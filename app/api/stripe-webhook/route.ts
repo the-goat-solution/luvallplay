@@ -1,0 +1,75 @@
+import { NextResponse } from "next/server";
+import type Stripe from "stripe";
+import { sql } from "@vercel/postgres";
+import { getStripe } from "@/lib/stripe";
+import { ensureTables, reserveBookingSlot } from "@/lib/db";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  const stripe = getStripe();
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 503 });
+  }
+
+  const body = await request.text();
+  const signature = request.headers.get("stripe-signature");
+  if (!signature) {
+    return NextResponse.json({ error: "Missing signature" }, { status: 400 });
+  }
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  } catch {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  if (event.type === "payment_intent.succeeded") {
+    const pi = event.data.object as Stripe.PaymentIntent;
+    if (pi.metadata?.type === "casual" && pi.metadata.sessionDate) {
+      if (process.env.POSTGRES_URL) {
+        await ensureTables();
+        const ok = await reserveBookingSlot(pi.metadata.sessionDate, {
+          firstName: pi.metadata.firstName ?? "",
+          lastName: pi.metadata.lastName ?? "",
+          email: pi.metadata.email ?? pi.receipt_email ?? "",
+          phone: pi.metadata.phone,
+          paymentIntentId: pi.id,
+        });
+        if (!ok) {
+          console.error("Could not reserve slot — session full", pi.metadata.sessionDate);
+        }
+      }
+    }
+  }
+
+  if (event.type === "customer.subscription.updated") {
+    const sub = event.data.object as Stripe.Subscription;
+    if (process.env.POSTGRES_URL && sub.status === "active") {
+      await sql`
+        UPDATE memberships SET status = 'active'
+        WHERE stripe_subscription_id = ${sub.id};
+      `;
+    }
+  }
+
+  if (event.type === "invoice.payment_succeeded") {
+    const invoice = event.data.object as Stripe.Invoice & {
+      subscription?: string | { id: string } | null;
+    };
+    const subId =
+      typeof invoice.subscription === "string"
+        ? invoice.subscription
+        : invoice.subscription?.id;
+    if (subId && process.env.POSTGRES_URL) {
+      await sql`
+        UPDATE memberships SET status = 'active'
+        WHERE stripe_subscription_id = ${subId};
+      `;
+    }
+  }
+
+  return NextResponse.json({ received: true });
+}

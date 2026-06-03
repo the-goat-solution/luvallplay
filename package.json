@@ -1,0 +1,38 @@
+{
+  "name": "three-wolves-badminton",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:migrate": "node scripts/migrate.mjs",
+    "stripe:setup": "node scripts/stripe-setup.mjs"
+  },
+  "dependencies": {
+    "@sanity/client": "^7.6.0",
+    "@sanity/image-url": "^1.1.0",
+    "@sanity/vision": "^3.99.0",
+    "@stripe/react-stripe-js": "^3.7.0",
+    "@stripe/stripe-js": "^7.3.1",
+    "@vercel/postgres": "^0.10.0",
+    "next": "^15.3.3",
+    "next-sanity": "^9.12.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "sanity": "^3.99.0",
+    "stripe": "^18.2.1",
+    "styled-components": "^6.1.18",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "eslint": "^9.28.0",
+    "eslint-config-next": "^15.3.3",
+    "@eslint/eslintrc": "^3.3.1",
+    "typescript": "^5.8.3"
+  }
+}

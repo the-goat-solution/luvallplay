@@ -1,19 +1,38 @@
 "use client";
 
 import { Trans } from "@/components/Trans";
+import { useLanguage } from "@/context/LanguageContext";
+import { pickLocale } from "@/lib/sanity";
+import type { CmsAbout } from "@/lib/sanity-queries";
+
+const DEFAULT_IMG_MAIN =
+  "/uploads/678602054_122107704008852785_8338718090885557850_n.jpg";
+const DEFAULT_IMG_SEC =
+  "/uploads/656703917_122095036622852785_1698823098359580880_n.jpg";
 
 export function About({
   stats,
+  cms,
 }: {
   stats?: {
     sessionsPerYear?: string;
     activeMembers?: string;
     established?: string;
   };
+  cms?: CmsAbout;
 }) {
+  const { lang } = useLanguage();
+
   const s1 = stats?.sessionsPerYear ?? "52+";
   const s2 = stats?.activeMembers ?? "30+";
   const s3 = stats?.established ?? "2024";
+
+  const title = cms?.title ? pickLocale(cms.title, lang) : "";
+  const body1 = cms?.body1 ? pickLocale(cms.body1, lang) : "";
+  const body2 = cms?.body2 ? pickLocale(cms.body2, lang) : "";
+  const imgMain = cms?.imageMainUrl || DEFAULT_IMG_MAIN;
+  const imgSec = cms?.imageSecondaryUrl || DEFAULT_IMG_SEC;
+
   return (
     <section className="section" id="about" data-screen-label="About">
       <div className="container">
@@ -23,16 +42,16 @@ export function About({
               <Trans k="about_lbl" />
             </div>
             <h2 className="section-title">
-              <Trans k="about_h" />
+              {title || <Trans k="about_h" />}
             </h2>
             <p className="about-established">
               <Trans k="about_est" />
             </p>
             <p className="about-body">
-              <Trans k="about_p1" />
+              {body1 || <Trans k="about_p1" />}
             </p>
             <p className="about-body">
-              <Trans k="about_p2" />
+              {body2 || <Trans k="about_p2" />}
             </p>
             <div className="about-stats">
               <div>
@@ -71,12 +90,12 @@ export function About({
           </div>
           <div className="about-imgs animate-in" style={{ animationDelay: ".15s" }}>
             <img
-              src="/uploads/678602054_122107704008852785_8338718090885557850_n.jpg"
+              src={imgMain}
               alt="Player in action"
               className="about-img-main"
             />
             <img
-              src="/uploads/656703917_122095036622852785_1698823098359580880_n.jpg"
+              src={imgSec}
               alt="Club members on court"
               className="about-img-sec"
             />

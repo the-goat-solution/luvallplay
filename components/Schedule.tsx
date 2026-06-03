@@ -5,6 +5,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
 import { MAX_CASUAL } from "@/lib/constants";
+import { pickLocale } from "@/lib/sanity";
+import type { CmsScheduleSettings } from "@/lib/sanity-queries";
 import {
   formatDateLong,
   getDayName,
@@ -16,7 +18,11 @@ import {
   toDateKey,
 } from "@/lib/dates";
 
-export function Schedule() {
+export function Schedule({
+  scheduleSettings,
+}: {
+  scheduleSettings?: CmsScheduleSettings;
+}) {
   const { lang, tr } = useLanguage();
   const {
     schedulePick,
@@ -36,9 +42,20 @@ export function Schedule() {
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
 
+  const maxSpots = scheduleSettings?.maxCasualSpots ?? MAX_CASUAL;
+  const venueLabel = scheduleSettings?.venueName
+    ? pickLocale(scheduleSettings.venueName, lang)
+    : "";
+  const addressLabel = scheduleSettings?.address
+    ? pickLocale(scheduleSettings.address, lang)
+    : "";
+  const timeLabel = scheduleSettings?.timeLabel
+    ? pickLocale(scheduleSettings.timeLabel, lang)
+    : "";
+
   const dateKey = toDateKey(displayDate);
   const spotsAvail =
-    spotsByDate[dateKey] !== undefined ? spotsByDate[dateKey] : MAX_CASUAL;
+    spotsByDate[dateKey] !== undefined ? spotsByDate[dateKey] : maxSpots;
 
   const withinLock = isWithinBookingLock(displayDate, today);
   const bookable = isBookable(displayDate, today);
@@ -149,7 +166,8 @@ export function Schedule() {
           classes.push(isSel ? "game-sel" : "game-open");
           clickable = true;
         } else if (locked) {
-          classes.push("game");
+          classes.push(isSel ? "game-sel" : "game");
+          clickable = true;
         }
       }
 
@@ -254,7 +272,7 @@ export function Schedule() {
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                <Trans k="ngc_time" />
+                {timeLabel || <Trans k="ngc_time" />}
               </div>
               <div className="ngc-row">
                 <svg
@@ -271,10 +289,10 @@ export function Schedule() {
                 </svg>
                 <div>
                   <div>
-                    <Trans k="ngc_venue" />
+                    {venueLabel || <Trans k="ngc_venue" />}
                   </div>
                   <div className="ngc-addr">
-                    <Trans k="ngc_addr" />
+                    {addressLabel || <Trans k="ngc_addr" />}
                   </div>
                 </div>
               </div>
@@ -283,7 +301,7 @@ export function Schedule() {
                 <div
                   className="ngc-bar"
                   style={{
-                    width: `${((MAX_CASUAL - spotsAvail) / MAX_CASUAL) * 100}%`,
+                    width: `${((maxSpots - spotsAvail) / maxSpots) * 100}%`,
                   }}
                 />
               </div>

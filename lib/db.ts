@@ -2,10 +2,11 @@ import { sql } from "@vercel/postgres";
 import { MAX_CASUAL } from "./constants";
 
 export async function ensureTables() {
+  // DEFAULT must be a literal — Postgres rejects bind params in CREATE TABLE DDL.
   await sql`
     CREATE TABLE IF NOT EXISTS sessions (
       date DATE PRIMARY KEY,
-      max_spots INT NOT NULL DEFAULT ${MAX_CASUAL},
+      max_spots INT NOT NULL DEFAULT 8,
       booked_spots INT NOT NULL DEFAULT 0
     );
   `;

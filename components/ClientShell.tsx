@@ -6,8 +6,13 @@ import { BookingModal } from "@/components/modals/BookingModal";
 import { MembershipModal } from "@/components/modals/MembershipModal";
 import { WaitlistModal } from "@/components/modals/WaitlistModal";
 import { Lightbox } from "@/components/Lightbox";
+import type { CmsGalleryImage } from "@/lib/sanity-queries";
 
-export function ClientShell() {
+export function ClientShell({
+  galleryImages,
+}: {
+  galleryImages?: CmsGalleryImage[];
+}) {
   useScrollNav();
   useAnimateIn();
   return (
@@ -15,7 +20,7 @@ export function ClientShell() {
       <BookingModal />
       <MembershipModal />
       <WaitlistModal />
-      <Lightbox />
+      <Lightbox images={galleryImages} />
     </>
   );
 }

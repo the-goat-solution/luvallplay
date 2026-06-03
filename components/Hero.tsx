@@ -2,28 +2,40 @@
 
 import { useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { Trans } from "@/components/Trans";
+import { pickLocale, type LocaleText } from "@/lib/sanity";
 
-const HERO_IMG =
+const DEFAULT_HERO_IMG =
   "/uploads/705237516_122111863220852785_3866235625892853843_n.jpg";
 
-export function Hero() {
+export function Hero({
+  backgroundImage,
+  tagline,
+}: {
+  backgroundImage?: string;
+  tagline?: LocaleText;
+}) {
   const { openMembershipModal, openCasualModal } = useApp();
+  const { lang } = useLanguage();
+
+  const heroImg = backgroundImage || DEFAULT_HERO_IMG;
+  const taglineText = tagline ? pickLocale(tagline, lang) : "";
 
   useEffect(() => {
     const bg = document.getElementById("hero-bg");
     if (!bg) return;
     const img = new Image();
     img.onload = () => bg.classList.add("loaded");
-    img.src = HERO_IMG;
-  }, []);
+    img.src = heroImg;
+  }, [heroImg]);
 
   return (
     <section className="hero" id="hero" data-screen-label="Hero">
       <div
         className="hero-bg"
         id="hero-bg"
-        style={{ backgroundImage: `url('${HERO_IMG}')` }}
+        style={{ backgroundImage: `url('${heroImg}')` }}
       />
       <div className="hero-overlay" />
       <div className="hero-content">
@@ -40,7 +52,7 @@ export function Hero() {
           <Trans k="hero_sub" />
         </p>
         <p className="hero-tagline">
-          <Trans k="hero_tagline" />
+          {taglineText || <Trans k="hero_tagline" />}
         </p>
         <div className="hero-meta">
           <div className="hero-meta-item">

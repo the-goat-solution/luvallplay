@@ -1,11 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GALLERY_IMAGES } from "@/lib/constants";
+import { useLanguage } from "@/context/LanguageContext";
+import { pickLocale } from "@/lib/sanity";
+import type { CmsGalleryImage } from "@/lib/sanity-queries";
 
-export function Lightbox() {
+export function Lightbox({ images }: { images?: CmsGalleryImage[] }) {
+  const { lang } = useLanguage();
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
+
+  const galleryImages = useMemo(() => {
+    if (images && images.length > 0) {
+      return images.map((img) => ({
+        src: img.src,
+        alt: img.alt ? pickLocale(img.alt, lang) : "Gallery photo",
+      }));
+    }
+    return GALLERY_IMAGES.map((img) => ({ src: img.src, alt: img.alt }));
+  }, [images, lang]);
+
+  const count = galleryImages.length;
 
   const update = useCallback((i: number) => {
     setIndex(i);
@@ -31,20 +47,19 @@ export function Lightbox() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!open) return;
+      if (!open || count === 0) return;
       if (e.key === "Escape") close();
       if (e.key === "ArrowLeft")
-        setIndex((i) => (i - 1 + GALLERY_IMAGES.length) % GALLERY_IMAGES.length);
-      if (e.key === "ArrowRight")
-        setIndex((i) => (i + 1) % GALLERY_IMAGES.length);
+        setIndex((i) => (i - 1 + count) % count);
+      if (e.key === "ArrowRight") setIndex((i) => (i + 1) % count);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
+  }, [open, close, count]);
 
-  if (!open) return null;
+  if (!open || count === 0) return null;
 
-  const img = GALLERY_IMAGES[index];
+  const img = galleryImages[index];
 
   return (
     <div
@@ -61,9 +76,7 @@ export function Lightbox() {
         <button
           type="button"
           className="lb-arrow"
-          onClick={() =>
-            update((index - 1 + GALLERY_IMAGES.length) % GALLERY_IMAGES.length)
-          }
+          onClick={() => update((index - 1 + count) % count)}
         >
           &#8249;
         </button>
@@ -73,13 +86,13 @@ export function Lightbox() {
         <button
           type="button"
           className="lb-arrow"
-          onClick={() => update((index + 1) % GALLERY_IMAGES.length)}
+          onClick={() => update((index + 1) % count)}
         >
           &#8250;
         </button>
       </div>
       <div className="lb-thumbs">
-        {GALLERY_IMAGES.map((g, i) => (
+        {galleryImages.map((g, i) => (
           <img
             key={g.src}
             src={g.src}

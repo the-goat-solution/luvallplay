@@ -14,7 +14,7 @@ async function main() {
       max_spots INT NOT NULL DEFAULT 8,
       booked_spots INT NOT NULL DEFAULT 0
     );
-  `;
+  `; // DEFAULT must be literal (no bind params in DDL)
   await pool.sql`
     CREATE TABLE IF NOT EXISTS bookings (
       id SERIAL PRIMARY KEY,

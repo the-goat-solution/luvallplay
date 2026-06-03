@@ -2,6 +2,9 @@
 
 import { GALLERY_IMAGES } from "@/lib/constants";
 import { Trans } from "@/components/Trans";
+import { useLanguage } from "@/context/LanguageContext";
+import { pickLocale } from "@/lib/sanity";
+import type { CmsGalleryImage } from "@/lib/sanity-queries";
 
 declare global {
   interface Window {
@@ -9,7 +12,17 @@ declare global {
   }
 }
 
-export function Gallery() {
+export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
+  const { lang } = useLanguage();
+
+  const galleryImages =
+    images && images.length > 0
+      ? images.map((img) => ({
+          src: img.src,
+          alt: img.alt ? pickLocale(img.alt, lang) : "Gallery photo",
+        }))
+      : GALLERY_IMAGES.map((img) => ({ src: img.src, alt: img.alt }));
+
   return (
     <section className="section" id="gallery" data-screen-label="Gallery">
       <div className="container">
@@ -24,7 +37,7 @@ export function Gallery() {
         </p>
 
         <div className="gallery-grid">
-          {GALLERY_IMAGES.map((img, i) => (
+          {galleryImages.map((img, i) => (
             <div
               key={img.src}
               className="gallery-item animate-in"

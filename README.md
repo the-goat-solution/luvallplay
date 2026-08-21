@@ -6,7 +6,7 @@ Production website for Three Wolves Badminton Club (Christchurch, NZ).
 
 - **Next.js 15** (App Router) on Vercel
 - **Sanity CMS** — content at `/studio`
-- **Stripe** — casual ($10), monthly ($33), quarterly ($85 / 3 months)
+- **Stripe** — casual ($10), monthly ($33), quarterly ($85 / 3 months), donations (custom amount, one-time or monthly)
 - **Vercel Postgres** — sessions, bookings, waitlist
 
 ## Design changes from prototype
@@ -37,10 +37,20 @@ npm run db:migrate
 STRIPE_SECRET_KEY=sk_test_... npm run stripe:setup
 ```
 
-Add printed price IDs to `.env.local`. Configure webhook:
+Add printed price/product IDs to `.env.local` (including `STRIPE_PRODUCT_DONATION`). Configure webhook:
 
 - URL: `https://your-domain.vercel.app/api/stripe-webhook`
-- Events: `payment_intent.succeeded`, `invoice.payment_succeeded`, `customer.subscription.updated`
+- Events: `payment_intent.succeeded`, `invoice.payment_succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`
+
+### Membership status emails
+
+Renewal reminders, failed-payment (dunning), and expiring-card emails for monthly/quarterly members are handled natively by Stripe — no code needed. In the Stripe Dashboard, go to **Settings → Billing → Subscriptions and emails** and enable:
+
+- **Send emails about upcoming renewals** (renewal reminders)
+- **Send emails when card payments fail**
+- **Send emails about expiring cards**
+
+These use the email already attached to each Stripe Customer (set at signup — see `app/api/create-subscription/route.ts`) and your account's [branding settings](https://dashboard.stripe.com/settings/branding). Test emails only send in a sandbox to your verified email domain or team member addresses.
 
 ### Sanity
 

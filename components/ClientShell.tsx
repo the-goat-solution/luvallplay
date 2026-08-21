@@ -5,6 +5,7 @@ import { useScrollNav } from "@/hooks/useScrollNav";
 import { BookingModal } from "@/components/modals/BookingModal";
 import { MembershipModal } from "@/components/modals/MembershipModal";
 import { WaitlistModal } from "@/components/modals/WaitlistModal";
+import { DonateModal } from "@/components/modals/DonateModal";
 import { Lightbox } from "@/components/Lightbox";
 import type { CmsGalleryImage } from "@/lib/sanity-queries";
 
@@ -20,6 +21,7 @@ export function ClientShell({
       <BookingModal />
       <MembershipModal />
       <WaitlistModal />
+      <DonateModal />
       <Lightbox images={galleryImages} />
     </>
   );

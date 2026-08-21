@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { PlanId } from "@/lib/constants";
 
-type ModalId = "booking" | "membership" | "waitlist" | null;
+type ModalId = "booking" | "membership" | "waitlist" | "donate" | null;
 
 type AppContextValue = {
   openModal: ModalId;
@@ -18,6 +18,7 @@ type AppContextValue = {
   openMembershipModal: (plan?: PlanId) => void;
   openCasualModal: () => void;
   openWaitlistModal: (sessionDate?: Date) => void;
+  openDonateModal: () => void;
   selectedPlan: PlanId;
   setSelectedPlan: (plan: PlanId) => void;
   selectedSession: Date | null;
@@ -68,6 +69,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOpenModal("waitlist");
   }, []);
 
+  const openDonateModal = useCallback(() => {
+    setOpenModal("donate");
+  }, []);
+
   const value = useMemo(
     () => ({
       openModal,
@@ -75,6 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openMembershipModal,
       openCasualModal,
       openWaitlistModal,
+      openDonateModal,
       selectedPlan,
       setSelectedPlan,
       selectedSession,
@@ -90,6 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openMembershipModal,
       openCasualModal,
       openWaitlistModal,
+      openDonateModal,
       selectedPlan,
       selectedSession,
       schedulePick,

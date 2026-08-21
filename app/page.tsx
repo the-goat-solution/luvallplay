@@ -5,6 +5,7 @@ import { Schedule } from "@/components/Schedule";
 import { Gallery } from "@/components/Gallery";
 import { Membership } from "@/components/Membership";
 import { Reviews } from "@/components/Reviews";
+import { Donate } from "@/components/Donate";
 import { Footer } from "@/components/Footer";
 import { ClientShell } from "@/components/ClientShell";
 import {
@@ -38,6 +39,7 @@ export default async function HomePage() {
       <Gallery images={gallery ?? undefined} />
       <Membership />
       <Reviews googleReviewUrl={siteSettings?.googleReviewUrl} />
+      <Donate />
       <Footer />
       <ClientShell galleryImages={gallery ?? undefined} />
     </>

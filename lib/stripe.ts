@@ -21,3 +21,9 @@ export function getPriceId(plan: "monthly" | "quarterly"): string {
   if (!id) throw new Error(`${key} is not configured`);
   return id;
 }
+
+export function getDonationProductId(): string {
+  const id = process.env.STRIPE_PRODUCT_DONATION;
+  if (!id) throw new Error("STRIPE_PRODUCT_DONATION is not configured");
+  return id;
+}

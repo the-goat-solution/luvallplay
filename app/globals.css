@@ -377,7 +377,12 @@ footer{background:var(--navy-dark);color:#fff;padding:80px 0 36px}
 .stripe-badge{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-light);margin-top:10px}
 
 /* Scroll margin for sections */
-#about,#schedule,#gallery,#membership,#reviews{scroll-margin-top:80px}
+#about,#schedule,#gallery,#membership,#reviews,#donate{scroll-margin-top:80px}
+
+/* Donate */
+.donate-panel{max-width:600px;margin:38px auto 0;text-align:center}
+.donate-icon{width:60px;height:60px;border-radius:50%;background:rgba(196,137,42,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 22px;font-size:26px}
+.donate-features{list-style:none;display:flex;flex-wrap:wrap;justify-content:center;gap:14px 30px;margin:30px 0 38px}
 
 /* Critical overrides (from prototype) */
 .section-label-light{color:var(--bronze-light)}

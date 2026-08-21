@@ -69,6 +69,11 @@ export function Footer() {
               <li>
                 <a href="#reviews">Reviews</a>
               </li>
+              <li>
+                <a href="#donate">
+                  <Trans k="nav_donate" />
+                </a>
+              </li>
             </ul>
           </div>
 

@@ -43,13 +43,50 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    if (pi.metadata?.type === "donation") {
+      if (process.env.POSTGRES_URL) {
+        await ensureTables();
+        await sql`
+          INSERT INTO donations (email, first_name, last_name, amount_cents, frequency, stripe_payment_intent_id, status)
+          VALUES (
+            ${pi.metadata.email ?? pi.receipt_email ?? ""},
+            ${pi.metadata.firstName ?? ""},
+            ${pi.metadata.lastName ?? ""},
+            ${pi.amount},
+            'once',
+            ${pi.id},
+            'succeeded'
+          )
+          ON CONFLICT (stripe_payment_intent_id) DO NOTHING;
+        `;
+      }
+    }
   }
 
   if (event.type === "customer.subscription.updated") {
     const sub = event.data.object as Stripe.Subscription;
-    if (process.env.POSTGRES_URL && sub.status === "active") {
+    if (process.env.POSTGRES_URL) {
       await sql`
-        UPDATE memberships SET status = 'active'
+        UPDATE memberships SET status = ${sub.status}
+        WHERE stripe_subscription_id = ${sub.id};
+      `;
+      await sql`
+        UPDATE donations SET status = ${sub.status}
+        WHERE stripe_subscription_id = ${sub.id};
+      `;
+    }
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const sub = event.data.object as Stripe.Subscription;
+    if (process.env.POSTGRES_URL) {
+      await sql`
+        UPDATE memberships SET status = 'canceled'
+        WHERE stripe_subscription_id = ${sub.id};
+      `;
+      await sql`
+        UPDATE donations SET status = 'canceled'
         WHERE stripe_subscription_id = ${sub.id};
       `;
     }
@@ -66,6 +103,10 @@ export async function POST(request: Request) {
     if (subId && process.env.POSTGRES_URL) {
       await sql`
         UPDATE memberships SET status = 'active'
+        WHERE stripe_subscription_id = ${subId};
+      `;
+      await sql`
+        UPDATE donations SET status = 'active'
         WHERE stripe_subscription_id = ${subId};
       `;
     }

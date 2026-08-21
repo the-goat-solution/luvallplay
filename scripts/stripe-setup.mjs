@@ -30,6 +30,9 @@ async function main() {
   const quarterly = await ensureProduct("Three Wolves — Quarterly Membership", {
     plan: "quarterly",
   });
+  const donation = await ensureProduct("Three Wolves — Donation", {
+    type: "donation",
+  });
 
   const monthlyPrice = await stripe.prices.create({
     product: monthly.id,
@@ -48,8 +51,10 @@ async function main() {
   console.log("\nAdd these to your .env / Vercel:\n");
   console.log(`STRIPE_PRICE_MONTHLY=${monthlyPrice.id}`);
   console.log(`STRIPE_PRICE_QUARTERLY=${quarterlyPrice.id}`);
+  console.log(`STRIPE_PRODUCT_DONATION=${donation.id}`);
   console.log(`\nCasual uses PaymentIntent amount (NZD $10) — product id: ${casual.id}`);
-  console.log("\nWebhook events to enable: payment_intent.succeeded, invoice.payment_succeeded, customer.subscription.updated");
+  console.log("Donations use a customer-chosen amount (PaymentIntent for one-time, Price.price_data for monthly) against the Donation product above.");
+  console.log("\nWebhook events to enable: payment_intent.succeeded, invoice.payment_succeeded, customer.subscription.updated, customer.subscription.deleted");
 }
 
 main().catch(console.error);

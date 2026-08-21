@@ -3,6 +3,10 @@ export const CASUAL_PRICE_CENTS = 1000;
 export const MONTHLY_PRICE_CENTS = 3300;
 export const QUARTERLY_PRICE_CENTS = 8500;
 export const BOOKING_LOCK_DAYS = 14;
+export const DONATION_MIN_CENTS = 200;
+export const DONATION_MAX_CENTS = 500000;
+
+export type DonationFrequency = "once" | "monthly";
 
 export const GALLERY_IMAGES = [
   {

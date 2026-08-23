@@ -32,10 +32,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Captcha verification failed" }, { status: 403 });
     }
 
-    assertSessionBookable(body.sessionDate);
-
     if (process.env.POSTGRES_URL) {
       await ensureTables();
+    }
+
+    await assertSessionBookable(body.sessionDate);
+
+    if (process.env.POSTGRES_URL) {
       const spots = await getAvailableSpots(body.sessionDate);
       if (spots <= 0) {
         return NextResponse.json({ error: "Session is full" }, { status: 409 });

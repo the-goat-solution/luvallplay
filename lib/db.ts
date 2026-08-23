@@ -66,6 +66,32 @@ export async function ensureTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
+  await sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS google_event_id TEXT;
+  `;
+  await sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS calendar_summary TEXT;
+  `;
+  await sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_start_time TIMESTAMPTZ;
+  `;
+  await sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_end_time TIMESTAMPTZ;
+  `;
+  await sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_location TEXT;
+  `;
+  await sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ;
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS session_alert_state (
+      session_date DATE PRIMARY KEY REFERENCES sessions(date),
+      state TEXT NOT NULL DEFAULT 'ok',
+      headcount INT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
 }
 
 export async function ensureSession(date: string) {

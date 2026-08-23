@@ -2,7 +2,8 @@ export const MAX_CASUAL = 8;
 export const CASUAL_PRICE_CENTS = 1000;
 export const MONTHLY_PRICE_CENTS = 3300;
 export const QUARTERLY_PRICE_CENTS = 8500;
-export const BOOKING_LOCK_DAYS = 14;
+export const BOOKING_WINDOW_DAYS = 30;
+export const BOOKING_CUTOFF_HOUR = 17;
 export const DONATION_MIN_CENTS = 200;
 export const DONATION_MAX_CENTS = 500000;
 

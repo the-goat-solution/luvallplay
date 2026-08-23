@@ -8,7 +8,8 @@ Production website for Three Wolves Badminton Club (Christchurch, NZ).
 - **Sanity CMS** — content at `/studio`
 - **Stripe** — casual ($10), monthly ($33), quarterly ($85 / 3 months), donations (custom amount, one-time or monthly)
 - **Vercel Postgres** — sessions, bookings, waitlist, memberships
-- **Resend** — automatic play day roster email
+- **Google Calendar** — source of truth for bookable session dates (synced hourly via cron)
+- **Resend** — admin headcount alerts and the automatic play day roster email
 
 ## Design changes from prototype
 

@@ -146,6 +146,122 @@ export async function reserveBookingSlot(
   return true;
 }
 
+export async function upsertSessionFromCalendar(
+  date: string,
+  event: { id: string; summary?: string; start: string; end?: string; location?: string },
+): Promise<void> {
+  await sql`
+    INSERT INTO sessions (date, max_spots, booked_spots, google_event_id, calendar_summary, event_start_time, event_end_time, event_location, synced_at)
+    VALUES (${date}, ${MAX_CASUAL}, 0, ${event.id}, ${event.summary ?? null}, ${event.start}, ${event.end ?? null}, ${event.location ?? null}, NOW())
+    ON CONFLICT (date) DO UPDATE SET
+      google_event_id = EXCLUDED.google_event_id,
+      calendar_summary = EXCLUDED.calendar_summary,
+      event_start_time = EXCLUDED.event_start_time,
+      event_end_time = EXCLUDED.event_end_time,
+      event_location = EXCLUDED.event_location,
+      synced_at = NOW();
+  `;
+}
+
+export async function sessionExists(date: string): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT 1 FROM sessions WHERE date = ${date} AND google_event_id IS NOT NULL;
+  `;
+  return rows.length > 0;
+}
+
+export async function listSessionsInRange(
+  from: string,
+  to: string,
+): Promise<
+  {
+    date: string;
+    maxSpots: number;
+    bookedSpots: number;
+    eventStartTime: string | null;
+    eventEndTime: string | null;
+    eventLocation: string | null;
+  }[]
+> {
+  const { rows } = await sql`
+    SELECT date, max_spots, booked_spots, event_start_time, event_end_time, event_location
+    FROM sessions
+    WHERE date >= ${from} AND date <= ${to} AND google_event_id IS NOT NULL
+    ORDER BY date;
+  `;
+  return rows.map((row) => {
+    const r = row as {
+      date: Date;
+      max_spots: number;
+      booked_spots: number;
+      event_start_time: Date | null;
+      event_end_time: Date | null;
+      event_location: string | null;
+    };
+    return {
+      date: r.date.toISOString().slice(0, 10),
+      maxSpots: r.max_spots,
+      bookedSpots: r.booked_spots,
+      eventStartTime: r.event_start_time ? r.event_start_time.toISOString() : null,
+      eventEndTime: r.event_end_time ? r.event_end_time.toISOString() : null,
+      eventLocation: r.event_location,
+    };
+  });
+}
+
+export async function getUpcomingSessionDates(withinDays: number): Promise<string[]> {
+  const { rows } = await sql`
+    SELECT date FROM sessions
+    WHERE date >= CURRENT_DATE AND date <= CURRENT_DATE + ${withinDays}::int
+      AND google_event_id IS NOT NULL
+    ORDER BY date;
+  `;
+  return rows.map((row) => (row as { date: Date }).date.toISOString().slice(0, 10));
+}
+
+export async function getActiveMemberCount(): Promise<number> {
+  const { rows } = await sql`
+    SELECT COUNT(*)::int AS count FROM memberships WHERE status = 'active';
+  `;
+  return (rows[0] as { count: number })?.count ?? 0;
+}
+
+export async function getSessionHeadcount(
+  date: string,
+): Promise<{ casual: number; members: number; total: number }> {
+  const { rows } = await sql`
+    SELECT booked_spots FROM sessions WHERE date = ${date};
+  `;
+  const casual = (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
+  const members = await getActiveMemberCount();
+  return { casual, members, total: casual + members };
+}
+
+export async function getSessionAlertState(
+  date: string,
+): Promise<{ state: string; headcount: number }> {
+  const { rows } = await sql`
+    SELECT state, headcount FROM session_alert_state WHERE session_date = ${date};
+  `;
+  const row = rows[0] as { state: string; headcount: number } | undefined;
+  return row ?? { state: "ok", headcount: 0 };
+}
+
+export async function upsertSessionAlertState(
+  date: string,
+  state: string,
+  headcount: number,
+): Promise<void> {
+  await sql`
+    INSERT INTO session_alert_state (session_date, state, headcount, updated_at)
+    VALUES (${date}, ${state}, ${headcount}, NOW())
+    ON CONFLICT (session_date) DO UPDATE SET
+      state = EXCLUDED.state,
+      headcount = EXCLUDED.headcount,
+      updated_at = NOW();
+  `;
+}
+
 export type RosterEntry = {
   name: string;
   email: string;

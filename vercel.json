@@ -4,6 +4,6 @@
   "crons": [
     { "path": "/api/cron/sync-calendar", "schedule": "0 17 * * *" },
     { "path": "/api/cron/headcount-alerts", "schedule": "0 18 * * *" },
-    { "path": "/api/cron/send-roster", "schedule": "0 3 * * 5" }
+    { "path": "/api/cron/send-roster", "schedule": "0 3 * * *" }
   ]
 }

@@ -56,7 +56,7 @@ These use the email already attached to each Stripe Customer (set at signup — 
 
 ### Play day roster
 
-Every Friday at 4:00 PM NZ time (2 hours before the 6:00 PM session), a Vercel Cron job (`vercel.json` → `/api/cron/send-roster`) emails the full player list for that day's session to `CLUB_ROSTER_EMAIL` (default `threewolvesbadminton@gmail.com`). The roster combines:
+Every day at 4:00 PM NZ time, a Vercel Cron job (`vercel.json` → `/api/cron/send-roster`) checks whether there's a session scheduled for that date (from the synced Google Calendar — not limited to Fridays) and, if so, emails the full player list to `CLUB_ROSTER_EMAIL` (default `threewolvesbadminton@gmail.com`). If no session is scheduled that day, it's a no-op. The roster combines:
 
 - **Casual bookers** — anyone with a confirmed paid booking for that date.
 - **Members** — anyone with an active monthly/quarterly subscription whose current billing period covers that date. Members are auto-included; there's no separate signup step, since their subscription period *is* their play-day window (renews automatically each billing cycle via the Stripe webhook).
@@ -65,9 +65,9 @@ Set up:
 - `RESEND_API_KEY` / `EMAIL_FROM` — provision via `vercel integration add resend/resend-email` (Vercel Marketplace), or manually in the [Resend dashboard](https://resend.com). `EMAIL_FROM` must be a verified sending address/domain.
 - `CRON_SECRET` — set automatically by Vercel when a project has cron jobs; also protects manual calls to the endpoint.
 
-View the current roster for any upcoming Friday at `/admin/play-days` (protected by HTTP Basic Auth — set `ADMIN_PASSWORD`).
+View the current roster for any upcoming session at `/admin/play-days` (protected by HTTP Basic Auth — set `ADMIN_PASSWORD`).
 
-> Note: Vercel Cron runs in UTC with no DST awareness. The schedule (`0 3 * * 5`) targets 4:00 PM NZDT (daylight saving); during NZST (non-DST months) the email will land around 5:00 PM instead.
+> Note: Vercel Cron runs in UTC with no DST awareness. The schedule (`0 3 * * *`) targets 4:00 PM NZDT (daylight saving); during NZST (non-DST months) the check will run around 5:00 PM instead.
 
 ### Sanity
 

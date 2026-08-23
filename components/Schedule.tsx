@@ -9,9 +9,8 @@ import { pickLocale } from "@/lib/sanity";
 import type { CmsScheduleSettings } from "@/lib/sanity-queries";
 import {
   formatDateLong,
+  formatEventTimeRange,
   getDayName,
-  getNextFriday,
-  getUpcomingFridays,
   isBookable,
   isWithinBookingLock,
   startOfDay,
@@ -20,8 +19,10 @@ import {
 
 export function Schedule({
   scheduleSettings,
+  calendarSubscribe,
 }: {
   scheduleSettings?: CmsScheduleSettings;
+  calendarSubscribe?: { googleUrl: string; icsUrl: string };
 }) {
   const { lang, tr } = useLanguage();
   const {
@@ -29,14 +30,27 @@ export function Schedule({
     setSchedulePick,
     spotsByDate,
     refreshSpots,
+    sessionDates,
+    refreshSessionDates,
     openWaitlistModal,
     setSelectedSession,
     setOpenModal,
   } = useApp();
 
   const today = useMemo(() => startOfDay(new Date()), []);
-  const nextFriday = useMemo(() => getNextFriday(today), [today]);
-  const displayDate = schedulePick ?? nextFriday;
+  const sortedUpcomingKeys = useMemo(() => {
+    const todayKey = toDateKey(today);
+    return Object.keys(sessionDates)
+      .filter((key) => key >= todayKey)
+      .sort();
+  }, [sessionDates, today]);
+  const nextSessionDate = useMemo(() => {
+    const key = sortedUpcomingKeys[0];
+    if (!key) return null;
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }, [sortedUpcomingKeys]);
+  const displayDate = schedulePick ?? nextSessionDate;
 
   const [calDate, setCalDate] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
@@ -53,23 +67,35 @@ export function Schedule({
     ? pickLocale(scheduleSettings.timeLabel, lang)
     : "";
 
-  const dateKey = toDateKey(displayDate);
+  const dateKey = displayDate ? toDateKey(displayDate) : null;
+  const sessionInfo = dateKey ? sessionDates[dateKey] : undefined;
+  const displayTimeLabel = sessionInfo?.eventStartTime
+    ? formatEventTimeRange(sessionInfo.eventStartTime, sessionInfo.eventEndTime)
+    : timeLabel;
+  const displayLocation = sessionInfo?.eventLocation || null;
   const spotsAvail =
-    spotsByDate[dateKey] !== undefined ? spotsByDate[dateKey] : maxSpots;
+    dateKey && spotsByDate[dateKey] !== undefined ? spotsByDate[dateKey] : maxSpots;
 
-  const withinLock = isWithinBookingLock(displayDate, today);
-  const bookable = isBookable(displayDate, today);
+  const withinLock = displayDate ? isWithinBookingLock(displayDate, today) : false;
+  const bookable = displayDate ? isBookable(displayDate, today) : false;
   const isFull = spotsAvail <= 0;
   const isNextGame =
-    startOfDay(displayDate).getTime() === startOfDay(nextFriday).getTime();
+    displayDate && nextSessionDate
+      ? startOfDay(displayDate).getTime() === startOfDay(nextSessionDate).getTime()
+      : false;
 
   useEffect(() => {
-    const fridays = getUpcomingFridays(today, 16);
-    refreshSpots(fridays.map(toDateKey));
-  }, [today, refreshSpots]);
+    const from = toDateKey(today);
+    const to = toDateKey(new Date(today.getFullYear(), today.getMonth() + 4, 0));
+    refreshSessionDates(from, to);
+  }, [today, refreshSessionDates]);
+
+  useEffect(() => {
+    if (sortedUpcomingKeys.length > 0) refreshSpots(sortedUpcomingKeys);
+  }, [sortedUpcomingKeys, refreshSpots]);
 
   const handleBook = useCallback(() => {
-    if (!bookable) return;
+    if (!displayDate || !bookable) return;
     if (isFull) {
       openWaitlistModal(displayDate);
       return;
@@ -138,12 +164,12 @@ export function Schedule({
     }
 
     const todayMs = today.getTime();
-    const nextGameMs = startOfDay(nextFriday).getTime();
+    const nextGameMs = nextSessionDate ? startOfDay(nextSessionDate).getTime() : null;
 
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(y, m, d);
       const dateMs = startOfDay(date).getTime();
-      const isFriday = date.getDay() === 5;
+      const isSessionDay = Boolean(sessionDates[toDateKey(date)]);
       const classes = ["cal-d"];
 
       if (dateMs < todayMs) classes.push("past");
@@ -151,7 +177,7 @@ export function Schedule({
 
       let clickable = false;
 
-      if (isFriday && dateMs >= todayMs) {
+      if (isSessionDay && dateMs >= todayMs) {
         const isNext = dateMs === nextGameMs;
         const locked = isWithinBookingLock(date, today);
         const canBook = isBookable(date, today);
@@ -241,8 +267,33 @@ export function Schedule({
           <Trans k="sched_sub" />
         </p>
 
+        {calendarSubscribe && (
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
+            <a
+              href={calendarSubscribe.googleUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-bronze-outline"
+            >
+              {tr("sched_subscribe_google")}
+            </a>
+            <a
+              href={calendarSubscribe.icsUrl}
+              className="btn btn-bronze-outline"
+            >
+              {tr("sched_subscribe_ics")}
+            </a>
+          </div>
+        )}
+
         <div className="schedule-grid">
           <div className="ngc animate-in">
+            {!displayDate ? (
+              <div className="ngc-body">
+                <p>{tr("ngc_no_sessions")}</p>
+              </div>
+            ) : (
+              <>
             <div className="ngc-head">
               <span className="ngc-badge">{badgeLabel}</span>
               <span
@@ -272,7 +323,7 @@ export function Schedule({
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                {timeLabel || <Trans k="ngc_time" />}
+                {displayTimeLabel || <Trans k="ngc_time" />}
               </div>
               <div className="ngc-row">
                 <svg
@@ -287,14 +338,18 @@ export function Schedule({
                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
-                <div>
+                {displayLocation ? (
+                  <div>{displayLocation}</div>
+                ) : (
                   <div>
-                    {venueLabel || <Trans k="ngc_venue" />}
+                    <div>
+                      {venueLabel || <Trans k="ngc_venue" />}
+                    </div>
+                    <div className="ngc-addr">
+                      {addressLabel || <Trans k="ngc_addr" />}
+                    </div>
                   </div>
-                  <div className="ngc-addr">
-                    {addressLabel || <Trans k="ngc_addr" />}
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="ngc-bar-wrap">
@@ -317,7 +372,7 @@ export function Schedule({
                   ctaDisabled
                     ? undefined
                     : isFull
-                      ? () => openWaitlistModal(displayDate)
+                      ? () => displayDate && openWaitlistModal(displayDate)
                       : handleBook
                 }
               >
@@ -341,6 +396,8 @@ export function Schedule({
                 </div>
               )}
             </div>
+              </>
+            )}
           </div>
 
           <div className="cal-wrap animate-in" style={{ animationDelay: ".1s" }}>

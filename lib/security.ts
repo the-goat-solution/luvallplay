@@ -1,5 +1,6 @@
 import { BOOKING_LOCK_DAYS } from "./constants";
 import { isBookable, startOfDay } from "./dates";
+import { sessionExists } from "./db";
 
 const rateLimitMap = new Map<string, { count: number; reset: number }>();
 
@@ -47,7 +48,7 @@ export async function verifyTurnstile(
   return data.success;
 }
 
-export function assertSessionBookable(sessionDate: string): void {
+export async function assertSessionBookable(sessionDate: string): Promise<void> {
   const [y, m, d] = sessionDate.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   if (!isBookable(date)) {
@@ -55,8 +56,11 @@ export function assertSessionBookable(sessionDate: string): void {
       `Session must be booked at least ${BOOKING_LOCK_DAYS} days in advance`,
     );
   }
-  if (date.getDay() !== 5) {
-    throw new Error("Sessions are only on Fridays");
+  if (process.env.POSTGRES_URL) {
+    const exists = await sessionExists(sessionDate);
+    if (!exists) {
+      throw new Error("This date is not an open session");
+    }
   }
 }
 

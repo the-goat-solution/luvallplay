@@ -1,4 +1,8 @@
 {
   "framework": "nextjs",
-  "regions": ["syd1"]
+  "regions": ["syd1"],
+  "crons": [
+    { "path": "/api/cron/sync-calendar", "schedule": "0 17 * * *" },
+    { "path": "/api/cron/headcount-alerts", "schedule": "0 18 * * *" }
+  ]
 }

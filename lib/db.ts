@@ -37,11 +37,21 @@ export async function ensureTables() {
       id SERIAL PRIMARY KEY,
       email TEXT NOT NULL,
       plan TEXT NOT NULL,
+      first_name TEXT,
+      last_name TEXT,
+      phone TEXT,
+      period_start DATE,
+      period_end DATE,
       stripe_subscription_id TEXT UNIQUE,
       status TEXT NOT NULL DEFAULT 'active',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS first_name TEXT;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_name TEXT;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS phone TEXT;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS period_start DATE;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS period_end DATE;`;
   await sql`
     CREATE TABLE IF NOT EXISTS donations (
       id SERIAL PRIMARY KEY,
@@ -108,4 +118,42 @@ export async function reserveBookingSlot(
     ON CONFLICT (payment_intent_id) DO NOTHING;
   `;
   return true;
+}
+
+export type RosterEntry = {
+  name: string;
+  email: string;
+  phone: string | null;
+  type: "casual" | "monthly" | "quarterly";
+};
+
+export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
+  const { rows: bookingRows } = await sql`
+    SELECT first_name, last_name, email, phone
+    FROM bookings
+    WHERE session_date = ${date} AND status = 'confirmed'
+    ORDER BY created_at ASC;
+  `;
+  const { rows: memberRows } = await sql`
+    SELECT first_name, last_name, email, phone, plan
+    FROM memberships
+    WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
+    ORDER BY created_at ASC;
+  `;
+
+  const casual: RosterEntry[] = bookingRows.map((r) => ({
+    name: `${r.first_name} ${r.last_name}`.trim(),
+    email: r.email as string,
+    phone: (r.phone as string | null) ?? null,
+    type: "casual",
+  }));
+
+  const members: RosterEntry[] = memberRows.map((r) => ({
+    name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || (r.email as string),
+    email: r.email as string,
+    phone: (r.phone as string | null) ?? null,
+    type: r.plan === "quarterly" ? "quarterly" : "monthly",
+  }));
+
+  return [...casual, ...members];
 }

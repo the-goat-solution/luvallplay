@@ -276,11 +276,12 @@ export type RosterEntry = {
   email: string;
   phone: string | null;
   type: "casual" | "monthly" | "quarterly";
+  method: "card" | "cash";
 };
 
 export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
   const { rows: bookingRows } = await sql`
-    SELECT first_name, last_name, email, phone
+    SELECT first_name, last_name, email, phone, payment_intent_id
     FROM bookings
     WHERE session_date = ${date} AND status = 'confirmed'
     ORDER BY created_at ASC;
@@ -297,6 +298,9 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
     type: "casual",
+    method: (r.payment_intent_id as string | null)?.startsWith("cash-invoice-")
+      ? "cash"
+      : "card",
   }));
 
   const members: RosterEntry[] = memberRows.map((r) => ({
@@ -304,6 +308,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
     type: r.plan === "quarterly" ? "quarterly" : "monthly",
+    method: "card",
   }));
 
   return [...casual, ...members];

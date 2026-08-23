@@ -1,5 +1,5 @@
-import { ensureTables, getRosterForDate, getUpcomingSessionDates } from "@/lib/db";
-import { formatDateLong, getDayName } from "@/lib/dates";
+import { ensureTables, getRosterForDate, listAllSessionDates } from "@/lib/db";
+import { formatDateLong, getDayName, toDateKey } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +24,15 @@ export default async function PlayDaysAdminPage({
   const sessionKeys = process.env.POSTGRES_URL
     ? await (async () => {
         await ensureTables();
-        return getUpcomingSessionDates(60);
+        return listAllSessionDates();
       })()
     : [];
 
+  const todayKey = toDateKey(new Date());
+  const defaultDate =
+    sessionKeys.find((key) => key >= todayKey) ?? sessionKeys[sessionKeys.length - 1];
   const selectedDate =
-    dateParam && sessionKeys.includes(dateParam) ? dateParam : sessionKeys[0];
+    dateParam && sessionKeys.includes(dateParam) ? dateParam : defaultDate;
 
   let roster: Awaited<ReturnType<typeof getRosterForDate>> = [];
   if (process.env.POSTGRES_URL && selectedDate) {
@@ -40,38 +43,51 @@ export default async function PlayDaysAdminPage({
     <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>Play day roster</h1>
       <p style={{ color: "#666", marginBottom: 20 }}>
-        Casual bookings and members whose subscription period covers the selected session date.
+        Casual bookings and members whose subscription period covers the selected play day.
       </p>
 
       {!process.env.POSTGRES_URL ? (
         <p>Database is not configured.</p>
       ) : sessionKeys.length === 0 ? (
-        <p>No upcoming sessions synced from the calendar yet.</p>
+        <p>No sessions synced from the calendar yet.</p>
       ) : (
         <>
-          <nav style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
-            {sessionKeys.map((key) => {
-              const date = parseDateKey(key);
-              const isSelected = key === selectedDate;
-              return (
-                <a
-                  key={key}
-                  href={`/admin/play-days?date=${key}`}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 6,
-                    border: "1px solid #ccc",
-                    textDecoration: "none",
-                    color: isSelected ? "#fff" : "#111",
-                    background: isSelected ? "#1a2a4a" : "#fff",
-                    fontSize: 13,
-                  }}
-                >
-                  {getDayName(date, "en")}, {formatDateLong(date, "en")}
-                </a>
-              );
-            })}
-          </nav>
+          <form style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
+            <label htmlFor="date" style={{ fontSize: 13, color: "#666" }}>
+              Play day:
+            </label>
+            <select
+              id="date"
+              name="date"
+              defaultValue={selectedDate}
+              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
+            >
+              {sessionKeys.map((key) => {
+                const date = parseDateKey(key);
+                const suffix = key < todayKey ? " (past)" : key === todayKey ? " (today)" : "";
+                return (
+                  <option key={key} value={key}>
+                    {getDayName(date, "en")}, {formatDateLong(date, "en")}
+                    {suffix}
+                  </option>
+                );
+              })}
+            </select>
+            <button
+              type="submit"
+              style={{
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #1a2a4a",
+                background: "#1a2a4a",
+                color: "#fff",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              View
+            </button>
+          </form>
 
           <p style={{ fontWeight: 600, marginBottom: 8 }}>
             {roster.length} player{roster.length === 1 ? "" : "s"} signed up for {selectedDate}

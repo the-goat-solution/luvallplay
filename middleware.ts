@@ -4,30 +4,24 @@ export const config = {
   matcher: "/admin/:path*",
 };
 
+const COOKIE_NAME = "admin_token";
+
 export function middleware(request: NextRequest) {
   const password = process.env.ADMIN_PASSWORD;
   if (!password) {
     return new NextResponse("Admin access is not configured", { status: 503 });
   }
 
-  const auth = request.headers.get("authorization");
-  if (auth) {
-    const [scheme, encoded] = auth.split(" ");
-    if (scheme === "Basic" && encoded) {
-      const decoded = atob(encoded);
-      const separatorIndex = decoded.indexOf(":");
-      const suppliedPassword =
-        separatorIndex === -1 ? decoded : decoded.slice(separatorIndex + 1);
-      if (timingSafeEqual(suppliedPassword, password)) {
-        return NextResponse.next();
-      }
-    }
+  if (request.nextUrl.pathname === "/admin/login") {
+    return NextResponse.next();
   }
 
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Admin"' },
-  });
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  if (token && timingSafeEqual(token, password)) {
+    return NextResponse.next();
+  }
+
+  return NextResponse.redirect(new URL("/admin/login", request.url));
 }
 
 function timingSafeEqual(a: string, b: string): boolean {

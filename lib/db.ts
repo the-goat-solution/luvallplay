@@ -219,6 +219,15 @@ export async function getUpcomingSessionDates(withinDays: number): Promise<strin
   return rows.map((row) => (row as { date: Date }).date.toISOString().slice(0, 10));
 }
 
+export async function listAllSessionDates(): Promise<string[]> {
+  const { rows } = await sql`
+    SELECT date FROM sessions
+    WHERE google_event_id IS NOT NULL
+    ORDER BY date;
+  `;
+  return rows.map((row) => (row as { date: Date }).date.toISOString().slice(0, 10));
+}
+
 export async function getActiveMemberCount(): Promise<number> {
   const { rows } = await sql`
     SELECT COUNT(*)::int AS count FROM memberships WHERE status = 'active';

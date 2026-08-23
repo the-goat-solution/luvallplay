@@ -1,4 +1,4 @@
-import { BOOKING_LOCK_DAYS } from "./constants";
+import { BOOKING_WINDOW_DAYS } from "./constants";
 import { isBookable, startOfDay } from "./dates";
 import { sessionExists } from "./db";
 
@@ -53,7 +53,7 @@ export async function assertSessionBookable(sessionDate: string): Promise<void> 
   const date = new Date(y, m - 1, d);
   if (!isBookable(date)) {
     throw new Error(
-      `Session must be booked at least ${BOOKING_LOCK_DAYS} days in advance`,
+      `Booking is only open from ${BOOKING_WINDOW_DAYS} days before the session until 5PM on the day of play`,
     );
   }
   if (process.env.POSTGRES_URL) {

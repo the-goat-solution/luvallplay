@@ -1,4 +1,6 @@
-import { BOOKING_LOCK_DAYS } from "./constants";
+import { BOOKING_CUTOFF_HOUR, BOOKING_WINDOW_DAYS } from "./constants";
+
+const CLUB_TIME_ZONE = "Pacific/Auckland";
 
 export function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -13,19 +15,59 @@ export function toDateKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function dateKeyToUTCms(key: string): number {
+  const [y, m, d] = key.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+// Reads the current date/time as observed in the club's time zone, since
+// bookings close at a wall-clock time (5PM) at the venue regardless of
+// where the browser or server happens to be running.
+function getClubNow(now: Date): { dateKey: string; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLUB_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  return {
+    dateKey: `${map.year}-${map.month}-${map.day}`,
+    hour: Number(map.hour) % 24,
+  };
+}
+
+function bookingWindowDiffDays(sessionDate: Date, now: Date): number {
+  const sessionKey = toDateKey(sessionDate);
+  const club = getClubNow(now);
+  return (
+    (dateKeyToUTCms(sessionKey) - dateKeyToUTCms(club.dateKey)) / 86400000
+  );
+}
+
+// Bookable from BOOKING_WINDOW_DAYS before the session up until
+// BOOKING_CUTOFF_HOUR (club local time) on the day of the session itself.
+export function isBookable(sessionDate: Date, today: Date = new Date()): boolean {
+  const diffDays = bookingWindowDiffDays(sessionDate, today);
+  if (diffDays < 0 || diffDays > BOOKING_WINDOW_DAYS) return false;
+  if (diffDays === 0) {
+    return getClubNow(today).hour < BOOKING_CUTOFF_HOUR;
+  }
+  return true;
+}
+
+// A session day that's visible on the calendar but not currently bookable
+// (registration hasn't opened yet, or the same-day cutoff has passed).
 export function isWithinBookingLock(
   sessionDate: Date,
   today: Date = new Date(),
 ): boolean {
-  const diff = startOfDay(sessionDate).getTime() - startOfDay(today).getTime();
-  return diff >= 0 && diff < BOOKING_LOCK_DAYS * 86400000;
-}
-
-export function isBookable(sessionDate: Date, today: Date = new Date()): boolean {
-  const session = startOfDay(sessionDate);
-  const now = startOfDay(today);
-  if (session < now) return false;
-  return !isWithinBookingLock(session, today);
+  const diffDays = bookingWindowDiffDays(sessionDate, today);
+  if (diffDays < 0) return false;
+  return !isBookable(sessionDate, today);
 }
 
 export function formatDateLong(d: Date, lang: "en" | "vi"): string {
@@ -61,8 +103,6 @@ export function formatDateLong(d: Date, lang: "en" | "vi"): string {
     return `${d.getDate()} ${monthsVi[d.getMonth()]} ${d.getFullYear()}`;
   return `${monthsEn[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
-
-const CLUB_TIME_ZONE = "Pacific/Auckland";
 
 export function formatEventTimeRange(start: string, end: string | null): string {
   const opts: Intl.DateTimeFormatOptions = {

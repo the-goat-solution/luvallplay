@@ -31,6 +31,8 @@ const I18N = {
     sched_lbl: "This Week",
     sched_h: "Next Session",
     sched_sub: "Join us on the court. All skill levels welcome.",
+    sched_subscribe_google: "Add to Google Calendar",
+    sched_subscribe_ics: "Subscribe (Apple / Outlook)",
     ngc_badge: "Next Game",
     ngc_selected: "Selected Session",
     ngc_time: "6:00 PM – 7:30 PM",
@@ -40,6 +42,7 @@ const I18N = {
     ngc_full: "Session Full — Join Waitlist",
     ngc_locked_msg: "Registration opens 14 days before the session",
     ngc_view_only: "View only — booking opens 14 days before",
+    ngc_no_sessions: "No upcoming sessions scheduled — check back soon.",
     cal_legend_next: "Next game",
     cal_legend_bookable: "Bookable — click to select",
     cal_legend_closed: "Closed (within 14 days)",
@@ -152,7 +155,7 @@ const I18N = {
     payment_note:
       "Stripe is not configured. Add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to enable payments.",
     sess_pick_hint:
-      "All Fridays are game days. Select one at least 14 days ahead to book a casual spot (max 8 per session).",
+      "Highlighted dates are open sessions. Select one at least 14 days ahead to book a casual spot (max 8 per session).",
     sess_closed_legend: "Closed within 14 days",
     sess_avail_legend: "Available",
     reg_closed: "Registration Closed",
@@ -187,6 +190,8 @@ const I18N = {
     sched_lbl: "Tuần Này",
     sched_h: "Buổi Tập Tiếp Theo",
     sched_sub: "Tham gia cùng chúng tôi. Mọi trình độ đều được chào đón.",
+    sched_subscribe_google: "Thêm vào Google Calendar",
+    sched_subscribe_ics: "Đăng ký (Apple / Outlook)",
     ngc_badge: "Trận Tới",
     ngc_selected: "Buổi đã chọn",
     ngc_time: "18:00 – 19:30",
@@ -196,6 +201,7 @@ const I18N = {
     ngc_full: "Hết Chỗ — Đăng Ký Chờ",
     ngc_locked_msg: "Đăng ký mở trước 14 ngày buổi tập",
     ngc_view_only: "Chỉ xem — đặt chỗ mở trước 14 ngày",
+    ngc_no_sessions: "Chưa có buổi tập sắp tới — vui lòng quay lại sau.",
     cal_legend_next: "Trận tới",
     cal_legend_bookable: "Có thể đặt — nhấn để chọn",
     cal_legend_closed: "Đã đóng (trong 14 ngày)",
@@ -308,7 +314,7 @@ const I18N = {
     payment_note:
       "Stripe chưa được cấu hình. Thêm NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY để bật thanh toán.",
     sess_pick_hint:
-      "Mọi thứ Sáu đều có buổi chơi. Chọn ngày cách ít nhất 14 ngày để đặt chỗ thông thường (tối đa 8/buổi).",
+      "Các ngày được đánh dấu là buổi tập đang mở. Chọn ngày cách ít nhất 14 ngày để đặt chỗ thông thường (tối đa 8/buổi).",
     sess_closed_legend: "Đã đóng (trong 14 ngày)",
     sess_avail_legend: "Còn chỗ",
     reg_closed: "Đã đóng đăng ký",

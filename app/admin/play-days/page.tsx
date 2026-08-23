@@ -1,5 +1,5 @@
-import { ensureTables, getRosterForDate } from "@/lib/db";
-import { getUpcomingFridays, formatDateLong, getDayName, toDateKey } from "@/lib/dates";
+import { ensureTables, getRosterForDate, getUpcomingSessionDates } from "@/lib/db";
+import { formatDateLong, getDayName } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -9,20 +9,30 @@ const PLAN_LABEL = {
   quarterly: "Quarterly member",
 } as const;
 
+function parseDateKey(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 export default async function PlayDaysAdminPage({
   searchParams,
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
   const { date: dateParam } = await searchParams;
-  const fridays = getUpcomingFridays(new Date(), 8);
-  const fridayKeys = fridays.map(toDateKey);
+
+  const sessionKeys = process.env.POSTGRES_URL
+    ? await (async () => {
+        await ensureTables();
+        return getUpcomingSessionDates(60);
+      })()
+    : [];
+
   const selectedDate =
-    dateParam && fridayKeys.includes(dateParam) ? dateParam : fridayKeys[0];
+    dateParam && sessionKeys.includes(dateParam) ? dateParam : sessionKeys[0];
 
   let roster: Awaited<ReturnType<typeof getRosterForDate>> = [];
   if (process.env.POSTGRES_URL && selectedDate) {
-    await ensureTables();
     roster = await getRosterForDate(selectedDate);
   }
 
@@ -30,37 +40,39 @@ export default async function PlayDaysAdminPage({
     <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>Play day roster</h1>
       <p style={{ color: "#666", marginBottom: 20 }}>
-        Casual bookings and members whose subscription period covers the selected Friday.
+        Casual bookings and members whose subscription period covers the selected session date.
       </p>
-
-      <nav style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
-        {fridays.map((friday) => {
-          const key = toDateKey(friday);
-          const isSelected = key === selectedDate;
-          return (
-            <a
-              key={key}
-              href={`/admin/play-days?date=${key}`}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #ccc",
-                textDecoration: "none",
-                color: isSelected ? "#fff" : "#111",
-                background: isSelected ? "#1a2a4a" : "#fff",
-                fontSize: 13,
-              }}
-            >
-              {getDayName(friday, "en")}, {formatDateLong(friday, "en")}
-            </a>
-          );
-        })}
-      </nav>
 
       {!process.env.POSTGRES_URL ? (
         <p>Database is not configured.</p>
+      ) : sessionKeys.length === 0 ? (
+        <p>No upcoming sessions synced from the calendar yet.</p>
       ) : (
         <>
+          <nav style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+            {sessionKeys.map((key) => {
+              const date = parseDateKey(key);
+              const isSelected = key === selectedDate;
+              return (
+                <a
+                  key={key}
+                  href={`/admin/play-days?date=${key}`}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: "1px solid #ccc",
+                    textDecoration: "none",
+                    color: isSelected ? "#fff" : "#111",
+                    background: isSelected ? "#1a2a4a" : "#fff",
+                    fontSize: 13,
+                  }}
+                >
+                  {getDayName(date, "en")}, {formatDateLong(date, "en")}
+                </a>
+              );
+            })}
+          </nav>
+
           <p style={{ fontWeight: 600, marginBottom: 8 }}>
             {roster.length} player{roster.length === 1 ? "" : "s"} signed up for {selectedDate}
           </p>

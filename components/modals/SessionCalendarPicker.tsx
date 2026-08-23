@@ -15,8 +15,14 @@ import {
 
 export function SessionCalendarPicker() {
   const { lang, tr } = useLanguage();
-  const { selectedSession, setSelectedSession, spotsByDate, refreshSpots } =
-    useApp();
+  const {
+    selectedSession,
+    setSelectedSession,
+    spotsByDate,
+    refreshSpots,
+    sessionDates,
+    refreshSessionDates,
+  } = useApp();
   const today = useMemo(() => startOfDay(new Date()), []);
   const [calDate, setCalDate] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
@@ -26,13 +32,23 @@ export function SessionCalendarPicker() {
     const y = calDate.getFullYear();
     const m = calDate.getMonth();
     const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const from = toDateKey(new Date(y, m, 1));
+    const to = toDateKey(new Date(y, m, daysInMonth));
+    refreshSessionDates(from, to);
+  }, [calDate, refreshSessionDates]);
+
+  useEffect(() => {
+    const y = calDate.getFullYear();
+    const m = calDate.getMonth();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
     const keys: string[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(y, m, d);
-      if (date.getDay() === 5 && date >= today) keys.push(toDateKey(date));
+      const key = toDateKey(date);
+      if (date >= today && sessionDates[key]) keys.push(key);
     }
-    refreshSpots(keys);
-  }, [calDate, today, refreshSpots]);
+    if (keys.length > 0) refreshSpots(keys);
+  }, [calDate, today, sessionDates, refreshSpots]);
 
   const monthNamesEn = [
     "January",
@@ -86,15 +102,15 @@ export function SessionCalendarPicker() {
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(y, m, d);
     const dateMs = startOfDay(date).getTime();
-    const isFriday = date.getDay() === 5;
+    const isSessionDay = Boolean(sessionDates[toDateKey(date)]);
     const isPast = dateMs < todayMs;
-    const locked = isFriday && !isPast && isWithinBookingLock(date, today);
-    const open = isFriday && !isPast && isBookable(date, today);
-    const spots = isFriday
+    const locked = isSessionDay && !isPast && isWithinBookingLock(date, today);
+    const open = isSessionDay && !isPast && isBookable(date, today);
+    const spots = isSessionDay
       ? (spotsByDate[toDateKey(date)] ?? MAX_CASUAL)
       : 0;
     const isFull = spots === 0;
-    const isSel = isFriday && selMs === dateMs;
+    const isSel = isSessionDay && selMs === dateMs;
 
     if (open && !isFull) {
       cells.push(

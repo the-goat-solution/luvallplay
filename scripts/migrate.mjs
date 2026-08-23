@@ -47,6 +47,46 @@ async function main() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
+  await pool.sql`
+    CREATE TABLE IF NOT EXISTS donations (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      amount_cents INT NOT NULL,
+      frequency TEXT NOT NULL DEFAULT 'once',
+      stripe_payment_intent_id TEXT UNIQUE,
+      stripe_subscription_id TEXT UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+  await pool.sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS google_event_id TEXT;
+  `;
+  await pool.sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS calendar_summary TEXT;
+  `;
+  await pool.sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_start_time TIMESTAMPTZ;
+  `;
+  await pool.sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_end_time TIMESTAMPTZ;
+  `;
+  await pool.sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_location TEXT;
+  `;
+  await pool.sql`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ;
+  `;
+  await pool.sql`
+    CREATE TABLE IF NOT EXISTS session_alert_state (
+      session_date DATE PRIMARY KEY REFERENCES sessions(date),
+      state TEXT NOT NULL DEFAULT 'ok',
+      headcount INT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
 
   console.log("Database tables ready.");
   await pool.end();

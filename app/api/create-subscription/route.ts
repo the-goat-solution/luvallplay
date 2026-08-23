@@ -75,9 +75,28 @@ export async function POST(request: Request) {
 
     if (process.env.POSTGRES_URL) {
       await ensureTables();
+      const item = subscription.items.data[0];
+      const periodStart = new Date(
+        (item?.current_period_start ?? subscription.created) * 1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+      const periodEnd = item
+        ? new Date(item.current_period_end * 1000).toISOString().slice(0, 10)
+        : periodStart;
       await sql`
-        INSERT INTO memberships (email, plan, stripe_subscription_id, status)
-        VALUES (${body.email}, ${body.plan}, ${subscription.id}, 'pending')
+        INSERT INTO memberships (email, plan, first_name, last_name, phone, period_start, period_end, stripe_subscription_id, status)
+        VALUES (
+          ${body.email},
+          ${body.plan},
+          ${body.firstName},
+          ${body.lastName},
+          ${body.phone ?? null},
+          ${periodStart},
+          ${periodEnd},
+          ${subscription.id},
+          'pending'
+        )
         ON CONFLICT (stripe_subscription_id) DO NOTHING;
       `;
     }

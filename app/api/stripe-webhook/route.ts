@@ -67,10 +67,25 @@ export async function POST(request: Request) {
   if (event.type === "customer.subscription.updated") {
     const sub = event.data.object as Stripe.Subscription;
     if (process.env.POSTGRES_URL) {
-      await sql`
-        UPDATE memberships SET status = ${sub.status}
-        WHERE stripe_subscription_id = ${sub.id};
-      `;
+      const item = sub.items.data[0];
+      if (item) {
+        const periodStart = new Date(item.current_period_start * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const periodEnd = new Date(item.current_period_end * 1000)
+          .toISOString()
+          .slice(0, 10);
+        await sql`
+          UPDATE memberships
+          SET status = ${sub.status}, period_start = ${periodStart}, period_end = ${periodEnd}
+          WHERE stripe_subscription_id = ${sub.id};
+        `;
+      } else {
+        await sql`
+          UPDATE memberships SET status = ${sub.status}
+          WHERE stripe_subscription_id = ${sub.id};
+        `;
+      }
       await sql`
         UPDATE donations SET status = ${sub.status}
         WHERE stripe_subscription_id = ${sub.id};

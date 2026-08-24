@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sql } from "@vercel/postgres";
 import { DONATION_MIN_CENTS, DONATION_MAX_CENTS } from "@/lib/constants";
-import { getStripe, getDonationProductId } from "@/lib/stripe";
+import { getStripe, getDonationProductId, getInvoicePaymentClientSecret } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 import { ensureTables } from "@/lib/db";
 
@@ -64,7 +64,6 @@ export async function POST(request: Request) {
       payment_settings: {
         save_default_payment_method: "on_subscription",
       },
-      expand: ["latest_invoice.payment_intent"],
       metadata: {
         type: "donation",
         firstName: body.firstName,
@@ -73,18 +72,14 @@ export async function POST(request: Request) {
       },
     });
 
-    const invoice = subscription.latest_invoice;
-    const paymentIntent =
-      typeof invoice === "object" && invoice && "payment_intent" in invoice
-        ? invoice.payment_intent
-        : null;
+    const invoiceId =
+      typeof subscription.latest_invoice === "string"
+        ? subscription.latest_invoice
+        : subscription.latest_invoice?.id;
 
-    const clientSecret =
-      typeof paymentIntent === "object" &&
-      paymentIntent &&
-      "client_secret" in paymentIntent
-        ? (paymentIntent.client_secret as string)
-        : null;
+    const clientSecret = invoiceId
+      ? await getInvoicePaymentClientSecret(stripe, invoiceId)
+      : null;
 
     if (!clientSecret) {
       return NextResponse.json(

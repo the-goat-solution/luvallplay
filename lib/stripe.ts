@@ -37,3 +37,23 @@ export async function cancelSubscriptionAtPeriodEnd(
     cancel_at_period_end: true,
   });
 }
+
+// The invoice's payment (and its PaymentIntent) attach a moment after the
+// invoice itself is created, so an immediate retrieve can race and find
+// `payments.data` still empty — poll briefly until it shows up.
+export async function getInvoicePaymentClientSecret(
+  stripeClient: Stripe,
+  invoiceId: string,
+): Promise<string | null> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const invoice = await stripeClient.invoices.retrieve(invoiceId, {
+      expand: ["payments.data.payment.payment_intent"],
+    });
+    const paymentIntent = invoice.payments?.data[0]?.payment?.payment_intent;
+    if (typeof paymentIntent === "object" && paymentIntent?.client_secret) {
+      return paymentIntent.client_secret;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  return null;
+}

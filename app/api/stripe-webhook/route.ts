@@ -125,6 +125,25 @@ export async function POST(request: Request) {
         WHERE stripe_subscription_id = ${subId};
       `;
     }
+
+    if (
+      !subId &&
+      invoice.metadata?.type === "casual" &&
+      invoice.metadata.sessionDate &&
+      process.env.POSTGRES_URL
+    ) {
+      await ensureTables();
+      const ok = await reserveBookingSlot(invoice.metadata.sessionDate, {
+        firstName: invoice.metadata.firstName ?? "",
+        lastName: invoice.metadata.lastName ?? "",
+        email: invoice.metadata.email ?? "",
+        phone: invoice.metadata.phone || undefined,
+        paymentIntentId: `cash-invoice-${invoice.id}`,
+      });
+      if (!ok) {
+        console.error("Could not reserve slot for cash invoice — session full", invoice.id);
+      }
+    }
   }
 
   return NextResponse.json({ received: true });

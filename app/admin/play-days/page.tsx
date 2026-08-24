@@ -4,6 +4,7 @@ import {
   getAvailableSpots,
   getRosterForDate,
   listAllSessionDates,
+  removeBooking,
   reserveBookingSlot,
 } from "@/lib/db";
 import { formatDateLong, getDayName, toDateKey } from "@/lib/dates";
@@ -108,12 +109,23 @@ async function addCashPlayer(date: string, formData: FormData) {
   redirect(`/admin/play-days?date=${date}&cashAdded=1`);
 }
 
+async function removePlayer(date: string, bookingId: number) {
+  "use server";
+  await removeBooking(bookingId, date);
+  redirect(`/admin/play-days?date=${date}&removed=1`);
+}
+
 export default async function PlayDaysAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; cashAdded?: string; cashError?: string }>;
+  searchParams: Promise<{
+    date?: string;
+    cashAdded?: string;
+    cashError?: string;
+    removed?: string;
+  }>;
 }) {
-  const { date: dateParam, cashAdded, cashError } = await searchParams;
+  const { date: dateParam, cashAdded, cashError, removed } = await searchParams;
 
   const sessionKeys = process.env.POSTGRES_URL
     ? await (async () => {
@@ -211,6 +223,20 @@ export default async function PlayDaysAdminPage({
               {cashError}
             </p>
           ) : null}
+          {removed ? (
+            <p
+              style={{
+                background: "#e6f4ea",
+                color: "#1e7e34",
+                padding: "8px 12px",
+                borderRadius: 6,
+                marginBottom: 16,
+                fontSize: 13,
+              }}
+            >
+              Player removed from the roster.
+            </p>
+          ) : null}
 
           <p style={{ fontWeight: 600, marginBottom: 8 }}>
             {roster.length} player{roster.length === 1 ? "" : "s"} signed up for {selectedDate}
@@ -223,12 +249,13 @@ export default async function PlayDaysAdminPage({
                 <th style={{ padding: "6px 8px" }}>Phone</th>
                 <th style={{ padding: "6px 8px" }}>Type</th>
                 <th style={{ padding: "6px 8px" }}>Payment</th>
+                <th style={{ padding: "6px 8px" }}></th>
               </tr>
             </thead>
             <tbody>
               {roster.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: "10px 8px", color: "#888" }}>
+                  <td colSpan={6} style={{ padding: "10px 8px", color: "#888" }}>
                     No signups yet.
                   </td>
                 </tr>
@@ -240,6 +267,26 @@ export default async function PlayDaysAdminPage({
                     <td style={{ padding: "6px 8px" }}>{p.phone ?? ""}</td>
                     <td style={{ padding: "6px 8px" }}>{PLAN_LABEL[p.type]}</td>
                     <td style={{ padding: "6px 8px" }}>{p.method === "cash" ? "Cash" : "Card"}</td>
+                    <td style={{ padding: "6px 8px" }}>
+                      {p.bookingId !== null ? (
+                        <form action={removePlayer.bind(null, selectedDate, p.bookingId)}>
+                          <button
+                            type="submit"
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #a12622",
+                              background: "#fff",
+                              color: "#a12622",
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </form>
+                      ) : null}
+                    </td>
                   </tr>
                 ))
               )}

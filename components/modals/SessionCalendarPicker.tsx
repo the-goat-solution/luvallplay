@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
-import { MAX_CASUAL } from "@/lib/constants";
+import { SESSION_CAPACITY } from "@/lib/constants";
 import {
   formatDateLong,
   getDayName,
@@ -107,7 +107,7 @@ export function SessionCalendarPicker() {
     const locked = isSessionDay && !isPast && isWithinBookingLock(date, today);
     const open = isSessionDay && !isPast && isBookable(date, today);
     const spots = isSessionDay
-      ? (spotsByDate[toDateKey(date)] ?? MAX_CASUAL)
+      ? (spotsByDate[toDateKey(date)] ?? SESSION_CAPACITY)
       : 0;
     const isFull = spots === 0;
     const isSel = isSessionDay && selMs === dateMs;
@@ -219,7 +219,7 @@ export function SessionCalendarPicker() {
             </div>
           </div>
           <div className="selected-session-spots">
-            {spotsByDate[toDateKey(selectedSession)] ?? MAX_CASUAL}{" "}
+            {spotsByDate[toDateKey(selectedSession)] ?? SESSION_CAPACITY}{" "}
             {tr("spots_left")}
           </div>
         </div>

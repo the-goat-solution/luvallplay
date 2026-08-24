@@ -123,7 +123,14 @@ export const scheduleSettings = defineType({
     defineField({ name: "venueName", type: "localeString" }),
     defineField({ name: "address", type: "localeString" }),
     defineField({ name: "timeLabel", type: "localeString" }),
-    defineField({ name: "maxCasualSpots", type: "number", initialValue: 8 }),
+    defineField({
+      name: "maxCasualSpots",
+      title: "Session capacity",
+      description:
+        "Total players allowed on court per session. Casual spots remaining are this minus current active members.",
+      type: "number",
+      initialValue: 12,
+    }),
     defineField({ name: "bookingLockDays", type: "number", initialValue: 14 }),
   ],
 });

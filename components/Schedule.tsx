@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
-import { MAX_CASUAL } from "@/lib/constants";
+import { SESSION_CAPACITY } from "@/lib/constants";
 import { pickLocale } from "@/lib/sanity";
 import type { CmsScheduleSettings } from "@/lib/sanity-queries";
 import {
@@ -56,7 +56,7 @@ export function Schedule({
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
 
-  const maxSpots = scheduleSettings?.maxCasualSpots ?? MAX_CASUAL;
+  const maxSpots = scheduleSettings?.maxCasualSpots ?? SESSION_CAPACITY;
   const venueLabel = scheduleSettings?.venueName
     ? pickLocale(scheduleSettings.venueName, lang)
     : "";

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { MAX_CASUAL } from "@/lib/constants";
+import { SESSION_CAPACITY } from "@/lib/constants";
 import { getAvailableSpots, ensureTables } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
@@ -26,12 +26,12 @@ export async function GET(request: Request) {
       }
     } else {
       for (const date of dates) {
-        spots[date] = MAX_CASUAL;
+        spots[date] = SESSION_CAPACITY;
       }
     }
   } catch {
     for (const date of dates) {
-      spots[date] = MAX_CASUAL;
+      spots[date] = SESSION_CAPACITY;
     }
   }
 

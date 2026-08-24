@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sql } from "@vercel/postgres";
 import { DONATION_MIN_CENTS, DONATION_MAX_CENTS } from "@/lib/constants";
-import { getStripe, getDonationProductId, getInvoicePaymentClientSecret } from "@/lib/stripe";
+import { getStripe, getDonationProductId, getInvoicePaymentIntent } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 import { ensureTables } from "@/lib/db";
 
@@ -77,16 +77,21 @@ export async function POST(request: Request) {
         ? subscription.latest_invoice
         : subscription.latest_invoice?.id;
 
-    const clientSecret = invoiceId
-      ? await getInvoicePaymentClientSecret(stripe, invoiceId)
+    const invoicePaymentIntent = invoiceId
+      ? await getInvoicePaymentIntent(stripe, invoiceId)
       : null;
 
-    if (!clientSecret) {
+    if (!invoicePaymentIntent) {
       return NextResponse.json(
         { error: "Failed to initialize donation payment" },
         { status: 500 },
       );
     }
+    const clientSecret = invoicePaymentIntent.clientSecret;
+
+    await stripe.paymentIntents.update(invoicePaymentIntent.id, {
+      receipt_email: body.email,
+    });
 
     if (process.env.POSTGRES_URL) {
       await ensureTables();

@@ -24,6 +24,7 @@ export function MembershipModal() {
   const [ln, setLn] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [recurring, setRecurring] = useState(true);
 
   const close = () => {
     setOpenModal(null);
@@ -36,6 +37,7 @@ export function MembershipModal() {
     if (open) {
       document.body.style.overflow = "hidden";
       setStep(1);
+      setRecurring(true);
     }
   }, [open]);
 
@@ -55,6 +57,7 @@ export function MembershipModal() {
         lastName: ln.trim(),
         email: email.trim(),
         phone: phone.trim(),
+        recurring,
       }),
     });
     const data = await res.json();
@@ -173,6 +176,47 @@ export function MembershipModal() {
               </div>
             ))}
           </div>
+          {(selectedPlan === "monthly" || selectedPlan === "quarterly") && (
+            <div>
+              <h4
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: 15,
+                  color: "var(--navy)",
+                  fontWeight: 700,
+                  marginBottom: 10,
+                }}
+              >
+                <Trans k="mem_billing" />
+              </h4>
+              <div className="plan-pick">
+                {[true, false].map((isRecurring) => (
+                  <div
+                    key={String(isRecurring)}
+                    className={`plan-opt${recurring === isRecurring ? " sel" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setRecurring(isRecurring)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") setRecurring(isRecurring);
+                    }}
+                  >
+                    <div className="plan-radio">
+                      <div className="plan-dot" />
+                    </div>
+                    <div className="plan-opt-info">
+                      <div className="plan-opt-name">
+                        <Trans k={isRecurring ? "mem_recurring" : "mem_onetime"} />
+                      </div>
+                      <div className="plan-opt-desc">
+                        <Trans k={isRecurring ? "mem_recurring_d" : "mem_onetime_d"} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
       {step === 2 && (
@@ -259,7 +303,10 @@ export function MembershipModal() {
                 {name} Membership
               </span>
               <span>
-                NZD ${price} / {period}
+                NZD ${price}
+                {selectedPlan !== "casual" && !recurring
+                  ? ` / ${tr("mem_onetime")}`
+                  : ` / ${period}`}
               </span>
             </div>
           </div>

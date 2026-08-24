@@ -44,6 +44,13 @@ export async function POST(request: Request) {
       }
     }
 
+    if (pi.metadata?.type === "membership" && process.env.POSTGRES_URL) {
+      await sql`
+        UPDATE memberships SET status = 'active'
+        WHERE stripe_payment_intent_id = ${pi.id};
+      `;
+    }
+
     if (pi.metadata?.type === "donation") {
       if (process.env.POSTGRES_URL) {
         await ensureTables();

@@ -53,6 +53,8 @@ export async function ensureTables() {
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS period_start DATE;`;
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS period_end DATE;`;
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS recurring BOOLEAN NOT NULL DEFAULT TRUE;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT UNIQUE;`;
   await sql`
     CREATE TABLE IF NOT EXISTS donations (
       id SERIAL PRIMARY KEY,
@@ -93,6 +95,14 @@ export async function ensureTables() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
+}
+
+// Adds whole calendar months to a YYYY-MM-DD date string, for computing a
+// one-time (non-recurring) membership's period_end without a Stripe subscription.
+export function addMonths(dateStr: string, months: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
 }
 
 export async function ensureSession(date: string) {
@@ -339,6 +349,7 @@ export type MembershipRow = {
   periodEnd: string | null;
   status: string;
   cancelAtPeriodEnd: boolean;
+  recurring: boolean;
   stripeSubscriptionId: string | null;
 };
 
@@ -353,6 +364,7 @@ function mapMembershipRow(r: {
   period_end: Date | null;
   status: string;
   cancel_at_period_end: boolean;
+  recurring: boolean;
   stripe_subscription_id: string | null;
 }): MembershipRow {
   return {
@@ -365,6 +377,7 @@ function mapMembershipRow(r: {
     periodEnd: r.period_end ? r.period_end.toISOString().slice(0, 10) : null,
     status: r.status,
     cancelAtPeriodEnd: r.cancel_at_period_end,
+    recurring: r.recurring,
     stripeSubscriptionId: r.stripe_subscription_id,
   };
 }
@@ -374,7 +387,7 @@ function mapMembershipRow(r: {
 // until Stripe's period-end webhook flips the status).
 export async function listMemberships(): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due')
     ORDER BY plan, created_at DESC;
@@ -384,7 +397,7 @@ export async function listMemberships(): Promise<MembershipRow[]> {
 
 export async function getMembershipById(id: number): Promise<MembershipRow | null> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
     FROM memberships
     WHERE id = ${id};
   `;
@@ -396,11 +409,12 @@ export async function listActiveMembershipsByEmail(
   email: string,
 ): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due')
       AND lower(email) = lower(${email})
       AND cancel_at_period_end = FALSE
+      AND recurring = TRUE
     ORDER BY created_at DESC;
   `;
   return rows.map((r) => mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]));

@@ -17,6 +17,7 @@ function MembersTable({ title, members }: { title: string; members: MembershipRo
             <th style={{ padding: "6px 8px" }}>Email</th>
             <th style={{ padding: "6px 8px" }}>Phone</th>
             <th style={{ padding: "6px 8px" }}>Renews / ends</th>
+            <th style={{ padding: "6px 8px" }}>Billing</th>
             <th style={{ padding: "6px 8px" }}>Status</th>
             <th style={{ padding: "6px 8px" }}></th>
           </tr>
@@ -24,7 +25,7 @@ function MembersTable({ title, members }: { title: string; members: MembershipRo
         <tbody>
           {members.length === 0 ? (
             <tr>
-              <td colSpan={6} style={{ padding: "10px 8px", color: "#888" }}>
+              <td colSpan={7} style={{ padding: "10px 8px", color: "#888" }}>
                 No {title.toLowerCase()}.
               </td>
             </tr>
@@ -35,6 +36,9 @@ function MembersTable({ title, members }: { title: string; members: MembershipRo
                 <td style={{ padding: "6px 8px" }}>{m.email}</td>
                 <td style={{ padding: "6px 8px" }}>{m.phone ?? ""}</td>
                 <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
+                <td style={{ padding: "6px 8px" }}>
+                  {m.recurring ? "Auto-renews" : "One-time"}
+                </td>
                 <td style={{ padding: "6px 8px" }}>
                   {m.cancelAtPeriodEnd ? (
                     <span style={{ color: "#b00020" }}>
@@ -47,7 +51,7 @@ function MembersTable({ title, members }: { title: string; members: MembershipRo
                   )}
                 </td>
                 <td style={{ padding: "6px 8px" }}>
-                  {!m.cancelAtPeriodEnd && (
+                  {m.recurring && !m.cancelAtPeriodEnd && (
                     <MemberCancelButton membershipId={m.id} memberName={m.name} />
                   )}
                 </td>

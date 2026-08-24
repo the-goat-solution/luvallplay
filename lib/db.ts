@@ -113,20 +113,23 @@ export async function ensureSession(date: string) {
   `;
 }
 
-// Casual spots remaining for a session = the session's total capacity, minus
+// Casual spots remaining for a session = the fixed session capacity, minus
 // current active members (monthly/quarterly — they can show up any Friday),
 // minus casual spots already booked for that date.
+//
+// This deliberately ignores the sessions.max_spots column: it's set once
+// when a session row is first created and never updated afterwards (the
+// Google Calendar sync's upsert only touches the calendar-derived columns),
+// so any row created before a SESSION_CAPACITY change stays stuck at the old
+// value forever. Computing straight from the constant avoids that drift.
 export async function getAvailableSpots(date: string): Promise<number> {
   await ensureSession(date);
   const { rows } = await sql`
-    SELECT max_spots, booked_spots FROM sessions WHERE date = ${date};
+    SELECT booked_spots FROM sessions WHERE date = ${date};
   `;
-  const capacity = rows[0]
-    ? (rows[0] as { max_spots: number }).max_spots
-    : SESSION_CAPACITY;
   const booked = rows[0] ? (rows[0] as { booked_spots: number }).booked_spots : 0;
   const activeMembers = await getActiveMemberCount();
-  return Math.max(0, capacity - activeMembers - booked);
+  return Math.max(0, SESSION_CAPACITY - activeMembers - booked);
 }
 
 export async function reserveBookingSlot(
@@ -140,14 +143,15 @@ export async function reserveBookingSlot(
   },
 ): Promise<boolean> {
   await ensureSession(date);
-  // Casual capacity is max_spots minus current active members (they can show
-  // up any Friday), so the atomic guard must account for both to avoid
-  // overselling the court.
+  // Casual capacity is SESSION_CAPACITY minus current active members (they
+  // can show up any Friday), so the atomic guard must account for both to
+  // avoid overselling the court. See getAvailableSpots for why this uses the
+  // constant rather than the sessions.max_spots column.
   const { rowCount } = await sql`
     UPDATE sessions
     SET booked_spots = booked_spots + 1
     WHERE date = ${date}
-      AND booked_spots < max_spots - (
+      AND booked_spots < ${SESSION_CAPACITY} - (
         SELECT COUNT(*)::int FROM memberships WHERE status = 'active'
       );
   `;

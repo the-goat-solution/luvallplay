@@ -1,12 +1,12 @@
 import { sql } from "@vercel/postgres";
-import { MAX_CASUAL } from "./constants";
+import { SESSION_CAPACITY } from "./constants";
 
 export async function ensureTables() {
   // DEFAULT must be a literal — Postgres rejects bind params in CREATE TABLE DDL.
   await sql`
     CREATE TABLE IF NOT EXISTS sessions (
       date DATE PRIMARY KEY,
-      max_spots INT NOT NULL DEFAULT 8,
+      max_spots INT NOT NULL DEFAULT 12,
       booked_spots INT NOT NULL DEFAULT 0
     );
   `;
@@ -108,19 +108,25 @@ export function addMonths(dateStr: string, months: number): string {
 export async function ensureSession(date: string) {
   await sql`
     INSERT INTO sessions (date, max_spots, booked_spots)
-    VALUES (${date}, ${MAX_CASUAL}, 0)
+    VALUES (${date}, ${SESSION_CAPACITY}, 0)
     ON CONFLICT (date) DO NOTHING;
   `;
 }
 
+// Casual spots remaining for a session = the session's total capacity, minus
+// current active members (monthly/quarterly — they can show up any Friday),
+// minus casual spots already booked for that date.
 export async function getAvailableSpots(date: string): Promise<number> {
   await ensureSession(date);
   const { rows } = await sql`
     SELECT max_spots, booked_spots FROM sessions WHERE date = ${date};
   `;
-  if (!rows[0]) return MAX_CASUAL;
-  const row = rows[0] as { max_spots: number; booked_spots: number };
-  return Math.max(0, row.max_spots - row.booked_spots);
+  const capacity = rows[0]
+    ? (rows[0] as { max_spots: number }).max_spots
+    : SESSION_CAPACITY;
+  const booked = rows[0] ? (rows[0] as { booked_spots: number }).booked_spots : 0;
+  const activeMembers = await getActiveMemberCount();
+  return Math.max(0, capacity - activeMembers - booked);
 }
 
 export async function reserveBookingSlot(
@@ -134,10 +140,16 @@ export async function reserveBookingSlot(
   },
 ): Promise<boolean> {
   await ensureSession(date);
+  // Casual capacity is max_spots minus current active members (they can show
+  // up any Friday), so the atomic guard must account for both to avoid
+  // overselling the court.
   const { rowCount } = await sql`
     UPDATE sessions
     SET booked_spots = booked_spots + 1
-    WHERE date = ${date} AND booked_spots < max_spots;
+    WHERE date = ${date}
+      AND booked_spots < max_spots - (
+        SELECT COUNT(*)::int FROM memberships WHERE status = 'active'
+      );
   `;
   if (!rowCount) return false;
 
@@ -174,7 +186,7 @@ export async function upsertSessionFromCalendar(
 ): Promise<void> {
   await sql`
     INSERT INTO sessions (date, max_spots, booked_spots, google_event_id, calendar_summary, event_start_time, event_end_time, event_location, synced_at)
-    VALUES (${date}, ${MAX_CASUAL}, 0, ${event.id}, ${event.summary ?? null}, ${event.start}, ${event.end ?? null}, ${event.location ?? null}, NOW())
+    VALUES (${date}, ${SESSION_CAPACITY}, 0, ${event.id}, ${event.summary ?? null}, ${event.start}, ${event.end ?? null}, ${event.location ?? null}, NOW())
     ON CONFLICT (date) DO UPDATE SET
       google_event_id = EXCLUDED.google_event_id,
       calendar_summary = EXCLUDED.calendar_summary,

@@ -329,17 +329,6 @@ export function MembershipModal() {
           <p className="success-body">
             <Trans k="confirm_join_body" />
           </p>
-          <div className="success-detail">
-            <strong>
-              <Trans k="session_details" />
-            </strong>
-            <br />
-            📅 Every Friday, 6:00 PM – 7:30 PM
-            <br />
-            📍 Graham Condon Recreation and Sport Centre
-            <br />
-            &nbsp;&nbsp;&nbsp;&nbsp;3 Sisson Drive, Papanui, Christchurch 8053
-          </div>
         </div>
       )}
     </ModalShell>

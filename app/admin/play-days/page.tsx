@@ -9,7 +9,7 @@ import {
 } from "@/lib/db";
 import { formatDateLong, getDayName, toDateKey } from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
-import { CASUAL_PRICE_CENTS } from "@/lib/constants";
+import { CASUAL_PRICE_CENTS, SESSION_CAPACITY } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
@@ -142,8 +142,10 @@ export default async function PlayDaysAdminPage({
     dateParam && sessionKeys.includes(dateParam) ? dateParam : defaultDate;
 
   let roster: Awaited<ReturnType<typeof getRosterForDate>> = [];
+  let casualSpotsRemaining: number | null = null;
   if (process.env.POSTGRES_URL && selectedDate) {
     roster = await getRosterForDate(selectedDate);
+    casualSpotsRemaining = await getAvailableSpots(selectedDate);
   }
 
   return (
@@ -240,9 +242,16 @@ export default async function PlayDaysAdminPage({
             </p>
           ) : null}
 
-          <p style={{ fontWeight: 600, marginBottom: 8 }}>
+          <p style={{ fontWeight: 600, marginBottom: 4 }}>
             {roster.length} player{roster.length === 1 ? "" : "s"} signed up for {selectedDate}
           </p>
+          {casualSpotsRemaining !== null && (
+            <p style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>
+              {casualSpotsRemaining} casual spot{casualSpotsRemaining === 1 ? "" : "s"} remaining
+              (session capacity {SESSION_CAPACITY} minus active members — see{" "}
+              <a href="/admin/members">Members</a>)
+            </p>
+          )}
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>

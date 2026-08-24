@@ -1,4 +1,7 @@
-export const MAX_CASUAL = 8;
+// Total players allowed on court per session. Casual spots remaining are this
+// minus current active members (who can show up any Friday) minus casual
+// bookings already made for that date.
+export const SESSION_CAPACITY = 12;
 export const CASUAL_PRICE_CENTS = 1000;
 export const MONTHLY_PRICE_CENTS = 3300;
 export const QUARTERLY_PRICE_CENTS = 8500;

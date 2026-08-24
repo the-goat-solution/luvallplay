@@ -1,6 +1,12 @@
-import { ensureTables, listMemberships, type MembershipRow } from "@/lib/db";
+import {
+  ensureTables,
+  getActiveMemberCount,
+  listMemberships,
+  type MembershipRow,
+} from "@/lib/db";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
+import { SESSION_CAPACITY } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -65,15 +71,20 @@ function MembersTable({ title, members }: { title: string; members: MembershipRo
 }
 
 export default async function MembersAdminPage() {
-  const memberships = process.env.POSTGRES_URL
+  const { memberships, activeMemberCount } = process.env.POSTGRES_URL
     ? await (async () => {
         await ensureTables();
-        return listMemberships();
+        const [memberships, activeMemberCount] = await Promise.all([
+          listMemberships(),
+          getActiveMemberCount(),
+        ]);
+        return { memberships, activeMemberCount };
       })()
-    : [];
+    : { memberships: [], activeMemberCount: 0 };
 
   const monthly = memberships.filter((m) => m.plan === "monthly");
   const quarterly = memberships.filter((m) => m.plan === "quarterly");
+  const casualSpotsRemaining = Math.max(0, SESSION_CAPACITY - activeMemberCount);
 
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 860, margin: "40px auto", padding: "0 20px" }}>
@@ -87,6 +98,21 @@ export default async function MembersAdminPage() {
         <p>Database is not configured.</p>
       ) : (
         <>
+          <p
+            style={{
+              background: "#eef2f7",
+              color: "#1a2a4a",
+              padding: "10px 14px",
+              borderRadius: 6,
+              marginBottom: 20,
+              fontSize: 13,
+            }}
+          >
+            {activeMemberCount} active member{activeMemberCount === 1 ? "" : "s"} · session
+            capacity is {SESSION_CAPACITY}, so up to {casualSpotsRemaining} casual spot
+            {casualSpotsRemaining === 1 ? "" : "s"} remain per session — see the{" "}
+            <a href="/admin/play-days">Play days</a> page for a specific date.
+          </p>
           <MembersTable title="Monthly members" members={monthly} />
           <MembersTable title="Quarterly members" members={quarterly} />
         </>

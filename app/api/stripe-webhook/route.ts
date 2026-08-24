@@ -77,12 +77,12 @@ export async function POST(request: Request) {
           .slice(0, 10);
         await sql`
           UPDATE memberships
-          SET status = ${sub.status}, period_start = ${periodStart}, period_end = ${periodEnd}
+          SET status = ${sub.status}, period_start = ${periodStart}, period_end = ${periodEnd}, cancel_at_period_end = ${sub.cancel_at_period_end}
           WHERE stripe_subscription_id = ${sub.id};
         `;
       } else {
         await sql`
-          UPDATE memberships SET status = ${sub.status}
+          UPDATE memberships SET status = ${sub.status}, cancel_at_period_end = ${sub.cancel_at_period_end}
           WHERE stripe_subscription_id = ${sub.id};
         `;
       }

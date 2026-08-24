@@ -110,6 +110,7 @@ const I18N = {
     footer_contact: "Contact",
     footer_follow: "Follow Us",
     footer_lang: "Language",
+    footer_cancel_membership: "Cancel Membership",
     footer_copy:
       "© 2026 Three Wolves Badminton Club. All rights reserved.",
     modal_book: "Book a Casual Spot",
@@ -269,6 +270,7 @@ const I18N = {
     footer_contact: "Liên Hệ",
     footer_follow: "Theo Dõi",
     footer_lang: "Ngôn Ngữ",
+    footer_cancel_membership: "Hủy Hội Viên",
     footer_copy:
       "© 2026 Câu Lạc Bộ Cầu Lông Three Wolves. Bản quyền được bảo lưu.",
     modal_book: "Đặt Chỗ Thông Thường",

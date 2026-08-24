@@ -8,6 +8,7 @@ import {
   reserveBookingSlot,
 } from "@/lib/db";
 import { formatDateLong, getDayName, toDateKey } from "@/lib/dates";
+import { AdminNav } from "@/components/admin/AdminNav";
 import { CASUAL_PRICE_CENTS } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
 
@@ -151,6 +152,7 @@ export default async function PlayDaysAdminPage({
       <p style={{ color: "#666", marginBottom: 20 }}>
         Casual bookings and members whose subscription period covers the selected play day.
       </p>
+      <AdminNav active="play-days" />
 
       {!process.env.POSTGRES_URL ? (
         <p>Database is not configured.</p>

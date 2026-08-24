@@ -28,6 +28,16 @@ export function getDonationProductId(): string {
   return id;
 }
 
+// Cancels at the end of the current billing period rather than
+// immediately, so a member keeps the access they already paid for.
+export async function cancelSubscriptionAtPeriodEnd(
+  subscriptionId: string,
+): Promise<Stripe.Subscription> {
+  return getStripe().subscriptions.update(subscriptionId, {
+    cancel_at_period_end: true,
+  });
+}
+
 // The invoice's payment (and its PaymentIntent) attach a moment after the
 // invoice itself is created, so an immediate retrieve can race and find
 // `payments.data` still empty — poll briefly until it shows up.

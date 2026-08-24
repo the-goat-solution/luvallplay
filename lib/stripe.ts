@@ -27,3 +27,13 @@ export function getDonationProductId(): string {
   if (!id) throw new Error("STRIPE_PRODUCT_DONATION is not configured");
   return id;
 }
+
+// Cancels at the end of the current billing period rather than
+// immediately, so a member keeps the access they already paid for.
+export async function cancelSubscriptionAtPeriodEnd(
+  subscriptionId: string,
+): Promise<Stripe.Subscription> {
+  return getStripe().subscriptions.update(subscriptionId, {
+    cancel_at_period_end: true,
+  });
+}

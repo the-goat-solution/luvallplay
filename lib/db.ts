@@ -52,6 +52,7 @@ export async function ensureTables() {
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS phone TEXT;`;
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS period_start DATE;`;
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS period_end DATE;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;`;
   await sql`
     CREATE TABLE IF NOT EXISTS donations (
       id SERIAL PRIMARY KEY,
@@ -307,4 +308,87 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
   }));
 
   return [...casual, ...members];
+}
+
+export type MembershipRow = {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  plan: "monthly" | "quarterly";
+  periodStart: string | null;
+  periodEnd: string | null;
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  stripeSubscriptionId: string | null;
+};
+
+function mapMembershipRow(r: {
+  id: number;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  plan: string;
+  period_start: Date | null;
+  period_end: Date | null;
+  status: string;
+  cancel_at_period_end: boolean;
+  stripe_subscription_id: string | null;
+}): MembershipRow {
+  return {
+    id: r.id,
+    name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || r.email,
+    email: r.email,
+    phone: r.phone,
+    plan: r.plan === "quarterly" ? "quarterly" : "monthly",
+    periodStart: r.period_start ? r.period_start.toISOString().slice(0, 10) : null,
+    periodEnd: r.period_end ? r.period_end.toISOString().slice(0, 10) : null,
+    status: r.status,
+    cancelAtPeriodEnd: r.cancel_at_period_end,
+    stripeSubscriptionId: r.stripe_subscription_id,
+  };
+}
+
+// Memberships still worth showing to the admin roster: active subscriptions
+// and any already scheduled to lapse (so a pending cancellation stays visible
+// until Stripe's period-end webhook flips the status).
+export async function listMemberships(): Promise<MembershipRow[]> {
+  const { rows } = await sql`
+    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, stripe_subscription_id
+    FROM memberships
+    WHERE status IN ('active', 'trialing', 'past_due')
+    ORDER BY plan, created_at DESC;
+  `;
+  return rows.map((r) => mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]));
+}
+
+export async function getMembershipById(id: number): Promise<MembershipRow | null> {
+  const { rows } = await sql`
+    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, stripe_subscription_id
+    FROM memberships
+    WHERE id = ${id};
+  `;
+  const row = rows[0];
+  return row ? mapMembershipRow(row as Parameters<typeof mapMembershipRow>[0]) : null;
+}
+
+export async function listActiveMembershipsByEmail(
+  email: string,
+): Promise<MembershipRow[]> {
+  const { rows } = await sql`
+    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, stripe_subscription_id
+    FROM memberships
+    WHERE status IN ('active', 'trialing', 'past_due')
+      AND lower(email) = lower(${email})
+      AND cancel_at_period_end = FALSE
+    ORDER BY created_at DESC;
+  `;
+  return rows.map((r) => mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]));
+}
+
+export async function setMembershipCancelAtPeriodEnd(id: number): Promise<void> {
+  await sql`
+    UPDATE memberships SET cancel_at_period_end = TRUE WHERE id = ${id};
+  `;
 }

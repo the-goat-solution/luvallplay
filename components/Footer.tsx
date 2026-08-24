@@ -74,6 +74,11 @@ export function Footer() {
                   <Trans k="nav_donate" />
                 </a>
               </li>
+              <li>
+                <a href="/cancel-membership">
+                  <Trans k="footer_cancel_membership" />
+                </a>
+              </li>
             </ul>
           </div>
 

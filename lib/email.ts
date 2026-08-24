@@ -67,6 +67,38 @@ export async function sendRosterEmail(
   });
 }
 
+export async function sendCancellationLinkEmail(
+  to: string,
+  planLabel: string,
+  confirmUrl: string,
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const html = `
+    <p>We received a request to cancel your ${escapeHtml(planLabel)} membership at Three Wolves Badminton Club.</p>
+    <p><a href="${escapeHtml(confirmUrl)}">Confirm your cancellation</a></p>
+    <p>This link expires in 24 hours. If you didn't request this, you can ignore this email — your membership will stay active.</p>
+  `;
+  const text = [
+    `We received a request to cancel your ${planLabel} membership at Three Wolves Badminton Club.`,
+    "",
+    `Confirm your cancellation: ${confirmUrl}`,
+    "",
+    "This link expires in 24 hours. If you didn't request this, you can ignore this email — your membership will stay active.",
+  ].join("\n");
+
+  await getResend().emails.send({
+    from,
+    to,
+    subject: "Confirm your membership cancellation — Three Wolves Badminton Club",
+    html,
+    text,
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

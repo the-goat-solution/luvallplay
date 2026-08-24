@@ -35,6 +35,7 @@ type AppContextValue = {
   setSchedulePick: (d: Date | null) => void;
   waitlistSession: Date | null;
   spotsByDate: Record<string, number>;
+  signedUpByDate: Record<string, number>;
   refreshSpots: (dates: string[]) => Promise<void>;
   sessionDates: Record<string, SessionDateInfo>;
   refreshSessionDates: (from: string, to: string) => Promise<void>;
@@ -49,6 +50,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [schedulePick, setSchedulePick] = useState<Date | null>(null);
   const [waitlistSession, setWaitlistSession] = useState<Date | null>(null);
   const [spotsByDate, setSpotsByDate] = useState<Record<string, number>>({});
+  const [signedUpByDate, setSignedUpByDate] = useState<Record<string, number>>({});
   const [sessionDates, setSessionDates] = useState<Record<string, SessionDateInfo>>({});
 
   const refreshSpots = useCallback(async (dates: string[]) => {
@@ -58,8 +60,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         `/api/spots?dates=${encodeURIComponent(dates.join(","))}`,
       );
       if (!res.ok) return;
-      const data = (await res.json()) as { spots: Record<string, number> };
+      const data = (await res.json()) as {
+        spots: Record<string, number>;
+        signedUp?: Record<string, number>;
+      };
       setSpotsByDate((prev) => ({ ...prev, ...data.spots }));
+      if (data.signedUp) {
+        setSignedUpByDate((prev) => ({ ...prev, ...data.signedUp }));
+      }
     } catch {
       /* offline / db not configured */
     }
@@ -127,6 +135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSchedulePick,
       waitlistSession,
       spotsByDate,
+      signedUpByDate,
       refreshSpots,
       sessionDates,
       refreshSessionDates,
@@ -142,6 +151,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       schedulePick,
       waitlistSession,
       spotsByDate,
+      signedUpByDate,
       refreshSpots,
       sessionDates,
       refreshSessionDates,

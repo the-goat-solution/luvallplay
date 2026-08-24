@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { SESSION_CAPACITY } from "@/lib/constants";
-import { getAvailableSpots, ensureTables } from "@/lib/db";
+import { getAvailableSpots, getSessionHeadcount, ensureTables } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
 export async function GET(request: Request) {
@@ -17,23 +17,27 @@ export async function GET(request: Request) {
 
   const dates = datesParam.split(",").map((d) => d.trim()).filter(Boolean);
   const spots: Record<string, number> = {};
+  const signedUp: Record<string, number> = {};
 
   try {
     if (process.env.POSTGRES_URL) {
       await ensureTables();
       for (const date of dates) {
         spots[date] = await getAvailableSpots(date);
+        signedUp[date] = (await getSessionHeadcount(date)).total;
       }
     } else {
       for (const date of dates) {
         spots[date] = SESSION_CAPACITY;
+        signedUp[date] = 0;
       }
     }
   } catch {
     for (const date of dates) {
       spots[date] = SESSION_CAPACITY;
+      signedUp[date] = 0;
     }
   }
 
-  return NextResponse.json({ spots });
+  return NextResponse.json({ spots, signedUp });
 }

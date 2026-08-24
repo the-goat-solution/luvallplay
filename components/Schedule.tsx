@@ -29,6 +29,7 @@ export function Schedule({
     schedulePick,
     setSchedulePick,
     spotsByDate,
+    signedUpByDate,
     refreshSpots,
     sessionDates,
     refreshSessionDates,
@@ -75,6 +76,9 @@ export function Schedule({
   const displayLocation = sessionInfo?.eventLocation || null;
   const spotsAvail =
     dateKey && spotsByDate[dateKey] !== undefined ? spotsByDate[dateKey] : maxSpots;
+  const signedUp = dateKey && signedUpByDate[dateKey] !== undefined
+    ? signedUpByDate[dateKey]
+    : 0;
 
   const withinLock = displayDate ? isWithinBookingLock(displayDate, today) : false;
   const bookable = displayDate ? isBookable(displayDate, today) : false;
@@ -356,12 +360,12 @@ export function Schedule({
                 <div
                   className="ngc-bar"
                   style={{
-                    width: `${((maxSpots - spotsAvail) / maxSpots) * 100}%`,
+                    width: `${Math.min(100, (signedUp / maxSpots) * 100)}%`,
                   }}
                 />
               </div>
               <div className="ngc-bar-lbl">
-                {tr("spots_label", { n: spotsAvail })}
+                {tr("session_signed_up", { n: signedUp })}
               </div>
 
               <button

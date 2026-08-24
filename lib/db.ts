@@ -146,6 +146,17 @@ export async function reserveBookingSlot(
   return true;
 }
 
+export async function removeBooking(bookingId: number, date: string): Promise<void> {
+  const { rowCount } = await sql`
+    DELETE FROM bookings WHERE id = ${bookingId} AND session_date = ${date};
+  `;
+  if (rowCount) {
+    await sql`
+      UPDATE sessions SET booked_spots = GREATEST(booked_spots - 1, 0) WHERE date = ${date};
+    `;
+  }
+}
+
 export async function upsertSessionFromCalendar(
   date: string,
   event: { id: string; summary?: string; start: string; end?: string; location?: string },
@@ -272,6 +283,7 @@ export async function upsertSessionAlertState(
 }
 
 export type RosterEntry = {
+  bookingId: number | null;
   name: string;
   email: string;
   phone: string | null;
@@ -281,7 +293,7 @@ export type RosterEntry = {
 
 export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
   const { rows: bookingRows } = await sql`
-    SELECT first_name, last_name, email, phone, payment_intent_id
+    SELECT id, first_name, last_name, email, phone, payment_intent_id
     FROM bookings
     WHERE session_date = ${date} AND status = 'confirmed'
     ORDER BY created_at ASC;
@@ -294,6 +306,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
   `;
 
   const casual: RosterEntry[] = bookingRows.map((r) => ({
+    bookingId: r.id as number,
     name: `${r.first_name} ${r.last_name}`.trim(),
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
@@ -304,6 +317,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
   }));
 
   const members: RosterEntry[] = memberRows.map((r) => ({
+    bookingId: null,
     name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || (r.email as string),
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,

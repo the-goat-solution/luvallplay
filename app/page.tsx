@@ -14,6 +14,7 @@ import {
   fetchAbout,
   fetchGallery,
   fetchScheduleSettings,
+  fetchPricingPlans,
 } from "@/lib/sanity-queries";
 
 export const revalidate = 60;
@@ -27,13 +28,15 @@ function getCalendarSubscribeLinks(calendarId: string | undefined) {
 }
 
 export default async function HomePage() {
-  const [siteSettings, hero, about, gallery, scheduleSettings] = await Promise.all([
-    fetchSiteSettings(),
-    fetchHero(),
-    fetchAbout(),
-    fetchGallery(),
-    fetchScheduleSettings(),
-  ]);
+  const [siteSettings, hero, about, gallery, scheduleSettings, pricingPlans] =
+    await Promise.all([
+      fetchSiteSettings(),
+      fetchHero(),
+      fetchAbout(),
+      fetchGallery(),
+      fetchScheduleSettings(),
+      fetchPricingPlans(),
+    ]);
 
   const calendarSubscribe = getCalendarSubscribeLinks(process.env.GOOGLE_CALENDAR_ID);
 
@@ -50,11 +53,14 @@ export default async function HomePage() {
         calendarSubscribe={calendarSubscribe}
       />
       <Gallery images={gallery ?? undefined} />
-      <Membership />
+      <Membership pricingPlans={pricingPlans ?? undefined} />
       <Reviews googleReviewUrl={siteSettings?.googleReviewUrl} />
       <Donate />
       <Footer />
-      <ClientShell galleryImages={gallery ?? undefined} />
+      <ClientShell
+        galleryImages={gallery ?? undefined}
+        pricingPlans={pricingPlans ?? undefined}
+      />
     </>
   );
 }

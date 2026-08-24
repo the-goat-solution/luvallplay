@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sql } from "@vercel/postgres";
-import { getStripe, getPriceId, getInvoicePaymentIntent } from "@/lib/stripe";
-import { checkRateLimit, getClientIp } from "@/lib/security";
+import { getStripe, getInvoicePaymentIntent, resolvePriceId } from "@/lib/stripe";
+import { checkRateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
 import { addMonths, ensureTables } from "@/lib/db";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 
@@ -11,8 +11,9 @@ const bodySchema = z.object({
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
   email: z.string().email().max(200),
-  phone: z.string().max(30).optional(),
+  phone: z.string().min(1).max(30),
   recurring: z.boolean().optional().default(true),
+  turnstileToken: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -23,6 +24,11 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await request.json());
+    const turnstileOk = await verifyTurnstile(body.turnstileToken, ip);
+    if (!turnstileOk) {
+      return NextResponse.json({ error: "Captcha verification failed" }, { status: 403 });
+    }
+
     const stripe = getStripe();
 
     if (!body.recurring) {
@@ -95,7 +101,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ clientSecret: paymentIntent.client_secret });
     }
 
-    const priceId = getPriceId(body.plan);
+    const priceId = await resolvePriceId(body.plan);
 
     const customers = await stripe.customers.list({
       email: body.email,

@@ -4,8 +4,11 @@ import { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
+import { FormError } from "@/components/FormError";
 import { ModalShell } from "@/components/modals/ModalShell";
 import { toDateKey } from "@/lib/dates";
+import { validateWaitlist } from "@/lib/validate-contact";
+import type { I18nKey } from "@/lib/i18n";
 
 export function WaitlistModal() {
   const { tr } = useLanguage();
@@ -15,17 +18,24 @@ export function WaitlistModal() {
   const [email, setEmail] = useState("");
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ name?: I18nKey; email?: I18nKey }>({});
 
   const close = () => {
     setOpenModal(null);
     setDone(false);
     setName("");
     setEmail("");
+    setErrors({});
     document.body.style.overflow = "";
   };
 
   const submit = async () => {
-    if (!name.trim() || !email.trim()) return;
+    const result = validateWaitlist(name, email);
+    if (!result.ok) {
+      setErrors(result.errors);
+      return;
+    }
+    setErrors({});
     setLoading(true);
     try {
       const res = await fetch("/api/waitlist", {
@@ -82,9 +92,19 @@ export function WaitlistModal() {
             <input
               className="form-input"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              required
+              aria-invalid={Boolean(errors.name)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.name;
+                  return next;
+                });
+              }}
               placeholder="Your full name"
             />
+            <FormError messageKey={errors.name} />
           </div>
           <div className="form-group">
             <label className="form-label">
@@ -94,9 +114,19 @@ export function WaitlistModal() {
               type="email"
               className="form-input"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              required
+              aria-invalid={Boolean(errors.email)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.email;
+                  return next;
+                });
+              }}
               placeholder="your@email.com"
             />
+            <FormError messageKey={errors.email} />
             <p className="form-hint">
               We&apos;ll notify you as soon as a spot opens. No payment required.
             </p>

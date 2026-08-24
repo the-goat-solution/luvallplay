@@ -1,15 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
+import { ContactDetailsForm } from "@/components/forms/ContactDetailsForm";
+import { StepHeading } from "@/components/forms/StepHeading";
 import { ModalShell, StepBar } from "@/components/modals/ModalShell";
 import { StripeCardForm } from "@/components/payment/StripeCardForm";
-import { PRICES, type PlanId } from "@/lib/constants";
+import {
+  resolveAllPlanDisplays,
+  type CmsPricingPlan,
+} from "@/lib/pricing-plans";
+import {
+  validateContact,
+  type ContactErrors,
+} from "@/lib/validate-contact";
 
-export function MembershipModal() {
-  const { tr } = useLanguage();
+export function MembershipModal({
+  pricingPlans,
+}: {
+  pricingPlans?: CmsPricingPlan[] | null;
+}) {
+  const { lang, tr } = useLanguage();
   const {
     openModal,
     setOpenModal,
@@ -25,11 +38,14 @@ export function MembershipModal() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [recurring, setRecurring] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [errors, setErrors] = useState<ContactErrors>({});
 
   const close = () => {
     setOpenModal(null);
     setStep(1);
     setClientSecret(null);
+    setErrors({});
     document.body.style.overflow = "";
   };
 
@@ -38,14 +54,18 @@ export function MembershipModal() {
       document.body.style.overflow = "hidden";
       setStep(1);
       setRecurring(true);
+      setErrors({});
     }
   }, [open]);
 
-  const planLabels: Record<PlanId, { name: string; period: string }> = {
-    casual: { name: tr("p_cas"), period: tr("p_cas_per") },
-    monthly: { name: tr("p_mon"), period: tr("p_mon_per") },
-    quarterly: { name: tr("p_qtr"), period: tr("p_qtr_per") },
-  };
+  const planDisplays = useMemo(
+    () => resolveAllPlanDisplays(pricingPlans, lang, tr),
+    [pricingPlans, lang, tr],
+  );
+  const planById = useMemo(
+    () => Object.fromEntries(planDisplays.map((p) => [p.planId, p])),
+    [planDisplays],
+  );
 
   const createSubscription = async () => {
     const res = await fetch("/api/create-subscription", {
@@ -58,6 +78,7 @@ export function MembershipModal() {
         email: email.trim(),
         phone: phone.trim(),
         recurring,
+        turnstileToken: turnstileToken || undefined,
       }),
     });
     const data = await res.json();
@@ -73,7 +94,18 @@ export function MembershipModal() {
       return;
     }
     if (step === 2) {
-      if (!fn.trim() || !ln.trim() || !email.trim()) return;
+      const result = validateContact({
+        firstName: fn,
+        lastName: ln,
+        email,
+        phone,
+        turnstileToken,
+      });
+      if (!result.ok) {
+        setErrors(result.errors);
+        return;
+      }
+      setErrors({});
       if (selectedPlan === "monthly" || selectedPlan === "quarterly") {
         try {
           await createSubscription();
@@ -90,8 +122,16 @@ export function MembershipModal() {
     if (step > 1) setStep(step - 1);
   };
 
-  const price = PRICES[selectedPlan] ?? PRICES.monthly;
-  const { name, period } = planLabels[selectedPlan] ?? planLabels.monthly;
+  const selected = planById[selectedPlan] ?? planDisplays[1];
+  const { name, period, priceNzd: price } = selected;
+
+  const clearError = (key: keyof ContactErrors) => {
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   return (
     <ModalShell
@@ -102,16 +142,19 @@ export function MembershipModal() {
       footer={
         step < 4 ? (
           <>
-            {step > 1 && (
-              <button type="button" className="btn btn-bronze-outline" onClick={back}>
+            {step > 1 && step < 4 && (
+              <button
+                type="button"
+                className="btn btn-bronze-outline btn-back"
+                onClick={back}
+              >
                 <Trans k="btn_back" />
               </button>
             )}
             {step < 3 && (
               <button
                 type="button"
-                className="btn btn-navy"
-                style={{ flex: 1 }}
+                className="btn btn-navy btn-continue"
                 onClick={next}
               >
                 <Trans k="btn_continue" />
@@ -124,55 +167,31 @@ export function MembershipModal() {
       <StepBar step={step} />
       {step === 1 && (
         <div>
-          <h4
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 19,
-              color: "var(--navy)",
-              fontWeight: 700,
-              marginBottom: 5,
-            }}
-          >
-            <Trans k="step_plan" />
-          </h4>
+          <StepHeading titleKey="step_plan" required />
           <p style={{ fontSize: 13, color: "var(--text-light)", marginBottom: 18 }}>
             Choose the membership that works best for you.
           </p>
           <div className="plan-pick">
-            {(["casual", "monthly", "quarterly"] as PlanId[]).map((plan) => (
+            {planDisplays.map((plan) => (
               <div
-                key={plan}
-                className={`plan-opt${selectedPlan === plan ? " sel" : ""}`}
+                key={plan.planId}
+                className={`plan-opt${selectedPlan === plan.planId ? " sel" : ""}`}
                 role="button"
                 tabIndex={0}
-                onClick={() => setSelectedPlan(plan)}
+                onClick={() => setSelectedPlan(plan.planId)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ")
-                    setSelectedPlan(plan);
+                    setSelectedPlan(plan.planId);
                 }}
               >
                 <div className="plan-radio">
                   <div className="plan-dot" />
                 </div>
                 <div className="plan-opt-info">
-                  <div className="plan-opt-name">
-                    <Trans k={plan === "casual" ? "p_cas" : plan === "monthly" ? "p_mon" : "p_qtr"} />
-                  </div>
-                  <div className="plan-opt-desc">
-                    {plan === "casual"
-                      ? "Pay per session"
-                      : plan === "monthly"
-                        ? tr("f_cancel")
-                        : tr("p_qtr_d")}
-                  </div>
+                  <div className="plan-opt-name">{plan.name}</div>
+                  <div className="plan-opt-desc">{plan.description}</div>
                 </div>
-                <div className="plan-opt-price">
-                  {plan === "casual"
-                    ? "$10"
-                    : plan === "monthly"
-                      ? "$33/mo"
-                      : "$85/3mo"}
-                </div>
+                <div className="plan-opt-price">{plan.modalPriceLabel}</div>
               </div>
             ))}
           </div>
@@ -221,79 +240,26 @@ export function MembershipModal() {
       )}
       {step === 2 && (
         <div>
-          <h4
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 19,
-              color: "var(--navy)",
-              fontWeight: 700,
-              marginBottom: 5,
-            }}
-          >
-            <Trans k="step_details" />
-          </h4>
-          <p style={{ fontSize: 13, color: "var(--text-light)", marginBottom: 18 }}>
-            We&apos;ll send your membership confirmation to your email.
-          </p>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">
-                <Trans k="form_fn" />
-              </label>
-              <input
-                className="form-input"
-                value={fn}
-                onChange={(e) => setFn(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <Trans k="form_ln" />
-              </label>
-              <input
-                className="form-input"
-                value={ln}
-                onChange={(e) => setLn(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">
-              <Trans k="form_email" />
-            </label>
-            <input
-              type="email"
-              className="form-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">
-              <Trans k="form_phone" />
-            </label>
-            <input
-              type="tel"
-              className="form-input"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
+          <StepHeading titleKey="step_details" />
+          <ContactDetailsForm
+            firstName={fn}
+            lastName={ln}
+            email={email}
+            phone={phone}
+            errors={errors}
+            onFirstNameChange={setFn}
+            onLastNameChange={setLn}
+            onEmailChange={setEmail}
+            onPhoneChange={setPhone}
+            onTurnstileToken={setTurnstileToken}
+            onClearError={clearError}
+            hintKey="form_membership_hint"
+          />
         </div>
       )}
       {step === 3 && (
         <div>
-          <h4
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 19,
-              color: "var(--navy)",
-              fontWeight: 700,
-              marginBottom: 5,
-            }}
-          >
-            <Trans k="step_payment" />
-          </h4>
+          <StepHeading titleKey="step_payment" />
           <p style={{ fontSize: 13, color: "var(--text-light)", marginBottom: 18 }}>
             Your membership activates immediately after payment.
           </p>

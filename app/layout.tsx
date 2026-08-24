@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Three Wolves Badminton Club — Christchurch, NZ",
   description:
-    "Three Wolves Badminton Club — Weekly Friday sessions at Graham Condon Recreation Centre, Christchurch. All skill levels welcome.",
+    "Three Wolves Badminton Club — Badminton sessions in Christchurch. All skill levels welcome.",
 };
 
 export default function RootLayout({

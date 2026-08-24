@@ -151,10 +151,39 @@ export async function fetchReviews(lang: Lang): Promise<CmsReview[] | null> {
   }));
 }
 
-export async function fetchPricingPlans(_lang: Lang) {
-  return cmsFetch(
+export async function fetchPricingPlans(): Promise<
+  import("@/lib/pricing-plans").CmsPricingPlan[] | null
+> {
+  const rows = await cmsFetch<
+    {
+      planId?: string;
+      name?: LocaleString;
+      description?: LocaleText;
+      priceNzd?: number;
+      periodLabel?: LocaleString;
+      featured?: boolean;
+      features?: LocaleString[];
+      stripePriceId?: string;
+    }[]
+  >(
     `*[_type == "pricingPlan"] | order(order asc) {
-      planId, name, description, priceNzd, periodLabel, featured, stripePriceId, features
+      planId, name, description, priceNzd, periodLabel, featured, features, stripePriceId
     }`,
   );
+  if (!rows?.length) return null;
+  const valid = new Set(["casual", "monthly", "quarterly"]);
+  return rows
+    .filter((r): r is typeof r & { planId: "casual" | "monthly" | "quarterly" } =>
+      Boolean(r.planId && valid.has(r.planId)),
+    )
+    .map((r) => ({
+      planId: r.planId,
+      name: r.name,
+      description: r.description,
+      priceNzd: r.priceNzd,
+      periodLabel: r.periodLabel,
+      featured: r.featured,
+      features: r.features,
+      stripePriceId: r.stripePriceId,
+    }));
 }

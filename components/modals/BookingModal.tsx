@@ -4,12 +4,18 @@ import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
+import { FormError } from "@/components/FormError";
+import { ContactDetailsForm } from "@/components/forms/ContactDetailsForm";
+import { StepHeading } from "@/components/forms/StepHeading";
 import { ModalShell, StepBar } from "@/components/modals/ModalShell";
 import { SessionCalendarPicker } from "@/components/modals/SessionCalendarPicker";
 import { StripeCardForm } from "@/components/payment/StripeCardForm";
-import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { toDateKey } from "@/lib/dates";
 import { PRICES } from "@/lib/constants";
+import {
+  validateContact,
+  type ContactErrors,
+} from "@/lib/validate-contact";
 
 export function BookingModal() {
   const { tr } = useLanguage();
@@ -22,11 +28,13 @@ export function BookingModal() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [errors, setErrors] = useState<ContactErrors>({});
 
   const close = () => {
     setOpenModal(null);
     setStep(1);
     setClientSecret(null);
+    setErrors({});
     document.body.style.overflow = "";
   };
 
@@ -34,6 +42,7 @@ export function BookingModal() {
     if (open) {
       document.body.style.overflow = "hidden";
       setStep(1);
+      setErrors({});
     }
   }, [open]);
 
@@ -58,9 +67,28 @@ export function BookingModal() {
   };
 
   const next = async () => {
-    if (step === 1 && !selectedSession) return;
+    if (step === 1) {
+      if (!selectedSession) {
+        setErrors({ session: "form_session_required" });
+        return;
+      }
+      setErrors({});
+      setStep(2);
+      return;
+    }
     if (step === 2) {
-      if (!fn.trim() || !ln.trim() || !email.trim()) return;
+      const result = validateContact({
+        firstName: fn,
+        lastName: ln,
+        email,
+        phone,
+        turnstileToken,
+      });
+      if (!result.ok) {
+        setErrors(result.errors);
+        return;
+      }
+      setErrors({});
       try {
         await createIntent();
       } catch (e) {
@@ -75,6 +103,14 @@ export function BookingModal() {
     if (step > 1) setStep(step - 1);
   };
 
+  const clearError = (key: keyof ContactErrors) => {
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
   return (
     <ModalShell
       id="booking-modal"
@@ -85,15 +121,18 @@ export function BookingModal() {
         step < 4 ? (
           <>
             {step > 1 && step < 4 && (
-              <button type="button" className="btn btn-bronze-outline" onClick={back}>
+              <button
+                type="button"
+                className="btn btn-bronze-outline btn-back"
+                onClick={back}
+              >
                 <Trans k="btn_back" />
               </button>
             )}
             {step < 3 && (
               <button
                 type="button"
-                className="btn btn-navy"
-                style={{ flex: 1 }}
+                className="btn btn-navy btn-continue"
                 onClick={next}
               >
                 <Trans k="btn_continue" />
@@ -106,100 +145,32 @@ export function BookingModal() {
       <StepBar step={step} />
       {step === 1 && (
         <div>
-          <h4
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 19,
-              color: "var(--navy)",
-              fontWeight: 700,
-              marginBottom: 5,
-            }}
-          >
-            <Trans k="step_session" />
-          </h4>
+          <StepHeading titleKey="step_session" required />
           <SessionCalendarPicker />
+          <FormError messageKey={errors.session} />
         </div>
       )}
       {step === 2 && (
         <div>
-          <h4
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 19,
-              color: "var(--navy)",
-              fontWeight: 700,
-              marginBottom: 5,
-            }}
-          >
-            <Trans k="step_details" />
-          </h4>
-          <p style={{ fontSize: 13, color: "var(--text-light)", marginBottom: 18 }}>
-            <Trans k="form_email_hint" />
-          </p>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">
-                <Trans k="form_fn" />
-              </label>
-              <input
-                className="form-input"
-                value={fn}
-                onChange={(e) => setFn(e.target.value)}
-                placeholder={tr("form_fn_ph")}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <Trans k="form_ln" />
-              </label>
-              <input
-                className="form-input"
-                value={ln}
-                onChange={(e) => setLn(e.target.value)}
-                placeholder={tr("form_ln_ph")}
-              />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">
-              <Trans k="form_email" />
-            </label>
-            <input
-              type="email"
-              className="form-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={tr("form_email_ph")}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">
-              <Trans k="form_phone" />
-            </label>
-            <input
-              type="tel"
-              className="form-input"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+64 xx xxx xxxx"
-            />
-          </div>
-          <TurnstileWidget onToken={setTurnstileToken} />
+          <StepHeading titleKey="step_details" />
+          <ContactDetailsForm
+            firstName={fn}
+            lastName={ln}
+            email={email}
+            phone={phone}
+            errors={errors}
+            onFirstNameChange={setFn}
+            onLastNameChange={setLn}
+            onEmailChange={setEmail}
+            onPhoneChange={setPhone}
+            onTurnstileToken={setTurnstileToken}
+            onClearError={clearError}
+          />
         </div>
       )}
       {step === 3 && (
         <div>
-          <h4
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 19,
-              color: "var(--navy)",
-              fontWeight: 700,
-              marginBottom: 5,
-            }}
-          >
-            <Trans k="step_payment" />
-          </h4>
+          <StepHeading titleKey="step_payment" />
           <p style={{ fontSize: 13, color: "var(--text-light)", marginBottom: 18 }}>
             Secure payment of <strong>NZD ${PRICES.casual}.00</strong> for one casual
             session.

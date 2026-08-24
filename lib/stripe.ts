@@ -1,25 +1,61 @@
 import Stripe from "stripe";
+import { fetchPricingPlans } from "@/lib/sanity-queries";
 
 let stripe: Stripe | null = null;
 
 export function getStripe(): Stripe {
-  if (!process.env.STRIPE_SECRET_KEY) {
+  const secret = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secret) {
     throw new Error("STRIPE_SECRET_KEY is not configured");
   }
   if (!stripe) {
-    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    stripe = new Stripe(secret);
   }
   return stripe;
 }
 
-export function getPriceId(plan: "monthly" | "quarterly"): string {
-  const key =
-    plan === "monthly"
-      ? "STRIPE_PRICE_MONTHLY"
-      : "STRIPE_PRICE_QUARTERLY";
-  const id = process.env[key];
-  if (!id) throw new Error(`${key} is not configured`);
-  return id;
+/** Client secret for Payment Element — supports Basil (confirmation_secret) and legacy invoices. */
+export function getSubscriptionPaymentClientSecret(
+  subscription: Stripe.Subscription,
+): string | null {
+  const invoice = subscription.latest_invoice;
+  if (!invoice || typeof invoice === "string") return null;
+
+  const confirmation = invoice.confirmation_secret;
+  if (confirmation && typeof confirmation === "object") {
+    const secret = confirmation.client_secret;
+    if (typeof secret === "string" && secret) return secret;
+  }
+
+  // Legacy API versions (pre-Basil) exposed payment_intent on invoices.
+  const paymentIntent = (
+    invoice as Stripe.Invoice & {
+      payment_intent?: Stripe.PaymentIntent | string | null;
+    }
+  ).payment_intent;
+  if (paymentIntent && typeof paymentIntent === "object") {
+    const secret = paymentIntent.client_secret;
+    if (typeof secret === "string" && secret) return secret;
+  }
+
+  return null;
+}
+
+export async function resolvePriceId(
+  plan: "monthly" | "quarterly",
+): Promise<string> {
+  const envKey =
+    plan === "monthly" ? "STRIPE_PRICE_MONTHLY" : "STRIPE_PRICE_QUARTERLY";
+  const fromEnv = process.env[envKey]?.trim();
+  if (fromEnv) return fromEnv;
+
+  const plans = await fetchPricingPlans();
+  const fromCms = plans
+    ?.find((p) => p.planId === plan)
+    ?.stripePriceId?.trim();
+  if (fromCms) return fromCms;
+
+  throw new Error(`${envKey} is not configured`);
 }
 
 export function getDonationProductId(): string {

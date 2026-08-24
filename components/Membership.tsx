@@ -1,45 +1,30 @@
 "use client";
 
+import { useMemo } from "react";
 import { useApp } from "@/context/AppContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { Trans } from "@/components/Trans";
 import type { PlanId } from "@/lib/constants";
+import {
+  resolveAllPlanDisplays,
+  type CmsPricingPlan,
+  type PlanDisplay,
+} from "@/lib/pricing-plans";
 
 function PriceCard({
-  plan,
-  featured,
+  display,
   delay,
 }: {
-  plan: "casual" | "monthly" | "quarterly";
-  featured?: boolean;
+  display: PlanDisplay;
   delay?: string;
 }) {
   const { openCasualModal, openMembershipModal } = useApp();
-
-  const amounts = { casual: "10", monthly: "33", quarterly: "85" };
-  const ctaKeys = {
-    casual: "cta_cas" as const,
-    monthly: "cta_mon" as const,
-    quarterly: "cta_qtr" as const,
-  };
-  const nameKeys = {
-    casual: "p_cas" as const,
-    monthly: "p_mon" as const,
-    quarterly: "p_qtr" as const,
-  };
-  const descKeys = {
-    casual: "p_cas_d" as const,
-    monthly: "p_mon_d" as const,
-    quarterly: "p_qtr_d" as const,
-  };
-  const perKeys = {
-    casual: "p_cas_per" as const,
-    monthly: "p_mon_per" as const,
-    quarterly: "p_qtr_per" as const,
-  };
+  const { planId, featured, name, description, priceNzd, period, ctaKey, features } =
+    display;
 
   const onCta = () => {
-    if (plan === "casual") openCasualModal();
-    else openMembershipModal(plan as PlanId);
+    if (planId === "casual") openCasualModal();
+    else openMembershipModal(planId as PlanId);
   };
 
   return (
@@ -52,88 +37,44 @@ function PriceCard({
           <Trans k="p_popular" />
         </div>
       )}
-      <div className="price-type">
-        <Trans k={nameKeys[plan]} />
-      </div>
-      <div className="price-name">
-        <Trans k={nameKeys[plan]} />
-      </div>
-      <p className="price-desc">
-        <Trans k={descKeys[plan]} />
-      </p>
+      <div className="price-type">{name}</div>
+      <div className="price-name">{name}</div>
+      <p className="price-desc">{description}</p>
       <div className="price-amount-row">
         <span className="price-cur">NZD $</span>
-        <span className="price-amt">{amounts[plan]}</span>
+        <span className="price-amt">{priceNzd}</span>
       </div>
-      <p className="price-period">
-        <Trans k={perKeys[plan]} />
-      </p>
+      <p className="price-period">{period}</p>
       <ul className="price-features">
-        <li className="price-feat">
-          <div className="price-feat-check">✓</div>
-          <span>
-            <Trans k="f_court" />
-          </span>
-        </li>
-        <li className="price-feat">
-          <div className="price-feat-check">✓</div>
-          <span>
-            <Trans k="f_shuttle" />
-          </span>
-        </li>
-        <li className="price-feat">
-          <div className="price-feat-check">✓</div>
-          <span>
-            <Trans k="f_racquet" />
-          </span>
-        </li>
-        {(plan === "monthly" || plan === "quarterly") && (
-          <>
-            <li className="price-feat">
-              <div className="price-feat-check">✓</div>
-              <span>
-                <Trans k="f_community" />
-              </span>
-            </li>
-            {plan === "monthly" && (
-              <li className="price-feat">
-                <div className="price-feat-check">✓</div>
-                <span>
-                  <Trans k="f_cancel" />
-                </span>
-              </li>
-            )}
-            {plan === "quarterly" && (
-              <>
-                <li className="price-feat">
-                  <div className="price-feat-check">✓</div>
-                  <span>
-                    <Trans k="f_priority" />
-                  </span>
-                </li>
-                <li className="price-feat">
-                  <div className="price-feat-check">✓</div>
-                  <span>
-                    <Trans k="f_save" />
-                  </span>
-                </li>
-              </>
-            )}
-          </>
-        )}
+        {features.map((feat) => (
+          <li key={feat} className="price-feat">
+            <div className="price-feat-check">✓</div>
+            <span>{feat}</span>
+          </li>
+        ))}
       </ul>
       <button
         type="button"
         className={`btn btn-full ${featured ? "btn-primary" : "btn-outline-white"}`}
         onClick={onCta}
       >
-        <Trans k={ctaKeys[plan]} />
+        <Trans k={ctaKey} />
       </button>
     </div>
   );
 }
 
-export function Membership() {
+export function Membership({
+  pricingPlans,
+}: {
+  pricingPlans?: CmsPricingPlan[] | null;
+}) {
+  const { lang, tr } = useLanguage();
+  const displays = useMemo(
+    () => resolveAllPlanDisplays(pricingPlans, lang, tr),
+    [pricingPlans, lang, tr],
+  );
+
   return (
     <section className="section section-navy" id="membership" data-screen-label="Membership">
       <div className="container">
@@ -148,9 +89,13 @@ export function Membership() {
         </p>
 
         <div className="pricing-grid">
-          <PriceCard plan="casual" />
-          <PriceCard plan="monthly" featured delay=".1s" />
-          <PriceCard plan="quarterly" delay=".2s" />
+          {displays.map((display, i) => (
+            <PriceCard
+              key={display.planId}
+              display={display}
+              delay={i > 0 ? `${i * 0.1}s` : undefined}
+            />
+          ))}
         </div>
       </div>
     </section>

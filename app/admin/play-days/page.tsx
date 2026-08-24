@@ -67,6 +67,7 @@ async function addCashPlayer(date: string, formData: FormData) {
       collection_method: "send_invoice",
       days_until_due: 1,
       auto_advance: false,
+      pending_invoice_items_behavior: "include",
       metadata: {
         type: "casual",
         sessionDate: date,

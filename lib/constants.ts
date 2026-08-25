@@ -1,7 +1,25 @@
 // Total players allowed on court per session. Casual spots remaining are this
 // minus current active members (who can show up any Friday) minus casual
 // bookings already made for that date.
+//
+// Fallback used only where a play day has no DB row yet (e.g. no-DB local
+// dev). Once a session row exists, its `courts` value (admin-configurable
+// per play day) drives capacity instead — see maxPlayersForCourts below.
 export const SESSION_CAPACITY = 12;
+
+// Max players allowed for a play day, by number of courts booked. Keep in
+// sync with the CASE expression in lib/db.ts's reserveBookingSlot query.
+export const COURTS_TO_MAX_PLAYERS: Record<number, number> = {
+  1: 7,
+  2: 12,
+  3: 18,
+  4: 22,
+};
+export const DEFAULT_COURTS = 2;
+
+export function maxPlayersForCourts(courts: number): number {
+  return COURTS_TO_MAX_PLAYERS[courts] ?? SESSION_CAPACITY;
+}
 export const CASUAL_PRICE_CENTS = 1000;
 export const MONTHLY_PRICE_CENTS = 3300;
 export const QUARTERLY_PRICE_CENTS = 8500;

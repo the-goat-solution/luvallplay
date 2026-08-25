@@ -99,6 +99,66 @@ export async function sendCancellationLinkEmail(
   });
 }
 
+export async function sendWaitlistConfirmationEmail(
+  to: string,
+  name: string,
+  sessionDate?: string,
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const forDate = sessionDate ? ` for ${escapeHtml(sessionDate)}` : "";
+  const forDateText = sessionDate ? ` for ${sessionDate}` : "";
+
+  const html = `
+    <p>Hi ${escapeHtml(name)},</p>
+    <p>You're on the waitlist${forDate} at Three Wolves Badminton Club. We'll email you as soon as a spot opens up — no payment required until then.</p>
+  `;
+  const text = [
+    `Hi ${name},`,
+    "",
+    `You're on the waitlist${forDateText} at Three Wolves Badminton Club. We'll email you as soon as a spot opens up — no payment required until then.`,
+  ].join("\n");
+
+  await getResend().emails.send({
+    from,
+    to,
+    subject: `You're on the waitlist — Three Wolves Badminton Club${forDateText}`,
+    html,
+    text,
+  });
+}
+
+export async function sendWaitlistAdminAlertEmail(
+  name: string,
+  email: string,
+  sessionDate?: string,
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  const to = process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com";
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const forDate = sessionDate ?? "an unspecified play day";
+
+  const html = `
+    <h2>New waitlist signup</h2>
+    <p><strong>${escapeHtml(name)}</strong> (${escapeHtml(email)}) joined the waitlist for ${escapeHtml(forDate)}.</p>
+  `;
+  const text = `${name} (${email}) joined the waitlist for ${forDate}.`;
+
+  await getResend().emails.send({
+    from,
+    to,
+    subject: `New waitlist signup — ${forDate}`,
+    html,
+    text,
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

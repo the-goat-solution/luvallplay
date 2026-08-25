@@ -1,15 +1,19 @@
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import {
   ensureTables,
   getAvailableSpots,
+  getCourtsForDate,
   getRosterForDate,
   listAllSessionDates,
   removeBooking,
   reserveBookingSlot,
+  setCourtsForDate,
 } from "@/lib/db";
 import { formatDateLong, getDayName, toDateKey } from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
-import { CASUAL_PRICE_CENTS, SESSION_CAPACITY } from "@/lib/constants";
+import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
+import { CASUAL_PRICE_CENTS, maxPlayersForCourts } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
@@ -107,13 +111,35 @@ async function addCashPlayer(date: string, formData: FormData) {
     );
   }
 
+  revalidatePath("/admin/play-days");
   redirect(`/admin/play-days?date=${date}&cashAdded=1`);
 }
 
 async function removePlayer(date: string, bookingId: number) {
   "use server";
   await removeBooking(bookingId, date);
+  revalidatePath("/admin/play-days");
   redirect(`/admin/play-days?date=${date}&removed=1`);
+}
+
+async function updateCourts(date: string, formData: FormData) {
+  "use server";
+  const courts = Number(formData.get("courts"));
+
+  if (![1, 2, 3, 4].includes(courts)) {
+    redirect(
+      `/admin/play-days?date=${date}&courtsError=${encodeURIComponent("Choose a valid number of courts")}`,
+    );
+  }
+
+  await ensureTables();
+  const result = await setCourtsForDate(date, courts);
+  if (!result.ok) {
+    redirect(`/admin/play-days?date=${date}&courtsError=${encodeURIComponent(result.reason)}`);
+  }
+
+  revalidatePath("/admin/play-days");
+  redirect(`/admin/play-days?date=${date}&courtsUpdated=${courts}`);
 }
 
 export default async function PlayDaysAdminPage({
@@ -124,9 +150,11 @@ export default async function PlayDaysAdminPage({
     cashAdded?: string;
     cashError?: string;
     removed?: string;
+    courtsUpdated?: string;
+    courtsError?: string;
   }>;
 }) {
-  const { date: dateParam, cashAdded, cashError, removed } = await searchParams;
+  const { date: dateParam } = await searchParams;
 
   const sessionKeys = process.env.POSTGRES_URL
     ? await (async () => {
@@ -143,10 +171,13 @@ export default async function PlayDaysAdminPage({
 
   let roster: Awaited<ReturnType<typeof getRosterForDate>> = [];
   let casualSpotsRemaining: number | null = null;
+  let courts = 2;
   if (process.env.POSTGRES_URL && selectedDate) {
     roster = await getRosterForDate(selectedDate);
     casualSpotsRemaining = await getAvailableSpots(selectedDate);
+    courts = await getCourtsForDate(selectedDate);
   }
+  const maxPlayers = maxPlayersForCourts(courts);
 
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
@@ -155,6 +186,7 @@ export default async function PlayDaysAdminPage({
         Casual bookings and members whose subscription period covers the selected play day.
       </p>
       <AdminNav active="play-days" />
+      <PlayDaysToastBridge />
 
       {!process.env.POSTGRES_URL ? (
         <p>Database is not configured.</p>
@@ -199,48 +231,44 @@ export default async function PlayDaysAdminPage({
             </button>
           </form>
 
-          {cashAdded ? (
-            <p
+          <h2 style={{ fontSize: 16, marginBottom: 8 }}>Courts booked</h2>
+          <form
+            action={updateCourts.bind(null, selectedDate)}
+            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}
+          >
+            <label htmlFor="courts" style={{ fontSize: 13, color: "#666" }}>
+              Courts:
+            </label>
+            <select
+              id="courts"
+              name="courts"
+              defaultValue={courts}
+              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
+            >
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: 12, color: "#666" }}>
+              (max {maxPlayers} players at {courts} court{courts === 1 ? "" : "s"})
+            </span>
+            <button
+              type="submit"
               style={{
-                background: "#e6f4ea",
-                color: "#1e7e34",
-                padding: "8px 12px",
+                padding: "6px 12px",
                 borderRadius: 6,
-                marginBottom: 16,
+                border: "1px solid #1a2a4a",
+                background: "#1a2a4a",
+                color: "#fff",
                 fontSize: 13,
+                cursor: "pointer",
               }}
             >
-              Cash player added and recorded in Stripe.
-            </p>
-          ) : null}
-          {cashError ? (
-            <p
-              style={{
-                background: "#fdecea",
-                color: "#a12622",
-                padding: "8px 12px",
-                borderRadius: 6,
-                marginBottom: 16,
-                fontSize: 13,
-              }}
-            >
-              {cashError}
-            </p>
-          ) : null}
-          {removed ? (
-            <p
-              style={{
-                background: "#e6f4ea",
-                color: "#1e7e34",
-                padding: "8px 12px",
-                borderRadius: 6,
-                marginBottom: 16,
-                fontSize: 13,
-              }}
-            >
-              Player removed from the roster.
-            </p>
-          ) : null}
+              Confirm
+            </button>
+          </form>
 
           <p style={{ fontWeight: 600, marginBottom: 4 }}>
             {roster.length} player{roster.length === 1 ? "" : "s"} signed up for {selectedDate}
@@ -248,7 +276,7 @@ export default async function PlayDaysAdminPage({
           {casualSpotsRemaining !== null && (
             <p style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>
               {casualSpotsRemaining} casual spot{casualSpotsRemaining === 1 ? "" : "s"} remaining
-              (session capacity {SESSION_CAPACITY} minus active members — see{" "}
+              (session capacity {maxPlayers} minus active members — see{" "}
               <a href="/admin/members">Members</a>)
             </p>
           )}

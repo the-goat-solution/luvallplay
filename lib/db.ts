@@ -1,7 +1,24 @@
 import { sql } from "@vercel/postgres";
-import { SESSION_CAPACITY } from "./constants";
+import { DEFAULT_COURTS, SESSION_CAPACITY, maxPlayersForCourts } from "./constants";
 
-export async function ensureTables() {
+// Every route touching the DB calls ensureTables() first, and it's ~24
+// sequential DDL statements — cheap individually but a heavy tax when paid
+// on every request. The DDL is idempotent (IF NOT EXISTS / ADD COLUMN IF NOT
+// EXISTS), so it only ever needs to actually run once per warm server
+// instance; memoize the promise so later calls resolve immediately.
+let ensureTablesPromise: Promise<void> | null = null;
+
+export function ensureTables(): Promise<void> {
+  if (!ensureTablesPromise) {
+    ensureTablesPromise = ensureTablesImpl().catch((err) => {
+      ensureTablesPromise = null;
+      throw err;
+    });
+  }
+  return ensureTablesPromise;
+}
+
+async function ensureTablesImpl() {
   // DEFAULT must be a literal — Postgres rejects bind params in CREATE TABLE DDL.
   await sql`
     CREATE TABLE IF NOT EXISTS sessions (
@@ -95,6 +112,10 @@ export async function ensureTables() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
+  // Courts booked for a play day, admin-configurable (default 2, matching the
+  // previous fixed 12-player capacity). Unlike max_spots, this is never
+  // touched by the calendar sync's upsert, so it doesn't drift.
+  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS courts INT NOT NULL DEFAULT 2;`;
 }
 
 // Adds whole calendar months to a YYYY-MM-DD date string, for computing a
@@ -113,23 +134,74 @@ export async function ensureSession(date: string) {
   `;
 }
 
-// Casual spots remaining for a session = the fixed session capacity, minus
-// current active members (monthly/quarterly — they can show up any Friday),
-// minus casual spots already booked for that date.
+// Casual spots remaining for a session = that play day's court-derived max
+// players, minus current active members (monthly/quarterly — they can show
+// up any Friday), minus casual spots already booked for that date.
 //
-// This deliberately ignores the sessions.max_spots column: it's set once
-// when a session row is first created and never updated afterwards (the
-// Google Calendar sync's upsert only touches the calendar-derived columns),
-// so any row created before a SESSION_CAPACITY change stays stuck at the old
-// value forever. Computing straight from the constant avoids that drift.
+// This deliberately ignores the sessions.max_spots column (see courts
+// instead): max_spots is set once when a session row is first created and
+// never updated afterwards (the Google Calendar sync's upsert only touches
+// the calendar-derived columns), so it drifts from reality. `courts` is only
+// ever written by setCourtsForDate, so it stays trustworthy.
 export async function getAvailableSpots(date: string): Promise<number> {
   await ensureSession(date);
   const { rows } = await sql`
-    SELECT booked_spots FROM sessions WHERE date = ${date};
+    SELECT booked_spots, courts FROM sessions WHERE date = ${date};
   `;
-  const booked = rows[0] ? (rows[0] as { booked_spots: number }).booked_spots : 0;
+  const row = rows[0] as { booked_spots: number; courts: number } | undefined;
+  const booked = row?.booked_spots ?? 0;
+  const maxPlayers = maxPlayersForCourts(row?.courts ?? DEFAULT_COURTS);
   const activeMembers = await getActiveMemberCount();
-  return Math.max(0, SESSION_CAPACITY - activeMembers - booked);
+  return Math.max(0, maxPlayers - activeMembers - booked);
+}
+
+// Batched variant of getAvailableSpots + getSessionHeadcount for the
+// multi-date "Next Session" widget: instead of 3 sequential round trips per
+// date, this does 1 upsert + 2 queries (in parallel) for the whole batch.
+export async function getSpotsAndHeadcountForDates(
+  dates: string[],
+): Promise<{
+  spots: Record<string, number>;
+  signedUp: Record<string, number>;
+}> {
+  if (dates.length === 0) return { spots: {}, signedUp: {} };
+
+  // The `sql` tagged template only types params as Primitive (no arrays), so
+  // array binding goes through the underlying pool's `.query()` instead —
+  // still parameterized, just not via the template tag.
+  await sql.query(
+    `INSERT INTO sessions (date, max_spots, booked_spots)
+     SELECT unnest($1::date[]), $2, 0
+     ON CONFLICT (date) DO NOTHING;`,
+    [dates, SESSION_CAPACITY],
+  );
+
+  const [{ rows }, activeMembers] = await Promise.all([
+    sql.query(
+      `SELECT date, booked_spots, courts FROM sessions WHERE date = ANY($1::date[]);`,
+      [dates],
+    ),
+    getActiveMemberCount(),
+  ]);
+
+  const bookedByDate = new Map<string, number>();
+  const courtsByDate = new Map<string, number>();
+  for (const row of rows) {
+    const r = row as { date: Date; booked_spots: number; courts: number };
+    const key = r.date.toISOString().slice(0, 10);
+    bookedByDate.set(key, r.booked_spots);
+    courtsByDate.set(key, r.courts);
+  }
+
+  const spots: Record<string, number> = {};
+  const signedUp: Record<string, number> = {};
+  for (const date of dates) {
+    const booked = bookedByDate.get(date) ?? 0;
+    const maxPlayers = maxPlayersForCourts(courtsByDate.get(date) ?? DEFAULT_COURTS);
+    spots[date] = Math.max(0, maxPlayers - activeMembers - booked);
+    signedUp[date] = booked + activeMembers;
+  }
+  return { spots, signedUp };
 }
 
 export async function reserveBookingSlot(
@@ -143,15 +215,25 @@ export async function reserveBookingSlot(
   },
 ): Promise<boolean> {
   await ensureSession(date);
-  // Casual capacity is SESSION_CAPACITY minus current active members (they
-  // can show up any Friday), so the atomic guard must account for both to
-  // avoid overselling the court. See getAvailableSpots for why this uses the
-  // constant rather than the sessions.max_spots column.
+  // Casual capacity is that play day's court-derived max minus current
+  // active members (they can show up any Friday), so the atomic guard must
+  // account for both to avoid overselling the court. The CASE mirrors
+  // COURTS_TO_MAX_PLAYERS in lib/constants.ts — keep the two in sync. See
+  // getAvailableSpots for why this reads sessions.courts rather than the
+  // stale sessions.max_spots column.
   const { rowCount } = await sql`
     UPDATE sessions
     SET booked_spots = booked_spots + 1
     WHERE date = ${date}
-      AND booked_spots < ${SESSION_CAPACITY} - (
+      AND booked_spots < (
+        CASE courts
+          WHEN 1 THEN 7
+          WHEN 2 THEN 12
+          WHEN 3 THEN 18
+          WHEN 4 THEN 22
+          ELSE ${SESSION_CAPACITY}
+        END
+      ) - (
         SELECT COUNT(*)::int FROM memberships WHERE status = 'active'
       );
   `;
@@ -222,7 +304,7 @@ export async function listSessionsInRange(
   }[]
 > {
   const { rows } = await sql`
-    SELECT date, max_spots, booked_spots, event_start_time, event_end_time, event_location
+    SELECT date, courts, booked_spots, event_start_time, event_end_time, event_location
     FROM sessions
     WHERE date >= ${from} AND date <= ${to} AND google_event_id IS NOT NULL
     ORDER BY date;
@@ -230,7 +312,7 @@ export async function listSessionsInRange(
   return rows.map((row) => {
     const r = row as {
       date: Date;
-      max_spots: number;
+      courts: number;
       booked_spots: number;
       event_start_time: Date | null;
       event_end_time: Date | null;
@@ -238,7 +320,7 @@ export async function listSessionsInRange(
     };
     return {
       date: r.date.toISOString().slice(0, 10),
-      maxSpots: r.max_spots,
+      maxSpots: maxPlayersForCourts(r.courts),
       bookedSpots: r.booked_spots,
       eventStartTime: r.event_start_time ? r.event_start_time.toISOString() : null,
       eventEndTime: r.event_end_time ? r.event_end_time.toISOString() : null,
@@ -282,6 +364,43 @@ export async function getSessionHeadcount(
   const casual = (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
   const members = await getActiveMemberCount();
   return { casual, members, total: casual + members };
+}
+
+export async function getCourtsForDate(date: string): Promise<number> {
+  await ensureSession(date);
+  const { rows } = await sql`
+    SELECT courts FROM sessions WHERE date = ${date};
+  `;
+  return (rows[0] as { courts: number } | undefined)?.courts ?? DEFAULT_COURTS;
+}
+
+// Updates how many courts are booked for a play day. Refuses to shrink
+// capacity below the number of players already signed up (casual bookings +
+// active members), so an admin can't accidentally strand booked players.
+export async function setCourtsForDate(
+  date: string,
+  courts: number,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  await ensureSession(date);
+  const maxPlayers = maxPlayersForCourts(courts);
+  const { rows } = await sql`
+    SELECT booked_spots FROM sessions WHERE date = ${date};
+  `;
+  const booked = (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
+  const activeMembers = await getActiveMemberCount();
+  const totalSignedUp = booked + activeMembers;
+
+  if (totalSignedUp > maxPlayers) {
+    return {
+      ok: false,
+      reason: `Can't set ${courts} court${courts === 1 ? "" : "s"} (max ${maxPlayers} players) — ${totalSignedUp} players are already signed up for this play day.`,
+    };
+  }
+
+  await sql`
+    UPDATE sessions SET courts = ${courts} WHERE date = ${date};
+  `;
+  return { ok: true };
 }
 
 export async function getSessionAlertState(

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sql } from "@vercel/postgres";
 import { ensureTables } from "@/lib/db";
+import { sendWaitlistAdminAlertEmail, sendWaitlistConfirmationEmail } from "@/lib/email";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
 const bodySchema = z.object({
@@ -28,6 +29,17 @@ export async function POST(request: Request) {
         INSERT INTO waitlist (session_date, name, email)
         VALUES (${body.sessionDate ?? null}, ${body.name}, ${body.email});
       `;
+    }
+
+    // Best-effort notifications — a Resend outage shouldn't fail the signup
+    // itself, since the waitlist row is already saved above.
+    try {
+      await Promise.all([
+        sendWaitlistConfirmationEmail(body.email, body.name, body.sessionDate),
+        sendWaitlistAdminAlertEmail(body.name, body.email, body.sessionDate),
+      ]);
+    } catch {
+      /* email delivery failure shouldn't block the waitlist signup */
     }
 
     return NextResponse.json({ ok: true });

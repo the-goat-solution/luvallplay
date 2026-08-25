@@ -10,7 +10,7 @@ import { StepHeading } from "@/components/forms/StepHeading";
 import { ModalShell, StepBar } from "@/components/modals/ModalShell";
 import { SessionCalendarPicker } from "@/components/modals/SessionCalendarPicker";
 import { StripeCardForm } from "@/components/payment/StripeCardForm";
-import { toDateKey } from "@/lib/dates";
+import { formatDateLong, formatEventTimeRange, getDayName, toDateKey } from "@/lib/dates";
 import { PRICES } from "@/lib/constants";
 import {
   validateContact,
@@ -18,8 +18,8 @@ import {
 } from "@/lib/validate-contact";
 
 export function BookingModal() {
-  const { tr } = useLanguage();
-  const { openModal, setOpenModal, selectedSession } = useApp();
+  const { lang, tr } = useLanguage();
+  const { openModal, setOpenModal, selectedSession, sessionDates } = useApp();
   const open = openModal === "booking";
   const [step, setStep] = useState(1);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -102,6 +102,8 @@ export function BookingModal() {
   const back = () => {
     if (step > 1) setStep(step - 1);
   };
+
+  const sessionInfo = selectedSession ? sessionDates[toDateKey(selectedSession)] : undefined;
 
   const clearError = (key: keyof ContactErrors) => {
     setErrors((prev) => {
@@ -220,11 +222,19 @@ export function BookingModal() {
               <Trans k="session_details" />
             </strong>
             <br />
-            📅 Friday, 6:00 PM – 7:30 PM
+            📅{" "}
+            {selectedSession ? (
+              <>
+                {getDayName(selectedSession, lang)}, {formatDateLong(selectedSession, lang)}
+                {sessionInfo?.eventStartTime
+                  ? `, ${formatEventTimeRange(sessionInfo.eventStartTime, sessionInfo.eventEndTime)}`
+                  : ""}
+              </>
+            ) : (
+              "Friday, 6:00 PM – 7:30 PM"
+            )}
             <br />
-            📍 Graham Condon Recreation and Sport Centre
-            <br />
-            &nbsp;&nbsp;&nbsp;&nbsp;3 Sisson Drive, Papanui, Christchurch 8053
+            📍 {sessionInfo?.eventLocation || "Graham Condon Recreation and Sport Centre"}
           </div>
         </div>
       )}

@@ -57,7 +57,6 @@ export function Schedule({
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
 
-  const maxSpots = scheduleSettings?.maxCasualSpots ?? SESSION_CAPACITY;
   const venueLabel = scheduleSettings?.venueName
     ? pickLocale(scheduleSettings.venueName, lang)
     : "";
@@ -70,6 +69,7 @@ export function Schedule({
 
   const dateKey = displayDate ? toDateKey(displayDate) : null;
   const sessionInfo = dateKey ? sessionDates[dateKey] : undefined;
+  const maxSpots = sessionInfo?.maxSpots ?? scheduleSettings?.maxCasualSpots ?? SESSION_CAPACITY;
   const displayTimeLabel = sessionInfo?.eventStartTime
     ? formatEventTimeRange(sessionInfo.eventStartTime, sessionInfo.eventEndTime)
     : timeLabel;

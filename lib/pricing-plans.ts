@@ -26,7 +26,12 @@ const I18N_KEYS: Record<
 > = {
   casual: { name: "p_cas", desc: "p_cas_d", per: "p_cas_per", cta: "cta_cas" },
   monthly: { name: "p_mon", desc: "p_mon_d", per: "p_mon_per", cta: "cta_mon" },
-  quarterly: { name: "p_qtr", desc: "p_qtr_d", per: "p_qtr_per", cta: "cta_qtr" },
+  quarterly: {
+    name: "p_qtr",
+    desc: "p_qtr_d",
+    per: "p_qtr_per",
+    cta: "cta_qtr",
+  },
 };
 
 const DEFAULT_FEATURE_KEYS: Record<PlanId, I18nKey[]> = {
@@ -79,8 +84,7 @@ export function resolvePlanDisplay(
   const keys = I18N_KEYS[plan.planId];
   const priceNzd = plan.priceNzd ?? PRICES[plan.planId];
   const name = pickLocale(plan.name, lang) || tr(keys.name);
-  const description =
-    pickLocale(plan.description, lang) || tr(keys.desc);
+  const description = pickLocale(plan.description, lang) || tr(keys.desc);
   const period = pickLocale(plan.periodLabel, lang) || tr(keys.per);
 
   const cmsFeatures =
@@ -94,9 +98,9 @@ export function resolvePlanDisplay(
   if (plan.planId === "casual") {
     modalPriceLabel = `$${priceNzd}`;
   } else if (plan.planId === "monthly") {
-    modalPriceLabel = `$${priceNzd}/mo`;
+    modalPriceLabel = `$${priceNzd}/4wk`;
   } else {
-    modalPriceLabel = `$${priceNzd}/3mo`;
+    modalPriceLabel = `$${priceNzd}/12wk`;
   }
 
   return {

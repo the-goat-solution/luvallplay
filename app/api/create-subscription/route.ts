@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { sql } from "@vercel/postgres";
-import { getStripe, getInvoicePaymentIntent, resolvePriceId } from "@/lib/stripe";
+import {
+  getStripe,
+  getInvoicePaymentIntent,
+  resolvePriceId,
+} from "@/lib/stripe";
 import { checkRateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
-import { addMonths, ensureTables } from "@/lib/db";
+import {
+  assignAndReserveMembershipAccessStart,
+  attachStripeIdToMembership,
+  ensureTables,
+  type MembershipAssignment,
+} from "@/lib/db";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 
 const bodySchema = z.object({
@@ -26,10 +34,36 @@ export async function POST(request: Request) {
     const body = bodySchema.parse(await request.json());
     const turnstileOk = await verifyTurnstile(body.turnstileToken, ip);
     if (!turnstileOk) {
-      return NextResponse.json({ error: "Captcha verification failed" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Captcha verification failed" },
+        { status: 403 },
+      );
     }
 
     const stripe = getStripe();
+
+    // Reserve the membership's access-start date — and therefore capacity —
+    // before touching Stripe at all, so a full play day never gets oversold
+    // and nobody is charged for a signup that turns out to be impossible.
+    // When there's no DB configured (local dev without POSTGRES_URL), skip
+    // this entirely; there's no capacity data to check against.
+    let assignment: (MembershipAssignment & { blocked: false }) | null = null;
+    if (process.env.POSTGRES_URL) {
+      await ensureTables();
+      const result = await assignAndReserveMembershipAccessStart(body.plan, {
+        email: body.email,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        phone: body.phone || null,
+        recurring: body.recurring,
+      });
+      if (result.blocked) {
+        return NextResponse.json({ error: "sessions_full" }, { status: 409 });
+      }
+      assignment = result;
+    }
+    const periodStart =
+      assignment?.periodStart ?? new Date().toISOString().slice(0, 10);
 
     if (!body.recurring) {
       const amount =
@@ -66,7 +100,9 @@ export async function POST(request: Request) {
             phone: body.phone ?? "",
           },
         },
-        { idempotencyKey: `membership-onetime-${body.plan}-${body.email}-${Date.now()}` },
+        {
+          idempotencyKey: `membership-onetime-${body.plan}-${body.email}-${Date.now()}`,
+        },
       );
 
       if (!paymentIntent.client_secret) {
@@ -76,29 +112,16 @@ export async function POST(request: Request) {
         );
       }
 
-      if (process.env.POSTGRES_URL) {
-        await ensureTables();
-        const periodStart = new Date().toISOString().slice(0, 10);
-        const periodEnd = addMonths(periodStart, body.plan === "monthly" ? 1 : 3);
-        await sql`
-          INSERT INTO memberships (email, plan, first_name, last_name, phone, period_start, period_end, stripe_payment_intent_id, recurring, status)
-          VALUES (
-            ${body.email},
-            ${body.plan},
-            ${body.firstName},
-            ${body.lastName},
-            ${body.phone ?? null},
-            ${periodStart},
-            ${periodEnd},
-            ${paymentIntent.id},
-            FALSE,
-            'pending'
-          )
-          ON CONFLICT (stripe_payment_intent_id) DO NOTHING;
-        `;
+      if (assignment) {
+        await attachStripeIdToMembership(assignment.membershipId, {
+          stripePaymentIntentId: paymentIntent.id,
+        });
       }
 
-      return NextResponse.json({ clientSecret: paymentIntent.client_secret });
+      return NextResponse.json({
+        clientSecret: paymentIntent.client_secret,
+        periodStart,
+      });
     }
 
     const priceId = await resolvePriceId(body.plan);
@@ -155,37 +178,16 @@ export async function POST(request: Request) {
       receipt_email: body.email,
     });
 
-    if (process.env.POSTGRES_URL) {
-      await ensureTables();
-      const item = subscription.items.data[0];
-      const periodStart = new Date(
-        (item?.current_period_start ?? subscription.created) * 1000,
-      )
-        .toISOString()
-        .slice(0, 10);
-      const periodEnd = item
-        ? new Date(item.current_period_end * 1000).toISOString().slice(0, 10)
-        : periodStart;
-      await sql`
-        INSERT INTO memberships (email, plan, first_name, last_name, phone, period_start, period_end, stripe_subscription_id, status)
-        VALUES (
-          ${body.email},
-          ${body.plan},
-          ${body.firstName},
-          ${body.lastName},
-          ${body.phone ?? null},
-          ${periodStart},
-          ${periodEnd},
-          ${subscription.id},
-          'pending'
-        )
-        ON CONFLICT (stripe_subscription_id) DO NOTHING;
-      `;
+    if (assignment) {
+      await attachStripeIdToMembership(assignment.membershipId, {
+        stripeSubscriptionId: subscription.id,
+      });
     }
 
     return NextResponse.json({
       clientSecret,
       subscriptionId: subscription.id,
+      periodStart,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";

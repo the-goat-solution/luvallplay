@@ -12,10 +12,7 @@ import {
   resolveAllPlanDisplays,
   type CmsPricingPlan,
 } from "@/lib/pricing-plans";
-import {
-  validateContact,
-  type ContactErrors,
-} from "@/lib/validate-contact";
+import { validateContact, type ContactErrors } from "@/lib/validate-contact";
 
 export function MembershipModal({
   pricingPlans,
@@ -40,12 +37,16 @@ export function MembershipModal({
   const [recurring, setRecurring] = useState(true);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [errors, setErrors] = useState<ContactErrors>({});
+  const [periodStart, setPeriodStart] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState(false);
 
   const close = () => {
     setOpenModal(null);
     setStep(1);
     setClientSecret(null);
     setErrors({});
+    setPeriodStart(null);
+    setBlocked(false);
     document.body.style.overflow = "";
   };
 
@@ -55,6 +56,8 @@ export function MembershipModal({
       setStep(1);
       setRecurring(true);
       setErrors({});
+      setPeriodStart(null);
+      setBlocked(false);
     }
   }, [open]);
 
@@ -82,8 +85,15 @@ export function MembershipModal({
       }),
     });
     const data = await res.json();
+    if (res.status === 409 && data.error === "sessions_full") {
+      setBlocked(true);
+      return;
+    }
     if (!res.ok) throw new Error(data.error ?? "Subscription setup failed");
     setClientSecret(data.clientSecret);
+    setPeriodStart(
+      typeof data.periodStart === "string" ? data.periodStart : null,
+    );
     setStep(3);
   };
 
@@ -140,7 +150,7 @@ export function MembershipModal({
       onClose={close}
       title={<Trans k="modal_join" />}
       footer={
-        step < 4 ? (
+        !blocked && step < 4 ? (
           <>
             {step > 1 && step < 4 && (
               <button
@@ -164,138 +174,177 @@ export function MembershipModal({
         ) : undefined
       }
     >
-      <StepBar step={step} />
-      {step === 1 && (
-        <div>
-          <StepHeading titleKey="step_plan" required />
-          <p style={{ fontSize: 13, color: "var(--text-light)", marginBottom: 18 }}>
-            Choose the membership that works best for you.
-          </p>
-          <div className="plan-pick">
-            {planDisplays.map((plan) => (
-              <div
-                key={plan.planId}
-                className={`plan-opt${selectedPlan === plan.planId ? " sel" : ""}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelectedPlan(plan.planId)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ")
-                    setSelectedPlan(plan.planId);
-                }}
-              >
-                <div className="plan-radio">
-                  <div className="plan-dot" />
-                </div>
-                <div className="plan-opt-info">
-                  <div className="plan-opt-name">{plan.name}</div>
-                  <div className="plan-opt-desc">{plan.description}</div>
-                </div>
-                <div className="plan-opt-price">{plan.modalPriceLabel}</div>
-              </div>
-            ))}
-          </div>
-          {(selectedPlan === "monthly" || selectedPlan === "quarterly") && (
+      {blocked ? (
+        <div className="success-screen">
+          <div className="success-icon">😕</div>
+          <h3 className="success-title">
+            <Trans k="mem_sessions_full" />
+          </h3>
+        </div>
+      ) : (
+        <>
+          <StepBar step={step} />
+          {step === 1 && (
             <div>
-              <h4
+              <StepHeading titleKey="step_plan" required />
+              <p
                 style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: 15,
-                  color: "var(--navy)",
-                  fontWeight: 700,
-                  marginBottom: 10,
+                  fontSize: 13,
+                  color: "var(--text-light)",
+                  marginBottom: 18,
                 }}
               >
-                <Trans k="mem_billing" />
-              </h4>
+                Choose the membership that works best for you.
+              </p>
               <div className="plan-pick">
-                {[true, false].map((isRecurring) => (
+                {planDisplays.map((plan) => (
                   <div
-                    key={String(isRecurring)}
-                    className={`plan-opt${recurring === isRecurring ? " sel" : ""}`}
+                    key={plan.planId}
+                    className={`plan-opt${selectedPlan === plan.planId ? " sel" : ""}`}
                     role="button"
                     tabIndex={0}
-                    onClick={() => setRecurring(isRecurring)}
+                    onClick={() => setSelectedPlan(plan.planId)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") setRecurring(isRecurring);
+                      if (e.key === "Enter" || e.key === " ")
+                        setSelectedPlan(plan.planId);
                     }}
                   >
                     <div className="plan-radio">
                       <div className="plan-dot" />
                     </div>
                     <div className="plan-opt-info">
-                      <div className="plan-opt-name">
-                        <Trans k={isRecurring ? "mem_recurring" : "mem_onetime"} />
-                      </div>
-                      <div className="plan-opt-desc">
-                        <Trans k={isRecurring ? "mem_recurring_d" : "mem_onetime_d"} />
-                      </div>
+                      <div className="plan-opt-name">{plan.name}</div>
+                      <div className="plan-opt-desc">{plan.description}</div>
                     </div>
+                    <div className="plan-opt-price">{plan.modalPriceLabel}</div>
                   </div>
                 ))}
               </div>
+              {(selectedPlan === "monthly" || selectedPlan === "quarterly") && (
+                <div>
+                  <h4
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: 15,
+                      color: "var(--navy)",
+                      fontWeight: 700,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <Trans k="mem_billing" />
+                  </h4>
+                  <div className="plan-pick">
+                    {[true, false].map((isRecurring) => (
+                      <div
+                        key={String(isRecurring)}
+                        className={`plan-opt${recurring === isRecurring ? " sel" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setRecurring(isRecurring)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ")
+                            setRecurring(isRecurring);
+                        }}
+                      >
+                        <div className="plan-radio">
+                          <div className="plan-dot" />
+                        </div>
+                        <div className="plan-opt-info">
+                          <div className="plan-opt-name">
+                            <Trans
+                              k={isRecurring ? "mem_recurring" : "mem_onetime"}
+                            />
+                          </div>
+                          <div className="plan-opt-desc">
+                            <Trans
+                              k={
+                                isRecurring
+                                  ? "mem_recurring_d"
+                                  : "mem_onetime_d"
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
-      {step === 2 && (
-        <div>
-          <StepHeading titleKey="step_details" />
-          <ContactDetailsForm
-            firstName={fn}
-            lastName={ln}
-            email={email}
-            phone={phone}
-            errors={errors}
-            onFirstNameChange={setFn}
-            onLastNameChange={setLn}
-            onEmailChange={setEmail}
-            onPhoneChange={setPhone}
-            onTurnstileToken={setTurnstileToken}
-            onClearError={clearError}
-            hintKey="form_membership_hint"
-          />
-        </div>
-      )}
-      {step === 3 && (
-        <div>
-          <StepHeading titleKey="step_payment" />
-          <p style={{ fontSize: 13, color: "var(--text-light)", marginBottom: 18 }}>
-            Your membership activates immediately after payment.
-          </p>
-          <div className="order-summary">
-            <div className="order-line">
-              <span>
-                {name} Membership
-              </span>
-              <span>
-                NZD ${price}
-                {selectedPlan !== "casual" && !recurring
-                  ? ` / ${tr("mem_onetime")}`
-                  : ` / ${period}`}
-              </span>
+          {step === 2 && (
+            <div>
+              <StepHeading titleKey="step_details" />
+              <ContactDetailsForm
+                firstName={fn}
+                lastName={ln}
+                email={email}
+                phone={phone}
+                errors={errors}
+                onFirstNameChange={setFn}
+                onLastNameChange={setLn}
+                onEmailChange={setEmail}
+                onPhoneChange={setPhone}
+                onTurnstileToken={setTurnstileToken}
+                onClearError={clearError}
+                hintKey="form_membership_hint"
+              />
             </div>
-          </div>
-          <StripeCardForm
-            clientSecret={clientSecret}
-            amountLabel={`${tr("pay_btn_pre")}${price}.00`}
-            onSuccess={() => setStep(4)}
-          />
-          <div className="stripe-badge">
-            Secured by Stripe
-          </div>
-        </div>
-      )}
-      {step === 4 && (
-        <div className="success-screen">
-          <div className="success-icon">🏸</div>
-          <h3 className="success-title">
-            <Trans k="confirm_join" />
-          </h3>
-          <p className="success-body">
-            <Trans k="confirm_join_body" />
-          </p>
-        </div>
+          )}
+          {step === 3 && (
+            <div>
+              <StepHeading titleKey="step_payment" />
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--text-light)",
+                  marginBottom: 18,
+                }}
+              >
+                {periodStart ? (
+                  <Trans k="mem_start_delayed" vars={{ date: periodStart }} />
+                ) : (
+                  <Trans k="mem_start_today" />
+                )}
+              </p>
+              <div className="order-summary">
+                <div className="order-line">
+                  <span>{name} Membership</span>
+                  <span>
+                    NZD ${price}
+                    {selectedPlan !== "casual" && !recurring
+                      ? ` / ${tr("mem_onetime")}`
+                      : ` / ${period}`}
+                  </span>
+                </div>
+              </div>
+              <StripeCardForm
+                clientSecret={clientSecret}
+                amountLabel={`${tr("pay_btn_pre")}${price}.00`}
+                onSuccess={() => setStep(4)}
+              />
+              <div className="stripe-badge">Secured by Stripe</div>
+            </div>
+          )}
+          {step === 4 && (
+            <div className="success-screen">
+              <div className="success-icon">🏸</div>
+              <h3 className="success-title">
+                <Trans k="confirm_join" />
+              </h3>
+              <p className="success-body">
+                {periodStart ? (
+                  <Trans
+                    k="confirm_join_body_delayed"
+                    vars={{ date: periodStart }}
+                  />
+                ) : (
+                  <Trans k="confirm_join_body" />
+                )}
+              </p>
+            </div>
+          )}
+        </>
       )}
     </ModalShell>
   );

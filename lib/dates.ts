@@ -40,17 +40,35 @@ function getClubNow(now: Date): { dateKey: string; hour: number } {
   };
 }
 
+// Club-local "today" as a YYYY-MM-DD key, and whether the same-day booking
+// cutoff has already passed. Exported so any server-side logic that needs to
+// agree with the booking-cutoff rules (e.g. picking the next available play
+// day for a new membership) uses the exact same notion of "today" — Postgres
+// CURRENT_DATE is UTC-based and can disagree with this for roughly half of
+// every NZ calendar day.
+export function getClubToday(now: Date = new Date()): {
+  dateKey: string;
+  cutoffPassed: boolean;
+} {
+  const club = getClubNow(now);
+  return {
+    dateKey: club.dateKey,
+    cutoffPassed: club.hour >= BOOKING_CUTOFF_HOUR,
+  };
+}
+
 function bookingWindowDiffDays(sessionDate: Date, now: Date): number {
   const sessionKey = toDateKey(sessionDate);
   const club = getClubNow(now);
-  return (
-    (dateKeyToUTCms(sessionKey) - dateKeyToUTCms(club.dateKey)) / 86400000
-  );
+  return (dateKeyToUTCms(sessionKey) - dateKeyToUTCms(club.dateKey)) / 86400000;
 }
 
 // Bookable from BOOKING_WINDOW_DAYS before the session up until
 // BOOKING_CUTOFF_HOUR (club local time) on the day of the session itself.
-export function isBookable(sessionDate: Date, today: Date = new Date()): boolean {
+export function isBookable(
+  sessionDate: Date,
+  today: Date = new Date(),
+): boolean {
   const diffDays = bookingWindowDiffDays(sessionDate, today);
   if (diffDays < 0 || diffDays > BOOKING_WINDOW_DAYS) return false;
   if (diffDays === 0) {
@@ -104,14 +122,19 @@ export function formatDateLong(d: Date, lang: "en" | "vi"): string {
   return `${monthsEn[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-export function formatEventTimeRange(start: string, end: string | null): string {
+export function formatEventTimeRange(
+  start: string,
+  end: string | null,
+): string {
   const opts: Intl.DateTimeFormatOptions = {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
     timeZone: CLUB_TIME_ZONE,
   };
-  const startLabel = new Intl.DateTimeFormat("en-NZ", opts).format(new Date(start));
+  const startLabel = new Intl.DateTimeFormat("en-NZ", opts).format(
+    new Date(start),
+  );
   if (!end) return startLabel;
   const endLabel = new Intl.DateTimeFormat("en-NZ", opts).format(new Date(end));
   return `${startLabel} – ${endLabel}`;

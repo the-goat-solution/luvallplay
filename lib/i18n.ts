@@ -40,7 +40,8 @@ const I18N = {
     ngc_addr: "3 Sisson Drive, Papanui, Christchurch 8053",
     ngc_cta: "Book a Casual Spot",
     ngc_full: "Session Full — Join Waitlist",
-    ngc_locked_msg: "Registration opens 30 days before the session and closes at 5PM on the day",
+    ngc_locked_msg:
+      "Registration opens 30 days before the session and closes at 5PM on the day",
     ngc_view_only: "View only — booking opens 30 days before",
     ngc_no_sessions: "No upcoming sessions scheduled — check back soon.",
     cal_legend_next: "Next game",
@@ -58,17 +59,22 @@ const I18N = {
     p_cas_d: "Pay per session, no commitment",
     p_cas_per: "per session",
     p_mon: "Monthly",
-    p_mon_d: "Flexible month-to-month membership",
-    p_mon_per: "per month",
+    p_mon_d: "Flexible 4-week membership",
+    p_mon_per: "every 4 weeks",
     p_qtr: "Quarterly",
-    p_qtr_d: "Every 3 months — save ~15%",
-    p_qtr_per: "every 3 months",
+    p_qtr_d: "Every 12 weeks — save ~15%",
+    p_qtr_per: "every 12 weeks",
     p_popular: "Most Popular",
     mem_billing: "Billing",
     mem_recurring: "Auto-renew",
     mem_recurring_d: "Renews automatically until you cancel",
     mem_onetime: "One-time payment",
     mem_onetime_d: "Single payment, no auto-renewal",
+    mem_start_today: "Your membership activates immediately after payment.",
+    mem_start_delayed:
+      "The next play day with space is {date} — your membership will start then. You'll still be charged today.",
+    mem_sessions_full:
+      "All upcoming play days are currently full, so we can't start a new membership right now. Please check back soon.",
     f_court: "Friday night court access",
     f_shuttle: "Shuttlecocks provided",
     f_racquet: "Racquet loan available",
@@ -98,7 +104,8 @@ const I18N = {
     donate_freq_monthly_d: "Ongoing support, cancel anytime",
     donate_amt_lbl: "Donation Amount (NZD)",
     donate_amt_ph: "25",
-    donate_amt_hint: "Every contribution helps keep Three Wolves running. Thank you!",
+    donate_amt_hint:
+      "Every contribution helps keep Three Wolves running. Thank you!",
     donate_amt_error: "Enter an amount between $2 and $5,000 NZD",
     donate_pay_btn_pre: "Donate NZD $",
     donate_per_month_suffix: " / month",
@@ -116,8 +123,7 @@ const I18N = {
     footer_follow: "Follow Us",
     footer_lang: "Language",
     footer_cancel_membership: "Cancel Membership",
-    footer_copy:
-      "© 2026 Three Wolves Badminton Club. All rights reserved.",
+    footer_copy: "© 2026 Three Wolves Badminton Club. All rights reserved.",
     modal_book: "Book a Casual Spot",
     modal_join: "Join Three Wolves",
     modal_waitlist: "Join the Waitlist",
@@ -156,6 +162,8 @@ const I18N = {
     confirm_join: "Welcome to Three Wolves!",
     confirm_join_body:
       "Your membership is now active. A welcome email with all the details has been sent. We look forward to seeing you on the court this Friday!",
+    confirm_join_body_delayed:
+      "Your membership is now active. A welcome email with all the details has been sent. Your access starts {date} — the next play day with space. We look forward to seeing you then!",
     confirm_waitlist: "You're on the waitlist!",
     confirm_waitlist_body:
       "We'll notify you by email if a spot opens for this session. No payment is required — we'll send you a booking link when a spot becomes available.",
@@ -231,17 +239,23 @@ const I18N = {
     p_cas_d: "Trả tiền theo buổi, không cam kết",
     p_cas_per: "mỗi buổi",
     p_mon: "Hàng Tháng",
-    p_mon_d: "Hội viên linh hoạt theo tháng",
-    p_mon_per: "mỗi tháng",
+    p_mon_d: "Hội viên linh hoạt 4 tuần",
+    p_mon_per: "mỗi 4 tuần",
     p_qtr: "Hàng Quý",
-    p_qtr_d: "Mỗi 3 tháng — tiết kiệm ~15%",
-    p_qtr_per: "mỗi 3 tháng",
+    p_qtr_d: "Mỗi 12 tuần — tiết kiệm ~15%",
+    p_qtr_per: "mỗi 12 tuần",
     p_popular: "Phổ Biến Nhất",
     mem_billing: "Hình Thức Thanh Toán",
     mem_recurring: "Tự động gia hạn",
     mem_recurring_d: "Tự động gia hạn cho đến khi bạn hủy",
     mem_onetime: "Thanh toán một lần",
     mem_onetime_d: "Thanh toán một lần, không tự động gia hạn",
+    mem_start_today:
+      "Hội viên của bạn sẽ được kích hoạt ngay sau khi thanh toán.",
+    mem_start_delayed:
+      "Buổi tập gần nhất còn chỗ là {date} — hội viên của bạn sẽ bắt đầu từ ngày đó. Bạn vẫn sẽ được thanh toán hôm nay.",
+    mem_sessions_full:
+      "Tất cả các buổi tập sắp tới hiện đã đầy, nên chúng tôi chưa thể bắt đầu hội viên mới ngay bây giờ. Vui lòng quay lại sau.",
     f_court: "Vào sân tối thứ Sáu",
     f_shuttle: "Cầu lông được cung cấp",
     f_racquet: "Có thể mượn vợt",
@@ -271,7 +285,8 @@ const I18N = {
     donate_freq_monthly_d: "Ủng hộ liên tục, hủy bất cứ lúc nào",
     donate_amt_lbl: "Số Tiền Ủng Hộ (NZD)",
     donate_amt_ph: "25",
-    donate_amt_hint: "Mọi đóng góp đều giúp Three Wolves duy trì hoạt động. Cảm ơn bạn!",
+    donate_amt_hint:
+      "Mọi đóng góp đều giúp Three Wolves duy trì hoạt động. Cảm ơn bạn!",
     donate_amt_error: "Nhập số tiền từ $2 đến $5,000 NZD",
     donate_pay_btn_pre: "Ủng Hộ NZD $",
     donate_per_month_suffix: " / tháng",
@@ -307,8 +322,7 @@ const I18N = {
     form_email_ph: "ban@email.com",
     form_phone_ph: "+64 xx xxx xxxx",
     form_email_hint: "Xác nhận đặt chỗ sẽ được gửi đến đây.",
-    form_membership_hint:
-      "Xác nhận thành viên sẽ được gửi đến email của bạn.",
+    form_membership_hint: "Xác nhận thành viên sẽ được gửi đến email của bạn.",
     form_required: "Trường này là bắt buộc.",
     form_email_invalid: "Nhập địa chỉ email hợp lệ.",
     form_phone_invalid: "Nhập số điện thoại hợp lệ.",
@@ -329,6 +343,8 @@ const I18N = {
     confirm_join: "Chào Mừng Đến Three Wolves!",
     confirm_join_body:
       "Hội viên của bạn đã được kích hoạt. Email chào mừng đã được gửi. Chúng tôi mong được gặp bạn trên sân tối thứ Sáu này!",
+    confirm_join_body_delayed:
+      "Hội viên của bạn đã được kích hoạt. Email chào mừng đã được gửi. Bạn có thể bắt đầu tham gia từ {date} — buổi tập gần nhất còn chỗ. Hẹn gặp bạn khi đó!",
     confirm_waitlist: "Bạn đã vào danh sách chờ!",
     confirm_waitlist_body:
       "Chúng tôi sẽ thông báo qua email nếu có chỗ trống. Không cần thanh toán — chúng tôi sẽ gửi link đặt chỗ khi có chỗ.",

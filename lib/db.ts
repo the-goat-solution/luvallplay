@@ -1,5 +1,24 @@
-import { sql } from "@vercel/postgres";
-import { DEFAULT_COURTS, SESSION_CAPACITY, maxPlayersForCourts } from "./constants";
+import { db, sql, types } from "@vercel/postgres";
+
+// By default the driver parses Postgres DATE columns into JS Date objects at
+// local midnight, so converting back with .toISOString().slice(0,10) silently
+// shifts the day whenever the process's timezone isn't UTC (verified: it
+// breaks under Pacific/Auckland, the club's own timezone — the exact
+// environment this app cares about getting right). DATE has no time-of-day
+// component to begin with, so keep it as the plain 'YYYY-MM-DD' string
+// Postgres already sends, sidestepping the conversion entirely everywhere in
+// this file. OID 1082 = date.
+types.setTypeParser(1082, (val: string) => val);
+import {
+  DEFAULT_COURTS,
+  MEMBERSHIP_CYCLE_DAYS,
+  MEMBERSHIP_DAYS,
+  MEMBERSHIP_START_SEARCH_DAYS,
+  PENDING_MEMBERSHIP_HOLD_MINUTES,
+  SESSION_CAPACITY,
+  maxPlayersForCourts,
+} from "./constants";
+import { getClubToday } from "./dates";
 
 // Every route touching the DB calls ensureTables() first, and it's ~24
 // sequential DDL statements — cheap individually but a heavy tax when paid
@@ -72,6 +91,9 @@ async function ensureTablesImpl() {
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;`;
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS recurring BOOLEAN NOT NULL DEFAULT TRUE;`;
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT UNIQUE;`;
+  // Guards the additive period_end advance on renewal (see applyRenewal)
+  // against Stripe's at-least-once webhook delivery re-granting a cycle.
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_renewal_invoice_id TEXT;`;
   await sql`
     CREATE TABLE IF NOT EXISTS donations (
       id SERIAL PRIMARY KEY,
@@ -118,11 +140,12 @@ async function ensureTablesImpl() {
   await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS courts INT NOT NULL DEFAULT 2;`;
 }
 
-// Adds whole calendar months to a YYYY-MM-DD date string, for computing a
-// one-time (non-recurring) membership's period_end without a Stripe subscription.
-export function addMonths(dateStr: string, months: number): string {
+// Adds an exact number of days to a YYYY-MM-DD date string. Unlike calendar-
+// month arithmetic (setUTCMonth), this has no rollover ambiguity — used to
+// compute membership period_end as an exact 28-day/84-day span.
+export function addDays(dateStr: string, days: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + months);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -151,16 +174,14 @@ export async function getAvailableSpots(date: string): Promise<number> {
   const row = rows[0] as { booked_spots: number; courts: number } | undefined;
   const booked = row?.booked_spots ?? 0;
   const maxPlayers = maxPlayersForCourts(row?.courts ?? DEFAULT_COURTS);
-  const activeMembers = await getActiveMemberCount();
+  const activeMembers = await getActiveMemberCountForDate(date);
   return Math.max(0, maxPlayers - activeMembers - booked);
 }
 
 // Batched variant of getAvailableSpots + getSessionHeadcount for the
 // multi-date "Next Session" widget: instead of 3 sequential round trips per
 // date, this does 1 upsert + 2 queries (in parallel) for the whole batch.
-export async function getSpotsAndHeadcountForDates(
-  dates: string[],
-): Promise<{
+export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   spots: Record<string, number>;
   signedUp: Record<string, number>;
 }> {
@@ -176,28 +197,50 @@ export async function getSpotsAndHeadcountForDates(
     [dates, SESSION_CAPACITY],
   );
 
-  const [{ rows }, activeMembers] = await Promise.all([
+  const [{ rows }, { rows: memberRows }] = await Promise.all([
     sql.query(
-      `SELECT date, booked_spots, courts FROM sessions WHERE date = ANY($1::date[]);`,
+      `SELECT date::text AS date, booked_spots, courts FROM sessions WHERE date = ANY($1::date[]);`,
       [dates],
     ),
-    getActiveMemberCount(),
+    // Each date gets its own correctly-scoped member count (a member only
+    // counts toward dates within their period_start..period_end), rather
+    // than one global count applied uniformly to every date in the batch.
+    // date::text avoids handing back a JS Date — @vercel/postgres's tagged-
+    // template and .query() paths parse DATE columns inconsistently across
+    // process timezones otherwise (verified: shifts a day under
+    // Pacific/Auckland), so every date column in this file is cast to text
+    // at the SQL level rather than relying on driver-side type parsing.
+    sql.query(
+      `SELECT d::text AS date, COUNT(m.id)::int AS active_members
+       FROM unnest($1::date[]) AS d
+       LEFT JOIN memberships m
+         ON m.status = 'active' AND m.period_start <= d AND m.period_end >= d
+       GROUP BY d;`,
+      [dates],
+    ),
   ]);
 
   const bookedByDate = new Map<string, number>();
   const courtsByDate = new Map<string, number>();
   for (const row of rows) {
-    const r = row as { date: Date; booked_spots: number; courts: number };
-    const key = r.date.toISOString().slice(0, 10);
-    bookedByDate.set(key, r.booked_spots);
-    courtsByDate.set(key, r.courts);
+    const r = row as { date: string; booked_spots: number; courts: number };
+    bookedByDate.set(r.date, r.booked_spots);
+    courtsByDate.set(r.date, r.courts);
+  }
+  const membersByDate = new Map<string, number>();
+  for (const row of memberRows) {
+    const r = row as { date: string; active_members: number };
+    membersByDate.set(r.date, r.active_members);
   }
 
   const spots: Record<string, number> = {};
   const signedUp: Record<string, number> = {};
   for (const date of dates) {
     const booked = bookedByDate.get(date) ?? 0;
-    const maxPlayers = maxPlayersForCourts(courtsByDate.get(date) ?? DEFAULT_COURTS);
+    const activeMembers = membersByDate.get(date) ?? 0;
+    const maxPlayers = maxPlayersForCourts(
+      courtsByDate.get(date) ?? DEFAULT_COURTS,
+    );
     spots[date] = Math.max(0, maxPlayers - activeMembers - booked);
     signedUp[date] = booked + activeMembers;
   }
@@ -216,7 +259,7 @@ export async function reserveBookingSlot(
 ): Promise<boolean> {
   await ensureSession(date);
   // Casual capacity is that play day's court-derived max minus current
-  // active members (they can show up any Friday), so the atomic guard must
+  // active members whose period covers this date, so the atomic guard must
   // account for both to avoid overselling the court. The CASE mirrors
   // COURTS_TO_MAX_PLAYERS in lib/constants.ts — keep the two in sync. See
   // getAvailableSpots for why this reads sessions.courts rather than the
@@ -234,7 +277,8 @@ export async function reserveBookingSlot(
           ELSE ${SESSION_CAPACITY}
         END
       ) - (
-        SELECT COUNT(*)::int FROM memberships WHERE status = 'active'
+        SELECT COUNT(*)::int FROM memberships
+        WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
       );
   `;
   if (!rowCount) return false;
@@ -255,7 +299,10 @@ export async function reserveBookingSlot(
   return true;
 }
 
-export async function removeBooking(bookingId: number, date: string): Promise<void> {
+export async function removeBooking(
+  bookingId: number,
+  date: string,
+): Promise<void> {
   const { rowCount } = await sql`
     DELETE FROM bookings WHERE id = ${bookingId} AND session_date = ${date};
   `;
@@ -266,9 +313,144 @@ export async function removeBooking(bookingId: number, date: string): Promise<vo
   }
 }
 
+export type MembershipAssignment =
+  | {
+      blocked: false;
+      membershipId: number;
+      periodStart: string;
+      periodEnd: string;
+    }
+  | { blocked: true };
+
+// Finds the nearest upcoming play day (any date, not a fixed weekday — a
+// member can attend any date within their period) that still has room, and
+// atomically reserves a 'pending' membership row starting there, so the
+// member's access window never overlaps a day that's already full. Locks
+// each candidate session row in turn (FOR UPDATE) so two concurrent
+// signups can't both claim the same last-open spot — see
+// PENDING_MEMBERSHIP_HOLD_MINUTES for why an abandoned checkout doesn't
+// block a spot forever. Returns `{ blocked: true }` if no known upcoming
+// play day (within MEMBERSHIP_START_SEARCH_DAYS) currently has room.
+export async function assignAndReserveMembershipAccessStart(
+  plan: "monthly" | "quarterly",
+  member: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+    recurring: boolean;
+  },
+): Promise<MembershipAssignment> {
+  const { dateKey: clubToday, cutoffPassed } = getClubToday();
+
+  const client = await db.connect();
+  try {
+    const { rows: candidates } = await client.query(
+      `SELECT date::text AS date FROM sessions
+       WHERE google_event_id IS NOT NULL
+         AND date >= ($1::date + $2::int)
+         AND date <= ($1::date + $3::int)
+       ORDER BY date;`,
+      [clubToday, cutoffPassed ? 1 : 0, MEMBERSHIP_START_SEARCH_DAYS],
+    );
+
+    for (const row of candidates) {
+      const date = (row as { date: string }).date;
+
+      await client.query("BEGIN");
+      try {
+        const { rows: sessionRows } = await client.query(
+          `SELECT booked_spots, courts FROM sessions WHERE date = $1 FOR UPDATE;`,
+          [date],
+        );
+        const session = sessionRows[0] as
+          | { booked_spots: number; courts: number }
+          | undefined;
+        const maxPlayers = maxPlayersForCourts(
+          session?.courts ?? DEFAULT_COURTS,
+        );
+        const booked = session?.booked_spots ?? 0;
+
+        const { rows: memberCountRows } = await client.query(
+          `SELECT COUNT(*)::int AS count FROM memberships
+           WHERE period_start <= $1 AND period_end >= $1
+             AND (
+               status = 'active'
+               OR (status = 'pending' AND created_at > NOW() - ($2 * INTERVAL '1 minute'))
+             );`,
+          [date, PENDING_MEMBERSHIP_HOLD_MINUTES],
+        );
+        const activeMembers = (memberCountRows[0] as { count: number }).count;
+
+        if (maxPlayers - activeMembers - booked > 0) {
+          const periodEnd = addDays(date, MEMBERSHIP_DAYS[plan]);
+          const { rows: inserted } = await client.query(
+            `INSERT INTO memberships
+               (email, plan, first_name, last_name, phone, period_start, period_end, recurring, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+             RETURNING id;`,
+            [
+              member.email,
+              plan,
+              member.firstName,
+              member.lastName,
+              member.phone,
+              date,
+              periodEnd,
+              member.recurring,
+            ],
+          );
+          await client.query("COMMIT");
+          return {
+            blocked: false,
+            membershipId: (inserted[0] as { id: number }).id,
+            periodStart: date,
+            periodEnd,
+          };
+        }
+        await client.query("ROLLBACK");
+      } catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+      }
+    }
+
+    return { blocked: true };
+  } finally {
+    client.release();
+  }
+}
+
+// Attaches a Stripe subscription/PaymentIntent id to a membership row created
+// by assignAndReserveMembershipAccessStart, once the corresponding Stripe
+// object has been created.
+export async function attachStripeIdToMembership(
+  membershipId: number,
+  ids: { stripeSubscriptionId?: string; stripePaymentIntentId?: string },
+): Promise<void> {
+  if (ids.stripeSubscriptionId) {
+    await sql`
+      UPDATE memberships SET stripe_subscription_id = ${ids.stripeSubscriptionId}
+      WHERE id = ${membershipId};
+    `;
+  }
+  if (ids.stripePaymentIntentId) {
+    await sql`
+      UPDATE memberships SET stripe_payment_intent_id = ${ids.stripePaymentIntentId}
+      WHERE id = ${membershipId};
+    `;
+  }
+}
+
 export async function upsertSessionFromCalendar(
   date: string,
-  event: { id: string; summary?: string; start: string; end?: string; location?: string },
+  event: {
+    id: string;
+    summary?: string;
+    start: string;
+    end?: string;
+    location?: string;
+  },
 ): Promise<void> {
   await sql`
     INSERT INTO sessions (date, max_spots, booked_spots, google_event_id, calendar_summary, event_start_time, event_end_time, event_location, synced_at)
@@ -304,14 +486,14 @@ export async function listSessionsInRange(
   }[]
 > {
   const { rows } = await sql`
-    SELECT date, courts, booked_spots, event_start_time, event_end_time, event_location
+    SELECT date::text AS date, courts, booked_spots, event_start_time, event_end_time, event_location
     FROM sessions
     WHERE date >= ${from} AND date <= ${to} AND google_event_id IS NOT NULL
     ORDER BY date;
   `;
   return rows.map((row) => {
     const r = row as {
-      date: Date;
+      date: string;
       courts: number;
       booked_spots: number;
       event_start_time: Date | null;
@@ -319,36 +501,55 @@ export async function listSessionsInRange(
       event_location: string | null;
     };
     return {
-      date: r.date.toISOString().slice(0, 10),
+      date: r.date,
       maxSpots: maxPlayersForCourts(r.courts),
       bookedSpots: r.booked_spots,
-      eventStartTime: r.event_start_time ? r.event_start_time.toISOString() : null,
+      eventStartTime: r.event_start_time
+        ? r.event_start_time.toISOString()
+        : null,
       eventEndTime: r.event_end_time ? r.event_end_time.toISOString() : null,
       eventLocation: r.event_location,
     };
   });
 }
 
-export async function getUpcomingSessionDates(withinDays: number): Promise<string[]> {
+export async function getUpcomingSessionDates(
+  withinDays: number,
+): Promise<string[]> {
   const { rows } = await sql`
-    SELECT date FROM sessions
+    SELECT date::text AS date FROM sessions
     WHERE date >= CURRENT_DATE AND date <= CURRENT_DATE + ${withinDays}::int
       AND google_event_id IS NOT NULL
     ORDER BY date;
   `;
-  return rows.map((row) => (row as { date: Date }).date.toISOString().slice(0, 10));
+  return rows.map((row) => (row as { date: string }).date);
 }
 
 export async function listAllSessionDates(): Promise<string[]> {
   const { rows } = await sql`
-    SELECT date FROM sessions
+    SELECT date::text AS date FROM sessions
     WHERE google_event_id IS NOT NULL
     ORDER BY date;
   `;
-  return rows.map((row) => (row as { date: Date }).date.toISOString().slice(0, 10));
+  return rows.map((row) => (row as { date: string }).date);
 }
 
-export async function getActiveMemberCount(): Promise<number> {
+// Members whose period covers this specific date — the correct scoping for
+// any per-play-day capacity calculation. Mirrors getRosterForDate's predicate.
+export async function getActiveMemberCountForDate(
+  date: string,
+): Promise<number> {
+  const { rows } = await sql`
+    SELECT COUNT(*)::int AS count FROM memberships
+    WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date};
+  `;
+  return (rows[0] as { count: number })?.count ?? 0;
+}
+
+// Global active-member headcount, ignoring date range — only meaningful for
+// an overall "N active members" summary stat, never for per-session capacity
+// (use getActiveMemberCountForDate for that).
+export async function getTotalActiveMemberCount(): Promise<number> {
   const { rows } = await sql`
     SELECT COUNT(*)::int AS count FROM memberships WHERE status = 'active';
   `;
@@ -361,8 +562,9 @@ export async function getSessionHeadcount(
   const { rows } = await sql`
     SELECT booked_spots FROM sessions WHERE date = ${date};
   `;
-  const casual = (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
-  const members = await getActiveMemberCount();
+  const casual =
+    (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
+  const members = await getActiveMemberCountForDate(date);
   return { casual, members, total: casual + members };
 }
 
@@ -386,8 +588,9 @@ export async function setCourtsForDate(
   const { rows } = await sql`
     SELECT booked_spots FROM sessions WHERE date = ${date};
   `;
-  const booked = (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
-  const activeMembers = await getActiveMemberCount();
+  const booked =
+    (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
+  const activeMembers = await getActiveMemberCountForDate(date);
   const totalSignedUp = booked + activeMembers;
 
   if (totalSignedUp > maxPlayers) {
@@ -464,7 +667,9 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
 
   const members: RosterEntry[] = memberRows.map((r) => ({
     bookingId: null,
-    name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || (r.email as string),
+    name:
+      `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() ||
+      (r.email as string),
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
     type: r.plan === "quarterly" ? "quarterly" : "monthly",
@@ -495,8 +700,8 @@ function mapMembershipRow(r: {
   last_name: string | null;
   phone: string | null;
   plan: string;
-  period_start: Date | null;
-  period_end: Date | null;
+  period_start: string | null;
+  period_end: string | null;
   status: string;
   cancel_at_period_end: boolean;
   recurring: boolean;
@@ -508,8 +713,8 @@ function mapMembershipRow(r: {
     email: r.email,
     phone: r.phone,
     plan: r.plan === "quarterly" ? "quarterly" : "monthly",
-    periodStart: r.period_start ? r.period_start.toISOString().slice(0, 10) : null,
-    periodEnd: r.period_end ? r.period_end.toISOString().slice(0, 10) : null,
+    periodStart: r.period_start,
+    periodEnd: r.period_end,
     status: r.status,
     cancelAtPeriodEnd: r.cancel_at_period_end,
     recurring: r.recurring,
@@ -522,29 +727,35 @@ function mapMembershipRow(r: {
 // until Stripe's period-end webhook flips the status).
 export async function listMemberships(): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due')
     ORDER BY plan, created_at DESC;
   `;
-  return rows.map((r) => mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]));
+  return rows.map((r) =>
+    mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]),
+  );
 }
 
-export async function getMembershipById(id: number): Promise<MembershipRow | null> {
+export async function getMembershipById(
+  id: number,
+): Promise<MembershipRow | null> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
     FROM memberships
     WHERE id = ${id};
   `;
   const row = rows[0];
-  return row ? mapMembershipRow(row as Parameters<typeof mapMembershipRow>[0]) : null;
+  return row
+    ? mapMembershipRow(row as Parameters<typeof mapMembershipRow>[0])
+    : null;
 }
 
 export async function listActiveMembershipsByEmail(
   email: string,
 ): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start, period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due')
       AND lower(email) = lower(${email})
@@ -552,11 +763,38 @@ export async function listActiveMembershipsByEmail(
       AND recurring = TRUE
     ORDER BY created_at DESC;
   `;
-  return rows.map((r) => mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]));
+  return rows.map((r) =>
+    mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]),
+  );
 }
 
-export async function setMembershipCancelAtPeriodEnd(id: number): Promise<void> {
+export async function setMembershipCancelAtPeriodEnd(
+  id: number,
+): Promise<void> {
   await sql`
     UPDATE memberships SET cancel_at_period_end = TRUE WHERE id = ${id};
+  `;
+}
+
+// Advances a recurring membership's access window by one billing cycle on
+// renewal. Additive (rolls forward from whatever's stored, rather than
+// resetting from Stripe's absolute period fields) so a delayed access-start
+// offset set at signup is preserved indefinitely. Stripe delivers webhooks
+// at-least-once, and this update is NOT naturally idempotent like the rest of
+// this file's absolute-value writes — the last_renewal_invoice_id guard is
+// required, or a duplicate delivery would silently grant an extra cycle.
+export async function applyMembershipRenewal(
+  subscriptionId: string,
+  invoiceId: string,
+): Promise<void> {
+  await sql`
+    UPDATE memberships
+    SET
+      period_end = period_end + (
+        CASE plan WHEN 'monthly' THEN ${MEMBERSHIP_CYCLE_DAYS.monthly} WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE 0 END
+      ),
+      last_renewal_invoice_id = ${invoiceId}
+    WHERE stripe_subscription_id = ${subscriptionId}
+      AND last_renewal_invoice_id IS DISTINCT FROM ${invoiceId};
   `;
 }

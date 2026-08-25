@@ -25,6 +25,33 @@ export const MONTHLY_PRICE_CENTS = 3300;
 export const QUARTERLY_PRICE_CENTS = 8500;
 export const BOOKING_WINDOW_DAYS = 30;
 export const BOOKING_CUTOFF_HOUR = 17;
+
+// Membership cycle length in days — 4 weeks / 12 weeks, matching the Stripe
+// billing interval (interval:week, count:4 or 12).
+export const MEMBERSHIP_CYCLE_DAYS: Record<"monthly" | "quarterly", number> = {
+  monthly: 28,
+  quarterly: 84,
+};
+
+// End-inclusive day span for a membership window counted from the assigned
+// access-start date (day 0) — one less than the cycle length.
+export const MEMBERSHIP_DAYS: Record<"monthly" | "quarterly", number> = {
+  monthly: MEMBERSHIP_CYCLE_DAYS.monthly - 1,
+  quarterly: MEMBERSHIP_CYCLE_DAYS.quarterly - 1,
+};
+
+// How far ahead to search for the next play day with room when assigning a
+// new membership's access-start date — matches the Google Calendar sync
+// horizon (see app/api/cron/sync-calendar/route.ts), so we never search past
+// dates that could plausibly be synced yet.
+export const MEMBERSHIP_START_SEARCH_DAYS = 90;
+
+// A 'pending' membership row (Stripe subscription/PaymentIntent created, but
+// payment not yet confirmed) still provisionally occupies a spot for this
+// long, so two concurrent signups can't both claim the same last-open play
+// day. Abandoned checkouts stop blocking a spot after this window without
+// needing a cleanup job.
+export const PENDING_MEMBERSHIP_HOLD_MINUTES = 30;
 export const DONATION_MIN_CENTS = 200;
 export const DONATION_MAX_CENTS = 500000;
 

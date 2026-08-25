@@ -1,22 +1,29 @@
 import {
   ensureTables,
-  getActiveMemberCount,
+  getTotalActiveMemberCount,
   listMemberships,
   type MembershipRow,
 } from "@/lib/db";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
-import { SESSION_CAPACITY } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
-function MembersTable({ title, members }: { title: string; members: MembershipRow[] }) {
+function MembersTable({
+  title,
+  members,
+}: {
+  title: string;
+  members: MembershipRow[];
+}) {
   return (
     <div style={{ marginBottom: 36 }}>
       <p style={{ fontWeight: 600, marginBottom: 8 }}>
         {title} ({members.length})
       </p>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+      <table
+        style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
+      >
         <thead>
           <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
             <th style={{ padding: "6px 8px" }}>Name</th>
@@ -51,14 +58,19 @@ function MembersTable({ title, members }: { title: string; members: MembershipRo
                       Cancels {m.periodEnd ?? "at period end"}
                     </span>
                   ) : (
-                    <span style={{ color: "#1a7a3c", textTransform: "capitalize" }}>
+                    <span
+                      style={{ color: "#1a7a3c", textTransform: "capitalize" }}
+                    >
                       {m.status}
                     </span>
                   )}
                 </td>
                 <td style={{ padding: "6px 8px" }}>
                   {m.recurring && !m.cancelAtPeriodEnd && (
-                    <MemberCancelButton membershipId={m.id} memberName={m.name} />
+                    <MemberCancelButton
+                      membershipId={m.id}
+                      memberName={m.name}
+                    />
                   )}
                 </td>
               </tr>
@@ -76,7 +88,7 @@ export default async function MembersAdminPage() {
         await ensureTables();
         const [memberships, activeMemberCount] = await Promise.all([
           listMemberships(),
-          getActiveMemberCount(),
+          getTotalActiveMemberCount(),
         ]);
         return { memberships, activeMemberCount };
       })()
@@ -84,10 +96,16 @@ export default async function MembersAdminPage() {
 
   const monthly = memberships.filter((m) => m.plan === "monthly");
   const quarterly = memberships.filter((m) => m.plan === "quarterly");
-  const casualSpotsRemaining = Math.max(0, SESSION_CAPACITY - activeMemberCount);
 
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 860, margin: "40px auto", padding: "0 20px" }}>
+    <div
+      style={{
+        fontFamily: "system-ui, sans-serif",
+        maxWidth: 860,
+        margin: "40px auto",
+        padding: "0 20px",
+      }}
+    >
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>Members</h1>
       <p style={{ color: "#666", marginBottom: 20 }}>
         Monthly and quarterly members with an active subscription.
@@ -108,9 +126,9 @@ export default async function MembersAdminPage() {
               fontSize: 13,
             }}
           >
-            {activeMemberCount} active member{activeMemberCount === 1 ? "" : "s"} · session
-            capacity is {SESSION_CAPACITY}, so up to {casualSpotsRemaining} casual spot
-            {casualSpotsRemaining === 1 ? "" : "s"} remain per session — see the{" "}
+            {activeMemberCount} active member
+            {activeMemberCount === 1 ? "" : "s"} total — capacity varies per
+            play day and per member&apos;s active period, see the{" "}
             <a href="/admin/play-days">Play days</a> page for a specific date.
           </p>
           <MembersTable title="Monthly members" members={monthly} />

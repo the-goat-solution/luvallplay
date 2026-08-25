@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { sql } from "@vercel/postgres";
 import { getStripe } from "@/lib/stripe";
-import { ensureTables, reserveBookingSlot } from "@/lib/db";
+import {
+  applyMembershipRenewal,
+  ensureTables,
+  reserveBookingSlot,
+} from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -10,7 +14,10 @@ export async function POST(request: Request) {
   const stripe = getStripe();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    return NextResponse.json({ error: "Webhook not configured" }, { status: 503 });
+    return NextResponse.json(
+      { error: "Webhook not configured" },
+      { status: 503 },
+    );
   }
 
   const body = await request.text();
@@ -26,6 +33,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  // Every event type below eventually touches a column ensureTables() may
+  // still need to create (e.g. last_renewal_invoice_id on a fresh deploy) —
+  // run it once up front rather than per-branch, so a cold serverless
+  // instance handling a webhook before any other route has run doesn't fail.
+  if (process.env.POSTGRES_URL) {
+    await ensureTables();
+  }
+
   if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object as Stripe.PaymentIntent;
     if (pi.metadata?.type === "casual" && pi.metadata.sessionDate) {
@@ -39,7 +54,10 @@ export async function POST(request: Request) {
           paymentIntentId: pi.id,
         });
         if (!ok) {
-          console.error("Could not reserve slot — session full", pi.metadata.sessionDate);
+          console.error(
+            "Could not reserve slot — session full",
+            pi.metadata.sessionDate,
+          );
         }
       }
     }
@@ -74,25 +92,16 @@ export async function POST(request: Request) {
   if (event.type === "customer.subscription.updated") {
     const sub = event.data.object as Stripe.Subscription;
     if (process.env.POSTGRES_URL) {
-      const item = sub.items.data[0];
-      if (item) {
-        const periodStart = new Date(item.current_period_start * 1000)
-          .toISOString()
-          .slice(0, 10);
-        const periodEnd = new Date(item.current_period_end * 1000)
-          .toISOString()
-          .slice(0, 10);
-        await sql`
-          UPDATE memberships
-          SET status = ${sub.status}, period_start = ${periodStart}, period_end = ${periodEnd}, cancel_at_period_end = ${sub.cancel_at_period_end}
-          WHERE stripe_subscription_id = ${sub.id};
-        `;
-      } else {
-        await sql`
-          UPDATE memberships SET status = ${sub.status}, cancel_at_period_end = ${sub.cancel_at_period_end}
-          WHERE stripe_subscription_id = ${sub.id};
-        `;
-      }
+      // period_start/period_end are NOT synced from Stripe's raw billing
+      // fields here — they represent the member's access window, which was
+      // deliberately assigned to the nearest available play day at signup
+      // (see assignAndReserveMembershipAccessStart) and can legitimately
+      // differ from Stripe's own billing anchor. Only period_end advances,
+      // additively, on renewal — see applyMembershipRenewal.
+      await sql`
+        UPDATE memberships SET status = ${sub.status}, cancel_at_period_end = ${sub.cancel_at_period_end}
+        WHERE stripe_subscription_id = ${sub.id};
+      `;
       await sql`
         UPDATE donations SET status = ${sub.status}
         WHERE stripe_subscription_id = ${sub.id};
@@ -131,6 +140,13 @@ export async function POST(request: Request) {
         UPDATE donations SET status = 'active'
         WHERE stripe_subscription_id = ${subId};
       `;
+      // billing_reason distinguishes a renewal invoice from the initial
+      // signup invoice — only renewals should extend the access window.
+      // applyMembershipRenewal is idempotent against Stripe's at-least-once
+      // webhook delivery via last_renewal_invoice_id.
+      if (invoice.billing_reason === "subscription_cycle" && invoice.id) {
+        await applyMembershipRenewal(subId, invoice.id);
+      }
     }
 
     if (
@@ -148,7 +164,10 @@ export async function POST(request: Request) {
         paymentIntentId: `cash-invoice-${invoice.id}`,
       });
       if (!ok) {
-        console.error("Could not reserve slot for cash invoice — session full", invoice.id);
+        console.error(
+          "Could not reserve slot for cash invoice — session full",
+          invoice.id,
+        );
       }
     }
   }

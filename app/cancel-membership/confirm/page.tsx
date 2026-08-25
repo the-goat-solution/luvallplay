@@ -1,6 +1,7 @@
 import { Navigation } from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
 import { ConfirmCancelForm } from "@/components/cancel/ConfirmCancelForm";
+import { RequestNewCancelLinkButton } from "@/components/cancel/RequestNewCancelLinkButton";
 import { getMembershipById } from "@/lib/db";
 import { verifyCancelToken } from "@/lib/security";
 
@@ -60,10 +61,7 @@ export default async function ConfirmCancelPage({
             {!token || !membership ? (
               <p style={{ color: "var(--text-dark)", lineHeight: 1.7 }}>
                 This link is invalid or has expired.{" "}
-                <a href="/cancel-membership" style={{ color: "var(--navy)", fontWeight: 600 }}>
-                  Request a new one
-                </a>
-                .
+                <RequestNewCancelLinkButton />.
               </p>
             ) : (
               <ConfirmCancelForm

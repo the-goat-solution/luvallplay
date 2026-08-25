@@ -127,6 +127,13 @@ const I18N = {
     modal_book: "Book a Casual Spot",
     modal_join: "Join Three Wolves",
     modal_waitlist: "Join the Waitlist",
+    modal_cancel: "Cancel Your Membership",
+    cancel_membership_intro:
+      "Enter the email your membership is under. We'll send you a link to confirm — your membership stays active through the end of the billing period you've already paid for.",
+    cancel_membership_btn: "Send Cancellation Link",
+    confirm_cancel_sent: "Check your inbox",
+    confirm_cancel_sent_body:
+      "If that email has an active monthly or quarterly membership, we've sent a link to confirm the cancellation. It expires in 24 hours — check your inbox (and spam folder).",
     step_session: "Select Session",
     step_details: "Your Details",
     step_payment: "Payment",
@@ -309,6 +316,13 @@ const I18N = {
     modal_book: "Đặt Chỗ Thông Thường",
     modal_join: "Tham Gia Three Wolves",
     modal_waitlist: "Đăng Ký Danh Sách Chờ",
+    modal_cancel: "Hủy Hội Viên Của Bạn",
+    cancel_membership_intro:
+      "Nhập email mà hội viên của bạn đã đăng ký. Chúng tôi sẽ gửi cho bạn một liên kết để xác nhận — hội viên của bạn vẫn hoạt động đến hết kỳ thanh toán bạn đã trả.",
+    cancel_membership_btn: "Gửi Liên Kết Hủy",
+    confirm_cancel_sent: "Kiểm tra hộp thư của bạn",
+    confirm_cancel_sent_body:
+      "Nếu email đó có hội viên tháng hoặc quý đang hoạt động, chúng tôi đã gửi một liên kết để xác nhận việc hủy. Liên kết hết hạn sau 24 giờ — hãy kiểm tra hộp thư (và cả thư mục spam).",
     step_session: "Chọn Buổi",
     step_details: "Thông Tin Cá Nhân",
     step_payment: "Thanh Toán",

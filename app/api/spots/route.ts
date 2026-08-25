@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { SESSION_CAPACITY } from "@/lib/constants";
-import { getAvailableSpots, getSessionHeadcount, ensureTables } from "@/lib/db";
+import { getSpotsAndHeadcountForDates, ensureTables } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
 export async function GET(request: Request) {
@@ -16,16 +16,13 @@ export async function GET(request: Request) {
   }
 
   const dates = datesParam.split(",").map((d) => d.trim()).filter(Boolean);
-  const spots: Record<string, number> = {};
-  const signedUp: Record<string, number> = {};
+  let spots: Record<string, number> = {};
+  let signedUp: Record<string, number> = {};
 
   try {
     if (process.env.POSTGRES_URL) {
       await ensureTables();
-      for (const date of dates) {
-        spots[date] = await getAvailableSpots(date);
-        signedUp[date] = (await getSessionHeadcount(date)).total;
-      }
+      ({ spots, signedUp } = await getSpotsAndHeadcountForDates(dates));
     } else {
       for (const date of dates) {
         spots[date] = SESSION_CAPACITY;

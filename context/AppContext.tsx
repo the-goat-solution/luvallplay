@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { PlanId } from "@/lib/constants";
 
-type ModalId = "booking" | "membership" | "waitlist" | "donate" | null;
+type ModalId = "booking" | "membership" | "waitlist" | "donate" | "cancel" | null;
 
 type SessionDateInfo = {
   maxSpots: number;

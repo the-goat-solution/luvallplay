@@ -201,8 +201,8 @@ const I18N = {
     hero_sub: "Câu Lạc Bộ Cầu Lông",
     hero_tagline:
       "Nơi đam mê và kỹ thuật giao nhau trên sân cầu Christchurch. Tham gia cùng chúng tôi mỗi tối thứ Sáu.",
-    hero_day: "Mỗi Thứ Sáu, 18:00 – 19:30",
-    hero_venue: "Trung Tâm Thể Thao Graham Condon",
+    hero_day: "Mỗi Thứ Sáu Và Hơn Thế Nữa",
+    hero_venue: "Khu Vực Christchurch",
     hero_cta1: "Trở Thành Hội Viên",
     hero_cta2: "Đặt Chỗ Chơi",
     about_lbl: "Về Câu Lạc Bộ",

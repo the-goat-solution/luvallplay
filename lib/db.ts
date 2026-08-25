@@ -138,6 +138,21 @@ async function ensureTablesImpl() {
   // previous fixed 12-player capacity). Unlike max_spots, this is never
   // touched by the calendar sync's upsert, so it doesn't drift.
   await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS courts INT NOT NULL DEFAULT 2;`;
+  // Set once a "spot opened" email has actually been sent for this waitlist
+  // row, so notifyWaitlistIfSpotOpened (lib/waitlist-notify.ts) never
+  // double-emails someone across repeated capacity-increase triggers.
+  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;`;
+  // Dedup guard for the day-before membership reminder cron — a given
+  // membership should only ever get one reminder for a given play day, even
+  // if the cron is retried or runs more than once on the same day.
+  await sql`
+    CREATE TABLE IF NOT EXISTS membership_reminders_sent (
+      membership_id INT NOT NULL,
+      session_date DATE NOT NULL,
+      sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (membership_id, session_date)
+    );
+  `;
 }
 
 // Adds an exact number of days to a YYYY-MM-DD date string. Unlike calendar-
@@ -513,12 +528,19 @@ export async function listSessionsInRange(
   });
 }
 
+// Postgres CURRENT_DATE is UTC-based, which disagrees with the club's
+// Pacific/Auckland "today" for roughly half of every NZ calendar day —
+// exactly the same class of bug documented on getClubToday. Bind the club-
+// local date explicitly instead of relying on the database's own clock, so
+// this agrees with every other "today" computation in the app (e.g. the
+// membership access-start search in assignAndReserveMembershipAccessStart).
 export async function getUpcomingSessionDates(
   withinDays: number,
 ): Promise<string[]> {
+  const { dateKey: clubToday } = getClubToday();
   const { rows } = await sql`
     SELECT date::text AS date FROM sessions
-    WHERE date >= CURRENT_DATE AND date <= CURRENT_DATE + ${withinDays}::int
+    WHERE date >= ${clubToday}::date AND date <= ${clubToday}::date + ${withinDays}::int
       AND google_event_id IS NOT NULL
     ORDER BY date;
   `;
@@ -631,6 +653,71 @@ export async function upsertSessionAlertState(
   `;
 }
 
+export type WaitlistEntry = {
+  id: number;
+  name: string;
+  email: string;
+  createdAt: string;
+  notifiedAt: string | null;
+};
+
+function mapWaitlistRow(r: {
+  id: number;
+  name: string;
+  email: string;
+  created_at: Date;
+  notified_at: Date | null;
+}): WaitlistEntry {
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    createdAt: r.created_at.toISOString(),
+    notifiedAt: r.notified_at ? r.notified_at.toISOString() : null,
+  };
+}
+
+export async function getWaitlistForDate(
+  date: string,
+): Promise<WaitlistEntry[]> {
+  const { rows } = await sql`
+    SELECT id, name, email, created_at, notified_at
+    FROM waitlist
+    WHERE session_date = ${date}
+    ORDER BY created_at ASC;
+  `;
+  return rows.map((r) => mapWaitlistRow(r as Parameters<typeof mapWaitlistRow>[0]));
+}
+
+// Oldest-first, capped at `limit` — used by notifyWaitlistIfSpotOpened so a
+// capacity increase of N spots only notifies (up to) N people at a time.
+export async function getUnnotifiedWaitlistForDate(
+  date: string,
+  limit: number,
+): Promise<WaitlistEntry[]> {
+  if (limit <= 0) return [];
+  const { rows } = await sql`
+    SELECT id, name, email, created_at, notified_at
+    FROM waitlist
+    WHERE session_date = ${date} AND notified_at IS NULL
+    ORDER BY created_at ASC
+    LIMIT ${limit};
+  `;
+  return rows.map((r) => mapWaitlistRow(r as Parameters<typeof mapWaitlistRow>[0]));
+}
+
+export async function markWaitlistNotified(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  await sql.query(
+    `UPDATE waitlist SET notified_at = NOW() WHERE id = ANY($1::int[]);`,
+    [ids],
+  );
+}
+
+export async function deleteWaitlistEntry(id: number): Promise<void> {
+  await sql`DELETE FROM waitlist WHERE id = ${id};`;
+}
+
 export type RosterEntry = {
   bookingId: number | null;
   name: string;
@@ -691,6 +778,7 @@ export type MembershipRow = {
   cancelAtPeriodEnd: boolean;
   recurring: boolean;
   stripeSubscriptionId: string | null;
+  method: "card" | "cash";
 };
 
 function mapMembershipRow(r: {
@@ -706,6 +794,7 @@ function mapMembershipRow(r: {
   cancel_at_period_end: boolean;
   recurring: boolean;
   stripe_subscription_id: string | null;
+  stripe_payment_intent_id: string | null;
 }): MembershipRow {
   return {
     id: r.id,
@@ -719,6 +808,9 @@ function mapMembershipRow(r: {
     cancelAtPeriodEnd: r.cancel_at_period_end,
     recurring: r.recurring,
     stripeSubscriptionId: r.stripe_subscription_id,
+    method: r.stripe_payment_intent_id?.startsWith("cash-invoice-")
+      ? "cash"
+      : "card",
   };
 }
 
@@ -727,7 +819,7 @@ function mapMembershipRow(r: {
 // until Stripe's period-end webhook flips the status).
 export async function listMemberships(): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due')
     ORDER BY plan, created_at DESC;
@@ -741,7 +833,7 @@ export async function getMembershipById(
   id: number,
 ): Promise<MembershipRow | null> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
     FROM memberships
     WHERE id = ${id};
   `;
@@ -755,7 +847,7 @@ export async function listActiveMembershipsByEmail(
   email: string,
 ): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id
+    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due')
       AND lower(email) = lower(${email})
@@ -797,4 +889,107 @@ export async function applyMembershipRenewal(
     WHERE stripe_subscription_id = ${subscriptionId}
       AND last_renewal_invoice_id IS DISTINCT FROM ${invoiceId};
   `;
+}
+
+// Activates a one-time-payment membership and, in the same statement, tells
+// the caller whether this call is the one that actually flipped it — Stripe
+// delivers webhooks at-least-once, so a plain unconditional UPDATE would
+// have re-sent the "membership confirmed" email on every redelivery. A
+// non-null return means "activate + email"; null means "already active,
+// skip" (either a genuine duplicate delivery, or the row doesn't exist).
+export async function activateMembershipByPaymentIntentId(
+  paymentIntentId: string,
+): Promise<MembershipRow | null> {
+  const { rows } = await sql`
+    UPDATE memberships SET status = 'active'
+    WHERE stripe_payment_intent_id = ${paymentIntentId} AND status != 'active'
+    RETURNING id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id;
+  `;
+  const row = rows[0];
+  return row
+    ? mapMembershipRow(row as Parameters<typeof mapMembershipRow>[0])
+    : null;
+}
+
+// Same guard as activateMembershipByPaymentIntentId, for the recurring-
+// subscription signup path (invoice.payment_succeeded, initial invoice).
+export async function activateMembershipBySubscriptionId(
+  subscriptionId: string,
+): Promise<MembershipRow | null> {
+  const { rows } = await sql`
+    UPDATE memberships SET status = 'active'
+    WHERE stripe_subscription_id = ${subscriptionId} AND status != 'active'
+    RETURNING id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id;
+  `;
+  const row = rows[0];
+  return row
+    ? mapMembershipRow(row as Parameters<typeof mapMembershipRow>[0])
+    : null;
+}
+
+export type MembershipReminderTarget = {
+  membershipId: number;
+  email: string;
+  firstName: string;
+  plan: "monthly" | "quarterly";
+  periodEnd: string;
+};
+
+// Active members whose membership period covers `date` — the pool eligible
+// for the day-before reminder cron (app/api/cron/membership-reminders).
+export async function getMembersWithPlayDayTomorrow(
+  date: string,
+): Promise<MembershipReminderTarget[]> {
+  const { rows } = await sql`
+    SELECT id, email, first_name, plan, period_end::text AS period_end
+    FROM memberships
+    WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date};
+  `;
+  return rows.map((r) => {
+    const row = r as {
+      id: number;
+      email: string;
+      first_name: string | null;
+      plan: string;
+      period_end: string;
+    };
+    return {
+      membershipId: row.id,
+      email: row.email,
+      firstName: row.first_name ?? "",
+      plan: row.plan === "quarterly" ? "quarterly" : "monthly",
+      periodEnd: row.period_end,
+    };
+  });
+}
+
+// Every synced play day from `fromDate` through `periodEnd` (inclusive) —
+// the "remaining sessions in their membership period" list for the reminder
+// email. Only synced (google_event_id set) dates are included, matching
+// every other bookable-date computation in the app.
+export async function getRemainingSessionDatesInPeriod(
+  fromDate: string,
+  periodEnd: string,
+): Promise<string[]> {
+  const { rows } = await sql`
+    SELECT date::text AS date FROM sessions
+    WHERE date >= ${fromDate} AND date <= ${periodEnd} AND google_event_id IS NOT NULL
+    ORDER BY date;
+  `;
+  return rows.map((row) => (row as { date: string }).date);
+}
+
+// Atomic dedup claim for the reminder cron: returns true only for the call
+// that actually inserted the row, so a retried or double-triggered cron run
+// never sends the same member two reminders for the same play day.
+export async function claimMembershipReminder(
+  membershipId: number,
+  sessionDate: string,
+): Promise<boolean> {
+  const { rowCount } = await sql`
+    INSERT INTO membership_reminders_sent (membership_id, session_date)
+    VALUES (${membershipId}, ${sessionDate})
+    ON CONFLICT (membership_id, session_date) DO NOTHING;
+  `;
+  return (rowCount ?? 0) > 0;
 }

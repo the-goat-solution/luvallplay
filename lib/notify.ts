@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { heading, paragraph, renderEmailLayout } from "./email-layout";
 
 let resend: Resend | null = null;
 
@@ -35,6 +36,11 @@ export async function sendHeadcountAlertEmail(input: {
       ? "Below the comfortable 8-12 range — consider recruiting more players."
       : "Above the comfortable 8-12 range — consider booking an additional court (pending availability).";
 
+  const bodyHtml = `
+    ${heading(subject)}
+    ${paragraph(`Session <strong>${input.date}</strong>: <strong>${input.total}</strong> total players (${input.casual} casual + ${input.members} active members).`)}
+    ${paragraph(action)}
+  `;
   const text = `Session ${input.date}: ${input.total} total players (${input.casual} casual + ${input.members} active members).\n\n${action}`;
 
   const resend = getResend();
@@ -42,6 +48,7 @@ export async function sendHeadcountAlertEmail(input: {
     from: process.env.ALERT_FROM_EMAIL ?? "alerts@threewolvesbadminton.com",
     to,
     subject,
+    html: renderEmailLayout({ title: subject, bodyHtml }),
     text,
   });
 }

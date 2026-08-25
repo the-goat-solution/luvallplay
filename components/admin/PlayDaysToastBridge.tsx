@@ -10,6 +10,8 @@ const TOAST_PARAMS = [
   "removed",
   "courtsUpdated",
   "courtsError",
+  "waitlistNotified",
+  "waitlistRemoved",
 ] as const;
 
 // Every admin action on the play-days page redirects back with one of these
@@ -27,6 +29,8 @@ export function PlayDaysToastBridge() {
     const removed = searchParams.get("removed");
     const courtsUpdated = searchParams.get("courtsUpdated");
     const courtsError = searchParams.get("courtsError");
+    const waitlistNotified = searchParams.get("waitlistNotified");
+    const waitlistRemoved = searchParams.get("waitlistRemoved");
 
     if (cashAdded) showToast("Cash player added and recorded in Stripe.", "success");
     if (cashError) showToast(cashError, "error");
@@ -38,8 +42,26 @@ export function PlayDaysToastBridge() {
       );
     }
     if (courtsError) showToast(courtsError, "error");
+    if (waitlistNotified) {
+      const n = Number(waitlistNotified);
+      showToast(
+        n > 0
+          ? `Notified ${n} waitlisted player${n === 1 ? "" : "s"} that a spot opened up.`
+          : "No spots available to notify the waitlist about yet.",
+        n > 0 ? "success" : "error",
+      );
+    }
+    if (waitlistRemoved) showToast("Removed from the waitlist.", "success");
 
-    if (cashAdded || cashError || removed || courtsUpdated || courtsError) {
+    if (
+      cashAdded ||
+      cashError ||
+      removed ||
+      courtsUpdated ||
+      courtsError ||
+      waitlistNotified ||
+      waitlistRemoved
+    ) {
       const params = new URLSearchParams(searchParams.toString());
       for (const key of TOAST_PARAMS) params.delete(key);
       const qs = params.toString();

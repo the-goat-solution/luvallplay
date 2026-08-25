@@ -1,15 +1,18 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
+  deleteWaitlistEntry,
   ensureTables,
   getAvailableSpots,
   getCourtsForDate,
   getRosterForDate,
+  getWaitlistForDate,
   listAllSessionDates,
   removeBooking,
   reserveBookingSlot,
   setCourtsForDate,
 } from "@/lib/db";
+import { notifyWaitlistIfSpotOpened } from "@/lib/waitlist-notify";
 import { formatDateLong, getDayName, toDateKey } from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
@@ -118,6 +121,9 @@ async function addCashPlayer(date: string, formData: FormData) {
 async function removePlayer(date: string, bookingId: number) {
   "use server";
   await removeBooking(bookingId, date);
+  // Removing a casual booking frees a spot — let anyone waitlisted for this
+  // date know right away rather than waiting on another trigger.
+  await notifyWaitlistIfSpotOpened(date);
   revalidatePath("/admin/play-days");
   redirect(`/admin/play-days?date=${date}&removed=1`);
 }
@@ -133,13 +139,34 @@ async function updateCourts(date: string, formData: FormData) {
   }
 
   await ensureTables();
+  const before = await getCourtsForDate(date);
   const result = await setCourtsForDate(date, courts);
   if (!result.ok) {
     redirect(`/admin/play-days?date=${date}&courtsError=${encodeURIComponent(result.reason)}`);
   }
 
+  // Only a capacity increase can free up a spot — no point checking on a
+  // decrease (setCourtsForDate already refuses to shrink below signups).
+  if (maxPlayersForCourts(courts) > maxPlayersForCourts(before)) {
+    await notifyWaitlistIfSpotOpened(date);
+  }
+
   revalidatePath("/admin/play-days");
   redirect(`/admin/play-days?date=${date}&courtsUpdated=${courts}`);
+}
+
+async function notifyWaitlistNow(date: string) {
+  "use server";
+  const count = await notifyWaitlistIfSpotOpened(date);
+  revalidatePath("/admin/play-days");
+  redirect(`/admin/play-days?date=${date}&waitlistNotified=${count}`);
+}
+
+async function removeWaitlistEntry(date: string, id: number) {
+  "use server";
+  await deleteWaitlistEntry(id);
+  revalidatePath("/admin/play-days");
+  redirect(`/admin/play-days?date=${date}&waitlistRemoved=1`);
 }
 
 export default async function PlayDaysAdminPage({
@@ -152,6 +179,8 @@ export default async function PlayDaysAdminPage({
     removed?: string;
     courtsUpdated?: string;
     courtsError?: string;
+    waitlistNotified?: string;
+    waitlistRemoved?: string;
   }>;
 }) {
   const { date: dateParam } = await searchParams;
@@ -170,10 +199,12 @@ export default async function PlayDaysAdminPage({
     dateParam && sessionKeys.includes(dateParam) ? dateParam : defaultDate;
 
   let roster: Awaited<ReturnType<typeof getRosterForDate>> = [];
+  let waitlist: Awaited<ReturnType<typeof getWaitlistForDate>> = [];
   let casualSpotsRemaining: number | null = null;
   let courts = 2;
   if (process.env.POSTGRES_URL && selectedDate) {
     roster = await getRosterForDate(selectedDate);
+    waitlist = await getWaitlistForDate(selectedDate);
     casualSpotsRemaining = await getAvailableSpots(selectedDate);
     courts = await getCourtsForDate(selectedDate);
   }
@@ -325,6 +356,85 @@ export default async function PlayDaysAdminPage({
                           </button>
                         </form>
                       ) : null}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 32, marginBottom: 8 }}>
+            <h2 style={{ fontSize: 16 }}>
+              Waitlist ({waitlist.length})
+            </h2>
+            {casualSpotsRemaining !== null && casualSpotsRemaining > 0 && waitlist.length > 0 && (
+              <form action={notifyWaitlistNow.bind(null, selectedDate)}>
+                <button
+                  type="submit"
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: "1px solid #1a2a4a",
+                    background: "#1a2a4a",
+                    color: "#fff",
+                    fontSize: 12,
+                    cursor: "pointer",
+                  }}
+                >
+                  Notify waitlist now ({casualSpotsRemaining} spot{casualSpotsRemaining === 1 ? "" : "s"} open)
+                </button>
+              </form>
+            )}
+          </div>
+          <p style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>
+            Anyone who joined the waitlist for this play day. They&apos;re emailed automatically when a
+            booking is removed or courts are added and a spot opens up.
+          </p>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginBottom: 8 }}>
+            <thead>
+              <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
+                <th style={{ padding: "6px 8px" }}>Name</th>
+                <th style={{ padding: "6px 8px" }}>Email</th>
+                <th style={{ padding: "6px 8px" }}>Joined</th>
+                <th style={{ padding: "6px 8px" }}>Status</th>
+                <th style={{ padding: "6px 8px" }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {waitlist.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: "10px 8px", color: "#888" }}>
+                    Nobody on the waitlist for this date.
+                  </td>
+                </tr>
+              ) : (
+                waitlist.map((w) => (
+                  <tr key={w.id} style={{ borderBottom: "1px solid #eee" }}>
+                    <td style={{ padding: "6px 8px" }}>{w.name}</td>
+                    <td style={{ padding: "6px 8px" }}>{w.email}</td>
+                    <td style={{ padding: "6px 8px" }}>
+                      {new Date(w.createdAt).toLocaleDateString("en-NZ")}
+                    </td>
+                    <td style={{ padding: "6px 8px" }}>
+                      {w.notifiedAt ? "Notified" : "Waiting"}
+                    </td>
+                    <td style={{ padding: "6px 8px" }}>
+                      <form action={removeWaitlistEntry.bind(null, selectedDate, w.id)}>
+                        <button
+                          type="submit"
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: 6,
+                            border: "1px solid #a12622",
+                            background: "#fff",
+                            color: "#a12622",
+                            fontSize: 12,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </form>
                     </td>
                   </tr>
                 ))

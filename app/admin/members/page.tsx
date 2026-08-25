@@ -1,13 +1,147 @@
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import {
+  activateMembershipByPaymentIntentId,
+  assignAndReserveMembershipAccessStart,
+  attachStripeIdToMembership,
   ensureTables,
   getTotalActiveMemberCount,
   listMemberships,
   type MembershipRow,
 } from "@/lib/db";
+import { getClubToday } from "@/lib/dates";
+import { getStripe } from "@/lib/stripe";
+import { sendMembershipConfirmationEmail } from "@/lib/email";
+import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
+import { MembersToastBridge } from "@/components/admin/MembersToastBridge";
 
 export const dynamic = "force-dynamic";
+
+const MEMBERSHIP_PRICE_CENTS: Record<"monthly" | "quarterly", number> = {
+  monthly: MONTHLY_PRICE_CENTS,
+  quarterly: QUARTERLY_PRICE_CENTS,
+};
+
+// Records a monthly/quarterly membership paid in cash: reserves the same
+// access-start slot the online signup flow would (so cash members count
+// against play-day capacity exactly like card members), records a Stripe
+// customer + invoice marked paid out-of-band (so Stripe stays the source of
+// truth for who's a paying member, without ever charging a card), then
+// activates the membership and sends the same confirmation email a card
+// payment would trigger.
+async function addCashMember(formData: FormData) {
+  "use server";
+
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = String(formData.get("lastName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const plan = formData.get("plan") === "quarterly" ? "quarterly" : "monthly";
+
+  if (!firstName || !lastName || !email) {
+    redirect(
+      `/admin/members?cashMemberError=${encodeURIComponent("Name and email are required")}`,
+    );
+  }
+
+  await ensureTables();
+
+  const assignment = await assignAndReserveMembershipAccessStart(plan, {
+    email,
+    firstName,
+    lastName,
+    phone: phone || null,
+    recurring: false,
+  });
+  if (assignment.blocked) {
+    redirect(
+      `/admin/members?cashMemberError=${encodeURIComponent(
+        "No upcoming play day has room for a new membership right now.",
+      )}`,
+    );
+  }
+
+  const amount = MEMBERSHIP_PRICE_CENTS[plan];
+  let invoiceId: string;
+  try {
+    const stripe = getStripe();
+
+    const customers = await stripe.customers.list({ email, limit: 1 });
+    const customer =
+      customers.data[0] ??
+      (await stripe.customers.create({
+        email,
+        name: `${firstName} ${lastName}`,
+        phone: phone || undefined,
+        metadata: { plan },
+      }));
+
+    await stripe.invoiceItems.create({
+      customer: customer.id,
+      amount,
+      currency: "nzd",
+      description: `Three Wolves — ${plan === "monthly" ? "Monthly" : "Quarterly"} membership — cash`,
+    });
+
+    const invoice = await stripe.invoices.create({
+      customer: customer.id,
+      collection_method: "send_invoice",
+      days_until_due: 1,
+      auto_advance: false,
+      pending_invoice_items_behavior: "include",
+      metadata: {
+        type: "membership",
+        plan,
+        firstName,
+        lastName,
+        email,
+        phone,
+        source: "cash",
+        membershipId: String(assignment.membershipId),
+      },
+    });
+
+    if (!invoice.id) throw new Error("Failed to create invoice");
+    const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+    await stripe.invoices.pay(finalized.id!, { paid_out_of_band: true });
+    invoiceId = finalized.id!;
+  } catch (e) {
+    const message =
+      e instanceof Error ? e.message : "Failed to record cash payment";
+    // The reserved membership row is left 'pending' — it stops counting
+    // toward play-day capacity after PENDING_MEMBERSHIP_HOLD_MINUTES, the
+    // same as an abandoned online checkout, so nothing else to clean up.
+    redirect(`/admin/members?cashMemberError=${encodeURIComponent(message)}`);
+  }
+
+  const paymentIntentId = `cash-invoice-${invoiceId}`;
+  await attachStripeIdToMembership(assignment.membershipId, {
+    stripePaymentIntentId: paymentIntentId,
+  });
+
+  // Guarded the same way the Stripe webhook activates card memberships, so
+  // it's safe if the webhook for this same invoice also fires and races us.
+  const activated = await activateMembershipByPaymentIntentId(paymentIntentId);
+  if (activated?.periodStart && activated.periodEnd) {
+    const { dateKey: clubToday } = getClubToday();
+    await sendMembershipConfirmationEmail(activated.email, {
+      firstName: activated.name,
+      plan: activated.plan,
+      priceNzd: amount / 100,
+      recurring: false,
+      periodStart: activated.periodStart,
+      periodEnd: activated.periodEnd,
+      delayed: activated.periodStart > clubToday,
+    }).catch((err) =>
+      console.error("Failed to send membership confirmation email", err),
+    );
+  }
+
+  revalidatePath("/admin/members");
+  redirect("/admin/members?cashMemberAdded=1");
+}
 
 function MembersTable({
   title,
@@ -31,6 +165,7 @@ function MembersTable({
             <th style={{ padding: "6px 8px" }}>Phone</th>
             <th style={{ padding: "6px 8px" }}>Renews / ends</th>
             <th style={{ padding: "6px 8px" }}>Billing</th>
+            <th style={{ padding: "6px 8px" }}>Payment</th>
             <th style={{ padding: "6px 8px" }}>Status</th>
             <th style={{ padding: "6px 8px" }}></th>
           </tr>
@@ -38,7 +173,7 @@ function MembersTable({
         <tbody>
           {members.length === 0 ? (
             <tr>
-              <td colSpan={7} style={{ padding: "10px 8px", color: "#888" }}>
+              <td colSpan={8} style={{ padding: "10px 8px", color: "#888" }}>
                 No {title.toLowerCase()}.
               </td>
             </tr>
@@ -51,6 +186,9 @@ function MembersTable({
                 <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
                 <td style={{ padding: "6px 8px" }}>
                   {m.recurring ? "Auto-renews" : "One-time"}
+                </td>
+                <td style={{ padding: "6px 8px" }}>
+                  {m.method === "cash" ? "Cash" : "Card"}
                 </td>
                 <td style={{ padding: "6px 8px" }}>
                   {m.cancelAtPeriodEnd ? (
@@ -111,6 +249,7 @@ export default async function MembersAdminPage() {
         Monthly and quarterly members with an active subscription.
       </p>
       <AdminNav active="members" />
+      <MembersToastBridge />
 
       {!process.env.POSTGRES_URL ? (
         <p>Database is not configured.</p>
@@ -133,6 +272,117 @@ export default async function MembersAdminPage() {
           </p>
           <MembersTable title="Monthly members" members={monthly} />
           <MembersTable title="Quarterly members" members={quarterly} />
+
+          <h2 style={{ fontSize: 16, marginTop: 32, marginBottom: 8 }}>
+            Add cash member
+          </h2>
+          <p style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>
+            Records a Stripe customer and invoice marked as paid out-of-band
+            (cash), assigns them the next play day with room, and sends the
+            same welcome email a card signup would get.
+          </p>
+          <form
+            action={addCashMember}
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "flex-end",
+            }}
+          >
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
+                First name
+              </label>
+              <input
+                name="firstName"
+                required
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  fontSize: 13,
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
+                Last name
+              </label>
+              <input
+                name="lastName"
+                required
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  fontSize: 13,
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                required
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  fontSize: 13,
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
+                Phone (optional)
+              </label>
+              <input
+                name="phone"
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  fontSize: 13,
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
+                Plan
+              </label>
+              <select
+                name="plan"
+                defaultValue="monthly"
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  fontSize: 13,
+                }}
+              >
+                <option value="monthly">Monthly ($33)</option>
+                <option value="quarterly">Quarterly ($85)</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              style={{
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid #1a2a4a",
+                background: "#1a2a4a",
+                color: "#fff",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Add cash member
+            </button>
+          </form>
         </>
       )}
     </div>

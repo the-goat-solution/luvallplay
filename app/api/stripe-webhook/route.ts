@@ -3,10 +3,24 @@ import type Stripe from "stripe";
 import { sql } from "@vercel/postgres";
 import { getStripe } from "@/lib/stripe";
 import {
+  activateMembershipByPaymentIntentId,
+  activateMembershipBySubscriptionId,
   applyMembershipRenewal,
   ensureTables,
   reserveBookingSlot,
 } from "@/lib/db";
+import { getClubToday } from "@/lib/dates";
+import {
+  sendAdminBookingRaceAlertEmail,
+  sendCasualBookingFullRefundEmail,
+  sendMembershipConfirmationEmail,
+} from "@/lib/email";
+import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
+
+const MEMBERSHIP_PRICE_CENTS: Record<"monthly" | "quarterly", number> = {
+  monthly: MONTHLY_PRICE_CENTS,
+  quarterly: QUARTERLY_PRICE_CENTS,
+};
 
 export const runtime = "nodejs";
 
@@ -46,7 +60,8 @@ export async function POST(request: Request) {
     if (pi.metadata?.type === "casual" && pi.metadata.sessionDate) {
       if (process.env.POSTGRES_URL) {
         await ensureTables();
-        const ok = await reserveBookingSlot(pi.metadata.sessionDate, {
+        const sessionDate = pi.metadata.sessionDate;
+        const ok = await reserveBookingSlot(sessionDate, {
           firstName: pi.metadata.firstName ?? "",
           lastName: pi.metadata.lastName ?? "",
           email: pi.metadata.email ?? pi.receipt_email ?? "",
@@ -54,19 +69,62 @@ export async function POST(request: Request) {
           paymentIntentId: pi.id,
         });
         if (!ok) {
-          console.error(
-            "Could not reserve slot — session full",
-            pi.metadata.sessionDate,
-          );
+          // Race: the session filled between PaymentIntent creation (which
+          // only reads capacity) and this webhook's atomic reservation. The
+          // customer was already charged for a spot that no longer exists —
+          // refund them immediately and make sure a human sees it either
+          // way, rather than leaving this as a log line nobody watches.
+          console.error("Could not reserve slot — session full", sessionDate);
+
+          const customerEmail = pi.metadata.email || pi.receipt_email || "";
+          let refunded = false;
+          let errorDetail: string | undefined;
+          try {
+            await stripe.refunds.create(
+              { payment_intent: pi.id },
+              { idempotencyKey: `refund-full-${pi.id}` },
+            );
+            refunded = true;
+          } catch (err) {
+            errorDetail = err instanceof Error ? err.message : String(err);
+            console.error("Automatic refund failed for oversold session", pi.id, err);
+          }
+
+          if (customerEmail) {
+            await sendCasualBookingFullRefundEmail(customerEmail, {
+              firstName: pi.metadata.firstName ?? "",
+              sessionDate,
+              amountNzd: pi.amount / 100,
+            }).catch((err) => console.error("Failed to send refund email", err));
+          }
+
+          await sendAdminBookingRaceAlertEmail({
+            sessionDate,
+            customerEmail: customerEmail || "(unknown)",
+            paymentIntentId: pi.id,
+            refunded,
+            errorDetail,
+          }).catch((err) => console.error("Failed to send admin race alert", err));
         }
       }
     }
 
     if (pi.metadata?.type === "membership" && process.env.POSTGRES_URL) {
-      await sql`
-        UPDATE memberships SET status = 'active'
-        WHERE stripe_payment_intent_id = ${pi.id};
-      `;
+      const activated = await activateMembershipByPaymentIntentId(pi.id);
+      if (activated?.periodStart && activated.periodEnd) {
+        const { dateKey: clubToday } = getClubToday();
+        await sendMembershipConfirmationEmail(activated.email, {
+          firstName: activated.name,
+          plan: activated.plan,
+          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          recurring: activated.recurring,
+          periodStart: activated.periodStart,
+          periodEnd: activated.periodEnd,
+          delayed: activated.periodStart > clubToday,
+        }).catch((err) =>
+          console.error("Failed to send membership confirmation email", err),
+        );
+      }
     }
 
     if (pi.metadata?.type === "donation") {
@@ -132,10 +190,11 @@ export async function POST(request: Request) {
         ? invoice.subscription
         : invoice.subscription?.id;
     if (subId && process.env.POSTGRES_URL) {
-      await sql`
-        UPDATE memberships SET status = 'active'
-        WHERE stripe_subscription_id = ${subId};
-      `;
+      // Guarded activation (status was not already 'active') tells us
+      // whether this is the initial signup invoice — a renewal invoice
+      // finds the membership already 'active' and returns null, so it
+      // never re-triggers the welcome email below.
+      const activated = await activateMembershipBySubscriptionId(subId);
       await sql`
         UPDATE donations SET status = 'active'
         WHERE stripe_subscription_id = ${subId};
@@ -146,6 +205,50 @@ export async function POST(request: Request) {
       // webhook delivery via last_renewal_invoice_id.
       if (invoice.billing_reason === "subscription_cycle" && invoice.id) {
         await applyMembershipRenewal(subId, invoice.id);
+      } else if (activated?.periodStart && activated.periodEnd) {
+        const { dateKey: clubToday } = getClubToday();
+        await sendMembershipConfirmationEmail(activated.email, {
+          firstName: activated.name,
+          plan: activated.plan,
+          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          recurring: activated.recurring,
+          periodStart: activated.periodStart,
+          periodEnd: activated.periodEnd,
+          delayed: activated.periodStart > clubToday,
+        }).catch((err) =>
+          console.error("Failed to send membership confirmation email", err),
+        );
+      }
+    }
+
+    // Backstop for a cash membership invoice (see the "Add cash member"
+    // action on the admin Members page): that action already activates the
+    // membership and sends the confirmation email synchronously, but this
+    // covers it if that request failed after Stripe's call succeeded.
+    // activateMembershipByPaymentIntentId is guarded on status != 'active',
+    // so this is a no-op if the admin action already ran.
+    if (
+      !subId &&
+      invoice.metadata?.type === "membership" &&
+      invoice.id &&
+      process.env.POSTGRES_URL
+    ) {
+      const activated = await activateMembershipByPaymentIntentId(
+        `cash-invoice-${invoice.id}`,
+      );
+      if (activated?.periodStart && activated.periodEnd) {
+        const { dateKey: clubToday } = getClubToday();
+        await sendMembershipConfirmationEmail(activated.email, {
+          firstName: activated.name,
+          plan: activated.plan,
+          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          recurring: false,
+          periodStart: activated.periodStart,
+          periodEnd: activated.periodEnd,
+          delayed: activated.periodStart > clubToday,
+        }).catch((err) =>
+          console.error("Failed to send membership confirmation email", err),
+        );
       }
     }
 
@@ -156,7 +259,8 @@ export async function POST(request: Request) {
       process.env.POSTGRES_URL
     ) {
       await ensureTables();
-      const ok = await reserveBookingSlot(invoice.metadata.sessionDate, {
+      const sessionDate = invoice.metadata.sessionDate;
+      const ok = await reserveBookingSlot(sessionDate, {
         firstName: invoice.metadata.firstName ?? "",
         lastName: invoice.metadata.lastName ?? "",
         email: invoice.metadata.email ?? "",
@@ -164,10 +268,20 @@ export async function POST(request: Request) {
         paymentIntentId: `cash-invoice-${invoice.id}`,
       });
       if (!ok) {
+        // Same race as the card-payment path above, but this was paid
+        // out-of-band (cash) so there's no Stripe charge to auto-refund —
+        // alert the admin to reconcile with the customer directly.
         console.error(
           "Could not reserve slot for cash invoice — session full",
           invoice.id,
         );
+        await sendAdminBookingRaceAlertEmail({
+          sessionDate,
+          customerEmail: invoice.metadata.email || "(unknown)",
+          paymentIntentId: `cash-invoice-${invoice.id}`,
+          refunded: false,
+          cashInvoice: true,
+        }).catch((err) => console.error("Failed to send admin race alert", err));
       }
     }
   }

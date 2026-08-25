@@ -13,8 +13,8 @@ const I18N = {
     hero_sub: "Badminton Club",
     hero_tagline:
       "Where passion meets precision on the courts of Christchurch. Join our growing community every Friday evening.",
-    hero_day: "Every Friday, 6:00 – 7:30 PM",
-    hero_venue: "Graham Condon Recreation Centre",
+    hero_day: "Every Friday and more",
+    hero_venue: "Christchurch area",
     hero_cta1: "Become a Member",
     hero_cta2: "Book a Session",
     about_lbl: "About the Club",

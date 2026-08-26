@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   let events;
   try {
-    events = await listUpcomingCalendarEvents(90);
+    events = await listUpcomingCalendarEvents(180);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Calendar sync failed";
     return NextResponse.json({ error: message }, { status: 503 });

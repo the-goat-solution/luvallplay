@@ -6,6 +6,8 @@ import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
 import { FormError } from "@/components/FormError";
 import { ModalShell } from "@/components/modals/ModalShell";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import { toDateKey } from "@/lib/dates";
 import { validateWaitlist } from "@/lib/validate-contact";
 import type { I18nKey } from "@/lib/i18n";
@@ -18,6 +20,7 @@ export function WaitlistModal() {
   const [email, setEmail] = useState("");
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const showLoading = useDelayedLoading(loading);
   const [errors, setErrors] = useState<{ name?: I18nKey; email?: I18nKey }>({});
 
   const close = () => {
@@ -137,7 +140,14 @@ export function WaitlistModal() {
             disabled={loading}
             onClick={submit}
           >
-            {loading ? tr("processing") : tr("join_waitlist")}
+            {showLoading ? (
+              <>
+                <LoadingIcon size="sm" />
+                {tr("processing")}
+              </>
+            ) : (
+              tr("join_waitlist")
+            )}
           </button>
         </div>
       ) : (

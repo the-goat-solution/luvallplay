@@ -9,6 +9,8 @@ import {
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { useLanguage } from "@/context/LanguageContext";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
@@ -26,6 +28,7 @@ function PaymentFormInner({
   const { tr } = useLanguage();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const showLoading = useDelayedLoading(loading);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +73,14 @@ function PaymentFormInner({
         className="btn btn-primary btn-full"
         disabled={!stripe || loading}
       >
-        {loading ? tr("processing") : amountLabel}
+        {showLoading ? (
+          <>
+            <LoadingIcon size="sm" />
+            {tr("processing")}
+          </>
+        ) : (
+          amountLabel
+        )}
       </button>
     </form>
   );

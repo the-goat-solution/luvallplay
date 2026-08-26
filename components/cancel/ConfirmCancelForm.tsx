@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 
 export function ConfirmCancelForm({
   token,
@@ -14,6 +16,7 @@ export function ConfirmCancelForm({
   alreadyScheduled: boolean;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const showSubmitting = useDelayedLoading(submitting);
   const [result, setResult] = useState<
     { ok: true; periodEnd: string | null } | { ok: false; error: string } | null
   >(null);
@@ -75,7 +78,14 @@ export function ConfirmCancelForm({
         onClick={onConfirm}
         disabled={submitting}
       >
-        {submitting ? "Canceling…" : "Confirm cancellation"}
+        {showSubmitting ? (
+          <>
+            <LoadingIcon size="sm" />
+            Canceling…
+          </>
+        ) : (
+          "Confirm cancellation"
+        )}
       </button>
     </>
   );

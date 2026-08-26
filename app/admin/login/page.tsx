@@ -1,3 +1,5 @@
+import { LoginSubmitButton } from "@/components/admin/LoginSubmitButton";
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminLoginPage({
@@ -33,21 +35,7 @@ export default async function AdminLoginPage({
             marginBottom: 10,
           }}
         />
-        <button
-          type="submit"
-          style={{
-            width: "100%",
-            padding: "8px 10px",
-            borderRadius: 6,
-            border: "1px solid #1a2a4a",
-            background: "#1a2a4a",
-            color: "#fff",
-            fontSize: 14,
-            cursor: "pointer",
-          }}
-        >
-          Log in
-        </button>
+        <LoginSubmitButton />
       </form>
       {error && (
         <p style={{ color: "#b00020", fontSize: 13, marginTop: 10 }}>

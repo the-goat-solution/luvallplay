@@ -38,6 +38,7 @@ type AppContextValue = {
   signedUpByDate: Record<string, number>;
   refreshSpots: (dates: string[]) => Promise<void>;
   sessionDates: Record<string, SessionDateInfo>;
+  sessionDatesLoading: boolean;
   refreshSessionDates: (from: string, to: string) => Promise<void>;
 };
 
@@ -52,6 +53,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [spotsByDate, setSpotsByDate] = useState<Record<string, number>>({});
   const [signedUpByDate, setSignedUpByDate] = useState<Record<string, number>>({});
   const [sessionDates, setSessionDates] = useState<Record<string, SessionDateInfo>>({});
+  const [sessionDatesLoading, setSessionDatesLoading] = useState(false);
 
   const refreshSpots = useCallback(async (dates: string[]) => {
     if (dates.length === 0) return;
@@ -74,6 +76,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshSessionDates = useCallback(async (from: string, to: string) => {
+    setSessionDatesLoading(true);
     try {
       const res = await fetch(
         `/api/sessions?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
@@ -97,6 +100,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     } catch {
       /* offline / db not configured */
+    } finally {
+      setSessionDatesLoading(false);
     }
   }, []);
 
@@ -138,6 +143,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signedUpByDate,
       refreshSpots,
       sessionDates,
+      sessionDatesLoading,
       refreshSessionDates,
     }),
     [
@@ -154,6 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signedUpByDate,
       refreshSpots,
       sessionDates,
+      sessionDatesLoading,
       refreshSessionDates,
     ],
   );

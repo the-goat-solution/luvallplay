@@ -5,6 +5,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
 import { ModalShell } from "@/components/modals/ModalShell";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 
 export function CancelMembershipModal() {
   const { tr } = useLanguage();
@@ -12,6 +14,7 @@ export function CancelMembershipModal() {
   const open = openModal === "cancel";
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const showSubmitting = useDelayedLoading(submitting);
   const [done, setDone] = useState(false);
 
   const close = () => {
@@ -70,7 +73,14 @@ export function CancelMembershipModal() {
             disabled={submitting}
             onClick={submit}
           >
-            {submitting ? tr("processing") : tr("cancel_membership_btn")}
+            {showSubmitting ? (
+              <>
+                <LoadingIcon size="sm" />
+                {tr("processing")}
+              </>
+            ) : (
+              tr("cancel_membership_btn")
+            )}
           </button>
         </div>
       ) : (

@@ -181,6 +181,7 @@ const I18N = {
     join_waitlist: "Join Waitlist",
     pay_btn_pre: "Pay NZD $",
     processing: "Processing...",
+    loading: "Loading...",
     payment_note:
       "Stripe is not configured. Add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to enable payments.",
     sess_pick_hint:
@@ -369,6 +370,7 @@ const I18N = {
     join_waitlist: "Đăng Ký Chờ",
     pay_btn_pre: "Thanh Toán NZD $",
     processing: "Đang xử lý...",
+    loading: "Đang tải...",
     payment_note:
       "Stripe chưa được cấu hình. Thêm NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY để bật thanh toán.",
     sess_pick_hint:

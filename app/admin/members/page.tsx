@@ -16,6 +16,7 @@ import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
 import { MembersToastBridge } from "@/components/admin/MembersToastBridge";
+import { SubmitButton } from "@/components/admin/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -368,8 +369,8 @@ export default async function MembersAdminPage() {
                 <option value="quarterly">Quarterly ($85)</option>
               </select>
             </div>
-            <button
-              type="submit"
+            <SubmitButton
+              loadingText="Adding…"
               style={{
                 padding: "6px 12px",
                 borderRadius: 6,
@@ -381,7 +382,7 @@ export default async function MembersAdminPage() {
               }}
             >
               Add cash member
-            </button>
+            </SubmitButton>
           </form>
         </>
       )}

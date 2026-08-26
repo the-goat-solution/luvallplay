@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 
 export function MemberCancelButton({
   membershipId,
@@ -12,6 +14,7 @@ export function MemberCancelButton({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const showBusy = useDelayedLoading(busy);
   const [error, setError] = useState<string | null>(null);
 
   const onClick = async () => {
@@ -55,9 +58,19 @@ export function MemberCancelButton({
           fontWeight: 600,
           cursor: busy ? "default" : "pointer",
           opacity: busy ? 0.6 : 1,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
         }}
       >
-        {busy ? "Canceling…" : "Cancel"}
+        {showBusy ? (
+          <>
+            <LoadingIcon size="sm" />
+            Canceling…
+          </>
+        ) : (
+          "Cancel"
+        )}
       </button>
       {error && <div style={{ color: "#b00020", fontSize: 11, marginTop: 4 }}>{error}</div>}
     </div>

@@ -16,6 +16,8 @@ import { notifyWaitlistIfSpotOpened } from "@/lib/waitlist-notify";
 import { formatDateLong, getDayName, toDateKey } from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
+import { SubmitButton } from "@/components/admin/SubmitButton";
+import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
 import { CASUAL_PRICE_CENTS, maxPlayersForCourts } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
 
@@ -246,8 +248,8 @@ export default async function PlayDaysAdminPage({
                 );
               })}
             </select>
-            <button
-              type="submit"
+            <PlainSubmitButton
+              loadingText="Loading…"
               style={{
                 padding: "6px 12px",
                 borderRadius: 6,
@@ -255,11 +257,10 @@ export default async function PlayDaysAdminPage({
                 background: "#1a2a4a",
                 color: "#fff",
                 fontSize: 13,
-                cursor: "pointer",
               }}
             >
               View
-            </button>
+            </PlainSubmitButton>
           </form>
 
           <h2 style={{ fontSize: 16, marginBottom: 8 }}>Courts booked</h2>
@@ -285,8 +286,8 @@ export default async function PlayDaysAdminPage({
             <span style={{ fontSize: 12, color: "#666" }}>
               (max {maxPlayers} players at {courts} court{courts === 1 ? "" : "s"})
             </span>
-            <button
-              type="submit"
+            <SubmitButton
+              loadingText="Saving…"
               style={{
                 padding: "6px 12px",
                 borderRadius: 6,
@@ -294,11 +295,10 @@ export default async function PlayDaysAdminPage({
                 background: "#1a2a4a",
                 color: "#fff",
                 fontSize: 13,
-                cursor: "pointer",
               }}
             >
               Confirm
-            </button>
+            </SubmitButton>
           </form>
 
           <p style={{ fontWeight: 600, marginBottom: 4 }}>
@@ -340,8 +340,8 @@ export default async function PlayDaysAdminPage({
                     <td style={{ padding: "6px 8px" }}>
                       {p.bookingId !== null ? (
                         <form action={removePlayer.bind(null, selectedDate, p.bookingId)}>
-                          <button
-                            type="submit"
+                          <SubmitButton
+                            loadingText="Removing…"
                             style={{
                               padding: "4px 8px",
                               borderRadius: 6,
@@ -349,11 +349,10 @@ export default async function PlayDaysAdminPage({
                               background: "#fff",
                               color: "#a12622",
                               fontSize: 12,
-                              cursor: "pointer",
                             }}
                           >
                             Remove
-                          </button>
+                          </SubmitButton>
                         </form>
                       ) : null}
                     </td>
@@ -369,8 +368,8 @@ export default async function PlayDaysAdminPage({
             </h2>
             {casualSpotsRemaining !== null && casualSpotsRemaining > 0 && waitlist.length > 0 && (
               <form action={notifyWaitlistNow.bind(null, selectedDate)}>
-                <button
-                  type="submit"
+                <SubmitButton
+                  loadingText="Notifying…"
                   style={{
                     padding: "6px 12px",
                     borderRadius: 6,
@@ -378,11 +377,10 @@ export default async function PlayDaysAdminPage({
                     background: "#1a2a4a",
                     color: "#fff",
                     fontSize: 12,
-                    cursor: "pointer",
                   }}
                 >
                   Notify waitlist now ({casualSpotsRemaining} spot{casualSpotsRemaining === 1 ? "" : "s"} open)
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -420,8 +418,8 @@ export default async function PlayDaysAdminPage({
                     </td>
                     <td style={{ padding: "6px 8px" }}>
                       <form action={removeWaitlistEntry.bind(null, selectedDate, w.id)}>
-                        <button
-                          type="submit"
+                        <SubmitButton
+                          loadingText="Removing…"
                           style={{
                             padding: "4px 8px",
                             borderRadius: 6,
@@ -429,11 +427,10 @@ export default async function PlayDaysAdminPage({
                             background: "#fff",
                             color: "#a12622",
                             fontSize: 12,
-                            cursor: "pointer",
                           }}
                         >
                           Remove
-                        </button>
+                        </SubmitButton>
                       </form>
                     </td>
                   </tr>
@@ -483,8 +480,8 @@ export default async function PlayDaysAdminPage({
                 style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
               />
             </div>
-            <button
-              type="submit"
+            <SubmitButton
+              loadingText="Adding…"
               style={{
                 padding: "6px 12px",
                 borderRadius: 6,
@@ -492,11 +489,10 @@ export default async function PlayDaysAdminPage({
                 background: "#1a2a4a",
                 color: "#fff",
                 fontSize: 13,
-                cursor: "pointer",
               }}
             >
               Add cash player
-            </button>
+            </SubmitButton>
           </form>
         </>
       )}

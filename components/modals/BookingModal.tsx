@@ -10,6 +10,8 @@ import { StepHeading } from "@/components/forms/StepHeading";
 import { ModalShell, StepBar } from "@/components/modals/ModalShell";
 import { SessionCalendarPicker } from "@/components/modals/SessionCalendarPicker";
 import { StripeCardForm } from "@/components/payment/StripeCardForm";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import { formatDateLong, formatEventTimeRange, getDayName, toDateKey } from "@/lib/dates";
 import { PRICES } from "@/lib/constants";
 import {
@@ -29,12 +31,15 @@ export function BookingModal() {
   const [phone, setPhone] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [errors, setErrors] = useState<ContactErrors>({});
+  const [submitting, setSubmitting] = useState(false);
+  const showSubmitting = useDelayedLoading(submitting);
 
   const close = () => {
     setOpenModal(null);
     setStep(1);
     setClientSecret(null);
     setErrors({});
+    setSubmitting(false);
     document.body.style.overflow = "";
   };
 
@@ -89,10 +94,13 @@ export function BookingModal() {
         return;
       }
       setErrors({});
+      setSubmitting(true);
       try {
         await createIntent();
       } catch (e) {
         alert(e instanceof Error ? e.message : "Error");
+      } finally {
+        setSubmitting(false);
       }
       return;
     }
@@ -127,6 +135,7 @@ export function BookingModal() {
                 type="button"
                 className="btn btn-bronze-outline btn-back"
                 onClick={back}
+                disabled={submitting}
               >
                 <Trans k="btn_back" />
               </button>
@@ -136,8 +145,16 @@ export function BookingModal() {
                 type="button"
                 className="btn btn-navy btn-continue"
                 onClick={next}
+                disabled={submitting}
               >
-                <Trans k="btn_continue" />
+                {showSubmitting ? (
+                  <>
+                    <LoadingIcon size="sm" />
+                    <Trans k="processing" />
+                  </>
+                ) : (
+                  <Trans k="btn_continue" />
+                )}
               </button>
             )}
           </>

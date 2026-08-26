@@ -6,6 +6,8 @@ import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
 import { ModalShell, StepBar } from "@/components/modals/ModalShell";
 import { StripeCardForm } from "@/components/payment/StripeCardForm";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import {
   DONATION_MIN_CENTS,
   DONATION_MAX_CENTS,
@@ -25,11 +27,14 @@ export function DonateModal() {
   const [ln, setLn] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const showSubmitting = useDelayedLoading(submitting);
 
   const close = () => {
     setOpenModal(null);
     setStep(1);
     setClientSecret(null);
+    setSubmitting(false);
     document.body.style.overflow = "";
   };
 
@@ -86,10 +91,13 @@ export function DonateModal() {
     }
     if (step === 2) {
       if (!fn.trim() || !ln.trim() || !email.trim()) return;
+      setSubmitting(true);
       try {
         await createDonation();
       } catch (e) {
         alert(e instanceof Error ? e.message : "Error");
+      } finally {
+        setSubmitting(false);
       }
       return;
     }
@@ -113,7 +121,12 @@ export function DonateModal() {
         step < 4 ? (
           <>
             {step > 1 && (
-              <button type="button" className="btn btn-bronze-outline" onClick={back}>
+              <button
+                type="button"
+                className="btn btn-bronze-outline"
+                onClick={back}
+                disabled={submitting}
+              >
                 <Trans k="btn_back" />
               </button>
             )}
@@ -123,8 +136,16 @@ export function DonateModal() {
                 className="btn btn-navy"
                 style={{ flex: 1 }}
                 onClick={next}
+                disabled={submitting}
               >
-                <Trans k="btn_continue" />
+                {showSubmitting ? (
+                  <>
+                    <LoadingIcon size="sm" />
+                    <Trans k="processing" />
+                  </>
+                ) : (
+                  <Trans k="btn_continue" />
+                )}
               </button>
             )}
           </>

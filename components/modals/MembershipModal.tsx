@@ -8,6 +8,8 @@ import { ContactDetailsForm } from "@/components/forms/ContactDetailsForm";
 import { StepHeading } from "@/components/forms/StepHeading";
 import { ModalShell, StepBar } from "@/components/modals/ModalShell";
 import { StripeCardForm } from "@/components/payment/StripeCardForm";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import {
   resolveAllPlanDisplays,
   type CmsPricingPlan,
@@ -39,6 +41,8 @@ export function MembershipModal({
   const [errors, setErrors] = useState<ContactErrors>({});
   const [periodStart, setPeriodStart] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const showSubmitting = useDelayedLoading(submitting);
 
   const close = () => {
     setOpenModal(null);
@@ -47,6 +51,7 @@ export function MembershipModal({
     setErrors({});
     setPeriodStart(null);
     setBlocked(false);
+    setSubmitting(false);
     document.body.style.overflow = "";
   };
 
@@ -117,10 +122,13 @@ export function MembershipModal({
       }
       setErrors({});
       if (selectedPlan === "monthly" || selectedPlan === "quarterly") {
+        setSubmitting(true);
         try {
           await createSubscription();
         } catch (e) {
           alert(e instanceof Error ? e.message : "Error");
+        } finally {
+          setSubmitting(false);
         }
         return;
       }
@@ -157,6 +165,7 @@ export function MembershipModal({
                 type="button"
                 className="btn btn-bronze-outline btn-back"
                 onClick={back}
+                disabled={submitting}
               >
                 <Trans k="btn_back" />
               </button>
@@ -166,8 +175,16 @@ export function MembershipModal({
                 type="button"
                 className="btn btn-navy btn-continue"
                 onClick={next}
+                disabled={submitting}
               >
-                <Trans k="btn_continue" />
+                {showSubmitting ? (
+                  <>
+                    <LoadingIcon size="sm" />
+                    <Trans k="processing" />
+                  </>
+                ) : (
+                  <Trans k="btn_continue" />
+                )}
               </button>
             )}
           </>

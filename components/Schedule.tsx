@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
+import { LoadingIcon } from "@/components/LoadingIcon";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import { SESSION_CAPACITY } from "@/lib/constants";
 import { pickLocale } from "@/lib/sanity";
 import type { CmsScheduleSettings } from "@/lib/sanity-queries";
@@ -32,11 +34,13 @@ export function Schedule({
     signedUpByDate,
     refreshSpots,
     sessionDates,
+    sessionDatesLoading,
     refreshSessionDates,
     openWaitlistModal,
     setSelectedSession,
     setOpenModal,
   } = useApp();
+  const showLoading = useDelayedLoading(sessionDatesLoading);
 
   const today = useMemo(() => startOfDay(new Date()), []);
   const sortedUpcomingKeys = useMemo(() => {
@@ -294,7 +298,14 @@ export function Schedule({
           <div className="ngc animate-in">
             {!displayDate ? (
               <div className="ngc-body">
-                <p>{tr("ngc_no_sessions")}</p>
+                {showLoading ? (
+                  <div className="loading-center">
+                    <LoadingIcon size="sm" />
+                    {tr("loading")}
+                  </div>
+                ) : (
+                  <p>{tr("ngc_no_sessions")}</p>
+                )}
               </div>
             ) : (
               <>

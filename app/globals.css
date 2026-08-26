@@ -429,3 +429,22 @@ footer{background:var(--navy-dark);color:#fff;padding:80px 0 36px}
 @media(max-width:768px){
   .toast-container{left:12px;right:12px;bottom:12px;max-width:none}
 }
+
+/* ── Loading icon ──────────────────────────────────────── */
+.loading-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;position:relative;border-radius:50%;background:var(--navy)}
+.loading-icon::before{content:"";position:absolute;border-radius:50%;border:3px solid rgba(196,137,42,.28);border-top-color:var(--bronze);animation:loading-spin .85s linear infinite}
+.loading-icon img{display:block;object-fit:contain}
+.loading-icon-sm{width:20px;height:20px}
+.loading-icon-sm::before{inset:-3px;border-width:2px}
+.loading-icon-sm img{width:64%;height:64%}
+.loading-icon-md{width:40px;height:40px}
+.loading-icon-md::before{inset:-4px;border-width:3px}
+.loading-icon-md img{width:64%;height:64%}
+.loading-icon-lg{width:72px;height:72px}
+.loading-icon-lg::before{inset:-5px;border-width:4px}
+.loading-icon-lg img{width:64%;height:64%}
+@keyframes loading-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){
+  .loading-icon::before{animation-duration:2.4s}
+}
+.loading-center{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 0;color:var(--text-mid);font-size:14px}

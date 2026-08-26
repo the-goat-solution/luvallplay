@@ -6,6 +6,7 @@ import { useApp } from "@/context/AppContext";
 import { SESSION_CAPACITY } from "@/lib/constants";
 import {
   formatDateLong,
+  formatEventTimeRange,
   getDayName,
   isBookable,
   isWithinBookingLock,
@@ -215,7 +216,13 @@ export function SessionCalendarPicker() {
             </div>
             <div className="selected-session-label">
               {getDayName(selectedSession, lang)},{" "}
-              {formatDateLong(selectedSession, lang)} · {tr("ngc_time")}
+              {formatDateLong(selectedSession, lang)} ·{" "}
+              {(() => {
+                const info = sessionDates[toDateKey(selectedSession)];
+                return info?.eventStartTime
+                  ? formatEventTimeRange(info.eventStartTime, info.eventEndTime)
+                  : tr("ngc_time");
+              })()}
             </div>
           </div>
           <div className="selected-session-spots">

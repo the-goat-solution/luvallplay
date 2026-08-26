@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { heading, paragraph, renderEmailLayout } from "./email-layout";
+import { heading, paragraph, renderEmailLayout, withDisplayName } from "./email-layout";
 
 let resend: Resend | null = null;
 
@@ -45,7 +45,7 @@ export async function sendHeadcountAlertEmail(input: {
 
   const resend = getResend();
   await resend.emails.send({
-    from: process.env.ALERT_FROM_EMAIL ?? "alerts@threewolvesbadminton.com",
+    from: withDisplayName(process.env.ALERT_FROM_EMAIL ?? "alerts@threewolvesbadminton.com"),
     to,
     subject,
     html: renderEmailLayout({ title: subject, bodyHtml }),

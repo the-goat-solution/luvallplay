@@ -15,6 +15,42 @@ const TEXT_MID = "#3a526a";
 const FONT_SANS =
   "'Montserrat','Helvetica Neue',Helvetica,Arial,sans-serif";
 
+// The club's public inbox — same address shown in the site footer and used
+// as the admin alert fallback, so members always land in the one mailbox
+// that's actually read.
+export const CLUB_CONTACT_EMAIL = "threewolvesbadminton@gmail.com";
+const CLUB_DISPLAY_NAME = "Three Wolves Badminton Club";
+
+// Resend sends whatever's in EMAIL_FROM/ALERT_FROM_EMAIL verbatim as the
+// From header — a bare address (no display name) shows up in a member's
+// inbox as just the raw email, not the club name. Wrap it unless it's
+// already in "Name <email>" form.
+export function withDisplayName(rawFrom: string): string {
+  const trimmed = rawFrom.trim();
+  if (trimmed.includes("<") && trimmed.includes(">")) return trimmed;
+  return `${CLUB_DISPLAY_NAME} <${trimmed}>`;
+}
+
+// Member-facing dates are stored/passed around as "YYYY-MM-DD" keys — this
+// renders them the way NZ readers expect, DD/MM/YYYY.
+export function formatEmailDate(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-");
+  if (!y || !m || !d) return dateKey;
+  return `${d}/${m}/${y}`;
+}
+
+// Appended to every member-facing email so people know replies here aren't
+// monitored and where to actually reach a human.
+export function contactFooterNote(): string {
+  return paragraph(
+    `Questions? This inbox isn't monitored — email us directly at <a href="mailto:${CLUB_CONTACT_EMAIL}" style="color:${BRONZE}">${CLUB_CONTACT_EMAIL}</a> and we'll get back to you.`,
+  );
+}
+
+export function contactFooterNoteText(): string {
+  return `Questions? This inbox isn't monitored — email us directly at ${CLUB_CONTACT_EMAIL} and we'll get back to you.`;
+}
+
 // Absolute base URL for links/images embedded in emails — a hosted image
 // URL (rather than a base64 data: URI) is what actually renders across
 // Outlook/Gmail/Apple Mail, so this must resolve to a real deployed origin.

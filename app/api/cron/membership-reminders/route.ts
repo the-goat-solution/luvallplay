@@ -5,9 +5,10 @@ import {
   ensureTables,
   getMembersWithPlayDayTomorrow,
   getRemainingSessionDatesInPeriod,
+  listSessionsInRange,
   sessionExists,
 } from "@/lib/db";
-import { getClubToday } from "@/lib/dates";
+import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import { sendMembershipReminderEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -37,6 +38,12 @@ export async function GET(request: Request) {
   const members = await getMembersWithPlayDayTomorrow(tomorrow);
   let sent = 0;
 
+  const [tomorrowSession] = await listSessionsInRange(tomorrow, tomorrow);
+  const sessionTime = tomorrowSession?.eventStartTime
+    ? formatEventTimeRange(tomorrowSession.eventStartTime, tomorrowSession.eventEndTime)
+    : null;
+  const sessionLocation = tomorrowSession?.eventLocation ?? null;
+
   for (const member of members) {
     const claimed = await claimMembershipReminder(member.membershipId, tomorrow);
     if (!claimed) continue; // already reminded for this play day
@@ -51,6 +58,8 @@ export async function GET(request: Request) {
         firstName: member.firstName,
         plan: member.plan,
         tomorrowDate: tomorrow,
+        sessionTime,
+        sessionLocation,
         remainingDates,
       });
       sent++;

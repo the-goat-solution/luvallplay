@@ -35,7 +35,7 @@ const I18N_KEYS: Record<
 };
 
 const DEFAULT_FEATURE_KEYS: Record<PlanId, I18nKey[]> = {
-  casual: ["f_court", "f_shuttle", "f_racquet"],
+  casual: ["f_court_casual", "f_shuttle", "f_racquet"],
   monthly: ["f_court", "f_shuttle", "f_racquet", "f_community", "f_cancel"],
   quarterly: [
     "f_court",

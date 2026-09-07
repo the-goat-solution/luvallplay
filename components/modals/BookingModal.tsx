@@ -248,7 +248,7 @@ export function BookingModal() {
                   : ""}
               </>
             ) : (
-              "Friday, 6:00 PM – 7:30 PM"
+              tr("ngc_time")
             )}
             <br />
             📍 {sessionInfo?.eventLocation || "Graham Condon Recreation and Sport Centre"}

@@ -10,7 +10,6 @@ import { db, sql, types } from "@vercel/postgres";
 // this file. OID 1082 = date.
 types.setTypeParser(1082, (val: string) => val);
 import {
-  DEFAULT_COURTS,
   MEMBERSHIP_CYCLE_DAYS,
   MEMBERSHIP_DAYS,
   MEMBERSHIP_START_SEARCH_DAYS,
@@ -18,7 +17,7 @@ import {
   SESSION_CAPACITY,
   maxPlayersForCourts,
 } from "./constants";
-import { getClubToday } from "./dates";
+import { defaultCourtsForDate, getClubToday, isFriday } from "./dates";
 
 // Every route touching the DB calls ensureTables() first, and it's ~24
 // sequential DDL statements — cheap individually but a heavy tax when paid
@@ -170,8 +169,8 @@ export function addDays(dateStr: string, days: number): string {
 
 export async function ensureSession(date: string) {
   await sql`
-    INSERT INTO sessions (date, max_spots, booked_spots)
-    VALUES (${date}, ${SESSION_CAPACITY}, 0)
+    INSERT INTO sessions (date, max_spots, booked_spots, courts)
+    VALUES (${date}, ${SESSION_CAPACITY}, 0, ${defaultCourtsForDate(date)})
     ON CONFLICT (date) DO NOTHING;
   `;
 }
@@ -192,7 +191,7 @@ export async function getAvailableSpots(date: string): Promise<number> {
   `;
   const row = rows[0] as { booked_spots: number; courts: number } | undefined;
   const booked = row?.booked_spots ?? 0;
-  const maxPlayers = maxPlayersForCourts(row?.courts ?? DEFAULT_COURTS);
+  const maxPlayers = maxPlayersForCourts(row?.courts ?? defaultCourtsForDate(date));
   const activeMembers = await getActiveMemberCountForDate(date);
   return Math.max(0, maxPlayers - activeMembers - booked);
 }
@@ -206,14 +205,20 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
 }> {
   if (dates.length === 0) return { spots: {}, signedUp: {} };
 
+  // Each date may default to a different court count (Friday vs. not), so
+  // the per-date default is computed in JS and zipped with the dates array
+  // via a paired unnest — a flat $2 like max_spots below can't vary per row.
+  const courtsDefaults = dates.map(defaultCourtsForDate);
+
   // The `sql` tagged template only types params as Primitive (no arrays), so
   // array binding goes through the underlying pool's `.query()` instead —
   // still parameterized, just not via the template tag.
   await sql.query(
-    `INSERT INTO sessions (date, max_spots, booked_spots)
-     SELECT unnest($1::date[]), $2, 0
+    `INSERT INTO sessions (date, max_spots, booked_spots, courts)
+     SELECT t.d, $2, 0, t.c
+     FROM unnest($1::date[], $3::int[]) AS t(d, c)
      ON CONFLICT (date) DO NOTHING;`,
-    [dates, SESSION_CAPACITY],
+    [dates, SESSION_CAPACITY, courtsDefaults],
   );
 
   const [{ rows }, { rows: memberRows }] = await Promise.all([
@@ -256,9 +261,10 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   const signedUp: Record<string, number> = {};
   for (const date of dates) {
     const booked = bookedByDate.get(date) ?? 0;
-    const activeMembers = membersByDate.get(date) ?? 0;
+    // Members only occupy capacity on Fridays — see getActiveMemberCountForDate.
+    const activeMembers = isFriday(date) ? (membersByDate.get(date) ?? 0) : 0;
     const maxPlayers = maxPlayersForCourts(
-      courtsByDate.get(date) ?? DEFAULT_COURTS,
+      courtsByDate.get(date) ?? defaultCourtsForDate(date),
     );
     spots[date] = Math.max(0, maxPlayers - activeMembers - booked);
     signedUp[date] = booked + activeMembers;
@@ -296,8 +302,10 @@ export async function reserveBookingSlot(
           ELSE ${SESSION_CAPACITY}
         END
       ) - (
-        SELECT COUNT(*)::int FROM memberships
-        WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
+        CASE WHEN EXTRACT(DOW FROM date) = 5 THEN (
+          SELECT COUNT(*)::int FROM memberships
+          WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
+        ) ELSE 0 END
       );
   `;
   if (!rowCount) return false;
@@ -341,10 +349,11 @@ export type MembershipAssignment =
     }
   | { blocked: true };
 
-// Finds the nearest upcoming play day (any date, not a fixed weekday — a
-// member can attend any date within their period) that still has room, and
-// atomically reserves a 'pending' membership row starting there, so the
-// member's access window never overlaps a day that's already full. Locks
+// Finds the nearest upcoming Friday play day (monthly/quarterly membership
+// access only applies on Fridays — every other day is casual-bookings-only)
+// that still has room, and atomically reserves a 'pending' membership row
+// starting there, so the member's access window never overlaps a day that's
+// already full. Locks
 // each candidate session row in turn (FOR UPDATE) so two concurrent
 // signups can't both claim the same last-open spot — see
 // PENDING_MEMBERSHIP_HOLD_MINUTES for why an abandoned checkout doesn't
@@ -367,6 +376,7 @@ export async function assignAndReserveMembershipAccessStart(
     const { rows: candidates } = await client.query(
       `SELECT date::text AS date FROM sessions
        WHERE google_event_id IS NOT NULL
+         AND EXTRACT(DOW FROM date) = 5
          AND date >= ($1::date + $2::int)
          AND date <= ($1::date + $3::int)
        ORDER BY date;`,
@@ -386,7 +396,7 @@ export async function assignAndReserveMembershipAccessStart(
           | { booked_spots: number; courts: number }
           | undefined;
         const maxPlayers = maxPlayersForCourts(
-          session?.courts ?? DEFAULT_COURTS,
+          session?.courts ?? defaultCourtsForDate(date),
         );
         const booked = session?.booked_spots ?? 0;
 
@@ -471,9 +481,12 @@ export async function upsertSessionFromCalendar(
     location?: string;
   },
 ): Promise<void> {
+  // courts is set only on insert (never in the DO UPDATE SET below) so a
+  // recurring calendar resync never clobbers an admin's manual court
+  // override for a date that's already been synced once.
   await sql`
-    INSERT INTO sessions (date, max_spots, booked_spots, google_event_id, calendar_summary, event_start_time, event_end_time, event_location, synced_at)
-    VALUES (${date}, ${SESSION_CAPACITY}, 0, ${event.id}, ${event.summary ?? null}, ${event.start}, ${event.end ?? null}, ${event.location ?? null}, NOW())
+    INSERT INTO sessions (date, max_spots, booked_spots, courts, google_event_id, calendar_summary, event_start_time, event_end_time, event_location, synced_at)
+    VALUES (${date}, ${SESSION_CAPACITY}, 0, ${defaultCourtsForDate(date)}, ${event.id}, ${event.summary ?? null}, ${event.start}, ${event.end ?? null}, ${event.location ?? null}, NOW())
     ON CONFLICT (date) DO UPDATE SET
       google_event_id = EXCLUDED.google_event_id,
       calendar_summary = EXCLUDED.calendar_summary,
@@ -562,9 +575,12 @@ export async function listAllSessionDates(): Promise<string[]> {
 
 // Members whose period covers this specific date — the correct scoping for
 // any per-play-day capacity calculation. Mirrors getRosterForDate's predicate.
+// Membership access only applies on Fridays — every other play day is
+// casual-bookings-only, so members never occupy capacity there.
 export async function getActiveMemberCountForDate(
   date: string,
 ): Promise<number> {
+  if (!isFriday(date)) return 0;
   const { rows } = await sql`
     SELECT COUNT(*)::int AS count FROM memberships
     WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date};
@@ -599,7 +615,10 @@ export async function getCourtsForDate(date: string): Promise<number> {
   const { rows } = await sql`
     SELECT courts FROM sessions WHERE date = ${date};
   `;
-  return (rows[0] as { courts: number } | undefined)?.courts ?? DEFAULT_COURTS;
+  return (
+    (rows[0] as { courts: number } | undefined)?.courts ??
+    defaultCourtsForDate(date)
+  );
 }
 
 // Updates how many courts are booked for a play day. Refuses to shrink
@@ -738,12 +757,15 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     WHERE session_date = ${date} AND status = 'confirmed'
     ORDER BY created_at ASC;
   `;
-  const { rows: memberRows } = await sql`
-    SELECT first_name, last_name, email, phone, plan
-    FROM memberships
-    WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
-    ORDER BY created_at ASC;
-  `;
+  // Membership access only applies on Fridays — see getActiveMemberCountForDate.
+  const { rows: memberRows } = isFriday(date)
+    ? await sql`
+        SELECT first_name, last_name, email, phone, plan
+        FROM memberships
+        WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
+        ORDER BY created_at ASC;
+      `
+    : { rows: [] };
 
   const casual: RosterEntry[] = bookingRows.map((r) => ({
     bookingId: r.id as number,
@@ -944,6 +966,7 @@ export type MembershipReminderTarget = {
 export async function getMembersWithPlayDayTomorrow(
   date: string,
 ): Promise<MembershipReminderTarget[]> {
+  if (!isFriday(date)) return [];
   const { rows } = await sql`
     SELECT id, email, first_name, plan, period_end::text AS period_end
     FROM memberships
@@ -967,10 +990,11 @@ export async function getMembersWithPlayDayTomorrow(
   });
 }
 
-// Every synced play day from `fromDate` through `periodEnd` (inclusive) —
-// the "remaining sessions in their membership period" list for the reminder
-// email. Only synced (google_event_id set) dates are included, matching
-// every other bookable-date computation in the app.
+// Every synced Friday play day from `fromDate` through `periodEnd`
+// (inclusive) — the "remaining sessions in their membership period" list for
+// the reminder email. Only synced (google_event_id set) dates are included,
+// matching every other bookable-date computation in the app; restricted to
+// Fridays since that's the only day membership access applies.
 export async function getRemainingSessionDatesInPeriod(
   fromDate: string,
   periodEnd: string,
@@ -978,6 +1002,7 @@ export async function getRemainingSessionDatesInPeriod(
   const { rows } = await sql`
     SELECT date::text AS date FROM sessions
     WHERE date >= ${fromDate} AND date <= ${periodEnd} AND google_event_id IS NOT NULL
+      AND EXTRACT(DOW FROM date) = 5
     ORDER BY date;
   `;
   return rows.map((row) => (row as { date: string }).date);

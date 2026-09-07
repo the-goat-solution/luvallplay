@@ -12,8 +12,8 @@ const I18N = {
     hero_eyebrow: "Christchurch, New Zealand",
     hero_sub: "Badminton Club",
     hero_tagline:
-      "Where passion meets precision on the courts of Christchurch. Join our growing community every Friday evening.",
-    hero_day: "Every Friday and more",
+      "Where passion meets precision on the courts of Christchurch. Join our growing Friday community — plus casual sessions throughout the week.",
+    hero_day: "Friday nights + casual any day",
     hero_venue: "Christchurch area",
     hero_cta1: "Become a Member",
     hero_cta2: "Book a Session",
@@ -44,6 +44,8 @@ const I18N = {
       "Registration opens 30 days before the session and closes at 5PM on the day",
     ngc_view_only: "View only — booking opens 30 days before",
     ngc_no_sessions: "No upcoming sessions scheduled — check back soon.",
+    casual_only_badge:
+      "Casual bookings only — membership access doesn't apply on this day.",
     cal_legend_next: "Next game",
     cal_legend_bookable: "Bookable — click to select",
     cal_legend_closed: "Closed (outside booking window)",
@@ -54,7 +56,7 @@ const I18N = {
     mem_lbl: "Membership",
     mem_h: "Choose Your Commitment",
     mem_sub:
-      "All memberships include full access to weekly Friday sessions, court bookings, and shuttlecocks. Bring your own racquet or borrow one at court.",
+      "Monthly and Quarterly memberships include full access to our weekly Friday sessions, court bookings, and shuttlecocks — bring your own racquet or borrow one at court. Sessions on other days are casual, pay-per-visit only.",
     p_cas: "Casual",
     p_cas_d: "Pay per session, no commitment",
     p_cas_per: "per session",
@@ -72,10 +74,11 @@ const I18N = {
     mem_onetime_d: "Single payment, no auto-renewal",
     mem_start_today: "Your membership activates immediately after payment.",
     mem_start_delayed:
-      "The next play day with space is {date} — your membership will start then. You'll still be charged today.",
+      "The next Friday session with space is {date} — your membership will start then. You'll still be charged today.",
     mem_sessions_full:
-      "All upcoming play days are currently full, so we can't start a new membership right now. Please check back soon.",
+      "All upcoming Friday sessions are currently full, so we can't start a new membership right now. Please check back soon.",
     f_court: "Friday night court access",
+    f_court_casual: "Court access any play day",
     f_shuttle: "Shuttlecocks provided",
     f_racquet: "Racquet loan available",
     f_community: "Club community & social events",
@@ -117,7 +120,7 @@ const I18N = {
     donate_details_hint: "We'll send your donation receipt here.",
     nav_donate: "Donate",
     footer_tagline:
-      "Christchurch's premier badminton community. All skill levels welcome, every Friday evening.",
+      "Christchurch's premier badminton community. Friday sessions for members, casual play welcome any day.",
     footer_quick: "Quick Links",
     footer_contact: "Contact",
     footer_follow: "Follow Us",
@@ -165,12 +168,12 @@ const I18N = {
     session_locked: "Opens {date}",
     confirm_book: "Booking Confirmed!",
     confirm_book_body:
-      "Your spot for Friday's session has been reserved. A confirmation email has been sent to your inbox. See you on the court!",
+      "Your spot has been reserved. A confirmation email has been sent to your inbox. See you on the court!",
     confirm_join: "Welcome to Three Wolves!",
     confirm_join_body:
       "Your membership is now active. A welcome email with all the details has been sent. We look forward to seeing you on the court this Friday!",
     confirm_join_body_delayed:
-      "Your membership is now active. A welcome email with all the details has been sent. Your access starts {date} — the next play day with space. We look forward to seeing you then!",
+      "Your membership is now active. A welcome email with all the details has been sent. Your access starts {date} — the next Friday session with space. We look forward to seeing you then!",
     confirm_waitlist: "You're on the waitlist!",
     confirm_waitlist_body:
       "We'll notify you by email if a spot opens for this session. No payment is required — we'll send you a booking link when a spot becomes available.",
@@ -201,8 +204,8 @@ const I18N = {
     hero_eyebrow: "Christchurch, New Zealand",
     hero_sub: "Câu Lạc Bộ Cầu Lông",
     hero_tagline:
-      "Nơi đam mê và kỹ thuật giao nhau trên sân cầu Christchurch. Tham gia cùng chúng tôi mỗi tối thứ Sáu.",
-    hero_day: "Mỗi Thứ Sáu Và Hơn Thế Nữa",
+      "Nơi đam mê và kỹ thuật giao nhau trên sân cầu Christchurch. Tham gia cộng đồng tối thứ Sáu của chúng tôi — cùng các buổi chơi thông thường vào những ngày khác trong tuần.",
+    hero_day: "Tối Thứ Sáu + Chơi Thường Mọi Ngày",
     hero_venue: "Khu Vực Christchurch",
     hero_cta1: "Trở Thành Hội Viên",
     hero_cta2: "Đặt Chỗ Chơi",
@@ -232,6 +235,8 @@ const I18N = {
     ngc_locked_msg: "Đăng ký mở trước 30 ngày và đóng lúc 17:00 ngày diễn ra",
     ngc_view_only: "Chỉ xem — đặt chỗ mở trước 30 ngày",
     ngc_no_sessions: "Chưa có buổi tập sắp tới — vui lòng quay lại sau.",
+    casual_only_badge:
+      "Chỉ đặt chỗ thông thường — hội viên không áp dụng vào ngày này.",
     cal_legend_next: "Trận tới",
     cal_legend_bookable: "Có thể đặt — nhấn để chọn",
     cal_legend_closed: "Đã đóng (ngoài thời gian đặt chỗ)",
@@ -242,7 +247,7 @@ const I18N = {
     mem_lbl: "Hội Viên",
     mem_h: "Chọn Gói Phù Hợp",
     mem_sub:
-      "Tất cả các gói đều bao gồm buổi tập tối thứ Sáu, đặt sân và cầu lông. Mang vợt của bạn hoặc mượn tại sân.",
+      "Gói Hàng Tháng và Hàng Quý bao gồm toàn quyền tham gia buổi tập tối thứ Sáu hàng tuần, đặt sân và cầu lông — mang vợt của bạn hoặc mượn tại sân. Các buổi chơi vào ngày khác chỉ dành cho khách chơi thông thường, trả phí theo buổi.",
     p_cas: "Thông Thường",
     p_cas_d: "Trả tiền theo buổi, không cam kết",
     p_cas_per: "mỗi buổi",
@@ -261,10 +266,11 @@ const I18N = {
     mem_start_today:
       "Hội viên của bạn sẽ được kích hoạt ngay sau khi thanh toán.",
     mem_start_delayed:
-      "Buổi tập gần nhất còn chỗ là {date} — hội viên của bạn sẽ bắt đầu từ ngày đó. Bạn vẫn sẽ được thanh toán hôm nay.",
+      "Buổi tập tối thứ Sáu gần nhất còn chỗ là {date} — hội viên của bạn sẽ bắt đầu từ ngày đó. Bạn vẫn sẽ được thanh toán hôm nay.",
     mem_sessions_full:
-      "Tất cả các buổi tập sắp tới hiện đã đầy, nên chúng tôi chưa thể bắt đầu hội viên mới ngay bây giờ. Vui lòng quay lại sau.",
+      "Tất cả các buổi tập tối thứ Sáu sắp tới hiện đã đầy, nên chúng tôi chưa thể bắt đầu hội viên mới ngay bây giờ. Vui lòng quay lại sau.",
     f_court: "Vào sân tối thứ Sáu",
+    f_court_casual: "Vào sân bất kỳ ngày chơi nào",
     f_shuttle: "Cầu lông được cung cấp",
     f_racquet: "Có thể mượn vợt",
     f_community: "Cộng đồng & sự kiện câu lạc bộ",
@@ -306,7 +312,7 @@ const I18N = {
     donate_details_hint: "Biên nhận ủng hộ sẽ được gửi đến email này.",
     nav_donate: "Ủng Hộ",
     footer_tagline:
-      "Cộng đồng cầu lông hàng đầu Christchurch. Mọi trình độ đều chào đón, mỗi tối thứ Sáu.",
+      "Cộng đồng cầu lông hàng đầu Christchurch. Buổi tập hội viên vào tối thứ Sáu, chơi thông thường chào đón mọi ngày.",
     footer_quick: "Liên Kết Nhanh",
     footer_contact: "Liên Hệ",
     footer_follow: "Theo Dõi",
@@ -354,12 +360,12 @@ const I18N = {
     session_locked: "Mở ngày {date}",
     confirm_book: "Đặt Chỗ Thành Công!",
     confirm_book_body:
-      "Chỗ của bạn cho buổi tập thứ Sáu đã được đặt. Email xác nhận đã được gửi đến hộp thư. Hẹn gặp bạn trên sân!",
+      "Chỗ của bạn đã được đặt. Email xác nhận đã được gửi đến hộp thư. Hẹn gặp bạn trên sân!",
     confirm_join: "Chào Mừng Đến Three Wolves!",
     confirm_join_body:
       "Hội viên của bạn đã được kích hoạt. Email chào mừng đã được gửi. Chúng tôi mong được gặp bạn trên sân tối thứ Sáu này!",
     confirm_join_body_delayed:
-      "Hội viên của bạn đã được kích hoạt. Email chào mừng đã được gửi. Bạn có thể bắt đầu tham gia từ {date} — buổi tập gần nhất còn chỗ. Hẹn gặp bạn khi đó!",
+      "Hội viên của bạn đã được kích hoạt. Email chào mừng đã được gửi. Bạn có thể bắt đầu tham gia từ {date} — buổi tập tối thứ Sáu gần nhất còn chỗ. Hẹn gặp bạn khi đó!",
     confirm_waitlist: "Bạn đã vào danh sách chờ!",
     confirm_waitlist_body:
       "Chúng tôi sẽ thông báo qua email nếu có chỗ trống. Không cần thanh toán — chúng tôi sẽ gửi link đặt chỗ khi có chỗ.",

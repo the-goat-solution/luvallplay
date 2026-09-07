@@ -1,4 +1,9 @@
-import { BOOKING_CUTOFF_HOUR, BOOKING_WINDOW_DAYS } from "./constants";
+import {
+  BOOKING_CUTOFF_HOUR,
+  BOOKING_WINDOW_DAYS,
+  DEFAULT_COURTS,
+  NON_FRIDAY_DEFAULT_COURTS,
+} from "./constants";
 
 const CLUB_TIME_ZONE = "Pacific/Auckland";
 
@@ -138,6 +143,25 @@ export function formatEventTimeRange(
   if (!end) return startLabel;
   const endLabel = new Intl.DateTimeFormat("en-NZ", opts).format(new Date(end));
   return `${startLabel} – ${endLabel}`;
+}
+
+// True if the given YYYY-MM-DD date string falls on a Friday. Parses via
+// local y/m/d components (not `new Date(dateKey)`, which parses as UTC
+// midnight and can shift a day depending on the server process's timezone —
+// see the DATE-parsing comment in lib/db.ts) so the result is correct
+// regardless of server TZ.
+export function isFriday(dateKey: string): boolean {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d).getDay() === 5;
+}
+
+// The default number of courts booked for a play day that doesn't yet have
+// an admin override — 2 on Friday (the club's main session), 1 on every
+// other day (casual-only, lower expected turnout). Only applies to newly
+// created session rows; existing rows keep whatever `courts` value they
+// already have (see setCourtsForDate in lib/db.ts).
+export function defaultCourtsForDate(dateKey: string): number {
+  return isFriday(dateKey) ? DEFAULT_COURTS : NON_FRIDAY_DEFAULT_COURTS;
 }
 
 export function getDayName(d: Date, lang: "en" | "vi"): string {

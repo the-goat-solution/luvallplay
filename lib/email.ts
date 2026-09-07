@@ -256,17 +256,17 @@ export async function sendMembershipConfirmationEmail(
 
   const accessParagraph = input.delayed
     ? paragraph(
-        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today. There wasn't an open spot on the very next play day, so your membership access starts on <strong>${escapeHtml(displayStart)}</strong> — the next play day with room. You were charged today either way; your access simply begins then.`,
+        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today. There wasn't an open spot on the very next Friday session, so your membership access starts on <strong>${escapeHtml(displayStart)}</strong> — the next Friday session with room. You were charged today either way; your access simply begins then.`,
       )
     : paragraph(
-        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today, and your membership is active immediately — you're welcome at any play day from now through <strong>${escapeHtml(displayEnd)}</strong>.`,
+        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today, and your membership is active immediately — you're welcome at every Friday session from now through <strong>${escapeHtml(displayEnd)}</strong>.`,
       );
 
   const bodyHtml = `
     ${heading(`Welcome to Three Wolves, ${escapeHtml(input.firstName)}!`)}
     ${paragraph(`We're so glad to have you — your <strong>${planName}</strong> membership is confirmed (${billingNote}).`)}
     ${accessParagraph}
-    ${paragraph(`Membership window: <strong>${escapeHtml(displayStart)}</strong> to <strong>${escapeHtml(displayEnd)}</strong>. You can show up to any play day in that window — no need to book individual sessions. See you on court!`)}
+    ${paragraph(`Membership window: <strong>${escapeHtml(displayStart)}</strong> to <strong>${escapeHtml(displayEnd)}</strong>. You can show up to any Friday session in that window — no need to book individual sessions. See you on court!`)}
     ${contactFooterNote()}
   `;
   const text = [
@@ -275,7 +275,7 @@ export async function sendMembershipConfirmationEmail(
     `We're so glad to have you — your ${planName} membership is confirmed (${billingNote}).`,
     "",
     input.delayed
-      ? `You were charged NZD $${input.priceNzd.toFixed(2)} today. There wasn't an open spot on the very next play day, so your membership access starts on ${displayStart} — the next play day with room.`
+      ? `You were charged NZD $${input.priceNzd.toFixed(2)} today. There wasn't an open spot on the very next Friday session, so your membership access starts on ${displayStart} — the next Friday session with room.`
       : `You were charged NZD $${input.priceNzd.toFixed(2)} today, and your membership is active immediately.`,
     "",
     `Membership window: ${displayStart} to ${displayEnd}. See you on court!`,
@@ -323,7 +323,7 @@ export async function sendMembershipReminderEmail(
   const remainingListHtml =
     otherDates.length > 0
       ? `
-        ${paragraph("Your other remaining play days this membership period:")}
+        ${paragraph("Your other remaining Friday sessions this membership period:")}
         <ul style="margin:0 0 16px;padding-left:20px;color:#3a526a">
           ${otherDates.map((d) => `<li style="margin-bottom:4px">${escapeHtml(formatEmailDate(d))}</li>`).join("")}
         </ul>
@@ -340,7 +340,7 @@ export async function sendMembershipReminderEmail(
   const text = [
     `Hi ${input.firstName}, just a friendly reminder that you're on for play tomorrow, ${displayDate}, ${whenWhereText} — on your ${PLAN_NAME[input.plan]} membership.`,
     ...(otherDates.length > 0
-      ? ["", "Your other remaining play days this membership period:", ...otherDates.map((d) => `- ${formatEmailDate(d)}`)]
+      ? ["", "Your other remaining Friday sessions this membership period:", ...otherDates.map((d) => `- ${formatEmailDate(d)}`)]
       : []),
     "",
     "Grab your racket and we'll see you on court!",

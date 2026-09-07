@@ -218,6 +218,10 @@ export default async function PlayDaysAdminPage({
       <p style={{ color: "#666", marginBottom: 20 }}>
         Casual bookings and members whose subscription period covers the selected play day.
       </p>
+      <p style={{ color: "#888", fontSize: 12, marginBottom: 20 }}>
+        Only Friday play days allow monthly/quarterly members — new sessions on other days
+        default to 1 court, casual bookings only.
+      </p>
       <AdminNav active="play-days" />
       <PlayDaysToastBridge />
 

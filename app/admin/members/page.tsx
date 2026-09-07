@@ -59,7 +59,7 @@ async function addCashMember(formData: FormData) {
   if (assignment.blocked) {
     redirect(
       `/admin/members?cashMemberError=${encodeURIComponent(
-        "No upcoming play day has room for a new membership right now.",
+        "No upcoming Friday session has room for a new membership right now.",
       )}`,
     );
   }
@@ -279,7 +279,7 @@ export default async function MembersAdminPage() {
           </h2>
           <p style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>
             Records a Stripe customer and invoice marked as paid out-of-band
-            (cash), assigns them the next play day with room, and sends the
+            (cash), assigns them the next Friday session with room, and sends the
             same welcome email a card signup would get.
           </p>
           <form

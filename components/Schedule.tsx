@@ -14,6 +14,7 @@ import {
   formatEventTimeRange,
   getDayName,
   isBookable,
+  isFriday,
   isWithinBookingLock,
   startOfDay,
   toDateKey,
@@ -324,6 +325,24 @@ export function Schedule({
             <div className="ngc-body">
               <div className="ngc-day">{getDayName(displayDate, lang)}</div>
               <div className="ngc-date">{formatDateLong(displayDate, lang)}</div>
+
+              {!isFriday(toDateKey(displayDate)) && (
+                <div className="ngc-locked">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <Trans k="casual_only_badge" />
+                </div>
+              )}
 
               <div className="ngc-row">
                 <svg

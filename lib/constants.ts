@@ -16,6 +16,9 @@ export const COURTS_TO_MAX_PLAYERS: Record<number, number> = {
   4: 22,
 };
 export const DEFAULT_COURTS = 2;
+// Default courts for a play day that isn't Friday — casual-only, lighter
+// expected turnout. See defaultCourtsForDate in lib/dates.ts.
+export const NON_FRIDAY_DEFAULT_COURTS = 1;
 
 export function maxPlayersForCourts(courts: number): number {
   return COURTS_TO_MAX_PLAYERS[courts] ?? SESSION_CAPACITY;

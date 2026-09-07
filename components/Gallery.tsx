@@ -12,16 +12,25 @@ declare global {
   }
 }
 
+// Bento/masonry tile shapes by position, for up to 8 displayed photos — fixed
+// spans rather than each photo's own aspect ratio, so the layout stays a
+// consistent, deliberate shape no matter what admins upload. Any photos
+// beyond 8 are still reachable via the Lightbox carousel (see Lightbox.tsx,
+// which reads the full `images` list independently of what's rendered here).
+const GALLERY_DISPLAY_LIMIT = 8;
+const GALLERY_SHAPES = ["gi-big", "", "gi-wide", "gi-tall", "", "gi-wide", "", ""];
+
 export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
   const { lang } = useLanguage();
 
-  const galleryImages =
+  const galleryImages = (
     images && images.length > 0
       ? images.map((img) => ({
           src: img.src,
           alt: img.alt ? pickLocale(img.alt, lang) : "Gallery photo",
         }))
-      : GALLERY_IMAGES.map((img) => ({ src: img.src, alt: img.alt }));
+      : GALLERY_IMAGES.map((img) => ({ src: img.src, alt: img.alt }))
+  ).slice(0, GALLERY_DISPLAY_LIMIT);
 
   return (
     <section className="section" id="gallery" data-screen-label="Gallery">
@@ -40,7 +49,7 @@ export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
           {galleryImages.map((img, i) => (
             <div
               key={img.src}
-              className="gallery-item animate-in"
+              className={`gallery-item animate-in${GALLERY_SHAPES[i] ? ` ${GALLERY_SHAPES[i]}` : ""}`}
               style={i > 0 ? { animationDelay: `${i * 0.1}s` } : undefined}
               role="button"
               tabIndex={0}

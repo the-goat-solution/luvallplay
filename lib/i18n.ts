@@ -13,7 +13,7 @@ const I18N = {
     hero_sub: "Badminton Club",
     hero_tagline:
       "Where passion meets precision on the courts of Christchurch. Join our growing Friday community — plus casual sessions throughout the week.",
-    hero_day: "Friday nights + casual any day",
+    hero_day: "Friday nights and other casual days",
     hero_venue: "Christchurch area",
     hero_cta1: "Become a Member",
     hero_cta2: "Book a Session",
@@ -205,7 +205,7 @@ const I18N = {
     hero_sub: "Câu Lạc Bộ Cầu Lông",
     hero_tagline:
       "Nơi đam mê và kỹ thuật giao nhau trên sân cầu Christchurch. Tham gia cộng đồng tối thứ Sáu của chúng tôi — cùng các buổi chơi thông thường vào những ngày khác trong tuần.",
-    hero_day: "Tối Thứ Sáu + Chơi Thường Mọi Ngày",
+    hero_day: "Tối Thứ Sáu Và Các Ngày Chơi Thường Khác",
     hero_venue: "Khu Vực Christchurch",
     hero_cta1: "Trở Thành Hội Viên",
     hero_cta2: "Đặt Chỗ Chơi",

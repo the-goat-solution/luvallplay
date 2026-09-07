@@ -8,7 +8,7 @@ Production website for Three Wolves Badminton Club (Christchurch, NZ).
 - **Sanity CMS** — content at `/studio`
 - **Stripe** — casual ($10), monthly ($33), quarterly ($85 / 3 months), donations (custom amount, one-time or monthly)
 - **Vercel Postgres** — sessions, bookings, waitlist, memberships
-- **Google Calendar** — source of truth for bookable session dates (synced every 4 hours via cron)
+- **Google Calendar** — source of truth for bookable session dates (synced daily via cron)
 - **Resend** — admin headcount alerts and the automatic play day roster email
 
 ## Design changes from prototype
@@ -54,6 +54,12 @@ Renewal reminders, failed-payment (dunning), and expiring-card emails for monthl
 
 These use the email already attached to each Stripe Customer (set at signup — see `app/api/create-subscription/route.ts`) and your account's [branding settings](https://dashboard.stripe.com/settings/branding). Test emails only send in a sandbox to your verified email domain or team member addresses.
 
+### Casual booking confirmation & play day reminders
+
+On a successful **casual card payment**, Stripe emails the customer its own receipt/invoice, and the webhook (`app/api/stripe-webhook`) additionally sends a Resend confirmation email with the play day's date, time, and location — same visual template as the day-before reminder below.
+
+A day-before cron (`/api/cron/membership-reminders`, schedule in `vercel.json`) sends a "see you tomorrow" reminder — date, time, location — to everyone confirmed for tomorrow's play day: active monthly/quarterly members **and** casual bookers with a confirmed booking for that date. Each booking/membership is only ever reminded once per play day (dedup via `bookings.reminder_sent_at` and the `membership_reminders_sent` table).
+
 ### Play day roster
 
 Every day at 4:00 PM NZ time, a Vercel Cron job (`vercel.json` → `/api/cron/send-roster`) checks whether there's a session scheduled for that date (from the synced Google Calendar — not limited to Fridays) and, if so, emails the full player list to `CLUB_ROSTER_EMAIL` (default `threewolvesbadminton@gmail.com`). If no session is scheduled that day, it's a no-op. The roster combines:
@@ -82,9 +88,9 @@ The site's bookable session dates are read from a Google Calendar — whatever e
 1. Create a Google Cloud service account and download its JSON key.
 2. Share the target Google Calendar with the service account's email (read access is enough).
 3. Set `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (with literal `\n` line breaks), and `GOOGLE_CALENDAR_ID` in `.env.local` / Vercel.
-4. The `sync-calendar` cron job (`vercel.json`) pulls events every 4 hours, starting at 12:00 AM NZDT (schedule: `0 3,7,11,15,19,23 * * *`, UTC). To sync manually: `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.vercel.app/api/cron/sync-calendar`
+4. The `sync-calendar` cron job (`vercel.json`) pulls events once daily at 3:00 PM NZDT (schedule: `0 2 * * *`, UTC — the Vercel Hobby plan only allows one run per day per cron job). To sync manually: `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.vercel.app/api/cron/sync-calendar`
 
-> Note: Vercel Cron runs in UTC with no DST awareness. The schedule targets 12:00/4:00/8:00 AM/PM NZDT (daylight saving); during NZST (non-DST months) each run will land 1 hour earlier local time.
+> Note: Vercel Cron runs in UTC with no DST awareness. The schedule targets 3:00 PM NZDT (daylight saving); during NZST (non-DST months) the sync will run around 2:00 PM instead.
 
 ### Headcount alerts
 

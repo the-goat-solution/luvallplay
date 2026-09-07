@@ -357,6 +357,98 @@ export async function sendMembershipReminderEmail(
   });
 }
 
+export async function sendCasualBookingConfirmationEmail(
+  to: string,
+  input: {
+    firstName: string;
+    sessionDate: string;
+    sessionTime: string | null;
+    sessionLocation: string | null;
+  },
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const displayDate = formatEmailDate(input.sessionDate);
+  const location = input.sessionLocation || "Graham Condon Recreation and Sport Centre";
+  const whenWhere = input.sessionTime
+    ? `at <strong>${escapeHtml(input.sessionTime)}</strong>, ${escapeHtml(location)}`
+    : escapeHtml(location);
+  const whenWhereText = input.sessionTime
+    ? `at ${input.sessionTime}, ${location}`
+    : location;
+
+  const bodyHtml = `
+    ${heading("You're confirmed!")}
+    ${paragraph(`Hi ${escapeHtml(input.firstName)}, you're booked in for play on <strong>${escapeHtml(displayDate)}</strong>, ${whenWhere}.`)}
+    ${paragraph("Grab your racket and we'll see you on court!")}
+    ${contactFooterNote()}
+  `;
+  const text = [
+    `Hi ${input.firstName}, you're booked in for play on ${displayDate}, ${whenWhereText}.`,
+    "",
+    "Grab your racket and we'll see you on court!",
+    "",
+    contactFooterNoteText(),
+  ].join("\n");
+
+  await getResend().emails.send({
+    from: withDisplayName(from),
+    to,
+    subject: `You're confirmed — ${displayDate} — Three Wolves Badminton Club`,
+    html: renderEmailLayout({ title: "You're confirmed!", bodyHtml }),
+    text,
+  });
+}
+
+export async function sendCasualBookingReminderEmail(
+  to: string,
+  input: {
+    firstName: string;
+    tomorrowDate: string;
+    sessionTime: string | null;
+    sessionLocation: string | null;
+  },
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const displayDate = formatEmailDate(input.tomorrowDate);
+  const location = input.sessionLocation || "Graham Condon Recreation and Sport Centre";
+  const whenWhere = input.sessionTime
+    ? `at <strong>${escapeHtml(input.sessionTime)}</strong>, ${escapeHtml(location)}`
+    : escapeHtml(location);
+  const whenWhereText = input.sessionTime
+    ? `at ${input.sessionTime}, ${location}`
+    : location;
+
+  const bodyHtml = `
+    ${heading("See you tomorrow!")}
+    ${paragraph(`Hi ${escapeHtml(input.firstName)}, just a friendly reminder that you're on for play tomorrow, <strong>${escapeHtml(displayDate)}</strong>, ${whenWhere}.`)}
+    ${paragraph("Grab your racket and we'll see you on court!")}
+    ${contactFooterNote()}
+  `;
+  const text = [
+    `Hi ${input.firstName}, just a friendly reminder that you're on for play tomorrow, ${displayDate}, ${whenWhereText}.`,
+    "",
+    "Grab your racket and we'll see you on court!",
+    "",
+    contactFooterNoteText(),
+  ].join("\n");
+
+  await getResend().emails.send({
+    from: withDisplayName(from),
+    to,
+    subject: `Reminder: you're playing tomorrow, ${displayDate}`,
+    html: renderEmailLayout({ title: "See you tomorrow!", bodyHtml }),
+    text,
+  });
+}
+
 export async function sendCasualBookingFullRefundEmail(
   to: string,
   input: { firstName: string; sessionDate: string; amountNzd: number },

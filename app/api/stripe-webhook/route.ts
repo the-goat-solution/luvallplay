@@ -7,11 +7,13 @@ import {
   activateMembershipBySubscriptionId,
   applyMembershipRenewal,
   ensureTables,
+  listSessionsInRange,
   reserveBookingSlot,
 } from "@/lib/db";
-import { getClubToday } from "@/lib/dates";
+import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import {
   sendAdminBookingRaceAlertEmail,
+  sendCasualBookingConfirmationEmail,
   sendCasualBookingFullRefundEmail,
   sendMembershipConfirmationEmail,
 } from "@/lib/email";
@@ -68,7 +70,23 @@ export async function POST(request: Request) {
           phone: pi.metadata.phone,
           paymentIntentId: pi.id,
         });
-        if (!ok) {
+        if (ok) {
+          const customerEmail = pi.metadata.email || pi.receipt_email || "";
+          if (customerEmail) {
+            const [session] = await listSessionsInRange(sessionDate, sessionDate);
+            const sessionTime = session?.eventStartTime
+              ? formatEventTimeRange(session.eventStartTime, session.eventEndTime)
+              : null;
+            await sendCasualBookingConfirmationEmail(customerEmail, {
+              firstName: pi.metadata.firstName ?? "",
+              sessionDate,
+              sessionTime,
+              sessionLocation: session?.eventLocation ?? null,
+            }).catch((err) =>
+              console.error("Failed to send casual booking confirmation email", err),
+            );
+          }
+        } else {
           // Race: the session filled between PaymentIntent creation (which
           // only reads capacity) and this webhook's atomic reservation. The
           // customer was already charged for a spot that no longer exists —

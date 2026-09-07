@@ -153,6 +153,10 @@ async function ensureTablesImpl() {
       PRIMARY KEY (membership_id, session_date)
     );
   `;
+  // Dedup guard for the day-before casual-booking reminder — a booking only
+  // ever covers one session_date, so a single nullable column (unlike the
+  // membership table above) is enough to guarantee at most one reminder.
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;`;
 }
 
 // Adds an exact number of days to a YYYY-MM-DD date string. Unlike calendar-
@@ -990,6 +994,42 @@ export async function claimMembershipReminder(
     INSERT INTO membership_reminders_sent (membership_id, session_date)
     VALUES (${membershipId}, ${sessionDate})
     ON CONFLICT (membership_id, session_date) DO NOTHING;
+  `;
+  return (rowCount ?? 0) > 0;
+}
+
+export type CasualReminderTarget = {
+  bookingId: number;
+  email: string;
+  firstName: string;
+};
+
+// Confirmed casual bookings for `date` — the pool eligible for the
+// day-before reminder cron (app/api/cron/membership-reminders), alongside
+// active members.
+export async function getCasualBookingsForDate(
+  date: string,
+): Promise<CasualReminderTarget[]> {
+  const { rows } = await sql`
+    SELECT id, email, first_name
+    FROM bookings
+    WHERE session_date = ${date} AND status = 'confirmed';
+  `;
+  return rows.map((r) => {
+    const row = r as { id: number; email: string; first_name: string | null };
+    return {
+      bookingId: row.id,
+      email: row.email,
+      firstName: row.first_name ?? "",
+    };
+  });
+}
+
+// Atomic dedup claim mirroring claimMembershipReminder, for casual bookings.
+export async function claimBookingReminder(bookingId: number): Promise<boolean> {
+  const { rowCount } = await sql`
+    UPDATE bookings SET reminder_sent_at = NOW()
+    WHERE id = ${bookingId} AND reminder_sent_at IS NULL;
   `;
   return (rowCount ?? 0) > 0;
 }

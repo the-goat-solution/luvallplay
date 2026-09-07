@@ -8,7 +8,7 @@ Production website for Three Wolves Badminton Club (Christchurch, NZ).
 - **Sanity CMS** — content at `/studio`
 - **Stripe** — casual ($10), monthly ($33), quarterly ($85 / 3 months), donations (custom amount, one-time or monthly)
 - **Vercel Postgres** — sessions, bookings, waitlist, memberships
-- **Google Calendar** — source of truth for bookable session dates (synced every 4 hours via cron)
+- **Google Calendar** — source of truth for bookable session dates (synced daily via cron)
 - **Resend** — admin headcount alerts and the automatic play day roster email
 
 ## Design changes from prototype
@@ -88,9 +88,9 @@ The site's bookable session dates are read from a Google Calendar — whatever e
 1. Create a Google Cloud service account and download its JSON key.
 2. Share the target Google Calendar with the service account's email (read access is enough).
 3. Set `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (with literal `\n` line breaks), and `GOOGLE_CALENDAR_ID` in `.env.local` / Vercel.
-4. The `sync-calendar` cron job (`vercel.json`) pulls events every 4 hours, starting at 12:00 AM NZDT (schedule: `0 3,7,11,15,19,23 * * *`, UTC). To sync manually: `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.vercel.app/api/cron/sync-calendar`
+4. The `sync-calendar` cron job (`vercel.json`) pulls events once daily at 3:00 PM NZDT (schedule: `0 2 * * *`, UTC — the Vercel Hobby plan only allows one run per day per cron job). To sync manually: `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.vercel.app/api/cron/sync-calendar`
 
-> Note: Vercel Cron runs in UTC with no DST awareness. The schedule targets 12:00/4:00/8:00 AM/PM NZDT (daylight saving); during NZST (non-DST months) each run will land 1 hour earlier local time.
+> Note: Vercel Cron runs in UTC with no DST awareness. The schedule targets 3:00 PM NZDT (daylight saving); during NZST (non-DST months) the sync will run around 2:00 PM instead.
 
 ### Headcount alerts
 

@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { GALLERY_IMAGES } from "@/lib/constants";
 import { Trans } from "@/components/Trans";
 import { useLanguage } from "@/context/LanguageContext";
+import { selectWeeklyRotation } from "@/lib/gallery-rotation";
 import { pickLocale } from "@/lib/sanity";
 import type { CmsGalleryImage } from "@/lib/sanity-queries";
 
@@ -34,14 +36,27 @@ const GALLERY_SHAPES = [
 export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
   const { lang } = useLanguage();
 
-  const galleryImages = (
-    images && images.length > 0
-      ? images.map((img) => ({
-          src: img.src,
-          alt: img.alt ? pickLocale(img.alt, lang) : "Gallery photo",
-        }))
-      : GALLERY_IMAGES.map((img) => ({ src: img.src, alt: img.alt }))
-  ).slice(0, GALLERY_DISPLAY_LIMIT);
+  // fullIndex tracks each photo's position in the complete list (not the
+  // rotated subset below) so a click opens the Lightbox — which carousels
+  // through every photo, unrotated — at the actual matching photo.
+  const fullGalleryImages = useMemo(() => {
+    const full =
+      images && images.length > 0
+        ? images.map((img) => ({
+            src: img.src,
+            alt: img.alt ? pickLocale(img.alt, lang) : "Gallery photo",
+          }))
+        : GALLERY_IMAGES.map((img) => ({ src: img.src, alt: img.alt }));
+    return full.map((img, fullIndex) => ({ ...img, fullIndex }));
+  }, [images, lang]);
+
+  // Deterministic weekly rotation (see lib/gallery-rotation.ts) — the same
+  // shuffled subset shows to everyone until it rolls over next Wednesday,
+  // rather than reshuffling on every page load.
+  const galleryImages = useMemo(
+    () => selectWeeklyRotation(fullGalleryImages, GALLERY_DISPLAY_LIMIT),
+    [fullGalleryImages],
+  );
 
   return (
     <section className="section" id="gallery" data-screen-label="Gallery">
@@ -64,9 +79,10 @@ export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
               style={i > 0 ? { animationDelay: `${i * 0.1}s` } : undefined}
               role="button"
               tabIndex={0}
-              onClick={() => window.openLightbox?.(i)}
+              onClick={() => window.openLightbox?.(img.fullIndex)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") window.openLightbox?.(i);
+                if (e.key === "Enter" || e.key === " ")
+                  window.openLightbox?.(img.fullIndex);
               }}
             >
               <img src={img.src} alt={img.alt} />

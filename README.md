@@ -54,6 +54,12 @@ Renewal reminders, failed-payment (dunning), and expiring-card emails for monthl
 
 These use the email already attached to each Stripe Customer (set at signup — see `app/api/create-subscription/route.ts`) and your account's [branding settings](https://dashboard.stripe.com/settings/branding). Test emails only send in a sandbox to your verified email domain or team member addresses.
 
+### Casual booking confirmation & play day reminders
+
+On a successful **casual card payment**, Stripe emails the customer its own receipt/invoice, and the webhook (`app/api/stripe-webhook`) additionally sends a Resend confirmation email with the play day's date, time, and location — same visual template as the day-before reminder below.
+
+A day-before cron (`/api/cron/membership-reminders`, schedule in `vercel.json`) sends a "see you tomorrow" reminder — date, time, location — to everyone confirmed for tomorrow's play day: active monthly/quarterly members **and** casual bookers with a confirmed booking for that date. Each booking/membership is only ever reminded once per play day (dedup via `bookings.reminder_sent_at` and the `membership_reminders_sent` table).
+
 ### Play day roster
 
 Every day at 4:00 PM NZ time, a Vercel Cron job (`vercel.json` → `/api/cron/send-roster`) checks whether there's a session scheduled for that date (from the synced Google Calendar — not limited to Fridays) and, if so, emails the full player list to `CLUB_ROSTER_EMAIL` (default `threewolvesbadminton@gmail.com`). If no session is scheduled that day, it's a no-op. The roster combines:

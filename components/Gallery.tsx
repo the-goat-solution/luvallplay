@@ -12,13 +12,24 @@ declare global {
   }
 }
 
-// Bento/masonry tile shapes by position, for up to 8 displayed photos — fixed
-// spans rather than each photo's own aspect ratio, so the layout stays a
-// consistent, deliberate shape no matter what admins upload. Any photos
-// beyond 8 are still reachable via the Lightbox carousel (see Lightbox.tsx,
+// Bento/masonry tile shapes by position, for up to 10 displayed photos —
+// fixed spans rather than each photo's own aspect ratio, so the layout stays
+// a consistent, deliberate shape no matter what admins upload. Any photos
+// beyond 10 are still reachable via the Lightbox carousel (see Lightbox.tsx,
 // which reads the full `images` list independently of what's rendered here).
-const GALLERY_DISPLAY_LIMIT = 8;
-const GALLERY_SHAPES = ["gi-big", "", "gi-wide", "gi-tall", "", "gi-wide", "", ""];
+const GALLERY_DISPLAY_LIMIT = 10;
+const GALLERY_SHAPES = [
+  "gi-big",
+  "",
+  "gi-wide",
+  "gi-tall",
+  "",
+  "gi-wide",
+  "",
+  "",
+  "",
+  "",
+];
 
 export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
   const { lang } = useLanguage();

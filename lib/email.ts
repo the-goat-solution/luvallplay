@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import type { RosterEntry } from "./db";
+import type { MembershipDay, MembershipTier } from "./constants";
 import {
   contactFooterNote,
   contactFooterNoteText,
@@ -31,9 +32,14 @@ const PLAN_LABEL: Record<RosterEntry["type"], string> = {
   quarterly: "Quarterly member",
 };
 
-const PLAN_NAME: Record<"monthly" | "quarterly", string> = {
+const PLAN_NAME: Record<MembershipTier, string> = {
   monthly: "Monthly",
   quarterly: "Quarterly",
+};
+
+const DAY_LABEL: Record<MembershipDay, string> = {
+  friday: "Friday",
+  wednesday: "Wednesday",
 };
 
 export async function sendRosterEmail(
@@ -234,7 +240,8 @@ export async function sendMembershipConfirmationEmail(
   to: string,
   input: {
     firstName: string;
-    plan: "monthly" | "quarterly";
+    plan: MembershipTier;
+    day: MembershipDay;
     priceNzd: number;
     recurring: boolean;
     periodStart: string;
@@ -248,6 +255,8 @@ export async function sendMembershipConfirmationEmail(
   }
 
   const planName = PLAN_NAME[input.plan];
+  const dayName = DAY_LABEL[input.day];
+  const planTitle = `${planName} (${dayName})`;
   const billingNote = input.recurring
     ? `renews automatically every ${input.plan === "monthly" ? "4 weeks" : "12 weeks"}`
     : "a single, one-time payment";
@@ -256,26 +265,26 @@ export async function sendMembershipConfirmationEmail(
 
   const accessParagraph = input.delayed
     ? paragraph(
-        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today. There wasn't an open spot on the very next Friday session, so your membership access starts on <strong>${escapeHtml(displayStart)}</strong> — the next Friday session with room. You were charged today either way; your access simply begins then.`,
+        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today. There wasn't an open spot on the very next ${dayName} session, so your membership access starts on <strong>${escapeHtml(displayStart)}</strong> — the next ${dayName} session with room. You were charged today either way; your access simply begins then.`,
       )
     : paragraph(
-        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today, and your membership is active immediately — you're welcome at every Friday session from now through <strong>${escapeHtml(displayEnd)}</strong>.`,
+        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today, and your membership is active immediately — you're welcome at every ${dayName} session from now through <strong>${escapeHtml(displayEnd)}</strong>.`,
       );
 
   const bodyHtml = `
     ${heading(`Welcome to Three Wolves, ${escapeHtml(input.firstName)}!`)}
-    ${paragraph(`We're so glad to have you — your <strong>${planName}</strong> membership is confirmed (${billingNote}).`)}
+    ${paragraph(`We're so glad to have you — your <strong>${planTitle}</strong> membership is confirmed (${billingNote}).`)}
     ${accessParagraph}
-    ${paragraph(`Membership window: <strong>${escapeHtml(displayStart)}</strong> to <strong>${escapeHtml(displayEnd)}</strong>. You can show up to any Friday session in that window — no need to book individual sessions. See you on court!`)}
+    ${paragraph(`Membership window: <strong>${escapeHtml(displayStart)}</strong> to <strong>${escapeHtml(displayEnd)}</strong>. You can show up to any ${dayName} session in that window — no need to book individual sessions. See you on court!`)}
     ${contactFooterNote()}
   `;
   const text = [
     `Welcome to Three Wolves, ${input.firstName}!`,
     "",
-    `We're so glad to have you — your ${planName} membership is confirmed (${billingNote}).`,
+    `We're so glad to have you — your ${planTitle} membership is confirmed (${billingNote}).`,
     "",
     input.delayed
-      ? `You were charged NZD $${input.priceNzd.toFixed(2)} today. There wasn't an open spot on the very next Friday session, so your membership access starts on ${displayStart} — the next Friday session with room.`
+      ? `You were charged NZD $${input.priceNzd.toFixed(2)} today. There wasn't an open spot on the very next ${dayName} session, so your membership access starts on ${displayStart} — the next ${dayName} session with room.`
       : `You were charged NZD $${input.priceNzd.toFixed(2)} today, and your membership is active immediately.`,
     "",
     `Membership window: ${displayStart} to ${displayEnd}. See you on court!`,
@@ -286,7 +295,7 @@ export async function sendMembershipConfirmationEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `Welcome to Three Wolves — ${planName} membership confirmed`,
+    subject: `Welcome to Three Wolves — ${planTitle} membership confirmed`,
     html: renderEmailLayout({ title: "Membership confirmed", bodyHtml }),
     text,
   });
@@ -296,7 +305,8 @@ export async function sendMembershipReminderEmail(
   to: string,
   input: {
     firstName: string;
-    plan: "monthly" | "quarterly";
+    plan: MembershipTier;
+    day: MembershipDay;
     tomorrowDate: string;
     sessionTime: string | null;
     sessionLocation: string | null;
@@ -308,6 +318,8 @@ export async function sendMembershipReminderEmail(
     throw new Error("EMAIL_FROM is not configured");
   }
 
+  const dayName = DAY_LABEL[input.day];
+  const planTitle = `${PLAN_NAME[input.plan]} (${dayName})`;
   const displayDate = formatEmailDate(input.tomorrowDate);
   const location = input.sessionLocation || "Graham Condon Recreation and Sport Centre";
   const whenWhere = input.sessionTime
@@ -323,7 +335,7 @@ export async function sendMembershipReminderEmail(
   const remainingListHtml =
     otherDates.length > 0
       ? `
-        ${paragraph("Your other remaining Friday sessions this membership period:")}
+        ${paragraph(`Your other remaining ${dayName} sessions this membership period:`)}
         <ul style="margin:0 0 16px;padding-left:20px;color:#3a526a">
           ${otherDates.map((d) => `<li style="margin-bottom:4px">${escapeHtml(formatEmailDate(d))}</li>`).join("")}
         </ul>
@@ -332,15 +344,15 @@ export async function sendMembershipReminderEmail(
 
   const bodyHtml = `
     ${heading("See you tomorrow!")}
-    ${paragraph(`Hi ${escapeHtml(input.firstName)}, just a friendly reminder that you're on for play tomorrow, <strong>${escapeHtml(displayDate)}</strong>, ${whenWhere} — on your ${PLAN_NAME[input.plan]} membership.`)}
+    ${paragraph(`Hi ${escapeHtml(input.firstName)}, just a friendly reminder that you're on for play tomorrow, <strong>${escapeHtml(displayDate)}</strong>, ${whenWhere} — on your ${planTitle} membership.`)}
     ${remainingListHtml}
     ${paragraph("Grab your racket and we'll see you on court!")}
     ${contactFooterNote()}
   `;
   const text = [
-    `Hi ${input.firstName}, just a friendly reminder that you're on for play tomorrow, ${displayDate}, ${whenWhereText} — on your ${PLAN_NAME[input.plan]} membership.`,
+    `Hi ${input.firstName}, just a friendly reminder that you're on for play tomorrow, ${displayDate}, ${whenWhereText} — on your ${planTitle} membership.`,
     ...(otherDates.length > 0
-      ? ["", "Your other remaining Friday sessions this membership period:", ...otherDates.map((d) => `- ${formatEmailDate(d)}`)]
+      ? ["", `Your other remaining ${dayName} sessions this membership period:`, ...otherDates.map((d) => `- ${formatEmailDate(d)}`)]
       : []),
     "",
     "Grab your racket and we'll see you on court!",

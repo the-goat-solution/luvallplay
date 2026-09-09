@@ -11,10 +11,20 @@ import { StripeCardForm } from "@/components/payment/StripeCardForm";
 import { LoadingIcon } from "@/components/LoadingIcon";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import {
+  isMembershipPlan,
   resolveAllPlanDisplays,
+  splitPlanId,
   type CmsPricingPlan,
+  type PlanDisplay,
 } from "@/lib/pricing-plans";
 import { validateContact, type ContactErrors } from "@/lib/validate-contact";
+
+type BlockedReason = "sessions_full" | "already_member" | null;
+
+const DAY_NAME: Record<"en" | "vi", Record<string, string>> = {
+  en: { friday: "Friday", wednesday: "Wednesday" },
+  vi: { friday: "Thứ Sáu", wednesday: "Thứ Tư" },
+};
 
 export function MembershipModal({
   pricingPlans,
@@ -40,7 +50,8 @@ export function MembershipModal({
   const [turnstileToken, setTurnstileToken] = useState("");
   const [errors, setErrors] = useState<ContactErrors>({});
   const [periodStart, setPeriodStart] = useState<string | null>(null);
-  const [blocked, setBlocked] = useState(false);
+  const [blockedReason, setBlockedReason] = useState<BlockedReason>(null);
+  const [blockedDay, setBlockedDay] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const showSubmitting = useDelayedLoading(submitting);
 
@@ -50,7 +61,8 @@ export function MembershipModal({
     setClientSecret(null);
     setErrors({});
     setPeriodStart(null);
-    setBlocked(false);
+    setBlockedReason(null);
+    setBlockedDay(null);
     setSubmitting(false);
     document.body.style.overflow = "";
   };
@@ -62,7 +74,8 @@ export function MembershipModal({
       setRecurring(true);
       setErrors({});
       setPeriodStart(null);
-      setBlocked(false);
+      setBlockedReason(null);
+      setBlockedDay(null);
     }
   }, [open]);
 
@@ -74,13 +87,52 @@ export function MembershipModal({
     () => Object.fromEntries(planDisplays.map((p) => [p.planId, p])),
     [planDisplays],
   );
+  const casualPlan = planDisplays.find((p) => p.planId === "casual");
+  const fridayPlans = planDisplays.filter(
+    (p) => splitPlanId(p.planId)?.day === "friday",
+  );
+  const wednesdayPlans = planDisplays.filter(
+    (p) => splitPlanId(p.planId)?.day === "wednesday",
+  );
+  const groupHeadingStyle = {
+    fontFamily: "var(--font-display)",
+    fontSize: 15,
+    color: "var(--navy)",
+    fontWeight: 700,
+    marginBottom: 10,
+  } as const;
+
+  const renderPlanOption = (plan: PlanDisplay) => (
+    <div
+      key={plan.planId}
+      className={`plan-opt${selectedPlan === plan.planId ? " sel" : ""}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => setSelectedPlan(plan.planId)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") setSelectedPlan(plan.planId);
+      }}
+    >
+      <div className="plan-radio">
+        <div className="plan-dot" />
+      </div>
+      <div className="plan-opt-info">
+        <div className="plan-opt-name">{plan.name}</div>
+        <div className="plan-opt-desc">{plan.description}</div>
+      </div>
+      <div className="plan-opt-price">{plan.modalPriceLabel}</div>
+    </div>
+  );
 
   const createSubscription = async () => {
+    const split = splitPlanId(selectedPlan);
+    if (!split) return; // casual never reaches this path — see next()
     const res = await fetch("/api/create-subscription", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        plan: selectedPlan,
+        plan: split.tier,
+        day: split.day,
         firstName: fn.trim(),
         lastName: ln.trim(),
         email: email.trim(),
@@ -90,8 +142,12 @@ export function MembershipModal({
       }),
     });
     const data = await res.json();
-    if (res.status === 409 && data.error === "sessions_full") {
-      setBlocked(true);
+    if (
+      res.status === 409 &&
+      (data.error === "sessions_full" || data.error === "already_member")
+    ) {
+      setBlockedReason(data.error);
+      setBlockedDay(typeof data.day === "string" ? data.day : null);
       return;
     }
     if (!res.ok) throw new Error(data.error ?? "Subscription setup failed");
@@ -121,7 +177,7 @@ export function MembershipModal({
         return;
       }
       setErrors({});
-      if (selectedPlan === "monthly" || selectedPlan === "quarterly") {
+      if (isMembershipPlan(selectedPlan)) {
         setSubmitting(true);
         try {
           await createSubscription();
@@ -142,6 +198,8 @@ export function MembershipModal({
 
   const selected = planById[selectedPlan] ?? planDisplays[1];
   const { name, period, priceNzd: price } = selected;
+  const selectedDay = splitPlanId(selectedPlan)?.day;
+  const selectedDayLabel = selectedDay ? DAY_NAME[lang][selectedDay] : "";
 
   const clearError = (key: keyof ContactErrors) => {
     setErrors((prev) => {
@@ -158,7 +216,7 @@ export function MembershipModal({
       onClose={close}
       title={<Trans k="modal_join" />}
       footer={
-        !blocked && step < 4 ? (
+        !blockedReason && step < 4 ? (
           <>
             {step > 1 && step < 4 && (
               <button
@@ -191,11 +249,20 @@ export function MembershipModal({
         ) : undefined
       }
     >
-      {blocked ? (
+      {blockedReason ? (
         <div className="success-screen">
           <div className="success-icon">😕</div>
           <h3 className="success-title">
-            <Trans k="mem_sessions_full" />
+            <Trans
+              k={
+                blockedReason === "already_member"
+                  ? "mem_already_member"
+                  : "mem_sessions_full"
+              }
+              vars={
+                blockedDay ? { day: DAY_NAME[lang][blockedDay] } : undefined
+              }
+            />
           </h3>
         </div>
       ) : (
@@ -213,41 +280,34 @@ export function MembershipModal({
               >
                 Choose the membership that works best for you.
               </p>
-              <div className="plan-pick">
-                {planDisplays.map((plan) => (
-                  <div
-                    key={plan.planId}
-                    className={`plan-opt${selectedPlan === plan.planId ? " sel" : ""}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedPlan(plan.planId)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ")
-                        setSelectedPlan(plan.planId);
-                    }}
-                  >
-                    <div className="plan-radio">
-                      <div className="plan-dot" />
-                    </div>
-                    <div className="plan-opt-info">
-                      <div className="plan-opt-name">{plan.name}</div>
-                      <div className="plan-opt-desc">{plan.description}</div>
-                    </div>
-                    <div className="plan-opt-price">{plan.modalPriceLabel}</div>
+              {casualPlan && (
+                <div className="plan-pick" style={{ marginBottom: 18 }}>
+                  {renderPlanOption(casualPlan)}
+                </div>
+              )}
+              {fridayPlans.length > 0 && (
+                <div style={{ marginBottom: 18 }}>
+                  <h4 style={groupHeadingStyle}>
+                    <Trans k="mem_group_friday" />
+                  </h4>
+                  <div className="plan-pick">
+                    {fridayPlans.map(renderPlanOption)}
                   </div>
-                ))}
-              </div>
-              {(selectedPlan === "monthly" || selectedPlan === "quarterly") && (
+                </div>
+              )}
+              {wednesdayPlans.length > 0 && (
                 <div>
-                  <h4
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontSize: 15,
-                      color: "var(--navy)",
-                      fontWeight: 700,
-                      marginBottom: 10,
-                    }}
-                  >
+                  <h4 style={groupHeadingStyle}>
+                    <Trans k="mem_group_wednesday" />
+                  </h4>
+                  <div className="plan-pick">
+                    {wednesdayPlans.map(renderPlanOption)}
+                  </div>
+                </div>
+              )}
+              {isMembershipPlan(selectedPlan) && (
+                <div>
+                  <h4 style={groupHeadingStyle}>
                     <Trans k="mem_billing" />
                   </h4>
                   <div className="plan-pick">
@@ -319,7 +379,10 @@ export function MembershipModal({
                 }}
               >
                 {periodStart ? (
-                  <Trans k="mem_start_delayed" vars={{ date: periodStart }} />
+                  <Trans
+                    k="mem_start_delayed"
+                    vars={{ date: periodStart, day: selectedDayLabel }}
+                  />
                 ) : (
                   <Trans k="mem_start_today" />
                 )}
@@ -353,10 +416,13 @@ export function MembershipModal({
                 {periodStart ? (
                   <Trans
                     k="confirm_join_body_delayed"
-                    vars={{ date: periodStart }}
+                    vars={{ date: periodStart, day: selectedDayLabel }}
                   />
                 ) : (
-                  <Trans k="confirm_join_body" />
+                  <Trans
+                    k="confirm_join_body"
+                    vars={{ day: selectedDayLabel }}
+                  />
                 )}
               </p>
             </div>

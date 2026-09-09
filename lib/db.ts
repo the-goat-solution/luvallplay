@@ -12,12 +12,19 @@ types.setTypeParser(1082, (val: string) => val);
 import {
   MEMBERSHIP_CYCLE_DAYS,
   MEMBERSHIP_DAYS,
+  MEMBERSHIP_DAY_TO_DOW,
   MEMBERSHIP_START_SEARCH_DAYS,
   PENDING_MEMBERSHIP_HOLD_MINUTES,
   SESSION_CAPACITY,
   maxPlayersForCourts,
+  type MembershipDay,
+  type MembershipTier,
 } from "./constants";
-import { defaultCourtsForDate, getClubToday, isFriday } from "./dates";
+import {
+  defaultCourtsForDate,
+  getClubToday,
+  getMembershipDayForDate,
+} from "./dates";
 
 // Every route touching the DB calls ensureTables() first, and it's ~24
 // sequential DDL statements — cheap individually but a heavy tax when paid
@@ -93,6 +100,9 @@ async function ensureTablesImpl() {
   // Guards the additive period_end advance on renewal (see applyRenewal)
   // against Stripe's at-least-once webhook delivery re-granting a cycle.
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_renewal_invoice_id TEXT;`;
+  // Which weekday's membership pool this row grants access to — defaults to
+  // 'friday' since every membership predating this column was Friday-only.
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS day TEXT NOT NULL DEFAULT 'friday';`;
   await sql`
     CREATE TABLE IF NOT EXISTS donations (
       id SERIAL PRIMARY KEY,
@@ -205,10 +215,15 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
 }> {
   if (dates.length === 0) return { spots: {}, signedUp: {} };
 
-  // Each date may default to a different court count (Friday vs. not), so
-  // the per-date default is computed in JS and zipped with the dates array
-  // via a paired unnest — a flat $2 like max_spots below can't vary per row.
+  // Each date may default to a different court count (membership day vs.
+  // not), so the per-date default is computed in JS and zipped with the
+  // dates array via a paired unnest — a flat $2 like max_spots below can't
+  // vary per row.
   const courtsDefaults = dates.map(defaultCourtsForDate);
+  // Each date's membership day (or null for casual-only), zipped with dates
+  // the same way, so the member-count query below only counts members whose
+  // day matches that specific date.
+  const membershipDays = dates.map(getMembershipDayForDate);
 
   // The `sql` tagged template only types params as Primitive (no arrays), so
   // array binding goes through the underlying pool's `.query()` instead —
@@ -227,20 +242,22 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
       [dates],
     ),
     // Each date gets its own correctly-scoped member count (a member only
-    // counts toward dates within their period_start..period_end), rather
-    // than one global count applied uniformly to every date in the batch.
+    // counts toward dates within their period_start..period_end AND whose
+    // day matches that date's membership day — a NULL day for a casual-only
+    // date never matches m.day, so it naturally counts zero), rather than
+    // one global count applied uniformly to every date in the batch.
     // date::text avoids handing back a JS Date — @vercel/postgres's tagged-
     // template and .query() paths parse DATE columns inconsistently across
     // process timezones otherwise (verified: shifts a day under
     // Pacific/Auckland), so every date column in this file is cast to text
     // at the SQL level rather than relying on driver-side type parsing.
     sql.query(
-      `SELECT d::text AS date, COUNT(m.id)::int AS active_members
-       FROM unnest($1::date[]) AS d
+      `SELECT t.d::text AS date, COUNT(m.id)::int AS active_members
+       FROM unnest($1::date[], $2::text[]) AS t(d, day)
        LEFT JOIN memberships m
-         ON m.status = 'active' AND m.period_start <= d AND m.period_end >= d
-       GROUP BY d;`,
-      [dates],
+         ON m.status = 'active' AND m.period_start <= t.d AND m.period_end >= t.d AND m.day = t.day
+       GROUP BY t.d;`,
+      [dates, membershipDays],
     ),
   ]);
 
@@ -261,8 +278,10 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   const signedUp: Record<string, number> = {};
   for (const date of dates) {
     const booked = bookedByDate.get(date) ?? 0;
-    // Members only occupy capacity on Fridays — see getActiveMemberCountForDate.
-    const activeMembers = isFriday(date) ? (membersByDate.get(date) ?? 0) : 0;
+    // Already scoped to the right membership day (or zero for casual-only
+    // dates) by the day-matched join above — see getActiveMemberCountForDate
+    // for the equivalent single-date query.
+    const activeMembers = membersByDate.get(date) ?? 0;
     const maxPlayers = maxPlayersForCourts(
       courtsByDate.get(date) ?? defaultCourtsForDate(date),
     );
@@ -284,28 +303,30 @@ export async function reserveBookingSlot(
 ): Promise<boolean> {
   await ensureSession(date);
   // Casual capacity is that play day's court-derived max minus current
-  // active members whose period covers this date, so the atomic guard must
-  // account for both to avoid overselling the court. The CASE mirrors
-  // COURTS_TO_MAX_PLAYERS in lib/constants.ts — keep the two in sync. See
-  // getAvailableSpots for why this reads sessions.courts rather than the
-  // stale sessions.max_spots column.
+  // active members whose period covers this date AND whose day matches this
+  // date's membership day, so the atomic guard must account for both to
+  // avoid overselling the court. The CASE mirrors COURTS_TO_MAX_PLAYERS in
+  // lib/constants.ts — keep the two in sync. See getAvailableSpots for why
+  // this reads sessions.courts rather than the stale sessions.max_spots
+  // column. The day CASE mirrors MEMBERSHIP_DAY_TO_DOW; a NULL result (a
+  // casual-only day) never matches memberships.day, so the subquery counts
+  // zero on those days without needing a separate ELSE 0 branch.
   const { rowCount } = await sql`
     UPDATE sessions
     SET booked_spots = booked_spots + 1
     WHERE date = ${date}
       AND booked_spots < (
         CASE courts
-          WHEN 1 THEN 7
+          WHEN 1 THEN 6
           WHEN 2 THEN 12
           WHEN 3 THEN 18
           WHEN 4 THEN 22
           ELSE ${SESSION_CAPACITY}
         END
       ) - (
-        CASE WHEN EXTRACT(DOW FROM date) = 5 THEN (
-          SELECT COUNT(*)::int FROM memberships
-          WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
-        ) ELSE 0 END
+        SELECT COUNT(*)::int FROM memberships
+        WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
+          AND day = CASE EXTRACT(DOW FROM date) WHEN 5 THEN 'friday' WHEN 3 THEN 'wednesday' END
       );
   `;
   if (!rowCount) return false;
@@ -347,20 +368,24 @@ export type MembershipAssignment =
       periodStart: string;
       periodEnd: string;
     }
-  | { blocked: true };
+  | { blocked: true; reason: "sessions_full" | "already_member" };
 
-// Finds the nearest upcoming Friday play day (monthly/quarterly membership
-// access only applies on Fridays — every other day is casual-bookings-only)
-// that still has room, and atomically reserves a 'pending' membership row
-// starting there, so the member's access window never overlaps a day that's
-// already full. Locks
-// each candidate session row in turn (FOR UPDATE) so two concurrent
+// Finds the nearest upcoming play day for the given membership day (Friday
+// or Wednesday — every other day is casual-bookings-only) that still has
+// room, and atomically reserves a 'pending' membership row starting there,
+// so the member's access window never overlaps a day that's already full.
+// Locks each candidate session row in turn (FOR UPDATE) so two concurrent
 // signups can't both claim the same last-open spot — see
 // PENDING_MEMBERSHIP_HOLD_MINUTES for why an abandoned checkout doesn't
-// block a spot forever. Returns `{ blocked: true }` if no known upcoming
-// play day (within MEMBERSHIP_START_SEARCH_DAYS) currently has room.
+// block a spot forever. Returns `{ blocked: true, reason: "sessions_full" }`
+// if no known upcoming play day (within MEMBERSHIP_START_SEARCH_DAYS)
+// currently has room, or `{ blocked: true, reason: "already_member" }` if
+// this email already has an active (or recently-pending) membership for the
+// same day — a member can hold one Friday AND one Wednesday membership at
+// once, just not two of the same day.
 export async function assignAndReserveMembershipAccessStart(
-  plan: "monthly" | "quarterly",
+  plan: MembershipTier,
+  day: MembershipDay,
   member: {
     email: string;
     firstName: string;
@@ -370,17 +395,46 @@ export async function assignAndReserveMembershipAccessStart(
   },
 ): Promise<MembershipAssignment> {
   const { dateKey: clubToday, cutoffPassed } = getClubToday();
+  const dow = MEMBERSHIP_DAY_TO_DOW[day];
+  const lockKey = `${member.email.toLowerCase()}:${day}`;
 
   const client = await db.connect();
   try {
+    // Session-level advisory lock (not transaction-scoped, so it spans every
+    // per-candidate transaction below) held for this whole function, so the
+    // duplicate-membership check and the capacity search + insert that
+    // follows it are serialized against any other concurrent signup for the
+    // same email+day. Without this, two requests racing each other could
+    // both pass the check below before either has committed a row.
+    await client.query(`SELECT pg_advisory_lock(hashtext($1));`, [lockKey]);
+
+    // A lapsed one-time (non-recurring) membership never transitions out of
+    // 'active' (nothing re-checks it once period_end passes), so this must
+    // require period_end >= today rather than trusting status alone —
+    // otherwise a member whose old plan already ended could never sign up
+    // again for the same day.
+    const { rows: conflictRows } = await client.query(
+      `SELECT id FROM memberships
+       WHERE lower(email) = lower($1) AND day = $2
+         AND (
+           (status IN ('active', 'trialing', 'past_due') AND (period_end IS NULL OR period_end >= $3))
+           OR (status = 'pending' AND created_at > NOW() - ($4 * INTERVAL '1 minute'))
+         )
+       LIMIT 1;`,
+      [member.email, day, clubToday, PENDING_MEMBERSHIP_HOLD_MINUTES],
+    );
+    if (conflictRows.length > 0) {
+      return { blocked: true, reason: "already_member" };
+    }
+
     const { rows: candidates } = await client.query(
       `SELECT date::text AS date FROM sessions
        WHERE google_event_id IS NOT NULL
-         AND EXTRACT(DOW FROM date) = 5
-         AND date >= ($1::date + $2::int)
-         AND date <= ($1::date + $3::int)
+         AND EXTRACT(DOW FROM date) = $2
+         AND date >= ($1::date + $3::int)
+         AND date <= ($1::date + $4::int)
        ORDER BY date;`,
-      [clubToday, cutoffPassed ? 1 : 0, MEMBERSHIP_START_SEARCH_DAYS],
+      [clubToday, dow, cutoffPassed ? 1 : 0, MEMBERSHIP_START_SEARCH_DAYS],
     );
 
     for (const row of candidates) {
@@ -402,12 +456,12 @@ export async function assignAndReserveMembershipAccessStart(
 
         const { rows: memberCountRows } = await client.query(
           `SELECT COUNT(*)::int AS count FROM memberships
-           WHERE period_start <= $1 AND period_end >= $1
+           WHERE day = $3 AND period_start <= $1 AND period_end >= $1
              AND (
                status = 'active'
                OR (status = 'pending' AND created_at > NOW() - ($2 * INTERVAL '1 minute'))
              );`,
-          [date, PENDING_MEMBERSHIP_HOLD_MINUTES],
+          [date, PENDING_MEMBERSHIP_HOLD_MINUTES, day],
         );
         const activeMembers = (memberCountRows[0] as { count: number }).count;
 
@@ -415,12 +469,13 @@ export async function assignAndReserveMembershipAccessStart(
           const periodEnd = addDays(date, MEMBERSHIP_DAYS[plan]);
           const { rows: inserted } = await client.query(
             `INSERT INTO memberships
-               (email, plan, first_name, last_name, phone, period_start, period_end, recurring, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+               (email, plan, day, first_name, last_name, phone, period_start, period_end, recurring, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
              RETURNING id;`,
             [
               member.email,
               plan,
+              day,
               member.firstName,
               member.lastName,
               member.phone,
@@ -444,8 +499,11 @@ export async function assignAndReserveMembershipAccessStart(
       }
     }
 
-    return { blocked: true };
+    return { blocked: true, reason: "sessions_full" };
   } finally {
+    await client
+      .query(`SELECT pg_advisory_unlock(hashtext($1));`, [lockKey])
+      .catch(() => {});
     client.release();
   }
 }
@@ -573,17 +631,18 @@ export async function listAllSessionDates(): Promise<string[]> {
   return rows.map((row) => (row as { date: string }).date);
 }
 
-// Members whose period covers this specific date — the correct scoping for
-// any per-play-day capacity calculation. Mirrors getRosterForDate's predicate.
-// Membership access only applies on Fridays — every other play day is
-// casual-bookings-only, so members never occupy capacity there.
+// Members whose period covers this specific date AND whose day matches this
+// date's membership day — the correct scoping for any per-play-day capacity
+// calculation. Mirrors getRosterForDate's predicate. A casual-only day (no
+// membership day) never has members occupying capacity.
 export async function getActiveMemberCountForDate(
   date: string,
 ): Promise<number> {
-  if (!isFriday(date)) return 0;
+  const day = getMembershipDayForDate(date);
+  if (!day) return 0;
   const { rows } = await sql`
     SELECT COUNT(*)::int AS count FROM memberships
-    WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date};
+    WHERE status = 'active' AND day = ${day} AND period_start <= ${date} AND period_end >= ${date};
   `;
   return (rows[0] as { count: number })?.count ?? 0;
 }
@@ -757,12 +816,14 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     WHERE session_date = ${date} AND status = 'confirmed'
     ORDER BY created_at ASC;
   `;
-  // Membership access only applies on Fridays — see getActiveMemberCountForDate.
-  const { rows: memberRows } = isFriday(date)
+  // Membership access only applies on a membership day — see
+  // getActiveMemberCountForDate.
+  const rosterDay = getMembershipDayForDate(date);
+  const { rows: memberRows } = rosterDay
     ? await sql`
         SELECT first_name, last_name, email, phone, plan
         FROM memberships
-        WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
+        WHERE status = 'active' AND day = ${rosterDay} AND period_start <= ${date} AND period_end >= ${date}
         ORDER BY created_at ASC;
       `
     : { rows: [] };
@@ -797,7 +858,8 @@ export type MembershipRow = {
   name: string;
   email: string;
   phone: string | null;
-  plan: "monthly" | "quarterly";
+  plan: MembershipTier;
+  day: MembershipDay;
   periodStart: string | null;
   periodEnd: string | null;
   status: string;
@@ -814,6 +876,7 @@ function mapMembershipRow(r: {
   last_name: string | null;
   phone: string | null;
   plan: string;
+  day: string | null;
   period_start: string | null;
   period_end: string | null;
   status: string;
@@ -828,6 +891,7 @@ function mapMembershipRow(r: {
     email: r.email,
     phone: r.phone,
     plan: r.plan === "quarterly" ? "quarterly" : "monthly",
+    day: r.day === "wednesday" ? "wednesday" : "friday",
     periodStart: r.period_start,
     periodEnd: r.period_end,
     status: r.status,
@@ -845,7 +909,7 @@ function mapMembershipRow(r: {
 // until Stripe's period-end webhook flips the status).
 export async function listMemberships(): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
+    SELECT id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due')
     ORDER BY plan, created_at DESC;
@@ -859,7 +923,7 @@ export async function getMembershipById(
   id: number,
 ): Promise<MembershipRow | null> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
+    SELECT id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
     FROM memberships
     WHERE id = ${id};
   `;
@@ -873,7 +937,7 @@ export async function listActiveMembershipsByEmail(
   email: string,
 ): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
+    SELECT id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due')
       AND lower(email) = lower(${email})
@@ -929,7 +993,7 @@ export async function activateMembershipByPaymentIntentId(
   const { rows } = await sql`
     UPDATE memberships SET status = 'active'
     WHERE stripe_payment_intent_id = ${paymentIntentId} AND status != 'active'
-    RETURNING id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id;
+    RETURNING id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id;
   `;
   const row = rows[0];
   return row
@@ -945,7 +1009,7 @@ export async function activateMembershipBySubscriptionId(
   const { rows } = await sql`
     UPDATE memberships SET status = 'active'
     WHERE stripe_subscription_id = ${subscriptionId} AND status != 'active'
-    RETURNING id, email, first_name, last_name, phone, plan, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id;
+    RETURNING id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id;
   `;
   const row = rows[0];
   return row
@@ -957,7 +1021,8 @@ export type MembershipReminderTarget = {
   membershipId: number;
   email: string;
   firstName: string;
-  plan: "monthly" | "quarterly";
+  plan: MembershipTier;
+  day: MembershipDay;
   periodEnd: string;
 };
 
@@ -966,11 +1031,12 @@ export type MembershipReminderTarget = {
 export async function getMembersWithPlayDayTomorrow(
   date: string,
 ): Promise<MembershipReminderTarget[]> {
-  if (!isFriday(date)) return [];
+  const membershipDay = getMembershipDayForDate(date);
+  if (!membershipDay) return [];
   const { rows } = await sql`
-    SELECT id, email, first_name, plan, period_end::text AS period_end
+    SELECT id, email, first_name, plan, day, period_end::text AS period_end
     FROM memberships
-    WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date};
+    WHERE status = 'active' AND day = ${membershipDay} AND period_start <= ${date} AND period_end >= ${date};
   `;
   return rows.map((r) => {
     const row = r as {
@@ -978,6 +1044,7 @@ export async function getMembersWithPlayDayTomorrow(
       email: string;
       first_name: string | null;
       plan: string;
+      day: string;
       period_end: string;
     };
     return {
@@ -985,24 +1052,27 @@ export async function getMembersWithPlayDayTomorrow(
       email: row.email,
       firstName: row.first_name ?? "",
       plan: row.plan === "quarterly" ? "quarterly" : "monthly",
+      day: row.day === "wednesday" ? "wednesday" : "friday",
       periodEnd: row.period_end,
     };
   });
 }
 
-// Every synced Friday play day from `fromDate` through `periodEnd`
-// (inclusive) — the "remaining sessions in their membership period" list for
-// the reminder email. Only synced (google_event_id set) dates are included,
-// matching every other bookable-date computation in the app; restricted to
-// Fridays since that's the only day membership access applies.
+// Every synced play day for the given membership day, from `fromDate`
+// through `periodEnd` (inclusive) — the "remaining sessions in their
+// membership period" list for the reminder email. Only synced
+// (google_event_id set) dates are included, matching every other
+// bookable-date computation in the app.
 export async function getRemainingSessionDatesInPeriod(
   fromDate: string,
   periodEnd: string,
+  day: MembershipDay,
 ): Promise<string[]> {
+  const dow = MEMBERSHIP_DAY_TO_DOW[day];
   const { rows } = await sql`
     SELECT date::text AS date FROM sessions
     WHERE date >= ${fromDate} AND date <= ${periodEnd} AND google_event_id IS NOT NULL
-      AND EXTRACT(DOW FROM date) = 5
+      AND EXTRACT(DOW FROM date) = ${dow}
     ORDER BY date;
   `;
   return rows.map((row) => (row as { date: string }).date);

@@ -21,7 +21,7 @@ git push origin main
 STRIPE_SECRET_KEY=sk_test_... npm run stripe:setup
 ```
 
-Add `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_QUARTERLY`, publishable key, and webhook secret to Vercel.
+Add `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_QUARTERLY` (Friday), `STRIPE_PRICE_WEDNESDAY_MONTHLY`, `STRIPE_PRICE_WEDNESDAY_QUARTERLY` (Wednesday), publishable key, and webhook secret to Vercel.
 
 Webhook URL: `https://YOUR_DOMAIN/api/stripe-webhook`
 

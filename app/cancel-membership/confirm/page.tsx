@@ -12,6 +12,11 @@ const PLAN_LABEL: Record<string, string> = {
   quarterly: "quarterly",
 };
 
+const DAY_LABEL: Record<string, string> = {
+  friday: "Friday",
+  wednesday: "Wednesday",
+};
+
 export default async function ConfirmCancelPage({
   searchParams,
 }: {
@@ -66,7 +71,7 @@ export default async function ConfirmCancelPage({
             ) : (
               <ConfirmCancelForm
                 token={token}
-                planLabel={PLAN_LABEL[membership.plan] ?? membership.plan}
+                planLabel={`${PLAN_LABEL[membership.plan] ?? membership.plan} (${DAY_LABEL[membership.day] ?? membership.day})`}
                 periodEnd={membership.periodEnd}
                 alreadyScheduled={
                   membership.cancelAtPeriodEnd || membership.status === "canceled"

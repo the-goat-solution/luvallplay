@@ -56,12 +56,14 @@ export async function GET(request: Request) {
     const remainingDates = await getRemainingSessionDatesInPeriod(
       tomorrow,
       member.periodEnd,
+      member.day,
     );
 
     try {
       await sendMembershipReminderEmail(member.email, {
         firstName: member.firstName,
         plan: member.plan,
+        day: member.day,
         tomorrowDate: tomorrow,
         sessionTime,
         sessionLocation,

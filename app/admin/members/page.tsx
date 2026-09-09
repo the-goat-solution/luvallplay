@@ -40,6 +40,8 @@ async function addCashMember(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const plan = formData.get("plan") === "quarterly" ? "quarterly" : "monthly";
+  const day = formData.get("day") === "wednesday" ? "wednesday" : "friday";
+  const dayLabel = day === "wednesday" ? "Wednesday" : "Friday";
 
   if (!firstName || !lastName || !email) {
     redirect(
@@ -49,7 +51,7 @@ async function addCashMember(formData: FormData) {
 
   await ensureTables();
 
-  const assignment = await assignAndReserveMembershipAccessStart(plan, {
+  const assignment = await assignAndReserveMembershipAccessStart(plan, day, {
     email,
     firstName,
     lastName,
@@ -57,11 +59,11 @@ async function addCashMember(formData: FormData) {
     recurring: false,
   });
   if (assignment.blocked) {
-    redirect(
-      `/admin/members?cashMemberError=${encodeURIComponent(
-        "No upcoming Friday session has room for a new membership right now.",
-      )}`,
-    );
+    const message =
+      assignment.reason === "already_member"
+        ? `This email already has an active ${dayLabel} membership.`
+        : `No upcoming ${dayLabel} session has room for a new membership right now.`;
+    redirect(`/admin/members?cashMemberError=${encodeURIComponent(message)}`);
   }
 
   const amount = MEMBERSHIP_PRICE_CENTS[plan];
@@ -76,14 +78,14 @@ async function addCashMember(formData: FormData) {
         email,
         name: `${firstName} ${lastName}`,
         phone: phone || undefined,
-        metadata: { plan },
+        metadata: { plan, day },
       }));
 
     await stripe.invoiceItems.create({
       customer: customer.id,
       amount,
       currency: "nzd",
-      description: `Three Wolves — ${plan === "monthly" ? "Monthly" : "Quarterly"} membership — cash`,
+      description: `Three Wolves — ${plan === "monthly" ? "Monthly" : "Quarterly"} Membership (${dayLabel}) — cash`,
     });
 
     const invoice = await stripe.invoices.create({
@@ -95,6 +97,7 @@ async function addCashMember(formData: FormData) {
       metadata: {
         type: "membership",
         plan,
+        day,
         firstName,
         lastName,
         email,
@@ -130,6 +133,7 @@ async function addCashMember(formData: FormData) {
     await sendMembershipConfirmationEmail(activated.email, {
       firstName: activated.name,
       plan: activated.plan,
+      day: activated.day,
       priceNzd: amount / 100,
       recurring: false,
       periodStart: activated.periodStart,
@@ -164,6 +168,7 @@ function MembersTable({
             <th style={{ padding: "6px 8px" }}>Name</th>
             <th style={{ padding: "6px 8px" }}>Email</th>
             <th style={{ padding: "6px 8px" }}>Phone</th>
+            <th style={{ padding: "6px 8px" }}>Day</th>
             <th style={{ padding: "6px 8px" }}>Renews / ends</th>
             <th style={{ padding: "6px 8px" }}>Billing</th>
             <th style={{ padding: "6px 8px" }}>Payment</th>
@@ -174,7 +179,7 @@ function MembersTable({
         <tbody>
           {members.length === 0 ? (
             <tr>
-              <td colSpan={8} style={{ padding: "10px 8px", color: "#888" }}>
+              <td colSpan={9} style={{ padding: "10px 8px", color: "#888" }}>
                 No {title.toLowerCase()}.
               </td>
             </tr>
@@ -184,6 +189,9 @@ function MembersTable({
                 <td style={{ padding: "6px 8px" }}>{m.name}</td>
                 <td style={{ padding: "6px 8px" }}>{m.email}</td>
                 <td style={{ padding: "6px 8px" }}>{m.phone ?? ""}</td>
+                <td style={{ padding: "6px 8px" }}>
+                  {m.day === "wednesday" ? "Wed" : "Fri"}
+                </td>
                 <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
                 <td style={{ padding: "6px 8px" }}>
                   {m.recurring ? "Auto-renews" : "One-time"}
@@ -279,8 +287,8 @@ export default async function MembersAdminPage() {
           </h2>
           <p style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>
             Records a Stripe customer and invoice marked as paid out-of-band
-            (cash), assigns them the next Friday session with room, and sends the
-            same welcome email a card signup would get.
+            (cash), assigns them the next session with room on the chosen day,
+            and sends the same welcome email a card signup would get.
           </p>
           <form
             action={addCashMember}
@@ -367,6 +375,24 @@ export default async function MembersAdminPage() {
               >
                 <option value="monthly">Monthly ($33)</option>
                 <option value="quarterly">Quarterly ($85)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
+                Day
+              </label>
+              <select
+                name="day"
+                defaultValue="friday"
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  fontSize: 13,
+                }}
+              >
+                <option value="friday">Friday</option>
+                <option value="wednesday">Wednesday</option>
               </select>
             </div>
             <SubmitButton

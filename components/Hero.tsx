@@ -90,7 +90,7 @@ export function Hero({
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => openMembershipModal("monthly")}
+            onClick={() => openMembershipModal("fridayMonthly")}
           >
             <Trans k="hero_cta1" />
           </button>

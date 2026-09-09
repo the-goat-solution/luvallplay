@@ -134,6 +134,7 @@ export async function POST(request: Request) {
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,
+          day: activated.day,
           priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
           recurring: activated.recurring,
           periodStart: activated.periodStart,
@@ -228,6 +229,7 @@ export async function POST(request: Request) {
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,
+          day: activated.day,
           priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
           recurring: activated.recurring,
           periodStart: activated.periodStart,
@@ -259,6 +261,7 @@ export async function POST(request: Request) {
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,
+          day: activated.day,
           priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
           recurring: false,
           periodStart: activated.periodStart,

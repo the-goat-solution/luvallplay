@@ -7,6 +7,7 @@ import { Trans } from "@/components/Trans";
 import type { PlanId } from "@/lib/constants";
 import {
   resolveAllPlanDisplays,
+  splitPlanId,
   type CmsPricingPlan,
   type PlanDisplay,
 } from "@/lib/pricing-plans";
@@ -74,6 +75,13 @@ export function Membership({
     () => resolveAllPlanDisplays(pricingPlans, lang, tr),
     [pricingPlans, lang, tr],
   );
+  const casualDisplay = displays.find((d) => d.planId === "casual");
+  const fridayDisplays = displays.filter(
+    (d) => splitPlanId(d.planId)?.day === "friday",
+  );
+  const wednesdayDisplays = displays.filter(
+    (d) => splitPlanId(d.planId)?.day === "wednesday",
+  );
 
   return (
     <section className="section section-navy" id="membership" data-screen-label="Membership">
@@ -88,15 +96,45 @@ export function Membership({
           <Trans k="mem_sub" />
         </p>
 
-        <div className="pricing-grid">
-          {displays.map((display, i) => (
-            <PriceCard
-              key={display.planId}
-              display={display}
-              delay={i > 0 ? `${i * 0.1}s` : undefined}
-            />
-          ))}
-        </div>
+        {casualDisplay && (
+          <div className="pricing-grid pricing-grid-casual">
+            <PriceCard display={casualDisplay} />
+          </div>
+        )}
+
+        {fridayDisplays.length > 0 && (
+          <div className="pricing-day-group">
+            <h3 className="pricing-day-group-title">
+              <Trans k="mem_group_friday" />
+            </h3>
+            <div className="pricing-grid">
+              {fridayDisplays.map((display, i) => (
+                <PriceCard
+                  key={display.planId}
+                  display={display}
+                  delay={i > 0 ? `${i * 0.1}s` : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {wednesdayDisplays.length > 0 && (
+          <div className="pricing-day-group">
+            <h3 className="pricing-day-group-title">
+              <Trans k="mem_group_wednesday" />
+            </h3>
+            <div className="pricing-grid">
+              {wednesdayDisplays.map((display, i) => (
+                <PriceCard
+                  key={display.planId}
+                  display={display}
+                  delay={i > 0 ? `${i * 0.1}s` : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

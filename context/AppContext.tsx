@@ -46,7 +46,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [openModal, setOpenModal] = useState<ModalId>(null);
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>("monthly");
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>("fridayMonthly");
   const [selectedSession, setSelectedSession] = useState<Date | null>(null);
   const [schedulePick, setSchedulePick] = useState<Date | null>(null);
   const [waitlistSession, setWaitlistSession] = useState<Date | null>(null);
@@ -105,7 +105,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const openMembershipModal = useCallback((plan: PlanId = "monthly") => {
+  const openMembershipModal = useCallback((plan: PlanId = "fridayMonthly") => {
     setSelectedPlan(plan);
     setOpenModal("membership");
   }, []);

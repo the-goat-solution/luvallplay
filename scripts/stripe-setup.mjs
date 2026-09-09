@@ -48,7 +48,7 @@ async function renameProduct(oldName, newName, metadata) {
 // Finds an existing active price on this product matching the exact amount
 // + recurring interval before creating a new one — without this, re-running
 // the script would create a fresh duplicate price every time.
-async function ensurePrice(product, unitAmount, recurring) {
+async function ensurePrice(product, unitAmount, recurring, nickname) {
   const { data } = await stripe.prices.list({
     product: product.id,
     active: true,
@@ -67,6 +67,7 @@ async function ensurePrice(product, unitAmount, recurring) {
     unit_amount: unitAmount,
     currency: "nzd",
     recurring,
+    nickname,
   });
 }
 
@@ -97,20 +98,35 @@ async function main() {
     type: "donation",
   });
 
-  const fridayMonthlyPrice = await ensurePrice(fridayMonthly, 3300, {
-    interval: "month",
-  });
-  const fridayQuarterlyPrice = await ensurePrice(fridayQuarterly, 8500, {
-    interval: "month",
-    interval_count: 3,
-  });
-  const wednesdayMonthlyPrice = await ensurePrice(wednesdayMonthly, 3300, {
-    interval: "month",
-  });
-  const wednesdayQuarterlyPrice = await ensurePrice(wednesdayQuarterly, 8500, {
-    interval: "month",
-    interval_count: 3,
-  });
+  // Week-based intervals (not calendar months) so Stripe's billing cycle
+  // lines up exactly with the app's 28-day/84-day access window
+  // (MEMBERSHIP_CYCLE_DAYS in lib/constants.ts) — matches the live account's
+  // already-corrected Friday prices (nicknamed "... (4-week cycle)" /
+  // "... (12-week cycle)").
+  const fridayMonthlyPrice = await ensurePrice(
+    fridayMonthly,
+    3300,
+    { interval: "week", interval_count: 4 },
+    "Monthly (4-week cycle)",
+  );
+  const fridayQuarterlyPrice = await ensurePrice(
+    fridayQuarterly,
+    8500,
+    { interval: "week", interval_count: 12 },
+    "Quarterly (12-week cycle)",
+  );
+  const wednesdayMonthlyPrice = await ensurePrice(
+    wednesdayMonthly,
+    3300,
+    { interval: "week", interval_count: 4 },
+    "Monthly (4-week cycle)",
+  );
+  const wednesdayQuarterlyPrice = await ensurePrice(
+    wednesdayQuarterly,
+    8500,
+    { interval: "week", interval_count: 12 },
+    "Quarterly (12-week cycle)",
+  );
 
   console.log(
     "\nFriday price ids — should already match your deployed env vars (no change needed):\n",

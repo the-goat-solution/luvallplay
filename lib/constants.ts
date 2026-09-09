@@ -44,7 +44,7 @@ export const BOOKING_WINDOW_DAYS = 30;
 export const BOOKING_CUTOFF_HOUR = 17;
 
 // Membership cycle length in days — 4 weeks / 12 weeks, matching the Stripe
-// billing interval (interval:month, count:1 or interval:month, count:3 — see
+// billing interval (interval:week, count:4 or count:12 — see
 // scripts/stripe-setup.mjs for the actual recurring price configuration).
 export const MEMBERSHIP_CYCLE_DAYS: Record<MembershipTier, number> = {
   monthly: 28,

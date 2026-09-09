@@ -1,68 +1,32 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { Trans } from "@/components/Trans";
-import type { PlanId } from "@/lib/constants";
+import type { MembershipDay } from "@/lib/constants";
 import {
+  combinePlanId,
   resolveAllPlanDisplays,
-  splitPlanId,
   type CmsPricingPlan,
   type PlanDisplay,
 } from "@/lib/pricing-plans";
 
-function PriceCard({
-  display,
-  delay,
-}: {
-  display: PlanDisplay;
-  delay?: string;
-}) {
-  const { openCasualModal, openMembershipModal } = useApp();
-  const { planId, featured, name, description, priceNzd, period, ctaKey, features } =
-    display;
+type Cell = { kind: "check" } | { kind: "dash" } | { kind: "text"; text: string };
 
-  const onCta = () => {
-    if (planId === "casual") openCasualModal();
-    else openMembershipModal(planId as PlanId);
-  };
+type ColumnKey = "casual" | "monthly" | "quarterly";
 
-  return (
-    <div
-      className={`price-card animate-in${featured ? " featured" : ""}`}
-      style={delay ? { animationDelay: delay } : undefined}
-    >
-      {featured && (
-        <div className="price-featured-tag">
-          <Trans k="p_popular" />
-        </div>
-      )}
-      <div className="price-type">{name}</div>
-      <div className="price-name">{name}</div>
-      <p className="price-desc">{description}</p>
-      <div className="price-amount-row">
-        <span className="price-cur">NZD $</span>
-        <span className="price-amt">{priceNzd}</span>
-      </div>
-      <p className="price-period">{period}</p>
-      <ul className="price-features">
-        {features.map((feat) => (
-          <li key={feat} className="price-feat">
-            <div className="price-feat-check">✓</div>
-            <span>{feat}</span>
-          </li>
-        ))}
-      </ul>
-      <button
-        type="button"
-        className={`btn btn-full ${featured ? "btn-primary" : "btn-outline-white"}`}
-        onClick={onCta}
-      >
-        <Trans k={ctaKey} />
-      </button>
-    </div>
-  );
+type Row = {
+  label: string;
+  casual: Cell;
+  monthly: Cell;
+  quarterly: Cell;
+};
+
+function CellValue({ cell }: { cell: Cell }) {
+  if (cell.kind === "check") return <div className="price-feat-check">✓</div>;
+  if (cell.kind === "dash") return <span className="tbl-dash">—</span>;
+  return <span className="tbl-text">{cell.text}</span>;
 }
 
 export function Membership({
@@ -71,20 +35,113 @@ export function Membership({
   pricingPlans?: CmsPricingPlan[] | null;
 }) {
   const { lang, tr } = useLanguage();
+  const { openCasualModal, openMembershipModal } = useApp();
+  const [day, setDay] = useState<MembershipDay>("friday");
+
   const displays = useMemo(
     () => resolveAllPlanDisplays(pricingPlans, lang, tr),
     [pricingPlans, lang, tr],
   );
-  const casualDisplay = displays.find((d) => d.planId === "casual");
-  const fridayDisplays = displays.filter(
-    (d) => splitPlanId(d.planId)?.day === "friday",
-  );
-  const wednesdayDisplays = displays.filter(
-    (d) => splitPlanId(d.planId)?.day === "wednesday",
+  const byId = useMemo(
+    () =>
+      Object.fromEntries(displays.map((d) => [d.planId, d])) as Record<
+        string,
+        PlanDisplay
+      >,
+    [displays],
   );
 
+  const casual = byId.casual;
+  const monthly = byId[combinePlanId(day, "monthly")];
+  const quarterly = byId[combinePlanId(day, "quarterly")];
+
+  if (!casual || !monthly || !quarterly) return null;
+
+  const dayLabel = tr(
+    day === "friday" ? "mem_group_friday" : "mem_group_wednesday",
+  );
+  const dayCell: Cell = {
+    kind: "text",
+    text: tr("tbl_val_court_day", { day: dayLabel }),
+  };
+
+  const rows: Row[] = [
+    {
+      label: tr("tbl_row_court"),
+      casual: { kind: "text", text: tr("tbl_val_court_any") },
+      monthly: dayCell,
+      quarterly: dayCell,
+    },
+    {
+      label: tr("tbl_row_shuttle"),
+      casual: { kind: "check" },
+      monthly: { kind: "check" },
+      quarterly: { kind: "check" },
+    },
+    {
+      label: tr("tbl_row_racquet"),
+      casual: { kind: "check" },
+      monthly: { kind: "check" },
+      quarterly: { kind: "check" },
+    },
+    {
+      label: tr("tbl_row_community"),
+      casual: { kind: "dash" },
+      monthly: { kind: "check" },
+      quarterly: { kind: "check" },
+    },
+    {
+      label: tr("tbl_row_cancel"),
+      casual: { kind: "dash" },
+      monthly: { kind: "check" },
+      quarterly: { kind: "dash" },
+    },
+    {
+      label: tr("tbl_row_priority"),
+      casual: { kind: "dash" },
+      monthly: { kind: "dash" },
+      quarterly: { kind: "check" },
+    },
+    {
+      label: tr("tbl_row_save"),
+      casual: { kind: "dash" },
+      monthly: { kind: "dash" },
+      quarterly: { kind: "check" },
+    },
+  ];
+
+  const columns: {
+    key: ColumnKey;
+    display: PlanDisplay;
+    headerName: string;
+    onCta: () => void;
+  }[] = [
+    {
+      key: "casual",
+      display: casual,
+      headerName: casual.name,
+      onCta: openCasualModal,
+    },
+    {
+      key: "monthly",
+      display: monthly,
+      headerName: tr("tbl_col_monthly"),
+      onCta: () => openMembershipModal(monthly.planId),
+    },
+    {
+      key: "quarterly",
+      display: quarterly,
+      headerName: tr("tbl_col_quarterly"),
+      onCta: () => openMembershipModal(quarterly.planId),
+    },
+  ];
+
   return (
-    <section className="section section-navy" id="membership" data-screen-label="Membership">
+    <section
+      className="section section-navy"
+      id="membership"
+      data-screen-label="Membership"
+    >
       <div className="container">
         <div className="section-label section-label-light">
           <Trans k="mem_lbl" />
@@ -96,45 +153,122 @@ export function Membership({
           <Trans k="mem_sub" />
         </p>
 
-        {casualDisplay && (
-          <div className="pricing-grid pricing-grid-casual">
-            <PriceCard display={casualDisplay} />
-          </div>
-        )}
+        <div className="day-toggle" role="group" aria-label="Membership day">
+          <button
+            type="button"
+            className={`day-toggle-btn${day === "friday" ? " active" : ""}`}
+            aria-pressed={day === "friday"}
+            onClick={() => setDay("friday")}
+          >
+            <Trans k="mem_group_friday" />
+          </button>
+          <button
+            type="button"
+            className={`day-toggle-btn${day === "wednesday" ? " active" : ""}`}
+            aria-pressed={day === "wednesday"}
+            onClick={() => setDay("wednesday")}
+          >
+            <Trans k="mem_group_wednesday" />
+          </button>
+        </div>
 
-        {fridayDisplays.length > 0 && (
-          <div className="pricing-day-group">
-            <h3 className="pricing-day-group-title">
-              <Trans k="mem_group_friday" />
-            </h3>
-            <div className="pricing-grid">
-              {fridayDisplays.map((display, i) => (
-                <PriceCard
-                  key={display.planId}
-                  display={display}
-                  delay={i > 0 ? `${i * 0.1}s` : undefined}
-                />
+        <table className="pricing-table-desktop animate-in">
+          <thead>
+            <tr>
+              <th className="pt-row-label" />
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  className={col.display.featured ? "pt-featured" : undefined}
+                >
+                  {col.display.featured && (
+                    <div className="price-featured-tag">
+                      <Trans k="p_popular" />
+                    </div>
+                  )}
+                  <div className="price-name">{col.headerName}</div>
+                  <p className="price-desc">{col.display.description}</p>
+                  <div className="price-amount-row">
+                    <span className="price-cur">NZD $</span>
+                    <span className="price-amt">{col.display.priceNzd}</span>
+                  </div>
+                  <p className="price-period">{col.display.period}</p>
+                </th>
               ))}
-            </div>
-          </div>
-        )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <th scope="row" className="pt-row-label">
+                  {row.label}
+                </th>
+                {columns.map((col) => (
+                  <td
+                    key={col.key}
+                    className={col.display.featured ? "pt-featured" : undefined}
+                  >
+                    <CellValue cell={row[col.key]} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+            <tr>
+              <td className="pt-row-label" />
+              {columns.map((col) => (
+                <td
+                  key={col.key}
+                  className={col.display.featured ? "pt-featured" : undefined}
+                >
+                  <button
+                    type="button"
+                    className={`btn btn-full ${col.display.featured ? "btn-primary" : "btn-outline-white"}`}
+                    onClick={col.onCta}
+                  >
+                    <Trans k={col.display.ctaKey} />
+                  </button>
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
 
-        {wednesdayDisplays.length > 0 && (
-          <div className="pricing-day-group">
-            <h3 className="pricing-day-group-title">
-              <Trans k="mem_group_wednesday" />
-            </h3>
-            <div className="pricing-grid">
-              {wednesdayDisplays.map((display, i) => (
-                <PriceCard
-                  key={display.planId}
-                  display={display}
-                  delay={i > 0 ? `${i * 0.1}s` : undefined}
-                />
-              ))}
+        <div className="pricing-cards-mobile">
+          {columns.map((col) => (
+            <div
+              key={col.key}
+              className={`pricing-mobile-card animate-in${col.display.featured ? " featured" : ""}`}
+            >
+              {col.display.featured && (
+                <div className="price-featured-tag">
+                  <Trans k="p_popular" />
+                </div>
+              )}
+              <div className="price-name">{col.headerName}</div>
+              <p className="price-desc">{col.display.description}</p>
+              <div className="price-amount-row">
+                <span className="price-cur">NZD $</span>
+                <span className="price-amt">{col.display.priceNzd}</span>
+              </div>
+              <p className="price-period">{col.display.period}</p>
+              <ul className="pricing-mobile-rows">
+                {rows.map((row) => (
+                  <li key={row.label}>
+                    <span className="pmr-label">{row.label}</span>
+                    <CellValue cell={row[col.key]} />
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className={`btn btn-full ${col.display.featured ? "btn-primary" : "btn-outline-white"}`}
+                onClick={col.onCta}
+              >
+                <Trans k={col.display.ctaKey} />
+              </button>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </section>
   );

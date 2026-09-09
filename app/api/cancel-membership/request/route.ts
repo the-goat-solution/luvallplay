@@ -15,6 +15,11 @@ const PLAN_LABEL: Record<string, string> = {
   quarterly: "quarterly",
 };
 
+const DAY_LABEL: Record<string, string> = {
+  friday: "Friday",
+  wednesday: "Wednesday",
+};
+
 export async function POST(request: Request) {
   const ip = getClientIp(request);
   if (!checkRateLimit(`cancel-req:${ip}`, 8)) {
@@ -35,11 +40,8 @@ export async function POST(request: Request) {
     for (const membership of memberships) {
       const token = signCancelToken(membership.id);
       const confirmUrl = `${origin}/cancel-membership/confirm?token=${token}`;
-      await sendCancellationLinkEmail(
-        membership.email,
-        PLAN_LABEL[membership.plan] ?? membership.plan,
-        confirmUrl,
-      );
+      const planLabel = `${PLAN_LABEL[membership.plan] ?? membership.plan} (${DAY_LABEL[membership.day] ?? membership.day})`;
+      await sendCancellationLinkEmail(membership.email, planLabel, confirmUrl);
     }
   } catch {
     // Fall through to the generic response either way.

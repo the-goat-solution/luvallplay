@@ -96,7 +96,7 @@ export function Navigation() {
               <button
                 type="button"
                 className="nav-cta btn"
-                onClick={() => openMembershipModal("monthly")}
+                onClick={() => openMembershipModal("fridayMonthly")}
               >
                 <Trans k="nav_join" />
               </button>
@@ -141,7 +141,7 @@ export function Navigation() {
           type="button"
           className="mobile-menu-join"
           onClick={() => {
-            openMembershipModal("monthly");
+            openMembershipModal("fridayMonthly");
             closeMobile();
           }}
         >

@@ -1,9 +1,19 @@
 import {
   BOOKING_CUTOFF_HOUR,
   BOOKING_WINDOW_DAYS,
+  CASUAL_ONLY_DEFAULT_COURTS,
   DEFAULT_COURTS,
-  NON_FRIDAY_DEFAULT_COURTS,
+  MEMBERSHIP_DAY_TO_DOW,
+  type MembershipDay,
 } from "./constants";
+
+const DOW_TO_MEMBERSHIP_DAY: Partial<Record<number, MembershipDay>> = {};
+for (const [day, dow] of Object.entries(MEMBERSHIP_DAY_TO_DOW) as [
+  MembershipDay,
+  number,
+][]) {
+  DOW_TO_MEMBERSHIP_DAY[dow] = day;
+}
 
 const CLUB_TIME_ZONE = "Pacific/Auckland";
 
@@ -145,23 +155,30 @@ export function formatEventTimeRange(
   return `${startLabel} – ${endLabel}`;
 }
 
-// True if the given YYYY-MM-DD date string falls on a Friday. Parses via
-// local y/m/d components (not `new Date(dateKey)`, which parses as UTC
-// midnight and can shift a day depending on the server process's timezone —
-// see the DATE-parsing comment in lib/db.ts) so the result is correct
-// regardless of server TZ.
-export function isFriday(dateKey: string): boolean {
+// The membership day (if any) the given YYYY-MM-DD date string falls on, or
+// null for a casual-only day. Parses via local y/m/d components (not `new
+// Date(dateKey)`, which parses as UTC midnight and can shift a day depending
+// on the server process's timezone — see the DATE-parsing comment in
+// lib/db.ts) so the result is correct regardless of server TZ.
+export function getMembershipDayForDate(dateKey: string): MembershipDay | null {
   const [y, m, d] = dateKey.split("-").map(Number);
-  return new Date(y, m - 1, d).getDay() === 5;
+  const dow = new Date(y, m - 1, d).getDay();
+  return DOW_TO_MEMBERSHIP_DAY[dow] ?? null;
+}
+
+// True if the given date is a membership day (Friday or Wednesday) rather
+// than a casual-only day.
+export function isMembershipDay(dateKey: string): boolean {
+  return getMembershipDayForDate(dateKey) !== null;
 }
 
 // The default number of courts booked for a play day that doesn't yet have
-// an admin override — 2 on Friday (the club's main session), 1 on every
-// other day (casual-only, lower expected turnout). Only applies to newly
-// created session rows; existing rows keep whatever `courts` value they
-// already have (see setCourtsForDate in lib/db.ts).
+// an admin override — 2 on a membership day (the club's main sessions), 1 on
+// every other day (casual-only, lower expected turnout). Only applies to
+// newly created session rows; existing rows keep whatever `courts` value
+// they already have (see setCourtsForDate in lib/db.ts).
 export function defaultCourtsForDate(dateKey: string): number {
-  return isFriday(dateKey) ? DEFAULT_COURTS : NON_FRIDAY_DEFAULT_COURTS;
+  return isMembershipDay(dateKey) ? DEFAULT_COURTS : CASUAL_ONLY_DEFAULT_COURTS;
 }
 
 export function getDayName(d: Date, lang: "en" | "vi"): string {

@@ -15,7 +15,8 @@ Production website for Three Wolves Badminton Club (Christchurch, NZ).
 
 - **UTM Copperplate** fonts for full Vietnamese support
 - **Quarterly** plan replaces Annual ($85 every 3 months, ~15% savings)
-- **Next upcoming Friday** selectable in calendar (viewable in left panel, not bookable within 14 days)
+- **Next upcoming session** selectable in calendar (viewable in left panel, not bookable within 14 days)
+- **Monthly/Quarterly memberships** available for both Friday and Wednesday sessions (same price, separate Stripe products/prices per day — see `scripts/stripe-setup.mjs`)
 - **14-day** casual booking window (sessions closer than 14 days are locked)
 
 ## Setup

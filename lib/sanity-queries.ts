@@ -7,6 +7,7 @@ import {
   type LocaleText,
 } from "@/lib/sanity";
 import type { Lang } from "@/lib/i18n";
+import type { PlanId } from "@/lib/constants";
 import type { SanityImageSource } from "@sanity/image-url/lib/types/types";
 
 export type CmsReview = {
@@ -171,10 +172,16 @@ export async function fetchPricingPlans(): Promise<
     }`,
   );
   if (!rows?.length) return null;
-  const valid = new Set(["casual", "monthly", "quarterly"]);
+  const valid = new Set<PlanId>([
+    "casual",
+    "fridayMonthly",
+    "fridayQuarterly",
+    "wednesdayMonthly",
+    "wednesdayQuarterly",
+  ]);
   return rows
-    .filter((r): r is typeof r & { planId: "casual" | "monthly" | "quarterly" } =>
-      Boolean(r.planId && valid.has(r.planId)),
+    .filter((r): r is typeof r & { planId: PlanId } =>
+      Boolean(r.planId && valid.has(r.planId as PlanId)),
     )
     .map((r) => ({
       planId: r.planId,

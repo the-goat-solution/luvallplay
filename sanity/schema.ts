@@ -99,8 +99,10 @@ export const pricingPlan = defineType({
       options: {
         list: [
           { title: "Casual", value: "casual" },
-          { title: "Monthly", value: "monthly" },
-          { title: "Quarterly", value: "quarterly" },
+          { title: "Monthly (Friday)", value: "fridayMonthly" },
+          { title: "Quarterly (Friday)", value: "fridayQuarterly" },
+          { title: "Monthly (Wednesday)", value: "wednesdayMonthly" },
+          { title: "Quarterly (Wednesday)", value: "wednesdayQuarterly" },
         ],
       },
     }),

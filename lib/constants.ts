@@ -1,6 +1,18 @@
+// Days of the week that grant recurring-membership access. Every other day
+// is casual-bookings-only. See lib/dates.ts's getMembershipDayForDate for the
+// date -> MembershipDay mapping used everywhere capacity/roster logic needs
+// to know which membership pool (if any) a given play day belongs to.
+export type MembershipDay = "friday" | "wednesday";
+export const MEMBERSHIP_ACCESS_DAYS: MembershipDay[] = ["friday", "wednesday"];
+// JS Date#getDay() values (0=Sunday) for each membership day.
+export const MEMBERSHIP_DAY_TO_DOW: Record<MembershipDay, number> = {
+  wednesday: 3,
+  friday: 5,
+};
+
 // Total players allowed on court per session. Casual spots remaining are this
-// minus current active members (who can show up any Friday) minus casual
-// bookings already made for that date.
+// minus current active members whose membership day matches this date, minus
+// casual bookings already made for that date.
 //
 // Fallback used only where a play day has no DB row yet (e.g. no-DB local
 // dev). Once a session row exists, its `courts` value (admin-configurable
@@ -10,15 +22,17 @@ export const SESSION_CAPACITY = 12;
 // Max players allowed for a play day, by number of courts booked. Keep in
 // sync with the CASE expression in lib/db.ts's reserveBookingSlot query.
 export const COURTS_TO_MAX_PLAYERS: Record<number, number> = {
-  1: 7,
+  1: 6,
   2: 12,
   3: 18,
   4: 22,
 };
+// Default courts for any membership day (Friday or Wednesday) — the club's
+// main sessions.
 export const DEFAULT_COURTS = 2;
-// Default courts for a play day that isn't Friday — casual-only, lighter
-// expected turnout. See defaultCourtsForDate in lib/dates.ts.
-export const NON_FRIDAY_DEFAULT_COURTS = 1;
+// Default courts for a play day with no membership access — casual-only,
+// lighter expected turnout. See defaultCourtsForDate in lib/dates.ts.
+export const CASUAL_ONLY_DEFAULT_COURTS = 1;
 
 export function maxPlayersForCourts(courts: number): number {
   return COURTS_TO_MAX_PLAYERS[courts] ?? SESSION_CAPACITY;
@@ -30,15 +44,16 @@ export const BOOKING_WINDOW_DAYS = 30;
 export const BOOKING_CUTOFF_HOUR = 17;
 
 // Membership cycle length in days — 4 weeks / 12 weeks, matching the Stripe
-// billing interval (interval:week, count:4 or 12).
-export const MEMBERSHIP_CYCLE_DAYS: Record<"monthly" | "quarterly", number> = {
+// billing interval (interval:week, count:4 or count:12 — see
+// scripts/stripe-setup.mjs for the actual recurring price configuration).
+export const MEMBERSHIP_CYCLE_DAYS: Record<MembershipTier, number> = {
   monthly: 28,
   quarterly: 84,
 };
 
 // End-inclusive day span for a membership window counted from the assigned
 // access-start date (day 0) — one less than the cycle length.
-export const MEMBERSHIP_DAYS: Record<"monthly" | "quarterly", number> = {
+export const MEMBERSHIP_DAYS: Record<MembershipTier, number> = {
   monthly: MEMBERSHIP_CYCLE_DAYS.monthly - 1,
   quarterly: MEMBERSHIP_CYCLE_DAYS.quarterly - 1,
 };
@@ -75,10 +90,17 @@ export const GALLERY_IMAGES = [
   },
 ] as const;
 
+// Public-facing plan identity: casual is day-agnostic, and each membership
+// tier (monthly/quarterly) is offered on both membership days at the same
+// price. See lib/pricing-plans.ts's splitPlanId for converting one of these
+// into the { tier, day } pair the DB/Stripe layer works with.
 export const PRICES = {
   casual: 10,
-  monthly: 33,
-  quarterly: 85,
+  fridayMonthly: 33,
+  fridayQuarterly: 85,
+  wednesdayMonthly: 33,
+  wednesdayQuarterly: 85,
 } as const;
 
 export type PlanId = keyof typeof PRICES;
+export type MembershipTier = "monthly" | "quarterly";

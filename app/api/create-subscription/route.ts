@@ -16,6 +16,7 @@ import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 
 const bodySchema = z.object({
   plan: z.enum(["monthly", "quarterly"]),
+  day: z.enum(["friday", "wednesday"]),
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
   email: z.string().email().max(200),
@@ -23,6 +24,9 @@ const bodySchema = z.object({
   recurring: z.boolean().optional().default(true),
   turnstileToken: z.string().optional(),
 });
+
+const TIER_LABEL = { monthly: "Monthly", quarterly: "Quarterly" } as const;
+const DAY_LABEL = { friday: "Friday", wednesday: "Wednesday" } as const;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -50,15 +54,22 @@ export async function POST(request: Request) {
     let assignment: (MembershipAssignment & { blocked: false }) | null = null;
     if (process.env.POSTGRES_URL) {
       await ensureTables();
-      const result = await assignAndReserveMembershipAccessStart(body.plan, {
-        email: body.email,
-        firstName: body.firstName,
-        lastName: body.lastName,
-        phone: body.phone || null,
-        recurring: body.recurring,
-      });
+      const result = await assignAndReserveMembershipAccessStart(
+        body.plan,
+        body.day,
+        {
+          email: body.email,
+          firstName: body.firstName,
+          lastName: body.lastName,
+          phone: body.phone || null,
+          recurring: body.recurring,
+        },
+      );
       if (result.blocked) {
-        return NextResponse.json({ error: "sessions_full" }, { status: 409 });
+        return NextResponse.json(
+          { error: result.reason, day: body.day },
+          { status: 409 },
+        );
       }
       assignment = result;
     }
@@ -79,7 +90,7 @@ export async function POST(request: Request) {
           email: body.email,
           name: `${body.firstName} ${body.lastName}`,
           phone: body.phone,
-          metadata: { plan: body.plan },
+          metadata: { plan: body.plan, day: body.day },
         }));
 
       const paymentIntent = await stripe.paymentIntents.create(
@@ -89,10 +100,11 @@ export async function POST(request: Request) {
           customer: customer.id,
           automatic_payment_methods: { enabled: true },
           receipt_email: body.email,
-          description: `Three Wolves — ${body.plan === "monthly" ? "Monthly" : "Quarterly"} membership (one-time)`,
+          description: `Three Wolves — ${TIER_LABEL[body.plan]} Membership (${DAY_LABEL[body.day]}) — one-time`,
           metadata: {
             type: "membership",
             plan: body.plan,
+            day: body.day,
             recurring: "false",
             firstName: body.firstName,
             lastName: body.lastName,
@@ -124,7 +136,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const priceId = await resolvePriceId(body.plan);
+    const priceId = await resolvePriceId(body.plan, body.day);
 
     const customers = await stripe.customers.list({
       email: body.email,
@@ -136,7 +148,7 @@ export async function POST(request: Request) {
         email: body.email,
         name: `${body.firstName} ${body.lastName}`,
         phone: body.phone,
-        metadata: { plan: body.plan },
+        metadata: { plan: body.plan, day: body.day },
       }));
 
     const subscription = await stripe.subscriptions.create({
@@ -146,8 +158,10 @@ export async function POST(request: Request) {
       payment_settings: {
         save_default_payment_method: "on_subscription",
       },
+      description: `Three Wolves — ${TIER_LABEL[body.plan]} Membership (${DAY_LABEL[body.day]})`,
       metadata: {
         plan: body.plan,
+        day: body.day,
         firstName: body.firstName,
         lastName: body.lastName,
         email: body.email,

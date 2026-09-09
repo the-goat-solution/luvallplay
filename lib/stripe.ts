@@ -1,5 +1,7 @@
 import Stripe from "stripe";
 import { fetchPricingPlans } from "@/lib/sanity-queries";
+import { combinePlanId } from "@/lib/pricing-plans";
+import type { MembershipDay, MembershipTier } from "@/lib/constants";
 
 let stripe: Stripe | null = null;
 
@@ -41,17 +43,32 @@ export function getSubscriptionPaymentClientSecret(
   return null;
 }
 
+// Env var name for each (day, tier) pair. Friday keeps the original env var
+// names so the already-deployed Friday configuration needs no changes —
+// only Wednesday needs new Vercel env vars added.
+const PRICE_ENV_KEYS: Record<MembershipDay, Record<MembershipTier, string>> = {
+  friday: {
+    monthly: "STRIPE_PRICE_MONTHLY",
+    quarterly: "STRIPE_PRICE_QUARTERLY",
+  },
+  wednesday: {
+    monthly: "STRIPE_PRICE_WEDNESDAY_MONTHLY",
+    quarterly: "STRIPE_PRICE_WEDNESDAY_QUARTERLY",
+  },
+};
+
 export async function resolvePriceId(
-  plan: "monthly" | "quarterly",
+  plan: MembershipTier,
+  day: MembershipDay,
 ): Promise<string> {
-  const envKey =
-    plan === "monthly" ? "STRIPE_PRICE_MONTHLY" : "STRIPE_PRICE_QUARTERLY";
+  const envKey = PRICE_ENV_KEYS[day][plan];
   const fromEnv = process.env[envKey]?.trim();
   if (fromEnv) return fromEnv;
 
+  const planId = combinePlanId(day, plan);
   const plans = await fetchPricingPlans();
   const fromCms = plans
-    ?.find((p) => p.planId === plan)
+    ?.find((p) => p.planId === planId)
     ?.stripePriceId?.trim();
   if (fromCms) return fromCms;
 

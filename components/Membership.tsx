@@ -24,7 +24,13 @@ type Row = {
 };
 
 function CellValue({ cell }: { cell: Cell }) {
-  if (cell.kind === "check") return <div className="price-feat-check">✓</div>;
+  if (cell.kind === "check") {
+    return (
+      <div className="tbl-check-wrap">
+        <div className="price-feat-check">✓</div>
+      </div>
+    );
+  }
   if (cell.kind === "dash") return <span className="tbl-dash">—</span>;
   return <span className="tbl-text">{cell.text}</span>;
 }

@@ -242,6 +242,13 @@ button{font-family:var(--font-sans);cursor:pointer}
 .pricing-table-desktop tbody tr:last-child td.pt-featured{border-radius:0 0 var(--radius-lg) var(--radius-lg)}
 .tbl-dash{color:rgba(255,255,255,.25);font-size:16px}
 .tbl-text{font-size:12px;color:rgba(255,255,255,.78)}
+/* .price-feat-check is a block-level flex box with a fixed width, so on its
+   own it hugs the start of its container — text-align:center on a table
+   cell only centers inline content, not this. Wrap it so the wrapper (not
+   the fixed-size badge) stretches to fill the cell and centers the badge
+   within it. Inside the mobile row's own flex layout the wrapper stays
+   content-sized, so this is a no-op there — safe in both contexts. */
+.tbl-check-wrap{display:flex;justify-content:center}
 
 /* Mobile fallback — one stacked card per column, same data as the table */
 .pricing-cards-mobile{display:none;flex-direction:column;gap:24px;margin-top:40px}

@@ -75,25 +75,25 @@ const I18N_KEYS: Record<
     name: "p_mon_fri",
     desc: "p_mon_fri_d",
     per: "p_mon_fri_per",
-    cta: "cta_mon_fri",
+    cta: "cta_mon",
   },
   fridayQuarterly: {
     name: "p_qtr_fri",
     desc: "p_qtr_fri_d",
     per: "p_qtr_fri_per",
-    cta: "cta_qtr_fri",
+    cta: "cta_qtr",
   },
   wednesdayMonthly: {
     name: "p_mon_wed",
     desc: "p_mon_wed_d",
     per: "p_mon_wed_per",
-    cta: "cta_mon_wed",
+    cta: "cta_mon",
   },
   wednesdayQuarterly: {
     name: "p_qtr_wed",
     desc: "p_qtr_wed_d",
     per: "p_qtr_wed_per",
-    cta: "cta_qtr_wed",
+    cta: "cta_qtr",
   },
 };
 
@@ -148,7 +148,10 @@ export function mergePricingPlans(
     }
   }
   return PLAN_ORDER.map((planId) => ({
-    featured: planId === "fridayMonthly",
+    // Monthly is the featured tier regardless of day, so toggling the
+    // pricing table's day selector doesn't change which tier looks
+    // "Most Popular".
+    featured: planId === "fridayMonthly" || planId === "wednesdayMonthly",
     ...byId.get(planId),
     planId,
   }));

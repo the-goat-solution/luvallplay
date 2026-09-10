@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ensureTables, upsertSessionFromCalendar } from "@/lib/db";
 import { listUpcomingCalendarEvents } from "@/lib/google-calendar";
-import { toDateKey } from "@/lib/dates";
+import { calendarEventDateKey } from "@/lib/dates";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   }
 
   for (const event of events) {
-    const dateKey = toDateKey(new Date(event.start));
+    const dateKey = calendarEventDateKey(event.start);
     await upsertSessionFromCalendar(dateKey, event);
   }
 

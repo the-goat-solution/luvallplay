@@ -27,9 +27,13 @@ export const COURTS_TO_MAX_PLAYERS: Record<number, number> = {
   3: 18,
   4: 22,
 };
-// Default courts for any membership day (Friday or Wednesday) — the club's
-// main sessions.
-export const DEFAULT_COURTS = 2;
+// Default courts for a new membership-day session row, by day — Wednesday
+// runs lighter than Friday. Only applies to newly created rows; see
+// defaultCourtsForDate in lib/dates.ts and setCourtsForDate in lib/db.ts.
+export const MEMBERSHIP_DAY_DEFAULT_COURTS: Record<MembershipDay, number> = {
+  friday: 2,
+  wednesday: 1,
+};
 // Default courts for a play day with no membership access — casual-only,
 // lighter expected turnout. See defaultCourtsForDate in lib/dates.ts.
 export const CASUAL_ONLY_DEFAULT_COURTS = 1;

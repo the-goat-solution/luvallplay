@@ -7,6 +7,7 @@ import { SESSION_CAPACITY } from "@/lib/constants";
 import {
   formatDateLong,
   formatEventTimeRange,
+  getClubTodayDate,
   getDayName,
   isBookable,
   isWithinBookingLock,
@@ -24,7 +25,12 @@ export function SessionCalendarPicker() {
     sessionDates,
     refreshSessionDates,
   } = useApp();
-  const today = useMemo(() => startOfDay(new Date()), []);
+  // `now` is the real current instant — required by isBookable/
+  // isWithinBookingLock so the 5pm NZ cutoff check reads the actual current
+  // NZ hour. `today` is derived from it via the club's NZ calendar day (not
+  // the browser's local midnight) for date-only comparisons below.
+  const now = useMemo(() => new Date(), []);
+  const today = useMemo(() => getClubTodayDate(now), [now]);
   const [calDate, setCalDate] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
@@ -105,8 +111,8 @@ export function SessionCalendarPicker() {
     const dateMs = startOfDay(date).getTime();
     const isSessionDay = Boolean(sessionDates[toDateKey(date)]);
     const isPast = dateMs < todayMs;
-    const locked = isSessionDay && !isPast && isWithinBookingLock(date, today);
-    const open = isSessionDay && !isPast && isBookable(date, today);
+    const locked = isSessionDay && !isPast && isWithinBookingLock(date, now);
+    const open = isSessionDay && !isPast && isBookable(date, now);
     const spots = isSessionDay
       ? (spotsByDate[toDateKey(date)] ?? SESSION_CAPACITY)
       : 0;

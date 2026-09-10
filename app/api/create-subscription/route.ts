@@ -13,6 +13,7 @@ import {
   type MembershipAssignment,
 } from "@/lib/db";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
+import { getClubToday } from "@/lib/dates";
 
 const bodySchema = z.object({
   plan: z.enum(["monthly", "quarterly"]),
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
       assignment = result;
     }
     const periodStart =
-      assignment?.periodStart ?? new Date().toISOString().slice(0, 10);
+      assignment?.periodStart ?? getClubToday().dateKey;
 
     if (!body.recurring) {
       const amount =

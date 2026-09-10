@@ -13,7 +13,7 @@ import {
   setCourtsForDate,
 } from "@/lib/db";
 import { notifyWaitlistIfSpotOpened } from "@/lib/waitlist-notify";
-import { formatDateLong, getDayName, toDateKey } from "@/lib/dates";
+import { formatDateLong, getClubToday, getDayName } from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
@@ -194,7 +194,7 @@ export default async function PlayDaysAdminPage({
       })()
     : [];
 
-  const todayKey = toDateKey(new Date());
+  const { dateKey: todayKey } = getClubToday();
   const defaultDate =
     sessionKeys.find((key) => key >= todayKey) ?? sessionKeys[sessionKeys.length - 1];
   const selectedDate =

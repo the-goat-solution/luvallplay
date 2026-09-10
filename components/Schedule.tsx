@@ -12,6 +12,7 @@ import type { CmsScheduleSettings } from "@/lib/sanity-queries";
 import {
   formatDateLong,
   formatEventTimeRange,
+  getClubTodayDate,
   getDayName,
   isBookable,
   isMembershipDay,
@@ -43,7 +44,12 @@ export function Schedule({
   } = useApp();
   const showLoading = useDelayedLoading(sessionDatesLoading);
 
-  const today = useMemo(() => startOfDay(new Date()), []);
+  // `now` is the real current instant — required by isBookable/
+  // isWithinBookingLock so the 5pm NZ cutoff check reads the actual current
+  // NZ hour. `today` is derived from it via the club's NZ calendar day (not
+  // the browser's local midnight) for date-only comparisons below.
+  const now = useMemo(() => new Date(), []);
+  const today = useMemo(() => getClubTodayDate(now), [now]);
   const sortedUpcomingKeys = useMemo(() => {
     const todayKey = toDateKey(today);
     return Object.keys(sessionDates)
@@ -85,8 +91,8 @@ export function Schedule({
     ? signedUpByDate[dateKey]
     : 0;
 
-  const withinLock = displayDate ? isWithinBookingLock(displayDate, today) : false;
-  const bookable = displayDate ? isBookable(displayDate, today) : false;
+  const withinLock = displayDate ? isWithinBookingLock(displayDate, now) : false;
+  const bookable = displayDate ? isBookable(displayDate, now) : false;
   const isFull = spotsAvail <= 0;
   const isNextGame =
     displayDate && nextSessionDate
@@ -188,8 +194,8 @@ export function Schedule({
 
       if (isSessionDay && dateMs >= todayMs) {
         const isNext = dateMs === nextGameMs;
-        const locked = isWithinBookingLock(date, today);
-        const canBook = isBookable(date, today);
+        const locked = isWithinBookingLock(date, now);
+        const canBook = isBookable(date, now);
         const isSel =
           schedulePick &&
           startOfDay(schedulePick).getTime() === dateMs;

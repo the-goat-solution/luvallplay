@@ -2,7 +2,7 @@ import {
   BOOKING_CUTOFF_HOUR,
   BOOKING_WINDOW_DAYS,
   CASUAL_ONLY_DEFAULT_COURTS,
-  DEFAULT_COURTS,
+  MEMBERSHIP_DAY_DEFAULT_COURTS,
   MEMBERSHIP_DAY_TO_DOW,
   type MembershipDay,
 } from "./constants";
@@ -70,6 +70,28 @@ export function getClubToday(now: Date = new Date()): {
     dateKey: club.dateKey,
     cutoffPassed: club.hour >= BOOKING_CUTOFF_HOUR,
   };
+}
+
+// A Date at local midnight representing the club's current NZ calendar day
+// — for date-only comparisons in client components (calendar "today"/"past"
+// highlighting, month navigation). Never pass this into isBookable /
+// isWithinBookingLock as `now` — it discards the time-of-day the cutoff
+// check needs. Pass the real current Date for that instead.
+export function getClubTodayDate(now: Date = new Date()): Date {
+  const { dateKey } = getClubToday(now);
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// The NZ calendar date a Google Calendar event's `start` value falls on.
+// `start` is either a bare YYYY-MM-DD (all-day event — already the right
+// answer, use directly) or a full dateTime string with an offset (convert
+// via the same club-timezone logic as getClubToday, rather than round-
+// tripping through `new Date(...)` + local Date getters, which can shift a
+// day depending on the server process's own timezone).
+export function calendarEventDateKey(start: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(start)) return start;
+  return getClubToday(new Date(start)).dateKey;
 }
 
 function bookingWindowDiffDays(sessionDate: Date, now: Date): number {
@@ -173,12 +195,14 @@ export function isMembershipDay(dateKey: string): boolean {
 }
 
 // The default number of courts booked for a play day that doesn't yet have
-// an admin override — 2 on a membership day (the club's main sessions), 1 on
-// every other day (casual-only, lower expected turnout). Only applies to
-// newly created session rows; existing rows keep whatever `courts` value
-// they already have (see setCourtsForDate in lib/db.ts).
+// an admin override — day-specific on a membership day (see
+// MEMBERSHIP_DAY_DEFAULT_COURTS), 1 on every other day (casual-only, lower
+// expected turnout). Only applies to newly created session rows; existing
+// rows keep whatever `courts` value they already have (see
+// setCourtsForDate in lib/db.ts).
 export function defaultCourtsForDate(dateKey: string): number {
-  return isMembershipDay(dateKey) ? DEFAULT_COURTS : CASUAL_ONLY_DEFAULT_COURTS;
+  const day = getMembershipDayForDate(dateKey);
+  return day ? MEMBERSHIP_DAY_DEFAULT_COURTS[day] : CASUAL_ONLY_DEFAULT_COURTS;
 }
 
 export function getDayName(d: Date, lang: "en" | "vi"): string {

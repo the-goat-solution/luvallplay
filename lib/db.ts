@@ -710,36 +710,6 @@ export async function setCourtsForDate(
   return { ok: true };
 }
 
-// One-time migration: lowers every upcoming Wednesday still at 2 courts down
-// to 1 (matching the new MEMBERSHIP_DAY_DEFAULT_COURTS default for newly
-// synced sessions), skipping any date that already has more players signed
-// up than 1 court supports (max 6) so nobody already booked gets stranded —
-// mirrors setCourtsForDate's safety guard. Triggered once from a temporary
-// admin-page button; safe to re-run (only touches rows still at courts <> 1).
-export async function fixWednesdayCourtDefaults(): Promise<{
-  updated: string[];
-  skipped: string[];
-}> {
-  const { dateKey: clubToday } = getClubToday();
-  const { rows: candidates } = await sql`
-    SELECT date::text AS date, booked_spots FROM sessions
-    WHERE EXTRACT(DOW FROM date) = 3 AND date >= ${clubToday} AND courts <> 1;
-  `;
-  const updated: string[] = [];
-  const skipped: string[] = [];
-  for (const row of candidates) {
-    const { date, booked_spots } = row as { date: string; booked_spots: number };
-    const activeMembers = await getActiveMemberCountForDate(date);
-    if (booked_spots + activeMembers > maxPlayersForCourts(1)) {
-      skipped.push(date);
-      continue;
-    }
-    await sql`UPDATE sessions SET courts = 1 WHERE date = ${date};`;
-    updated.push(date);
-  }
-  return { updated, skipped };
-}
-
 export async function getSessionAlertState(
   date: string,
 ): Promise<{ state: string; headcount: number }> {
@@ -985,6 +955,17 @@ export async function setMembershipCancelAtPeriodEnd(
 ): Promise<void> {
   await sql`
     UPDATE memberships SET cancel_at_period_end = TRUE WHERE id = ${id};
+  `;
+}
+
+// Immediately deactivates a membership rather than waiting for period end —
+// used for cash (non-recurring) members, which have no Stripe subscription
+// to schedule a cancellation against, so "remove" means "stop counting
+// toward capacity and drop off the roster right now" instead of the
+// cancel-at-period-end flow recurring members get.
+export async function cancelMembershipImmediately(id: number): Promise<void> {
+  await sql`
+    UPDATE memberships SET status = 'canceled' WHERE id = ${id};
   `;
 }
 

@@ -3,7 +3,6 @@ import { revalidatePath } from "next/cache";
 import {
   deleteWaitlistEntry,
   ensureTables,
-  fixWednesdayCourtDefaults,
   getAvailableSpots,
   getCourtsForDate,
   getRosterForDate,
@@ -172,18 +171,6 @@ async function removeWaitlistEntry(date: string, id: number) {
   redirect(`/admin/play-days?date=${date}&waitlistRemoved=1`);
 }
 
-// One-time migration action — see fixWednesdayCourtDefaults in lib/db.ts.
-// Remove this action and its UI section once it's been run in production.
-async function fixWednesdayCourts() {
-  "use server";
-  await ensureTables();
-  const { updated, skipped } = await fixWednesdayCourtDefaults();
-  revalidatePath("/admin/play-days");
-  redirect(
-    `/admin/play-days?wedCourtsUpdated=${updated.length}&wedCourtsSkipped=${skipped.length}`,
-  );
-}
-
 export default async function PlayDaysAdminPage({
   searchParams,
 }: {
@@ -196,8 +183,6 @@ export default async function PlayDaysAdminPage({
     courtsError?: string;
     waitlistNotified?: string;
     waitlistRemoved?: string;
-    wedCourtsUpdated?: string;
-    wedCourtsSkipped?: string;
   }>;
 }) {
   const { date: dateParam } = await searchParams;
@@ -242,41 +227,10 @@ export default async function PlayDaysAdminPage({
 
       {!process.env.POSTGRES_URL ? (
         <p>Database is not configured.</p>
+      ) : sessionKeys.length === 0 ? (
+        <p>No sessions synced from the calendar yet.</p>
       ) : (
         <>
-          <div
-            style={{
-              background: "#fff8ec",
-              border: "1px solid #e8d9b8",
-              borderRadius: 8,
-              padding: 12,
-              marginBottom: 24,
-            }}
-          >
-            <p style={{ fontSize: 13, marginBottom: 8 }}>
-              One-time fix: lowers every upcoming Wednesday still at 2 courts down to 1, skipping
-              any that already has more than 6 players signed up.
-            </p>
-            <form action={fixWednesdayCourts}>
-              <SubmitButton
-                loadingText="Fixing…"
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: "1px solid #1a2a4a",
-                  background: "#1a2a4a",
-                  color: "#fff",
-                  fontSize: 13,
-                }}
-              >
-                Fix Wednesday courts (2→1)
-              </SubmitButton>
-            </form>
-          </div>
-          {sessionKeys.length === 0 ? (
-            <p>No sessions synced from the calendar yet.</p>
-          ) : (
-            <>
           <form style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
             <label htmlFor="date" style={{ fontSize: 13, color: "#666" }}>
               Play day:
@@ -544,8 +498,6 @@ export default async function PlayDaysAdminPage({
               Add cash player
             </SubmitButton>
           </form>
-            </>
-          )}
         </>
       )}
     </div>

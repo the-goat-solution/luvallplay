@@ -213,12 +213,19 @@ function MembersTable({
                   )}
                 </td>
                 <td style={{ padding: "6px 8px" }}>
-                  {m.recurring && !m.cancelAtPeriodEnd && (
+                  {m.recurring && !m.cancelAtPeriodEnd ? (
                     <MemberCancelButton
                       membershipId={m.id}
                       memberName={m.name}
+                      mode="cancel"
                     />
-                  )}
+                  ) : !m.recurring ? (
+                    <MemberCancelButton
+                      membershipId={m.id}
+                      memberName={m.name}
+                      mode="remove"
+                    />
+                  ) : null}
                 </td>
               </tr>
             ))

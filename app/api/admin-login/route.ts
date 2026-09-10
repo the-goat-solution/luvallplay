@@ -24,7 +24,13 @@ export async function POST(request: Request) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/admin",
+    // Scoping this to "/admin" meant the browser never attached it to
+    // /api/admin/* requests (that path doesn't start with "/admin"), so any
+    // admin API route checking isAdminRequest (lib/security.ts) — e.g.
+    // /api/admin/cancel-membership — always saw no cookie and returned 401,
+    // even though the admin was correctly logged in per the middleware's own
+    // check on /admin pages.
+    path: "/",
     maxAge: 60 * 60 * 24 * 30,
   });
   return response;

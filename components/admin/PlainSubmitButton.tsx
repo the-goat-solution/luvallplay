@@ -33,7 +33,18 @@ export function PlainSubmitButton({
       }}
       disabled={submitting}
       className={className}
-      style={{ display: "inline-flex", alignItems: "center", gap: 8, ...style }}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        ...style,
+        // See the equivalent comment in SubmitButton.tsx — gives an
+        // immediate visual cue on click instead of waiting for the
+        // delayed spinner, so a caller's own background/color style can't
+        // make a disabled button look identical to an enabled one.
+        opacity: submitting ? 0.6 : 1,
+        cursor: submitting ? "default" : "pointer",
+      }}
     >
       {showSubmitting ? (
         <>

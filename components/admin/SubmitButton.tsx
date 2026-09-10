@@ -26,7 +26,20 @@ export function SubmitButton({
       type="submit"
       disabled={pending}
       className={className}
-      style={{ display: "inline-flex", alignItems: "center", gap: 8, ...style }}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        ...style,
+        // Applied after the caller's own style so a click is always
+        // visibly acknowledged immediately, even during the delayed-spinner
+        // grace window above — without this, a button whose caller sets its
+        // own background/color (every admin button does) looks pixel-
+        // identical whether disabled or not, which reads as "did that even
+        // register?" and invites a second click.
+        opacity: pending ? 0.6 : 1,
+        cursor: pending ? "default" : "pointer",
+      }}
     >
       {showPending ? (
         <>

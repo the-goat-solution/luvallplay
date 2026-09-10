@@ -12,8 +12,6 @@ const TOAST_PARAMS = [
   "courtsError",
   "waitlistNotified",
   "waitlistRemoved",
-  "wedCourtsUpdated",
-  "wedCourtsSkipped",
 ] as const;
 
 // Every admin action on the play-days page redirects back with one of these
@@ -33,8 +31,6 @@ export function PlayDaysToastBridge() {
     const courtsError = searchParams.get("courtsError");
     const waitlistNotified = searchParams.get("waitlistNotified");
     const waitlistRemoved = searchParams.get("waitlistRemoved");
-    const wedCourtsUpdated = searchParams.get("wedCourtsUpdated");
-    const wedCourtsSkipped = searchParams.get("wedCourtsSkipped");
 
     if (cashAdded) showToast("Cash player added and recorded in Stripe.", "success");
     if (cashError) showToast(cashError, "error");
@@ -56,16 +52,6 @@ export function PlayDaysToastBridge() {
       );
     }
     if (waitlistRemoved) showToast("Removed from the waitlist.", "success");
-    if (wedCourtsUpdated !== null) {
-      const u = Number(wedCourtsUpdated);
-      const s = Number(wedCourtsSkipped ?? "0");
-      showToast(
-        u === 0 && s === 0
-          ? "No upcoming Wednesday sessions needed updating."
-          : `Fixed ${u} Wednesday session${u === 1 ? "" : "s"} to 1 court${s > 0 ? ` (${s} left unchanged — already over capacity)` : ""}.`,
-        "success",
-      );
-    }
 
     if (
       cashAdded ||
@@ -74,8 +60,7 @@ export function PlayDaysToastBridge() {
       courtsUpdated ||
       courtsError ||
       waitlistNotified ||
-      waitlistRemoved ||
-      wedCourtsUpdated
+      waitlistRemoved
     ) {
       const params = new URLSearchParams(searchParams.toString());
       for (const key of TOAST_PARAMS) params.delete(key);

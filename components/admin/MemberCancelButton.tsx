@@ -8,9 +8,15 @@ import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 export function MemberCancelButton({
   membershipId,
   memberName,
+  mode = "cancel",
 }: {
   membershipId: number;
   memberName: string;
+  // "cancel" schedules a recurring member's Stripe subscription to stop
+  // renewing at period end (existing behavior). "remove" is for cash
+  // (non-recurring) members, who have no subscription to schedule against —
+  // it deactivates the membership immediately, freeing their spot right away.
+  mode?: "cancel" | "remove";
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -18,11 +24,11 @@ export function MemberCancelButton({
   const [error, setError] = useState<string | null>(null);
 
   const onClick = async () => {
-    if (
-      !window.confirm(
-        `Cancel ${memberName}'s membership at the end of their current billing period?`,
-      )
-    ) {
+    const confirmMessage =
+      mode === "remove"
+        ? `Remove ${memberName}'s membership? This takes effect immediately and frees their spot right away.`
+        : `Cancel ${memberName}'s membership at the end of their current billing period?`;
+    if (!window.confirm(confirmMessage)) {
       return;
     }
     setBusy(true);
@@ -34,10 +40,15 @@ export function MemberCancelButton({
         body: JSON.stringify({ membershipId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to cancel");
+      if (!res.ok)
+        throw new Error(data.error ?? `Failed to ${mode === "remove" ? "remove" : "cancel"}`);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to cancel");
+      setError(
+        e instanceof Error
+          ? e.message
+          : `Failed to ${mode === "remove" ? "remove" : "cancel"}`,
+      );
       setBusy(false);
     }
   };
@@ -66,8 +77,10 @@ export function MemberCancelButton({
         {showBusy ? (
           <>
             <LoadingIcon size="sm" />
-            Canceling…
+            {mode === "remove" ? "Removing…" : "Canceling…"}
           </>
+        ) : mode === "remove" ? (
+          "Remove"
         ) : (
           "Cancel"
         )}

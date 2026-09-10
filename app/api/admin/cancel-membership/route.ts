@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getMembershipById, setMembershipCancelAtPeriodEnd } from "@/lib/db";
+import {
+  cancelMembershipImmediately,
+  getMembershipById,
+  setMembershipCancelAtPeriodEnd,
+} from "@/lib/db";
 import { cancelSubscriptionAtPeriodEnd } from "@/lib/stripe";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
 
@@ -30,11 +34,12 @@ export async function POST(request: Request) {
     if (!membership) {
       return NextResponse.json({ error: "Membership not found" }, { status: 404 });
     }
+    // Cash (non-recurring) members have no Stripe subscription to schedule a
+    // cancellation against — removing one takes effect immediately instead
+    // of at a period end that Stripe will never actually reach.
     if (!membership.stripeSubscriptionId) {
-      return NextResponse.json(
-        { error: "No Stripe subscription on file for this member" },
-        { status: 400 },
-      );
+      await cancelMembershipImmediately(membership.id);
+      return NextResponse.json({ ok: true, removed: true });
     }
 
     await cancelSubscriptionAtPeriodEnd(membership.stripeSubscriptionId);

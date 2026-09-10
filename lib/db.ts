@@ -368,7 +368,7 @@ export type MembershipAssignment =
       periodStart: string;
       periodEnd: string;
     }
-  | { blocked: true; reason: "sessions_full" | "already_member" };
+  | { blocked: true; reason: "sessions_full" | "already_member" | "invalid_date" };
 
 // Finds the nearest upcoming play day for the given membership day (Friday
 // or Wednesday — every other day is casual-bookings-only) that still has
@@ -393,6 +393,13 @@ export async function assignAndReserveMembershipAccessStart(
     phone: string | null;
     recurring: boolean;
   },
+  // Admin-chosen start date (cash member signup), overriding the default
+  // nearest-available search below. Re-validated here regardless of
+  // whatever the client sent — must be an actual synced play day matching
+  // this membership day, not already in the past per the same cutoff rule
+  // the search uses — so a stale or tampered value can't target a bogus
+  // date. `blocked: true, reason: "invalid_date"` if it doesn't hold up.
+  preferredDate?: string,
 ): Promise<MembershipAssignment> {
   const { dateKey: clubToday, cutoffPassed } = getClubToday();
   const dow = MEMBERSHIP_DAY_TO_DOW[day];
@@ -427,15 +434,26 @@ export async function assignAndReserveMembershipAccessStart(
       return { blocked: true, reason: "already_member" };
     }
 
-    const { rows: candidates } = await client.query(
-      `SELECT date::text AS date FROM sessions
-       WHERE google_event_id IS NOT NULL
-         AND EXTRACT(DOW FROM date) = $2
-         AND date >= ($1::date + $3::int)
-         AND date <= ($1::date + $4::int)
-       ORDER BY date;`,
-      [clubToday, dow, cutoffPassed ? 1 : 0, MEMBERSHIP_START_SEARCH_DAYS],
-    );
+    const { rows: candidates } = preferredDate
+      ? await client.query(
+          `SELECT date::text AS date FROM sessions
+           WHERE date = $1 AND google_event_id IS NOT NULL AND EXTRACT(DOW FROM date) = $2
+             AND date >= ($3::date + $4::int);`,
+          [preferredDate, dow, clubToday, cutoffPassed ? 1 : 0],
+        )
+      : await client.query(
+          `SELECT date::text AS date FROM sessions
+           WHERE google_event_id IS NOT NULL
+             AND EXTRACT(DOW FROM date) = $2
+             AND date >= ($1::date + $3::int)
+             AND date <= ($1::date + $4::int)
+           ORDER BY date;`,
+          [clubToday, dow, cutoffPassed ? 1 : 0, MEMBERSHIP_START_SEARCH_DAYS],
+        );
+
+    if (preferredDate && candidates.length === 0) {
+      return { blocked: true, reason: "invalid_date" };
+    }
 
     for (const row of candidates) {
       const date = (row as { date: string }).date;

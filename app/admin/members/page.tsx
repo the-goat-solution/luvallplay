@@ -14,6 +14,7 @@ import { getStripe } from "@/lib/stripe";
 import { sendMembershipConfirmationEmail } from "@/lib/email";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { CashMemberDayAndDateFields } from "@/components/admin/CashMemberDayAndDateFields";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
 import { MembersToastBridge } from "@/components/admin/MembersToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
@@ -42,6 +43,7 @@ async function addCashMember(formData: FormData) {
   const plan = formData.get("plan") === "quarterly" ? "quarterly" : "monthly";
   const day = formData.get("day") === "wednesday" ? "wednesday" : "friday";
   const dayLabel = day === "wednesday" ? "Wednesday" : "Friday";
+  const startDate = String(formData.get("startDate") ?? "").trim();
 
   if (!firstName || !lastName || !email) {
     redirect(
@@ -51,18 +53,25 @@ async function addCashMember(formData: FormData) {
 
   await ensureTables();
 
-  const assignment = await assignAndReserveMembershipAccessStart(plan, day, {
-    email,
-    firstName,
-    lastName,
-    phone: phone || null,
-    recurring: false,
-  });
+  const assignment = await assignAndReserveMembershipAccessStart(
+    plan,
+    day,
+    {
+      email,
+      firstName,
+      lastName,
+      phone: phone || null,
+      recurring: false,
+    },
+    startDate || undefined,
+  );
   if (assignment.blocked) {
     const message =
       assignment.reason === "already_member"
         ? `This email already has an active ${dayLabel} membership.`
-        : `No upcoming ${dayLabel} session has room for a new membership right now.`;
+        : assignment.reason === "invalid_date"
+          ? "That start date is no longer available — pick another."
+          : `No upcoming ${dayLabel} session has room for a new membership right now.`;
     redirect(`/admin/members?cashMemberError=${encodeURIComponent(message)}`);
   }
 
@@ -384,24 +393,7 @@ export default async function MembersAdminPage() {
                 <option value="quarterly">Quarterly ($85)</option>
               </select>
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
-                Day
-              </label>
-              <select
-                name="day"
-                defaultValue="friday"
-                style={{
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #ccc",
-                  fontSize: 13,
-                }}
-              >
-                <option value="friday">Friday</option>
-                <option value="wednesday">Wednesday</option>
-              </select>
-            </div>
+            <CashMemberDayAndDateFields />
             <SubmitButton
               loadingText="Adding…"
               style={{

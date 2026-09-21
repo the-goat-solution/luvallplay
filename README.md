@@ -66,7 +66,7 @@ A day-before cron (`/api/cron/membership-reminders`, schedule in `vercel.json`) 
 Every day at 4:00 PM NZ time, a Vercel Cron job (`vercel.json` → `/api/cron/send-roster`) checks whether there's a session scheduled for that date (from the synced Google Calendar — not limited to Fridays) and, if so, emails the full player list to `CLUB_ROSTER_EMAIL` (default `threewolvesbadminton@gmail.com`). If no session is scheduled that day, it's a no-op. The roster combines:
 
 - **Casual bookers** — anyone with a confirmed paid booking for that date.
-- **Members** — anyone with an active monthly/quarterly subscription whose current billing period covers that date. Members are auto-included; there's no separate signup step, since their subscription period *is* their play-day window (renews automatically each billing cycle via the Stripe webhook).
+- **Members** — anyone with an active monthly/quarterly subscription covering that date. Members are auto-included; there's no separate signup step, since their subscription period *is* their play-day window (renews automatically each billing cycle via the Stripe webhook). A subscription set to auto-renew counts for play days beyond its current billing period as well: `period_end` only advances once Stripe's renewal invoice is paid, so without that projection every member would drop off the roster for the next play day past their current cycle and the court would be oversold. One-time (non-recurring) memberships and subscriptions already set to cancel stop at `period_end`.
 
 Set up:
 - `RESEND_API_KEY` / `EMAIL_FROM` — provision via `vercel integration add resend/resend-email` (Vercel Marketplace), or manually in the [Resend dashboard](https://resend.com). `EMAIL_FROM` must be a verified sending address/domain.

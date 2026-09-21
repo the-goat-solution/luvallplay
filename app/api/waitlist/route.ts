@@ -44,7 +44,19 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Invalid request";
-    return NextResponse.json({ error: message }, { status: 400 });
+    // Never hand the raw error back: a ZodError stringifies to a multi-line
+    // JSON dump and a database error leaks schema details, and the modal puts
+    // whatever comes back in front of the person signing up.
+    if (e instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Please enter a valid name and email address." },
+        { status: 400 },
+      );
+    }
+    console.error("Waitlist signup failed", e);
+    return NextResponse.json(
+      { error: "Sorry, we couldn't save your waitlist signup. Please try again." },
+      { status: 500 },
+    );
   }
 }

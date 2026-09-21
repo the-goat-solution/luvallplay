@@ -168,6 +168,56 @@ async function ensureTablesImpl() {
   await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;`;
 }
 
+// Whether a `memberships` row grants access to a given play day.
+//
+// period_start..period_end is only the CURRENT billing cycle: period_end
+// moves forward when Stripe's renewal invoice is paid (see
+// applyMembershipRenewal), which happens at the END of that cycle. So for
+// most of every cycle the next play day past period_end falls outside the
+// stored window, and a member who is plainly going to be there is counted as
+// absent — the roster and headcount under-report that day, and casual
+// bookings oversell the court against the spot they'll occupy.
+//
+// An auto-renewing subscription that isn't scheduled to stop (recurring, and
+// no pending cancel_at_period_end) therefore covers every play day from
+// period_start onward, not just the cycle that happens to be paid for right
+// now. One-time memberships (recurring = FALSE, e.g. cash members) and
+// subscriptions already set to cancel keep the hard period_end, since those
+// genuinely do lapse.
+//
+// `dateExpr` is whatever SQL yields the play day being tested — a bind
+// placeholder like `$1`, or a column such as `t.d`. Callers must also filter
+// on status and `day` themselves; this covers the date window only.
+export function membershipCoversDateSql(dateExpr: string, alias = ""): string {
+  const c = alias ? `${alias}.` : "";
+  return `(
+    ${c}period_start <= ${dateExpr}
+    AND (
+      ${c}period_end >= ${dateExpr}
+      OR (${c}recurring AND ${c}cancel_at_period_end = FALSE)
+    )
+  )`;
+}
+
+// The effective end of a member's access window as of `dateExpr`: the stored
+// period_end rolled forward by whole billing cycles until it covers that day.
+// For a member whose stored window already covers the date this is a no-op,
+// so it's safe to apply unconditionally.
+export function projectedPeriodEndSql(dateExpr: string): string {
+  return `(
+    period_end + (
+      CASE plan WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE ${MEMBERSHIP_CYCLE_DAYS.monthly} END
+      * GREATEST(
+          0,
+          CEIL(
+            (${dateExpr}::date - period_end)::numeric
+            / CASE plan WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE ${MEMBERSHIP_CYCLE_DAYS.monthly} END
+          )::int
+        )
+    )
+  )`;
+}
+
 // Adds an exact number of days to a YYYY-MM-DD date string. Unlike calendar-
 // month arithmetic (setUTCMonth), this has no rollover ambiguity — used to
 // compute membership period_end as an exact 28-day/84-day span.
@@ -255,7 +305,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
       `SELECT t.d::text AS date, COUNT(m.id)::int AS active_members
        FROM unnest($1::date[], $2::text[]) AS t(d, day)
        LEFT JOIN memberships m
-         ON m.status = 'active' AND m.period_start <= t.d AND m.period_end >= t.d AND m.day = t.day
+         ON m.status = 'active' AND m.day = t.day AND ${membershipCoversDateSql("t.d", "m")}
        GROUP BY t.d;`,
       [dates, membershipDays],
     ),
@@ -311,24 +361,26 @@ export async function reserveBookingSlot(
   // column. The day CASE mirrors MEMBERSHIP_DAY_TO_DOW; a NULL result (a
   // casual-only day) never matches memberships.day, so the subquery counts
   // zero on those days without needing a separate ELSE 0 branch.
-  const { rowCount } = await sql`
-    UPDATE sessions
-    SET booked_spots = booked_spots + 1
-    WHERE date = ${date}
-      AND booked_spots < (
-        CASE courts
-          WHEN 1 THEN 6
-          WHEN 2 THEN 12
-          WHEN 3 THEN 18
-          WHEN 4 THEN 22
-          ELSE ${SESSION_CAPACITY}
-        END
-      ) - (
-        SELECT COUNT(*)::int FROM memberships
-        WHERE status = 'active' AND period_start <= ${date} AND period_end >= ${date}
-          AND day = CASE EXTRACT(DOW FROM date) WHEN 5 THEN 'friday' WHEN 3 THEN 'wednesday' END
-      );
-  `;
+  const { rowCount } = await sql.query(
+    `UPDATE sessions
+     SET booked_spots = booked_spots + 1
+     WHERE date = $1
+       AND booked_spots < (
+         CASE courts
+           WHEN 1 THEN 6
+           WHEN 2 THEN 12
+           WHEN 3 THEN 18
+           WHEN 4 THEN 22
+           ELSE $2
+         END
+       ) - (
+         SELECT COUNT(*)::int FROM memberships
+         WHERE status = 'active'
+           AND day = CASE EXTRACT(DOW FROM sessions.date) WHEN 5 THEN 'friday' WHEN 3 THEN 'wednesday' END
+           AND ${membershipCoversDateSql("$1")}
+       );`,
+    [date, SESSION_CAPACITY],
+  );
   if (!rowCount) return false;
 
   await sql`
@@ -474,7 +526,7 @@ export async function assignAndReserveMembershipAccessStart(
 
         const { rows: memberCountRows } = await client.query(
           `SELECT COUNT(*)::int AS count FROM memberships
-           WHERE day = $3 AND period_start <= $1 AND period_end >= $1
+           WHERE day = $3 AND ${membershipCoversDateSql("$1")}
              AND (
                status = 'active'
                OR (status = 'pending' AND created_at > NOW() - ($2 * INTERVAL '1 minute'))
@@ -649,19 +701,21 @@ export async function listAllSessionDates(): Promise<string[]> {
   return rows.map((row) => (row as { date: string }).date);
 }
 
-// Members whose period covers this specific date AND whose day matches this
-// date's membership day — the correct scoping for any per-play-day capacity
-// calculation. Mirrors getRosterForDate's predicate. A casual-only day (no
-// membership day) never has members occupying capacity.
+// Members with access to this specific date (see membershipCoversDateSql,
+// which counts an auto-renewing subscription past its current cycle) AND
+// whose day matches this date's membership day — the correct scoping for any
+// per-play-day capacity calculation. Mirrors getRosterForDate's predicate. A
+// casual-only day (no membership day) never has members occupying capacity.
 export async function getActiveMemberCountForDate(
   date: string,
 ): Promise<number> {
   const day = getMembershipDayForDate(date);
   if (!day) return 0;
-  const { rows } = await sql`
-    SELECT COUNT(*)::int AS count FROM memberships
-    WHERE status = 'active' AND day = ${day} AND period_start <= ${date} AND period_end >= ${date};
-  `;
+  const { rows } = await sql.query(
+    `SELECT COUNT(*)::int AS count FROM memberships
+     WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")};`,
+    [date, day],
+  );
   return (rows[0] as { count: number })?.count ?? 0;
 }
 
@@ -838,12 +892,13 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
   // getActiveMemberCountForDate.
   const rosterDay = getMembershipDayForDate(date);
   const { rows: memberRows } = rosterDay
-    ? await sql`
-        SELECT first_name, last_name, email, phone, plan
-        FROM memberships
-        WHERE status = 'active' AND day = ${rosterDay} AND period_start <= ${date} AND period_end >= ${date}
-        ORDER BY created_at ASC;
-      `
+    ? await sql.query(
+        `SELECT first_name, last_name, email, phone, plan
+         FROM memberships
+         WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
+         ORDER BY created_at ASC;`,
+        [date, rosterDay],
+      )
     : { rows: [] };
 
   const casual: RosterEntry[] = bookingRows.map((r) => ({
@@ -1055,18 +1110,24 @@ export type MembershipReminderTarget = {
   periodEnd: string;
 };
 
-// Active members whose membership period covers `date` — the pool eligible
+// Active members with access to `date` (auto-renewing subscriptions included
+// past their current cycle — see membershipCoversDateSql) — the pool eligible
 // for the day-before reminder cron (app/api/cron/membership-reminders).
 export async function getMembersWithPlayDayTomorrow(
   date: string,
 ): Promise<MembershipReminderTarget[]> {
   const membershipDay = getMembershipDayForDate(date);
   if (!membershipDay) return [];
-  const { rows } = await sql`
-    SELECT id, email, first_name, plan, day, period_end::text AS period_end
-    FROM memberships
-    WHERE status = 'active' AND day = ${membershipDay} AND period_start <= ${date} AND period_end >= ${date};
-  `;
+  // period_end is reported as the projected one so the reminder email's
+  // "remaining sessions in your membership" list still spans a real cycle for
+  // a member whose renewal hasn't billed yet.
+  const { rows } = await sql.query(
+    `SELECT id, email, first_name, plan, day,
+            ${projectedPeriodEndSql("$1")}::text AS period_end
+     FROM memberships
+     WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")};`,
+    [date, membershipDay],
+  );
   return rows.map((r) => {
     const row = r as {
       id: number;

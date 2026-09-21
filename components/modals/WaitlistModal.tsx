@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
@@ -11,6 +11,11 @@ import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import { toDateKey } from "@/lib/dates";
 import { validateWaitlist } from "@/lib/validate-contact";
 import type { I18nKey } from "@/lib/i18n";
+
+// Upper bound on how long the submit button may sit on "Processing...".
+// Vercel cuts a function off well before this, so hitting it means the
+// response was lost in transit rather than still being worked on.
+const REQUEST_TIMEOUT_MS = 20_000;
 
 export function WaitlistModal() {
   const { tr } = useLanguage();
@@ -23,16 +28,37 @@ export function WaitlistModal() {
   const showLoading = useDelayedLoading(loading);
   const [errors, setErrors] = useState<{ name?: I18nKey; email?: I18nKey }>({});
 
+  // A stalled request must never outlive the modal: without this the in-flight
+  // fetch keeps `loading` true after the user closes the form, and reopening
+  // it lands on a permanently disabled "Processing..." button that only a page
+  // reload clears.
+  const abortRef = useRef<AbortController | null>(null);
+
   const close = () => {
+    abortRef.current?.abort();
     setOpenModal(null);
     setDone(false);
     setName("");
     setEmail("");
     setErrors({});
+    setLoading(false);
     document.body.style.overflow = "";
   };
 
+  // Mirrors the other modals (see BookingModal/MembershipModal/DonateModal):
+  // lock the page behind the overlay, and reset whichever screen the modal was
+  // left on so it always reopens on the form.
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+      setDone(false);
+      setErrors({});
+      setLoading(false);
+    }
+  }, [open]);
+
   const submit = async () => {
+    if (loading) return;
     const result = validateWaitlist(name, email);
     if (!result.ok) {
       setErrors(result.errors);
@@ -40,6 +66,15 @@ export function WaitlistModal() {
     }
     setErrors({});
     setLoading(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+
     try {
       const res = await fetch("/api/waitlist", {
         method: "POST",
@@ -49,15 +84,32 @@ export function WaitlistModal() {
           email: email.trim(),
           sessionDate: waitlistSession ? toDateKey(waitlistSession) : undefined,
         }),
+        signal: controller.signal,
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Failed");
+        // A failing route doesn't always answer with JSON (a gateway timeout
+        // or an HTML error page), and the raw parse error is meaningless to
+        // the person reading it.
+        const data = await res.json().catch(() => null);
+        throw new Error(
+          typeof data?.error === "string" ? data.error : tr("waitlist_failed"),
+        );
       }
       setDone(true);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Error");
+      // Aborted by close() — the modal is already gone, so there's nobody to
+      // tell. A timeout is ours to report.
+      if (controller.signal.aborted && !timedOut) return;
+      alert(
+        timedOut
+          ? tr("waitlist_timeout")
+          : e instanceof Error
+            ? e.message
+            : tr("waitlist_failed"),
+      );
     } finally {
+      clearTimeout(timer);
+      if (abortRef.current === controller) abortRef.current = null;
       setLoading(false);
     }
   };

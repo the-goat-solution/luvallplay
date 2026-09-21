@@ -216,7 +216,9 @@ export default async function PlayDaysAdminPage({
     <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>Play day roster</h1>
       <p style={{ color: "#666", marginBottom: 20 }}>
-        Casual bookings and members whose subscription period covers the selected play day.
+        Casual bookings and members with access to the selected play day. Auto-renewing
+        members count for play days past their current billing period too — their
+        subscription rolls over before the session, so they keep their spot.
       </p>
       <p style={{ color: "#888", fontSize: 12, marginBottom: 20 }}>
         Only Friday and Wednesday play days allow monthly/quarterly members — new sessions on

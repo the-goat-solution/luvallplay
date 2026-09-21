@@ -204,6 +204,10 @@ const I18N = {
       "This session is currently full. Add yourself to the waitlist and we'll email you if a spot becomes available.",
     your_name: "Full Name",
     join_waitlist: "Join Waitlist",
+    waitlist_failed:
+      "Sorry, we couldn't add you to the waitlist just now. Please try again.",
+    waitlist_timeout:
+      "That took too long to go through. Please check your connection and try again.",
     pay_btn_pre: "Pay NZD $",
     processing: "Processing...",
     loading: "Loading...",
@@ -418,6 +422,10 @@ const I18N = {
       "Buổi tập này đã đầy. Thêm bạn vào danh sách chờ và chúng tôi sẽ thông báo khi có chỗ.",
     your_name: "Họ Và Tên",
     join_waitlist: "Đăng Ký Chờ",
+    waitlist_failed:
+      "Rất tiếc, hiện chưa thể thêm bạn vào danh sách chờ. Vui lòng thử lại.",
+    waitlist_timeout:
+      "Yêu cầu mất quá nhiều thời gian. Vui lòng kiểm tra kết nối và thử lại.",
     pay_btn_pre: "Thanh Toán NZD $",
     processing: "Đang xử lý...",
     loading: "Đang tải...",

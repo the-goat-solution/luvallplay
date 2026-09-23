@@ -17,7 +17,7 @@ const bodySchema = z.object({
 // try it now" button, so the admin doesn't have to wait for that schedule or
 // open the Stripe dashboard.
 export async function POST(request: Request) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

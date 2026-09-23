@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/lib/security";
+import {
+  ADMIN_COOKIE,
+  adminCookieOptions,
+  appendLegacyAdminCookieClear,
+  signAdminToken,
+} from "@/lib/admin-session";
 
 export const runtime = "nodejs";
-
-const COOKIE_NAME = "admin_token";
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -19,19 +23,16 @@ export async function POST(request: Request) {
     return NextResponse.redirect(new URL("/admin/login?error=1", request.url), 303);
   }
 
+  const token = await signAdminToken();
+  if (!token) {
+    return NextResponse.redirect(new URL("/admin/login?error=1", request.url), 303);
+  }
+
   const response = NextResponse.redirect(new URL("/admin/play-days", request.url), 303);
-  response.cookies.set(COOKIE_NAME, password, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    // Scoping this to "/admin" meant the browser never attached it to
-    // /api/admin/* requests (that path doesn't start with "/admin"), so any
-    // admin API route checking isAdminRequest (lib/security.ts) — e.g.
-    // /api/admin/cancel-membership — always saw no cookie and returned 401,
-    // even though the admin was correctly logged in per the middleware's own
-    // check on /admin pages.
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
+  // A signed, self-expiring token rather than the password itself — see
+  // lib/admin-session.ts. The 48-hour window slides forward on every
+  // authenticated admin request.
+  response.cookies.set(ADMIN_COOKIE, token, adminCookieOptions());
+  appendLegacyAdminCookieClear(response);
   return response;
 }

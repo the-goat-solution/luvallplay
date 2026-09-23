@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { BOOKING_WINDOW_DAYS } from "./constants";
+import { ADMIN_COOKIE, verifyAdminToken } from "./admin-session";
 import { isBookable, startOfDay } from "./dates";
 import { sessionExists } from "./db";
 
@@ -71,15 +72,6 @@ export function parseSessionDate(sessionDate: string): Date {
   return startOfDay(new Date(y, m - 1, d));
 }
 
-function timingSafeEqualStr(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
-
 function getCookieFromRequest(request: Request, name: string): string | null {
   const header = request.headers.get("cookie");
   if (!header) return null;
@@ -93,14 +85,12 @@ function getCookieFromRequest(request: Request, name: string): string | null {
   return null;
 }
 
-// Mirrors the admin_token cookie check in middleware.ts, for use in API
-// route handlers (which get a plain Request, not the NextRequest the
-// middleware works with).
-export function isAdminRequest(request: Request): boolean {
-  const password = process.env.ADMIN_PASSWORD;
-  if (!password) return false;
-  const token = getCookieFromRequest(request, "admin_token");
-  return !!token && timingSafeEqualStr(token, password);
+// Mirrors the admin_token check in middleware.ts, for use in API route
+// handlers (which get a plain Request, not the NextRequest the middleware
+// works with). Both call the same verifier in lib/admin-session.ts, so an
+// expired session is rejected identically on pages and on API routes.
+export async function isAdminRequest(request: Request): Promise<boolean> {
+  return verifyAdminToken(getCookieFromRequest(request, ADMIN_COOKIE));
 }
 
 const CANCEL_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;

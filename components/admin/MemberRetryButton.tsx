@@ -46,6 +46,12 @@ export function MemberRetryButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ membershipId }),
       });
+      // The session can lapse while this page sits open. Send them to the
+      // login page rather than showing an "Unauthorized" they can't act on.
+      if (res.status === 401) {
+        window.location.href = "/admin/login?expired=1";
+        return;
+      }
       const data = await res.json();
       if (!res.ok) {
         setFailure({

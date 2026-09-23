@@ -5,9 +5,13 @@ export const dynamic = "force-dynamic";
 export default async function AdminLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    expired?: string;
+    loggedOut?: string;
+  }>;
 }) {
-  const { error } = await searchParams;
+  const { error, expired, loggedOut } = await searchParams;
 
   return (
     <div
@@ -19,6 +23,36 @@ export default async function AdminLoginPage({
       }}
     >
       <h1 style={{ fontSize: 20, marginBottom: 16 }}>Admin login</h1>
+      {expired && !error ? (
+        <p
+          style={{
+            background: "#fdf3e3",
+            color: "#7a4a00",
+            padding: "9px 12px",
+            borderRadius: 6,
+            fontSize: 13,
+            marginBottom: 14,
+            lineHeight: 1.5,
+          }}
+        >
+          Your session timed out after 48 hours without activity. Please log in
+          again.
+        </p>
+      ) : null}
+      {loggedOut && !error ? (
+        <p
+          style={{
+            background: "#eef2f7",
+            color: "#1a2a4a",
+            padding: "9px 12px",
+            borderRadius: 6,
+            fontSize: 13,
+            marginBottom: 14,
+          }}
+        >
+          You&apos;ve been logged out.
+        </p>
+      ) : null}
       <form method="POST" action="/api/admin-login">
         <input
           type="password"

@@ -12,6 +12,9 @@ const TOAST_PARAMS = [
   "courtsError",
   "waitlistNotified",
   "waitlistRemoved",
+  "fillInSaved",
+  "fillInRemoved",
+  "fillInError",
 ] as const;
 
 // Every admin action on the play-days page redirects back with one of these
@@ -31,6 +34,9 @@ export function PlayDaysToastBridge() {
     const courtsError = searchParams.get("courtsError");
     const waitlistNotified = searchParams.get("waitlistNotified");
     const waitlistRemoved = searchParams.get("waitlistRemoved");
+    const fillInSaved = searchParams.get("fillInSaved");
+    const fillInRemoved = searchParams.get("fillInRemoved");
+    const fillInError = searchParams.get("fillInError");
 
     if (cashAdded) showToast("Cash player added and recorded in Stripe.", "success");
     if (cashError) showToast(cashError, "error");
@@ -52,6 +58,9 @@ export function PlayDaysToastBridge() {
       );
     }
     if (waitlistRemoved) showToast("Removed from the waitlist.", "success");
+    if (fillInSaved) showToast("Fill-in saved and emailed the session details.", "success");
+    if (fillInRemoved) showToast("Fill-in removed — the original player is back on the roster.", "success");
+    if (fillInError) showToast(fillInError, "error");
 
     if (
       cashAdded ||
@@ -60,7 +69,10 @@ export function PlayDaysToastBridge() {
       courtsUpdated ||
       courtsError ||
       waitlistNotified ||
-      waitlistRemoved
+      waitlistRemoved ||
+      fillInSaved ||
+      fillInRemoved ||
+      fillInError
     ) {
       const params = new URLSearchParams(searchParams.toString());
       for (const key of TOAST_PARAMS) params.delete(key);

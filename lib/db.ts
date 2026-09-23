@@ -166,6 +166,40 @@ async function ensureTablesImpl() {
   // ever covers one session_date, so a single nullable column (unlike the
   // membership table above) is enough to guarantee at most one reminder.
   await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;`;
+  // A player standing in for a member (or casual booking) who can't make a
+  // given session. The original player has already paid, so a fill-in is
+  // purely a substitution: it never creates a booking, never touches
+  // capacity, and carries no payment of its own. Exactly one of
+  // membership_id / booking_id identifies whose spot is being filled.
+  await sql`
+    CREATE TABLE IF NOT EXISTS session_fill_ins (
+      id SERIAL PRIMARY KEY,
+      session_date DATE NOT NULL,
+      membership_id INT,
+      booking_id INT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT session_fill_ins_one_target CHECK (
+        (membership_id IS NULL) <> (booking_id IS NULL)
+      )
+    );
+  `;
+  // One fill-in per player per session — the partial indexes let the unused
+  // target column stay NULL without colliding (NULLs aren't equal in a
+  // plain UNIQUE constraint, so every row would otherwise be "distinct").
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS session_fill_ins_membership_idx
+      ON session_fill_ins (session_date, membership_id)
+      WHERE membership_id IS NOT NULL;
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS session_fill_ins_booking_idx
+      ON session_fill_ins (session_date, booking_id)
+      WHERE booking_id IS NOT NULL;
+  `;
 }
 
 // Whether a `memberships` row grants access to a given play day.
@@ -872,13 +906,26 @@ export async function deleteWaitlistEntry(id: number): Promise<void> {
   await sql`DELETE FROM waitlist WHERE id = ${id};`;
 }
 
+export type RosterFillIn = {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+};
+
 export type RosterEntry = {
   bookingId: number | null;
+  membershipId: number | null;
   name: string;
   email: string;
   phone: string | null;
   type: "casual" | "monthly" | "quarterly";
   method: "card" | "cash";
+  // Set when someone is standing in for this player on this date. The
+  // original entry is kept (they paid for the spot) — callers render them
+  // as replaced rather than dropping them, and headcount is unaffected
+  // because a fill-in occupies the spot that was already counted.
+  fillIn: RosterFillIn | null;
 };
 
 export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
@@ -888,12 +935,38 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     WHERE session_date = ${date} AND status = 'confirmed'
     ORDER BY created_at ASC;
   `;
+  const { rows: fillInRows } = await sql`
+    SELECT id, membership_id, booking_id, first_name, last_name, email, phone
+    FROM session_fill_ins
+    WHERE session_date = ${date};
+  `;
+  const fillInByBooking = new Map<number, RosterFillIn>();
+  const fillInByMembership = new Map<number, RosterFillIn>();
+  for (const row of fillInRows) {
+    const r = row as {
+      id: number;
+      membership_id: number | null;
+      booking_id: number | null;
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone: string | null;
+    };
+    const entry: RosterFillIn = {
+      id: r.id,
+      name: `${r.first_name} ${r.last_name}`.trim(),
+      email: r.email,
+      phone: r.phone,
+    };
+    if (r.booking_id !== null) fillInByBooking.set(r.booking_id, entry);
+    if (r.membership_id !== null) fillInByMembership.set(r.membership_id, entry);
+  }
   // Membership access only applies on a membership day — see
   // getActiveMemberCountForDate.
   const rosterDay = getMembershipDayForDate(date);
   const { rows: memberRows } = rosterDay
     ? await sql.query(
-        `SELECT first_name, last_name, email, phone, plan
+        `SELECT id, first_name, last_name, email, phone, plan
          FROM memberships
          WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
          ORDER BY created_at ASC;`,
@@ -903,6 +976,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
 
   const casual: RosterEntry[] = bookingRows.map((r) => ({
     bookingId: r.id as number,
+    membershipId: null,
     name: `${r.first_name} ${r.last_name}`.trim(),
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
@@ -910,10 +984,12 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     method: (r.payment_intent_id as string | null)?.startsWith("cash-invoice-")
       ? "cash"
       : "card",
+    fillIn: fillInByBooking.get(r.id as number) ?? null,
   }));
 
   const members: RosterEntry[] = memberRows.map((r) => ({
     bookingId: null,
+    membershipId: r.id as number,
     name:
       `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() ||
       (r.email as string),
@@ -921,9 +997,76 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     phone: (r.phone as string | null) ?? null,
     type: r.plan === "quarterly" ? "quarterly" : "monthly",
     method: "card",
+    fillIn: fillInByMembership.get(r.id as number) ?? null,
   }));
 
   return [...casual, ...members];
+}
+
+export type FillInTarget =
+  | { membershipId: number; bookingId?: undefined }
+  | { bookingId: number; membershipId?: undefined };
+
+export type FillInInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+};
+
+// Records (or replaces) the stand-in for one player on one date. Upsert
+// rather than insert so the admin "Edit" flow reuses the same call — the
+// partial unique indexes on session_fill_ins make the conflict target a
+// single (date, player) pair.
+export async function saveSessionFillIn(
+  date: string,
+  target: FillInTarget,
+  input: FillInInput,
+): Promise<void> {
+  const membershipId = target.membershipId ?? null;
+  const bookingId = target.bookingId ?? null;
+  const conflict =
+    membershipId !== null
+      ? "(session_date, membership_id) WHERE membership_id IS NOT NULL"
+      : "(session_date, booking_id) WHERE booking_id IS NOT NULL";
+  await sql.query(
+    `INSERT INTO session_fill_ins
+       (session_date, membership_id, booking_id, first_name, last_name, email, phone)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT ${conflict}
+     DO UPDATE SET
+       first_name = EXCLUDED.first_name,
+       last_name = EXCLUDED.last_name,
+       email = EXCLUDED.email,
+       phone = EXCLUDED.phone;`,
+    [
+      date,
+      membershipId,
+      bookingId,
+      input.firstName,
+      input.lastName,
+      input.email,
+      input.phone,
+    ],
+  );
+}
+
+// Clears the stand-in — the original player is back on the roster as normal.
+export async function removeSessionFillIn(
+  date: string,
+  target: FillInTarget,
+): Promise<void> {
+  if (target.membershipId !== undefined) {
+    await sql`
+      DELETE FROM session_fill_ins
+      WHERE session_date = ${date} AND membership_id = ${target.membershipId};
+    `;
+    return;
+  }
+  await sql`
+    DELETE FROM session_fill_ins
+    WHERE session_date = ${date} AND booking_id = ${target.bookingId!};
+  `;
 }
 
 export type MembershipRow = {
@@ -984,7 +1127,7 @@ export async function listMemberships(): Promise<MembershipRow[]> {
   const { rows } = await sql`
     SELECT id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
     FROM memberships
-    WHERE status IN ('active', 'trialing', 'past_due')
+    WHERE status IN ('active', 'trialing', 'past_due', 'unpaid', 'incomplete')
     ORDER BY plan, created_at DESC;
   `;
   return rows.map((r) =>

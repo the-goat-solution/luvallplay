@@ -16,6 +16,7 @@ import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { CashMemberDayAndDateFields } from "@/components/admin/CashMemberDayAndDateFields";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
+import { MemberRetryButton } from "@/components/admin/MemberRetryButton";
 import { MembersToastBridge } from "@/components/admin/MembersToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 
@@ -157,6 +158,12 @@ async function addCashMember(formData: FormData) {
   redirect("/admin/members?cashMemberAdded=1");
 }
 
+// Stripe subscription statuses that mean an invoice is sitting unpaid:
+// 'past_due' is a failed renewal in dunning, 'unpaid' is one Stripe has
+// given up retrying, and 'incomplete' is a first payment that never
+// completed. Each one has an outstanding invoice the admin can re-attempt.
+const OVERDUE_STATUSES = new Set(["past_due", "unpaid", "incomplete"]);
+
 function MembersTable({
   title,
   members,
@@ -215,26 +222,46 @@ function MembersTable({
                     </span>
                   ) : (
                     <span
-                      style={{ color: "#1a7a3c", textTransform: "capitalize" }}
+                      style={{
+                        color: OVERDUE_STATUSES.has(m.status)
+                          ? "#b00020"
+                          : "#1a7a3c",
+                        textTransform: "capitalize",
+                      }}
                     >
-                      {m.status}
+                      {m.status.replace("_", " ")}
                     </span>
                   )}
                 </td>
                 <td style={{ padding: "6px 8px" }}>
-                  {m.recurring && !m.cancelAtPeriodEnd ? (
-                    <MemberCancelButton
-                      membershipId={m.id}
-                      memberName={m.name}
-                      mode="cancel"
-                    />
-                  ) : !m.recurring ? (
-                    <MemberCancelButton
-                      membershipId={m.id}
-                      memberName={m.name}
-                      mode="remove"
-                    />
-                  ) : null}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      alignItems: "flex-start",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {OVERDUE_STATUSES.has(m.status) && m.stripeSubscriptionId ? (
+                      <MemberRetryButton
+                        membershipId={m.id}
+                        memberName={m.name}
+                      />
+                    ) : null}
+                    {m.recurring && !m.cancelAtPeriodEnd ? (
+                      <MemberCancelButton
+                        membershipId={m.id}
+                        memberName={m.name}
+                        mode="cancel"
+                      />
+                    ) : !m.recurring ? (
+                      <MemberCancelButton
+                        membershipId={m.id}
+                        memberName={m.name}
+                        mode="remove"
+                      />
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))

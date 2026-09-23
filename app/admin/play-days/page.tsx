@@ -8,13 +8,24 @@ import {
   getRosterForDate,
   getWaitlistForDate,
   listAllSessionDates,
+  listSessionsInRange,
   removeBooking,
+  removeSessionFillIn,
   reserveBookingSlot,
+  saveSessionFillIn,
   setCourtsForDate,
+  type FillInTarget,
 } from "@/lib/db";
 import { notifyWaitlistIfSpotOpened } from "@/lib/waitlist-notify";
-import { formatDateLong, getClubToday, getDayName } from "@/lib/dates";
+import { sendFillInConfirmationEmail } from "@/lib/email";
+import {
+  formatDateLong,
+  formatEventTimeRange,
+  getClubToday,
+  getDayName,
+} from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { FillInButton } from "@/components/admin/FillInButton";
 import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
@@ -123,6 +134,10 @@ async function addCashPlayer(date: string, formData: FormData) {
 async function removePlayer(date: string, bookingId: number) {
   "use server";
   await removeBooking(bookingId, date);
+  // The booking is gone, so any stand-in arranged for it is meaningless —
+  // drop it too, rather than leaving a row pointing at a booking id that no
+  // longer exists.
+  await removeSessionFillIn(date, { bookingId });
   // Removing a casual booking frees a spot — let anyone waitlisted for this
   // date know right away rather than waiting on another trigger.
   await notifyWaitlistIfSpotOpened(date);
@@ -164,6 +179,92 @@ async function notifyWaitlistNow(date: string) {
   redirect(`/admin/play-days?date=${date}&waitlistNotified=${count}`);
 }
 
+// Records the stand-in for a player who can't make this session. No payment
+// is taken and no booking row is created: the original player already paid
+// for the spot, so this is a substitution on an existing seat, and the
+// session's headcount is deliberately left untouched.
+async function saveFillIn(
+  date: string,
+  target: FillInTarget,
+  formData: FormData,
+) {
+  "use server";
+
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = String(formData.get("lastName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+
+  const fail = (message: string) =>
+    redirect(
+      `/admin/play-days?date=${date}&fillInError=${encodeURIComponent(message)}`,
+    );
+
+  if (!firstName || !lastName || !email) {
+    fail("Fill-in needs a first name, last name and email");
+  }
+
+  await ensureTables();
+
+  // One person can't hold two spots on the same day, so reject a fill-in
+  // whose email is already on this roster — as a player, or as somebody
+  // else's stand-in. The player being replaced is excluded: re-saving a
+  // fill-in without changing the email is an edit, not a duplicate.
+  const roster = await getRosterForDate(date);
+  const isTarget = (entry: (typeof roster)[number]) =>
+    target.membershipId !== undefined
+      ? entry.membershipId === target.membershipId
+      : entry.bookingId === target.bookingId;
+  const emailKey = email.toLowerCase();
+  for (const entry of roster) {
+    if (isTarget(entry)) continue;
+    if (entry.email.toLowerCase() === emailKey) {
+      fail(
+        `${entry.name} is already on this roster with that email — one person can't take two spots.`,
+      );
+    }
+    if (entry.fillIn && entry.fillIn.email.toLowerCase() === emailKey) {
+      fail(
+        `That email is already filling in for ${entry.name} on this date.`,
+      );
+    }
+  }
+
+  await saveSessionFillIn(date, target, {
+    firstName,
+    lastName,
+    email,
+    phone: phone || null,
+  });
+
+  const [session] = await listSessionsInRange(date, date);
+  const sessionTime = session?.eventStartTime
+    ? formatEventTimeRange(session.eventStartTime, session.eventEndTime)
+    : null;
+  const replacing =
+    roster.find((entry) => isTarget(entry))?.name ?? "a member";
+  await sendFillInConfirmationEmail(email, {
+    firstName,
+    replacing,
+    sessionDate: date,
+    sessionTime,
+    sessionLocation: session?.eventLocation ?? null,
+  }).catch((err) =>
+    console.error("Failed to send fill-in confirmation email", err),
+  );
+
+  revalidatePath("/admin/play-days");
+  redirect(`/admin/play-days?date=${date}&fillInSaved=1`);
+}
+
+async function clearFillIn(date: string, target: FillInTarget) {
+  "use server";
+  await ensureTables();
+  await removeSessionFillIn(date, target);
+  revalidatePath("/admin/play-days");
+  redirect(`/admin/play-days?date=${date}&fillInRemoved=1`);
+}
+
 async function removeWaitlistEntry(date: string, id: number) {
   "use server";
   await deleteWaitlistEntry(id);
@@ -183,6 +284,9 @@ export default async function PlayDaysAdminPage({
     courtsError?: string;
     waitlistNotified?: string;
     waitlistRemoved?: string;
+    fillInSaved?: string;
+    fillInRemoved?: string;
+    fillInError?: string;
   }>;
 }) {
   const { date: dateParam } = await searchParams;
@@ -336,34 +440,87 @@ export default async function PlayDaysAdminPage({
                   </td>
                 </tr>
               ) : (
-                roster.map((p, i) => (
-                  <tr key={`${p.email}-${i}`} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={{ padding: "6px 8px" }}>{p.name}</td>
-                    <td style={{ padding: "6px 8px" }}>{p.email}</td>
-                    <td style={{ padding: "6px 8px" }}>{p.phone ?? ""}</td>
-                    <td style={{ padding: "6px 8px" }}>{PLAN_LABEL[p.type]}</td>
-                    <td style={{ padding: "6px 8px" }}>{p.method === "cash" ? "Cash" : "Card"}</td>
-                    <td style={{ padding: "6px 8px" }}>
-                      {p.bookingId !== null ? (
-                        <form action={removePlayer.bind(null, selectedDate, p.bookingId)}>
-                          <SubmitButton
-                            loadingText="Removing…"
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              border: "1px solid #a12622",
-                              background: "#fff",
-                              color: "#a12622",
-                              fontSize: 12,
-                            }}
+                roster.flatMap((p, i) => {
+                  // Exactly one of these is set on any roster entry, and
+                  // it's what a fill-in hangs off — see getRosterForDate.
+                  const target =
+                    p.membershipId !== null
+                      ? { membershipId: p.membershipId }
+                      : { bookingId: p.bookingId! };
+                  // A replaced player keeps their row — they paid for the
+                  // spot — but is struck through, with their stand-in shown
+                  // directly underneath.
+                  const struck = p.fillIn
+                    ? { textDecoration: "line-through" as const, color: "#999" }
+                    : undefined;
+                  return [
+                    <tr
+                      key={`${p.email}-${i}`}
+                      style={{
+                        borderBottom: p.fillIn ? "none" : "1px solid #eee",
+                      }}
+                    >
+                      <td style={{ padding: "6px 8px", ...struck }}>{p.name}</td>
+                      <td style={{ padding: "6px 8px", ...struck }}>{p.email}</td>
+                      <td style={{ padding: "6px 8px", ...struck }}>{p.phone ?? ""}</td>
+                      <td style={{ padding: "6px 8px", ...struck }}>{PLAN_LABEL[p.type]}</td>
+                      <td style={{ padding: "6px 8px", ...struck }}>
+                        {p.method === "cash" ? "Cash" : "Card"}
+                      </td>
+                      <td style={{ padding: "6px 8px" }}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <FillInButton
+                            playerName={p.name}
+                            existing={p.fillIn}
+                            saveAction={saveFillIn.bind(null, selectedDate, target)}
+                            removeAction={clearFillIn.bind(null, selectedDate, target)}
+                          />
+                          {p.bookingId !== null ? (
+                            <form action={removePlayer.bind(null, selectedDate, p.bookingId)}>
+                              <SubmitButton
+                                loadingText="Removing…"
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 6,
+                                  border: "1px solid #a12622",
+                                  background: "#fff",
+                                  color: "#a12622",
+                                  fontSize: 12,
+                                }}
+                              >
+                                Remove
+                              </SubmitButton>
+                            </form>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>,
+                    ...(p.fillIn
+                      ? [
+                          <tr
+                            key={`${p.email}-${i}-fill-in`}
+                            style={{ borderBottom: "1px solid #eee" }}
                           >
-                            Remove
-                          </SubmitButton>
-                        </form>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))
+                            <td style={{ padding: "2px 8px 6px" }}>
+                              ↳ {p.fillIn.name}
+                            </td>
+                            <td style={{ padding: "2px 8px 6px" }}>
+                              {p.fillIn.email}
+                            </td>
+                            <td style={{ padding: "2px 8px 6px" }}>
+                              {p.fillIn.phone ?? ""}
+                            </td>
+                            <td
+                              colSpan={3}
+                              style={{ padding: "2px 8px 6px", color: "#666", fontSize: 13 }}
+                            >
+                              Filling in for {p.name}
+                            </td>
+                          </tr>,
+                        ]
+                      : []),
+                  ];
+                })
               )}
             </tbody>
           </table>

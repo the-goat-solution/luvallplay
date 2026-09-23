@@ -52,16 +52,28 @@ export async function sendRosterEmail(
     throw new Error("EMAIL_FROM is not configured");
   }
 
+  // A player with a stand-in is listed as their stand-in: whoever runs the
+  // door needs the name and number of the person actually turning up, with
+  // the absent member named only so the spot can still be accounted for.
   const rows = roster
-    .map(
-      (p) =>
-        `<tr>
-          <td style="padding:8px 10px;border-bottom:1px solid #e5e0cf">${escapeHtml(p.name)}</td>
-          <td style="padding:8px 10px;border-bottom:1px solid #e5e0cf">${escapeHtml(p.email)}</td>
-          <td style="padding:8px 10px;border-bottom:1px solid #e5e0cf">${escapeHtml(p.phone ?? "")}</td>
-          <td style="padding:8px 10px;border-bottom:1px solid #e5e0cf">${PLAN_LABEL[p.type]}</td>
-        </tr>`,
-    )
+    .map((p) => {
+      const cell = (content: string) =>
+        `<td style="padding:8px 10px;border-bottom:1px solid #e5e0cf">${content}</td>`;
+      if (p.fillIn) {
+        return `<tr>
+          ${cell(`${escapeHtml(p.fillIn.name)}<br /><span style="font-size:12px;color:#6b6b6b">filling in for ${escapeHtml(p.name)}</span>`)}
+          ${cell(escapeHtml(p.fillIn.email))}
+          ${cell(escapeHtml(p.fillIn.phone ?? ""))}
+          ${cell(`${PLAN_LABEL[p.type]} (fill-in)`)}
+        </tr>`;
+      }
+      return `<tr>
+          ${cell(escapeHtml(p.name))}
+          ${cell(escapeHtml(p.email))}
+          ${cell(escapeHtml(p.phone ?? ""))}
+          ${cell(PLAN_LABEL[p.type])}
+        </tr>`;
+    })
     .join("");
 
   const bodyHtml = `
@@ -81,8 +93,10 @@ export async function sendRosterEmail(
     `Play day roster — ${date}`,
     `${roster.length} player${roster.length === 1 ? "" : "s"} signed up.`,
     "",
-    ...roster.map(
-      (p) => `${p.name} <${p.email}> ${p.phone ?? ""} — ${PLAN_LABEL[p.type]}`,
+    ...roster.map((p) =>
+      p.fillIn
+        ? `${p.fillIn.name} <${p.fillIn.email}> ${p.fillIn.phone ?? ""} — ${PLAN_LABEL[p.type]} (filling in for ${p.name})`
+        : `${p.name} <${p.email}> ${p.phone ?? ""} — ${PLAN_LABEL[p.type]}`,
     ),
   ].join("\n");
 
@@ -411,6 +425,57 @@ export async function sendCasualBookingConfirmationEmail(
     to,
     subject: `You're confirmed — ${displayDate} — Three Wolves Badminton Club`,
     html: renderEmailLayout({ title: "You're confirmed!", bodyHtml }),
+    text,
+  });
+}
+
+// Sent to someone standing in for a member who can't make a session. Their
+// spot is already paid for by the member, so this deliberately says nothing
+// about payment — it's just the where and when.
+export async function sendFillInConfirmationEmail(
+  to: string,
+  input: {
+    firstName: string;
+    replacing: string;
+    sessionDate: string;
+    sessionTime: string | null;
+    sessionLocation: string | null;
+  },
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const displayDate = formatEmailDate(input.sessionDate);
+  const location =
+    input.sessionLocation || "Graham Condon Recreation and Sport Centre";
+  const whenWhere = input.sessionTime
+    ? `at <strong>${escapeHtml(input.sessionTime)}</strong>, ${escapeHtml(location)}`
+    : escapeHtml(location);
+  const whenWhereText = input.sessionTime
+    ? `at ${input.sessionTime}, ${location}`
+    : location;
+
+  const bodyHtml = `
+    ${heading("You're on the list!")}
+    ${paragraph(`Hi ${escapeHtml(input.firstName)}, you're filling in for <strong>${escapeHtml(input.replacing)}</strong> on <strong>${escapeHtml(displayDate)}</strong>, ${whenWhere}.`)}
+    ${paragraph("Their spot is already covered, so there's nothing to pay. Just bring your racket and we'll see you on court!")}
+    ${contactFooterNote()}
+  `;
+  const text = [
+    `Hi ${input.firstName}, you're filling in for ${input.replacing} on ${displayDate}, ${whenWhereText}.`,
+    "",
+    "Their spot is already covered, so there's nothing to pay. Just bring your racket and we'll see you on court!",
+    "",
+    contactFooterNoteText(),
+  ].join("\n");
+
+  await getResend().emails.send({
+    from: withDisplayName(from),
+    to,
+    subject: `You're filling in — ${displayDate} — Three Wolves Badminton Club`,
+    html: renderEmailLayout({ title: "You're on the list!", bodyHtml }),
     text,
   });
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CASUAL_PRICE_CENTS } from "@/lib/constants";
-import { getAvailableSpots, ensureTables } from "@/lib/db";
+import { getAvailableSpots, ensureTables, isRegistrationLocked } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
 import {
   assertSessionBookable,
@@ -39,6 +39,12 @@ export async function POST(request: Request) {
     await assertSessionBookable(body.sessionDate);
 
     if (process.env.POSTGRES_URL) {
+      if (await isRegistrationLocked(body.sessionDate)) {
+        return NextResponse.json(
+          { error: "Registration for this session is closed" },
+          { status: 409 },
+        );
+      }
       const spots = await getAvailableSpots(body.sessionDate);
       if (spots <= 0) {
         return NextResponse.json({ error: "Session is full" }, { status: 409 });

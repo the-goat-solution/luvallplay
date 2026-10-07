@@ -7,6 +7,7 @@ import {
   getCourtsForDate,
   getRosterForDate,
   getWaitlistForDate,
+  isRegistrationLocked,
   listAllSessionDates,
   listSessionsInRange,
   removeBooking,
@@ -14,6 +15,7 @@ import {
   reserveBookingSlot,
   saveSessionFillIn,
   setCourtsForDate,
+  setRegistrationLocked,
   type FillInTarget,
 } from "@/lib/db";
 import { notifyWaitlistIfSpotOpened } from "@/lib/waitlist-notify";
@@ -59,7 +61,9 @@ async function addCashPlayer(date: string, formData: FormData) {
 
   await ensureTables();
 
-  const spots = await getAvailableSpots(date);
+  // Admin adds go through even when registration is locked — the lock only
+  // closes public sign-ups.
+  const spots = await getAvailableSpots(date, { ignoreLock: true });
   if (spots <= 0) {
     redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent("Session is full")}`);
   }
@@ -170,6 +174,19 @@ async function updateCourts(date: string, formData: FormData) {
 
   revalidatePath("/admin/play-days");
   redirect(`/admin/play-days?date=${date}&courtsUpdated=${courts}`);
+}
+
+// Closes (or reopens) public sign-ups for a play day regardless of how many
+// spots are left. Existing bookings and members are untouched.
+async function setRegistration(date: string, locked: boolean) {
+  "use server";
+  await ensureTables();
+  await setRegistrationLocked(date, locked);
+  // Reopening may free spots that were hidden by the lock — let the
+  // waitlist know, the same as when courts are added.
+  if (!locked) await notifyWaitlistIfSpotOpened(date);
+  revalidatePath("/admin/play-days");
+  redirect(`/admin/play-days?date=${date}&registration=${locked ? "locked" : "unlocked"}`);
 }
 
 async function notifyWaitlistNow(date: string) {
@@ -287,6 +304,7 @@ export default async function PlayDaysAdminPage({
     fillInSaved?: string;
     fillInRemoved?: string;
     fillInError?: string;
+    registration?: string;
   }>;
 }) {
   const { date: dateParam } = await searchParams;
@@ -308,11 +326,14 @@ export default async function PlayDaysAdminPage({
   let waitlist: Awaited<ReturnType<typeof getWaitlistForDate>> = [];
   let casualSpotsRemaining: number | null = null;
   let courts = 2;
+  let registrationLocked = false;
   if (process.env.POSTGRES_URL && selectedDate) {
     roster = await getRosterForDate(selectedDate);
     waitlist = await getWaitlistForDate(selectedDate);
-    casualSpotsRemaining = await getAvailableSpots(selectedDate);
+    // Shown ignoring the lock, so the admin still sees real capacity.
+    casualSpotsRemaining = await getAvailableSpots(selectedDate, { ignoreLock: true });
     courts = await getCourtsForDate(selectedDate);
+    registrationLocked = await isRegistrationLocked(selectedDate);
   }
   const maxPlayers = maxPlayersForCourts(courts);
 
@@ -410,6 +431,49 @@ export default async function PlayDaysAdminPage({
               Confirm
             </SubmitButton>
           </form>
+
+          <h2 style={{ fontSize: 16, marginBottom: 8 }}>Registration</h2>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              padding: "10px 12px",
+              marginBottom: 24,
+              borderRadius: 8,
+              border: `1px solid ${registrationLocked ? "#e0b4b2" : "#cfe3d4"}`,
+              background: registrationLocked ? "#fdf1f0" : "#f1f8f3",
+            }}
+          >
+            <div style={{ fontSize: 13 }}>
+              <strong style={{ color: registrationLocked ? "#a12622" : "#1e6b3a" }}>
+                {registrationLocked ? "🔒 Locked" : "Open"}
+              </strong>
+              <span style={{ color: "#666" }}>
+                {registrationLocked
+                  ? " — no new casual bookings or memberships can start on this play day, even with spots left. Existing players keep their places, and you can still add cash players below."
+                  : ` — players can sign up while spots remain (${casualSpotsRemaining ?? 0} left).`}
+              </span>
+            </div>
+            <form action={setRegistration.bind(null, selectedDate, !registrationLocked)}>
+              <SubmitButton
+                loadingText={registrationLocked ? "Unlocking…" : "Locking…"}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 6,
+                  border: `1px solid ${registrationLocked ? "#1a2a4a" : "#a12622"}`,
+                  background: registrationLocked ? "#1a2a4a" : "#a12622",
+                  color: "#fff",
+                  fontSize: 13,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {registrationLocked ? "Unlock registration" : "Lock registration"}
+              </SubmitButton>
+            </form>
+          </div>
 
           <p style={{ fontWeight: 600, marginBottom: 4 }}>
             {roster.length} player{roster.length === 1 ? "" : "s"} signed up for {selectedDate}
@@ -529,7 +593,7 @@ export default async function PlayDaysAdminPage({
             <h2 style={{ fontSize: 16 }}>
               Waitlist ({waitlist.length})
             </h2>
-            {casualSpotsRemaining !== null && casualSpotsRemaining > 0 && waitlist.length > 0 && (
+            {!registrationLocked && casualSpotsRemaining !== null && casualSpotsRemaining > 0 && waitlist.length > 0 && (
               <form action={notifyWaitlistNow.bind(null, selectedDate)}>
                 <SubmitButton
                   loadingText="Notifying…"

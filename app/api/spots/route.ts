@@ -18,11 +18,12 @@ export async function GET(request: Request) {
   const dates = datesParam.split(",").map((d) => d.trim()).filter(Boolean);
   let spots: Record<string, number> = {};
   let signedUp: Record<string, number> = {};
+  let locked: Record<string, boolean> = {};
 
   try {
     if (process.env.POSTGRES_URL) {
       await ensureTables();
-      ({ spots, signedUp } = await getSpotsAndHeadcountForDates(dates));
+      ({ spots, signedUp, locked } = await getSpotsAndHeadcountForDates(dates));
     } else {
       for (const date of dates) {
         spots[date] = SESSION_CAPACITY;
@@ -36,5 +37,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ spots, signedUp });
+  return NextResponse.json({ spots, signedUp, locked });
 }

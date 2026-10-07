@@ -15,6 +15,7 @@ const TOAST_PARAMS = [
   "fillInSaved",
   "fillInRemoved",
   "fillInError",
+  "registration",
 ] as const;
 
 // Every admin action on the play-days page redirects back with one of these
@@ -37,6 +38,7 @@ export function PlayDaysToastBridge() {
     const fillInSaved = searchParams.get("fillInSaved");
     const fillInRemoved = searchParams.get("fillInRemoved");
     const fillInError = searchParams.get("fillInError");
+    const registration = searchParams.get("registration");
 
     if (cashAdded) showToast("Cash player added and recorded in Stripe.", "success");
     if (cashError) showToast(cashError, "error");
@@ -58,6 +60,12 @@ export function PlayDaysToastBridge() {
       );
     }
     if (waitlistRemoved) showToast("Removed from the waitlist.", "success");
+    if (registration === "locked") {
+      showToast("Registration locked — no new sign-ups for this play day.", "success");
+    }
+    if (registration === "unlocked") {
+      showToast("Registration reopened for this play day.", "success");
+    }
     if (fillInSaved) showToast("Fill-in saved and emailed the session details.", "success");
     if (fillInRemoved) showToast("Fill-in removed — the original player is back on the roster.", "success");
     if (fillInError) showToast(fillInError, "error");

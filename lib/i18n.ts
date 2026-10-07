@@ -42,6 +42,7 @@ const I18N = {
     ngc_full: "Session Full — Join Waitlist",
     ngc_locked_msg:
       "Registration opens 30 days before the session and closes at 5PM on the day",
+    ngc_admin_locked_msg: "Registration for this session has closed",
     ngc_view_only: "View only — booking opens 30 days before",
     ngc_no_sessions: "No upcoming sessions scheduled — check back soon.",
     casual_only_badge:
@@ -259,6 +260,7 @@ const I18N = {
     ngc_cta: "Đặt Chỗ Thông Thường",
     ngc_full: "Hết Chỗ — Đăng Ký Chờ",
     ngc_locked_msg: "Đăng ký mở trước 30 ngày và đóng lúc 17:00 ngày diễn ra",
+    ngc_admin_locked_msg: "Đã đóng đăng ký cho buổi này",
     ngc_view_only: "Chỉ xem — đặt chỗ mở trước 30 ngày",
     ngc_no_sessions: "Chưa có buổi tập sắp tới — vui lòng quay lại sau.",
     casual_only_badge:

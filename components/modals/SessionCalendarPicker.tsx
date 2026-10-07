@@ -21,6 +21,7 @@ export function SessionCalendarPicker() {
     selectedSession,
     setSelectedSession,
     spotsByDate,
+    lockedByDate,
     refreshSpots,
     sessionDates,
     refreshSessionDates,
@@ -133,7 +134,11 @@ export function SessionCalendarPicker() {
       );
     } else if (open && isFull) {
       cells.push(
-        <div key={d} className="sess-d game-locked" title={tr("session_full")}>
+        <div
+          key={d}
+          className="sess-d game-locked"
+          title={lockedByDate[toDateKey(date)] ? tr("reg_closed") : tr("session_full")}
+        >
           {d}
         </div>,
       );

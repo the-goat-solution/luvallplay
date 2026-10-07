@@ -147,6 +147,10 @@ async function ensureTablesImpl() {
   // previous fixed 12-player capacity). Unlike max_spots, this is never
   // touched by the calendar sync's upsert, so it doesn't drift.
   await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS courts INT NOT NULL DEFAULT 2;`;
+  // Admin switch that closes registration for a play day before it's full.
+  // While set, the day offers no casual spots and new memberships won't
+  // start on it; existing bookings and members keep their places.
+  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS registration_locked BOOLEAN NOT NULL DEFAULT FALSE;`;
   // Set once a "spot opened" email has actually been sent for this waitlist
   // row, so notifyWaitlistIfSpotOpened (lib/waitlist-notify.ts) never
   // double-emails someone across repeated capacity-increase triggers.
@@ -278,12 +282,21 @@ export async function ensureSession(date: string) {
 // never updated afterwards (the Google Calendar sync's upsert only touches
 // the calendar-derived columns), so it drifts from reality. `courts` is only
 // ever written by setCourtsForDate, so it stays trustworthy.
-export async function getAvailableSpots(date: string): Promise<number> {
+//
+// A play day with registration locked by an admin reports 0 spots, unless
+// ignoreLock is set (admin-side adds, which bypass the lock on purpose).
+export async function getAvailableSpots(
+  date: string,
+  { ignoreLock = false }: { ignoreLock?: boolean } = {},
+): Promise<number> {
   await ensureSession(date);
   const { rows } = await sql`
-    SELECT booked_spots, courts FROM sessions WHERE date = ${date};
+    SELECT booked_spots, courts, registration_locked FROM sessions WHERE date = ${date};
   `;
-  const row = rows[0] as { booked_spots: number; courts: number } | undefined;
+  const row = rows[0] as
+    | { booked_spots: number; courts: number; registration_locked: boolean }
+    | undefined;
+  if (row?.registration_locked && !ignoreLock) return 0;
   const booked = row?.booked_spots ?? 0;
   const maxPlayers = maxPlayersForCourts(row?.courts ?? defaultCourtsForDate(date));
   const activeMembers = await getActiveMemberCountForDate(date);
@@ -296,8 +309,9 @@ export async function getAvailableSpots(date: string): Promise<number> {
 export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   spots: Record<string, number>;
   signedUp: Record<string, number>;
+  locked: Record<string, boolean>;
 }> {
-  if (dates.length === 0) return { spots: {}, signedUp: {} };
+  if (dates.length === 0) return { spots: {}, signedUp: {}, locked: {} };
 
   // Each date may default to a different court count (membership day vs.
   // not), so the per-date default is computed in JS and zipped with the
@@ -322,7 +336,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
 
   const [{ rows }, { rows: memberRows }] = await Promise.all([
     sql.query(
-      `SELECT date::text AS date, booked_spots, courts FROM sessions WHERE date = ANY($1::date[]);`,
+      `SELECT date::text AS date, booked_spots, courts, registration_locked FROM sessions WHERE date = ANY($1::date[]);`,
       [dates],
     ),
     // Each date gets its own correctly-scoped member count (a member only
@@ -347,10 +361,17 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
 
   const bookedByDate = new Map<string, number>();
   const courtsByDate = new Map<string, number>();
+  const lockedDates = new Set<string>();
   for (const row of rows) {
-    const r = row as { date: string; booked_spots: number; courts: number };
+    const r = row as {
+      date: string;
+      booked_spots: number;
+      courts: number;
+      registration_locked: boolean;
+    };
     bookedByDate.set(r.date, r.booked_spots);
     courtsByDate.set(r.date, r.courts);
+    if (r.registration_locked) lockedDates.add(r.date);
   }
   const membersByDate = new Map<string, number>();
   for (const row of memberRows) {
@@ -360,6 +381,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
 
   const spots: Record<string, number> = {};
   const signedUp: Record<string, number> = {};
+  const locked: Record<string, boolean> = {};
   for (const date of dates) {
     const booked = bookedByDate.get(date) ?? 0;
     // Already scoped to the right membership day (or zero for casual-only
@@ -369,10 +391,11 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
     const maxPlayers = maxPlayersForCourts(
       courtsByDate.get(date) ?? defaultCourtsForDate(date),
     );
-    spots[date] = Math.max(0, maxPlayers - activeMembers - booked);
+    locked[date] = lockedDates.has(date);
+    spots[date] = locked[date] ? 0 : Math.max(0, maxPlayers - activeMembers - booked);
     signedUp[date] = booked + activeMembers;
   }
-  return { spots, signedUp };
+  return { spots, signedUp, locked };
 }
 
 export async function reserveBookingSlot(
@@ -528,8 +551,11 @@ export async function assignAndReserveMembershipAccessStart(
           [preferredDate, dow, clubToday, cutoffPassed ? 1 : 0],
         )
       : await client.query(
+          // A play day an admin has locked never becomes a new member's
+          // first day; the admin-chosen preferredDate above bypasses this.
           `SELECT date::text AS date FROM sessions
            WHERE google_event_id IS NOT NULL
+             AND NOT registration_locked
              AND EXTRACT(DOW FROM date) = $2
              AND date >= ($1::date + $3::int)
              AND date <= ($1::date + $4::int)
@@ -773,6 +799,20 @@ export async function getSessionHeadcount(
     (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
   const members = await getActiveMemberCountForDate(date);
   return { casual, members, total: casual + members };
+}
+
+export async function isRegistrationLocked(date: string): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT registration_locked FROM sessions WHERE date = ${date};
+  `;
+  return Boolean((rows[0] as { registration_locked: boolean } | undefined)?.registration_locked);
+}
+
+export async function setRegistrationLocked(date: string, locked: boolean): Promise<void> {
+  await ensureSession(date);
+  await sql`
+    UPDATE sessions SET registration_locked = ${locked} WHERE date = ${date};
+  `;
 }
 
 export async function getCourtsForDate(date: string): Promise<number> {

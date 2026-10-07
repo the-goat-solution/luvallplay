@@ -36,6 +36,8 @@ type AppContextValue = {
   waitlistSession: Date | null;
   spotsByDate: Record<string, number>;
   signedUpByDate: Record<string, number>;
+  /** Play days an admin has closed registration for. */
+  lockedByDate: Record<string, boolean>;
   refreshSpots: (dates: string[]) => Promise<void>;
   sessionDates: Record<string, SessionDateInfo>;
   sessionDatesLoading: boolean;
@@ -52,6 +54,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [waitlistSession, setWaitlistSession] = useState<Date | null>(null);
   const [spotsByDate, setSpotsByDate] = useState<Record<string, number>>({});
   const [signedUpByDate, setSignedUpByDate] = useState<Record<string, number>>({});
+  const [lockedByDate, setLockedByDate] = useState<Record<string, boolean>>({});
   const [sessionDates, setSessionDates] = useState<Record<string, SessionDateInfo>>({});
   const [sessionDatesLoading, setSessionDatesLoading] = useState(false);
 
@@ -65,10 +68,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const data = (await res.json()) as {
         spots: Record<string, number>;
         signedUp?: Record<string, number>;
+        locked?: Record<string, boolean>;
       };
       setSpotsByDate((prev) => ({ ...prev, ...data.spots }));
       if (data.signedUp) {
         setSignedUpByDate((prev) => ({ ...prev, ...data.signedUp }));
+      }
+      if (data.locked) {
+        setLockedByDate((prev) => ({ ...prev, ...data.locked }));
       }
     } catch {
       /* offline / db not configured */
@@ -141,6 +148,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       waitlistSession,
       spotsByDate,
       signedUpByDate,
+      lockedByDate,
       refreshSpots,
       sessionDates,
       sessionDatesLoading,
@@ -158,6 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       waitlistSession,
       spotsByDate,
       signedUpByDate,
+      lockedByDate,
       refreshSpots,
       sessionDates,
       sessionDatesLoading,

@@ -34,6 +34,7 @@ export function Schedule({
     setSchedulePick,
     spotsByDate,
     signedUpByDate,
+    lockedByDate,
     refreshSpots,
     sessionDates,
     sessionDatesLoading,
@@ -94,6 +95,8 @@ export function Schedule({
   const withinLock = displayDate ? isWithinBookingLock(displayDate, now) : false;
   const bookable = displayDate ? isBookable(displayDate, now) : false;
   const isFull = spotsAvail <= 0;
+  // Closed early by an admin, whether or not the session has filled.
+  const adminLocked = dateKey ? Boolean(lockedByDate[dateKey]) : false;
   const isNextGame =
     displayDate && nextSessionDate
       ? startOfDay(displayDate).getTime() === startOfDay(nextSessionDate).getTime()
@@ -110,7 +113,7 @@ export function Schedule({
   }, [sortedUpcomingKeys, refreshSpots]);
 
   const handleBook = useCallback(() => {
-    if (!displayDate || !bookable) return;
+    if (!displayDate || !bookable || adminLocked) return;
     if (isFull) {
       openWaitlistModal(displayDate);
       return;
@@ -118,6 +121,7 @@ export function Schedule({
     setSelectedSession(new Date(displayDate));
     setOpenModal("booking");
   }, [
+    adminLocked,
     bookable,
     displayDate,
     isFull,
@@ -262,6 +266,10 @@ export function Schedule({
 
   if (withinLock) {
     ctaLabel = isNextGame ? tr("ngc_view_only") : tr("reg_closed");
+    ctaDisabled = true;
+    showLocked = true;
+  } else if (adminLocked) {
+    ctaLabel = tr("reg_closed");
     ctaDisabled = true;
     showLocked = true;
   } else if (isFull) {
@@ -432,7 +440,7 @@ export function Schedule({
                     <rect x="3" y="11" width="18" height="11" rx="2" />
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
-                  <Trans k="ngc_locked_msg" />
+                  <Trans k={withinLock ? "ngc_locked_msg" : "ngc_admin_locked_msg"} />
                 </div>
               )}
             </div>

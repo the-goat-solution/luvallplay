@@ -175,22 +175,11 @@ function formatWhen(iso: string, lang: Lang) {
   }).format(new Date(iso));
 }
 
-function shuffle<T>(items: T[]): T[] {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-/** Sample draw for preview mode: random pairs and the first few rounds played. */
-function sampleDraw(players: string[]): NonNullable<MiniGameState["draw"]> {
-  const names = shuffle(players);
-  const teams: Team[] = [];
-  for (let i = 0; i + 1 < names.length; i += 2) {
-    teams.push({ id: teams.length + 1, players: [names[i], names[i + 1]] });
-  }
+/**
+ * Sample draw for preview mode: teams come from the server's real draw rules
+ * (nothing is saved), with the first few rounds filled in with made-up scores.
+ */
+function sampleDraw(teams: Team[]): NonNullable<MiniGameState["draw"]> {
   const matches = buildSchedule(teams);
   const scores: Record<string, Score> = {};
   for (const m of matches.filter((m) => m.round <= 3)) {
@@ -308,9 +297,24 @@ export function MiniGame() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const startPreview = () => {
-    if (!state) return;
-    setDemo(sampleDraw(state.players));
+  const startPreview = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/mini-game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "preview" }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const { teams } = (await res.json()) as { teams: Team[] };
+      setDemo(sampleDraw(teams));
+    } catch {
+      setNotice(c.errGeneric);
+      return;
+    } finally {
+      setBusy(false);
+    }
     setDrafts({});
     setJustDrawn(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -463,7 +467,7 @@ export function MiniGame() {
                   </svg>
                   {c.draw}
                 </button>
-                <button type="button" className="btn btn-bronze-outline btn-full mg-preview-btn" onClick={startPreview}>
+                <button type="button" className="btn btn-bronze-outline btn-full mg-preview-btn" onClick={startPreview} disabled={busy}>
                   {c.preview}
                 </button>
               </div>

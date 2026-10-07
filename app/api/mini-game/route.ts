@@ -7,6 +7,7 @@ import {
   lockScore,
   resetDraw,
 } from "@/lib/mini-game-db";
+import { drawTeams } from "@/lib/mini-game-roster";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
@@ -43,20 +44,27 @@ type Body =
   | { action: "draw"; password: string }
   | { action: "reset"; password: string }
   | { action: "redraw"; password: string }
+  | { action: "preview" }
   | { action: "score"; drawId: number; matchId: string; a: number; b: number };
 
 export async function POST(request: Request) {
   if (!checkRateLimit(`mini-game:post:${getClientIp(request)}`, 40)) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
-  if (!process.env.POSTGRES_URL) return unavailable();
-
   let body: Body;
   try {
     body = (await request.json()) as Body;
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
+
+  // Sample teams for preview mode, drawn by the real tier rules but never
+  // saved. Needs no database or password.
+  if (body.action === "preview") {
+    return NextResponse.json({ teams: drawTeams() }, { headers: NO_STORE });
+  }
+
+  if (!process.env.POSTGRES_URL) return unavailable();
 
   if (body.action !== "score" && !passwordMatches(body.password)) {
     if (!checkRateLimit(`mini-game:password:${getClientIp(request)}`, 10)) {

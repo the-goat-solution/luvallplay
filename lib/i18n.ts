@@ -9,7 +9,6 @@ const I18N = {
     nav_gallery: "Gallery",
     nav_membership: "Membership",
     nav_join: "Join Us",
-    nav_minigame: "Mini Game",
     hero_eyebrow: "Christchurch, New Zealand",
     hero_sub: "Badminton Club",
     hero_tagline:
@@ -228,7 +227,6 @@ const I18N = {
     nav_gallery: "Hình Ảnh",
     nav_membership: "Hội Viên",
     nav_join: "Tham Gia",
-    nav_minigame: "Mini Game",
     hero_eyebrow: "Christchurch, New Zealand",
     hero_sub: "Câu Lạc Bộ Cầu Lông",
     hero_tagline:

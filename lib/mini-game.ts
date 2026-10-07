@@ -1,36 +1,16 @@
-// Three Wolves mini game: doubles round robin.
-// Teams are drawn by pairing tier 1 with tier 4 and tier 2 with tier 3, then
-// every team plays every other team once. A win is worth 2 points, a loss 0.
-
-export type Tier = 1 | 2 | 3 | 4;
-
-export type Player = { name: string; tier: Tier };
-
-export const ROSTER: Player[] = [
-  { name: "Hòa", tier: 1 },
-  { name: "Khoai Lang", tier: 1 },
-  { name: "Sơn", tier: 1 },
-  { name: "Huy", tier: 1 },
-  { name: "Quang", tier: 2 },
-  { name: "Timba", tier: 2 },
-  { name: "Hùng", tier: 2 },
-  { name: "Tố Anh", tier: 2 },
-  { name: "Jason", tier: 3 },
-  { name: "Hiếu", tier: 3 },
-  { name: "Ly", tier: 3 },
-  { name: "Uyên", tier: 3 },
-  { name: "Trang", tier: 4 },
-  { name: "Gia Minh", tier: 4 },
-  { name: "Tú", tier: 4 },
-  { name: "Kelcee", tier: 4 },
-];
+// Three Wolves mini game: doubles round robin. Every team plays every other
+// team once. A win is worth 2 points, a loss 0. Shared by the page and the
+// API; the tiered roster that drives the draw lives in mini-game-roster.ts
+// and stays on the server.
 
 export const WIN_POINTS = 2;
 export const LOSS_POINTS = 0;
+export const TEAM_LOCK_DAYS = 7;
+export const MAX_SCORE = 99;
 
 export type Team = {
   id: number;
-  players: [Player, Player];
+  players: [string, string];
 };
 
 export type Match = {
@@ -42,33 +22,21 @@ export type Match = {
   teamB: number;
 };
 
-export type Score = { a: string; b: string };
+/** A confirmed, locked-in score. */
+export type Score = { a: number; b: number };
 
-function shuffle<T>(items: T[]): T[] {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-function pairTiers(roster: Player[], high: Tier, low: Tier): [Player, Player][] {
-  const highs = shuffle(roster.filter((p) => p.tier === high));
-  const lows = shuffle(roster.filter((p) => p.tier === low));
-  if (highs.length !== lows.length) {
-    throw new Error(
-      `Tier ${high} has ${highs.length} players but tier ${low} has ${lows.length}`,
-    );
-  }
-  return highs.map((p, i) => [p, lows[i]]);
-}
-
-/** Randomly draws the doubles teams: tier 1 + tier 4, tier 2 + tier 3. */
-export function drawTeams(roster: Player[] = ROSTER): Team[] {
-  const pairs = shuffle([...pairTiers(roster, 1, 4), ...pairTiers(roster, 2, 3)]);
-  return pairs.map((players, i) => ({ id: i + 1, players }));
-}
+/** State of the current draw as served by /api/mini-game. */
+export type MiniGameState = {
+  players: string[];
+  draw: {
+    id: number;
+    teams: Team[];
+    matches: Match[];
+    scores: Record<string, Score>;
+    createdAt: string;
+    lockedUntil: string;
+  } | null;
+};
 
 /**
  * Round-robin schedule using the circle method. Every round each team plays
@@ -102,27 +70,28 @@ export function buildSchedule(teams: Team[]): Match[] {
   return matches;
 }
 
-export type MatchResult = { winner: number; loser: number; scoreA: number; scoreB: number };
-
-function parseScore(value: string): number | null {
-  if (!/^\d{1,2}$/.test(value.trim())) return null;
-  return Number(value);
+/** Badminton has no draws: a valid score is two whole numbers that differ. */
+export function isValidScore(a: number, b: number): boolean {
+  return (
+    Number.isInteger(a) &&
+    Number.isInteger(b) &&
+    a >= 0 &&
+    b >= 0 &&
+    a <= MAX_SCORE &&
+    b <= MAX_SCORE &&
+    a !== b
+  );
 }
 
-/**
- * Returns the result for a match, or null if the score is incomplete or
- * invalid (badminton has no draws, so equal scores don't count).
- */
+export type MatchResult = { winner: number; loser: number; scoreA: number; scoreB: number };
+
 export function matchResult(match: Match, score: Score | undefined): MatchResult | null {
-  if (!score) return null;
-  const a = parseScore(score.a);
-  const b = parseScore(score.b);
-  if (a === null || b === null || a === b) return null;
+  if (!score || !isValidScore(score.a, score.b)) return null;
   return {
-    scoreA: a,
-    scoreB: b,
-    winner: a > b ? match.teamA : match.teamB,
-    loser: a > b ? match.teamB : match.teamA,
+    scoreA: score.a,
+    scoreB: score.b,
+    winner: score.a > score.b ? match.teamA : match.teamB,
+    loser: score.a > score.b ? match.teamB : match.teamA,
   };
 }
 
@@ -182,9 +151,7 @@ export function computeStandings(
   for (const s of standings) s.diff = s.pointsFor - s.pointsAgainst;
 
   const headToHead = (s: Standing, group: Set<number>) =>
-    results.filter(
-      (r) => r.winner === s.team.id && group.has(r.loser),
-    ).length * WIN_POINTS;
+    results.filter((r) => r.winner === s.team.id && group.has(r.loser)).length * WIN_POINTS;
 
   const groups = new Map<number, Standing[]>();
   for (const s of standings) {
@@ -206,5 +173,5 @@ export function computeStandings(
 }
 
 export function teamName(team: Team): string {
-  return `${team.players[0].name} & ${team.players[1].name}`;
+  return `${team.players[0]} & ${team.players[1]}`;
 }

@@ -1,51 +1,62 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { ModalShell } from "@/components/modals/ModalShell";
 import type { Lang } from "@/lib/i18n";
 import {
-  ROSTER,
+  TEAM_LOCK_DAYS,
   WIN_POINTS,
   buildSchedule,
   computeStandings,
-  drawTeams,
+  isValidScore,
   matchResult,
   teamName,
   type Match,
+  type MiniGameState,
   type Score,
   type Team,
-  type Tier,
 } from "@/lib/mini-game";
 
-const STORAGE_KEY = "tw-mini-game-v1";
-
-type SavedGame = {
-  teams: Team[];
-  matches: Match[];
-  scores: Record<string, Score>;
-};
+const POLL_MS = 15_000;
 
 const COPY = {
   en: {
-    back: "Back to main site",
     eyebrow: "Club Mini Game",
     title: "Round Robin",
     sub: "Doubles · Every team meets every team",
     howLbl: "How it works",
-    how1: "Teams are drawn at random: a Tier 1 player with a Tier 4 player, and a Tier 2 player with a Tier 3 player.",
-    how2: "Every team plays every other team once. Games are grouped into rounds so each team plays once per round.",
-    how3: `A win earns ${WIN_POINTS} points, a loss 0. Ties on points are split by head-to-head, then point difference, then points scored.`,
-    roster: "Tonight's players",
-    tier: "Tier",
+    how1: "Teams of two are drawn at random and balanced by skill.",
+    how2: `Once drawn, teams are locked in for ${TEAM_LOCK_DAYS} days. Every team plays every other team once, one game per team each round.`,
+    how3: `Confirm each score to lock it in for good. A win earns ${WIN_POINTS} points, a loss 0. Ties on points are split by head-to-head, then point difference, then points scored.`,
+    roster: "Players",
     draw: "Draw Teams",
+    auth: {
+      draw: {
+        title: "Draw the teams?",
+        body: `The teams will be locked in for ${TEAM_LOCK_DAYS} days and can't be redrawn until then. Enter the password to continue.`,
+        confirm: "Draw & lock teams",
+      },
+      redraw: {
+        title: "Redraw the teams?",
+        body: `This clears the current teams and every score, then draws new teams locked in for ${TEAM_LOCK_DAYS} days. Enter the password to continue.`,
+        confirm: "Redraw teams",
+      },
+      reset: {
+        title: "Reset the mini game?",
+        body: "This clears the teams and every score so a new draw can be made. It can't be undone. Enter the password to continue.",
+        confirm: "Yes, reset",
+      },
+    },
     redraw: "Redraw Teams",
-    redrawLocked: "Teams are locked once a score is entered. Reset to start over.",
+    password: "Password",
+    wrongPassword: "Incorrect password.",
+    preview: "Preview with sample data",
+    previewBanner: "Preview mode: sample data only. Nothing here is saved.",
+    exitPreview: "Exit preview",
     reset: "Reset",
+    lockedUntil: (when: string) => `Teams locked until ${when}`,
     teams: "The Teams",
-    pairing14: "Tier 1 + 4",
-    pairing23: "Tier 2 + 3",
     standings: "Standings",
     games: "Games",
     round: "Round",
@@ -60,34 +71,60 @@ const COPY = {
     team: "Team",
     progress: (done: number, total: number) => `${done} of ${total} games played`,
     noDraws: "Scores can't be level",
+    confirm: "Confirm score",
+    locked: "Final",
     leader: "Leader",
     champion: "Champions",
     championSub: "Every team has met every team. Congratulations!",
-    resetTitle: "Reset the mini game?",
-    resetBody: "This clears the teams and every score entered so far. It can't be undone.",
-    resetConfirm: "Yes, reset",
+    confirmTitle: "Lock in this score?",
+    confirmBody: "Once confirmed, this score is final and can't be edited.",
+    confirmYes: "Lock it in",
     cancel: "Cancel",
-    savedNote: "Scores are saved on this device automatically.",
+    loadError: "Couldn't load the mini game. Check your connection and try again.",
+    retry: "Try again",
+    errAlreadyLocked: "That score was already locked in by someone else. Showing the final result.",
+    errStale: "The teams changed since this page loaded. Showing the latest draw.",
+    errStillLocked: "The teams are still locked, so the game can't be reset yet.",
+    errGeneric: "Something went wrong. Please try again.",
     scoreLabel: (name: string) => `Score for ${name}`,
+    syncNote: "Results are shared live with everyone who has this page open.",
   },
   vi: {
-    back: "Về trang chính",
     eyebrow: "Mini Game Của CLB",
     title: "Vòng Tròn",
     sub: "Đánh đôi · Mọi đội đều gặp nhau",
     howLbl: "Cách chơi",
-    how1: "Các đội được bốc thăm ngẫu nhiên: một người Tier 1 với một người Tier 4, và một người Tier 2 với một người Tier 3.",
-    how2: "Mỗi đội gặp tất cả các đội còn lại một lần. Các trận được chia theo vòng, mỗi đội chơi một trận mỗi vòng.",
-    how3: `Thắng được ${WIN_POINTS} điểm, thua 0 điểm. Bằng điểm thì xét đối đầu, rồi hiệu số, rồi tổng điểm ghi được.`,
-    roster: "Người chơi hôm nay",
-    tier: "Tier",
+    how1: "Các đội hai người được bốc thăm ngẫu nhiên và cân bằng trình độ.",
+    how2: `Sau khi bốc thăm, đội được giữ nguyên trong ${TEAM_LOCK_DAYS} ngày. Mỗi đội gặp tất cả các đội còn lại một lần, mỗi vòng một trận.`,
+    how3: `Xác nhận tỉ số để chốt vĩnh viễn. Thắng được ${WIN_POINTS} điểm, thua 0 điểm. Bằng điểm thì xét đối đầu, rồi hiệu số, rồi tổng điểm ghi được.`,
+    roster: "Người chơi",
     draw: "Bốc Thăm Đội",
+    auth: {
+      draw: {
+        title: "Bốc thăm các đội?",
+        body: `Các đội sẽ được giữ nguyên trong ${TEAM_LOCK_DAYS} ngày và không thể bốc lại trước thời gian đó. Nhập mật khẩu để tiếp tục.`,
+        confirm: "Bốc thăm & chốt đội",
+      },
+      redraw: {
+        title: "Bốc thăm lại?",
+        body: `Thao tác này xoá các đội và toàn bộ tỉ số hiện tại, rồi bốc thăm đội mới được chốt trong ${TEAM_LOCK_DAYS} ngày. Nhập mật khẩu để tiếp tục.`,
+        confirm: "Bốc thăm lại",
+      },
+      reset: {
+        title: "Đặt lại mini game?",
+        body: "Thao tác này xoá các đội và toàn bộ tỉ số để bốc thăm lại. Không thể hoàn tác. Nhập mật khẩu để tiếp tục.",
+        confirm: "Đặt lại",
+      },
+    },
     redraw: "Bốc Thăm Lại",
-    redrawLocked: "Đã có tỉ số nên không thể bốc lại. Bấm Đặt lại để chơi từ đầu.",
+    password: "Mật khẩu",
+    wrongPassword: "Sai mật khẩu.",
+    preview: "Xem thử với dữ liệu mẫu",
+    previewBanner: "Chế độ xem thử: chỉ là dữ liệu mẫu, không có gì được lưu.",
+    exitPreview: "Thoát xem thử",
     reset: "Đặt lại",
+    lockedUntil: (when: string) => `Đội được chốt đến ${when}`,
     teams: "Các Đội",
-    pairing14: "Tier 1 + 4",
-    pairing23: "Tier 2 + 3",
     standings: "Bảng Xếp Hạng",
     games: "Các Trận",
     round: "Vòng",
@@ -102,119 +139,239 @@ const COPY = {
     team: "Đội",
     progress: (done: number, total: number) => `Đã đấu ${done} / ${total} trận`,
     noDraws: "Tỉ số không thể hoà",
+    confirm: "Xác nhận",
+    locked: "Chung cuộc",
     leader: "Dẫn đầu",
     champion: "Vô Địch",
     championSub: "Tất cả các đội đã gặp nhau. Chúc mừng!",
-    resetTitle: "Đặt lại mini game?",
-    resetBody: "Thao tác này xoá các đội và toàn bộ tỉ số đã nhập. Không thể hoàn tác.",
-    resetConfirm: "Đặt lại",
+    confirmTitle: "Chốt tỉ số này?",
+    confirmBody: "Sau khi xác nhận, tỉ số là chung cuộc và không thể sửa.",
+    confirmYes: "Chốt tỉ số",
     cancel: "Huỷ",
-    savedNote: "Tỉ số được tự động lưu trên thiết bị này.",
+    loadError: "Không tải được mini game. Kiểm tra kết nối và thử lại.",
+    retry: "Thử lại",
+    errAlreadyLocked: "Tỉ số này đã được người khác chốt. Đang hiển thị kết quả chung cuộc.",
+    errStale: "Các đội đã thay đổi. Đang hiển thị lần bốc thăm mới nhất.",
+    errStillLocked: "Các đội vẫn đang được chốt nên chưa thể đặt lại.",
+    errGeneric: "Đã xảy ra lỗi. Vui lòng thử lại.",
     scoreLabel: (name: string) => `Tỉ số của ${name}`,
+    syncNote: "Kết quả được cập nhật trực tiếp cho mọi người đang mở trang này.",
   },
 } satisfies Record<Lang, Record<string, unknown>>;
 
-function loadSaved(): SavedGame | null {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SavedGame;
-    if (!Array.isArray(parsed.teams) || !Array.isArray(parsed.matches)) return null;
-    return { teams: parsed.teams, matches: parsed.matches, scores: parsed.scores ?? {} };
-  } catch {
-    return null;
+type Draft = { a: string; b: string };
+/** Organiser actions that need the password. */
+type AuthAction = "draw" | "redraw" | "reset";
+type PendingConfirm = { match: Match; a: number; b: number };
+
+function formatWhen(iso: string, lang: Lang) {
+  return new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : "en-NZ", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Pacific/Auckland",
+  }).format(new Date(iso));
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
   }
+  return out;
 }
 
-function persist(game: SavedGame | null) {
-  try {
-    if (game) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
-    else window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Storage can be unavailable (private mode); the game still works in memory.
+/** Sample draw for preview mode: random pairs and the first few rounds played. */
+function sampleDraw(players: string[]): NonNullable<MiniGameState["draw"]> {
+  const names = shuffle(players);
+  const teams: Team[] = [];
+  for (let i = 0; i + 1 < names.length; i += 2) {
+    teams.push({ id: teams.length + 1, players: [names[i], names[i + 1]] });
   }
+  const matches = buildSchedule(teams);
+  const scores: Record<string, Score> = {};
+  for (const m of matches.filter((m) => m.round <= 3)) {
+    const loser = 8 + Math.floor(Math.random() * 12);
+    scores[m.id] = Math.random() < 0.5 ? { a: 21, b: loser } : { a: loser, b: 21 };
+  }
+  const now = Date.now();
+  return {
+    id: 0,
+    teams,
+    matches,
+    scores,
+    createdAt: new Date(now).toISOString(),
+    lockedUntil: new Date(now + TEAM_LOCK_DAYS * 86_400_000).toISOString(),
+  };
 }
 
-function TierChip({ tier }: { tier: Tier }) {
-  return <span className={`mg-tier mg-tier-${tier}`}>T{tier}</span>;
-}
-
-function isPairing14(team: Team) {
-  return team.players.some((p) => p.tier === 1);
+function LockIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
 }
 
 export function MiniGame() {
   const { lang, setLang } = useLanguage();
   const c = COPY[lang];
-  const [game, setGame] = useState<SavedGame | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [state, setState] = useState<MiniGameState | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [pending, setPending] = useState<PendingConfirm | null>(null);
+  const [authAction, setAuthAction] = useState<AuthAction | null>(null);
   const [justDrawn, setJustDrawn] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
+  const [demo, setDemo] = useState<MiniGameState["draw"]>(null);
 
-  useEffect(() => {
-    setGame(loadSaved());
-    setLoaded(true);
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/mini-game", { cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      setState((await res.json()) as MiniGameState);
+      setLoadFailed(false);
+    } catch {
+      setLoadFailed(true);
+    }
   }, []);
 
   useEffect(() => {
-    if (loaded) persist(game);
-  }, [game, loaded]);
+    load();
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+      setNow(Date.now());
+    }, POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load]);
+
+  /** POSTs an action; resolves to the HTTP status (0 on network failure). */
+  const post = async (body: object, conflictNotice?: string): Promise<number> => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/mini-game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => null)) as MiniGameState | null;
+      if (data && "players" in data) setState(data);
+      if (res.status === 409) setNotice(conflictNotice ?? c.errGeneric);
+      else if (!res.ok && res.status !== 401) setNotice(c.errGeneric);
+      return res.status;
+    } catch {
+      setNotice(c.errGeneric);
+      return 0;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openAuth = (action: AuthAction) => {
+    setPassword("");
+    setPasswordError(false);
+    setAuthAction(action);
+  };
 
   const setLanguage = (l: Lang) => {
     setLang(l);
     document.documentElement.lang = l;
   };
 
-  const draw = () => {
-    const teams = drawTeams();
-    setGame({ teams, matches: buildSchedule(teams), scores: {} });
-    setJustDrawn(true);
-  };
-
-  const reset = () => {
-    setGame(null);
-    setJustDrawn(false);
-    setConfirmReset(false);
+  const runAuthAction = async () => {
+    if (!authAction || !password) return;
+    const status = await post(
+      { action: authAction, password },
+      authAction === "draw" ? undefined : c.errStillLocked,
+    );
+    if (status === 401) return setPasswordError(true);
+    setAuthAction(null);
+    if (status !== 200) return;
+    setDrafts({});
+    setJustDrawn(authAction !== "reset");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const setScore = (matchId: string, side: "a" | "b", value: string) => {
-    const clean = value.replace(/\D/g, "").slice(0, 2);
-    setGame((g) => {
-      if (!g) return g;
-      const prev = g.scores[matchId] ?? { a: "", b: "" };
-      return { ...g, scores: { ...g.scores, [matchId]: { ...prev, [side]: clean } } };
-    });
+  const startPreview = () => {
+    if (!state) return;
+    setDemo(sampleDraw(state.players));
+    setDrafts({});
+    setJustDrawn(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const teamsById = useMemo(
-    () => new Map(game?.teams.map((t) => [t.id, t]) ?? []),
-    [game?.teams],
-  );
+  const exitPreview = () => {
+    setDemo(null);
+    setDrafts({});
+    setJustDrawn(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const lockIn = async () => {
+    if (!pending) return;
+    const { match, a, b } = pending;
+    setPending(null);
+    let ok = false;
+    if (demo) {
+      setDemo({ ...demo, scores: { ...demo.scores, [match.id]: { a, b } } });
+      ok = true;
+    } else if (state?.draw) {
+      const scoreConflict = state.draw.scores[match.id] ? c.errAlreadyLocked : c.errStale;
+      const status = await post(
+        { action: "score", drawId: state.draw.id, matchId: match.id, a, b },
+        scoreConflict,
+      );
+      ok = status === 200;
+    }
+    if (ok) {
+      setDrafts((d) => {
+        const next = { ...d };
+        delete next[match.id];
+        return next;
+      });
+    }
+  };
+
+  const setDraft = (matchId: string, side: "a" | "b", value: string) => {
+    const clean = value.replace(/\D/g, "").slice(0, 2);
+    setDrafts((d) => ({ ...d, [matchId]: { ...(d[matchId] ?? { a: "", b: "" }), [side]: clean } }));
+  };
+
+  const game = demo ?? state?.draw ?? null;
+
+  const teamsById = useMemo(() => new Map(game?.teams.map((t) => [t.id, t]) ?? []), [game?.teams]);
 
   const standings = useMemo(
     () => (game ? computeStandings(game.teams, game.matches, game.scores) : []),
     [game],
   );
 
-  const completed = game
-    ? game.matches.filter((m) => matchResult(m, game.scores[m.id])).length
-    : 0;
-  const total = game?.matches.length ?? 0;
-  const anyScoreEntered = game
-    ? Object.values(game.scores).some((s) => s.a !== "" || s.b !== "")
-    : false;
-  const finished = total > 0 && completed === total;
-
   const rounds = useMemo(() => {
     const map = new Map<number, Match[]>();
-    for (const m of game?.matches ?? []) {
-      map.set(m.round, [...(map.get(m.round) ?? []), m]);
-    }
+    for (const m of game?.matches ?? []) map.set(m.round, [...(map.get(m.round) ?? []), m]);
     return [...map.entries()];
   }, [game?.matches]);
 
-  const tiers: Tier[] = [1, 2, 3, 4];
+  const completed = game ? game.matches.filter((m) => game.scores[m.id]).length : 0;
+  const total = game?.matches.length ?? 0;
+  const finished = total > 0 && completed === total;
+  const teamsLocked = game ? new Date(game.lockedUntil).getTime() > now : false;
 
   return (
     <div className="mg-page">
@@ -222,12 +379,6 @@ export function MiniGame() {
         <div className="mg-hero-bg" />
         <div className="mg-hero-overlay" />
         <div className="container mg-topbar">
-          <Link href="/" className="mg-back">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            {c.back}
-          </Link>
           <div className="lang-toggle">
             <button type="button" className={`lang-btn${lang === "en" ? " active" : ""}`} onClick={() => setLanguage("en")}>
               EN
@@ -255,8 +406,35 @@ export function MiniGame() {
 
       <main className="mg-main">
         <div className="container">
-          {!loaded ? (
-            <div className="mg-loading" aria-hidden="true" />
+          {notice && (
+            <div className="mg-notice" role="status">
+              <span>{notice}</span>
+              <button type="button" onClick={() => setNotice(null)} aria-label={c.cancel}>
+                ×
+              </button>
+            </div>
+          )}
+
+          {demo && (
+            <div className="mg-preview-banner" role="status">
+              <span>{c.previewBanner}</span>
+              <button type="button" className="btn btn-primary mg-btn-sm" onClick={exitPreview}>
+                {c.exitPreview}
+              </button>
+            </div>
+          )}
+
+          {!state ? (
+            loadFailed ? (
+              <div className="mg-card mg-error">
+                <p>{c.loadError}</p>
+                <button type="button" className="btn btn-navy mg-btn-sm" onClick={load}>
+                  {c.retry}
+                </button>
+              </div>
+            ) : (
+              <div className="mg-loading" aria-hidden="true" />
+            )
           ) : !game ? (
             <section className="mg-intro">
               <div className="mg-card mg-how">
@@ -269,28 +447,24 @@ export function MiniGame() {
               </div>
               <div className="mg-card">
                 <div className="section-label">{c.roster}</div>
-                <div className="mg-roster">
-                  {tiers.map((tier) => (
-                    <div key={tier} className="mg-roster-col">
-                      <div className="mg-roster-head">
-                        <TierChip tier={tier} />
-                        <span>
-                          {c.tier} {tier}
-                        </span>
-                      </div>
-                      <ul>
-                        {ROSTER.filter((p) => p.tier === tier).map((p) => (
-                          <li key={p.name}>{p.name}</li>
-                        ))}
-                      </ul>
-                    </div>
+                <ul className="mg-roster">
+                  {state.players.map((name) => (
+                    <li key={name}>{name}</li>
                   ))}
-                </div>
-                <button type="button" className="btn btn-primary btn-full mg-draw" onClick={draw}>
+                </ul>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-full mg-draw"
+                  onClick={() => openAuth("draw")}
+                  disabled={busy}
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
                   </svg>
                   {c.draw}
+                </button>
+                <button type="button" className="btn btn-bronze-outline btn-full mg-preview-btn" onClick={startPreview}>
+                  {c.preview}
                 </button>
               </div>
             </section>
@@ -312,35 +486,44 @@ export function MiniGame() {
               <section className="mg-section">
                 <div className="mg-section-head">
                   <h2 className="mg-h2">{c.teams}</h2>
-                  <div className="mg-actions">
-                    <button
-                      type="button"
-                      className="btn btn-bronze-outline mg-btn-sm"
-                      onClick={draw}
-                      disabled={anyScoreEntered}
-                      title={anyScoreEntered ? c.redrawLocked : undefined}
-                    >
-                      {c.redraw}
-                    </button>
-                    <button type="button" className="btn btn-navy mg-btn-sm" onClick={() => setConfirmReset(true)}>
-                      {c.reset}
-                    </button>
-                  </div>
+                  {!demo && (
+                    <div className="mg-actions">
+                      <button
+                        type="button"
+                        className="btn btn-bronze-outline mg-btn-sm"
+                        onClick={() => openAuth("redraw")}
+                        disabled={teamsLocked || busy}
+                      >
+                        {teamsLocked && <LockIcon />}
+                        {c.redraw}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-navy mg-btn-sm"
+                        onClick={() => openAuth("reset")}
+                        disabled={teamsLocked || busy}
+                      >
+                        {teamsLocked && <LockIcon />}
+                        {c.reset}
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {anyScoreEntered && <p className="mg-hint">{c.redrawLocked}</p>}
-                <div className={`mg-teams${justDrawn ? " mg-teams-reveal" : ""}`} key={game.teams.map(teamName).join("|")}>
+                {teamsLocked && (
+                  <p className="mg-lock-line">
+                    <LockIcon />
+                    {c.lockedUntil(formatWhen(game.lockedUntil, lang))}
+                  </p>
+                )}
+                <div className={`mg-teams${justDrawn ? " mg-teams-reveal" : ""}`}>
                   {game.teams.map((team, i) => (
                     <div key={team.id} className="mg-team" style={{ animationDelay: `${i * 70}ms` }}>
-                      <div className="mg-team-top">
-                        <span className="mg-team-num">#{team.id}</span>
-                        <span className="mg-team-pool">{isPairing14(team) ? c.pairing14 : c.pairing23}</span>
+                      <span className="mg-team-num">#{team.id}</span>
+                      <div className="mg-team-players">
+                        {team.players.map((p) => (
+                          <span key={p}>{p}</span>
+                        ))}
                       </div>
-                      {team.players.map((p) => (
-                        <div key={p.name} className="mg-team-player">
-                          <TierChip tier={p.tier} />
-                          <span>{p.name}</span>
-                        </div>
-                      ))}
                     </div>
                   ))}
                 </div>
@@ -403,7 +586,7 @@ export function MiniGame() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="mg-note">{c.savedNote}</p>
+                  <p className="mg-note">{c.syncNote}</p>
                 </section>
 
                 <section className="mg-section mg-games-wrap">
@@ -416,55 +599,20 @@ export function MiniGame() {
                         </span>
                       </div>
                       <div className="mg-matches">
-                        {matches.map((m) => {
-                          const a = teamsById.get(m.teamA)!;
-                          const b = teamsById.get(m.teamB)!;
-                          const score = game.scores[m.id] ?? { a: "", b: "" };
-                          const result = matchResult(m, score);
-                          const level = score.a !== "" && score.b !== "" && score.a === score.b;
-                          const side = (team: Team, key: "a" | "b") => {
-                            const won = result?.winner === team.id;
-                            const lost = result?.loser === team.id;
-                            return (
-                              <div className={`mg-side${won ? " mg-side-won" : ""}${lost ? " mg-side-lost" : ""}`}>
-                                <div className="mg-side-names">
-                                  {team.players.map((p) => (
-                                    <span key={p.name}>{p.name}</span>
-                                  ))}
-                                </div>
-                                <input
-                                  className="mg-score"
-                                  type="text"
-                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                  maxLength={2}
-                                  placeholder="–"
-                                  value={score[key]}
-                                  aria-label={c.scoreLabel(teamName(team))}
-                                  onChange={(e) => setScore(m.id, key, e.target.value)}
-                                />
-                              </div>
-                            );
-                          };
-                          return (
-                            <div key={m.id} className={`mg-match${result ? " mg-match-done" : ""}`}>
-                              <div className="mg-match-top">
-                                <span>
-                                  {c.game} {m.number}
-                                </span>
-                                {result && (
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <path d="M20 6 9 17l-5-5" />
-                                  </svg>
-                                )}
-                              </div>
-                              {side(a, "a")}
-                              <div className="mg-vs">{c.vs}</div>
-                              {side(b, "b")}
-                              {level && <div className="mg-warn">{c.noDraws}</div>}
-                            </div>
-                          );
-                        })}
+                        {matches.map((m) => (
+                          <MatchCard
+                            key={m.id}
+                            match={m}
+                            teamA={teamsById.get(m.teamA)!}
+                            teamB={teamsById.get(m.teamB)!}
+                            final={game.scores[m.id]}
+                            draft={drafts[m.id] ?? { a: "", b: "" }}
+                            busy={busy}
+                            copy={c}
+                            onDraft={(side, v) => setDraft(m.id, side, v)}
+                            onConfirm={(a, b) => setPending({ match: m, a, b })}
+                          />
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -478,28 +626,211 @@ export function MiniGame() {
       <footer className="mg-footer">
         <div className="container">
           <span>Three Wolves Badminton Club</span>
-          <Link href="/">{c.back}</Link>
         </div>
       </footer>
 
       <ModalShell
-        id="mg-reset-modal"
-        open={confirmReset}
-        onClose={() => setConfirmReset(false)}
-        title={c.resetTitle}
+        id="mg-auth-modal"
+        open={authAction !== null}
+        onClose={() => setAuthAction(null)}
+        title={authAction ? c.auth[authAction].title : ""}
         footer={
           <>
-            <button type="button" className="btn btn-bronze-outline" onClick={() => setConfirmReset(false)}>
+            <button type="button" className="btn btn-bronze-outline" onClick={() => setAuthAction(null)}>
               {c.cancel}
             </button>
-            <button type="button" className="btn btn-primary mg-btn-grow" onClick={reset}>
-              {c.resetConfirm}
+            <button
+              type="button"
+              className="btn btn-primary mg-btn-grow"
+              onClick={runAuthAction}
+              disabled={busy || !password}
+            >
+              {authAction ? c.auth[authAction].confirm : ""}
             </button>
           </>
         }
       >
-        <p className="mg-modal-text">{c.resetBody}</p>
+        <p className="mg-modal-text">{authAction ? c.auth[authAction].body : ""}</p>
+        <PasswordField
+          id="mg-password"
+          label={c.password}
+          value={password}
+          error={passwordError ? c.wrongPassword : null}
+          onChange={(v) => {
+            setPassword(v);
+            setPasswordError(false);
+          }}
+          onSubmit={runAuthAction}
+        />
       </ModalShell>
+
+      <ModalShell
+        id="mg-score-modal"
+        open={pending !== null}
+        onClose={() => setPending(null)}
+        title={c.confirmTitle}
+        footer={
+          <>
+            <button type="button" className="btn btn-bronze-outline" onClick={() => setPending(null)}>
+              {c.cancel}
+            </button>
+            <button type="button" className="btn btn-primary mg-btn-grow" onClick={lockIn} disabled={busy}>
+              <LockIcon size={16} />
+              {c.confirmYes}
+            </button>
+          </>
+        }
+      >
+        {pending && game && (
+          <>
+            <div className="mg-confirm-score">
+              <div className="mg-confirm-game">
+                {c.game} {pending.match.number}
+              </div>
+              {(
+                [
+                  [teamsById.get(pending.match.teamA)!, pending.a, pending.a > pending.b],
+                  [teamsById.get(pending.match.teamB)!, pending.b, pending.b > pending.a],
+                ] as const
+              ).map(([team, score, won]) => (
+                <div key={team.id} className={`mg-confirm-row${won ? " mg-confirm-won" : ""}`}>
+                  <span>{teamName(team)}</span>
+                  <strong>{score}</strong>
+                </div>
+              ))}
+            </div>
+            <p className="mg-modal-text">{c.confirmBody}</p>
+          </>
+        )}
+      </ModalShell>
+    </div>
+  );
+}
+
+function PasswordField({
+  id,
+  label,
+  value,
+  error,
+  onChange,
+  onSubmit,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  error: string | null;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <form
+      className="mg-password"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value) onSubmit();
+      }}
+    >
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        type="password"
+        autoComplete="current-password"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+      />
+      {error && <p className="mg-password-error">{error}</p>}
+    </form>
+  );
+}
+
+function MatchCard({
+  match,
+  teamA,
+  teamB,
+  final,
+  draft,
+  busy,
+  copy: c,
+  onDraft,
+  onConfirm,
+}: {
+  match: Match;
+  teamA: Team;
+  teamB: Team;
+  final: { a: number; b: number } | undefined;
+  draft: Draft;
+  busy: boolean;
+  copy: (typeof COPY)[Lang];
+  onDraft: (side: "a" | "b", value: string) => void;
+  onConfirm: (a: number, b: number) => void;
+}) {
+  const result = matchResult(match, final);
+  const a = draft.a === "" ? NaN : Number(draft.a);
+  const b = draft.b === "" ? NaN : Number(draft.b);
+  const draftValid = isValidScore(a, b);
+  const level = draft.a !== "" && draft.a === draft.b;
+  const draftWinner = draftValid ? (a > b ? teamA.id : teamB.id) : null;
+
+  const side = (team: Team, key: "a" | "b") => {
+    const won = result ? result.winner === team.id : draftWinner === team.id;
+    const lost = result ? result.loser === team.id : draftWinner !== null && draftWinner !== team.id;
+    return (
+      <div className={`mg-side${won ? " mg-side-won" : ""}${lost ? " mg-side-lost" : ""}`}>
+        <div className="mg-side-names">
+          {team.players.map((p) => (
+            <span key={p}>{p}</span>
+          ))}
+        </div>
+        {final ? (
+          <span className="mg-score mg-score-final">{final[key]}</span>
+        ) : (
+          <input
+            className="mg-score"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={2}
+            placeholder="–"
+            value={draft[key]}
+            aria-label={c.scoreLabel(teamName(team))}
+            onChange={(e) => onDraft(key, e.target.value)}
+          />
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className={`mg-match${final ? " mg-match-done" : ""}`}>
+      <div className="mg-match-top">
+        <span>
+          {c.game} {match.number}
+        </span>
+        {final && (
+          <span className="mg-final-tag">
+            <LockIcon size={12} />
+            {c.locked}
+          </span>
+        )}
+      </div>
+      {side(teamA, "a")}
+      <div className="mg-vs">{c.vs}</div>
+      {side(teamB, "b")}
+      {!final && (
+        <>
+          {level && <div className="mg-warn">{c.noDraws}</div>}
+          <button
+            type="button"
+            className="btn btn-primary btn-full mg-confirm-btn"
+            disabled={!draftValid || busy}
+            onClick={() => onConfirm(a, b)}
+          >
+            <LockIcon />
+            {c.confirm}
+          </button>
+        </>
+      )}
     </div>
   );
 }

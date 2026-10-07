@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
@@ -64,11 +63,6 @@ export function Navigation() {
               </li>
               <li>
                 <a href="#reviews">Reviews</a>
-              </li>
-              <li>
-                <Link href="/mini-game">
-                  <Trans k="nav_minigame" />
-                </Link>
               </li>
             </ul>
             <div className="nav-actions">
@@ -143,9 +137,6 @@ export function Navigation() {
         <a href="#membership" onClick={closeMobile}>
           <Trans k="nav_membership" />
         </a>
-        <Link href="/mini-game" onClick={closeMobile}>
-          <Trans k="nav_minigame" />
-        </Link>
         <button
           type="button"
           className="mobile-menu-join"

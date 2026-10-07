@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
@@ -76,6 +77,11 @@ export function Footer() {
                 <a href="#donate">
                   <Trans k="nav_donate" />
                 </a>
+              </li>
+              <li>
+                <Link href="/mini-game">
+                  <Trans k="nav_minigame" />
+                </Link>
               </li>
               <li>
                 <button type="button" onClick={() => setOpenModal("cancel")}>

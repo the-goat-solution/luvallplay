@@ -60,7 +60,21 @@ type DrawRow = {
   locked_until: Date;
 };
 
+/**
+ * Retires a draw once its one-week team lock has run out, so the page goes
+ * back to the pre-draw screen and a new draw can be made. Archived draws
+ * (and their scores) stay in the database as history.
+ */
+async function archiveExpiredDraw(): Promise<void> {
+  await sql`
+    UPDATE mini_game_draws
+    SET archived_at = NOW()
+    WHERE archived_at IS NULL AND locked_until <= NOW();
+  `;
+}
+
 async function activeDraw(): Promise<DrawRow | null> {
+  await archiveExpiredDraw();
   const { rows } = await sql<DrawRow>`
     SELECT id, teams, matches, created_at, locked_until
     FROM mini_game_draws
@@ -95,6 +109,7 @@ export async function getMiniGameState(): Promise<MiniGameState> {
 
 /** Draws teams unless a live draw already exists (then it is left alone). */
 export async function createDraw(): Promise<void> {
+  await archiveExpiredDraw();
   const teams = drawTeams();
   const matches = buildSchedule(teams);
   try {
@@ -132,15 +147,4 @@ export async function lockScore(
     RETURNING match_id;
   `;
   return rows.length ? "ok" : "already-locked";
-}
-
-/** Retires the live draw, but only once its one-week team lock has run out. */
-export async function resetDraw(): Promise<boolean> {
-  const { rows } = await sql`
-    UPDATE mini_game_draws
-    SET archived_at = NOW()
-    WHERE archived_at IS NULL AND locked_until <= NOW()
-    RETURNING id;
-  `;
-  return rows.length > 0;
 }

@@ -516,7 +516,6 @@ footer{background:var(--navy-dark);color:#fff;padding:80px 0 36px}
 .mg-section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:10px}
 .mg-h2{font-family:var(--font-display);font-size:clamp(22px,2.6vw,30px);font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--navy);line-height:1.1}
 .mg-section > .mg-h2{margin-bottom:18px}
-.mg-actions{display:flex;gap:10px;flex-wrap:wrap}
 .mg-btn-sm{padding:9px 20px;font-size:12px}
 .mg-btn-grow{flex:1}
 .mg-lock-line{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text-mid);margin-bottom:18px}

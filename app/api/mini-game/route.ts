@@ -5,7 +5,6 @@ import {
   ensureMiniGameTables,
   getMiniGameState,
   lockScore,
-  resetDraw,
 } from "@/lib/mini-game-db";
 import { drawTeams } from "@/lib/mini-game-roster";
 import { checkRateLimit, getClientIp } from "@/lib/security";
@@ -18,7 +17,8 @@ function unavailable() {
   return NextResponse.json({ error: "Mini game storage is not configured" }, { status: 503 });
 }
 
-// Drawing, redrawing and resetting are organiser-only; entering scores is open to players.
+// Drawing is organiser-only; entering scores is open to players. A draw retires
+// itself when its one-week lock runs out (see archiveExpiredDraw).
 function passwordMatches(given: unknown): boolean {
   const expected = process.env.MINI_GAME_PASSWORD;
   if (!expected || typeof given !== "string") return false;
@@ -42,8 +42,6 @@ export async function GET(request: Request) {
 
 type Body =
   | { action: "draw"; password: string }
-  | { action: "reset"; password: string }
-  | { action: "redraw"; password: string }
   | { action: "preview" }
   | { action: "score"; drawId: number; matchId: string; a: number; b: number };
 
@@ -86,18 +84,6 @@ export async function POST(request: Request) {
       await createDraw();
       return stateResponse();
 
-    case "reset": {
-      const reset = await resetDraw();
-      // 409 when the teams are still inside their one-week lock.
-      return stateResponse(reset ? 200 : 409);
-    }
-
-    case "redraw": {
-      // Same one-week lock as reset: only once it has run out.
-      if (!(await resetDraw())) return stateResponse(409);
-      await createDraw();
-      return stateResponse();
-    }
 
     case "score": {
       const result = await lockScore(

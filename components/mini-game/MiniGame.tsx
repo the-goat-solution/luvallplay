@@ -27,35 +27,23 @@ const COPY = {
     sub: "Doubles · Every team meets every team",
     howLbl: "How it works",
     how1: "Teams of two are drawn at random and balanced by skill.",
-    how2: `Once drawn, teams are locked in for ${TEAM_LOCK_DAYS} days. Every team plays every other team once, one game per team each round.`,
+    how2: `Once drawn, teams are locked in for ${TEAM_LOCK_DAYS} days, then the page resets for a new draw. Every team plays every other team once, one game per team each round.`,
     how3: `Confirm each score to lock it in for good. A win earns ${WIN_POINTS} points, a loss 0. Ties on points are split by head-to-head, then point difference, then points scored.`,
     roster: "Players",
     draw: "Draw Teams",
     auth: {
       draw: {
         title: "Draw the teams?",
-        body: `The teams will be locked in for ${TEAM_LOCK_DAYS} days and can't be redrawn until then. Enter the password to continue.`,
+        body: `The teams will be locked in for ${TEAM_LOCK_DAYS} days. After that the page resets so a new draw can be made. Enter the password to continue.`,
         confirm: "Draw & lock teams",
       },
-      redraw: {
-        title: "Redraw the teams?",
-        body: `This clears the current teams and every score, then draws new teams locked in for ${TEAM_LOCK_DAYS} days. Enter the password to continue.`,
-        confirm: "Redraw teams",
-      },
-      reset: {
-        title: "Reset the mini game?",
-        body: "This clears the teams and every score so a new draw can be made. It can't be undone. Enter the password to continue.",
-        confirm: "Yes, reset",
-      },
     },
-    redraw: "Redraw Teams",
     password: "Password",
     wrongPassword: "Incorrect password.",
     preview: "Preview with sample data",
     previewBanner: "Preview mode: sample data only. Nothing here is saved.",
     exitPreview: "Exit preview",
-    reset: "Reset",
-    lockedUntil: (when: string) => `Teams locked until ${when}`,
+    lockedUntil: (when: string) => `Teams locked until ${when}. The page then resets for a new draw.`,
     teams: "The Teams",
     standings: "Standings",
     games: "Games",
@@ -84,7 +72,6 @@ const COPY = {
     retry: "Try again",
     errAlreadyLocked: "That score was already locked in by someone else. Showing the final result.",
     errStale: "The teams changed since this page loaded. Showing the latest draw.",
-    errStillLocked: "The teams are still locked, so the game can't be reset yet.",
     officialDraw: "The teams have been officially drawn. Showing the live game.",
     errGeneric: "Something went wrong. Please try again.",
     scoreLabel: (name: string) => `Score for ${name}`,
@@ -96,35 +83,23 @@ const COPY = {
     sub: "Đánh đôi · Mọi đội đều gặp nhau",
     howLbl: "Cách chơi",
     how1: "Các đội hai người được bốc thăm ngẫu nhiên và cân bằng trình độ.",
-    how2: `Sau khi bốc thăm, đội được giữ nguyên trong ${TEAM_LOCK_DAYS} ngày. Mỗi đội gặp tất cả các đội còn lại một lần, mỗi vòng một trận.`,
+    how2: `Sau khi bốc thăm, đội được giữ nguyên trong ${TEAM_LOCK_DAYS} ngày, rồi trang sẽ đặt lại để bốc thăm mới. Mỗi đội gặp tất cả các đội còn lại một lần, mỗi vòng một trận.`,
     how3: `Xác nhận tỉ số để chốt vĩnh viễn. Thắng được ${WIN_POINTS} điểm, thua 0 điểm. Bằng điểm thì xét đối đầu, rồi hiệu số, rồi tổng điểm ghi được.`,
     roster: "Người chơi",
     draw: "Bốc Thăm Đội",
     auth: {
       draw: {
         title: "Bốc thăm các đội?",
-        body: `Các đội sẽ được giữ nguyên trong ${TEAM_LOCK_DAYS} ngày và không thể bốc lại trước thời gian đó. Nhập mật khẩu để tiếp tục.`,
+        body: `Các đội sẽ được giữ nguyên trong ${TEAM_LOCK_DAYS} ngày. Sau đó trang sẽ tự đặt lại để bốc thăm mới. Nhập mật khẩu để tiếp tục.`,
         confirm: "Bốc thăm & chốt đội",
       },
-      redraw: {
-        title: "Bốc thăm lại?",
-        body: `Thao tác này xoá các đội và toàn bộ tỉ số hiện tại, rồi bốc thăm đội mới được chốt trong ${TEAM_LOCK_DAYS} ngày. Nhập mật khẩu để tiếp tục.`,
-        confirm: "Bốc thăm lại",
-      },
-      reset: {
-        title: "Đặt lại mini game?",
-        body: "Thao tác này xoá các đội và toàn bộ tỉ số để bốc thăm lại. Không thể hoàn tác. Nhập mật khẩu để tiếp tục.",
-        confirm: "Đặt lại",
-      },
     },
-    redraw: "Bốc Thăm Lại",
     password: "Mật khẩu",
     wrongPassword: "Sai mật khẩu.",
     preview: "Xem thử với dữ liệu mẫu",
     previewBanner: "Chế độ xem thử: chỉ là dữ liệu mẫu, không có gì được lưu.",
     exitPreview: "Thoát xem thử",
-    reset: "Đặt lại",
-    lockedUntil: (when: string) => `Đội được chốt đến ${when}`,
+    lockedUntil: (when: string) => `Đội được chốt đến ${when}. Sau đó trang sẽ đặt lại để bốc thăm mới.`,
     teams: "Các Đội",
     standings: "Bảng Xếp Hạng",
     games: "Các Trận",
@@ -153,7 +128,6 @@ const COPY = {
     retry: "Thử lại",
     errAlreadyLocked: "Tỉ số này đã được người khác chốt. Đang hiển thị kết quả chung cuộc.",
     errStale: "Các đội đã thay đổi. Đang hiển thị lần bốc thăm mới nhất.",
-    errStillLocked: "Các đội vẫn đang được chốt nên chưa thể đặt lại.",
     officialDraw: "Các đội đã được bốc thăm chính thức. Đang hiển thị trận đấu thật.",
     errGeneric: "Đã xảy ra lỗi. Vui lòng thử lại.",
     scoreLabel: (name: string) => `Tỉ số của ${name}`,
@@ -163,7 +137,7 @@ const COPY = {
 
 type Draft = { a: string; b: string };
 /** Organiser actions that need the password. */
-type AuthAction = "draw" | "redraw" | "reset";
+type AuthAction = "draw";
 type PendingConfirm = { match: Match; a: number; b: number };
 
 function formatWhen(iso: string, lang: Lang) {
@@ -287,15 +261,12 @@ export function MiniGame() {
 
   const runAuthAction = async () => {
     if (!authAction || !password) return;
-    const status = await post(
-      { action: authAction, password },
-      authAction === "draw" ? undefined : c.errStillLocked,
-    );
+    const status = await post({ action: authAction, password });
     if (status === 401) return setPasswordError(true);
     setAuthAction(null);
     if (status !== 200) return;
     setDrafts({});
-    setJustDrawn(authAction !== "reset");
+    setJustDrawn(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -513,28 +484,6 @@ export function MiniGame() {
               <section className="mg-section">
                 <div className="mg-section-head">
                   <h2 className="mg-h2">{c.teams}</h2>
-                  {!inPreview && (
-                    <div className="mg-actions">
-                      <button
-                        type="button"
-                        className="btn btn-bronze-outline mg-btn-sm"
-                        onClick={() => openAuth("redraw")}
-                        disabled={teamsLocked || busy}
-                      >
-                        {teamsLocked && <LockIcon />}
-                        {c.redraw}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-navy mg-btn-sm"
-                        onClick={() => openAuth("reset")}
-                        disabled={teamsLocked || busy}
-                      >
-                        {teamsLocked && <LockIcon />}
-                        {c.reset}
-                      </button>
-                    </div>
-                  )}
                 </div>
                 {teamsLocked && (
                   <p className="mg-lock-line">

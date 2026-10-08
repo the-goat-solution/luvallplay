@@ -85,6 +85,7 @@ const COPY = {
     errAlreadyLocked: "That score was already locked in by someone else. Showing the final result.",
     errStale: "The teams changed since this page loaded. Showing the latest draw.",
     errStillLocked: "The teams are still locked, so the game can't be reset yet.",
+    officialDraw: "The teams have been officially drawn. Showing the live game.",
     errGeneric: "Something went wrong. Please try again.",
     scoreLabel: (name: string) => `Score for ${name}`,
     syncNote: "Results are shared live with everyone who has this page open.",
@@ -153,6 +154,7 @@ const COPY = {
     errAlreadyLocked: "Tỉ số này đã được người khác chốt. Đang hiển thị kết quả chung cuộc.",
     errStale: "Các đội đã thay đổi. Đang hiển thị lần bốc thăm mới nhất.",
     errStillLocked: "Các đội vẫn đang được chốt nên chưa thể đặt lại.",
+    officialDraw: "Các đội đã được bốc thăm chính thức. Đang hiển thị trận đấu thật.",
     errGeneric: "Đã xảy ra lỗi. Vui lòng thử lại.",
     scoreLabel: (name: string) => `Tỉ số của ${name}`,
     syncNote: "Kết quả được cập nhật trực tiếp cho mọi người đang mở trang này.",
@@ -298,6 +300,7 @@ export function MiniGame() {
   };
 
   const startPreview = async () => {
+    if (state?.draw) return;
     setBusy(true);
     setNotice(null);
     try {
@@ -306,6 +309,13 @@ export function MiniGame() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "preview" }),
       });
+      // 409: teams were drawn since this page loaded. The response carries
+      // the live game, so show that instead of sample data.
+      if (res.status === 409) {
+        setState((await res.json()) as MiniGameState);
+        setNotice(c.officialDraw);
+        return;
+      }
       if (!res.ok) throw new Error(String(res.status));
       const { teams } = (await res.json()) as { teams: Team[] };
       setDemo(sampleDraw(teams));
@@ -332,7 +342,7 @@ export function MiniGame() {
     const { match, a, b } = pending;
     setPending(null);
     let ok = false;
-    if (demo) {
+    if (demo && !state?.draw) {
       setDemo({ ...demo, scores: { ...demo.scores, [match.id]: { a, b } } });
       ok = true;
     } else if (state?.draw) {
@@ -357,7 +367,20 @@ export function MiniGame() {
     setDrafts((d) => ({ ...d, [matchId]: { ...(d[matchId] ?? { a: "", b: "" }), [side]: clean } }));
   };
 
-  const game = demo ?? state?.draw ?? null;
+  // Once teams are officially drawn the live game always wins: preview mode
+  // is only ever available before the draw.
+  const liveDrawId = state?.draw?.id ?? null;
+  useEffect(() => {
+    if (liveDrawId === null || !demo) return;
+    setDemo(null);
+    setDrafts({});
+    setPending(null);
+    setJustDrawn(true);
+    setNotice(c.officialDraw);
+  }, [liveDrawId, demo, c.officialDraw]);
+
+  const game = state?.draw ?? demo ?? null;
+  const inPreview = !state?.draw && demo !== null;
 
   const teamsById = useMemo(() => new Map(game?.teams.map((t) => [t.id, t]) ?? []), [game?.teams]);
 
@@ -419,7 +442,7 @@ export function MiniGame() {
             </div>
           )}
 
-          {demo && (
+          {inPreview && (
             <div className="mg-preview-banner" role="status">
               <span>{c.previewBanner}</span>
               <button type="button" className="btn btn-primary mg-btn-sm" onClick={exitPreview}>
@@ -490,7 +513,7 @@ export function MiniGame() {
               <section className="mg-section">
                 <div className="mg-section-head">
                   <h2 className="mg-h2">{c.teams}</h2>
-                  {!demo && (
+                  {!inPreview && (
                     <div className="mg-actions">
                       <button
                         type="button"

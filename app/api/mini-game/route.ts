@@ -58,13 +58,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  if (!process.env.POSTGRES_URL) return unavailable();
+
   // Sample teams for preview mode, drawn by the real tier rules but never
-  // saved. Needs no database or password.
+  // saved, and only before the official draw: once teams exist, everyone
+  // gets the live game (409 + current state) instead.
   if (body.action === "preview") {
+    await ensureMiniGameTables();
+    const state = await getMiniGameState();
+    if (state.draw) {
+      return NextResponse.json(state, { status: 409, headers: NO_STORE });
+    }
     return NextResponse.json({ teams: drawTeams() }, { headers: NO_STORE });
   }
-
-  if (!process.env.POSTGRES_URL) return unavailable();
 
   if (body.action !== "score" && !passwordMatches(body.password)) {
     if (!checkRateLimit(`mini-game:password:${getClientIp(request)}`, 10)) {

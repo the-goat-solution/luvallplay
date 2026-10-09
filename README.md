@@ -104,6 +104,18 @@ The club targets 8–12 paid players per session (casual bookings + active month
 
 Note: monthly/quarterly members are counted as attending every session for as long as their membership is active/paid — there's no per-session RSVP for members, so the count is an estimate, not a confirmed headcount.
 
+### Financials (`/admin/financials`)
+
+A ledger of every dollar in and out of the club, with filters, totals, receipts and an Excel export.
+
+- **Money in is imported from Stripe automatically.** The import reads Stripe's balance transactions, so each card payment shows its **gross** amount as *Received*, and **Stripe's fee** and any **refund** show up as separate *Spent* lines. That way the net total matches what reaches the bank. Payouts to the club's bank account are not income or expenses, so they're skipped. Cash recorded with "Add cash member" or "Add cash booking" (Stripe invoices marked paid out of band) is imported with method *Cash*. Imported rows are read-only; each one links to the payment in Stripe.
+- **Syncing:** the import runs whenever the page is opened and the last sync is more than 10 minutes old, nightly via `/api/cron/sync-finance` (`vercel.json`), and on demand with **Sync now**. The first sync imports your whole Stripe history. **Re-import full history** rescans everything; it's safe to run because rows are matched by their Stripe ID.
+- **Expenses and other income** (court hire, shuttlecocks, sponsorship by bank transfer, …) are added with **+ Record expense or income**. These rows can be edited and deleted.
+- **Receipts:** a photo or PDF up to 4 MB can be attached to each entry. Phone photos are shrunk in the browser first. Files are stored in **Vercel Blob as private files** and can only be viewed by a logged-in admin. To set it up, create a Blob store (choose *Private*) under Vercel → Storage and connect it to the project, which sets `BLOB_READ_WRITE_TOKEN`.
+- **Periods:** defaults to *This month*. The presets are This month, Last month, Last 3/6/12 months (whole calendar months, including the current one), Year to date, Last year and All time, plus a custom From/To range. The **Year to date** card always covers 1 Jan → today (calendar year) and uses the same type, source, method and search filters as the table.
+- **Math:** amounts are stored as integer cents, and totals are summed in Postgres over exactly the same filter as the table. Dates use NZ time, so a payment at 9am on the 1st counts toward that month.
+- **Export to Excel** downloads exactly the current view: a *Transactions* sheet (live SUMIF totals, frozen header, autofilter, links to receipts and Stripe) and a *Summary* sheet comparing the period with year to date, broken down by source.
+
 ## Development
 
 ```bash

@@ -55,6 +55,13 @@ function getClubNow(now: Date): { dateKey: string; hour: number } {
   };
 }
 
+// The club-local calendar date (YYYY-MM-DD) an instant falls on — e.g. a
+// Stripe payment's unix timestamp. A payment at 9am NZ time on the 1st is
+// still the previous day in UTC; the club's books should say the 1st.
+export function clubDateKeyForInstant(instant: Date): string {
+  return getClubNow(instant).dateKey;
+}
+
 // Club-local "today" as a YYYY-MM-DD key, and whether the same-day booking
 // cutoff has already passed. Exported so any server-side logic that needs to
 // agree with the booking-cutoff rules (e.g. picking the next available play

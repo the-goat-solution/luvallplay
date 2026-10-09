@@ -6,9 +6,11 @@ import { DeleteEntryButton } from "@/components/admin/finance/DeleteEntryButton"
 import {
   EntryForm,
   type EntryFormInitial,
+  type EntryFormPrefill,
   type EntryFormState,
 } from "@/components/admin/finance/EntryForm";
 import { FinanceFilters } from "@/components/admin/finance/FinanceFilters";
+import { MonthlyChart } from "@/components/admin/finance/MonthlyChart";
 import { FinancialsToastBridge } from "@/components/admin/finance/FinancialsToastBridge";
 import styles from "@/components/admin/finance/financials.module.css";
 import { getClubToday } from "@/lib/dates";
@@ -19,11 +21,14 @@ import {
   financeFiltersToSearchParams,
   formatCents,
   formatDateKey,
+  financialYearLabel,
+  financialYearOf,
   formatRange,
   isDateKey,
   isFinanceCategory,
   isFinanceMethod,
   methodLabel,
+  monthLabel,
   parseAmountToCents,
   parseFinanceFilters,
   presetLabel,
@@ -43,6 +48,8 @@ import {
   type ManualEntryInput,
 } from "@/lib/finance-db";
 import { loadFinanceReport } from "@/lib/finance-report";
+import { getBankTransaction, setBankTransactionStatus } from "@/lib/bank-db";
+import { FinanceSubNav } from "@/components/admin/finance/FinanceSubNav";
 import {
   deleteReceipt,
   receiptsConfigured,
@@ -148,6 +155,20 @@ async function saveEntry(
     entryId = await createManualEntry(input);
   }
 
+  // Created from an unreconciled bank line → match the two, as long as the
+  // amounts still agree (otherwise the treasurer reconciles it by hand).
+  let bankNote: string | null = null;
+  const bankTxnId = Number(formData.get("bankTxnId"));
+  if (!id && Number.isSafeInteger(bankTxnId) && bankTxnId > 0) {
+    const line = await getBankTransaction(bankTxnId);
+    const signed = kind === "received" ? amountCents : -amountCents;
+    if (line && line.status === "unmatched" && line.amountCents === signed) {
+      await setBankTransactionStatus(bankTxnId, "matched", entryId);
+    } else if (line) {
+      bankNote = "Entry saved, but it wasn't matched to the bank line because the amounts differ.";
+    }
+  }
+
   let receiptError: string | null = null;
   if (receiptFile) {
     try {
@@ -160,14 +181,18 @@ async function saveEntry(
   }
 
   revalidatePath("/admin/financials");
-  redirect(
-    backTo(returnTo, {
-      saved: id ? "updated" : "new",
-      ...(receiptError
-        ? { financeError: `Entry saved, but the receipt didn't upload: ${receiptError}` }
+  const extra = {
+    saved: id ? "updated" : "new",
+    ...(receiptError
+      ? { financeError: `Entry saved, but the receipt didn't upload: ${receiptError}` }
+      : bankNote
+        ? { financeError: bankNote }
         : {}),
-    }),
-  );
+  };
+  if (formData.get("after") === "bank") {
+    redirect(`/admin/financials/bank?${new URLSearchParams(extra).toString()}`);
+  }
+  redirect(backTo(returnTo, extra));
 }
 
 async function deleteEntry(formData: FormData) {
@@ -295,6 +320,8 @@ export default async function FinancialsPage({
   const selfHref = returnTo ? `/admin/financials?${returnTo}` : "/admin/financials";
   const editParam = Array.isArray(params.edit) ? params.edit[0] : params.edit;
   const editId = editParam && /^\d+$/.test(editParam) ? Number(editParam) : null;
+  const fromBankParam = Array.isArray(params.fromBank) ? params.fromBank[0] : params.fromBank;
+  const fromBankId = fromBankParam && /^\d+$/.test(fromBankParam) ? Number(fromBankParam) : null;
 
   const header = (
     <>
@@ -304,6 +331,7 @@ export default async function FinancialsPage({
         automatically; record expenses and any other income here.
       </p>
       <AdminNav active="financials" />
+      <FinanceSubNav active="ledger" />
       <FinancialsToastBridge />
     </>
   );
@@ -337,11 +365,24 @@ export default async function FinancialsPage({
     syncState = await getStripeSyncState();
   }
 
-  const [report, people, editing] = await Promise.all([
+  const [report, people, editing, bankLine] = await Promise.all([
     loadFinanceReport(filters, today),
     listKnownPeople(),
     editId ? getManualEntry(editId) : Promise.resolve(null),
+    fromBankId && !editId ? getBankTransaction(fromBankId) : Promise.resolve(null),
   ]);
+
+  const prefill: EntryFormPrefill | null =
+    bankLine && bankLine.status === "unmatched"
+      ? {
+          kind: bankLine.amountCents > 0 ? "received" : "spent",
+          amount: centsToInputValue(Math.abs(bankLine.amountCents)),
+          entryDate: bankLine.date,
+          name: bankLine.description,
+          notes: bankLine.reference,
+          bankTxnId: bankLine.id,
+        }
+      : null;
 
   const initial: EntryFormInitial | null = editing
     ? {
@@ -427,13 +468,21 @@ export default async function FinancialsPage({
           totals={totals}
         />
         <SummaryCard
-          title={`Year to date · ${today.slice(0, 4)}`}
+          title={`Year to date · FY ${financialYearLabel(financialYearOf(today))}`}
           subtitle={`${formatRange(report.ytdRange.from, report.ytdRange.to)}${
             nonDateFilters.length ? " · same filters" : ""
           }`}
           totals={ytd}
         />
       </div>
+
+      <MonthlyChart
+        months={report.monthly}
+        title={`Monthly trend · ${monthLabel(report.monthly[0].month, { year: true })} – ${monthLabel(
+          report.monthly[report.monthly.length - 1].month,
+          { year: true },
+        )}`}
+      />
 
       {breakdown.length > 0 ? (
         <details className={styles.breakdown} open={breakdown.length > 1}>
@@ -485,15 +534,16 @@ export default async function FinancialsPage({
       ) : null}
 
       <EntryForm
-        key={editing?.id ?? "new"}
+        key={editing?.id ?? (prefill ? `bank-${prefill.bankTxnId}` : "new")}
         action={saveEntry}
         initial={initial}
+        prefill={prefill}
         today={today}
         people={people}
         receiptsEnabled={receiptsConfigured()}
         returnTo={returnTo}
-        cancelHref={selfHref}
-        defaultOpen={Boolean(editing)}
+        cancelHref={prefill ? "/admin/financials/bank" : selfHref}
+        defaultOpen={Boolean(editing || prefill)}
       />
 
       <div className={styles.tableWrap}>

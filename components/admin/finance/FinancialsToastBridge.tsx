@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/context/ToastContext";
 
-const TOAST_PARAMS = ["saved", "deleted", "synced", "financeError"] as const;
+const TOAST_PARAMS = ["saved", "deleted", "synced", "notice", "financeError"] as const;
 
 // Server actions on the Financials page redirect back with one of these
 // params; this turns it into a toast and strips it so a refresh doesn't
@@ -12,6 +12,7 @@ const TOAST_PARAMS = ["saved", "deleted", "synced", "financeError"] as const;
 export function FinancialsToastBridge() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -19,6 +20,9 @@ export function FinancialsToastBridge() {
     const deleted = searchParams.get("deleted");
     const synced = searchParams.get("synced");
     const error = searchParams.get("financeError");
+    // Free-text success message (bank page actions).
+    const notice = searchParams.get("notice");
+    if (notice) showToast(notice, "success");
 
     if (saved === "new") showToast("Entry added.", "success");
     else if (saved) showToast("Changes saved.", "success");
@@ -32,13 +36,13 @@ export function FinancialsToastBridge() {
     }
     if (error) showToast(error, "error");
 
-    if (saved || deleted || synced !== null || error) {
+    if (saved || deleted || synced !== null || error || notice) {
       const params = new URLSearchParams(searchParams.toString());
       for (const key of TOAST_PARAMS) params.delete(key);
       const qs = params.toString();
-      router.replace(qs ? `/admin/financials?${qs}` : "/admin/financials", { scroll: false });
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     }
-  }, [searchParams, showToast, router]);
+  }, [searchParams, showToast, router, pathname]);
 
   return null;
 }

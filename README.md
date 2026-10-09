@@ -112,9 +112,37 @@ A ledger of every dollar in and out of the club, with filters, totals, receipts 
 - **Syncing:** the import runs whenever the page is opened and the last sync is more than 10 minutes old, nightly via `/api/cron/sync-finance` (`vercel.json`), and on demand with **Sync now**. The first sync imports your whole Stripe history. **Re-import full history** rescans everything; it's safe to run because rows are matched by their Stripe ID.
 - **Expenses and other income** (court hire, shuttlecocks, sponsorship by bank transfer, …) are added with **+ Record expense or income**. These rows can be edited and deleted.
 - **Receipts:** a photo or PDF up to 4 MB can be attached to each entry. Phone photos are shrunk in the browser first. Files are stored in **Vercel Blob as private files** and can only be viewed by a logged-in admin. To set it up, create a Blob store (choose *Private*) under Vercel → Storage and connect it to the project, which sets `BLOB_READ_WRITE_TOKEN`.
-- **Periods:** defaults to *This month*. The presets are This month, Last month, Last 3/6/12 months (whole calendar months, including the current one), Year to date, Last year and All time, plus a custom From/To range. The **Year to date** card always covers 1 Jan → today (calendar year) and uses the same type, source, method and search filters as the table.
+- **Periods:** defaults to *This month*. The presets are This month, Last month, Last 3/6/12 months (whole calendar months, including the current one), Financial year to date, Last financial year and All time, plus a custom From/To range. The club's **financial year runs 1 April – 31 March** (`FINANCIAL_YEAR_START_MONTH` in `lib/finance.ts`). The **Year to date** card covers 1 April → today and uses the same type, source, method and search filters as the table.
+- **Monthly trend chart:** received vs. spent per month with a net line. It covers the selected period, or the financial year so far when only one month is selected. Hover a month for its figures; there's also a table view.
 - **Math:** amounts are stored as integer cents, and totals are summed in Postgres over exactly the same filter as the table. Dates use NZ time, so a payment at 9am on the 1st counts toward that month.
 - **Export to Excel** downloads exactly the current view: a *Transactions* sheet (live SUMIF totals, frozen header, autofilter, links to receipts and Stripe) and a *Summary* sheet comparing the period with year to date, broken down by source.
+
+#### Bank & reconciliation (`/admin/financials/bank`)
+
+- **Opening balances:** enter the ANZ balance and the cash on hand at the start of a date, ideally 1 April. Everything is counted forward from there.
+- **Money held:** bank, Stripe balance (live), cash on hand (opening cash + cash in − cash out − cash banked) and the total. A **balance check** compares the bank's own reported balance with opening balance + imported lines, and flags any gap, which usually means missing statement lines.
+- **Reconciling:** every bank line is matched to a ledger entry or classed as a *Stripe payout*, *cash deposit*, *cash withdrawal*, *transfer between club accounts* or *ignored*. Clear cases are matched automatically: Stripe payouts by amount and arrival date, and a single bank- or card-paid entry with the same amount within 10 days. Anything else can be matched by hand or turned into a new entry in one click. The page also lists bank-paid ledger entries that haven't shown up in the bank yet.
+
+**Getting ANZ data in.** ANZ NZ shares account data only with MBIE-accredited providers (open banking under the Customer and Product Data Act), so the club can't call an ANZ API directly. There are three ways in, and all three can be used together because duplicates are skipped:
+
+1. **Akahu (recommended, automatic):** Akahu is an accredited NZ open-banking provider. Its *personal apps* are free for your own accounts.
+   1. Sign up at [akahu.nz](https://www.akahu.nz) with the ANZ login that holds the club account and connect ANZ.
+   2. At [my.akahu.nz/developers](https://my.akahu.nz/developers), create a Personal App.
+   3. Set `AKAHU_APP_TOKEN` (App ID Token) and `AKAHU_USER_TOKEN` (User Access Token) in Vercel. Set `AKAHU_ACCOUNT_ID` too if more than one account is connected; the error message lists the ids.
+   4. The account syncs nightly with the Stripe import (`/api/cron/sync-finance`), and on **Sync bank now**. Akahu refreshes from ANZ about once a day.
+2. **CSV import (no setup):** export from ANZ Internet Banking as CSV and upload it on the page. Re-importing, or overlapping with the Akahu feed, is safe.
+3. **Inbound webhook (`POST /api/bank/webhook`):** for bank data pushed to the club. Set `BANK_WEBHOOK_SECRET`.
+   - **Akahu webhooks** (full Akahu apps only): subscribe with `state` set to the secret. Each event triggers a pull from Akahu.
+   - **Anything else**, such as a future ANZ data-sharing provider, Zapier/Make or a script: `Authorization: Bearer <secret>` with `{ "account", "balance", "transactions": [{ "id", "date", "amount", "description", "reference", "balance" }] }`. Amounts are NZD dollars, + in / − out, and ids must be stable.
+
+#### Annual report (`/admin/financials/report`)
+
+The year's accounts for the AGM, in the NZ Tier 4 not-for-profit cash format (PBE SFR-C):
+- a **Statement of Receipts and Payments** by source, with the previous year alongside (the same period, while the year is still in progress);
+- **cash and bank** at the start and end of the year, with a check that opening funds + surplus = closing funds (which needs opening balances on or before 1 April);
+- a month-by-month table.
+
+Use **Print / save as PDF** for a clean copy.
 
 ## Development
 

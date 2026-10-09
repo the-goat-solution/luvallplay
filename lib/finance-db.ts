@@ -56,6 +56,52 @@ async function ensureFinanceTablesImpl() {
     );
   `;
   await sql`CREATE INDEX IF NOT EXISTS finance_entries_date_idx ON finance_entries (entry_date);`;
+  // Stripe payouts (Stripe balance → the club's bank account). Not income
+  // or expense — kept so a bank credit from Stripe can be reconciled
+  // against the exact payout it came from.
+  await sql`
+    CREATE TABLE IF NOT EXISTS stripe_payouts (
+      id TEXT PRIMARY KEY,
+      amount_cents BIGINT NOT NULL,
+      created_date DATE NOT NULL,
+      arrival_date DATE NOT NULL,
+      status TEXT
+    );
+  `;
+  // Lines from the club's bank account (ANZ via Akahu, CSV statement
+  // import, or the inbound webhook). amount_cents is SIGNED here, as the
+  // bank reports it: + money in, − money out. `status` records how the line
+  // is reconciled: matched to a ledger entry, or classified as a movement
+  // between the club's own pots of money (not income/expense).
+  await sql`
+    CREATE TABLE IF NOT EXISTS bank_transactions (
+      id SERIAL PRIMARY KEY,
+      source TEXT NOT NULL,
+      external_id TEXT NOT NULL UNIQUE,
+      account TEXT,
+      txn_date DATE NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      reference TEXT,
+      amount_cents BIGINT NOT NULL,
+      balance_cents BIGINT,
+      status TEXT NOT NULL DEFAULT 'unmatched' CHECK (status IN (
+        'unmatched', 'matched', 'stripe_payout', 'cash_deposit',
+        'cash_withdrawal', 'internal', 'ignored'
+      )),
+      entry_id INT UNIQUE REFERENCES finance_entries(id) ON DELETE SET NULL,
+      payout_id TEXT,
+      auto_matched BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS bank_transactions_date_idx ON bank_transactions (txn_date);`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS finance_settings (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
   await sql`
     CREATE TABLE IF NOT EXISTS finance_sync_state (
       key TEXT PRIMARY KEY,
@@ -229,6 +275,36 @@ export async function getCategoryBreakdown(
   );
 }
 
+export type MonthlyTotal = { month: string; receivedCents: number; spentCents: number };
+
+// Received / spent per calendar month ('YYYY-MM') over a date range, using
+// the same non-date filters as the table. Months with no entries are absent;
+// the caller fills the gaps.
+export async function getMonthlyTotals(
+  filters: Pick<FinanceFilters, "kind" | "category" | "method" | "q">,
+  range: { from: string | null; to: string | null },
+): Promise<MonthlyTotal[]> {
+  const { where, params } = buildWhere(filters, range);
+  const { rows } = await sql.query(
+    `SELECT to_char(entry_date, 'YYYY-MM') AS month,
+       COALESCE(SUM(amount_cents) FILTER (WHERE kind = 'received'), 0) AS received,
+       COALESCE(SUM(amount_cents) FILTER (WHERE kind = 'spent'), 0) AS spent
+     FROM finance_entries ${where}
+     GROUP BY 1 ORDER BY 1;`,
+    params,
+  );
+  return (rows as { month: string; received: string; spent: string }[]).map((r) => ({
+    month: r.month,
+    receivedCents: toSafeInt(r.received),
+    spentCents: toSafeInt(r.spent),
+  }));
+}
+
+export async function getEarliestEntryDate(): Promise<string | null> {
+  const { rows } = await sql`SELECT MIN(entry_date)::text AS d FROM finance_entries;`;
+  return (rows[0]?.d as string | null) ?? null;
+}
+
 // ── Manual entries ────────────────────────────────────────────────────────
 
 export type ManualEntryInput = {
@@ -270,7 +346,15 @@ export async function updateManualEntry(id: number, input: ManualEntryInput): Pr
       updated_at = NOW()
     WHERE id = ${id} AND origin = 'manual';
   `;
-  return (rowCount ?? 0) > 0;
+  if (!rowCount) return false;
+  // If the edit changed the amount or direction, a bank line matched to it
+  // no longer agrees — release it so it shows up for reconciling again.
+  const signed = input.kind === "received" ? input.amountCents : -input.amountCents;
+  await sql`
+    UPDATE bank_transactions SET status = 'unmatched', entry_id = NULL, auto_matched = FALSE
+    WHERE entry_id = ${id} AND amount_cents <> ${signed};
+  `;
+  return true;
 }
 
 export type ManualEntryRecord = ManualEntryInput & {
@@ -307,6 +391,12 @@ export async function getManualEntry(id: number): Promise<ManualEntryRecord | nu
 export async function deleteManualEntry(
   id: number,
 ): Promise<{ receiptUrl: string | null; receiptAccess: string | null } | null> {
+  // A bank line matched to this entry goes back to "unmatched" rather than
+  // silently claiming a match to something that no longer exists.
+  await sql`
+    UPDATE bank_transactions SET status = 'unmatched', entry_id = NULL, auto_matched = FALSE
+    WHERE entry_id = ${id};
+  `;
   const { rows } = await sql`
     DELETE FROM finance_entries WHERE id = ${id} AND origin = 'manual'
     RETURNING receipt_url, receipt_access;

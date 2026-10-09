@@ -10,6 +10,7 @@ import {
   type StripeLedgerLine,
 } from "./finance-db";
 import type { FinanceKind } from "./finance";
+import { upsertStripePayouts } from "./bank-db";
 
 // Imports the club's Stripe money movements into the finance ledger.
 //
@@ -301,6 +302,7 @@ export async function syncStripeFinance({ full = false } = {}): Promise<StripeSy
     const lines: StripeLedgerLine[] = [];
     let scanned = 0;
 
+    const payouts: Parameters<typeof upsertStripePayouts>[0] = [];
     for await (const bt of stripe.balanceTransactions.list({
       limit: 100,
       ...(created ? { created } : {}),
@@ -308,7 +310,21 @@ export async function syncStripeFinance({ full = false } = {}): Promise<StripeSy
     })) {
       scanned++;
       lines.push(...(await linesForBalanceTransaction(stripe, bt, cache)));
+      // Payouts aren't income or expense, but bank reconciliation needs
+      // them to recognise the matching credit on the bank statement.
+      const source = bt.source && typeof bt.source === "object" ? bt.source : null;
+      if (bt.type === "payout" && source?.object === "payout") {
+        const payout = source as Stripe.Payout;
+        payouts.push({
+          id: payout.id,
+          amountCents: Math.abs(bt.amount),
+          createdDate: dateKeyFromUnix(bt.created),
+          arrivalDate: dateKeyFromUnix(payout.arrival_date),
+          status: payout.status,
+        });
+      }
     }
+    await upsertStripePayouts(payouts);
 
     for await (const invoice of stripe.invoices.list({
       limit: 100,
@@ -333,4 +349,13 @@ export async function syncStripeFinance({ full = false } = {}): Promise<StripeSy
 export async function getStripeSyncState() {
   await ensureFinanceTables();
   return getSyncState(SYNC_KEY);
+}
+
+// Money currently held by Stripe for the club (available + pending, NZD) —
+// one of the three pots in the bank reconciliation's "money held".
+export async function getStripeBalanceCents(): Promise<number> {
+  const balance = await getStripe().balance.retrieve();
+  const sum = (list: { amount: number; currency: string }[] | undefined) =>
+    (list ?? []).filter((b) => b.currency === "nzd").reduce((t, b) => t + b.amount, 0);
+  return sum(balance.available) + sum(balance.pending);
 }

@@ -4,6 +4,8 @@ import { getClubToday } from "@/lib/dates";
 import {
   categoryLabel,
   describeNonDateFilters,
+  financialYearLabel,
+  financialYearOf,
   formatRange,
   methodLabel,
   parseFinanceFilters,
@@ -201,7 +203,7 @@ export async function GET(request: Request) {
   summary.getCell("A3").value = `Filters: ${filterText}`;
 
   const head = summary.getRow(5);
-  head.values = ["", "Selected period", `Year to date (${report.ytdRange.from.slice(0, 4)})`];
+  head.values = ["", "Selected period", `Year to date (FY ${financialYearLabel(financialYearOf(report.ytdRange.from))})`];
   styleHeader(head, 3);
 
   const summaryRows: [string, (t: FinanceTotals) => number, boolean][] = [

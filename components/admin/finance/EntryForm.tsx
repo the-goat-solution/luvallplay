@@ -60,9 +60,21 @@ async function compressImage(file: File): Promise<File> {
   }
 }
 
+// Pre-filled values for a NEW entry created from an unreconciled bank line
+// (see /admin/financials/bank). Saving it also matches it to that line.
+export type EntryFormPrefill = {
+  kind: FinanceKind;
+  amount: string;
+  entryDate: string;
+  name: string;
+  notes: string | null;
+  bankTxnId: number;
+};
+
 export function EntryForm({
   action,
   initial,
+  prefill,
   today,
   people,
   receiptsEnabled,
@@ -72,6 +84,7 @@ export function EntryForm({
 }: {
   action: (state: EntryFormState, formData: FormData) => Promise<EntryFormState>;
   initial: EntryFormInitial | null;
+  prefill?: EntryFormPrefill | null;
   today: string;
   people: string[];
   receiptsEnabled: boolean;
@@ -81,7 +94,7 @@ export function EntryForm({
 }) {
   const [state, formAction] = useActionState(action, {});
   const [open, setOpen] = useState(defaultOpen);
-  const [kind, setKind] = useState<FinanceKind>(initial?.kind ?? "spent");
+  const [kind, setKind] = useState<FinanceKind>(initial?.kind ?? prefill?.kind ?? "spent");
   const [category, setCategory] = useState(initial?.category ?? "");
   const [preview, setPreview] = useState<string | null>(null);
   const [fileNote, setFileNote] = useState<string | null>(null);
@@ -138,9 +151,15 @@ export function EntryForm({
     <div ref={panelRef} className={styles.formPanel}>
       <div className={styles.formHead}>
         <h2 className={styles.formTitle}>
-          {editing ? "Edit entry" : kind === "spent" ? "Record money spent" : "Record money received"}
+          {editing
+            ? "Edit entry"
+            : prefill
+              ? "Record this bank line in the ledger"
+              : kind === "spent"
+                ? "Record money spent"
+                : "Record money received"}
         </h2>
-        {editing ? (
+        {editing || prefill ? (
           <a href={cancelHref} className={styles.buttonGhost}>
             Cancel
           </a>
@@ -155,6 +174,12 @@ export function EntryForm({
         {initial ? <input type="hidden" name="id" value={initial.id} /> : null}
         <input type="hidden" name="returnTo" value={returnTo} />
         <input type="hidden" name="kind" value={kind} />
+        {prefill ? (
+          <>
+            <input type="hidden" name="bankTxnId" value={prefill.bankTxnId} />
+            <input type="hidden" name="after" value="bank" />
+          </>
+        ) : null}
 
         <div className={styles.formGrid}>
           <div className={styles.field}>
@@ -186,7 +211,7 @@ export function EntryForm({
               name="entryDate"
               required
               className={styles.input}
-              defaultValue={v?.entryDate ?? initial?.entryDate ?? today}
+              defaultValue={v?.entryDate ?? initial?.entryDate ?? prefill?.entryDate ?? today}
             />
           </label>
 
@@ -203,7 +228,7 @@ export function EntryForm({
                 pattern="^\$?\s*[0-9][0-9,]*(\.[0-9]{1,2})?$"
                 title="An amount like 45 or 45.50"
                 className={`${styles.input} ${styles.num}`}
-                defaultValue={v?.amount ?? initial?.amount ?? ""}
+                defaultValue={v?.amount ?? initial?.amount ?? prefill?.amount ?? ""}
               />
             </span>
           </label>
@@ -231,7 +256,7 @@ export function EntryForm({
               maxLength={200}
               className={styles.input}
               placeholder={kind === "spent" ? "e.g. Court hire — Pioneer Stadium, October" : "e.g. Sponsorship — Joe's Bakery"}
-              defaultValue={v?.name ?? initial?.name ?? ""}
+              defaultValue={v?.name ?? initial?.name ?? prefill?.name ?? ""}
             />
           </label>
 
@@ -281,7 +306,7 @@ export function EntryForm({
               maxLength={1000}
               className={styles.textarea}
               placeholder="Anything the treasurer should know — invoice number, what it covered…"
-              defaultValue={v?.notes ?? initial?.notes ?? ""}
+              defaultValue={v?.notes ?? initial?.notes ?? prefill?.notes ?? ""}
             />
           </label>
 
@@ -345,7 +370,7 @@ export function EntryForm({
         ) : null}
 
         <div className={styles.formActions}>
-          {editing ? (
+          {editing || prefill ? (
             <a href={cancelHref} className={styles.button}>
               Cancel
             </a>

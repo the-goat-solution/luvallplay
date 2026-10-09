@@ -711,3 +711,375 @@
     width: 100%;
   }
 }
+
+/* ── Monthly trend chart ───────────────────────────────── */
+
+.chartCard {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 16px 6px;
+  margin-bottom: 14px;
+}
+
+.chartHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend span,
+.tooltip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.lineKey {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.chartArea {
+  position: relative;
+}
+
+.chartSvg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chartSvg rect:focus {
+  outline: none;
+}
+
+.axisText {
+  font-size: 11px;
+  fill: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip {
+  position: absolute;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.12);
+  font-size: 12px;
+  color: var(--ink);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.tooltip b {
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.chartTable > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+
+/* ── Section nav (Ledger / Bank / Annual report) ───────── */
+
+.subNav {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: -8px 0 18px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  flex-wrap: wrap;
+}
+
+.subNavLink {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.subNavLink:hover {
+  color: var(--ink);
+}
+
+.subNavActive {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+/* ── Bank & reconciliation ─────────────────────────────── */
+
+.fundsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.fundsTotal {
+  background: #f3f7fb;
+  border-color: #cfdceb;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  margin: 26px 0 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.sectionCount {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.checkOk,
+.checkWarn {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.checkOk {
+  background: var(--green-bg);
+  color: #0f5132;
+}
+
+.checkWarn {
+  background: #fdf3e3;
+  color: #7a4a00;
+}
+
+.setupGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.setupCard {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.setupCard h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  word-break: break-all;
+}
+
+.statusPill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--soft);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.statusOn {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.reconcileForm {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.reconcileForm .select {
+  max-width: 280px;
+}
+
+.inlineForm {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .fundsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .setupGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Annual report ─────────────────────────────────────── */
+
+.report {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 28px 32px;
+}
+
+.reportHead {
+  border-bottom: 2px solid var(--navy);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+.reportClub {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--navy);
+}
+
+.reportTitle {
+  font-size: 22px;
+  margin: 4px 0 2px;
+}
+
+.statement {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin-bottom: 26px;
+}
+
+.statement caption {
+  text-align: left;
+  font-size: 15px;
+  font-weight: 700;
+  padding-bottom: 8px;
+}
+
+.statement th,
+.statement td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.statement th {
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+
+.statement th:first-child {
+  text-align: left;
+}
+
+.statement td + td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 150px;
+}
+
+.stmtGroup td {
+  font-weight: 700;
+  padding-top: 14px;
+  border-bottom: 0;
+}
+
+.stmtIndent td:first-child {
+  padding-left: 24px;
+}
+
+.stmtTotal td {
+  font-weight: 700;
+  border-top: 1px solid var(--ink);
+  border-bottom: 0;
+}
+
+.stmtGrand td {
+  font-weight: 800;
+  border-top: 1px solid var(--ink);
+  border-bottom: 3px double var(--ink);
+}
+
+.reportNotes {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.reportNotes li {
+  margin-bottom: 4px;
+}
+
+@media print {
+  .noPrint {
+    display: none !important;
+  }
+  .page {
+    margin: 0;
+    max-width: none;
+    padding: 0;
+  }
+  .report {
+    border: 0;
+    padding: 0;
+  }
+  .statement {
+    break-inside: avoid;
+  }
+}

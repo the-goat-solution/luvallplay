@@ -166,8 +166,8 @@ export const FINANCE_PRESETS: { value: FinancePreset; label: string }[] = [
   { value: "last-3-months", label: "Last 3 months" },
   { value: "last-6-months", label: "Last 6 months" },
   { value: "last-12-months", label: "Last 12 months" },
-  { value: "ytd", label: "Year to date" },
-  { value: "last-year", label: "Last year" },
+  { value: "ytd", label: "Financial year to date" },
+  { value: "last-year", label: "Last financial year" },
   { value: "all", label: "All time" },
   { value: "custom", label: "Custom range" },
 ];
@@ -203,18 +203,82 @@ export function resolvePresetRange(
     case "last-12-months":
       return { from: monthStart(y, m, -11), to: monthEnd(y, m) };
     case "ytd":
-      return { from: `${y}-01-01`, to: today };
+      return ytdRange(today);
     case "last-year":
-      return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31` };
+      return financialYearRange(financialYearOf(today) - 1);
     case "all":
       return { from: null, to: null };
   }
 }
 
-// Year-to-date for the calendar year containing `today` (the club's
-// financial-year choice — Jan to Dec).
+// ── Financial year ────────────────────────────────────────────────────────
+// The club's financial year runs 1 April – 31 March (the usual NZ balance
+// date for incorporated societies). A financial year is named by the
+// calendar year it STARTS in: FY 2026 = 1 Apr 2026 – 31 Mar 2027, shown as
+// "2026/27".
+
+export const FINANCIAL_YEAR_START_MONTH = 4; // April
+
+export function financialYearOf(dateKey: string): number {
+  const [y, m] = dateKey.split("-").map(Number);
+  return m >= FINANCIAL_YEAR_START_MONTH ? y : y - 1;
+}
+
+export function financialYearRange(fy: number): { from: string; to: string } {
+  return {
+    from: monthStart(fy, FINANCIAL_YEAR_START_MONTH),
+    // Last day of the month before the start month, a year later.
+    to: monthEnd(fy + 1, FINANCIAL_YEAR_START_MONTH, -1),
+  };
+}
+
+export function financialYearLabel(fy: number): string {
+  return `${fy}/${String((fy + 1) % 100).padStart(2, "0")}`;
+}
+
+// Financial year to date: 1 April of the current financial year → today.
 export function ytdRange(today: string): { from: string; to: string } {
-  return { from: `${today.slice(0, 4)}-01-01`, to: today };
+  return { from: financialYearRange(financialYearOf(today)).from, to: today };
+}
+
+// Every 'YYYY-MM' from the month of `from` to the month of `to`, inclusive.
+export function monthsBetween(from: string, to: string): string[] {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  const out: string[] = [];
+  for (let y = fy, m = fm; y < ty || (y === ty && m <= tm); m === 12 ? (y++, (m = 1)) : m++) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+// 'YYYY-MM' → its last day as 'YYYY-MM-DD'.
+export function lastDayOfMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return monthEnd(y, m);
+}
+
+export function monthLabel(month: string, { year = false } = {}): string {
+  const [y, m] = month.split("-").map(Number);
+  return year ? `${MONTHS[m - 1]} ${y}` : MONTHS[m - 1];
+}
+
+// The months the trend chart covers: the selected period when it spans at
+// least two months (capped to the latest 24), otherwise the current
+// financial year so far — a single month on its own isn't a trend.
+export function chartMonths(
+  range: { from: string | null; to: string | null },
+  today: string,
+  earliest: string | null,
+): string[] {
+  const from = range.from ?? earliest ?? today;
+  const to = range.to ?? today;
+  let months = monthsBetween(from <= to ? from : to, to);
+  if (months.length < 2) {
+    months = monthsBetween(ytdRange(today).from, today);
+    if (months.length < 2) months = monthsBetween(monthStart(Number(today.slice(0, 4)), Number(today.slice(5, 7)), -1), today);
+  }
+  return months.slice(-24);
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

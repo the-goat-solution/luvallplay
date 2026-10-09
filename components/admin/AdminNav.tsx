@@ -1,9 +1,14 @@
 const TABS = [
   { href: "/admin/play-days", label: "Play days" },
   { href: "/admin/members", label: "Members" },
+  { href: "/admin/financials", label: "Financials" },
 ] as const;
 
-export function AdminNav({ active }: { active: "play-days" | "members" }) {
+export function AdminNav({
+  active,
+}: {
+  active: "play-days" | "members" | "financials";
+}) {
   return (
     <nav
       style={{

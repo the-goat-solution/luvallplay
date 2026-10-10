@@ -12,11 +12,14 @@ export function SubmitButton({
   loadingText = "Saving…",
   className,
   style,
+  disabled = false,
 }: {
   children: ReactNode;
   loadingText?: string;
   className?: string;
   style?: CSSProperties;
+  // Extra reason to hold the button (e.g. a file still being prepared).
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   const showPending = useDelayedLoading(pending);
@@ -24,7 +27,7 @@ export function SubmitButton({
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className={className}
       style={{
         display: "inline-flex",
@@ -37,8 +40,8 @@ export function SubmitButton({
         // own background/color (every admin button does) looks pixel-
         // identical whether disabled or not, which reads as "did that even
         // register?" and invites a second click.
-        opacity: pending ? 0.6 : 1,
-        cursor: pending ? "default" : "pointer",
+        opacity: pending || disabled ? 0.6 : 1,
+        cursor: pending || disabled ? "default" : "pointer",
       }}
     >
       {showPending ? (

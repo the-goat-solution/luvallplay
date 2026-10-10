@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { AdminLink } from "@/components/admin/AdminLink";
+import { LoadingIcon } from "@/components/LoadingIcon";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import {
   FINANCE_CATEGORIES,
@@ -99,6 +101,10 @@ export function EntryForm({
   const [preview, setPreview] = useState<string | null>(null);
   const [fileNote, setFileNote] = useState<string | null>(null);
   const [removeReceipt, setRemoveReceipt] = useState(false);
+  // True while a phone photo is being shrunk in the browser. Submitting
+  // meanwhile would send the full-size original (often over the upload
+  // limit), so the save button waits for it.
+  const [preparing, setPreparing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const v = state.values;
 
@@ -119,7 +125,8 @@ export function EntryForm({
     setPreview(null);
     setFileNote(null);
     if (!original) return;
-    const file = await compressImage(original);
+    setPreparing(true);
+    const file = await compressImage(original).finally(() => setPreparing(false));
     if (file !== original) {
       // Swap the compressed file into the input so the form submits it.
       const dt = new DataTransfer();
@@ -160,9 +167,9 @@ export function EntryForm({
                 : "Record money received"}
         </h2>
         {editing || prefill ? (
-          <a href={cancelHref} className={styles.buttonGhost}>
+          <AdminLink href={cancelHref} className={styles.buttonGhost}>
             Cancel
-          </a>
+          </AdminLink>
         ) : (
           <button type="button" className={styles.buttonGhost} onClick={() => setOpen(false)}>
             Close
@@ -336,8 +343,13 @@ export function EntryForm({
                     accept="image/*,application/pdf"
                     onChange={(e) => onFile(e.currentTarget)}
                   />
-                  <span className={styles.hint}>
-                    {fileNote ??
+                  <span className={styles.hint} aria-live="polite">
+                    {preparing ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <LoadingIcon size="sm" />
+                        Preparing photo…
+                      </span>
+                    ) : fileNote ??
                       (initial?.hasReceipt
                         ? "Choose a file to replace the current receipt."
                         : "Photo or PDF, up to 4 MB. Phone photos are shrunk automatically.")}
@@ -371,11 +383,11 @@ export function EntryForm({
 
         <div className={styles.formActions}>
           {editing || prefill ? (
-            <a href={cancelHref} className={styles.button}>
+            <AdminLink href={cancelHref} className={styles.button}>
               Cancel
-            </a>
+            </AdminLink>
           ) : null}
-          <SubmitButton loadingText="Saving…" className={styles.buttonPrimary}>
+          <SubmitButton loadingText="Saving…" className={styles.buttonPrimary} disabled={preparing}>
             {editing ? "Save changes" : kind === "spent" ? "Add expense" : "Add income"}
           </SubmitButton>
         </div>

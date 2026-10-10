@@ -1,3 +1,6 @@
+import { AdminLink } from "@/components/admin/AdminLink";
+import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
+
 const TABS = [
   { href: "/admin/play-days", label: "Play days" },
   { href: "/admin/members", label: "Members" },
@@ -22,9 +25,11 @@ export function AdminNav({
       {TABS.map((tab) => {
         const isActive = tab.href.endsWith(active);
         return (
-          <a
+          <AdminLink
             key={tab.href}
             href={tab.href}
+            current={isActive}
+            prefetchShell
             style={{
               padding: "10px 16px",
               fontSize: 14,
@@ -36,7 +41,7 @@ export function AdminNav({
             }}
           >
             {tab.label}
-          </a>
+          </AdminLink>
         );
       })}
       <a
@@ -61,8 +66,8 @@ export function AdminNav({
         action="/api/admin-logout"
         style={{ paddingBottom: 6 }}
       >
-        <button
-          type="submit"
+        <PlainSubmitButton
+          loadingText="Logging out…"
           style={{
             padding: "5px 12px",
             borderRadius: 6,
@@ -71,11 +76,10 @@ export function AdminNav({
             color: "#555",
             fontSize: 12,
             fontWeight: 600,
-            cursor: "pointer",
           }}
         >
           Log out
-        </button>
+        </PlainSubmitButton>
       </form>
     </nav>
   );

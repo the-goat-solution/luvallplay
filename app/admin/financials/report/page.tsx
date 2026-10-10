@@ -1,4 +1,6 @@
 import { AdminNav } from "@/components/admin/AdminNav";
+import { ExportButton } from "@/components/admin/finance/ExportButton";
+import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
 import { FinanceSubNav } from "@/components/admin/finance/FinanceSubNav";
 import { PrintButton } from "@/components/admin/finance/PrintButton";
 import styles from "@/components/admin/finance/financials.module.css";
@@ -156,13 +158,11 @@ export default async function AnnualReportPage({
               ))}
             </select>
           </label>
-          <button type="submit" className={styles.button} style={{ alignSelf: "flex-end" }}>
+          <PlainSubmitButton loadingText="Loading…" className={styles.button} style={{ alignSelf: "flex-end" }}>
             Show
-          </button>
+          </PlainSubmitButton>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignSelf: "flex-end" }}>
-            <a className={styles.button} href={`/api/admin/finance/export?${exportQs}`} download>
-              ⤓ Excel (all transactions)
-            </a>
+            <ExportButton href={`/api/admin/finance/export?${exportQs}`}>⤓ Excel (all transactions)</ExportButton>
             <PrintButton />
           </span>
         </form>

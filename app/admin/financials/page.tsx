@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { ExportButton } from "@/components/admin/finance/ExportButton";
+import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { SubmitButton } from "@/components/admin/SubmitButton";
@@ -300,10 +302,10 @@ function SortHeader({
   const arrow = current === `${field}-desc` ? " ↓" : current === `${field}-asc` ? " ↑" : "";
   return (
     <th className={alignRight ? styles.right : undefined} aria-sort={current ? (current.endsWith("asc") ? "ascending" : "descending") : "none"}>
-      <a className={styles.sortLink} href={qs ? `/admin/financials?${qs}` : "/admin/financials"}>
+      <AdminLink className={styles.sortLink} href={qs ? `/admin/financials?${qs}` : "/admin/financials"} scroll={false}>
         {label}
         {arrow}
-      </a>
+      </AdminLink>
     </th>
   );
 }
@@ -456,9 +458,7 @@ export default async function FinancialsPage({
             <span className={styles.rangePreset}>· {presetLabel(filters.preset)}</span>
           ) : null}
         </span>
-        <a href={exportHref} className={styles.button} download>
-          ⤓ Export to Excel
-        </a>
+        <ExportButton href={exportHref}>⤓ Export to Excel</ExportButton>
       </div>
 
       <div className={styles.summary}>
@@ -505,9 +505,9 @@ export default async function FinancialsPage({
                 return (
                   <tr key={b.category}>
                     <td>
-                      <a className={styles.sortLink} href={`/admin/financials?${qs}`}>
+                      <AdminLink className={styles.sortLink} href={`/admin/financials?${qs}`} scroll={false}>
                         {categoryLabel(b.category)}
-                      </a>
+                      </AdminLink>
                     </td>
                     <td className={styles.num}>{b.receivedCents ? formatCents(b.receivedCents) : "—"}</td>
                     <td className={styles.num}>{b.spentCents ? formatCents(b.spentCents) : "—"}</td>
@@ -627,9 +627,9 @@ export default async function FinancialsPage({
                     <td>
                       {e.origin === "manual" ? (
                         <div className={styles.actions}>
-                          <a className={styles.actionLink} href={`/admin/financials?${editQs.toString()}`}>
+                          <AdminLink className={styles.actionLink} href={`/admin/financials?${editQs.toString()}`}>
                             Edit
-                          </a>
+                          </AdminLink>
                           <DeleteEntryButton action={deleteEntry} id={e.id} label={e.name} returnTo={returnTo} />
                         </div>
                       ) : (

@@ -6,6 +6,7 @@ import {
   suggestForLine,
   type MatchEntry,
   type MatchLine,
+  type MatchPayout,
   type MatchRule,
   type Suggestion,
 } from "./bank-match";
@@ -28,8 +29,10 @@ import {
 //     unmatched        → still to do
 //
 // Bank balance  = opening bank balance + every bank line since the opening date
-// Cash on hand  = opening cash + ledger cash in − ledger cash out
-//                 − cash deposited + cash withdrawn
+// Cash on hand  = opening cash + unbanked ledger cash in − cash out
+//                 − deposits marked "cash deposit" + cash withdrawn
+//                 (a deposit MATCHED to cash entries banks exactly those
+//                 entries, so they drop out of "unbanked" instead)
 // Stripe        = live balance from Stripe (available + pending)
 
 export type BankStatus =
@@ -234,12 +237,9 @@ export async function upsertStripePayouts(
 // amounts must add up to the bank line exactly — any gap is booked as its
 // own entry (e.g. a bank fee) so the books always balance to the cent.
 
-// Ledger methods whose money moves through the bank account. Stripe
-// payments arrive via payouts and cash via deposits, never line by line.
-const BANK_METHODS = ["bank_transfer", "card", "other"];
-const STRIPE_PAYOUT_DAYS = 5;
-// How far either side of a bank line to look for entries to match.
-const CANDIDATE_DAYS = 45;
+// How far either side of a bank line to look for entries to match — wide
+// enough for cash that sat in the tin for a few weeks before banking.
+const CANDIDATE_DAYS = 60;
 
 type DbClient = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }> };
 
@@ -465,21 +465,35 @@ export async function applyBankRule(bankTxnId: number, ruleId: number, { auto = 
 
 type LineRow = MatchLine & { status: BankStatus };
 
-async function loadMatchingPool(): Promise<{ lines: LineRow[]; entries: MatchEntry[]; rules: MatchRule[] }> {
-  const [{ rows: lineRows }, { rows: entryRows }, rules] = await Promise.all([
+// Everything the matcher needs: unreconciled lines; unlinked ledger entries
+// that reach the bank line by line (transfer / card / other) or inside a
+// cash deposit (cash) — Stripe entries arrive as payouts instead; Stripe
+// payouts not yet tied to a bank line; and the learned rules.
+async function loadMatchingPool(): Promise<{
+  lines: LineRow[];
+  entries: MatchEntry[];
+  payouts: MatchPayout[];
+  rules: MatchRule[];
+}> {
+  const [{ rows: lineRows }, { rows: entryRows }, { rows: payoutRows }, rules] = await Promise.all([
     sql`
       SELECT id, txn_date::text AS d, description, reference, amount_cents, status
       FROM bank_transactions WHERE status = 'unmatched' ORDER BY txn_date, id;
     `,
     sql.query(
-      `SELECT e.id, e.entry_date::text AS d, e.name, e.person, e.notes,
+      `SELECT e.id, e.entry_date::text AS d, e.name, e.person, e.notes, e.method,
          CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END AS signed
        FROM finance_entries e
-       WHERE (e.method IS NULL OR e.method = ANY($1::text[]))
+       WHERE (e.method IS NULL OR e.method <> 'stripe')
          AND NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id)
-         AND e.entry_date >= (SELECT COALESCE(MIN(txn_date), CURRENT_DATE) FROM bank_transactions WHERE status = 'unmatched') - $2::int;`,
-      [BANK_METHODS, CANDIDATE_DAYS],
+         AND e.entry_date >= (SELECT COALESCE(MIN(txn_date), CURRENT_DATE) FROM bank_transactions WHERE status = 'unmatched') - $1::int;`,
+      [CANDIDATE_DAYS],
     ),
+    sql`
+      SELECT p.id, p.amount_cents, p.arrival_date::text AS d FROM stripe_payouts p
+      WHERE COALESCE(p.status, 'paid') NOT IN ('failed', 'canceled')
+        AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.payout_id = p.id);
+    `,
     listBankRules(),
   ]);
   return {
@@ -497,8 +511,10 @@ async function loadMatchingPool(): Promise<{ lines: LineRow[]; entries: MatchEnt
       name: r.name,
       person: r.person,
       notes: r.notes,
+      method: r.method,
       signedCents: toInt(r.signed),
     })),
+    payouts: payoutRows.map((r) => ({ id: r.id, amountCents: toInt(r.amount_cents), arrivalDate: r.d })),
     rules,
   };
 }
@@ -508,75 +524,76 @@ function nearby(entries: MatchEntry[], date: string): MatchEntry[] {
   return entries.filter((e) => Math.abs(Date.parse(`${e.date}T00:00:00Z`) - t) <= CANDIDATE_DAYS * 86_400_000);
 }
 
-// Suggestions for every unreconciled line, for the bank page. Lines are
-// processed oldest first and an entry suggested for one line isn't offered
-// to the next, so two lines never get pointed at the same entry.
-export async function getBankSuggestions(): Promise<Map<number, Suggestion>> {
-  await ensureFinanceTables();
-  const { lines, entries, rules } = await loadMatchingPool();
-  let pool = entries;
+// Runs the matcher over every unreconciled line, oldest first. Whatever a
+// suggestion uses (entries, a payout) is taken out of the pool, so two
+// lines are never pointed at the same thing.
+function suggestAll(pool: Awaited<ReturnType<typeof loadMatchingPool>>): Map<number, Suggestion> {
+  let entries = pool.entries;
+  let payouts = pool.payouts;
   const out = new Map<number, Suggestion>();
-  for (const line of lines) {
-    const s = suggestForLine(line, nearby(pool, line.date), rules);
+  for (const line of pool.lines) {
+    const s = suggestForLine(line, nearby(entries, line.date), pool.rules, payouts);
     if (!s) continue;
     out.set(line.id, s);
-    if (s.kind === "entries") pool = pool.filter((e) => !s.entryIds.includes(e.id));
+    if (s.kind === "entries") entries = entries.filter((e) => !s.entryIds.includes(e.id));
+    if (s.kind === "payout") payouts = payouts.filter((p) => p.id !== s.payoutId);
   }
   return out;
 }
 
-// Applies what can be applied with confidence: Stripe payouts, clear
-// single matches, and bank rules the treasurer switched to automatic.
-// Everything else is left as a suggestion on the bank page.
+// Suggestions for every unreconciled line, for the bank page.
+export async function getBankSuggestions(): Promise<Map<number, Suggestion>> {
+  await ensureFinanceTables();
+  return suggestAll(await loadMatchingPool());
+}
+
+// Marks a bank credit as a Stripe payout, linked to Stripe's record of it.
+export async function markStripePayout(
+  bankTxnId: number,
+  payoutId: string | null,
+  { auto = false, reason = null }: { auto?: boolean; reason?: string | null } = {},
+): Promise<void> {
+  await ensureFinanceTables();
+  const { rowCount } = await sql`
+    UPDATE bank_transactions SET status = 'stripe_payout', payout_id = ${payoutId},
+      auto_matched = ${auto}, match_reason = ${reason}
+    WHERE id = ${bankTxnId} AND status = 'unmatched'
+      AND (${payoutId}::text IS NULL OR NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.payout_id = ${payoutId}));
+  `;
+  if (!rowCount) throw new MatchError("That bank line is already reconciled, or the payout is already matched.");
+}
+
+// Applies what can be applied with confidence: Stripe payouts (by amount
+// and arrival date), clear single matches, and bank rules the treasurer
+// switched to automatic. Everything else stays a suggestion on the page.
 export async function autoMatchBankTransactions(): Promise<number> {
   await ensureFinanceTables();
   let matched = 0;
 
-  // 1. Stripe payouts — a credit mentioning Stripe, matched to the payout
-  //    of the same amount arriving within a few days (or left unlinked if
-  //    Stripe's record of it isn't imported yet).
-  const { rows: stripeLines } = await sql`
-    SELECT id, txn_date::text AS d, amount_cents FROM bank_transactions
-    WHERE status = 'unmatched' AND amount_cents > 0 AND description ILIKE '%stripe%'
-    ORDER BY txn_date, id;
-  `;
-  for (const r of stripeLines) {
-    const { rows: payouts } = await sql.query(
-      `SELECT id FROM stripe_payouts p
-       WHERE p.amount_cents = $1
-         AND ABS(p.arrival_date - $2::date) <= $3
-         AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.payout_id = p.id)
-       ORDER BY ABS(p.arrival_date - $2::date) LIMIT 1;`,
-      [toInt(r.amount_cents), r.d, STRIPE_PAYOUT_DAYS],
-    );
-    const { rowCount } = await sql`
-      UPDATE bank_transactions SET status = 'stripe_payout', payout_id = ${payouts[0]?.id ?? null},
-        auto_matched = TRUE, match_reason = ${payouts[0] ? "Stripe payout of the same amount" : "Description mentions Stripe"}
-      WHERE id = ${r.id as number} AND status = 'unmatched';
-    `;
-    if (rowCount) matched++;
-  }
-
-  // 2. Clear single matches and automatic rules.
-  const { lines, entries, rules } = await loadMatchingPool();
-  let pool = entries;
-  for (const line of lines) {
-    const s = suggestForLine(line, nearby(pool, line.date), rules);
-    if (!s?.auto) continue;
+  for (const [lineId, s] of suggestAll(await loadMatchingPool())) {
+    if (!s.auto) continue;
     try {
-      if (s.kind === "entries") {
-        await matchBankLine(line.id, s.entryIds, { auto: true, reason: s.reasons.join(" · ") });
-        pool = pool.filter((e) => !s.entryIds.includes(e.id));
-      } else {
-        await applyBankRule(line.id, s.rule.id, { auto: true });
-      }
+      const reason = s.reasons.join(" · ");
+      if (s.kind === "entries") await matchBankLine(lineId, s.entryIds, { auto: true, reason });
+      else if (s.kind === "payout") await markStripePayout(lineId, s.payoutId, { auto: true, reason });
+      else if (s.kind === "rule") await applyBankRule(lineId, s.rule.id, { auto: true });
+      else continue;
       matched++;
     } catch (err) {
       // Lost a race with a human (or another run) — leave it for the page.
       if (!(err instanceof MatchError)) throw err;
     }
   }
-  return matched;
+
+  // A credit that says "Stripe" but matches no imported payout (e.g. the
+  // payout predates the Stripe import) is still a payout, not income.
+  const { rowCount } = await sql`
+    UPDATE bank_transactions SET status = 'stripe_payout', auto_matched = TRUE,
+      match_reason = 'Description mentions Stripe'
+    WHERE status = 'unmatched' AND amount_cents > 0
+      AND (description ILIKE '%stripe%' OR COALESCE(reference, '') ILIKE '%stripe%');
+  `;
+  return matched + (rowCount ?? 0);
 }
 
 export async function getBankTransaction(id: number): Promise<BankTransaction | null> {
@@ -660,26 +677,47 @@ function toEntry(r: Record<string, unknown>): FinanceEntry {
 }
 
 // Unlinked ledger entries a bank line could be matched to, for the manual
-// "match" controls: both directions (a deposit can be income net of a fee),
-// nearest first, exact-amount ones flagged.
+// "match" controls. Every method is eligible — a deposit may be cash
+// takings, a payout may be Stripe payments — ranked so the likeliest come
+// first: exact amount; then entries that travel through the bank the way
+// this line did (bank-paid in the same direction, or cash takings before a
+// deposit); then by date. Stripe entries come last (their payouts are the
+// normal match) but are still there for the odd case.
 export async function findMatchCandidates(
   amountCents: number,
   date: string,
-  limit = 30,
+  limit = 80,
 ): Promise<(FinanceEntry & { exact: boolean })[]> {
   const { rows } = await sql.query(
     `SELECT e.id, e.kind, e.name, e.category, e.method, e.person, e.entry_date::text AS entry_date,
        e.amount_cents, e.notes, e.origin, e.external_url,
-       ((CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END) = $1) AS exact
+       ((CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END) = $1) AS exact,
+       CASE
+         WHEN e.method = 'stripe' THEN 3
+         WHEN e.method = 'cash' AND $1 > 0 AND e.entry_date <= $2::date THEN 1
+         WHEN e.method = 'cash' THEN 2
+         WHEN e.kind = $4 THEN 0
+         ELSE 2
+       END AS rank
      FROM finance_entries e
      WHERE ABS(e.entry_date - $2::date) <= $3
-       AND (e.method IS NULL OR e.method NOT IN ('stripe', 'cash'))
        AND NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id)
-     ORDER BY exact DESC, (e.kind = $4) DESC, ABS(e.entry_date - $2::date), e.id
+     ORDER BY exact DESC, rank, ABS(e.entry_date - $2::date), e.id
      LIMIT $5;`,
-    [amountCents, date, CANDIDATE_DAYS, amountCents > 0 ? "received" : "spent", limit],
+    [amountCents, date, 120, amountCents > 0 ? "received" : "spent", limit],
   );
   return rows.map((r) => ({ ...toEntry(r), exact: r.exact as boolean }));
+}
+
+export async function getEntriesByIds(ids: number[]): Promise<FinanceEntry[]> {
+  if (ids.length === 0) return [];
+  const { rows } = await sql.query(
+    `SELECT id, kind, name, category, method, person, entry_date::text AS entry_date,
+       amount_cents, notes, origin, external_url
+     FROM finance_entries WHERE id = ANY($1::int[]);`,
+    [ids],
+  );
+  return rows.map(toEntry);
 }
 
 // Ledger entries paid through the bank (transfer / card) since `from` that
@@ -739,9 +777,12 @@ export async function getFundsSummary(): Promise<FundsSummary> {
 
   let cashOnHandCents: number | null = null;
   if (opening) {
+    // Cash takings matched to a bank deposit have left the tin — they're in
+    // the bank now — so only unbanked cash entries count here.
     const { rows: cash } = await sql`
       SELECT COALESCE(SUM(CASE WHEN kind = 'received' THEN amount_cents ELSE -amount_cents END), 0) AS net
-      FROM finance_entries WHERE method = 'cash' AND entry_date >= ${opening.date}::date;
+      FROM finance_entries e WHERE method = 'cash' AND entry_date >= ${opening.date}::date
+        AND NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id);
     `;
     // A deposit is a + bank line (cash leaves the tin), a withdrawal a −
     // line (cash arrives in the tin) — both are "minus the bank amount".
@@ -782,9 +823,14 @@ export async function getFundsAt(
       (SELECT COALESCE(SUM(amount_cents), 0) FROM bank_transactions
         WHERE status IN ('cash_deposit', 'cash_withdrawal')
           AND txn_date >= ${opening.date}::date AND txn_date < ${date}::date) AS cash_moves,
-      (SELECT COALESCE(SUM(CASE WHEN kind = 'received' THEN amount_cents ELSE -amount_cents END), 0)
-        FROM finance_entries WHERE method = 'cash'
-          AND entry_date >= ${opening.date}::date AND entry_date < ${date}::date) AS cash_net,
+      (SELECT COALESCE(SUM(CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END), 0)
+        FROM finance_entries e WHERE e.method = 'cash'
+          AND e.entry_date >= ${opening.date}::date AND e.entry_date < ${date}::date
+          -- takings already banked by this date have left the tin
+          AND NOT EXISTS (
+            SELECT 1 FROM bank_matches m JOIN bank_transactions b ON b.id = m.bank_txn_id
+            WHERE m.entry_id = e.id AND b.txn_date < ${date}::date
+          )) AS cash_net,
       (SELECT COALESCE(SUM(CASE WHEN kind = 'received' THEN amount_cents ELSE -amount_cents END), 0)
         FROM finance_entries WHERE method = 'stripe' AND entry_date < ${date}::date) AS stripe_net,
       (SELECT COALESCE(SUM(amount_cents), 0) FROM stripe_payouts

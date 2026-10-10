@@ -123,11 +123,16 @@ A ledger of every dollar in and out of the club, with filters, totals, receipts 
 - **Money held:** bank, Stripe balance (live), cash on hand (opening cash + cash in − cash out − cash banked) and the total. A **balance check** compares the bank's own reported balance with opening balance + imported lines, and flags any gap, which usually means missing statement lines.
 - **Reconciling:** every bank line is matched to one or more ledger entries, or classed as a *Stripe payout*, *cash deposit*, *cash withdrawal*, *transfer between club accounts* or *ignored*. Reconciling **links** a bank line to the ledger; it doesn't add an entry by itself. To put a bank payment into the ledger, use **Record as new** or accept a bank-rule suggestion. The new entry is dated on the bank line, and the confirmation says which month it went into. Reconciled entries show **✓ Bank** in the ledger, and "Recently reconciled" links straight to them.
 - **Match several (one bank line ↔ many entries):** tick the ledger entries a payment covers, for example two invoices paid in one transfer or three member transfers banked together. The total must equal the bank amount to the cent. Any gap, such as a bank fee, can be recorded as its own entry in the same step. An entry can belong to only one bank line.
-- **Smart matching** (`lib/bank-match.ts`), modelled on Xero/QuickBooks bank feeds:
-  - **Scoring.** Candidates are scored on exact amount, date closeness (fading over 14 days) and description words ("PIONEER STADIUM" ↔ "Court hire — Pioneer Stadium").
-  - **Combinations.** If no single entry fits, a bounded search looks for 2–5 nearby entries that add up exactly.
-  - **Suggestions.** Each one shows a confidence level and its reasons, with a one-click **Accept**.
-  - **What's automatic.** Only a clear single match (exact amount, within 10 days, well ahead of any alternative) is applied without you, along with Stripe payouts. This happens on each sync and nightly.
+- **Smart matching** (`lib/bank-match.ts`), modelled on Xero/QuickBooks bank feeds. Each unreconciled line gets the best of:
+  1. **Stripe payout.** A credit for exactly a payout's amount within 5 days of its arrival date. Applied automatically, whatever the bank's description says.
+  2. **One bank-paid entry** (transfer, card or other), scored on exact amount, date closeness and description words. Applied automatically only when clear: within 10 days and well ahead of any alternative.
+  3. **Cash takings in a deposit.** The run of unbanked cash entries before the deposit that adds up to it exactly.
+  4. **Several bank-paid entries** adding up exactly (a bounded search over 2–5 nearby entries).
+  5. **A learned bank rule.**
+  6. **A "looks like a cash deposit/withdrawal" hint** from the description.
+
+  Only items 1 and 2, and rules switched to automatic, are ever applied without you; the rest are one-click **Accept** suggestions that show their reasons. "Match several…" lists every unlinked entry within 4 months: likeliest first, cash and Stripe included, each labelled with how it was paid.
+- **Cash on hand** counts only *unbanked* cash entries. Matching a deposit to the cash entries it contains moves exactly that money from the tin to the bank, so nothing is counted twice.
 - **Bank rules (learned):** when you record or classify a bank line, its payee is remembered, for example "pioneer stadium" → *Court hire*. The next line from that payee gets that suggestion. Switch a rule to **Automatic** and it's applied on every sync. A rule never fires when an existing entry, or combination of entries, already matches the line, so nothing is recorded twice.
 **Getting ANZ data in.** ANZ NZ shares account data only with MBIE-accredited providers (open banking under the Customer and Product Data Act), so the club can't call an ANZ API directly. There are three ways in, and all three can be used together because duplicates are skipped:
 

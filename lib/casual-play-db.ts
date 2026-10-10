@@ -9,11 +9,13 @@ import {
   type Tier,
 } from "./casual-play";
 import { getCourtsForDate, getRosterForDate } from "./db";
+import { demoRoster, demoStore, isCasualPlayDemo } from "./casual-play-demo";
 
 // Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
 let ensurePromise: Promise<void> | null = null;
 
 export function ensureCasualPlayTables(): Promise<void> {
+  if (isCasualPlayDemo()) return Promise.resolve();
   if (!ensurePromise) {
     ensurePromise = ensureImpl().catch((err) => {
       ensurePromise = null;
@@ -56,7 +58,7 @@ type RosterPlayer = { id: string; email: string; firstName: string; fullName: st
 
 /** Who is actually playing on the date: a fill-in takes their player's place. */
 async function rosterPlayers(date: string): Promise<RosterPlayer[]> {
-  const roster = await getRosterForDate(date);
+  const roster = isCasualPlayDemo() ? demoRoster() : await getRosterForDate(date);
   const seen = new Set<string>();
   const out: RosterPlayer[] = [];
   for (const entry of roster) {
@@ -65,7 +67,9 @@ async function rosterPlayers(date: string): Promise<RosterPlayer[]> {
     if (!email || seen.has(email)) continue;
     seen.add(email);
     const fullName = person.name.trim() || email.split("@")[0];
-    out.push({ id: playerIdForEmail(email), email, firstName: fullName.split(/\s+/)[0], fullName });
+    // Prefer the first name as entered: "Gia Minh" is one given name.
+    const firstName = person.firstName || fullName.split(/\s+/)[0];
+    out.push({ id: playerIdForEmail(email), email, firstName, fullName });
   }
   return out;
 }
@@ -88,6 +92,9 @@ type Profile = { tier: Tier | null; nickname: string | null };
 
 async function profilesFor(emails: string[]): Promise<Map<string, Profile>> {
   if (emails.length === 0) return new Map();
+  if (isCasualPlayDemo()) {
+    return new Map(emails.flatMap((e) => (demoStore.profiles.has(e) ? [[e, demoStore.profiles.get(e)!]] : [])));
+  }
   const { rows } = await sql.query(
     `SELECT email, tier, nickname FROM casual_play_profiles WHERE email = ANY($1::text[]);`,
     [emails],
@@ -147,16 +154,22 @@ type Loaded = {
   roster: RosterPlayer[];
 };
 
+async function readStored(date: string): Promise<{ state: CasualPlayState; version: number } | undefined> {
+  if (isCasualPlayDemo()) {
+    const row = demoStore.boards.get(date);
+    return row && { state: structuredClone(row.state) as CasualPlayState, version: row.version };
+  }
+  const { rows } = await sql<{ state: CasualPlayState; version: number }>`
+    SELECT state, version FROM casual_play_sessions WHERE date = ${date};
+  `;
+  return rows[0];
+}
+
 async function load(date: string, now: number): Promise<Loaded> {
-  const [{ rows }, roster] = await Promise.all([
-    sql<{ state: CasualPlayState; version: number }>`
-      SELECT state, version FROM casual_play_sessions WHERE date = ${date};
-    `,
-    rosterPlayers(date),
-  ]);
+  const [stored, roster] = await Promise.all([readStored(date), rosterPlayers(date)]);
   const profiles = await profilesFor(roster.map((r) => r.email));
-  const stored = rows[0];
-  const base = stored ? stored.state : emptyState(date, await getCourtsForDate(date));
+  const courts = isCasualPlayDemo() ? 2 : await getCourtsForDate(date);
+  const base = stored ? stored.state : emptyState(date, courts);
   return {
     state: mergeRoster(structuredClone(base), roster, profiles, now),
     version: stored ? stored.version : null,
@@ -172,6 +185,11 @@ export class ConflictError extends Error {}
 
 /** Saves only if nobody else saved first; false means try again. */
 async function save(date: string, state: CasualPlayState, version: number | null): Promise<boolean> {
+  if (isCasualPlayDemo()) {
+    if ((demoStore.boards.get(date)?.version ?? null) !== version) return false;
+    demoStore.boards.set(date, { state: structuredClone(state), version: (version ?? 0) + 1 });
+    return true;
+  }
   const json = JSON.stringify(state);
   if (version === null) {
     const { rows } = await sql`
@@ -191,6 +209,11 @@ async function save(date: string, state: CasualPlayState, version: number | null
 }
 
 async function rememberProfile(email: string, change: Partial<Profile>): Promise<void> {
+  if (isCasualPlayDemo()) {
+    const current = demoStore.profiles.get(email) ?? { tier: null, nickname: null };
+    demoStore.profiles.set(email, { ...current, ...change });
+    return;
+  }
   if ("tier" in change) {
     await sql`
       INSERT INTO casual_play_profiles (email, tier) VALUES (${email}, ${change.tier ?? null})

@@ -776,7 +776,29 @@ ol.cp-queue-list li::before{content:counter(q);width:24px;height:24px;flex-shrin
 .cp-resting li{opacity:.7}
 .cp-mini-btn{border:1px solid var(--steel);background:#fff;border-radius:var(--radius-pill);padding:4px 11px;font-size:11px;font-weight:700;color:var(--text-mid)}
 .cp-mini-btn:disabled{opacity:.5}
-.cp-end-row{display:flex;justify-content:center;margin-top:30px}
+.cp-end-row{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:34px}
+.cp-conclude-btn{padding:15px 34px}
+.cp-startover-btn{color:var(--text-light)}
+.cp-court-next{font-size:13px;line-height:1.45;color:var(--steel-light);text-align:center;font-weight:600}
+.cp-court-next span{display:block;font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--bronze-light);margin-bottom:2px}
+.cp-court-next em{font-style:normal;font-size:11px;color:var(--bronze-light);margin:0 4px}
+
+/* concluded */
+.cp-concluded{max-width:760px;margin:0 auto}
+.cp-wrap-banner{position:relative;overflow:hidden;text-align:center;background:linear-gradient(135deg,var(--navy-dark),var(--navy));color:#fff;border-radius:var(--radius-xl);padding:36px 24px 28px;margin-bottom:24px;box-shadow:var(--shadow-elevated);animation:mgReveal .5s ease both}
+.cp-wrap-banner::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(226,174,96,.35),transparent 60%)}
+.cp-wrap-banner > *{position:relative}
+.cp-wrap-icon{width:70px;height:70px;margin:0 auto 14px;border-radius:50%;background:var(--bronze);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(196,137,42,.5)}
+.cp-wrap-title{font-family:var(--font-display);font-size:clamp(28px,5vw,46px);font-weight:700;letter-spacing:.07em;text-transform:uppercase;line-height:1.1;margin-bottom:6px}
+.cp-wrap-banner p{color:rgba(255,255,255,.72);font-size:15px}
+.cp-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}
+.cp-stats div{background:rgba(255,255,255,.08);border-radius:var(--radius-lg);padding:14px 8px;display:flex;flex-direction:column;gap:2px}
+.cp-stats strong{font-family:var(--font-display);font-size:clamp(26px,4vw,36px);font-weight:700;color:var(--bronze-light);line-height:1.1}
+.cp-stats span{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--steel-light)}
+.mg-card.cp-summary-card{padding:0}
+.cp-summary-card .mg-col-team{padding-left:18px}
+.cp-games-bar{height:5px;border-radius:var(--radius-pill);background:var(--steel-light);margin-top:6px;overflow:hidden;max-width:220px}
+.cp-games-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--bronze),var(--bronze-light));border-radius:inherit}
 
 /* full screen on a venue TV: everything bigger, no footer */
 .cp-fullscreen .mg-footer{display:none}

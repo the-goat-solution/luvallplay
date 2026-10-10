@@ -48,6 +48,12 @@ export type CasualPlayState = {
   next: Game | null;
   history: Game[];
   nextGameId: number;
+  /**
+   * Set once the organiser concludes the play day: no more games are put on
+   * and everyone sees the summary. Missing on boards saved before this
+   * existed, which reads the same as null.
+   */
+  concludedAt?: number | null;
 };
 
 export type Action =
@@ -61,6 +67,8 @@ export type Action =
   | { type: "finish"; court: number }
   | { type: "void"; court: number }
   | { type: "reshuffleNext" }
+  | { type: "conclude" }
+  | { type: "reopen" }
   | { type: "endSession" };
 
 export function emptyState(date: string, courts: number): CasualPlayState {
@@ -74,7 +82,12 @@ export function emptyState(date: string, courts: number): CasualPlayState {
     next: null,
     history: [],
     nextGameId: 1,
+    concludedAt: null,
   };
+}
+
+export function isConcluded(state: CasualPlayState): boolean {
+  return Boolean(state.concludedAt);
 }
 
 export function clampCourts(n: number): number {
@@ -235,7 +248,7 @@ function previewStillValid(state: CasualPlayState, game: Game | null): game is G
 
 /** Puts a game on every empty court, then refreshes the "up next" preview. */
 function fillCourts(state: CasualPlayState, now: number, random: () => number): void {
-  if (!state.started) {
+  if (!state.started || isConcluded(state)) {
     state.next = null;
     return;
   }
@@ -282,7 +295,7 @@ function lookahead(state: CasualPlayState): CasualPlayState {
 }
 
 function refreshNext(state: CasualPlayState, random: () => number, force = false): void {
-  if (!state.started) {
+  if (!state.started || isConcluded(state)) {
     state.next = null;
     return;
   }
@@ -308,6 +321,22 @@ function replaceOnCourt(state: CasualPlayState, playerId: string, leaving: Playe
   const swap = (team: [string, string]): [string, string] =>
     team.map((id) => (id === playerId ? sub.id : id)) as [string, string];
   state.onCourt[index] = { ...game, teamA: swap(game.teamA), teamB: swap(game.teamB) };
+}
+
+/** Ends the game on a court: it counts, and its four go to the back of the queue. */
+function finishCourt(state: CasualPlayState, court: number, now: number): void {
+  const game = state.onCourt[court - 1];
+  if (!game) return;
+  state.onCourt[court - 1] = null;
+  state.history.push({ ...game, endedAt: now });
+  if (state.history.length > MAX_HISTORY) state.history = state.history.slice(-MAX_HISTORY);
+  for (const id of gamePlayers(game)) {
+    const p = findPlayer(state, id);
+    if (p) {
+      p.games++;
+      p.readyAt = now;
+    }
+  }
 }
 
 function findPlayer(state: CasualPlayState, id: string): Player | undefined {
@@ -398,23 +427,31 @@ export function applyAction(
     }
     case "start": {
       if (state.started) return state;
+      state.concludedAt = null;
       state.started = true;
       for (const p of state.players) p.readyAt = now;
       break;
     }
     case "finish": {
-      const game = state.onCourt[action.court - 1];
-      if (!game) throw new ActionError("That court is already free");
-      state.onCourt[action.court - 1] = null;
-      state.history.push({ ...game, endedAt: now });
-      if (state.history.length > MAX_HISTORY) state.history = state.history.slice(-MAX_HISTORY);
-      for (const id of gamePlayers(game)) {
-        const p = findPlayer(state, id);
-        if (p) {
-          p.games++;
-          p.readyAt = now;
-        }
+      if (isConcluded(state)) throw new ActionError("The play day has been concluded");
+      if (!state.onCourt[action.court - 1]) throw new ActionError("That court is already free");
+      finishCourt(state, action.court, now);
+      break;
+    }
+    case "conclude": {
+      if (!state.started || isConcluded(state)) return state;
+      // Whatever is on court when the night wraps up counts as played.
+      for (let court = 1; court <= state.courts; court++) {
+        if (state.onCourt[court - 1]) finishCourt(state, court, now);
       }
+      state.next = null;
+      state.concludedAt = now;
+      return state;
+    }
+    case "reopen": {
+      if (!isConcluded(state)) return state;
+      state.concludedAt = null;
+      for (const p of state.players) p.readyAt = Math.max(p.readyAt, now);
       break;
     }
     case "void": {
@@ -466,6 +503,8 @@ export function isValidAction(value: unknown): value is Action {
       return court(a.court);
     case "start":
     case "reshuffleNext":
+    case "conclude":
+    case "reopen":
     case "endSession":
       return true;
     default:
@@ -490,3 +529,32 @@ export type CasualPlayResponse = {
   dates: string[];
   session: { time: string | null; location: string | null } | null;
 };
+
+export type PlayDaySummary = {
+  games: number;
+  /** Minutes from the first game starting to the last one ending. */
+  minutes: number;
+  players: { id: string; name: string; games: number; partners: number }[];
+};
+
+/** End-of-night numbers for the concluded board: games, time on court, and who played how much. */
+export function summarise(state: CasualPlayState): PlayDaySummary {
+  const games = state.history;
+  const first = Math.min(...games.map((g) => g.startedAt));
+  const last = Math.max(...games.map((g) => g.endedAt ?? g.startedAt));
+  const partners = new Map<string, Set<string>>();
+  for (const g of games) {
+    for (const [a, b] of [g.teamA, g.teamB]) {
+      partners.set(a, (partners.get(a) ?? new Set()).add(b));
+      partners.set(b, (partners.get(b) ?? new Set()).add(a));
+    }
+  }
+  return {
+    games: games.length,
+    minutes: games.length ? Math.round((last - first) / 60_000) : 0,
+    players: state.players
+      .filter((p) => p.games > 0)
+      .map((p) => ({ id: p.id, name: p.name, games: p.games, partners: partners.get(p.id)?.size ?? 0 }))
+      .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name, "vi")),
+  };
+}

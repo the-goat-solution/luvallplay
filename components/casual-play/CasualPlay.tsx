@@ -8,8 +8,10 @@ import {
   MAX_COURTS,
   MAX_GUEST_NAME,
   MIN_COURTS,
+  isConcluded,
   onCourtIds,
   queueOrder,
+  summarise,
   type Action,
   type CasualPlayResponse,
   type CasualPlayState,
@@ -58,17 +60,33 @@ const COPY = {
     getReady: "Get ready: you're on the next free court",
     waiting: "Waiting",
     resting: "On a break",
-    finish: "Game finished",
-    confirmFinish: "Tap again to confirm",
+    finish: "Finish · next game on",
+    finishLast: "Finish game",
+    confirmFinish: "Tap again to finish",
+    nextOn: "Next on",
     callOff: "Call off",
     callOffConfirm: "Tap again to call off",
     shuffle: "Shuffle up next",
     fullscreen: "Full screen",
     exitFullscreen: "Exit full screen",
-    endSession: "End session",
-    endTitle: "End this session?",
+    conclude: "Conclude play day",
+    concludeTitle: "Conclude the play day?",
+    concludeBody:
+      "Games on court now count as finished and no new games start. Everyone sees tonight's summary. You can reopen the courts if you need to.",
+    concludedTitle: "That's a wrap!",
+    concludedSub: "Play day concluded. Thanks for playing, see you next week.",
+    statGames: "Games played",
+    statTime: "On court",
+    statPlayers: "Players",
+    colPlayer: "Player",
+    colGames: "Games",
+    colPartners: "Partners",
+    reopen: "Reopen courts",
+    duration: (min: number) => (min >= 60 ? `${Math.floor(min / 60)}h ${min % 60}m` : `${min}m`),
+    endSession: "Start over",
+    endTitle: "Start over?",
     endBody: "All courts are cleared and everyone's game count goes back to zero. Tiers are kept.",
-    endConfirm: "End session",
+    endConfirm: "Start over",
     emptyCourt: "Waiting for players",
     notStarted: "Courts appear here as soon as the organiser starts the session.",
     playersToday: "Players today",
@@ -132,17 +150,33 @@ const COPY = {
     getReady: "Chuẩn bị: bạn vào sân trống tiếp theo",
     waiting: "Đang chờ",
     resting: "Đang nghỉ",
-    finish: "Xong trận",
-    confirmFinish: "Chạm lần nữa để xác nhận",
+    finish: "Xong trận · vào trận tiếp",
+    finishLast: "Xong trận",
+    confirmFinish: "Chạm lần nữa để kết thúc",
+    nextOn: "Trận tiếp",
     callOff: "Huỷ trận",
     callOffConfirm: "Chạm lần nữa để huỷ",
     shuffle: "Đổi trận tiếp theo",
     fullscreen: "Toàn màn hình",
     exitFullscreen: "Thoát toàn màn hình",
-    endSession: "Kết thúc buổi",
-    endTitle: "Kết thúc buổi chơi?",
+    conclude: "Kết thúc ngày chơi",
+    concludeTitle: "Kết thúc ngày chơi?",
+    concludeBody:
+      "Các trận đang đánh được tính là đã xong và không có trận mới. Mọi người sẽ thấy tổng kết tối nay. Bạn có thể mở lại sân nếu cần.",
+    concludedTitle: "Hết giờ rồi!",
+    concludedSub: "Ngày chơi đã kết thúc. Cảm ơn mọi người, hẹn tuần sau.",
+    statGames: "Số trận",
+    statTime: "Thời gian",
+    statPlayers: "Người chơi",
+    colPlayer: "Người chơi",
+    colGames: "Trận",
+    colPartners: "Đồng đội",
+    reopen: "Mở lại sân",
+    duration: (min: number) => (min >= 60 ? `${Math.floor(min / 60)}g ${min % 60}p` : `${min}p`),
+    endSession: "Làm lại từ đầu",
+    endTitle: "Làm lại từ đầu?",
     endBody: "Tất cả sân được xoá và số trận của mọi người về 0. Nhóm vẫn được giữ.",
-    endConfirm: "Kết thúc",
+    endConfirm: "Làm lại",
     emptyCourt: "Đang chờ người chơi",
     notStarted: "Các sân sẽ hiện ở đây ngay khi BTC bắt đầu buổi chơi.",
     playersToday: "Người chơi hôm nay",
@@ -217,6 +251,7 @@ export function CasualPlay() {
   const [busy, setBusy] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
+  const [concludeOpen, setConcludeOpen] = useState(false);
   const [clockSkew, setClockSkew] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [fullscreen, setFullscreen] = useState(false);
@@ -363,7 +398,7 @@ export function CasualPlay() {
             </div>
           </div>
           <div className="cp-top-actions">
-            {state?.started && (
+            {state?.started && !isConcluded(state) && (
               <span className="cp-live">
                 <span className="cp-live-dot" />
                 {c.live}
@@ -497,6 +532,7 @@ export function CasualPlay() {
                   serverNow={serverNow}
                   onAction={act}
                   onEnd={() => setEndOpen(true)}
+                  onConclude={() => setConcludeOpen(true)}
                 />
               )}
             </>
@@ -551,6 +587,37 @@ export function CasualPlay() {
         }
       >
         <p className="mg-modal-text">{c.endBody}</p>
+      </ModalShell>
+
+      <ModalShell
+        id="cp-conclude-modal"
+        open={concludeOpen}
+        onClose={() => setConcludeOpen(false)}
+        title={c.concludeTitle}
+        footer={
+          <>
+            <button type="button" className="btn btn-bronze-outline" onClick={() => setConcludeOpen(false)}>
+              {c.cancel}
+            </button>
+            <button
+              type="button"
+              className="btn btn-navy mg-btn-grow"
+              disabled={busy}
+              onClick={async () => {
+                if (await act({ type: "conclude" })) {
+                  setConcludeOpen(false);
+                  setTab("courts");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+            >
+              <FlagIcon />
+              {c.conclude}
+            </button>
+          </>
+        }
+      >
+        <p className="mg-modal-text">{c.concludeBody}</p>
       </ModalShell>
     </div>
   );
@@ -900,6 +967,7 @@ function CourtsPanel({
   serverNow,
   onAction,
   onEnd,
+  onConclude,
 }: {
   state: CasualPlayState;
   names: Map<string, Player>;
@@ -909,6 +977,7 @@ function CourtsPanel({
   serverNow: number;
   onAction: (a: Action) => Promise<boolean>;
   onEnd: () => void;
+  onConclude: () => void;
 }) {
   const busyIds = onCourtIds(state);
   const nextIds = new Set(state.next ? [...state.next.teamA, ...state.next.teamB] : []);
@@ -919,6 +988,10 @@ function CourtsPanel({
   const courtOf = new Map(
     state.onCourt.flatMap((g) => (g ? [...g.teamA, ...g.teamB].map((id) => [id, g.court] as const) : [])),
   );
+
+  if (isConcluded(state)) {
+    return <ConcludedPanel state={state} copy={c} organiser={organiser} busy={busy} onAction={onAction} onEnd={onEnd} />;
+  }
 
   if (!state.started) {
     return (
@@ -958,6 +1031,7 @@ function CourtsPanel({
             organiser={organiser}
             busy={busy}
             serverNow={serverNow}
+            next={state.next}
             onFinish={() => onAction({ type: "finish", court: i + 1 })}
             onCallOff={() => onAction({ type: "void", court: i + 1 })}
           />
@@ -1046,7 +1120,99 @@ function CourtsPanel({
 
       {organiser && (
         <div className="cp-end-row">
-          <button type="button" className="btn btn-bronze-outline mg-btn-sm" onClick={onEnd}>
+          <button type="button" className="btn btn-navy cp-conclude-btn" disabled={busy} onClick={onConclude}>
+            <FlagIcon />
+            {c.conclude}
+          </button>
+          <button type="button" className="cp-calloff-btn cp-startover-btn" disabled={busy} onClick={onEnd}>
+            {c.endSession}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ConcludedPanel({
+  state,
+  copy: c,
+  organiser,
+  busy,
+  onAction,
+  onEnd,
+}: {
+  state: CasualPlayState;
+  copy: Copy;
+  organiser: boolean;
+  busy: boolean;
+  onAction: (a: Action) => Promise<boolean>;
+  onEnd: () => void;
+}) {
+  const summary = summarise(state);
+  const most = summary.players[0]?.games ?? 0;
+  return (
+    <section className="cp-concluded">
+      <div className="cp-wrap-banner">
+        <div className="cp-wrap-icon" aria-hidden="true">
+          <FlagIcon size={34} />
+        </div>
+        <h2 className="cp-wrap-title">{c.concludedTitle}</h2>
+        <p>{c.concludedSub}</p>
+        <div className="cp-stats">
+          <div>
+            <strong>{summary.games}</strong>
+            <span>{c.statGames}</span>
+          </div>
+          <div>
+            <strong>{c.duration(summary.minutes)}</strong>
+            <span>{c.statTime}</span>
+          </div>
+          <div>
+            <strong>{summary.players.length}</strong>
+            <span>{c.statPlayers}</span>
+          </div>
+        </div>
+      </div>
+
+      {summary.players.length > 0 && (
+        <div className="mg-card mg-table-card cp-summary-card">
+          <table className="mg-table">
+            <thead>
+              <tr>
+                <th className="mg-col-team">{c.colPlayer}</th>
+                <th>{c.colGames}</th>
+                <th>{c.colPartners}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.players.map((p) => (
+                <tr key={p.id}>
+                  <td className="mg-col-team">
+                    <div className="mg-table-team">{p.name}</div>
+                    <div className="cp-games-bar" aria-hidden="true">
+                      <span style={{ width: `${most ? (p.games / most) * 100 : 0}%` }} />
+                    </div>
+                  </td>
+                  <td className="mg-col-pts">{p.games}</td>
+                  <td>{p.partners}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {organiser && (
+        <div className="cp-end-row">
+          <button
+            type="button"
+            className="btn btn-primary mg-btn-sm"
+            disabled={busy}
+            onClick={() => onAction({ type: "reopen" })}
+          >
+            {c.reopen}
+          </button>
+          <button type="button" className="btn btn-bronze-outline mg-btn-sm" disabled={busy} onClick={onEnd}>
             {c.endSession}
           </button>
         </div>
@@ -1136,11 +1302,13 @@ function CourtCard({
   organiser,
   busy,
   serverNow,
+  next,
   onFinish,
   onCallOff,
 }: {
   court: number;
   game: Game | null;
+  next: Game | null;
   name: (id: string) => string;
   copy: Copy;
   organiser: boolean;
@@ -1166,14 +1334,20 @@ function CourtCard({
       )}
       {organiser && game && (
         <div className="cp-court-actions">
+          {next && (
+            <p className="cp-court-next">
+              <span>{c.nextOn}</span>
+              {next.teamA.map(name).join(" & ")} <em>{c.vs}</em> {next.teamB.map(name).join(" & ")}
+            </p>
+          )}
           <ConfirmButton
-            label={c.finish}
+            label={next ? c.finish : c.finishLast}
             confirmLabel={c.confirmFinish}
             className="btn btn-primary cp-finish-btn"
             disabled={busy}
             onConfirm={onFinish}
           >
-            <CheckIcon />
+            {next ? <NextIcon /> : <CheckIcon />}
           </ConfirmButton>
           <ConfirmButton
             label={c.callOff}
@@ -1298,6 +1472,20 @@ function CheckIcon() {
   return (
     <svg {...iconProps} width={18} height={18}>
       <path d="M4 12.5 9.5 18 20 6" />
+    </svg>
+  );
+}
+function NextIcon() {
+  return (
+    <svg {...iconProps} width={18} height={18}>
+      <path d="M5 12h13M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+function FlagIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg {...iconProps} width={size} height={size}>
+      <path d="M5 21V4M5 4h11l-2 4 2 4H5" />
     </svg>
   );
 }

@@ -11,6 +11,7 @@ import { ConflictError, ensureCasualPlayTables, getCasualPlayState, runCasualPla
 import { addDays, ensureTables, listAllSessionDates, listSessionsInRange } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
+import { DEMO_PASSWORD, DEMO_SESSION, demoDates, isCasualPlayDemo } from "@/lib/casual-play-demo";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 // Organisers are either logged in to /admin, or know the organiser password
 // (the same one that runs the mini game draw), sent as a header.
 function passwordMatches(given: string | null): boolean {
-  const expected = process.env.MINI_GAME_PASSWORD;
+  const expected = process.env.MINI_GAME_PASSWORD || (isCasualPlayDemo() ? DEMO_PASSWORD : undefined);
   if (!expected || !given) return false;
   const a = crypto.createHash("sha256").update(given).digest();
   const b = crypto.createHash("sha256").update(expected).digest();
@@ -35,6 +36,16 @@ function defaultDate(dates: string[], today: string): string | null {
   return dates.find((d) => d >= today) ?? dates[dates.length - 1] ?? null;
 }
 
+async function sessionInfo(date: string): Promise<CasualPlayResponse["session"]> {
+  if (isCasualPlayDemo()) return DEMO_SESSION;
+  const [session] = await listSessionsInRange(date, date);
+  if (!session) return null;
+  return {
+    time: session.eventStartTime ? formatEventTimeRange(session.eventStartTime, session.eventEndTime) : null,
+    location: session.eventLocation,
+  };
+}
+
 async function respond(
   date: string,
   state: CasualPlayState,
@@ -42,26 +53,24 @@ async function respond(
   dates: string[],
   status = 200,
 ) {
-  const [session] = await listSessionsInRange(date, date);
   const body: CasualPlayResponse = {
     state: organiser ? state : publicState(state),
     organiser,
     serverNow: Date.now(),
     // A window around today is plenty to pick from on a phone.
     dates: organiser ? dates.filter((d) => d >= addDays(getClubToday().dateKey, -21)).slice(0, 20) : [],
-    session: session
-      ? {
-          time: session.eventStartTime ? formatEventTimeRange(session.eventStartTime, session.eventEndTime) : null,
-          location: session.eventLocation,
-        }
-      : null,
+    session: await sessionInfo(date),
   };
   return NextResponse.json(body, { status, headers: NO_STORE });
 }
 
 async function resolveDate(requested: string | null): Promise<{ date: string | null; dates: string[] }> {
-  await Promise.all([ensureTables(), ensureCasualPlayTables()]);
-  const dates = await listAllSessionDates();
+  let dates: string[];
+  if (isCasualPlayDemo()) dates = demoDates();
+  else {
+    await Promise.all([ensureTables(), ensureCasualPlayTables()]);
+    dates = await listAllSessionDates();
+  }
   if (requested) return { date: dates.includes(requested) ? requested : null, dates };
   return { date: defaultDate(dates, getClubToday().dateKey), dates };
 }
@@ -70,7 +79,7 @@ export async function GET(request: Request) {
   if (!checkRateLimit(`casual-play:get:${getClientIp(request)}`, 120)) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
-  if (!process.env.POSTGRES_URL) {
+  if (!process.env.POSTGRES_URL && !isCasualPlayDemo()) {
     return NextResponse.json({ error: "Storage is not configured" }, { status: 503 });
   }
   const organiser = await isOrganiser(request);
@@ -90,7 +99,7 @@ export async function POST(request: Request) {
   if (!checkRateLimit(`casual-play:post:${getClientIp(request)}`, 90)) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
-  if (!process.env.POSTGRES_URL) {
+  if (!process.env.POSTGRES_URL && !isCasualPlayDemo()) {
     return NextResponse.json({ error: "Storage is not configured" }, { status: 503 });
   }
   if (!(await isOrganiser(request))) {

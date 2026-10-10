@@ -144,6 +144,18 @@ The year's accounts for the AGM, in the NZ Tier 4 not-for-profit cash format (PB
 
 Use **Print / save as PDF** for a clean copy.
 
+### Casual play court board (`/casual-play`)
+
+A live court board for ordinary play days (not mini game days), in the spirit of Reclub's open-play match generator. It isn't linked from the main site; admins get a **Court board ↗** link in the admin nav. Put it on the venue TV (**Full screen**) and let players open it on their phones.
+
+- **Players** come from the play day's roster on `/admin/play-days`: casual bookers and members, with a fill-in taking their player's place. Organisers can add walk-ins by name. Only first names are shown (with a last initial when two people share one), and organisers can rename anyone to their club nickname.
+- **Tiers:** organisers drag players into **Tier 1**, **Tier 2** or **Not playing** (on a phone: press and hold, or tap a name and then *Move here*). Tiers and nicknames are remembered per person, so next week starts already sorted. Tiers are only shown to organisers.
+- **Rotation:** every team is one tier 1 player with one tier 2 player (two same-tier players only team up when a tier is short). When an organiser taps **Game finished** (two taps, so a stray tap can't end a game), the next game goes straight onto that court. Players with the fewest games go first, then whoever has waited longest. Repeat partners, repeat opponents and the same four players are avoided. **Up next** previews the next game so those players can get ready; it accounts for the game that has been on longest, so it rarely changes.
+- **Organiser tools:** courts in use (1–4), **Finish · next game on** on each court (shows who goes on next; two taps), **Break / Back in** for a player who needs a rest (anyone on court is swapped for the next player from the same tier), **Call off** a game (it doesn't count) and **Shuffle up next**.
+- **Concluding the play day:** **Conclude play day** counts the games still on court, stops new games and shows everyone the night's summary: games played, time on court, and each player's games and number of different partners. Organisers can **Reopen courts** to carry on, or **Start over**, which clears the courts and game counts but keeps the tiers.
+- **Local preview without a database:** `CASUAL_PLAY_DEMO=1 npm run dev`, then open http://localhost:3000/casual-play. It uses 18 sample players kept in memory (reset on restart), and the organiser password is `demo` unless `MINI_GAME_PASSWORD` is set. Demo mode is ignored in production builds.
+- **Access:** anyone can view. Organisers unlock with `MINI_GAME_PASSWORD` (same password as the mini game draw); a logged-in admin is an organiser automatically. Every change is saved in Postgres (`casual_play_sessions`, `casual_play_profiles`) and shown on every open screen within a few seconds. Two organisers tapping at once can't overwrite each other.
+
 ## Development
 
 ```bash

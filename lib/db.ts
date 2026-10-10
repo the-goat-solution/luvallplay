@@ -949,6 +949,8 @@ export async function deleteWaitlistEntry(id: number): Promise<void> {
 export type RosterFillIn = {
   id: number;
   name: string;
+  /** As entered at sign-up, so two-word given names stay whole. */
+  firstName: string;
   email: string;
   phone: string | null;
 };
@@ -957,6 +959,8 @@ export type RosterEntry = {
   bookingId: number | null;
   membershipId: number | null;
   name: string;
+  /** As entered at sign-up, so two-word given names stay whole. */
+  firstName: string;
   email: string;
   phone: string | null;
   type: "casual" | "monthly" | "quarterly";
@@ -995,6 +999,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     const entry: RosterFillIn = {
       id: r.id,
       name: `${r.first_name} ${r.last_name}`.trim(),
+      firstName: (r.first_name ?? "").trim(),
       email: r.email,
       phone: r.phone,
     };
@@ -1018,6 +1023,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     bookingId: r.id as number,
     membershipId: null,
     name: `${r.first_name} ${r.last_name}`.trim(),
+    firstName: String(r.first_name ?? "").trim(),
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
     type: "casual",
@@ -1033,6 +1039,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     name:
       `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() ||
       (r.email as string),
+    firstName: String(r.first_name ?? "").trim(),
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
     type: r.plan === "quarterly" ? "quarterly" : "monthly",

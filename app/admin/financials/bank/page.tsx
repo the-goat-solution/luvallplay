@@ -30,6 +30,8 @@ import {
   autoMatchBankTransactions,
   deleteBankRule,
   getBankSuggestions,
+  getEntriesByIds,
+  markStripePayout,
   getBankTransaction,
   learnBankRule,
   listBankRules,
@@ -148,19 +150,32 @@ async function acceptSuggestion(formData: FormData) {
   "use server";
   const id = Number(formData.get("id"));
   const ruleId = Number(formData.get("ruleId"));
+  const payoutId = String(formData.get("payoutId") ?? "");
+  const status = String(formData.get("status") ?? "");
   const entryIds = formData.getAll("entryId").map(Number);
   const reason = String(formData.get("reason") ?? "").slice(0, 300) || null;
   let error: string | null = null;
   try {
     if (ruleId) await applyBankRule(id, ruleId);
-    else await matchBankLine(id, entryIds, { reason });
+    else if (payoutId) await markStripePayout(id, payoutId, { reason });
+    else if (status === "cash_deposit" || status === "cash_withdrawal") {
+      await setBankTransactionStatus(id, status);
+    } else await matchBankLine(id, entryIds, { reason });
   } catch (err) {
     if (!(err instanceof MatchError)) throw err;
     error = err.message;
   }
   if (error) back({ financeError: error });
   revalidatePath(PAGE);
-  back({ notice: ruleId ? "Recorded using the bank rule." : "Matched." });
+  back({
+    notice: ruleId
+      ? "Recorded using the bank rule."
+      : payoutId
+        ? "Marked as a Stripe payout."
+        : status
+          ? "Reconciled."
+          : "Matched.",
+  });
 }
 
 async function matchMany(formData: FormData) {
@@ -280,7 +295,11 @@ function SuggestionBox({
   lineAmount: number;
 }) {
   let title: string;
-  if (suggestion.kind === "rule") {
+  if (suggestion.kind === "payout") {
+    title = `Stripe payout of ${formatCents(lineAmount)}`;
+  } else if (suggestion.kind === "classify") {
+    title = `Mark as ${BANK_STATUS_LABELS[suggestion.status]}`;
+  } else if (suggestion.kind === "rule") {
     const r = suggestion.rule;
     title =
       r.action === "classify" && r.status
@@ -288,7 +307,8 @@ function SuggestionBox({
         : `Record “${r.name}” · ${categoryLabel(r.category ?? "")} · ${formatCents(Math.abs(lineAmount))}`;
   } else {
     const names = suggestion.entryIds.map((id) => entryInfo.get(id)?.name ?? `entry #${id}`);
-    title = suggestion.entryIds.length === 1 ? `Match “${names[0]}”` : `Match ${names.length} entries: ${names.join(" + ")}`;
+    const shown = names.slice(0, 3).join(" + ") + (names.length > 3 ? ` + ${names.length - 3} more` : "");
+    title = names.length === 1 ? `Match “${names[0]}”` : `Match ${names.length} entries: ${shown}`;
   }
   const confidence =
     suggestion.kind === "entries"
@@ -297,13 +317,21 @@ function SuggestionBox({
         : suggestion.score >= 0.6
           ? "Medium"
           : "Low"
-      : "Rule";
+      : suggestion.kind === "payout"
+        ? "High"
+        : suggestion.kind === "classify"
+          ? "Low"
+          : "Rule";
   return (
     <form action={acceptSuggestion} className={styles.suggestion}>
       <input type="hidden" name="id" value={lineId} />
       <input type="hidden" name="reason" value={suggestion.reasons.join(" · ")} />
       {suggestion.kind === "rule" ? (
         <input type="hidden" name="ruleId" value={suggestion.rule.id} />
+      ) : suggestion.kind === "payout" ? (
+        <input type="hidden" name="payoutId" value={suggestion.payoutId} />
+      ) : suggestion.kind === "classify" ? (
+        <input type="hidden" name="status" value={suggestion.status} />
       ) : (
         suggestion.entryIds.map((id) => <input key={id} type="hidden" name="entryId" value={id} />)
       )}
@@ -361,8 +389,12 @@ export default async function BankPage() {
     getBankSuggestions(),
     listBankRules(),
   ]);
-  // Names/amounts of every candidate entry, to describe suggestions.
-  const entryInfo = new Map(candidates.flat().map((c) => [c.id, c]));
+  // Names of every entry a suggestion mentions (a cash deposit can cover
+  // more takings than the candidate lists show).
+  const suggestedIds = [...suggestions.values()].flatMap((s) => (s.kind === "entries" ? s.entryIds : []));
+  const entryInfo = new Map(
+    [...candidates.flat(), ...(await getEntriesByIds(suggestedIds))].map((c) => [c.id, c]),
+  );
 
   // The bank figure to trust: the bank's own reported balance (Akahu /
   // webhook), else the running balance on the latest statement line, else
@@ -645,8 +677,13 @@ export default async function BankPage() {
                             date: o.entryDate,
                             signedCents: o.kind === "received" ? o.amountCents : -o.amountCents,
                             exact: o.exact,
+                            method: o.method,
                           }))}
-                          preselected={suggestion?.kind === "entries" ? suggestion.entryIds : []}
+                          preselected={
+                            suggestion?.kind === "entries"
+                              ? suggestion.entryIds.filter((id) => options.some((o) => o.id === id))
+                              : []
+                          }
                           action={matchMany}
                         />
                       </div>

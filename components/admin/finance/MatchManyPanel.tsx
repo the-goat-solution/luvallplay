@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { SubmitButton } from "@/components/admin/SubmitButton";
-import { FINANCE_CATEGORIES, formatCents, formatDateKey } from "@/lib/finance";
+import { FINANCE_CATEGORIES, formatCents, formatDateKey, methodLabel } from "@/lib/finance";
 import styles from "./financials.module.css";
 
 export type MatchCandidate = {
@@ -11,6 +11,7 @@ export type MatchCandidate = {
   date: string;
   signedCents: number;
   exact: boolean;
+  method: string | null;
 };
 
 // "Match several…" for one bank line (Xero's Find & Match): tick any
@@ -74,6 +75,13 @@ export function MatchManyPanel({
         </button>
       </div>
 
+      {candidates.length > 0 && !candidates.some((c) => Math.sign(c.signedCents) === Math.sign(bankAmountCents)) ? (
+        <p style={{ margin: "8px 0 0", color: "#b54708" }}>
+          Nothing {bankAmountCents < 0 ? "spent" : "received"} in the ledger near this date. If this payment isn&apos;t
+          recorded yet, close this and use “Record as new {bankAmountCents < 0 ? "expense" : "income"}”.
+        </p>
+      ) : null}
+
       {candidates.length > 6 ? (
         <input
           type="search"
@@ -88,7 +96,7 @@ export function MatchManyPanel({
       <div className={styles.matchList}>
         {visible.length === 0 ? (
           <div style={{ padding: 10, color: "#6b7280" }}>
-            No unmatched ledger entries within 45 days of this line.
+            No unmatched ledger entries within 4 months of this line — use “Record as new” instead.
           </div>
         ) : (
           visible.map((c) => (
@@ -104,7 +112,10 @@ export function MatchManyPanel({
                 }}
               />
               <span className={styles.num}>{formatDateKey(c.date)}</span>
-              <span>{c.name}</span>
+              <span>
+                {c.name}
+                {c.method ? <span className={styles.method}>{methodLabel(c.method)}</span> : null}
+              </span>
               <span className={`${styles.num} ${c.signedCents < 0 ? styles.amountOut : styles.amountIn}`}>
                 {formatCents(c.signedCents, { signed: true })}
               </span>

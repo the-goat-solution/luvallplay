@@ -1,0 +1,229 @@
+import crypto from "crypto";
+import { sql } from "@vercel/postgres";
+import {
+  applyAction,
+  emptyState,
+  type Action,
+  type CasualPlayState,
+  type Player,
+  type Tier,
+} from "./casual-play";
+import { getCourtsForDate, getRosterForDate } from "./db";
+
+// Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
+let ensurePromise: Promise<void> | null = null;
+
+export function ensureCasualPlayTables(): Promise<void> {
+  if (!ensurePromise) {
+    ensurePromise = ensureImpl().catch((err) => {
+      ensurePromise = null;
+      throw err;
+    });
+  }
+  return ensurePromise;
+}
+
+async function ensureImpl() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS casual_play_sessions (
+      date DATE PRIMARY KEY,
+      state JSONB NOT NULL,
+      version INT NOT NULL DEFAULT 1,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+  // Tier and nickname are remembered per person (by email), so next week's
+  // board starts with everyone already in the right tier.
+  await sql`
+    CREATE TABLE IF NOT EXISTS casual_play_profiles (
+      email TEXT PRIMARY KEY,
+      tier SMALLINT,
+      nickname TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+}
+
+/**
+ * Stable, opaque player id derived from the email, so the board can be
+ * shown publicly without exposing anyone's address.
+ */
+function playerIdForEmail(email: string): string {
+  return `p_${crypto.createHash("sha256").update(email.trim().toLowerCase()).digest("hex").slice(0, 12)}`;
+}
+
+type RosterPlayer = { id: string; email: string; firstName: string; fullName: string };
+
+/** Who is actually playing on the date: a fill-in takes their player's place. */
+async function rosterPlayers(date: string): Promise<RosterPlayer[]> {
+  const roster = await getRosterForDate(date);
+  const seen = new Set<string>();
+  const out: RosterPlayer[] = [];
+  for (const entry of roster) {
+    const person = entry.fillIn ?? entry;
+    const email = person.email.trim().toLowerCase();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    const fullName = person.name.trim() || email.split("@")[0];
+    out.push({ id: playerIdForEmail(email), email, firstName: fullName.split(/\s+/)[0], fullName });
+  }
+  return out;
+}
+
+/** First names, with a last initial added only where two people share one. */
+function displayNames(players: RosterPlayer[]): Map<string, string> {
+  const counts = new Map<string, number>();
+  for (const p of players) counts.set(p.firstName.toLowerCase(), (counts.get(p.firstName.toLowerCase()) ?? 0) + 1);
+  return new Map(
+    players.map((p) => {
+      if ((counts.get(p.firstName.toLowerCase()) ?? 0) < 2) return [p.id, p.firstName];
+      const parts = p.fullName.split(/\s+/);
+      const last = parts.length > 1 ? parts[parts.length - 1] : "";
+      return [p.id, last ? `${p.firstName} ${last[0].toUpperCase()}.` : p.firstName];
+    }),
+  );
+}
+
+type Profile = { tier: Tier | null; nickname: string | null };
+
+async function profilesFor(emails: string[]): Promise<Map<string, Profile>> {
+  if (emails.length === 0) return new Map();
+  const { rows } = await sql.query(
+    `SELECT email, tier, nickname FROM casual_play_profiles WHERE email = ANY($1::text[]);`,
+    [emails],
+  );
+  return new Map(
+    rows.map((r) => [
+      r.email as string,
+      { tier: r.tier === 1 || r.tier === 2 ? (r.tier as Tier) : null, nickname: (r.nickname as string | null) ?? null },
+    ]),
+  );
+}
+
+/**
+ * Brings the stored board in line with the play day's roster: new sign-ups
+ * appear (in their remembered tier), cancellations drop off unless they're
+ * mid-game, and nicknames follow the profile. Guests are left alone.
+ */
+function mergeRoster(
+  state: CasualPlayState,
+  roster: RosterPlayer[],
+  profiles: Map<string, Profile>,
+  now: number,
+): CasualPlayState {
+  const names = displayNames(roster);
+  const rosterIds = new Set(roster.map((p) => p.id));
+  const busy = new Set(state.onCourt.flatMap((g) => (g ? [...g.teamA, ...g.teamB] : [])));
+  const byId = new Map(state.players.map((p) => [p.id, p]));
+
+  const players: Player[] = state.players.filter((p) => p.guest || rosterIds.has(p.id) || busy.has(p.id));
+  for (const r of roster) {
+    const profile = profiles.get(r.email);
+    const name = profile?.nickname || names.get(r.id) || r.firstName;
+    const existing = byId.get(r.id);
+    if (existing) {
+      existing.name = name;
+      continue;
+    }
+    players.push({
+      id: r.id,
+      name,
+      tier: profile?.tier ?? null,
+      paused: false,
+      guest: false,
+      games: 0,
+      readyAt: now,
+    });
+  }
+  // Someone previewed as up next who has since dropped off the roster.
+  const kept = new Set(players.map((p) => p.id));
+  const next = state.next && [...state.next.teamA, ...state.next.teamB].every((id) => kept.has(id)) ? state.next : null;
+  return { ...state, players, next };
+}
+
+type Loaded = {
+  state: CasualPlayState;
+  version: number | null;
+  roster: RosterPlayer[];
+};
+
+async function load(date: string, now: number): Promise<Loaded> {
+  const [{ rows }, roster] = await Promise.all([
+    sql<{ state: CasualPlayState; version: number }>`
+      SELECT state, version FROM casual_play_sessions WHERE date = ${date};
+    `,
+    rosterPlayers(date),
+  ]);
+  const profiles = await profilesFor(roster.map((r) => r.email));
+  const stored = rows[0];
+  const base = stored ? stored.state : emptyState(date, await getCourtsForDate(date));
+  return {
+    state: mergeRoster(structuredClone(base), roster, profiles, now),
+    version: stored ? stored.version : null,
+    roster,
+  };
+}
+
+export async function getCasualPlayState(date: string): Promise<CasualPlayState> {
+  return (await load(date, Date.now())).state;
+}
+
+export class ConflictError extends Error {}
+
+/** Saves only if nobody else saved first; false means try again. */
+async function save(date: string, state: CasualPlayState, version: number | null): Promise<boolean> {
+  const json = JSON.stringify(state);
+  if (version === null) {
+    const { rows } = await sql`
+      INSERT INTO casual_play_sessions (date, state) VALUES (${date}, ${json}::jsonb)
+      ON CONFLICT (date) DO NOTHING
+      RETURNING date;
+    `;
+    return rows.length > 0;
+  }
+  const { rows } = await sql`
+    UPDATE casual_play_sessions
+    SET state = ${json}::jsonb, version = version + 1, updated_at = NOW()
+    WHERE date = ${date} AND version = ${version}
+    RETURNING date;
+  `;
+  return rows.length > 0;
+}
+
+async function rememberProfile(email: string, change: Partial<Profile>): Promise<void> {
+  if ("tier" in change) {
+    await sql`
+      INSERT INTO casual_play_profiles (email, tier) VALUES (${email}, ${change.tier ?? null})
+      ON CONFLICT (email) DO UPDATE SET tier = EXCLUDED.tier, updated_at = NOW();
+    `;
+  }
+  if ("nickname" in change) {
+    await sql`
+      INSERT INTO casual_play_profiles (email, nickname) VALUES (${email}, ${change.nickname ?? null})
+      ON CONFLICT (email) DO UPDATE SET nickname = EXCLUDED.nickname, updated_at = NOW();
+    `;
+  }
+}
+
+/**
+ * Runs an organiser action against the stored board. Two organisers tapping
+ * at once can't overwrite each other: a save only lands on the version it
+ * was computed from, and a clash is retried on the fresh state.
+ */
+export async function runCasualPlayAction(date: string, action: Action): Promise<CasualPlayState> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const now = Date.now();
+    const { state, version, roster } = await load(date, now);
+    const next = applyAction(state, action, now);
+    if (!(await save(date, next, version))) continue;
+
+    const email = roster.find((r) => "playerId" in action && r.id === action.playerId)?.email;
+    if (email && action.type === "setTier") await rememberProfile(email, { tier: action.tier });
+    if (email && action.type === "rename") {
+      const name = next.players.find((p) => p.id === action.playerId)?.name ?? null;
+      await rememberProfile(email, { nickname: name });
+    }
+    return next;
+  }
+  throw new ConflictError("The board is busy. Please try again.");
+}

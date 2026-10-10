@@ -39,12 +39,27 @@ export function AdminNav({
           </a>
         );
       })}
+      <a
+        href="/casual-play"
+        target="_blank"
+        rel="noopener"
+        style={{
+          marginLeft: "auto",
+          padding: "10px 16px",
+          fontSize: 14,
+          fontWeight: 600,
+          color: "#888",
+          textDecoration: "none",
+        }}
+      >
+        Court board ↗
+      </a>
       {/* A plain form post, so logging out still works when the session is
           already broken — no JavaScript and no valid cookie required. */}
       <form
         method="POST"
         action="/api/admin-logout"
-        style={{ marginLeft: "auto", paddingBottom: 6 }}
+        style={{ paddingBottom: 6 }}
       >
         <button
           type="submit"

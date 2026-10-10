@@ -14,14 +14,27 @@ import {
   formatCents,
   formatDateKey,
   isDateKey,
+  isFinanceCategory,
+  lastDayOfMonth,
   methodLabel,
 } from "@/lib/finance";
+import type { Suggestion } from "@/lib/bank-match";
+import { MatchManyPanel } from "@/components/admin/finance/MatchManyPanel";
 import { ensureFinanceTables } from "@/lib/finance-db";
 import { akahuConfigured, getAkahuSyncState, syncAkahu } from "@/lib/bank-akahu";
 import { CsvImportError, parseBankCsv, parseMoneyToCents } from "@/lib/bank-csv";
 import {
   BANK_STATUS_LABELS,
+  MatchError,
+  applyBankRule,
   autoMatchBankTransactions,
+  deleteBankRule,
+  getBankSuggestions,
+  getBankTransaction,
+  learnBankRule,
+  listBankRules,
+  matchBankLine,
+  setBankRuleAuto,
   findMatchCandidates,
   getFundsSummary,
   insertBankTransactions,
@@ -106,22 +119,92 @@ async function reconcile(formData: FormData) {
     redirect(`/admin/financials?fromBank=${id}`);
   }
   const entryId = choice.startsWith("entry:") ? Number(choice.slice(6)) : null;
-  if (entryId === null && !isBankStatus(choice)) {
+  if (entryId === null && (!isBankStatus(choice) || choice === "matched" || choice === "unmatched")) {
     back({ financeError: "Choose how to reconcile this line." });
   }
-  let failed = false;
+  let error: string | null = null;
   try {
-    if (entryId !== null) await setBankTransactionStatus(id, "matched", entryId);
-    else await setBankTransactionStatus(id, choice as BankStatus);
+    if (entryId !== null) {
+      await matchBankLine(id, [entryId], { reason: "Matched by hand" });
+    } else {
+      const line = await getBankTransaction(id);
+      await setBankTransactionStatus(id, choice as ClassifyStatus);
+      // Remember the payee: next time it's suggested, or automatic once
+      // the treasurer switches the rule on.
+      if (line) await learnBankRule(line.description, line.amountCents, { action: "classify", status: choice as BankStatus });
+    }
   } catch (err) {
-    // Almost always the entry being matched to another line meanwhile
-    // (entry_id is UNIQUE — one bank line per entry).
-    console.error("Reconcile failed", id, choice, err);
-    failed = true;
+    if (!(err instanceof MatchError)) throw err;
+    error = err.message;
   }
-  if (failed) back({ financeError: "That entry is already matched to another bank line." });
+  if (error) back({ financeError: error });
   revalidatePath(PAGE);
   back({ notice: "Reconciled." });
+}
+
+// Accepts a smart suggestion: one entry, several entries that add up, or a
+// learned bank rule.
+async function acceptSuggestion(formData: FormData) {
+  "use server";
+  const id = Number(formData.get("id"));
+  const ruleId = Number(formData.get("ruleId"));
+  const entryIds = formData.getAll("entryId").map(Number);
+  const reason = String(formData.get("reason") ?? "").slice(0, 300) || null;
+  let error: string | null = null;
+  try {
+    if (ruleId) await applyBankRule(id, ruleId);
+    else await matchBankLine(id, entryIds, { reason });
+  } catch (err) {
+    if (!(err instanceof MatchError)) throw err;
+    error = err.message;
+  }
+  if (error) back({ financeError: error });
+  revalidatePath(PAGE);
+  back({ notice: ruleId ? "Recorded using the bank rule." : "Matched." });
+}
+
+async function matchMany(formData: FormData) {
+  "use server";
+  const id = Number(formData.get("id"));
+  const entryIds = formData.getAll("entryId").map(Number);
+  const adjust = formData.get("adjust") === "1";
+  const category = String(formData.get("adjustCategory") ?? "");
+  const name = String(formData.get("adjustName") ?? "").trim().slice(0, 200);
+  if (adjust && (!isFinanceCategory(category) || !name)) {
+    back({ financeError: "Choose a source and a name for the difference." });
+  }
+  let error: string | null = null;
+  try {
+    await matchBankLine(id, entryIds, {
+      reason: `Matched to ${entryIds.length} entr${entryIds.length === 1 ? "y" : "ies"} by hand`,
+      adjustment: adjust ? { category, name } : null,
+    });
+  } catch (err) {
+    if (!(err instanceof MatchError)) throw err;
+    error = err.message;
+  }
+  if (error) back({ financeError: error });
+  revalidatePath(PAGE);
+  back({ notice: adjust ? "Matched, and the difference recorded in the ledger." : "Matched." });
+}
+
+async function updateRule(formData: FormData) {
+  "use server";
+  const id = Number(formData.get("ruleId"));
+  const op = formData.get("op");
+  if (Number.isSafeInteger(id) && id > 0) {
+    if (op === "delete") await deleteBankRule(id);
+    else await setBankRuleAuto(id, op === "auto-on");
+  }
+  revalidatePath(PAGE);
+  back({
+    notice:
+      op === "delete"
+        ? "Rule deleted."
+        : op === "auto-on"
+          ? "Rule will now be applied automatically."
+          : "Rule switched to suggestion only.",
+  });
 }
 
 async function unreconcile(formData: FormData) {
@@ -169,8 +252,73 @@ function FundCard({
   );
 }
 
-const CLASSIFY_FOR_CREDIT: BankStatus[] = ["stripe_payout", "cash_deposit", "internal", "ignored"];
-const CLASSIFY_FOR_DEBIT: BankStatus[] = ["cash_withdrawal", "internal", "ignored"];
+type ClassifyStatus = Exclude<BankStatus, "matched" | "unmatched">;
+
+// Opens the ledger on the month an entry is dated in, scrolled to and
+// highlighting that entry — entries from a bank line are dated on the bank
+// line, often outside the ledger's default "This month".
+function ledgerLink(entryId: number, date: string): string {
+  const month = date.slice(0, 7);
+  const qs = new URLSearchParams({
+    preset: "custom",
+    from: `${month}-01`,
+    to: lastDayOfMonth(month),
+    focus: String(entryId),
+  });
+  return `/admin/financials?${qs.toString()}#entry-${entryId}`;
+}
+
+function SuggestionBox({
+  lineId,
+  suggestion,
+  entryInfo,
+  lineAmount,
+}: {
+  lineId: number;
+  suggestion: Suggestion;
+  entryInfo: Map<number, { name: string; entryDate: string; amountCents: number; kind: string }>;
+  lineAmount: number;
+}) {
+  let title: string;
+  if (suggestion.kind === "rule") {
+    const r = suggestion.rule;
+    title =
+      r.action === "classify" && r.status
+        ? `Mark as ${BANK_STATUS_LABELS[r.status as BankStatus] ?? r.status}`
+        : `Record “${r.name}” · ${categoryLabel(r.category ?? "")} · ${formatCents(Math.abs(lineAmount))}`;
+  } else {
+    const names = suggestion.entryIds.map((id) => entryInfo.get(id)?.name ?? `entry #${id}`);
+    title = suggestion.entryIds.length === 1 ? `Match “${names[0]}”` : `Match ${names.length} entries: ${names.join(" + ")}`;
+  }
+  const confidence =
+    suggestion.kind === "entries"
+      ? suggestion.score >= 0.8
+        ? "High"
+        : suggestion.score >= 0.6
+          ? "Medium"
+          : "Low"
+      : "Rule";
+  return (
+    <form action={acceptSuggestion} className={styles.suggestion}>
+      <input type="hidden" name="id" value={lineId} />
+      <input type="hidden" name="reason" value={suggestion.reasons.join(" · ")} />
+      {suggestion.kind === "rule" ? (
+        <input type="hidden" name="ruleId" value={suggestion.rule.id} />
+      ) : (
+        suggestion.entryIds.map((id) => <input key={id} type="hidden" name="entryId" value={id} />)
+      )}
+      <span className={styles.confidence}>{confidence}</span>
+      <span className={styles.suggestionTitle}>Suggested: {title}</span>
+      <span className={styles.reasons}>{suggestion.reasons.join(" · ")}</span>
+      <SubmitButton loadingText="Accepting…" className={styles.button}>
+        Accept
+      </SubmitButton>
+    </form>
+  );
+}
+
+const CLASSIFY_FOR_CREDIT: ClassifyStatus[] = ["stripe_payout", "cash_deposit", "internal", "ignored"];
+const CLASSIFY_FOR_DEBIT: ClassifyStatus[] = ["cash_withdrawal", "internal", "ignored"];
 
 export default async function BankPage() {
   const header = (
@@ -208,7 +356,13 @@ export default async function BankPage() {
     listEntriesMissingFromBank(from),
     listBankTransactions({ reconciled: true, from, limit: 40 }),
   ]);
-  const candidates = await Promise.all(unmatched.map((t) => findMatchCandidates(t.amountCents, t.date)));
+  const [candidates, suggestions, rules] = await Promise.all([
+    Promise.all(unmatched.map((t) => findMatchCandidates(t.amountCents, t.date))),
+    getBankSuggestions(),
+    listBankRules(),
+  ]);
+  // Names/amounts of every candidate entry, to describe suggestions.
+  const entryInfo = new Map(candidates.flat().map((c) => [c.id, c]));
 
   // The bank figure to trust: the bank's own reported balance (Akahu /
   // webhook), else the running balance on the latest statement line, else
@@ -427,13 +581,22 @@ export default async function BankPage() {
               unmatched.map((t, i) => {
                 const options = candidates[i];
                 const statuses = t.amountCents > 0 ? CLASSIFY_FOR_CREDIT : CLASSIFY_FOR_DEBIT;
-                const exact = options.filter((o) => o.exact);
+                const singles = options.filter((o) => o.kind === (t.amountCents > 0 ? "received" : "spent"));
+                const suggestion = suggestions.get(t.id) ?? null;
                 return (
                   <tr key={t.id}>
                     <td className={styles.num}>{formatDateKey(t.date)}</td>
                     <td>
                       <div className={styles.entryName}>{t.description}</div>
                       {t.reference ? <div className={styles.entryNotes}>{t.reference}</div> : null}
+                      {suggestion ? (
+                        <SuggestionBox
+                          lineId={t.id}
+                          suggestion={suggestion}
+                          entryInfo={entryInfo}
+                          lineAmount={t.amountCents}
+                        />
+                      ) : null}
                     </td>
                     <td className={`${styles.right}`}>
                       <Money cents={t.amountCents} signed />
@@ -444,15 +607,15 @@ export default async function BankPage() {
                         <select
                           name="choice"
                           className={styles.select}
-                          defaultValue={exact.length === 1 ? `entry:${exact[0].id}` : "new"}
+                          defaultValue="new"
                         >
                           <option value="new">
                             ＋ Record as new {t.amountCents > 0 ? "income" : "expense"}…
                           </option>
-                          {options.length ? (
-                            <optgroup label="Match to ledger entry">
-                              {options.map((o) => (
-                                <option key={o.id} value={`entry:${o.id}`}>
+                          {singles.length ? (
+                            <optgroup label="Match to one ledger entry">
+                              {singles.slice(0, 10).map((o) => (
+                                <option key={o.id} value={`entry:${o.id}`} disabled={!o.exact}>
                                   {o.exact ? "" : "≠ "}
                                   {formatDateKey(o.entryDate)} · {o.name} · {formatCents(o.amountCents)}
                                 </option>
@@ -471,6 +634,22 @@ export default async function BankPage() {
                           Apply
                         </SubmitButton>
                       </form>
+                      <div style={{ textAlign: "right" }}>
+                        <MatchManyPanel
+                          bankTxnId={t.id}
+                          bankAmountCents={t.amountCents}
+                          description={t.description}
+                          candidates={options.map((o) => ({
+                            id: o.id,
+                            name: o.name,
+                            date: o.entryDate,
+                            signedCents: o.kind === "received" ? o.amountCents : -o.amountCents,
+                            exact: o.exact,
+                          }))}
+                          preselected={suggestion?.kind === "entries" ? suggestion.entryIds : []}
+                          action={matchMany}
+                        />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -480,8 +659,11 @@ export default async function BankPage() {
         </table>
       </div>
       <p className={styles.hint} style={{ marginTop: 8 }}>
-        “≠” marks a ledger entry with a different amount — match it only if the ledger amount is wrong, then fix it.
-        Stripe payouts and cash deposits aren&apos;t income: the payments behind them are already in the ledger.
+        Reconciling links a bank line to entries already in the ledger — it doesn&apos;t add to the ledger by itself. To
+        put a bank payment into the ledger, choose “Record as new”, or accept a bank-rule suggestion. Use “Match
+        several…” when one payment covers several entries (with any difference, like a bank fee, recorded for you).
+        Stripe payouts and cash deposits aren&apos;t income: the payments behind them are already in the ledger. “≠”
+        entries have a different amount — fix the entry first, or use “Match several…” to record the difference.
       </p>
 
       <h2 className={styles.sectionTitle}>
@@ -565,8 +747,23 @@ export default async function BankPage() {
                     <Money cents={t.amountCents} signed />
                   </td>
                   <td>
-                    {t.status === "matched" && t.entryName ? `↔ ${t.entryName}` : BANK_STATUS_LABELS[t.status]}
-                    {t.autoMatched ? <span className={styles.method}>auto-matched</span> : null}
+                    {t.status === "matched" && t.entries.length ? (
+                      t.entries.map((e) => (
+                        <div key={e.id}>
+                          ↔{" "}
+                          <AdminLink className={styles.sortLink} href={ledgerLink(e.id, e.date)}>
+                            {e.name}
+                          </AdminLink>{" "}
+                          <span className={styles.hint}>({formatDateKey(e.date)})</span>
+                        </div>
+                      ))
+                    ) : (
+                      BANK_STATUS_LABELS[t.status]
+                    )}
+                    <span className={styles.method}>
+                      {t.autoMatched ? "Automatic · " : ""}
+                      {t.matchReason ?? ""}
+                    </span>
                   </td>
                   <td className={styles.right}>
                     <form action={unreconcile}>
@@ -582,6 +779,81 @@ export default async function BankPage() {
           </tbody>
         </table>
       </div>
+
+      <h2 className={styles.sectionTitle}>
+        Bank rules
+        <span className={styles.sectionCount}>learned from how you reconcile — {rules.length}</span>
+      </h2>
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>When a bank line from</th>
+              <th>Do</th>
+              <th className={styles.right}>Used</th>
+              <th>Mode</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rules.length === 0 ? (
+              <tr>
+                <td colSpan={5} className={styles.empty}>
+                  No rules yet. Each time you record or classify a bank line, its payee is remembered here.
+                </td>
+              </tr>
+            ) : (
+              rules.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <span className={styles.entryName}>“{r.pattern}”</span>
+                    <span className={styles.method}>{r.direction === "in" ? "money in" : "money out"}</span>
+                  </td>
+                  <td>
+                    {r.action === "classify" && r.status
+                      ? `Mark as ${BANK_STATUS_LABELS[r.status as BankStatus] ?? r.status}`
+                      : `Record “${r.name}” as ${categoryLabel(r.category ?? "")}`}
+                    {r.action === "create" && r.method ? (
+                      <span className={styles.method}>
+                        {methodLabel(r.method)}
+                        {r.person ? ` · ${r.person}` : ""}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className={`${styles.right} ${styles.num}`}>{r.hits}×</td>
+                  <td>
+                    <span className={`${styles.statusPill} ${r.auto ? styles.ruleAuto : ""}`}>
+                      {r.auto ? "Automatic" : "Suggest only"}
+                    </span>
+                  </td>
+                  <td>
+                    <div className={styles.actions}>
+                      <form action={updateRule}>
+                        <input type="hidden" name="ruleId" value={r.id} />
+                        <input type="hidden" name="op" value={r.auto ? "auto-off" : "auto-on"} />
+                        <SubmitButton loadingText="Saving…" className={styles.actionLink}>
+                          {r.auto ? "Make suggest-only" : "Make automatic"}
+                        </SubmitButton>
+                      </form>
+                      <form action={updateRule}>
+                        <input type="hidden" name="ruleId" value={r.id} />
+                        <input type="hidden" name="op" value="delete" />
+                        <SubmitButton loadingText="Deleting…" className={`${styles.actionLink} ${styles.actionDanger}`}>
+                          Delete
+                        </SubmitButton>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className={styles.hint} style={{ marginTop: 8 }}>
+        Automatic rules run on every bank sync and nightly — but never over a ledger entry that already matches the
+        line, so nothing gets recorded twice. Suggest-only rules just pre-fill the suggestion for you to accept.
+      </p>
     </div>
   );
 }

@@ -415,6 +415,8 @@ export type FinanceEntry = {
   hasReceipt: boolean;
   receiptContentType: string | null;
   externalUrl: string | null;
+  // Date of the bank line this entry is reconciled to, if any.
+  bankDate: string | null;
 };
 
 export type FinanceTotals = {

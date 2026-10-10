@@ -1,3 +1,4 @@
+import { AdminLink } from "@/components/admin/AdminLink";
 import styles from "./financials.module.css";
 
 const LINKS = [
@@ -10,14 +11,14 @@ export function FinanceSubNav({ active }: { active: (typeof LINKS)[number]["key"
   return (
     <nav className={styles.subNav} aria-label="Financials sections">
       {LINKS.map((l) => (
-        <a
+        <AdminLink
           key={l.key}
           href={l.href}
           className={`${styles.subNavLink} ${l.key === active ? styles.subNavActive : ""}`}
-          aria-current={l.key === active ? "page" : undefined}
+          current={l.key === active}
         >
           {l.label}
-        </a>
+        </AdminLink>
       ))}
     </nav>
   );

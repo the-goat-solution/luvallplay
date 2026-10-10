@@ -7,6 +7,7 @@ import {
   type MembershipDay,
 } from "@/lib/constants";
 import { formatDateLong, getClubTodayDate, getDayName, toDateKey } from "@/lib/dates";
+import { LoadingIcon } from "@/components/LoadingIcon";
 
 const MONTH_NAMES = [
   "January",
@@ -42,8 +43,12 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
   const [selected, setSelected] = useState<string | null>(null);
-  const [sessionDates, setSessionDates] = useState<Record<string, true>>({});
+  // null while this month's play days are still loading — distinct from {}
+  // ("loaded, none this month"), so the calendar never briefly claims a
+  // month has no available dates just because the request hasn't returned.
+  const [sessionDates, setSessionDates] = useState<Record<string, true> | null>(null);
   const [spotsByDate, setSpotsByDate] = useState<Record<string, number>>({});
+  const [spotsLoading, setSpotsLoading] = useState(false);
 
   // A date picked while on "friday" is never valid once switched to
   // "wednesday" (or vice versa) — drop it so a stale selection can't be
@@ -60,6 +65,7 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
     const to = toDateKey(new Date(y, m, daysInMonth));
     const dow = MEMBERSHIP_DAY_TO_DOW[day];
     let cancelled = false;
+    setSessionDates(null);
 
     fetch(`/api/sessions?from=${from}&to=${to}`)
       .then((r) => r.json())
@@ -82,12 +88,15 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
   }, [calDate, day]);
 
   useEffect(() => {
+    if (sessionDates === null) return;
     const keys = Object.keys(sessionDates);
     if (keys.length === 0) {
       setSpotsByDate({});
+      setSpotsLoading(false);
       return;
     }
     let cancelled = false;
+    setSpotsLoading(true);
     fetch(`/api/spots?dates=${keys.join(",")}`)
       .then((r) => r.json())
       .then((data: { spots?: Record<string, number> }) => {
@@ -95,11 +104,18 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
       })
       .catch(() => {
         if (!cancelled) setSpotsByDate({});
+      })
+      .finally(() => {
+        if (!cancelled) setSpotsLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [sessionDates]);
+
+  // Until both the play days and their open spots are in, no day can be
+  // judged open or full — show that rather than a misleading empty month.
+  const loading = sessionDates === null || spotsLoading;
 
   const y = calDate.getFullYear();
   const m = calDate.getMonth();
@@ -120,11 +136,11 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
     const date = new Date(y, m, d);
     const dateMs = date.getTime();
     const key = toDateKey(date);
-    const isSessionDay = Boolean(sessionDates[key]);
+    const isSessionDay = Boolean(sessionDates?.[key]);
     const isPast = dateMs < todayMs;
     const spots = isSessionDay ? (spotsByDate[key] ?? 0) : 0;
     const isFull = isSessionDay && spots <= 0;
-    const isOpen = isSessionDay && !isPast && !isFull;
+    const isOpen = isSessionDay && !isPast && !isFull && !loading;
     const isSel = key === selected;
 
     if (isOpen) {
@@ -139,7 +155,7 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
           {d}
         </div>,
       );
-    } else if (isSessionDay && isFull && !isPast) {
+    } else if (isSessionDay && isFull && !isPast && !loading) {
       cells.push(
         <div key={d} className="sess-d game-locked" title="Full — no room for another member">
           {d}
@@ -193,7 +209,33 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
           &#8250;
         </button>
       </div>
-      <div className="sess-cal-grid">{cells}</div>
+      <div style={{ position: "relative" }} aria-busy={loading}>
+        <div
+          className="sess-cal-grid"
+          style={loading ? { opacity: 0.45, pointerEvents: "none" } : undefined}
+        >
+          {cells}
+        </div>
+        {loading ? (
+          <div
+            role="status"
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              fontSize: 13,
+              color: "#1a2a4a",
+              fontWeight: 600,
+            }}
+          >
+            <LoadingIcon size="sm" />
+            Loading dates…
+          </div>
+        ) : null}
+      </div>
       <div className="sess-cal-legend">
         <div className="sess-legend-item">
           <div className="sess-legend-dot" style={{ background: "var(--navy)", opacity: 0.7 }} />

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
 import {
   deleteWaitlistEntry,
@@ -482,7 +483,7 @@ export default async function PlayDaysAdminPage({
             <p style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>
               {casualSpotsRemaining} casual spot{casualSpotsRemaining === 1 ? "" : "s"} remaining
               (session capacity {maxPlayers} minus active members — see{" "}
-              <a href="/admin/members">Members</a>)
+              <AdminLink href="/admin/members">Members</AdminLink>)
             </p>
           )}
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>

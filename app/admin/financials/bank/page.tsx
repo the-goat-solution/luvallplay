@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { AdminLink } from "@/components/admin/AdminLink";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { FinanceSubNav } from "@/components/admin/finance/FinanceSubNav";
@@ -466,7 +467,7 @@ export default async function BankPage() {
                             ))}
                           </optgroup>
                         </select>
-                        <SubmitButton loadingText="…" className={styles.button}>
+                        <SubmitButton loadingText="Applying…" className={styles.button}>
                           Apply
                         </SubmitButton>
                       </form>
@@ -520,9 +521,9 @@ export default async function BankPage() {
                     <Money cents={e.kind === "received" ? e.amountCents : -e.amountCents} signed />
                   </td>
                   <td className={styles.right}>
-                    <a className={styles.actionLink} href={`/admin/financials?preset=all&edit=${e.id}`}>
+                    <AdminLink className={styles.actionLink} href={`/admin/financials?preset=all&edit=${e.id}`}>
                       Edit
-                    </a>
+                    </AdminLink>
                   </td>
                 </tr>
               ))
@@ -570,9 +571,9 @@ export default async function BankPage() {
                   <td className={styles.right}>
                     <form action={unreconcile}>
                       <input type="hidden" name="id" value={t.id} />
-                      <button type="submit" className={styles.actionLink}>
+                      <SubmitButton loadingText="Undoing…" className={styles.actionLink}>
                         Undo
-                      </button>
+                      </SubmitButton>
                     </form>
                   </td>
                 </tr>

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
 import {
   activateMembershipByPaymentIntentId,
@@ -320,7 +321,7 @@ export default async function MembersAdminPage() {
             {activeMemberCount} active member
             {activeMemberCount === 1 ? "" : "s"} total — capacity varies per
             play day and per member&apos;s active period, see the{" "}
-            <a href="/admin/play-days">Play days</a> page for a specific date.
+            <AdminLink href="/admin/play-days">Play days</AdminLink> page for a specific date.
           </p>
           <MembersTable title="Monthly members" members={monthly} />
           <MembersTable title="Quarterly members" members={quarterly} />

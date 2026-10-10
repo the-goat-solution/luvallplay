@@ -95,6 +95,47 @@ async function ensureFinanceTablesImpl() {
     );
   `;
   await sql`CREATE INDEX IF NOT EXISTS bank_transactions_date_idx ON bank_transactions (txn_date);`;
+  // Why a line was reconciled the way it was ("same amount · 1 day apart",
+  // "Bank rule: “pioneer stadium”") — shown on the bank page.
+  await sql`ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS match_reason TEXT;`;
+  // Bank line ↔ ledger entries. Many entries can make up one bank line
+  // (two invoices paid in one transfer); an entry belongs to at most one
+  // bank line. Supersedes the single bank_transactions.entry_id column.
+  await sql`
+    CREATE TABLE IF NOT EXISTS bank_matches (
+      bank_txn_id INT NOT NULL REFERENCES bank_transactions(id) ON DELETE CASCADE,
+      entry_id INT NOT NULL UNIQUE REFERENCES finance_entries(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (bank_txn_id, entry_id)
+    );
+  `;
+  // One-time carry-over of matches made before bank_matches existed;
+  // idempotent (the old column is cleared once copied).
+  await sql`
+    INSERT INTO bank_matches (bank_txn_id, entry_id)
+    SELECT id, entry_id FROM bank_transactions WHERE entry_id IS NOT NULL
+    ON CONFLICT DO NOTHING;
+  `;
+  await sql`UPDATE bank_transactions SET entry_id = NULL WHERE entry_id IS NOT NULL;`;
+  // Learned "bank rules": what the treasurer did with a payee's lines.
+  await sql`
+    CREATE TABLE IF NOT EXISTS bank_rules (
+      id SERIAL PRIMARY KEY,
+      pattern TEXT NOT NULL,
+      direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+      action TEXT NOT NULL CHECK (action IN ('create', 'classify')),
+      status TEXT,
+      category TEXT,
+      name TEXT,
+      method TEXT,
+      person TEXT,
+      auto BOOLEAN NOT NULL DEFAULT FALSE,
+      hits INT NOT NULL DEFAULT 0,
+      last_used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (pattern, direction)
+    );
+  `;
   await sql`
     CREATE TABLE IF NOT EXISTS finance_settings (
       key TEXT PRIMARY KEY,
@@ -169,6 +210,7 @@ type EntryRow = {
   has_receipt: boolean;
   receipt_content_type: string | null;
   external_url: string | null;
+  bank_date: string | null;
 };
 
 // BIGINT comes back from the driver as a string. Every amount this app
@@ -197,13 +239,16 @@ function mapEntry(r: EntryRow): FinanceEntry {
     hasReceipt: r.has_receipt,
     receiptContentType: r.receipt_content_type,
     externalUrl: r.external_url,
+    bankDate: r.bank_date,
   };
 }
 
 const ENTRY_COLUMNS = `
   id, kind, name, category, method, person, entry_date::text AS entry_date,
   amount_cents, notes, origin, (receipt_url IS NOT NULL) AS has_receipt,
-  receipt_content_type, external_url
+  receipt_content_type, external_url,
+  (SELECT b.txn_date::text FROM bank_matches m JOIN bank_transactions b ON b.id = m.bank_txn_id
+    WHERE m.entry_id = finance_entries.id) AS bank_date
 `;
 
 export async function listFinanceEntries(filters: FinanceFilters): Promise<FinanceEntry[]> {
@@ -347,12 +392,23 @@ export async function updateManualEntry(id: number, input: ManualEntryInput): Pr
     WHERE id = ${id} AND origin = 'manual';
   `;
   if (!rowCount) return false;
-  // If the edit changed the amount or direction, a bank line matched to it
-  // no longer agrees — release it so it shows up for reconciling again.
-  const signed = input.kind === "received" ? input.amountCents : -input.amountCents;
+  // If the edit changed the amount or direction, the bank line it's matched
+  // to (alone or with other entries) no longer adds up — release that line
+  // so it shows up for reconciling again.
   await sql`
-    UPDATE bank_transactions SET status = 'unmatched', entry_id = NULL, auto_matched = FALSE
-    WHERE entry_id = ${id} AND amount_cents <> ${signed};
+    WITH line AS (
+      SELECT m.bank_txn_id AS id FROM bank_matches m WHERE m.entry_id = ${id}
+    ), total AS (
+      SELECT COALESCE(SUM(CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END), 0) AS s
+      FROM bank_matches m JOIN finance_entries e ON e.id = m.entry_id
+      WHERE m.bank_txn_id = (SELECT id FROM line)
+    )
+    UPDATE bank_transactions b SET status = 'unmatched', auto_matched = FALSE, match_reason = NULL
+    WHERE b.id = (SELECT id FROM line) AND b.amount_cents <> (SELECT s FROM total);
+  `;
+  await sql`
+    DELETE FROM bank_matches m USING bank_transactions b
+    WHERE m.bank_txn_id = b.id AND b.status = 'unmatched';
   `;
   return true;
 }
@@ -391,11 +447,15 @@ export async function getManualEntry(id: number): Promise<ManualEntryRecord | nu
 export async function deleteManualEntry(
   id: number,
 ): Promise<{ receiptUrl: string | null; receiptAccess: string | null } | null> {
-  // A bank line matched to this entry goes back to "unmatched" rather than
-  // silently claiming a match to something that no longer exists.
+  // The bank line this entry was matched to (alone or with others) no
+  // longer adds up without it — put it back to "unmatched", releasing its
+  // other entries too, rather than claim a match that doesn't balance.
   await sql`
-    UPDATE bank_transactions SET status = 'unmatched', entry_id = NULL, auto_matched = FALSE
-    WHERE entry_id = ${id};
+    UPDATE bank_transactions SET status = 'unmatched', auto_matched = FALSE, match_reason = NULL
+    WHERE id IN (SELECT bank_txn_id FROM bank_matches WHERE entry_id = ${id});
+  `;
+  await sql`
+    DELETE FROM bank_matches WHERE bank_txn_id IN (SELECT bank_txn_id FROM bank_matches WHERE entry_id = ${id});
   `;
   const { rows } = await sql`
     DELETE FROM finance_entries WHERE id = ${id} AND origin = 'manual'

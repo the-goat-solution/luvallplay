@@ -1,6 +1,14 @@
-import { sql } from "@vercel/postgres";
+import { db, sql } from "@vercel/postgres";
 import { ensureFinanceTables } from "./finance-db";
 import type { FinanceEntry, FinanceKind } from "./finance";
+import {
+  payeeKey,
+  suggestForLine,
+  type MatchEntry,
+  type MatchLine,
+  type MatchRule,
+  type Suggestion,
+} from "./bank-match";
 
 // Bank feed + reconciliation storage. See finance-db.ts for the tables.
 //
@@ -8,8 +16,9 @@ import type { FinanceEntry, FinanceKind } from "./finance";
 // hand, and the Stripe balance):
 //
 //   every bank line is either
-//     matched          → to one ledger entry (expense paid by transfer/card,
-//                        income received by transfer, …)
+//     matched          → to one or more ledger entries that add up to it
+//                        (expense paid by transfer/card, income received by
+//                        transfer, two invoices paid in one transfer, …)
 //     stripe_payout    → Stripe moving the club's own money to the bank; the
 //                        underlying payments are already in the ledger
 //     cash_deposit     → cash on hand banked (credit)
@@ -66,10 +75,10 @@ export type BankTransaction = {
   amountCents: number;
   balanceCents: number | null;
   status: BankStatus;
-  entryId: number | null;
-  entryName: string | null;
+  entries: { id: number; name: string; date: string }[];
   payoutId: string | null;
   autoMatched: boolean;
+  matchReason: string | null;
 };
 
 const toInt = (v: unknown): number => {
@@ -219,90 +228,355 @@ export async function upsertStripePayouts(
 }
 
 // ── Matching ──────────────────────────────────────────────────────────────
+//
+// A bank line can be matched to ONE OR MORE ledger entries (bank_matches);
+// each entry is matched to at most one bank line. The entries' signed
+// amounts must add up to the bank line exactly — any gap is booked as its
+// own entry (e.g. a bank fee) so the books always balance to the cent.
 
-// Ledger methods whose money moves through the bank account.
+// Ledger methods whose money moves through the bank account. Stripe
+// payments arrive via payouts and cash via deposits, never line by line.
 const BANK_METHODS = ["bank_transfer", "card", "other"];
-const AUTO_MATCH_DAYS = 10;
 const STRIPE_PAYOUT_DAYS = 5;
+// How far either side of a bank line to look for entries to match.
+const CANDIDATE_DAYS = 45;
 
-// Matches what can be matched with confidence, leaving anything ambiguous
-// for the treasurer:
-//  - a credit whose description mentions Stripe → that Stripe payout (same
-//    amount, arriving within a few days), or a payout without a link if
-//    Stripe's record of it isn't imported yet;
-//  - otherwise, exactly one unlinked ledger entry paid by bank/card with
-//    the same signed amount within 10 days (closest date wins; a tie is
-//    left for a human).
-export async function autoMatchBankTransactions(): Promise<number> {
-  await ensureFinanceTables();
-  const { rows } = await sql`
-    SELECT id, txn_date::text AS d, description, amount_cents
-    FROM bank_transactions WHERE status = 'unmatched'
-    ORDER BY txn_date, id;
-  `;
-  let matched = 0;
+type DbClient = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }> };
 
-  for (const r of rows) {
-    const id = r.id as number;
-    const amount = toInt(r.amount_cents);
-    const date = r.d as string;
-
-    if (amount > 0 && /stripe/i.test(r.description as string)) {
-      const { rows: payouts } = await sql.query(
-        `SELECT id FROM stripe_payouts p
-         WHERE p.amount_cents = $1
-           AND ABS(p.arrival_date - $2::date) <= $3
-           AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.payout_id = p.id)
-         ORDER BY ABS(p.arrival_date - $2::date) LIMIT 1;`,
-        [amount, date, STRIPE_PAYOUT_DAYS],
-      );
-      await sql`
-        UPDATE bank_transactions SET status = 'stripe_payout', payout_id = ${payouts[0]?.id ?? null},
-          auto_matched = TRUE
-        WHERE id = ${id} AND status = 'unmatched';
-      `;
-      matched++;
-      continue;
-    }
-
-    const { rows: candidates } = await sql.query(
-      `SELECT e.id, ABS(e.entry_date - $2::date) AS gap
-       FROM finance_entries e
-       WHERE (CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END) = $1
-         AND (e.method IS NULL OR e.method = ANY($3::text[]))
-         AND ABS(e.entry_date - $2::date) <= $4
-         AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.entry_id = e.id)
-       ORDER BY gap, e.id
-       LIMIT 2;`,
-      [amount, date, BANK_METHODS, AUTO_MATCH_DAYS],
-    );
-    if (candidates.length === 0) continue;
-    if (candidates.length === 2 && candidates[0].gap === candidates[1].gap) continue;
-    const { rowCount } = await sql`
-      UPDATE bank_transactions SET status = 'matched', entry_id = ${candidates[0].id as number},
-        auto_matched = TRUE
-      WHERE id = ${id} AND status = 'unmatched';
-    `;
-    if (rowCount) matched++;
+// Runs `fn` inside a transaction so a multi-entry match (and its
+// difference entry) lands all together or not at all.
+async function inTransaction<T>(fn: (client: DbClient) => Promise<T>): Promise<T> {
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client as unknown as DbClient);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
   }
-  return matched;
 }
 
-export async function setBankTransactionStatus(
-  id: number,
-  status: BankStatus,
-  entryId: number | null = null,
-): Promise<void> {
+export class MatchError extends Error {}
+
+export type MatchAdjustment = { category: string; name: string };
+
+// Matches a bank line to one or more ledger entries. If the entries don't
+// add up to the bank amount, `adjustment` books the difference as a new
+// entry (dated on the bank line, paid by bank transfer) — otherwise the
+// match is refused. Re-checks everything inside the transaction, so two
+// admins (or the nightly auto-match) can't double-match an entry.
+export async function matchBankLine(
+  bankTxnId: number,
+  entryIds: number[],
+  {
+    auto = false,
+    reason = null,
+    adjustment = null,
+  }: { auto?: boolean; reason?: string | null; adjustment?: MatchAdjustment | null } = {},
+): Promise<{ adjustmentEntryId: number | null }> {
   await ensureFinanceTables();
-  if (status === "matched" && !entryId) throw new Error("Choose the entry to match.");
+  const ids = [...new Set(entryIds)].filter((n) => Number.isSafeInteger(n) && n > 0);
+  if (ids.length === 0 && !adjustment) throw new MatchError("Choose at least one entry to match.");
+
+  return inTransaction(async (client) => {
+    const { rows: lines } = await client.query(
+      `SELECT id, txn_date::text AS d, description, amount_cents, status
+       FROM bank_transactions WHERE id = $1 FOR UPDATE;`,
+      [bankTxnId],
+    );
+    const line = lines[0];
+    if (!line) throw new MatchError("That bank line no longer exists.");
+    if (line.status !== "unmatched") throw new MatchError("That bank line is already reconciled.");
+    const bankAmount = toInt(line.amount_cents);
+
+    const { rows: entries } = ids.length
+      ? await client.query(
+          `SELECT e.id, CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END AS signed,
+             EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id) AS taken
+           FROM finance_entries e WHERE e.id = ANY($1::int[]) FOR UPDATE;`,
+          [ids],
+        )
+      : { rows: [] as Record<string, unknown>[] };
+    if (entries.length !== ids.length) throw new MatchError("One of those entries no longer exists.");
+    if (entries.some((e) => e.taken)) {
+      throw new MatchError("One of those entries is already matched to another bank line.");
+    }
+
+    const sum = entries.reduce((t, e) => t + toInt(e.signed), 0);
+    const difference = bankAmount - sum;
+    let adjustmentEntryId: number | null = null;
+    if (difference !== 0) {
+      if (!adjustment) {
+        throw new MatchError(
+          `Those entries come to ${(sum / 100).toFixed(2)}, but the bank line is ${(bankAmount / 100).toFixed(2)}.`,
+        );
+      }
+      const { rows: created } = await client.query(
+        `INSERT INTO finance_entries (kind, name, category, method, entry_date, amount_cents, origin)
+         VALUES ($1, $2, $3, 'bank_transfer', $4::date, $5, 'manual') RETURNING id;`,
+        [difference > 0 ? "received" : "spent", adjustment.name, adjustment.category, line.d, Math.abs(difference)],
+      );
+      adjustmentEntryId = created[0].id as number;
+      ids.push(adjustmentEntryId);
+    }
+
+    await client.query(
+      `INSERT INTO bank_matches (bank_txn_id, entry_id) SELECT $1, unnest($2::int[]);`,
+      [bankTxnId, ids],
+    );
+    await client.query(
+      `UPDATE bank_transactions SET status = 'matched', auto_matched = $2, match_reason = $3, payout_id = NULL
+       WHERE id = $1;`,
+      [bankTxnId, auto, reason],
+    );
+    return { adjustmentEntryId };
+  });
+}
+
+// Classifies a bank line as something other than a ledger match (or puts
+// it back to "unmatched"). Any entry matches it had are released.
+export async function setBankTransactionStatus(id: number, status: Exclude<BankStatus, "matched">): Promise<void> {
+  await ensureFinanceTables();
+  await sql`DELETE FROM bank_matches WHERE bank_txn_id = ${id};`;
   await sql`
     UPDATE bank_transactions SET
       status = ${status},
-      entry_id = ${status === "matched" ? entryId : null},
       payout_id = CASE WHEN ${status} = 'stripe_payout' THEN payout_id ELSE NULL END,
-      auto_matched = FALSE
+      auto_matched = FALSE,
+      match_reason = NULL
     WHERE id = ${id};
   `;
+}
+
+// ── Bank rules ────────────────────────────────────────────────────────────
+
+const toRule = (r: Record<string, unknown>): MatchRule => ({
+  id: r.id as number,
+  pattern: r.pattern as string,
+  direction: r.direction as "in" | "out",
+  action: r.action as "create" | "classify",
+  status: (r.status as string | null) ?? null,
+  category: (r.category as string | null) ?? null,
+  name: (r.name as string | null) ?? null,
+  method: (r.method as string | null) ?? null,
+  person: (r.person as string | null) ?? null,
+  auto: r.auto as boolean,
+  hits: r.hits as number,
+});
+
+export async function listBankRules(): Promise<MatchRule[]> {
+  await ensureFinanceTables();
+  const { rows } = await sql`SELECT * FROM bank_rules ORDER BY hits DESC, last_used_at DESC NULLS LAST;`;
+  return rows.map(toRule);
+}
+
+// Remembers what the treasurer did with a bank line, keyed on its payee,
+// so the next line from the same payee gets the same treatment suggested.
+// Repeating the same choice raises its count; a different choice for the
+// same payee replaces the old one (the latest decision wins).
+export async function learnBankRule(
+  description: string,
+  amountCents: number,
+  action:
+    | { action: "classify"; status: BankStatus }
+    | { action: "create"; category: string; name: string; method: string | null; person: string | null },
+): Promise<void> {
+  const pattern = payeeKey(description);
+  if (!pattern) return;
+  await ensureFinanceTables();
+  const direction = amountCents > 0 ? "in" : "out";
+  const v =
+    action.action === "classify"
+      ? { status: action.status, category: null, name: null, method: null, person: null }
+      : { status: null, category: action.category, name: action.name, method: action.method, person: action.person };
+  await sql`
+    INSERT INTO bank_rules (pattern, direction, action, status, category, name, method, person, hits, last_used_at)
+    VALUES (${pattern}, ${direction}, ${action.action}, ${v.status}, ${v.category}, ${v.name}, ${v.method}, ${v.person}, 1, NOW())
+    ON CONFLICT (pattern, direction) DO UPDATE SET
+      hits = CASE
+        WHEN bank_rules.action = EXCLUDED.action
+          AND COALESCE(bank_rules.status, '') = COALESCE(EXCLUDED.status, '')
+          AND COALESCE(bank_rules.category, '') = COALESCE(EXCLUDED.category, '')
+        THEN bank_rules.hits + 1 ELSE 1 END,
+      auto = CASE
+        WHEN bank_rules.action = EXCLUDED.action
+          AND COALESCE(bank_rules.status, '') = COALESCE(EXCLUDED.status, '')
+          AND COALESCE(bank_rules.category, '') = COALESCE(EXCLUDED.category, '')
+        THEN bank_rules.auto ELSE FALSE END,
+      action = EXCLUDED.action,
+      status = EXCLUDED.status,
+      category = EXCLUDED.category,
+      name = EXCLUDED.name,
+      method = EXCLUDED.method,
+      person = EXCLUDED.person,
+      last_used_at = NOW();
+  `;
+}
+
+export async function setBankRuleAuto(id: number, auto: boolean): Promise<void> {
+  await sql`UPDATE bank_rules SET auto = ${auto} WHERE id = ${id};`;
+}
+
+export async function deleteBankRule(id: number): Promise<void> {
+  await sql`DELETE FROM bank_rules WHERE id = ${id};`;
+}
+
+// Applies a rule to a bank line: classifies it, or records a new ledger
+// entry from the rule (dated on the bank line, for its exact amount) and
+// matches the two.
+export async function applyBankRule(bankTxnId: number, ruleId: number, { auto = false } = {}): Promise<void> {
+  await ensureFinanceTables();
+  const [{ rows: lines }, { rows: rules }] = await Promise.all([
+    sql`SELECT id, status FROM bank_transactions WHERE id = ${bankTxnId};`,
+    sql`SELECT * FROM bank_rules WHERE id = ${ruleId};`,
+  ]);
+  const line = lines[0];
+  const rule = rules[0] ? toRule(rules[0]) : null;
+  if (!line || !rule) throw new MatchError("That bank line or rule no longer exists.");
+  if (line.status !== "unmatched") throw new MatchError("That bank line is already reconciled.");
+  const reason = `${auto ? "Bank rule (automatic)" : "Bank rule"}: “${rule.pattern}”`;
+
+  if (rule.action === "classify" && rule.status && isBankStatus(rule.status) && rule.status !== "matched") {
+    await setBankTransactionStatus(bankTxnId, rule.status);
+    await sql`UPDATE bank_transactions SET auto_matched = ${auto}, match_reason = ${reason} WHERE id = ${bankTxnId};`;
+  } else if (rule.action === "create" && rule.category && rule.name) {
+    await matchBankLine(bankTxnId, [], {
+      auto,
+      reason,
+      adjustment: { category: rule.category, name: rule.name },
+    });
+    // The rule's entry is the "adjustment" for the whole amount; give it
+    // the rule's method and person too.
+    await sql`
+      UPDATE finance_entries e SET method = COALESCE(${rule.method}, e.method), person = ${rule.person}
+      FROM bank_matches m WHERE m.bank_txn_id = ${bankTxnId} AND m.entry_id = e.id;
+    `;
+  } else {
+    throw new MatchError("That rule is incomplete.");
+  }
+  await sql`UPDATE bank_rules SET hits = hits + 1, last_used_at = NOW() WHERE id = ${ruleId};`;
+}
+
+// ── Smart suggestions & auto-matching ─────────────────────────────────────
+
+type LineRow = MatchLine & { status: BankStatus };
+
+async function loadMatchingPool(): Promise<{ lines: LineRow[]; entries: MatchEntry[]; rules: MatchRule[] }> {
+  const [{ rows: lineRows }, { rows: entryRows }, rules] = await Promise.all([
+    sql`
+      SELECT id, txn_date::text AS d, description, reference, amount_cents, status
+      FROM bank_transactions WHERE status = 'unmatched' ORDER BY txn_date, id;
+    `,
+    sql.query(
+      `SELECT e.id, e.entry_date::text AS d, e.name, e.person, e.notes,
+         CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END AS signed
+       FROM finance_entries e
+       WHERE (e.method IS NULL OR e.method = ANY($1::text[]))
+         AND NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id)
+         AND e.entry_date >= (SELECT COALESCE(MIN(txn_date), CURRENT_DATE) FROM bank_transactions WHERE status = 'unmatched') - $2::int;`,
+      [BANK_METHODS, CANDIDATE_DAYS],
+    ),
+    listBankRules(),
+  ]);
+  return {
+    lines: lineRows.map((r) => ({
+      id: r.id,
+      date: r.d,
+      description: r.description,
+      reference: r.reference,
+      amountCents: toInt(r.amount_cents),
+      status: r.status,
+    })),
+    entries: entryRows.map((r) => ({
+      id: r.id,
+      date: r.d,
+      name: r.name,
+      person: r.person,
+      notes: r.notes,
+      signedCents: toInt(r.signed),
+    })),
+    rules,
+  };
+}
+
+function nearby(entries: MatchEntry[], date: string): MatchEntry[] {
+  const t = Date.parse(`${date}T00:00:00Z`);
+  return entries.filter((e) => Math.abs(Date.parse(`${e.date}T00:00:00Z`) - t) <= CANDIDATE_DAYS * 86_400_000);
+}
+
+// Suggestions for every unreconciled line, for the bank page. Lines are
+// processed oldest first and an entry suggested for one line isn't offered
+// to the next, so two lines never get pointed at the same entry.
+export async function getBankSuggestions(): Promise<Map<number, Suggestion>> {
+  await ensureFinanceTables();
+  const { lines, entries, rules } = await loadMatchingPool();
+  let pool = entries;
+  const out = new Map<number, Suggestion>();
+  for (const line of lines) {
+    const s = suggestForLine(line, nearby(pool, line.date), rules);
+    if (!s) continue;
+    out.set(line.id, s);
+    if (s.kind === "entries") pool = pool.filter((e) => !s.entryIds.includes(e.id));
+  }
+  return out;
+}
+
+// Applies what can be applied with confidence: Stripe payouts, clear
+// single matches, and bank rules the treasurer switched to automatic.
+// Everything else is left as a suggestion on the bank page.
+export async function autoMatchBankTransactions(): Promise<number> {
+  await ensureFinanceTables();
+  let matched = 0;
+
+  // 1. Stripe payouts — a credit mentioning Stripe, matched to the payout
+  //    of the same amount arriving within a few days (or left unlinked if
+  //    Stripe's record of it isn't imported yet).
+  const { rows: stripeLines } = await sql`
+    SELECT id, txn_date::text AS d, amount_cents FROM bank_transactions
+    WHERE status = 'unmatched' AND amount_cents > 0 AND description ILIKE '%stripe%'
+    ORDER BY txn_date, id;
+  `;
+  for (const r of stripeLines) {
+    const { rows: payouts } = await sql.query(
+      `SELECT id FROM stripe_payouts p
+       WHERE p.amount_cents = $1
+         AND ABS(p.arrival_date - $2::date) <= $3
+         AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.payout_id = p.id)
+       ORDER BY ABS(p.arrival_date - $2::date) LIMIT 1;`,
+      [toInt(r.amount_cents), r.d, STRIPE_PAYOUT_DAYS],
+    );
+    const { rowCount } = await sql`
+      UPDATE bank_transactions SET status = 'stripe_payout', payout_id = ${payouts[0]?.id ?? null},
+        auto_matched = TRUE, match_reason = ${payouts[0] ? "Stripe payout of the same amount" : "Description mentions Stripe"}
+      WHERE id = ${r.id as number} AND status = 'unmatched';
+    `;
+    if (rowCount) matched++;
+  }
+
+  // 2. Clear single matches and automatic rules.
+  const { lines, entries, rules } = await loadMatchingPool();
+  let pool = entries;
+  for (const line of lines) {
+    const s = suggestForLine(line, nearby(pool, line.date), rules);
+    if (!s?.auto) continue;
+    try {
+      if (s.kind === "entries") {
+        await matchBankLine(line.id, s.entryIds, { auto: true, reason: s.reasons.join(" · ") });
+        pool = pool.filter((e) => !s.entryIds.includes(e.id));
+      } else {
+        await applyBankRule(line.id, s.rule.id, { auto: true });
+      }
+      matched++;
+    } catch (err) {
+      // Lost a race with a human (or another run) — leave it for the page.
+      if (!(err instanceof MatchError)) throw err;
+    }
+  }
+  return matched;
 }
 
 export async function getBankTransaction(id: number): Promise<BankTransaction | null> {
@@ -337,11 +611,14 @@ export async function listBankTransactions({
   params.push(limit);
   const { rows } = await sql.query(
     `SELECT b.id, b.source, b.account, b.txn_date::text AS d, b.description, b.reference,
-       b.amount_cents, b.balance_cents, b.status, b.entry_id, e.name AS entry_name,
-       b.payout_id, b.auto_matched
+       b.amount_cents, b.balance_cents, b.status, b.payout_id, b.auto_matched, b.match_reason,
+       COALESCE(json_agg(json_build_object('id', e.id, 'name', e.name, 'date', e.entry_date::text))
+         FILTER (WHERE e.id IS NOT NULL), '[]') AS entries
      FROM bank_transactions b
-     LEFT JOIN finance_entries e ON e.id = b.entry_id
+     LEFT JOIN bank_matches m ON m.bank_txn_id = b.id
+     LEFT JOIN finance_entries e ON e.id = m.entry_id
      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+     GROUP BY b.id
      ORDER BY b.txn_date ${reconciled ? "DESC" : "ASC"}, b.id ${reconciled ? "DESC" : "ASC"}
      LIMIT $${params.length};`,
     params,
@@ -356,50 +633,53 @@ export async function listBankTransactions({
     amountCents: toInt(r.amount_cents),
     balanceCents: r.balance_cents === null ? null : toInt(r.balance_cents),
     status: r.status,
-    entryId: r.entry_id,
-    entryName: r.entry_name,
+    entries: (r.entries as { id: number; name: string; date: string }[]) ?? [],
     payoutId: r.payout_id,
     autoMatched: r.auto_matched,
+    matchReason: r.match_reason,
   }));
 }
 
-// Unlinked ledger entries a bank line could be matched to: same signed
-// amount first, then anything nearby in date, so the treasurer can also
-// match a line whose amount was typed slightly differently (and fix it).
+function toEntry(r: Record<string, unknown>): FinanceEntry {
+  return {
+    id: r.id as number,
+    kind: r.kind as FinanceKind,
+    name: r.name as string,
+    category: r.category as string,
+    method: r.method as string | null,
+    person: r.person as string | null,
+    entryDate: r.entry_date as string,
+    amountCents: toInt(r.amount_cents),
+    notes: r.notes as string | null,
+    origin: r.origin as "manual" | "stripe",
+    hasReceipt: false,
+    receiptContentType: null,
+    externalUrl: r.external_url as string | null,
+    bankDate: null,
+  };
+}
+
+// Unlinked ledger entries a bank line could be matched to, for the manual
+// "match" controls: both directions (a deposit can be income net of a fee),
+// nearest first, exact-amount ones flagged.
 export async function findMatchCandidates(
   amountCents: number,
   date: string,
+  limit = 30,
 ): Promise<(FinanceEntry & { exact: boolean })[]> {
-  const kind: FinanceKind = amountCents > 0 ? "received" : "spent";
   const { rows } = await sql.query(
     `SELECT e.id, e.kind, e.name, e.category, e.method, e.person, e.entry_date::text AS entry_date,
        e.amount_cents, e.notes, e.origin, e.external_url,
-       (e.amount_cents = $1) AS exact
+       ((CASE WHEN e.kind = 'received' THEN e.amount_cents ELSE -e.amount_cents END) = $1) AS exact
      FROM finance_entries e
-     WHERE e.kind = $2
-       AND ABS(e.entry_date - $3::date) <= 45
-       AND (e.method IS NULL OR e.method <> 'stripe')
-       AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.entry_id = e.id)
-     ORDER BY (e.amount_cents = $1) DESC, ABS(e.entry_date - $3::date), e.id
-     LIMIT 8;`,
-    [Math.abs(amountCents), kind, date],
+     WHERE ABS(e.entry_date - $2::date) <= $3
+       AND (e.method IS NULL OR e.method NOT IN ('stripe', 'cash'))
+       AND NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id)
+     ORDER BY exact DESC, (e.kind = $4) DESC, ABS(e.entry_date - $2::date), e.id
+     LIMIT $5;`,
+    [amountCents, date, CANDIDATE_DAYS, amountCents > 0 ? "received" : "spent", limit],
   );
-  return rows.map((r) => ({
-    id: r.id,
-    kind: r.kind,
-    name: r.name,
-    category: r.category,
-    method: r.method,
-    person: r.person,
-    entryDate: r.entry_date,
-    amountCents: toInt(r.amount_cents),
-    notes: r.notes,
-    origin: r.origin,
-    hasReceipt: false,
-    receiptContentType: null,
-    externalUrl: r.external_url,
-    exact: r.exact,
-  }));
+  return rows.map((r) => ({ ...toEntry(r), exact: r.exact as boolean }));
 }
 
 // Ledger entries paid through the bank (transfer / card) since `from` that
@@ -412,26 +692,12 @@ export async function listEntriesMissingFromBank(from: string | null): Promise<F
      FROM finance_entries e
      WHERE e.method IN ('bank_transfer', 'card')
        ${from ? "AND e.entry_date >= $1::date" : ""}
-       AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.entry_id = e.id)
+       AND NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id)
      ORDER BY e.entry_date DESC, e.id DESC
      LIMIT 200;`,
     from ? [from] : [],
   );
-  return rows.map((r) => ({
-    id: r.id,
-    kind: r.kind,
-    name: r.name,
-    category: r.category,
-    method: r.method,
-    person: r.person,
-    entryDate: r.entry_date,
-    amountCents: toInt(r.amount_cents),
-    notes: r.notes,
-    origin: r.origin,
-    hasReceipt: false,
-    receiptContentType: null,
-    externalUrl: r.external_url,
-  }));
+  return rows.map(toEntry);
 }
 
 // ── Money held ────────────────────────────────────────────────────────────

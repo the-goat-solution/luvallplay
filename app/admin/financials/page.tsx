@@ -50,7 +50,7 @@ import {
   type ManualEntryInput,
 } from "@/lib/finance-db";
 import { loadFinanceReport } from "@/lib/finance-report";
-import { getBankTransaction, setBankTransactionStatus } from "@/lib/bank-db";
+import { MatchError, getBankTransaction, learnBankRule, matchBankLine } from "@/lib/bank-db";
 import { FinanceSubNav } from "@/components/admin/finance/FinanceSubNav";
 import {
   deleteReceipt,
@@ -159,13 +159,27 @@ async function saveEntry(
 
   // Created from an unreconciled bank line → match the two, as long as the
   // amounts still agree (otherwise the treasurer reconciles it by hand).
+  // Also remembers the payee as a bank rule, so the next line from them
+  // is suggested (or, once switched on, recorded automatically).
   let bankNote: string | null = null;
   const bankTxnId = Number(formData.get("bankTxnId"));
   if (!id && Number.isSafeInteger(bankTxnId) && bankTxnId > 0) {
     const line = await getBankTransaction(bankTxnId);
     const signed = kind === "received" ? amountCents : -amountCents;
     if (line && line.status === "unmatched" && line.amountCents === signed) {
-      await setBankTransactionStatus(bankTxnId, "matched", entryId);
+      try {
+        await matchBankLine(bankTxnId, [entryId], { reason: "Recorded from this bank line" });
+        await learnBankRule(line.description, line.amountCents, {
+          action: "create",
+          category,
+          name,
+          method: method || null,
+          person: person || null,
+        });
+      } catch (err) {
+        if (!(err instanceof MatchError)) throw err;
+        bankNote = `Entry saved, but not matched to the bank line: ${err.message}`;
+      }
     } else if (line) {
       bankNote = "Entry saved, but it wasn't matched to the bank line because the amounts differ.";
     }
@@ -192,7 +206,12 @@ async function saveEntry(
         : {}),
   };
   if (formData.get("after") === "bank") {
-    redirect(`/admin/financials/bank?${new URLSearchParams(extra).toString()}`);
+    // Say where the entry went: it's dated on the bank line, which is often
+    // outside the ledger's default "This month" view.
+    const notice = `Added “${name}” to the ledger, dated ${formatDateKey(entryDate)}.`;
+    const { saved: _saved, ...rest } = extra;
+    void _saved;
+    redirect(`/admin/financials/bank?${new URLSearchParams({ notice, ...rest }).toString()}`);
   }
   redirect(backTo(returnTo, extra));
 }
@@ -322,6 +341,9 @@ export default async function FinancialsPage({
   const selfHref = returnTo ? `/admin/financials?${returnTo}` : "/admin/financials";
   const editParam = Array.isArray(params.edit) ? params.edit[0] : params.edit;
   const editId = editParam && /^\d+$/.test(editParam) ? Number(editParam) : null;
+  // ?focus=ID highlights one entry (linked from the bank page).
+  const focusParam = Array.isArray(params.focus) ? params.focus[0] : params.focus;
+  const focusId = focusParam && /^\d+$/.test(focusParam) ? Number(focusParam) : null;
   const fromBankParam = Array.isArray(params.fromBank) ? params.fromBank[0] : params.fromBank;
   const fromBankId = fromBankParam && /^\d+$/.test(fromBankParam) ? Number(fromBankParam) : null;
 
@@ -574,7 +596,13 @@ export default async function FinancialsPage({
                 const editQs = new URLSearchParams(returnTo);
                 editQs.set("edit", String(e.id));
                 return (
-                  <tr key={e.id} className={editing?.id === e.id ? styles.rowEditing : undefined}>
+                  <tr
+                    key={e.id}
+                    id={`entry-${e.id}`}
+                    className={
+                      editing?.id === e.id ? styles.rowEditing : focusId === e.id ? styles.rowFocus : undefined
+                    }
+                  >
                     <td className={`${styles.rowNo} ${styles.num}`}>{i + 1}</td>
                     <td className={styles.num}>{formatDateKey(e.entryDate)}</td>
                     <td>
@@ -625,6 +653,16 @@ export default async function FinancialsPage({
                       )}
                     </td>
                     <td>
+                      {e.bankDate ? (
+                        <div className={styles.actions} style={{ marginBottom: 4 }}>
+                          <span
+                            className={`${styles.badge} ${styles.badgeBank}`}
+                            title={`Reconciled to the bank line on ${formatDateKey(e.bankDate)}`}
+                          >
+                            ✓ Bank
+                          </span>
+                        </div>
+                      ) : null}
                       {e.origin === "manual" ? (
                         <div className={styles.actions}>
                           <AdminLink className={styles.actionLink} href={`/admin/financials?${editQs.toString()}`}>

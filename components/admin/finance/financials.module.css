@@ -1083,3 +1083,107 @@
     break-inside: avoid;
   }
 }
+
+/* ── Smart reconciliation ──────────────────────────────── */
+
+.badgeBank {
+  color: var(--green);
+  border-color: #b7e4c7;
+  background: var(--green-bg);
+}
+
+/* A ledger row linked to from the bank page (?focus=123#entry-123). */
+.table tbody tr:target,
+.table tbody tr.rowFocus {
+  background: #fff7e0;
+  box-shadow: inset 4px 0 0 #c4892a;
+}
+
+.suggestion {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f3f7fb;
+  border: 1px solid #d6e3f0;
+  font-size: 12px;
+}
+
+.suggestionTitle {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.confidence {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #fff;
+  border: 1px solid #d6e3f0;
+  color: var(--navy);
+}
+
+.reasons {
+  color: var(--muted);
+}
+
+.matchPanel {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  text-align: left;
+}
+
+.matchList {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+.matchItem {
+  display: grid;
+  grid-template-columns: auto 90px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid #f0f1f3;
+  cursor: pointer;
+}
+
+.matchItem:last-child {
+  border-bottom: 0;
+}
+
+.matchItem:hover {
+  background: var(--soft);
+}
+
+.matchTotals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-weight: 600;
+}
+
+.balanced {
+  color: var(--green);
+}
+
+.unbalanced {
+  color: #b54708;
+}
+
+.ruleAuto {
+  background: var(--green-bg);
+  color: var(--green);
+}

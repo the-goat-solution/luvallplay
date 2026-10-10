@@ -82,7 +82,10 @@ export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL && !isCasualPlayDemo()) {
     return NextResponse.json({ error: "Storage is not configured" }, { status: 503 });
   }
-  const organiser = await isOrganiser(request);
+  // "Exit" on the page asks for the player view, which an admin login would
+  // otherwise override.
+  const asPlayer = request.headers.get("x-view-as") === "player";
+  const organiser = !asPlayer && (await isOrganiser(request));
   if (!organiser && request.headers.get("x-organiser-password")) {
     if (!checkRateLimit(`casual-play:password:${getClientIp(request)}`, 10)) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });

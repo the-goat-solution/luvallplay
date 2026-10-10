@@ -23,6 +23,9 @@ import {
 const VIEWER_POLL_MS = 5_000;
 const ORGANISER_POLL_MS = 8_000;
 const PASSWORD_KEY = "cp-organiser-password";
+// Set by "Exit": show the player view even to a logged-in admin, who the
+// server would otherwise always treat as an organiser.
+const VIEWER_KEY = "cp-view-as-player";
 
 const COPY = {
   en: {
@@ -221,6 +224,23 @@ function readPassword(): string | null {
   }
 }
 
+function readViewer(): boolean {
+  try {
+    return sessionStorage.getItem(VIEWER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeViewer(on: boolean) {
+  try {
+    if (on) sessionStorage.setItem(VIEWER_KEY, "1");
+    else sessionStorage.removeItem(VIEWER_KEY);
+  } catch {
+    // Private mode: the choice just won't survive a reload.
+  }
+}
+
 function writePassword(value: string | null) {
   try {
     if (value) sessionStorage.setItem(PASSWORD_KEY, value);
@@ -258,14 +278,19 @@ export function CasualPlay() {
   const dragging = useRef(false);
   const pageRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setPassword(readPassword()), []);
+  const [viewer, setViewer] = useState(false);
+
+  useEffect(() => {
+    setPassword(readPassword());
+    setViewer(readViewer());
+  }, []);
 
   const headers = useCallback(
-    (pw: string | null = password): HeadersInit => ({
+    (pw: string | null = password, asPlayer: boolean = viewer): HeadersInit => ({
       "Content-Type": "application/json",
-      ...(pw ? { "x-organiser-password": pw } : {}),
+      ...(pw ? { "x-organiser-password": pw } : asPlayer ? { "x-view-as": "player" } : {}),
     }),
-    [password],
+    [password, viewer],
   );
 
   const accept = useCallback((body: CasualPlayResponse) => {
@@ -276,10 +301,10 @@ export function CasualPlay() {
   }, []);
 
   const load = useCallback(
-    async (pw: string | null = password): Promise<number> => {
+    async (pw: string | null = password, asPlayer: boolean = viewer): Promise<number> => {
       try {
         const qs = date ? `?date=${encodeURIComponent(date)}` : "";
-        const res = await fetch(`/api/casual-play${qs}`, { cache: "no-store", headers: headers(pw) });
+        const res = await fetch(`/api/casual-play${qs}`, { cache: "no-store", headers: headers(pw, asPlayer) });
         if (res.status === 401) return 401;
         if (res.status === 404) {
           setLoadState("none");
@@ -293,7 +318,7 @@ export function CasualPlay() {
         return 0;
       }
     },
-    [date, headers, password, accept],
+    [date, headers, password, viewer, accept],
   );
 
   // A stale saved password (changed on the server) quietly drops back to viewer mode.
@@ -377,8 +402,29 @@ export function CasualPlay() {
   const exitOrganiser = () => {
     writePassword(null);
     setPassword(null);
+    writeViewer(true);
+    setViewer(true);
     setTab(null);
-    load(null);
+    load(null, true);
+  };
+
+  // Admins are organisers without a password, so try that first and only
+  // ask for the password if the server says no.
+  const enterOrganiser = async () => {
+    try {
+      const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+      const res = await fetch(`/api/casual-play${qs}`, { cache: "no-store", headers: headers(null, false) });
+      const body = res.ok ? ((await res.json()) as CasualPlayResponse) : null;
+      if (body?.organiser) {
+        writeViewer(false);
+        setViewer(false);
+        accept(body);
+        return;
+      }
+    } catch {
+      // Fall through to the password prompt.
+    }
+    setUnlockOpen(true);
   };
 
   const names = useMemo(() => new Map(state?.players.map((p) => [p.id, p]) ?? []), [state?.players]);
@@ -434,7 +480,7 @@ export function CasualPlay() {
                   </button>
                 </span>
               ) : (
-                <button type="button" className="cp-ghost-btn" onClick={() => setUnlockOpen(true)}>
+                <button type="button" className="cp-ghost-btn" onClick={enterOrganiser}>
                   <KeyIcon />
                   {c.organiser}
                 </button>
@@ -551,10 +597,12 @@ export function CasualPlay() {
         copy={c}
         onClose={() => setUnlockOpen(false)}
         onUnlock={async (pw) => {
-          const status = await load(pw);
+          const status = await load(pw, false);
           if (status === 401) return false;
           writePassword(pw);
           setPassword(pw);
+          writeViewer(false);
+          setViewer(false);
           setUnlockOpen(false);
           return true;
         }}

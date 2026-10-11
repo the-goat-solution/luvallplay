@@ -110,3 +110,62 @@ export async function getInvoicePaymentIntent(
   }
   return null;
 }
+
+// One shared 100%-off, single-use coupon for every "free month" an admin
+// grants (competition prizes, goodwill). A fixed id means it's created once
+// and found again on every later grant, rather than littering the Stripe
+// dashboard with a fresh coupon per member.
+export const FREE_PERIOD_COUPON_ID = "three-wolves-free-period";
+
+async function ensureFreePeriodCoupon(stripeClient: Stripe): Promise<void> {
+  try {
+    await stripeClient.coupons.retrieve(FREE_PERIOD_COUPON_ID);
+  } catch (e) {
+    if (!(e instanceof Stripe.errors.StripeError) || e.statusCode !== 404) {
+      throw e;
+    }
+    await stripeClient.coupons.create({
+      id: FREE_PERIOD_COUPON_ID,
+      name: "Free month (admin granted)",
+      percent_off: 100,
+      duration: "once",
+    });
+  }
+}
+
+// Makes the subscription's next renewal invoice $0 without cancelling or
+// pausing it. Stripe still issues that invoice and marks it paid, so the
+// webhook's renewal path (invoice.payment_succeeded → applyMembershipRenewal)
+// extends the member's access exactly as a paid renewal would, and the
+// subscription stays 'active' throughout — unlike pausing collection (voids
+// the invoice, so access never advances) or a trial (flips status to
+// 'trialing', dropping the member off the active roster).
+export async function giveFreeNextPeriod(
+  subscriptionId: string,
+): Promise<{ alreadyQueued: boolean }> {
+  const stripeClient = getStripe();
+  const subscription = await stripeClient.subscriptions.retrieve(
+    subscriptionId,
+    { expand: ["discounts"] },
+  );
+  const existing = (subscription.discounts ?? []).filter(
+    (d): d is Stripe.Discount => typeof d === "object" && d !== null,
+  );
+  // A "once" coupon is consumed by the next invoice, so one still attached
+  // means a free month is already queued — a second would be swallowed by
+  // that same invoice rather than give them another month.
+  if (existing.some((d) => d.coupon?.id === FREE_PERIOD_COUPON_ID)) {
+    return { alreadyQueued: true };
+  }
+
+  await ensureFreePeriodCoupon(stripeClient);
+  await stripeClient.subscriptions.update(subscriptionId, {
+    // Setting `discounts` replaces the whole list — carry any existing
+    // discounts over so granting a free month doesn't strip another one.
+    discounts: [
+      ...existing.map((d) => ({ discount: d.id })),
+      { coupon: FREE_PERIOD_COUPON_ID },
+    ],
+  });
+  return { alreadyQueued: false };
+}

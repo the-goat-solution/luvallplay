@@ -18,6 +18,7 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { CashMemberDayAndDateFields } from "@/components/admin/CashMemberDayAndDateFields";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
 import { MemberRetryButton } from "@/components/admin/MemberRetryButton";
+import { MemberFreeMonthButton } from "@/components/admin/MemberFreeMonthButton";
 import { MembersToastBridge } from "@/components/admin/MembersToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 
@@ -247,6 +248,17 @@ function MembersTable({
                       <MemberRetryButton
                         membershipId={m.id}
                         memberName={m.name}
+                      />
+                    ) : null}
+                    {m.recurring &&
+                    !m.cancelAtPeriodEnd &&
+                    m.plan === "monthly" &&
+                    m.stripeSubscriptionId &&
+                    m.status === "active" ? (
+                      <MemberFreeMonthButton
+                        membershipId={m.id}
+                        memberName={m.name}
+                        renewsOn={m.periodEnd}
                       />
                     ) : null}
                     {m.recurring && !m.cancelAtPeriodEnd ? (

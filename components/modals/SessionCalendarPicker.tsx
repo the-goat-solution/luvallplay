@@ -3,13 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
+import { usePausedDays } from "@/context/SignupPauseContext";
+import { weekdayKey } from "@/components/modals/DayRequestModal";
 import { SESSION_CAPACITY } from "@/lib/constants";
 import {
   formatDateLong,
   formatEventTimeRange,
   getClubTodayDate,
   getDayName,
+  getWeekdayForDate,
   isBookable,
+  isDatePaused,
   isWithinBookingLock,
   startOfDay,
   toDateKey,
@@ -26,6 +30,7 @@ export function SessionCalendarPicker() {
     sessionDates,
     refreshSessionDates,
   } = useApp();
+  const pausedDays = usePausedDays();
   // `now` is the real current instant — required by isBookable/
   // isWithinBookingLock so the 5pm NZ cutoff check reads the actual current
   // NZ hour. `today` is derived from it via the club's NZ calendar day (not
@@ -119,8 +124,21 @@ export function SessionCalendarPicker() {
       : 0;
     const isFull = spots === 0;
     const isSel = isSessionDay && selMs === dateMs;
+    const paused = isSessionDay && isDatePaused(toDateKey(date), pausedDays);
 
-    if (open && !isFull) {
+    if (paused && !isPast) {
+      cells.push(
+        <div
+          key={d}
+          className="sess-d game-locked"
+          title={tr("day_paused_badge", {
+            day: tr(weekdayKey(getWeekdayForDate(toDateKey(date)))),
+          })}
+        >
+          {d}
+        </div>,
+      );
+    } else if (open && !isFull) {
       cells.push(
         <div
           key={d}
@@ -210,6 +228,11 @@ export function SessionCalendarPicker() {
           {tr("sess_closed_legend")}
         </div>
       </div>
+      {pausedDays.map((day) => (
+        <p key={day} className="form-hint" style={{ marginTop: 8 }}>
+          {tr("day_paused_badge", { day: tr(weekdayKey(day)) })}
+        </p>
+      ))}
       {selectedSession && (
         <div className="selected-session-box">
           <div>

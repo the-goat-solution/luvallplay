@@ -8,6 +8,8 @@ import { Reviews } from "@/components/Reviews";
 import { Donate } from "@/components/Donate";
 import { Footer } from "@/components/Footer";
 import { ClientShell } from "@/components/ClientShell";
+import { SignupPauseProvider } from "@/context/SignupPauseContext";
+import { getPausedDays } from "@/lib/day-requests";
 import {
   fetchSiteSettings,
   fetchHero,
@@ -28,20 +30,28 @@ function getCalendarSubscribeLinks(calendarId: string | undefined) {
 }
 
 export default async function HomePage() {
-  const [siteSettings, hero, about, gallery, scheduleSettings, pricingPlans] =
-    await Promise.all([
-      fetchSiteSettings(),
-      fetchHero(),
-      fetchAbout(),
-      fetchGallery(),
-      fetchScheduleSettings(),
-      fetchPricingPlans(),
-    ]);
+  const [
+    siteSettings,
+    hero,
+    about,
+    gallery,
+    scheduleSettings,
+    pricingPlans,
+    pausedDays,
+  ] = await Promise.all([
+    fetchSiteSettings(),
+    fetchHero(),
+    fetchAbout(),
+    fetchGallery(),
+    fetchScheduleSettings(),
+    fetchPricingPlans(),
+    getPausedDays(),
+  ]);
 
   const calendarSubscribe = getCalendarSubscribeLinks(process.env.GOOGLE_CALENDAR_ID);
 
   return (
-    <>
+    <SignupPauseProvider pausedDays={pausedDays}>
       <Navigation />
       <Hero
         backgroundImage={hero?.backgroundImageUrl}
@@ -61,6 +71,6 @@ export default async function HomePage() {
         galleryImages={gallery ?? undefined}
         pricingPlans={pricingPlans ?? undefined}
       />
-    </>
+    </SignupPauseProvider>
   );
 }

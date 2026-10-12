@@ -615,3 +615,100 @@ export async function sendAdminBookingRaceAlertEmail(input: {
     text,
   });
 }
+
+// Someone asked to be emailed when a weekday opens up — `paused` says whether
+// it's a day we normally run that's temporarily paused, or a brand-new day.
+export async function sendDayRequestConfirmationEmail(
+  to: string,
+  name: string,
+  dayLabel: string,
+  paused: boolean,
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const message = paused
+    ? `${dayLabel} sessions at Three Wolves Badminton Club are temporarily paused. You're on the list — we'll email you as soon as ${dayLabel} sign-ups are back.`
+    : `Thanks for letting us know you'd like to play on ${dayLabel}s. You're on the list — if we open up ${dayLabel} sessions, you'll be the first to hear about it.`;
+
+  const bodyHtml = `
+    ${heading("You're on the list")}
+    ${paragraph(`Hi ${escapeHtml(name)},`)}
+    ${paragraph(escapeHtml(message))}
+    ${contactFooterNote()}
+  `;
+  const text = [`Hi ${name},`, "", message, "", contactFooterNoteText()].join("\n");
+
+  await getResend().emails.send({
+    from: withDisplayName(from),
+    to,
+    subject: `We'll let you know about ${dayLabel} sessions — Three Wolves Badminton Club`,
+    html: renderEmailLayout({ title: "You're on the list", bodyHtml }),
+    text,
+  });
+}
+
+export async function sendDayRequestAdminAlertEmail(
+  name: string,
+  email: string,
+  dayLabel: string,
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  const to = process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com";
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const bodyHtml = `
+    ${heading("New play day request")}
+    ${paragraph(`<strong>${escapeHtml(name)}</strong> (${escapeHtml(email)}) asked to be notified when ${escapeHtml(dayLabel)} sessions open.`)}
+  `;
+  const text = `${name} (${email}) asked to be notified when ${dayLabel} sessions open.`;
+
+  await getResend().emails.send({
+    from: withDisplayName(from),
+    to,
+    subject: `New ${dayLabel} session request`,
+    html: renderEmailLayout({ title: "New play day request", bodyHtml }),
+    text,
+  });
+}
+
+// Sent from /admin/day-requests when the club opens (or reopens) a weekday.
+export async function sendDayOpenEmail(
+  to: string,
+  name: string,
+  dayLabel: string,
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const url = `${getSiteUrl()}/#schedule`;
+
+  const bodyHtml = `
+    ${heading(`${dayLabel} sessions are open!`)}
+    ${paragraph(`Hi ${escapeHtml(name)},`)}
+    ${paragraph(`Good news — you asked us to let you know, and <strong>${escapeHtml(dayLabel)}</strong> sessions at Three Wolves Badminton Club are now open for sign-ups. Spots go first-come, first-served.`)}
+    ${ctaButton("See sessions & sign up", url)}
+    ${contactFooterNote()}
+  `;
+  const text = [
+    `Hi ${name},`,
+    "",
+    `Good news — you asked us to let you know, and ${dayLabel} sessions at Three Wolves Badminton Club are now open for sign-ups. Spots go first-come, first-served: ${url}`,
+    "",
+    contactFooterNoteText(),
+  ].join("\n");
+
+  await getResend().emails.send({
+    from: withDisplayName(from),
+    to,
+    subject: `${dayLabel} sessions are open — Three Wolves Badminton Club`,
+    html: renderEmailLayout({ title: `${dayLabel} sessions are open`, bodyHtml }),
+    text,
+  });
+}

@@ -10,6 +10,7 @@ import { db, sql, types } from "@vercel/postgres";
 // this file. OID 1082 = date.
 types.setTypeParser(1082, (val: string) => val);
 import {
+  DEFAULT_PAUSED_DAYS,
   MEMBERSHIP_CYCLE_DAYS,
   MEMBERSHIP_DAYS,
   MEMBERSHIP_DAY_TO_DOW,
@@ -155,6 +156,43 @@ async function ensureTablesImpl() {
   // row, so notifyWaitlistIfSpotOpened (lib/waitlist-notify.ts) never
   // double-emails someone across repeated capacity-increase triggers.
   await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;`;
+  // People asking to be emailed when a weekday opens up for play — either a
+  // paused day coming back (see day_signup_settings below) or a day the club
+  // doesn't run yet. notified_at is set once the "it's open" email has sent.
+  await sql`
+    CREATE TABLE IF NOT EXISTS day_requests (
+      id SERIAL PRIMARY KEY,
+      day TEXT NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      notified_at TIMESTAMPTZ
+    );
+  `;
+  // One pending request per person per day, so a double submit (or asking
+  // twice) doesn't send them two "it's open" emails.
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS day_requests_pending_idx
+      ON day_requests (day, LOWER(email))
+      WHERE notified_at IS NULL;
+  `;
+  // Admin switch pausing public sign-ups (memberships and casual bookings)
+  // for every play day on a weekday. Seeded once from DEFAULT_PAUSED_DAYS;
+  // ON CONFLICT DO NOTHING means an admin's later choice is never undone.
+  await sql`
+    CREATE TABLE IF NOT EXISTS day_signup_settings (
+      day TEXT PRIMARY KEY,
+      paused BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+  for (const day of DEFAULT_PAUSED_DAYS) {
+    await sql`
+      INSERT INTO day_signup_settings (day, paused)
+      VALUES (${day}, TRUE)
+      ON CONFLICT (day) DO NOTHING;
+    `;
+  }
   // Dedup guard for the day-before membership reminder cron — a given
   // membership should only ever get one reminder for a given play day, even
   // if the cron is retried or runs more than once on the same day.

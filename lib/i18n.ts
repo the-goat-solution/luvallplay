@@ -221,6 +221,35 @@ const I18N = {
     reg_closed: "Registration Closed",
     selected_session: "Selected Session",
     spots_left: "spots left",
+    day_paused_badge:
+      "{day} sessions are temporarily paused — new memberships and casual bookings are on hold for now.",
+    day_paused_cta: "Notify Me When {day} Sessions Return",
+    day_request_cta: "Request Another Day",
+    day_request_hint:
+      "Want to play on a different day? Let us know and we'll email you if we open it up.",
+    modal_day_request: "Request a Play Day",
+    modal_day_paused: "Get Notified",
+    day_request_paused_msg:
+      "{day} sessions are temporarily paused. Leave your details and we'll email you as soon as sign-ups are back.",
+    day_request_msg:
+      "Tell us which day you'd like to play. If we open sessions on that day, we'll email you straight away.",
+    day_request_day_label: "Day",
+    day_request_submit: "Notify Me",
+    confirm_day_request: "You're on the list!",
+    confirm_day_request_body:
+      "We'll email you when {day} sessions open. No payment needed.",
+    day_request_failed:
+      "Sorry, we couldn't save your request just now. Please try again.",
+    mem_day_paused:
+      "{day} memberships are temporarily paused. Get an email as soon as they're back.",
+    mem_day_paused_blocked: "{day} memberships are temporarily paused.",
+    wd_monday: "Monday",
+    wd_tuesday: "Tuesday",
+    wd_wednesday: "Wednesday",
+    wd_thursday: "Thursday",
+    wd_friday: "Friday",
+    wd_saturday: "Saturday",
+    wd_sunday: "Sunday",
   },
   vi: {
     nav_about: "Giới Thiệu",
@@ -440,6 +469,35 @@ const I18N = {
     reg_closed: "Đã đóng đăng ký",
     selected_session: "Buổi đã chọn",
     spots_left: "chỗ còn",
+    day_paused_badge:
+      "Các buổi {day} tạm ngưng — hiện chưa nhận đăng ký thành viên và đặt chỗ lẻ.",
+    day_paused_cta: "Báo Tôi Khi Buổi {day} Mở Lại",
+    day_request_cta: "Đề Xuất Ngày Khác",
+    day_request_hint:
+      "Muốn chơi vào ngày khác? Hãy cho chúng tôi biết, chúng tôi sẽ email cho bạn nếu mở thêm ngày đó.",
+    modal_day_request: "Đề Xuất Ngày Chơi",
+    modal_day_paused: "Nhận Thông Báo",
+    day_request_paused_msg:
+      "Các buổi {day} đang tạm ngưng. Để lại thông tin, chúng tôi sẽ email cho bạn ngay khi mở đăng ký lại.",
+    day_request_msg:
+      "Cho chúng tôi biết bạn muốn chơi vào ngày nào. Nếu mở buổi vào ngày đó, chúng tôi sẽ email cho bạn ngay.",
+    day_request_day_label: "Ngày",
+    day_request_submit: "Báo Cho Tôi",
+    confirm_day_request: "Bạn đã có tên trong danh sách!",
+    confirm_day_request_body:
+      "Chúng tôi sẽ email cho bạn khi các buổi {day} mở đăng ký. Không cần thanh toán.",
+    day_request_failed:
+      "Xin lỗi, chưa lưu được yêu cầu của bạn. Vui lòng thử lại.",
+    mem_day_paused:
+      "Thành viên {day} đang tạm ngưng. Nhận email ngay khi mở lại.",
+    mem_day_paused_blocked: "Thành viên {day} đang tạm ngưng.",
+    wd_monday: "Thứ Hai",
+    wd_tuesday: "Thứ Ba",
+    wd_wednesday: "Thứ Tư",
+    wd_thursday: "Thứ Năm",
+    wd_friday: "Thứ Sáu",
+    wd_saturday: "Thứ Bảy",
+    wd_sunday: "Chủ Nhật",
   },
 } as const;
 

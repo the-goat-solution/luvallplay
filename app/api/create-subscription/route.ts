@@ -14,6 +14,7 @@ import {
 } from "@/lib/db";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { getClubToday } from "@/lib/dates";
+import { isDayPaused } from "@/lib/day-requests";
 
 const bodySchema = z.object({
   plan: z.enum(["monthly", "quarterly"]),
@@ -42,6 +43,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Captcha verification failed" },
         { status: 403 },
+      );
+    }
+
+    if (await isDayPaused(body.day)) {
+      return NextResponse.json(
+        { error: "day_paused", day: body.day },
+        { status: 409 },
       );
     }
 

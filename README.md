@@ -76,6 +76,12 @@ View the roster for any past or upcoming play day at `/admin/play-days` — pick
 
 > Note: Vercel Cron runs in UTC with no DST awareness. The schedule (`0 3 * * *`) targets 4:00 PM NZDT (daylight saving); during NZST (non-DST months) the check will run around 5:00 PM instead.
 
+### Paused days & day requests
+
+An admin can pause public sign-ups for any weekday at `/admin/day-requests` (Wednesday starts out paused). While a day is paused, new memberships and casual bookings for it are blocked — on the site and in the API — and visitors see a "temporarily paused" note with a **Notify me** button. A **Request another day** button under the schedule lets anyone ask for any other weekday.
+
+Requests are listed per day on `/admin/day-requests`. **Reopen & email** un-pauses a day and emails everyone waiting on it; for a day the club doesn't run yet, **Email N waiting** sends the "it's open" email once sessions are on the calendar. Each person is emailed at most once per request.
+
 ### Sanity
 
 1. Create a project at [sanity.io](https://www.sanity.io)

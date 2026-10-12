@@ -4,13 +4,14 @@ import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
 const TABS = [
   { href: "/admin/play-days", label: "Play days" },
   { href: "/admin/members", label: "Members" },
+  { href: "/admin/day-requests", label: "Day requests" },
   { href: "/admin/financials", label: "Financials" },
 ] as const;
 
 export function AdminNav({
   active,
 }: {
-  active: "play-days" | "members" | "financials";
+  active: "play-days" | "members" | "day-requests" | "financials";
 }) {
   return (
     <nav

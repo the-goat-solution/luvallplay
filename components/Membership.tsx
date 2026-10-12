@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { usePausedDays } from "@/context/SignupPauseContext";
 import { Trans } from "@/components/Trans";
 import type { MembershipDay } from "@/lib/constants";
+import type { I18nKey } from "@/lib/i18n";
 import {
   combinePlanId,
   resolveAllPlanDisplays,
@@ -41,8 +43,12 @@ export function Membership({
   pricingPlans?: CmsPricingPlan[] | null;
 }) {
   const { lang, tr } = useLanguage();
-  const { openCasualModal, openMembershipModal } = useApp();
+  const { openCasualModal, openMembershipModal, openDayRequestModal } = useApp();
+  const pausedDays = usePausedDays();
   const [day, setDay] = useState<MembershipDay>("friday");
+  // Memberships for this day are paused: swap their sign-up buttons for
+  // "notify me when it's back".
+  const dayPaused = pausedDays.includes(day);
 
   const displays = useMemo(
     () => resolveAllPlanDisplays(pricingPlans, lang, tr),
@@ -120,25 +126,33 @@ export function Membership({
     key: ColumnKey;
     display: PlanDisplay;
     headerName: string;
+    ctaKey: I18nKey;
     onCta: () => void;
   }[] = [
     {
       key: "casual",
       display: casual,
       headerName: casual.name,
+      ctaKey: casual.ctaKey,
       onCta: openCasualModal,
     },
     {
       key: "monthly",
       display: monthly,
       headerName: tr("tbl_col_monthly"),
-      onCta: () => openMembershipModal(monthly.planId),
+      ctaKey: dayPaused ? "day_request_submit" : monthly.ctaKey,
+      onCta: dayPaused
+        ? () => openDayRequestModal(day)
+        : () => openMembershipModal(monthly.planId),
     },
     {
       key: "quarterly",
       display: quarterly,
       headerName: tr("tbl_col_quarterly"),
-      onCta: () => openMembershipModal(quarterly.planId),
+      ctaKey: dayPaused ? "day_request_submit" : quarterly.ctaKey,
+      onCta: dayPaused
+        ? () => openDayRequestModal(day)
+        : () => openMembershipModal(quarterly.planId),
     },
   ];
 
@@ -177,6 +191,21 @@ export function Membership({
             <Trans k="mem_group_wednesday" />
           </button>
         </div>
+
+        {dayPaused && (
+          <div className="mem-paused-note" role="status">
+            <span>
+              <Trans k="mem_day_paused" vars={{ day: dayLabel }} />
+            </span>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => openDayRequestModal(day)}
+            >
+              {tr("day_request_submit")}
+            </button>
+          </div>
+        )}
 
         <table className="pricing-table-desktop animate-in">
           <thead>
@@ -231,7 +260,7 @@ export function Membership({
                     className={`btn btn-full ${col.display.featured ? "btn-primary" : "btn-outline-white"}`}
                     onClick={col.onCta}
                   >
-                    <Trans k={col.display.ctaKey} />
+                    <Trans k={col.ctaKey} />
                   </button>
                 </td>
               ))}
@@ -270,7 +299,7 @@ export function Membership({
                 className={`btn btn-full ${col.display.featured ? "btn-primary" : "btn-outline-white"}`}
                 onClick={col.onCta}
               >
-                <Trans k={col.display.ctaKey} />
+                <Trans k={col.ctaKey} />
               </button>
             </div>
           ))}

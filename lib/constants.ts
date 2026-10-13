@@ -108,3 +108,48 @@ export const PRICES = {
 
 export type PlanId = keyof typeof PRICES;
 export type MembershipTier = "monthly" | "quarterly";
+
+// Every day of the week, Monday first — used for "request a play day"
+// sign-ups and for pausing public sign-ups on a given weekday.
+export type Weekday =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
+export const WEEKDAYS: Weekday[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+// JS Date#getDay() order (0=Sunday).
+export const DOW_TO_WEEKDAY: Weekday[] = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+export const WEEKDAY_LABEL: Record<Weekday, string> = {
+  monday: "Monday",
+  tuesday: "Tuesday",
+  wednesday: "Wednesday",
+  thursday: "Thursday",
+  friday: "Friday",
+  saturday: "Saturday",
+  sunday: "Sunday",
+};
+
+// Weekdays whose public sign-ups (memberships and casual bookings) start out
+// paused. The live setting is admin-controlled from /admin/day-requests and
+// stored in the day_signup_settings table (see lib/day-requests.ts); this
+// list only seeds that table and covers local dev without a database.
+export const DEFAULT_PAUSED_DAYS: Weekday[] = ["wednesday"];

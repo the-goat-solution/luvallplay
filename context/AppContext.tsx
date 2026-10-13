@@ -8,9 +8,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { PlanId } from "@/lib/constants";
+import type { PlanId, Weekday } from "@/lib/constants";
 
-type ModalId = "booking" | "membership" | "waitlist" | "donate" | "cancel" | null;
+type ModalId =
+  | "booking"
+  | "membership"
+  | "waitlist"
+  | "dayRequest"
+  | "donate"
+  | "cancel"
+  | null;
 
 type SessionDateInfo = {
   maxSpots: number;
@@ -27,6 +34,9 @@ type AppContextValue = {
   openCasualModal: () => void;
   openWaitlistModal: (sessionDate?: Date) => void;
   openDonateModal: () => void;
+  /** "Notify me when this day opens" — preselects `day` when given. */
+  openDayRequestModal: (day?: Weekday) => void;
+  dayRequestDay: Weekday | null;
   selectedPlan: PlanId;
   setSelectedPlan: (plan: PlanId) => void;
   selectedSession: Date | null;
@@ -52,6 +62,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedSession, setSelectedSession] = useState<Date | null>(null);
   const [schedulePick, setSchedulePick] = useState<Date | null>(null);
   const [waitlistSession, setWaitlistSession] = useState<Date | null>(null);
+  const [dayRequestDay, setDayRequestDay] = useState<Weekday | null>(null);
   const [spotsByDate, setSpotsByDate] = useState<Record<string, number>>({});
   const [signedUpByDate, setSignedUpByDate] = useState<Record<string, number>>({});
   const [lockedByDate, setLockedByDate] = useState<Record<string, boolean>>({});
@@ -131,6 +142,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOpenModal("donate");
   }, []);
 
+  const openDayRequestModal = useCallback((day?: Weekday) => {
+    setDayRequestDay(day ?? null);
+    setOpenModal("dayRequest");
+  }, []);
+
   const value = useMemo(
     () => ({
       openModal,
@@ -139,6 +155,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openCasualModal,
       openWaitlistModal,
       openDonateModal,
+      openDayRequestModal,
+      dayRequestDay,
       selectedPlan,
       setSelectedPlan,
       selectedSession,
@@ -160,6 +178,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openCasualModal,
       openWaitlistModal,
       openDonateModal,
+      openDayRequestModal,
+      dayRequestDay,
       selectedPlan,
       selectedSession,
       schedulePick,

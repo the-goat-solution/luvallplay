@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sql } from "@vercel/postgres";
 import { ensureTables } from "@/lib/db";
+import { isSessionDatePaused } from "@/lib/day-requests";
 import { sendWaitlistAdminAlertEmail, sendWaitlistConfirmationEmail } from "@/lib/email";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
@@ -22,6 +23,13 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await request.json());
+
+    if (body.sessionDate && (await isSessionDatePaused(body.sessionDate))) {
+      return NextResponse.json(
+        { error: "Sign-ups for this day are temporarily paused." },
+        { status: 409 },
+      );
+    }
 
     if (process.env.POSTGRES_URL) {
       await ensureTables();

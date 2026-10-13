@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
+import { usePausedDays } from "@/context/SignupPauseContext";
 import { Trans } from "@/components/Trans";
 import { ContactDetailsForm } from "@/components/forms/ContactDetailsForm";
 import { StepHeading } from "@/components/forms/StepHeading";
@@ -19,7 +20,7 @@ import {
 } from "@/lib/pricing-plans";
 import { validateContact, type ContactErrors } from "@/lib/validate-contact";
 
-type BlockedReason = "sessions_full" | "already_member" | null;
+type BlockedReason = "sessions_full" | "already_member" | "day_paused" | null;
 
 const DAY_NAME: Record<"en" | "vi", Record<string, string>> = {
   en: { friday: "Friday", wednesday: "Wednesday" },
@@ -38,7 +39,11 @@ export function MembershipModal({
     selectedPlan,
     setSelectedPlan,
     openCasualModal,
+    openDayRequestModal,
   } = useApp();
+  const pausedDays = usePausedDays();
+  const wednesdayPaused = pausedDays.includes("wednesday");
+  const fridayPaused = pausedDays.includes("friday");
   const open = openModal === "membership";
   const [step, setStep] = useState(1);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -124,6 +129,27 @@ export function MembershipModal({
     </div>
   );
 
+  // A paused day's plans aren't selectable — offer "notify me" instead.
+  const renderPausedGroup = (day: "friday" | "wednesday") => (
+    <div className="info-box" style={{ marginBottom: 0 }}>
+      <div style={{ flex: 1 }}>
+        <Trans k="mem_day_paused" vars={{ day: DAY_NAME[lang][day] }} />
+        <div style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            className="btn btn-bronze-outline"
+            onClick={() => {
+              close();
+              openDayRequestModal(day);
+            }}
+          >
+            {tr("day_request_submit")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const createSubscription = async () => {
     const split = splitPlanId(selectedPlan);
     if (!split) return; // casual never reaches this path — see next()
@@ -144,7 +170,9 @@ export function MembershipModal({
     const data = await res.json();
     if (
       res.status === 409 &&
-      (data.error === "sessions_full" || data.error === "already_member")
+      (data.error === "sessions_full" ||
+        data.error === "already_member" ||
+        data.error === "day_paused")
     ) {
       setBlockedReason(data.error);
       setBlockedDay(typeof data.day === "string" ? data.day : null);
@@ -158,7 +186,13 @@ export function MembershipModal({
     setStep(3);
   };
 
+  const selectedPlanPaused = (() => {
+    const split = splitPlanId(selectedPlan);
+    return split ? pausedDays.includes(split.day) : false;
+  })();
+
   const next = async () => {
+    if (step === 1 && selectedPlanPaused) return;
     if (step === 1 && selectedPlan === "casual") {
       close();
       openCasualModal();
@@ -233,7 +267,7 @@ export function MembershipModal({
                 type="button"
                 className="btn btn-navy btn-continue"
                 onClick={next}
-                disabled={submitting}
+                disabled={submitting || (step === 1 && selectedPlanPaused)}
               >
                 {showSubmitting ? (
                   <>
@@ -257,7 +291,9 @@ export function MembershipModal({
               k={
                 blockedReason === "already_member"
                   ? "mem_already_member"
-                  : "mem_sessions_full"
+                  : blockedReason === "day_paused"
+                    ? "mem_day_paused_blocked"
+                    : "mem_sessions_full"
               }
               vars={
                 blockedDay ? { day: DAY_NAME[lang][blockedDay] } : undefined
@@ -290,9 +326,13 @@ export function MembershipModal({
                   <h4 style={groupHeadingStyle}>
                     <Trans k="mem_group_friday" />
                   </h4>
-                  <div className="plan-pick">
-                    {fridayPlans.map(renderPlanOption)}
-                  </div>
+                  {fridayPaused ? (
+                    renderPausedGroup("friday")
+                  ) : (
+                    <div className="plan-pick">
+                      {fridayPlans.map(renderPlanOption)}
+                    </div>
+                  )}
                 </div>
               )}
               {wednesdayPlans.length > 0 && (
@@ -300,12 +340,16 @@ export function MembershipModal({
                   <h4 style={groupHeadingStyle}>
                     <Trans k="mem_group_wednesday" />
                   </h4>
-                  <div className="plan-pick">
-                    {wednesdayPlans.map(renderPlanOption)}
-                  </div>
+                  {wednesdayPaused ? (
+                    renderPausedGroup("wednesday")
+                  ) : (
+                    <div className="plan-pick">
+                      {wednesdayPlans.map(renderPlanOption)}
+                    </div>
+                  )}
                 </div>
               )}
-              {isMembershipPlan(selectedPlan) && (
+              {isMembershipPlan(selectedPlan) && !selectedPlanPaused && (
                 <div>
                   <h4 style={groupHeadingStyle}>
                     <Trans k="mem_billing" />

@@ -3,8 +3,10 @@ import {
   BOOKING_WINDOW_DAYS,
   CASUAL_ONLY_DEFAULT_COURTS,
   MEMBERSHIP_DAY_DEFAULT_COURTS,
+  DOW_TO_WEEKDAY,
   MEMBERSHIP_DAY_TO_DOW,
   type MembershipDay,
+  type Weekday,
 } from "./constants";
 
 const DOW_TO_MEMBERSHIP_DAY: Partial<Record<number, MembershipDay>> = {};
@@ -232,4 +234,19 @@ export function getDayName(d: Date, lang: "en" | "vi"): string {
     "Thứ Bảy",
   ];
   return lang === "vi" ? vi[d.getDay()] : en[d.getDay()];
+}
+
+// The weekday a YYYY-MM-DD date string falls on. Parses via local y/m/d
+// components for the same server-TZ reason as getMembershipDayForDate.
+export function getWeekdayForDate(dateKey: string): Weekday {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return DOW_TO_WEEKDAY[new Date(y, m - 1, d).getDay()];
+}
+
+// True if public sign-ups are paused for the weekday this date falls on.
+export function isDatePaused(
+  dateKey: string,
+  pausedDays: readonly Weekday[],
+): boolean {
+  return pausedDays.includes(getWeekdayForDate(dateKey));
 }

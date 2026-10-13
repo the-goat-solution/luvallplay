@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
+import { usePausedDays } from "@/context/SignupPauseContext";
+import { weekdayKey } from "@/components/modals/DayRequestModal";
 import { Trans } from "@/components/Trans";
 import { LoadingIcon } from "@/components/LoadingIcon";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
@@ -14,7 +16,9 @@ import {
   formatEventTimeRange,
   getClubTodayDate,
   getDayName,
+  getWeekdayForDate,
   isBookable,
+  isDatePaused,
   isMembershipDay,
   isWithinBookingLock,
   startOfDay,
@@ -40,9 +44,11 @@ export function Schedule({
     sessionDatesLoading,
     refreshSessionDates,
     openWaitlistModal,
+    openDayRequestModal,
     setSelectedSession,
     setOpenModal,
   } = useApp();
+  const pausedDays = usePausedDays();
   const showLoading = useDelayedLoading(sessionDatesLoading);
 
   // `now` is the real current instant — required by isBookable/
@@ -57,12 +63,16 @@ export function Schedule({
       .filter((key) => key >= todayKey)
       .sort();
   }, [sessionDates, today]);
+  // Lead with the next session people can actually sign up for — a paused
+  // day (e.g. Wednesday) is still on the calendar, just not the headline.
   const nextSessionDate = useMemo(() => {
-    const key = sortedUpcomingKeys[0];
+    const key =
+      sortedUpcomingKeys.find((k) => !isDatePaused(k, pausedDays)) ??
+      sortedUpcomingKeys[0];
     if (!key) return null;
     const [y, m, d] = key.split("-").map(Number);
     return new Date(y, m - 1, d);
-  }, [sortedUpcomingKeys]);
+  }, [sortedUpcomingKeys, pausedDays]);
   const displayDate = schedulePick ?? nextSessionDate;
 
   const [calDate, setCalDate] = useState(
@@ -97,6 +107,9 @@ export function Schedule({
   const isFull = spotsAvail <= 0;
   // Closed early by an admin, whether or not the session has filled.
   const adminLocked = dateKey ? Boolean(lockedByDate[dateKey]) : false;
+  // Sign-ups for this weekday are paused by an admin (see /admin/day-requests).
+  const pausedWeekday =
+    dateKey && isDatePaused(dateKey, pausedDays) ? getWeekdayForDate(dateKey) : null;
   const isNextGame =
     displayDate && nextSessionDate
       ? startOfDay(displayDate).getTime() === startOfDay(nextSessionDate).getTime()
@@ -113,7 +126,7 @@ export function Schedule({
   }, [sortedUpcomingKeys, refreshSpots]);
 
   const handleBook = useCallback(() => {
-    if (!displayDate || !bookable || adminLocked) return;
+    if (!displayDate || !bookable || adminLocked || pausedWeekday) return;
     if (isFull) {
       openWaitlistModal(displayDate);
       return;
@@ -122,6 +135,7 @@ export function Schedule({
     setOpenModal("booking");
   }, [
     adminLocked,
+    pausedWeekday,
     bookable,
     displayDate,
     isFull,
@@ -198,6 +212,7 @@ export function Schedule({
 
       if (isSessionDay && dateMs >= todayMs) {
         const isNext = dateMs === nextGameMs;
+        const paused = isDatePaused(toDateKey(date), pausedDays);
         const locked = isWithinBookingLock(date, now);
         const canBook = isBookable(date, now);
         const isSel =
@@ -206,6 +221,10 @@ export function Schedule({
 
         if (isNext) {
           classes.push(isSel ? "game-sel" : "next-game");
+          clickable = true;
+        } else if (paused) {
+          // Still viewable, so the card can explain the pause.
+          classes.push(isSel ? "game-sel" : "game");
           clickable = true;
         } else if (canBook) {
           classes.push(isSel ? "game-sel" : "game-open");
@@ -264,7 +283,9 @@ export function Schedule({
   let ctaDisabled = false;
   let showLocked = false;
 
-  if (withinLock) {
+  if (pausedWeekday) {
+    ctaLabel = tr("day_paused_cta", { day: tr(weekdayKey(pausedWeekday)) });
+  } else if (withinLock) {
     ctaLabel = isNextGame ? tr("ngc_view_only") : tr("reg_closed");
     ctaDisabled = true;
     showLocked = true;
@@ -326,6 +347,7 @@ export function Schedule({
               <>
             <div className="ngc-head">
               <span className="ngc-badge">{badgeLabel}</span>
+              {!pausedWeekday && (
               <span
                 className="ngc-avail"
                 dangerouslySetInnerHTML={{
@@ -335,12 +357,31 @@ export function Schedule({
                   ),
                 }}
               />
+              )}
             </div>
             <div className="ngc-body">
               <div className="ngc-day">{getDayName(displayDate, lang)}</div>
               <div className="ngc-date">{formatDateLong(displayDate, lang)}</div>
 
-              {!isMembershipDay(toDateKey(displayDate)) && (
+              {pausedWeekday ? (
+                <div className="ngc-locked" style={{ marginBottom: 14 }}>
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                  <Trans
+                    k="day_paused_badge"
+                    vars={{ day: tr(weekdayKey(pausedWeekday)) }}
+                  />
+                </div>
+              ) : !isMembershipDay(toDateKey(displayDate)) && (
                 <div className="ngc-locked">
                   <svg
                     width="15"
@@ -419,7 +460,9 @@ export function Schedule({
                 onClick={
                   ctaDisabled
                     ? undefined
-                    : isFull
+                    : pausedWeekday
+                      ? () => openDayRequestModal(pausedWeekday)
+                      : isFull
                       ? () => displayDate && openWaitlistModal(displayDate)
                       : handleBook
                 }
@@ -505,6 +548,19 @@ export function Schedule({
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="day-request-row">
+          <p>
+            <Trans k="day_request_hint" />
+          </p>
+          <button
+            type="button"
+            className="btn btn-bronze-outline"
+            onClick={() => openDayRequestModal()}
+          >
+            {tr("day_request_cta")}
+          </button>
         </div>
       </div>
     </section>

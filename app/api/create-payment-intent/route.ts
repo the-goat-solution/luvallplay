@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { CASUAL_PRICE_CENTS } from "@/lib/constants";
 import { getAvailableSpots, ensureTables, isRegistrationLocked } from "@/lib/db";
+import { isSessionDatePaused } from "@/lib/day-requests";
+import { getWeekdayForDate } from "@/lib/dates";
+import { CASUAL_PRICE_CENTS, WEEKDAY_LABEL } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
 import {
   assertSessionBookable,
@@ -37,6 +39,14 @@ export async function POST(request: Request) {
     }
 
     await assertSessionBookable(body.sessionDate);
+
+    if (await isSessionDatePaused(body.sessionDate)) {
+      const dayLabel = WEEKDAY_LABEL[getWeekdayForDate(body.sessionDate)];
+      return NextResponse.json(
+        { error: `${dayLabel} sessions are temporarily paused` },
+        { status: 409 },
+      );
+    }
 
     if (process.env.POSTGRES_URL) {
       if (await isRegistrationLocked(body.sessionDate)) {

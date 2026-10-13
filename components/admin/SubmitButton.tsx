@@ -13,6 +13,7 @@ export function SubmitButton({
   className,
   style,
   disabled = false,
+  confirmMessage,
 }: {
   children: ReactNode;
   loadingText?: string;
@@ -20,6 +21,8 @@ export function SubmitButton({
   style?: CSSProperties;
   // Extra reason to hold the button (e.g. a file still being prepared).
   disabled?: boolean;
+  // Ask before submitting (e.g. an action that sends emails).
+  confirmMessage?: string;
 }) {
   const { pending } = useFormStatus();
   const showPending = useDelayedLoading(pending);
@@ -28,6 +31,13 @@ export function SubmitButton({
     <button
       type="submit"
       disabled={pending || disabled}
+      onClick={
+        confirmMessage
+          ? (e) => {
+              if (!window.confirm(confirmMessage)) e.preventDefault();
+            }
+          : undefined
+      }
       className={className}
       style={{
         display: "inline-flex",

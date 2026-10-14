@@ -682,11 +682,13 @@ function toEntry(r: Record<string, unknown>): FinanceEntry {
 // first: exact amount; then entries that travel through the bank the way
 // this line did (bank-paid in the same direction, or cash takings before a
 // deposit); then by date. Stripe entries come last (their payouts are the
-// normal match) but are still there for the odd case.
+// normal match) but are still there for the odd case. There's no date
+// cut-off — an old entry can still be the right match when catching up on
+// reconciliation; nearer entries simply rank first.
 export async function findMatchCandidates(
   amountCents: number,
   date: string,
-  limit = 80,
+  limit = 150,
 ): Promise<(FinanceEntry & { exact: boolean })[]> {
   const { rows } = await sql.query(
     `SELECT e.id, e.kind, e.name, e.category, e.method, e.person, e.entry_date::text AS entry_date,
@@ -696,15 +698,14 @@ export async function findMatchCandidates(
          WHEN e.method = 'stripe' THEN 3
          WHEN e.method = 'cash' AND $1 > 0 AND e.entry_date <= $2::date THEN 1
          WHEN e.method = 'cash' THEN 2
-         WHEN e.kind = $4 THEN 0
+         WHEN e.kind = $3 THEN 0
          ELSE 2
        END AS rank
      FROM finance_entries e
-     WHERE ABS(e.entry_date - $2::date) <= $3
-       AND NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id)
+     WHERE NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.entry_id = e.id)
      ORDER BY exact DESC, rank, ABS(e.entry_date - $2::date), e.id
-     LIMIT $5;`,
-    [amountCents, date, 120, amountCents > 0 ? "received" : "spent", limit],
+     LIMIT $4;`,
+    [amountCents, date, amountCents > 0 ? "received" : "spent", limit],
   );
   return rows.map((r) => ({ ...toEntry(r), exact: r.exact as boolean }));
 }

@@ -96,7 +96,7 @@ export function MatchManyPanel({
       <div className={styles.matchList}>
         {visible.length === 0 ? (
           <div style={{ padding: 10, color: "#6b7280" }}>
-            No unmatched ledger entries within 4 months of this line — use “Record as new” instead.
+            No unmatched ledger entries to match — use “Record as new” instead.
           </div>
         ) : (
           visible.map((c) => (

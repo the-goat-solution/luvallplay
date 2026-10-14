@@ -650,6 +650,7 @@ export default async function BankPage() {
                                 <option key={o.id} value={`entry:${o.id}`} disabled={!o.exact}>
                                   {o.exact ? "" : "≠ "}
                                   {formatDateKey(o.entryDate)} · {o.name} · {formatCents(o.amountCents)}
+                                  {o.exact ? "" : " (amount differs — use Match several…)"}
                                 </option>
                               ))}
                             </optgroup>

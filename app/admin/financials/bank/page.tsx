@@ -591,7 +591,7 @@ export default async function BankPage() {
         </form>
       </h2>
       <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <table className={`${styles.table} ${styles.stackTable}`}>
           <thead>
             <tr>
               <th>Date</th>

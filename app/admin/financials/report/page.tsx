@@ -80,7 +80,10 @@ export default async function AnnualReportPage({
   if (!process.env.POSTGRES_URL) {
     return (
       <div className={styles.page}>
+        <h1 className={styles.title}>Financials</h1>
+        <p className={styles.subtitle}>The year&apos;s accounts, laid out for the AGM. Print it or save it as a PDF.</p>
         <AdminNav active="financials" />
+        <FinanceSubNav active="report" />
         <p>Database is not configured.</p>
       </div>
     );

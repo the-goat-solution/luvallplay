@@ -28,6 +28,7 @@ import {
   getDayName,
 } from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
+import adminStyles from "@/components/admin/admin.module.css";
 import { FillInButton } from "@/components/admin/FillInButton";
 import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
@@ -339,14 +340,14 @@ export default async function PlayDaysAdminPage({
   const maxPlayers = maxPlayersForCourts(courts);
 
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
-      <h1 style={{ fontSize: 22, marginBottom: 4 }}>Play day roster</h1>
-      <p style={{ color: "#666", marginBottom: 20 }}>
+    <div className={adminStyles.page}>
+      <h1 className={adminStyles.title}>Play day roster</h1>
+      <p className={adminStyles.subtitle}>
         Casual bookings and members with access to the selected play day. Auto-renewing
         members count for play days past their current billing period too — their
         subscription rolls over before the session, so they keep their spot.
       </p>
-      <p style={{ color: "#888", fontSize: 12, marginBottom: 20 }}>
+      <p className={adminStyles.note}>
         Only Friday and Wednesday play days allow monthly/quarterly members — new sessions on
         other days default to 1 court, casual bookings only.
       </p>
@@ -486,109 +487,111 @@ export default async function PlayDaysAdminPage({
               <AdminLink href="/admin/members">Members</AdminLink>)
             </p>
           )}
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-                <th style={{ padding: "6px 8px" }}>Name</th>
-                <th style={{ padding: "6px 8px" }}>Email</th>
-                <th style={{ padding: "6px 8px" }}>Phone</th>
-                <th style={{ padding: "6px 8px" }}>Type</th>
-                <th style={{ padding: "6px 8px" }}>Payment</th>
-                <th style={{ padding: "6px 8px" }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {roster.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "10px 8px", color: "#888" }}>
-                    No signups yet.
-                  </td>
+          <div className={adminStyles.tableWrap}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+              <thead>
+                <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
+                  <th style={{ padding: "6px 8px" }}>Name</th>
+                  <th style={{ padding: "6px 8px" }}>Email</th>
+                  <th style={{ padding: "6px 8px" }}>Phone</th>
+                  <th style={{ padding: "6px 8px" }}>Type</th>
+                  <th style={{ padding: "6px 8px" }}>Payment</th>
+                  <th style={{ padding: "6px 8px" }}></th>
                 </tr>
-              ) : (
-                roster.flatMap((p, i) => {
-                  // Exactly one of these is set on any roster entry, and
-                  // it's what a fill-in hangs off — see getRosterForDate.
-                  const target =
-                    p.membershipId !== null
-                      ? { membershipId: p.membershipId }
-                      : { bookingId: p.bookingId! };
-                  // A replaced player keeps their row — they paid for the
-                  // spot — but is struck through, with their stand-in shown
-                  // directly underneath.
-                  const struck = p.fillIn
-                    ? { textDecoration: "line-through" as const, color: "#999" }
-                    : undefined;
-                  return [
-                    <tr
-                      key={`${p.email}-${i}`}
-                      style={{
-                        borderBottom: p.fillIn ? "none" : "1px solid #eee",
-                      }}
-                    >
-                      <td style={{ padding: "6px 8px", ...struck }}>{p.name}</td>
-                      <td style={{ padding: "6px 8px", ...struck }}>{p.email}</td>
-                      <td style={{ padding: "6px 8px", ...struck }}>{p.phone ?? ""}</td>
-                      <td style={{ padding: "6px 8px", ...struck }}>{PLAN_LABEL[p.type]}</td>
-                      <td style={{ padding: "6px 8px", ...struck }}>
-                        {p.method === "cash" ? "Cash" : "Card"}
-                      </td>
-                      <td style={{ padding: "6px 8px" }}>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          <FillInButton
-                            playerName={p.name}
-                            existing={p.fillIn}
-                            saveAction={saveFillIn.bind(null, selectedDate, target)}
-                            removeAction={clearFillIn.bind(null, selectedDate, target)}
-                          />
-                          {p.bookingId !== null ? (
-                            <form action={removePlayer.bind(null, selectedDate, p.bookingId)}>
-                              <SubmitButton
-                                loadingText="Removing…"
-                                style={{
-                                  padding: "4px 8px",
-                                  borderRadius: 6,
-                                  border: "1px solid #a12622",
-                                  background: "#fff",
-                                  color: "#a12622",
-                                  fontSize: 12,
-                                }}
-                              >
-                                Remove
-                              </SubmitButton>
-                            </form>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>,
-                    ...(p.fillIn
-                      ? [
-                          <tr
-                            key={`${p.email}-${i}-fill-in`}
-                            style={{ borderBottom: "1px solid #eee" }}
-                          >
-                            <td style={{ padding: "2px 8px 6px" }}>
-                              ↳ {p.fillIn.name}
-                            </td>
-                            <td style={{ padding: "2px 8px 6px" }}>
-                              {p.fillIn.email}
-                            </td>
-                            <td style={{ padding: "2px 8px 6px" }}>
-                              {p.fillIn.phone ?? ""}
-                            </td>
-                            <td
-                              colSpan={3}
-                              style={{ padding: "2px 8px 6px", color: "#666", fontSize: 13 }}
+              </thead>
+              <tbody>
+                {roster.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "10px 8px", color: "#888" }}>
+                      No signups yet.
+                    </td>
+                  </tr>
+                ) : (
+                  roster.flatMap((p, i) => {
+                    // Exactly one of these is set on any roster entry, and
+                    // it's what a fill-in hangs off — see getRosterForDate.
+                    const target =
+                      p.membershipId !== null
+                        ? { membershipId: p.membershipId }
+                        : { bookingId: p.bookingId! };
+                    // A replaced player keeps their row — they paid for the
+                    // spot — but is struck through, with their stand-in shown
+                    // directly underneath.
+                    const struck = p.fillIn
+                      ? { textDecoration: "line-through" as const, color: "#999" }
+                      : undefined;
+                    return [
+                      <tr
+                        key={`${p.email}-${i}`}
+                        style={{
+                          borderBottom: p.fillIn ? "none" : "1px solid #eee",
+                        }}
+                      >
+                        <td style={{ padding: "6px 8px", ...struck }}>{p.name}</td>
+                        <td style={{ padding: "6px 8px", ...struck }}>{p.email}</td>
+                        <td style={{ padding: "6px 8px", ...struck }}>{p.phone ?? ""}</td>
+                        <td style={{ padding: "6px 8px", ...struck }}>{PLAN_LABEL[p.type]}</td>
+                        <td style={{ padding: "6px 8px", ...struck }}>
+                          {p.method === "cash" ? "Cash" : "Card"}
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <FillInButton
+                              playerName={p.name}
+                              existing={p.fillIn}
+                              saveAction={saveFillIn.bind(null, selectedDate, target)}
+                              removeAction={clearFillIn.bind(null, selectedDate, target)}
+                            />
+                            {p.bookingId !== null ? (
+                              <form action={removePlayer.bind(null, selectedDate, p.bookingId)}>
+                                <SubmitButton
+                                  loadingText="Removing…"
+                                  style={{
+                                    padding: "4px 8px",
+                                    borderRadius: 6,
+                                    border: "1px solid #a12622",
+                                    background: "#fff",
+                                    color: "#a12622",
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  Remove
+                                </SubmitButton>
+                              </form>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>,
+                      ...(p.fillIn
+                        ? [
+                            <tr
+                              key={`${p.email}-${i}-fill-in`}
+                              style={{ borderBottom: "1px solid #eee" }}
                             >
-                              Filling in for {p.name}
-                            </td>
-                          </tr>,
-                        ]
-                      : []),
-                  ];
-                })
-              )}
-            </tbody>
-          </table>
+                              <td style={{ padding: "2px 8px 6px" }}>
+                                ↳ {p.fillIn.name}
+                              </td>
+                              <td style={{ padding: "2px 8px 6px" }}>
+                                {p.fillIn.email}
+                              </td>
+                              <td style={{ padding: "2px 8px 6px" }}>
+                                {p.fillIn.phone ?? ""}
+                              </td>
+                              <td
+                                colSpan={3}
+                                style={{ padding: "2px 8px 6px", color: "#666", fontSize: 13 }}
+                              >
+                                Filling in for {p.name}
+                              </td>
+                            </tr>,
+                          ]
+                        : []),
+                    ];
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 32, marginBottom: 8 }}>
             <h2 style={{ fontSize: 16 }}>
@@ -616,56 +619,58 @@ export default async function PlayDaysAdminPage({
             Anyone who joined the waitlist for this play day. They&apos;re emailed automatically when a
             booking is removed or courts are added and a spot opens up.
           </p>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginBottom: 8 }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-                <th style={{ padding: "6px 8px" }}>Name</th>
-                <th style={{ padding: "6px 8px" }}>Email</th>
-                <th style={{ padding: "6px 8px" }}>Joined</th>
-                <th style={{ padding: "6px 8px" }}>Status</th>
-                <th style={{ padding: "6px 8px" }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {waitlist.length === 0 ? (
-                <tr>
-                  <td colSpan={5} style={{ padding: "10px 8px", color: "#888" }}>
-                    Nobody on the waitlist for this date.
-                  </td>
+          <div className={adminStyles.tableWrap}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginBottom: 8 }}>
+              <thead>
+                <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
+                  <th style={{ padding: "6px 8px" }}>Name</th>
+                  <th style={{ padding: "6px 8px" }}>Email</th>
+                  <th style={{ padding: "6px 8px" }}>Joined</th>
+                  <th style={{ padding: "6px 8px" }}>Status</th>
+                  <th style={{ padding: "6px 8px" }}></th>
                 </tr>
-              ) : (
-                waitlist.map((w) => (
-                  <tr key={w.id} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={{ padding: "6px 8px" }}>{w.name}</td>
-                    <td style={{ padding: "6px 8px" }}>{w.email}</td>
-                    <td style={{ padding: "6px 8px" }}>
-                      {new Date(w.createdAt).toLocaleDateString("en-NZ")}
-                    </td>
-                    <td style={{ padding: "6px 8px" }}>
-                      {w.notifiedAt ? "Notified" : "Waiting"}
-                    </td>
-                    <td style={{ padding: "6px 8px" }}>
-                      <form action={removeWaitlistEntry.bind(null, selectedDate, w.id)}>
-                        <SubmitButton
-                          loadingText="Removing…"
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: 6,
-                            border: "1px solid #a12622",
-                            background: "#fff",
-                            color: "#a12622",
-                            fontSize: 12,
-                          }}
-                        >
-                          Remove
-                        </SubmitButton>
-                      </form>
+              </thead>
+              <tbody>
+                {waitlist.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: "10px 8px", color: "#888" }}>
+                      Nobody on the waitlist for this date.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  waitlist.map((w) => (
+                    <tr key={w.id} style={{ borderBottom: "1px solid #eee" }}>
+                      <td style={{ padding: "6px 8px" }}>{w.name}</td>
+                      <td style={{ padding: "6px 8px" }}>{w.email}</td>
+                      <td style={{ padding: "6px 8px" }}>
+                        {new Date(w.createdAt).toLocaleDateString("en-NZ")}
+                      </td>
+                      <td style={{ padding: "6px 8px" }}>
+                        {w.notifiedAt ? "Notified" : "Waiting"}
+                      </td>
+                      <td style={{ padding: "6px 8px" }}>
+                        <form action={removeWaitlistEntry.bind(null, selectedDate, w.id)}>
+                          <SubmitButton
+                            loadingText="Removing…"
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #a12622",
+                              background: "#fff",
+                              color: "#a12622",
+                              fontSize: 12,
+                            }}
+                          >
+                            Remove
+                          </SubmitButton>
+                        </form>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
           <h2 style={{ fontSize: 16, marginTop: 32, marginBottom: 8 }}>Add cash player</h2>
           <p style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>

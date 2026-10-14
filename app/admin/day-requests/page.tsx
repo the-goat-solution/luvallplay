@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
+import adminStyles from "@/components/admin/admin.module.css";
 import { DayRequestsToastBridge } from "@/components/admin/DayRequestsToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { WEEKDAYS, WEEKDAY_LABEL, type Weekday } from "@/lib/constants";
@@ -217,54 +218,56 @@ function DaySection({
         ) : null}
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-        <thead>
-          <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-            <th style={{ padding: "6px 8px" }}>Name</th>
-            <th style={{ padding: "6px 8px" }}>Email</th>
-            <th style={{ padding: "6px 8px" }}>Requested</th>
-            <th style={{ padding: "6px 8px" }}>Status</th>
-            <th style={{ padding: "6px 8px" }}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {requests.length === 0 ? (
-            <tr>
-              <td colSpan={5} style={{ padding: "10px 8px", color: "#888" }}>
-                No requests yet.
-              </td>
+      <div className={adminStyles.tableWrap}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
+              <th style={{ padding: "6px 8px" }}>Name</th>
+              <th style={{ padding: "6px 8px" }}>Email</th>
+              <th style={{ padding: "6px 8px" }}>Requested</th>
+              <th style={{ padding: "6px 8px" }}>Status</th>
+              <th style={{ padding: "6px 8px" }}></th>
             </tr>
-          ) : (
-            requests.map((r) => (
-              <tr key={r.id} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={{ padding: "6px 8px" }}>{r.name}</td>
-                <td style={{ padding: "6px 8px" }}>{r.email}</td>
-                <td style={{ padding: "6px 8px" }}>{formatNzDate(r.createdAt)}</td>
-                <td style={{ padding: "6px 8px" }}>
-                  {r.notifiedAt ? (
-                    <span style={{ color: "#1a7a3c" }}>
-                      Emailed {formatNzDate(r.notifiedAt)}
-                    </span>
-                  ) : (
-                    <span style={{ color: "#8a4b00" }}>Waiting</span>
-                  )}
-                </td>
-                <td style={{ padding: "6px 8px" }}>
-                  <form action={removeRequest.bind(null, r.id)}>
-                    <SubmitButton
-                      loadingText="Removing…"
-                      style={{ ...secondaryButtonStyle, padding: "3px 8px", fontSize: 12 }}
-                      confirmMessage={`Remove ${r.name}'s ${label} request?`}
-                    >
-                      Remove
-                    </SubmitButton>
-                  </form>
+          </thead>
+          <tbody>
+            {requests.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ padding: "10px 8px", color: "#888" }}>
+                  No requests yet.
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              requests.map((r) => (
+                <tr key={r.id} style={{ borderBottom: "1px solid #eee" }}>
+                  <td style={{ padding: "6px 8px" }}>{r.name}</td>
+                  <td style={{ padding: "6px 8px" }}>{r.email}</td>
+                  <td style={{ padding: "6px 8px" }}>{formatNzDate(r.createdAt)}</td>
+                  <td style={{ padding: "6px 8px" }}>
+                    {r.notifiedAt ? (
+                      <span style={{ color: "#1a7a3c" }}>
+                        Emailed {formatNzDate(r.notifiedAt)}
+                      </span>
+                    ) : (
+                      <span style={{ color: "#8a4b00" }}>Waiting</span>
+                    )}
+                  </td>
+                  <td style={{ padding: "6px 8px" }}>
+                    <form action={removeRequest.bind(null, r.id)}>
+                      <SubmitButton
+                        loadingText="Removing…"
+                        style={{ ...secondaryButtonStyle, padding: "3px 8px", fontSize: 12 }}
+                        confirmMessage={`Remove ${r.name}'s ${label} request?`}
+                      >
+                        Remove
+                      </SubmitButton>
+                    </form>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -289,16 +292,9 @@ export default async function DayRequestsAdminPage() {
   const pausable = WEEKDAYS.filter((d) => !pausedDays.includes(d));
 
   return (
-    <div
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 860,
-        margin: "40px auto",
-        padding: "0 20px",
-      }}
-    >
-      <h1 style={{ fontSize: 22, marginBottom: 4 }}>Day requests</h1>
-      <p style={{ color: "#666", marginBottom: 20 }}>
+    <div className={adminStyles.page}>
+      <h1 className={adminStyles.title}>Day requests</h1>
+      <p className={adminStyles.subtitle}>
         Paused play days, and people waiting to hear when a day opens.
       </p>
       <AdminNav active="day-requests" />

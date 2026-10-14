@@ -2,6 +2,8 @@
    follows that, using the club navy as its one accent colour. */
 
 .page {
+  /* Container, margins and phone tweaks shared with every admin tab. */
+  composes: page from "../admin.module.css";
   --ink: #1a2a4a;
   --muted: #6b7280;
   --line: #e5e7eb;
@@ -12,22 +14,16 @@
   --red-bg: #fef3f2;
   --navy: #184467;
 
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
-  max-width: 1200px;
-  margin: 40px auto;
-  padding: 0 20px;
   font-size: 14px;
 }
 
 .title {
-  font-size: 22px;
-  margin: 0 0 4px;
+  composes: title from "../admin.module.css";
 }
 
 .subtitle {
-  color: #666;
-  margin: 0 0 20px;
+  composes: subtitle from "../admin.module.css";
 }
 
 .num {
@@ -179,6 +175,9 @@
 }
 
 .pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--muted);
   align-self: center;
@@ -694,10 +693,6 @@
 }
 
 @media (max-width: 560px) {
-  .page {
-    padding: 0 12px;
-    margin-top: 24px;
-  }
   .formGrid {
     grid-template-columns: 1fr;
   }
@@ -842,6 +837,18 @@
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
 }
 
+@media (max-width: 560px) {
+  .subNav {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .subNavLink {
+    white-space: nowrap;
+  }
+}
+
 /* ── Bank & reconciliation ─────────────────────────────── */
 
 .fundsGrid {
@@ -860,8 +867,9 @@
   font-size: 16px;
   margin: 26px 0 10px;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  gap: 4px 10px;
 }
 
 .sectionCount {
@@ -949,6 +957,61 @@
 
 .reconcileForm .select {
   max-width: 280px;
+}
+
+/* On a phone the reconcile table becomes one card per bank line — date and
+   amount on top, description, then the "Reconcile as" controls full width —
+   instead of a 960px table with the controls scrolled out of sight. */
+@media (max-width: 600px) {
+  .stackTable {
+    min-width: 0;
+  }
+  .stackTable thead {
+    display: none;
+  }
+  .stackTable tbody tr {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "date amount"
+      "desc desc"
+      "action action";
+    border-bottom: 1px solid var(--line);
+    padding: 6px 0;
+  }
+  .stackTable tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .stackTable td {
+    display: block;
+    border-bottom: 0;
+    padding: 4px 12px;
+  }
+  .stackTable td:nth-child(1) {
+    grid-area: date;
+    color: var(--muted);
+  }
+  .stackTable td:nth-child(2) {
+    grid-area: desc;
+  }
+  .stackTable td:nth-child(3) {
+    grid-area: amount;
+  }
+  .stackTable td:nth-child(4) {
+    grid-area: action;
+  }
+  .stackTable td:only-child {
+    grid-area: auto;
+    grid-column: 1 / -1;
+  }
+  .reconcileForm {
+    flex-wrap: nowrap;
+  }
+  .reconcileForm .select {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+  }
 }
 
 .inlineForm {

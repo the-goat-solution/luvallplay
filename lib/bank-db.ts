@@ -570,6 +570,11 @@ export async function autoMatchBankTransactions(): Promise<number> {
   await ensureFinanceTables();
   let matched = 0;
 
+  // Jersey payments carry their registration's 5-digit code in the
+  // reference; claim those lines first, before generic matching.
+  const { matchAndNotifyJersey } = await import("./jersey-db");
+  matched += await matchAndNotifyJersey();
+
   for (const [lineId, s] of suggestAll(await loadMatchingPool())) {
     if (!s.auto) continue;
     try {

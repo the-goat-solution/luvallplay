@@ -855,3 +855,45 @@ ol.cp-queue-list li::before{content:counter(q);width:24px;height:24px;flex-shrin
 @media(max-width:420px){
   .cp-topbar .cp-live{display:none}
 }
+
+/* ── Club jersey (/jersey) ───────────────────────────── */
+.jersey-hero{padding-top:140px}
+.jersey-count{display:flex;justify-content:center;gap:14px;margin-top:18px;flex-wrap:wrap}
+.jersey-count-cell{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:var(--radius-lg);padding:16px 8px;min-width:84px}
+.jersey-count-num{font-family:var(--font-display);font-size:clamp(34px,8vw,56px);font-weight:700;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
+.jersey-count-lbl{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--steel);margin-top:8px;font-weight:600}
+.jersey-badge{display:inline-block;background:rgba(196,137,42,.18);border:1px solid var(--bronze);color:#fff;border-radius:var(--radius-pill);padding:12px 26px;font-size:17px}
+.jersey-badge strong{color:var(--bronze-light)}
+.jersey-two{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.jersey-img{width:100%;border-radius:var(--radius-lg);box-shadow:var(--shadow-elevated);background:#fff}
+.jersey-list{list-style:none;margin-top:20px}
+.jersey-list li{position:relative;padding-left:26px;margin-bottom:12px;color:var(--text-mid)}
+.jersey-list li::before{content:'';position:absolute;left:4px;top:.7em;width:8px;height:8px;border-radius:50%;background:var(--bronze)}
+.jersey-steps{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:28px}
+.jersey-steps li{display:flex;gap:14px;background:#fff;border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow-card);color:var(--text-mid)}
+.jersey-steps li span{flex:none;width:34px;height:34px;border-radius:50%;background:var(--bronze);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+.jersey-card{background:#fff;border-radius:var(--radius-lg);padding:32px;color:var(--text-dark);box-shadow:var(--shadow-elevated)}
+.jersey-card-title{font-family:var(--font-display);color:var(--navy);text-transform:uppercase;letter-spacing:.05em;font-size:22px;margin-bottom:14px}
+.jersey-bank{margin:14px 0}
+.jersey-bank>div{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--cream-dark)}
+.jersey-bank dt{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-light)}
+.jersey-bank dd{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--navy);word-break:break-word}
+.jersey-copy{border:1px solid var(--steel);background:var(--cream);color:var(--navy);border-radius:var(--radius-sm);padding:4px 10px;font-size:12px;font-weight:600}
+.jersey-copy:hover{background:var(--steel-light)}
+.jersey-code{text-align:center;margin:20px 0;padding:20px;border:2px dashed var(--bronze);border-radius:var(--radius-lg);background:var(--cream)}
+.jersey-code-lbl{font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--text-mid)}
+.jersey-code-num{font-family:var(--font-display);font-size:clamp(44px,12vw,64px);letter-spacing:.2em;color:var(--navy);font-weight:700;line-height:1.2}
+.jersey-warn{background:#fff6e6;border-left:4px solid var(--bronze);padding:12px 14px;border-radius:var(--radius-sm);font-size:15px;margin:14px 0}
+.jersey-check{display:flex;gap:10px;align-items:flex-start;font-size:15px;color:var(--text-mid);cursor:pointer}
+.jersey-check input{margin-top:5px;width:18px;height:18px;accent-color:var(--bronze);flex:none}
+.jersey-total{display:flex;justify-content:space-between;align-items:center;margin:22px 0 14px;padding:14px 16px;background:var(--cream);border-radius:var(--radius-md);font-size:18px;color:var(--navy)}
+.jersey-total strong{font-family:var(--font-display);font-size:28px}
+@media(max-width:860px){.jersey-two{grid-template-columns:1fr;gap:28px}.jersey-steps{grid-template-columns:1fr}.jersey-card{padding:22px}.jersey-hero{padding-top:110px}}
+.jersey-table-wrap{overflow-x:auto;margin-top:20px}
+.jersey-table{border-collapse:collapse;width:100%;font-size:14px;background:#fff;border-radius:var(--radius-md);overflow:hidden}
+.jersey-table th,.jersey-table td{padding:8px 10px;border:1px solid var(--steel-light);text-align:center;white-space:nowrap}
+.jersey-table thead th{background:var(--navy);color:#fff;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.jersey-table tbody th{color:var(--navy);font-weight:700}
+.jersey-sponsor-logo{display:block;width:200px;height:200px;margin:8px auto 0;background:#fff;border-radius:50%;padding:14px;box-shadow:var(--shadow-card);transition:transform var(--ease)}
+.jersey-sponsor-logo:hover{transform:translateY(-3px)}
+.jersey-sponsor-logo img{width:100%;height:100%;object-fit:contain}

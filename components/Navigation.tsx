@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /jersey too */
 "use client";
 
 import { useState } from "react";
@@ -42,27 +43,30 @@ export function Navigation() {
             </a>
             <ul className="nav-links">
               <li>
-                <a href="#about">
+                <a href="/#about">
                   <Trans k="nav_about" />
                 </a>
               </li>
               <li>
-                <a href="#schedule">
+                <a href="/#schedule">
                   <Trans k="nav_schedule" />
                 </a>
               </li>
               <li>
-                <a href="#gallery">
+                <a href="/#gallery">
                   <Trans k="nav_gallery" />
                 </a>
               </li>
               <li>
-                <a href="#membership">
+                <a href="/#membership">
                   <Trans k="nav_membership" />
                 </a>
               </li>
               <li>
-                <a href="#reviews">Reviews</a>
+                <a href="/#reviews">Reviews</a>
+              </li>
+              <li>
+                <a href="/jersey">Jersey</a>
               </li>
             </ul>
             <div className="nav-actions">
@@ -125,17 +129,20 @@ export function Navigation() {
         >
           ×
         </button>
-        <a href="#about" onClick={closeMobile}>
+        <a href="/#about" onClick={closeMobile}>
           <Trans k="nav_about" />
         </a>
-        <a href="#schedule" onClick={closeMobile}>
+        <a href="/#schedule" onClick={closeMobile}>
           <Trans k="nav_schedule" />
         </a>
-        <a href="#gallery" onClick={closeMobile}>
+        <a href="/#gallery" onClick={closeMobile}>
           <Trans k="nav_gallery" />
         </a>
-        <a href="#membership" onClick={closeMobile}>
+        <a href="/#membership" onClick={closeMobile}>
           <Trans k="nav_membership" />
+        </a>
+        <a href="/jersey" onClick={closeMobile}>
+          Jersey
         </a>
         <button
           type="button"

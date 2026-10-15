@@ -204,6 +204,16 @@ A live court board for ordinary play days (not mini game days), in the spirit of
 - **Local preview without a database:** `CASUAL_PLAY_DEMO=1 npm run dev`, then open http://localhost:3000/casual-play. It uses 18 sample players kept in memory (reset on restart), and the organiser password is `demo` unless `MINI_GAME_PASSWORD` is set. Demo mode is ignored in production builds.
 - **Access:** anyone can view. Organisers unlock with `MINI_GAME_PASSWORD` (same password as the mini game draw); a logged-in admin is an organiser automatically. Every change is saved in Postgres (`casual_play_sessions`, `casual_play_profiles`) and shown on every open screen within a few seconds. Two organisers tapping at once can't overwrite each other.
 
+### Club jersey (`/jersey`)
+
+Registration page for the Yonex club jersey (bank-transfer payment, one per person).
+
+- **Opens** 1:30 AM NZ time, Fri 16 Oct 2026; before that the page shows a countdown and the API refuses registrations. Override with `JERSEY_OPENS_AT` (ISO time). Prices and rules live in `lib/jersey.ts`: first 10 registrations $15, then $30, name + number +$5, early-bird spots held 48 hours.
+- **One per person:** the email (Gmail dots/`+tags` normalised) is unique across live registrations, enforced by a partial unique index. A matching IP (stored hashed), browser, phone or name is allowed but **flagged** on `/admin/jersey`.
+- **Reference code:** every registration gets a unique 5-digit code to put in the bank transfer reference. Whenever bank lines are imported (Akahu, CSV, webhook, nightly cron) `matchJerseyPayments()` finds the code, marks the registration paid, books a *Jersey & merchandise* ledger entry and reconciles the bank line. Paying more than the price is kept as club funds (no refunds); paying less is flagged, never auto-paid.
+- **Admin:** `/admin/jersey` lists registrations, with Mark paid / Undo / Release / Cancel and **Export to Excel** (registrations, printer order, summary).
+- Jersey and size-chart images are placeholders in `public/uploads/jersey/`; point `DESIGN_IMG` / `SIZE_CHART_IMG` in `app/jersey/page.tsx` at the real files.
+
 ## Development
 
 ```bash

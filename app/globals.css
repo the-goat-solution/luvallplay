@@ -894,3 +894,6 @@ ol.cp-queue-list li::before{content:counter(q);width:24px;height:24px;flex-shrin
 .jersey-table th,.jersey-table td{padding:8px 10px;border:1px solid var(--steel-light);text-align:center;white-space:nowrap}
 .jersey-table thead th{background:var(--navy);color:#fff;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
 .jersey-table tbody th{color:var(--navy);font-weight:700}
+.jersey-sponsor-logo{display:block;width:200px;height:200px;margin:8px auto 0;background:#fff;border-radius:50%;padding:14px;box-shadow:var(--shadow-card);transition:transform var(--ease)}
+.jersey-sponsor-logo:hover{transform:translateY(-3px)}
+.jersey-sponsor-logo img{width:100%;height:100%;object-fit:contain}

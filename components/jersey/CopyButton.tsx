@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useJerseyT } from "@/lib/jersey-i18n";
 
-export function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, label }: { text: string; label?: string }) {
   const { tr } = useJerseyT();
   const [done, setDone] = useState(false);
   return (
@@ -20,7 +20,7 @@ export function CopyButton({ text }: { text: string }) {
         }
       }}
     >
-      {done ? tr("copied") : tr("copy")}
+      {done ? tr("copied") : (label ?? tr("copy"))}
     </button>
   );
 }

@@ -120,7 +120,9 @@ export function JerseyContent({ opensAt, serverNow, left }: { opensAt: string; s
       <section className="section section-cream">
         <div className="container" style={{ maxWidth: 760, textAlign: "center" }}>
           <div className="section-label" style={{ justifyContent: "center", display: "flex" }}>{tr("sponsor_label")}</div>
-          <h2 className="section-title">{SPONSOR_NAME}</h2>
+          <a href={SPONSOR_URL} target="_blank" rel="noopener noreferrer" aria-label={SPONSOR_NAME} className="jersey-sponsor-logo">
+            <img src="/uploads/jersey/house-of-barber-logo.svg" alt={`${SPONSOR_NAME} logo`} width={220} height={220} />
+          </a>
           <p className="section-sub" style={{ margin: "16px auto 0" }}>{rich(tr("sponsor_p"))}</p>
           <div style={{ marginTop: 24 }}>
             <a href={SPONSOR_URL} target="_blank" rel="noopener noreferrer" className="btn btn-navy">{tr("visit")}</a>

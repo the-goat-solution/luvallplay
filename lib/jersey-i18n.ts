@@ -51,6 +51,7 @@ const JERSEY_I18N = {
     acct_no: "Account number",
     reference: "Reference",
     copy: "Copy",
+    copy_both: "Copy account name & number",
     copied: "Copied ✓",
 
     reg_label: "Registration",
@@ -151,6 +152,7 @@ const JERSEY_I18N = {
     acct_no: "Số tài khoản",
     reference: "Nội dung (Reference)",
     copy: "Sao chép",
+    copy_both: "Sao chép tên & số tài khoản",
     copied: "Đã chép ✓",
 
     reg_label: "Đăng Ký",

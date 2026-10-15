@@ -16,7 +16,13 @@ export function BankDetails({ refCode }: { refCode?: string }) {
         <dt>{tr("acct_no")}</dt>
         <dd>
           <span>{BANK_ACCOUNT_NUMBER}</span>
-          <CopyButton text={BANK_ACCOUNT_NUMBER} />
+        </dd>
+      </div>
+      {/* NZ banking apps recognise a pasted "name number", so one button copies both. */}
+      <div>
+        <dt />
+        <dd>
+          <CopyButton text={`${BANK_ACCOUNT_NAME} ${BANK_ACCOUNT_NUMBER}`} label={tr("copy_both")} />
         </dd>
       </div>
       {refCode ? (

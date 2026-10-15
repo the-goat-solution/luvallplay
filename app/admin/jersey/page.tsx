@@ -38,7 +38,7 @@ async function markPaid(id: number) {
     await sendJerseyPaidEmail({
       to: reg.email,
       firstName: reg.firstName,
-      refCode: reg.refCode,
+      refCode: reg.refCode ?? "",
       paidCents: reg.priceCents,
       priceCents: reg.priceCents,
       lang: reg.lang,
@@ -94,11 +94,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function Row({ r }: { r: JerseyRegistration }) {
-  const st = STATUS_STYLE[r.status];
+  const free = r.paidBy === "free";
+  const st = free ? { bg: "#e8f0fb", fg: "#1f4f8f", label: "Free" } : STATUS_STYLE[r.status];
   const live = r.status === "pending" || r.status === "paid";
   return (
     <tr style={{ borderBottom: "1px solid #eee", opacity: live ? 1 : 0.6 }}>
-      <td style={{ ...cell, fontFamily: "monospace", fontWeight: 700 }}>{r.refCode}</td>
+      <td style={{ ...cell, fontFamily: "monospace", fontWeight: 700 }}>{r.refCode ?? "—"}</td>
       <td style={cell}>
         {r.firstName} {r.lastName}
         <div style={{ color: "#666", fontSize: 12 }}>{r.email}<br />{r.phone}</div>
@@ -108,14 +109,16 @@ function Row({ r }: { r: JerseyRegistration }) {
         {r.printName ? <div style={{ fontSize: 12, color: "#666" }}>{r.printName}{r.printNumber !== null ? ` #${r.printNumber}` : r.printCountry ? ` · ${r.printCountry}` : ""}</div> : null}
       </td>
       <td style={cell}>
-        {formatDollars(r.priceCents)}
+        {free ? "Free" : formatDollars(r.priceCents)}
         {r.earlyBird ? <div style={{ fontSize: 12, color: "#9e6d1f" }}>Early bird</div> : null}
       </td>
       <td style={cell}>
         <span style={{ background: st.bg, color: st.fg, fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
           {st.label}
         </span>
-        {r.status === "paid" ? (
+        {free ? (
+          <div style={{ fontSize: 12, color: "#666" }}>No payment needed · {nz(r.paidAt)}</div>
+        ) : r.status === "paid" ? (
           <div style={{ fontSize: 12, color: "#666" }}>
             {r.paidCents !== null ? formatDollars(r.paidCents) : ""} · {r.paidBy === "auto" ? "bank match" : "by admin"} · {nz(r.paidAt)}
           </div>
@@ -141,7 +144,7 @@ function Row({ r }: { r: JerseyRegistration }) {
               </SubmitButton>
             </form>
           ) : null}
-          {r.status === "paid" ? (
+          {r.status === "paid" && !free ? (
             <form action={markUnpaid.bind(null, r.id)}>
               <SubmitButton loadingText="Saving…" style={btn} confirmMessage={`Mark ${r.firstName} ${r.lastName} as NOT paid?`}>
                 Undo paid
@@ -153,7 +156,7 @@ function Row({ r }: { r: JerseyRegistration }) {
               <SubmitButton loadingText="Saving…" style={btn} confirmMessage="Release this spot now?">Release</SubmitButton>
             </form>
           ) : null}
-          {r.status === "pending" || r.status === "released" ? (
+          {r.status === "pending" || r.status === "released" || free ? (
             <form action={setStatus.bind(null, r.id, "cancelled")}>
               <SubmitButton loadingText="Saving…" style={btn} confirmMessage={`Cancel ${r.firstName}'s registration?`}>Cancel</SubmitButton>
             </form>
@@ -168,7 +171,8 @@ export default async function JerseyAdminPage() {
   const hasDb = Boolean(process.env.POSTGRES_URL);
   const regs = hasDb ? await listJerseyRegistrations() : [];
   const live = regs.filter((r) => r.status === "pending" || r.status === "paid");
-  const paid = regs.filter((r) => r.status === "paid");
+  const free = live.filter((r) => r.paidBy === "free");
+  const paid = regs.filter((r) => r.status === "paid" && r.paidBy !== "free");
   const pending = regs.filter((r) => r.status === "pending");
   const early = live.filter((r) => r.earlyBird).length;
   const sum = (list: JerseyRegistration[], f: (r: JerseyRegistration) => number) => list.reduce((t, r) => t + f(r), 0);
@@ -194,6 +198,7 @@ export default async function JerseyAdminPage() {
             <Stat label="Registered" value={String(live.length)} />
             <Stat label="Early birds" value={`${early} / ${EARLY_BIRD_LIMIT}`} />
             <Stat label="Paid" value={`${paid.length} (${formatDollars(received)})`} />
+            <Stat label="Free" value={String(free.length)} />
             <Stat label="Awaiting" value={`${pending.length} (${formatDollars(outstanding)})`} />
             <Stat label="Flagged" value={String(flagged)} />
           </div>
@@ -201,7 +206,13 @@ export default async function JerseyAdminPage() {
             Sizes:{" "}
             {JERSEY_SIZES.map((s) => `${s} ${live.filter((r) => r.size === s).length}`).join(" · ")}
           </div>
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <AdminLink
+              href="/admin/jersey/new"
+              style={{ padding: "7px 14px", borderRadius: 7, border: "1px solid #1a2a4a", background: "#1a2a4a", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none", display: "inline-block" }}
+            >
+              + Add registration
+            </AdminLink>
             <JerseyExport />
           </div>
 

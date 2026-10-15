@@ -158,7 +158,7 @@ export async function POST(request: Request) {
       await sendJerseyRegistrationEmail({
         to: r.email,
         firstName: r.firstName,
-        refCode: r.refCode,
+        refCode: r.refCode ?? "",
         priceCents: r.priceCents,
         earlyBird: r.earlyBird,
         lang: r.lang,
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
         await sendJerseyAdminAlertEmail({
           name: `${r.firstName} ${r.lastName}`,
           email: r.email,
-          refCode: r.refCode,
+          refCode: r.refCode ?? "",
           flags: r.flags,
         });
       }
@@ -179,7 +179,7 @@ export async function POST(request: Request) {
     // Flags are for the admin only; the registrant never sees them.
     return NextResponse.json({
       ok: true,
-      refCode: r.refCode,
+      refCode: r.refCode ?? "",
       priceCents: r.priceCents,
       earlyBird: r.earlyBird,
       expiresAt: r.expiresAt,

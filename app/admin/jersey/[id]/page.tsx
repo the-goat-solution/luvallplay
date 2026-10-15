@@ -35,7 +35,7 @@ async function save(id: number, formData: FormData) {
 
   if (!firstName || !lastName) fail(id, "First and last name are required.");
   if (!EMAIL_RE.test(email)) fail(id, "Please enter a valid email address.");
-  if (phone.length < 6) fail(id, "Please enter a phone number.");
+  if (phone && phone.length < 6) fail(id, "That phone number looks too short. Leave it empty if there isn't one.");
   if (!(JERSEY_SIZES as readonly string[]).includes(size)) fail(id, "Pick a size.");
 
   // The printing option: a name (required if printing) plus an optional
@@ -107,7 +107,7 @@ export default async function EditJerseyPage({
 
   return (
     <div className={adminStyles.page}>
-      <h1 className={adminStyles.title}>Edit registration {r.refCode}</h1>
+      <h1 className={adminStyles.title}>Edit registration {r.refCode ?? "(free entry)"}</h1>
       <p className={adminStyles.subtitle}>
         Status: {r.status}. Registered by {r.firstName} {r.lastName}. The reference code and payment details can&apos;t be changed here.
       </p>
@@ -136,8 +136,8 @@ export default async function EditJerseyPage({
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div style={field}>
-            <label style={label} htmlFor="phone">Phone</label>
-            <input id="phone" name="phone" type="tel" required maxLength={30} defaultValue={r.phone} style={input} />
+            <label style={label} htmlFor="phone">Phone (optional)</label>
+            <input id="phone" name="phone" type="tel" maxLength={30} defaultValue={r.phone} style={input} />
           </div>
           <div style={field}>
             <label style={label} htmlFor="size">Size</label>
@@ -172,9 +172,10 @@ export default async function EditJerseyPage({
         </fieldset>
 
         <p style={{ fontSize: 13, color: "#666", margin: "0 0 16px" }}>
-          Price follows the printing option: {formatDollars(base)}{r.earlyBird ? " (early bird)" : ""} without printing,{" "}
+          {r.paidBy === "free" ? "This is a free entry: no code and no payment, whatever the printing option." : null}
+          {r.paidBy === "free" ? null : <>Price follows the printing option: {formatDollars(base)}{r.earlyBird ? " (early bird)" : ""} without printing,{" "}
           {formatDollars(base + PRINT_CENTS)} with printing. Currently {formatDollars(r.priceCents)}
-          {r.status === "paid" && r.paidCents !== null ? `; ${formatDollars(r.paidCents)} already paid` : ""}.
+          {r.status === "paid" && r.paidCents !== null ? `; ${formatDollars(r.paidCents)} already paid` : ""}.</>}
         </p>
 
         <div style={{ display: "flex", gap: 10 }}>

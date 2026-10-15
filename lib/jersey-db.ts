@@ -16,7 +16,8 @@ import { generateRefCode } from "./jersey-server";
 
 export type JerseyRegistration = {
   id: number;
-  refCode: string;
+  // Null for entries the admin added as free: no code, no payment.
+  refCode: string | null;
   firstName: string;
   lastName: string;
   email: string;
@@ -30,7 +31,7 @@ export type JerseyRegistration = {
   status: JerseyStatus;
   paidCents: number | null;
   paidAt: string | null;
-  paidBy: "auto" | "admin" | null;
+  paidBy: "auto" | "admin" | "free" | null;
   flags: string[];
   lang: "en" | "vi";
   expiresAt: string | null;
@@ -75,6 +76,9 @@ export function ensureJerseyTables(): Promise<void> {
       `;
       await sql`ALTER TABLE jersey_registrations ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'en';`;
       await sql`ALTER TABLE jersey_registrations ADD COLUMN IF NOT EXISTS print_country TEXT;`;
+      // Free entries added by an admin have no reference code (the UNIQUE
+      // constraint still allows many NULLs).
+      await sql`ALTER TABLE jersey_registrations ALTER COLUMN ref_code DROP NOT NULL;`;
       // The database itself enforces one live registration per person, so
       // two near-simultaneous submissions can't both get in.
       await sql`
@@ -95,7 +99,7 @@ function toReg(r: Row): JerseyRegistration {
   const iso = (v: unknown) => (v ? new Date(v as string | Date).toISOString() : null);
   return {
     id: r.id as number,
-    refCode: r.ref_code as string,
+    refCode: (r.ref_code as string | null) ?? null,
     firstName: r.first_name as string,
     lastName: r.last_name as string,
     email: r.email as string,
@@ -109,7 +113,7 @@ function toReg(r: Row): JerseyRegistration {
     status: r.status as JerseyStatus,
     paidCents: (r.paid_cents as number | null) ?? null,
     paidAt: iso(r.paid_at),
-    paidBy: (r.paid_by as "auto" | "admin" | null) ?? null,
+    paidBy: (r.paid_by as "auto" | "admin" | "free" | null) ?? null,
     flags: (r.flags as string[]) ?? [],
     lang: r.lang === "vi" ? "vi" : "en",
     expiresAt: iso(r.expires_at),
@@ -173,7 +177,7 @@ export async function registerJersey(input: RegisterInput): Promise<RegisterResu
     );
     if (dupe.rows[0]) {
       await client.query("ROLLBACK");
-      return { ok: false, reason: "duplicate_email", refCode: dupe.rows[0].ref_code as string };
+      return { ok: false, reason: "duplicate_email", refCode: (dupe.rows[0].ref_code as string | null) ?? "" };
     }
 
     const { rows: counts } = await client.query(
@@ -245,6 +249,88 @@ export async function getJerseyRegistration(id: number): Promise<JerseyRegistrat
   return rows[0] ? toReg(rows[0]) : null;
 }
 
+export type AdminJerseyInput = JerseyEdit & {
+  // "code": a normal pending entry with a reference code to pay against.
+  // "free": confirmed straight away, no code and no payment ($0).
+  payment: "code" | "free";
+  // Price tier for a coded entry: by early-bird count, or forced.
+  priceMode: "auto" | "early" | "standard";
+  lang: "en" | "vi";
+};
+
+// Adds an entry on an admin's behalf. Same one-live-registration-per-email
+// rule as the public form, but no duplicate flags and no 48-hour hold (the
+// admin is in charge of chasing it). Free entries never count toward the
+// early-bird ten.
+export async function createJerseyByAdmin(
+  input: AdminJerseyInput,
+): Promise<{ ok: true; registration: JerseyRegistration } | { ok: false; reason: "duplicate_email" }> {
+  await releaseExpired();
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(7340211)");
+
+    const emailNormalized = normalizeEmail(input.email);
+    const dupe = await client.query(
+      `SELECT 1 FROM jersey_registrations WHERE email_normalized = $1 AND status IN ('pending', 'paid') LIMIT 1;`,
+      [emailNormalized],
+    );
+    if (dupe.rows[0]) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "duplicate_email" };
+    }
+
+    const free = input.payment === "free";
+    let earlyBird = false;
+    if (!free) {
+      if (input.priceMode === "early") earlyBird = true;
+      else if (input.priceMode === "auto") {
+        const { rows } = await client.query(
+          `SELECT COUNT(*)::int AS n FROM jersey_registrations WHERE early_bird AND status IN ('pending', 'paid');`,
+        );
+        earlyBird = (rows[0].n as number) < EARLY_BIRD_LIMIT;
+      }
+    }
+    const price = free ? 0 : priceCents(earlyBird, input.printName !== null);
+
+    const values = (code: string | null) => [
+      code, input.firstName, input.lastName, input.email, emailNormalized, input.phone,
+      normalizePhone(input.phone), normalizeName(input.firstName, input.lastName), input.size,
+      input.printName, input.printNumber, input.printCountry, price, earlyBird,
+      free ? "paid" : "pending", free ? 0 : null, free ? "free" : null, input.lang,
+    ];
+    const insert = `INSERT INTO jersey_registrations
+      (ref_code, first_name, last_name, email, email_normalized, phone, phone_normalized, name_normalized,
+       size, print_name, print_number, print_country, price_cents, early_bird, status, paid_cents, paid_by, lang, paid_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, ${free ? "NOW()" : "NULL"})
+      RETURNING *;`;
+
+    if (free) {
+      const { rows } = await client.query(insert, values(null));
+      await client.query("COMMIT");
+      return { ok: true, registration: toReg(rows[0]) };
+    }
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await client.query("SAVEPOINT ins");
+      try {
+        const { rows } = await client.query(insert, values(generateRefCode()));
+        await client.query("COMMIT");
+        return { ok: true, registration: toReg(rows[0]) };
+      } catch (err) {
+        await client.query("ROLLBACK TO SAVEPOINT ins");
+        if ((err as { constraint?: string }).constraint !== "jersey_registrations_ref_code_key") throw err;
+      }
+    }
+    throw new Error("Could not allocate a reference code");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export type JerseyEdit = {
   firstName: string;
   lastName: string;
@@ -265,9 +351,10 @@ export async function updateJerseyRegistration(
   e: JerseyEdit,
 ): Promise<{ ok: true } | { ok: false; reason: "not_found" | "duplicate_email" }> {
   await ensureJerseyTables();
-  const { rows: cur } = await sql`SELECT early_bird FROM jersey_registrations WHERE id = ${id};`;
+  const { rows: cur } = await sql`SELECT early_bird, paid_by FROM jersey_registrations WHERE id = ${id};`;
   if (!cur[0]) return { ok: false, reason: "not_found" };
-  const price = priceCents(cur[0].early_bird as boolean, e.printName !== null);
+  // A free entry stays free whatever the printing option.
+  const price = cur[0].paid_by === "free" ? 0 : priceCents(cur[0].early_bird as boolean, e.printName !== null);
   try {
     await sql`
       UPDATE jersey_registrations SET
@@ -304,7 +391,7 @@ export async function markJerseyUnpaid(id: number): Promise<boolean> {
   const { rowCount } = await sql`
     UPDATE jersey_registrations
     SET status = 'pending', paid_by = NULL, paid_at = NULL, paid_cents = NULL, expires_at = NULL
-    WHERE id = ${id} AND status = 'paid' AND bank_txn_id IS NULL;
+    WHERE id = ${id} AND status = 'paid' AND bank_txn_id IS NULL AND paid_by IS DISTINCT FROM 'free';
   `;
   return Boolean(rowCount);
 }
@@ -312,7 +399,8 @@ export async function markJerseyUnpaid(id: number): Promise<boolean> {
 export async function setJerseyStatus(id: number, status: "cancelled" | "released"): Promise<boolean> {
   await ensureJerseyTables();
   const { rowCount } = await sql`
-    UPDATE jersey_registrations SET status = ${status} WHERE id = ${id} AND status IN ('pending', 'released');
+    UPDATE jersey_registrations SET status = ${status}
+    WHERE id = ${id} AND (status IN ('pending', 'released') OR (${status} = 'cancelled' AND paid_by = 'free'));
   `;
   return Boolean(rowCount);
 }
@@ -360,7 +448,7 @@ export async function matchJerseyPayments(): Promise<{ paid: PaidNotice[]; under
     try {
       entryId = await createManualEntry({
         kind: "received",
-        name: `Club jersey — ${reg.firstName} ${reg.lastName} (${reg.refCode})`,
+        name: `Club jersey — ${reg.firstName} ${reg.lastName} (${reg.refCode ?? ""})`,
         category: "merchandise",
         method: "bank_transfer",
         person: `${reg.firstName} ${reg.lastName}`,
@@ -370,7 +458,7 @@ export async function matchJerseyPayments(): Promise<{ paid: PaidNotice[]; under
       });
       await matchBankLine(line.id as number, [entryId], {
         auto: true,
-        reason: `Jersey code ${reg.refCode}`,
+        reason: `Jersey code ${reg.refCode ?? ""}`,
       });
     } catch (err) {
       if (entryId !== null) await deleteManualEntry(entryId).catch(() => {});
@@ -401,7 +489,7 @@ export async function matchAndNotifyJersey(): Promise<number> {
         await sendJerseyPaidEmail({
           to: n.registration.email,
           firstName: n.registration.firstName,
-          refCode: n.registration.refCode,
+          refCode: n.registration.refCode ?? "",
           paidCents: n.paidCents,
           priceCents: n.registration.priceCents,
           lang: n.registration.lang,

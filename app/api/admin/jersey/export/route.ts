@@ -72,7 +72,7 @@ export async function GET(request: Request) {
   styleHeader(ws.getRow(1));
   for (const r of shown) {
     const row = ws.addRow({
-      code: r.refCode,
+      code: r.refCode ?? "",
       created: nz(r.createdAt),
       first: r.firstName,
       last: r.lastName,
@@ -126,11 +126,12 @@ export async function GET(request: Request) {
   styleHeader(sm.addRow(["Totals (Registrations sheet)", "Count", "$ amount"]));
   const R = (col: string) => `Registrations!$${col}$2:$${col}$${n}`;
   sm.addRow(["Registered (pending + paid)", { formula: `COUNTIF(${R("M")},"pending")+COUNTIF(${R("M")},"paid")` }]);
-  sm.addRow(["Paid", { formula: `COUNTIF(${R("M")},"paid")` }, { formula: `SUMIF(${R("M")},"paid",${R("K")})` }]);
+  sm.addRow(["Paid (including free entries)", { formula: `COUNTIF(${R("M")},"paid")` }, { formula: `SUMIF(${R("M")},"paid",${R("K")})` }]);
   sm.addRow(["Awaiting payment", { formula: `COUNTIF(${R("M")},"pending")` }, { formula: `SUMIF(${R("M")},"pending",${R("K")})` }]);
   sm.addRow(["Received in total", null, { formula: `SUMIF(${R("M")},"paid",${R("N")})` }]);
   sm.addRow(["Over the price (club funds)", null, { formula: `SUMIF(${R("M")},"paid",${R("N")})-SUMIF(${R("M")},"paid",${R("K")})` }]);
   sm.addRow(["Early birds", { formula: `COUNTIF(${R("L")},"Yes")` }]);
+  sm.addRow(["Free entries (no payment)", { formula: `COUNTIF(${R("P")},"free")` }]);
   sm.addRow([]);
   styleHeader(sm.addRow(["Size", "Count"]));
   for (const s of JERSEY_SIZES) sm.addRow([s, { formula: `COUNTIF('Printer order'!$A:$A,"${s}")` }]);

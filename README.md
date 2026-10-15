@@ -69,6 +69,21 @@ One-time (non-auto-renewing) memberships, including cash members, get a renewal 
 
 One-time memberships have no Stripe subscription to report that they've ended, so `lib/membership-status.ts` marks them **expired** once their end date has passed. It also re-checks any recurring membership whose access window ran out more than 3 days ago without a renewal or cancellation webhook, and syncs it from Stripe. This runs daily in the reminders cron and every time `/admin/members` loads. The page reports anything it just fixed and lists memberships that ended in the last 60 days.
 
+### Stripe sync
+
+Stripe is the record of what each member paid for. `lib/stripe-sync.ts` lines every membership row up with it:
+
+- **Auto-renewing memberships:** status, cancel-at-period-end and end date come from the subscription.
+- **One-time memberships (card or cash):**
+  - the plan comes from the payment;
+  - access can't start before the day it was paid;
+  - the end date is exactly one plan length later, plus any free weeks.
+- **Paid but stuck at "pending":** activated. This happens when Stripe's payment notice never reached the site.
+- **Older rows with no payment linked:** matched to their payment by email and signup time.
+- **Paid in Stripe with no row at all:** restored.
+
+Anything it can't safely fix is reported instead. It runs daily in the reminders cron, and on demand from **Sync with Stripe now** on `/admin/members`, which shows a report of every change.
+
 ### Free months
 
 The **Give free month** button on `/admin/members` works for every active membership:

@@ -17,8 +17,10 @@ import {
 } from "@/lib/email";
 import { sendRenewalReminders } from "@/lib/membership-renewal";
 import { auditMembershipStatuses } from "@/lib/membership-status";
+import { syncMembershipsWithStripe } from "@/lib/stripe-sync";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -34,6 +36,27 @@ export async function GET(request: Request) {
   }
 
   await ensureTables();
+
+  // Line every membership up with Stripe first (dates, statuses, missed
+  // webhooks), so everything below works from correct data.
+  let stripeSync:
+    | { checked: number; changed: number; issues: string[]; errors: number }
+    | { error: string };
+  try {
+    const report = await syncMembershipsWithStripe();
+    stripeSync = {
+      checked: report.checked,
+      changed: report.changed.length,
+      issues: report.issues,
+      errors: report.errors,
+    };
+    for (const c of report.changed) {
+      console.log(`Stripe sync: #${c.membershipId} ${c.email}: ${c.changes.join("; ")}`);
+    }
+  } catch (err) {
+    console.error("Stripe sync failed", err);
+    stripeSync = { error: "Stripe sync failed" };
+  }
 
   // Mark ended memberships before anything below reads statuses.
   let statusAudit: Awaited<ReturnType<typeof auditMembershipStatuses>> | { error: string };
@@ -63,6 +86,7 @@ export async function GET(request: Request) {
       skipped: "No play day tomorrow",
       renewals,
       statusAudit,
+      stripeSync,
     });
   }
 
@@ -130,5 +154,6 @@ export async function GET(request: Request) {
     casualSent,
     renewals,
     statusAudit,
+    stripeSync,
   });
 }

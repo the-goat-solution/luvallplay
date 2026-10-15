@@ -55,6 +55,15 @@ export async function sendRosterEmail(
   // A player with a stand-in is listed as their stand-in: whoever runs the
   // door needs the name and number of the person actually turning up, with
   // the absent member named only so the spot can still be accounted for.
+  // Members also show when their membership started (and when it ends, unless
+  // it auto-renews), so it's clear why they're on this play day.
+  const memberWindow = (p: RosterEntry): string =>
+    p.type === "casual" || !p.periodStart
+      ? ""
+      : ` · since ${formatEmailDate(p.periodStart)}${
+          p.autoRenews || !p.periodEnd ? "" : `, until ${formatEmailDate(p.periodEnd)}`
+        }`;
+
   const rows = roster
     .map((p) => {
       const cell = (content: string) =>
@@ -64,14 +73,14 @@ export async function sendRosterEmail(
           ${cell(`${escapeHtml(p.fillIn.name)}<br /><span style="font-size:12px;color:#6b6b6b">filling in for ${escapeHtml(p.name)}</span>`)}
           ${cell(escapeHtml(p.fillIn.email))}
           ${cell(escapeHtml(p.fillIn.phone ?? ""))}
-          ${cell(`${PLAN_LABEL[p.type]} (fill-in)`)}
+          ${cell(`${PLAN_LABEL[p.type]} (fill-in)${escapeHtml(memberWindow(p))}`)}
         </tr>`;
       }
       return `<tr>
           ${cell(escapeHtml(p.name))}
           ${cell(escapeHtml(p.email))}
           ${cell(escapeHtml(p.phone ?? ""))}
-          ${cell(PLAN_LABEL[p.type])}
+          ${cell(`${PLAN_LABEL[p.type]}${escapeHtml(memberWindow(p))}`)}
         </tr>`;
     })
     .join("");
@@ -95,8 +104,8 @@ export async function sendRosterEmail(
     "",
     ...roster.map((p) =>
       p.fillIn
-        ? `${p.fillIn.name} <${p.fillIn.email}> ${p.fillIn.phone ?? ""} — ${PLAN_LABEL[p.type]} (filling in for ${p.name})`
-        : `${p.name} <${p.email}> ${p.phone ?? ""} — ${PLAN_LABEL[p.type]}`,
+        ? `${p.fillIn.name} <${p.fillIn.email}> ${p.fillIn.phone ?? ""} — ${PLAN_LABEL[p.type]} (filling in for ${p.name})${memberWindow(p)}`
+        : `${p.name} <${p.email}> ${p.phone ?? ""} — ${PLAN_LABEL[p.type]}${memberWindow(p)}`,
     ),
   ].join("\n");
 

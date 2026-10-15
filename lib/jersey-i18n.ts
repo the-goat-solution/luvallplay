@@ -76,9 +76,9 @@ const JERSEY_I18N = {
     choose_size: "Choose a size",
     size_hint: "Check the size chart above. Between sizes? Size up.",
     add_print: "Add my name & number on the back ({price})",
-    print_name: "Name on back",
+    print_name: "Name on back (required)",
     print_name_hint: "Up to {n} characters.",
-    number: "Number",
+    number: "Number (optional)",
     number_hint: "0–99.",
     consent:
       "I'll pay by bank transfer using my reference code. I understand any amount over the price goes to club funds and there are no refunds.",
@@ -87,7 +87,7 @@ const JERSEY_I18N = {
     submit: "Register & get my code",
     submitting: "Registering…",
     err_size: "Please choose your size.",
-    err_print: "Add a print name and number, or untick the printing option.",
+    err_print: "Add the name to print on the back, or untick the printing option.",
     err_consent: "Please tick the box to confirm you understand the payment rules.",
     err_generic: "Something went wrong. Please try again.",
 
@@ -189,7 +189,7 @@ const JERSEY_I18N = {
     add_print: "In tên & số của tôi sau lưng ({price})",
     print_name: "Tên in sau lưng",
     print_name_hint: "Tối đa {n} ký tự.",
-    number: "Số áo",
+    number: "Số áo (không bắt buộc)",
     number_hint: "Từ 0–99.",
     consent:
       "Tôi sẽ chuyển khoản kèm mã tham chiếu của mình. Tôi hiểu rằng số tiền chuyển dư sẽ thuộc về quỹ CLB và không được hoàn lại.",
@@ -198,7 +198,7 @@ const JERSEY_I18N = {
     submit: "Đăng ký & nhận mã",
     submitting: "Đang đăng ký…",
     err_size: "Vui lòng chọn size.",
-    err_print: "Hãy nhập tên và số cần in, hoặc bỏ chọn mục in tên.",
+    err_print: "Hãy nhập tên cần in sau lưng, hoặc bỏ chọn mục in tên.",
     err_consent: "Vui lòng tích vào ô xác nhận đã hiểu quy định thanh toán.",
     err_generic: "Đã có lỗi xảy ra. Vui lòng thử lại.",
 

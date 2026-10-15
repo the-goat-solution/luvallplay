@@ -61,7 +61,7 @@ const MSG = {
     invalid: "Please check your details and try again.",
     captcha: "Please complete the captcha.",
     disposable: "Please use a permanent email address.",
-    print: "Add a print name and number, or untick the printing option.",
+    print: "Add the name to print on the back, or untick the printing option.",
     duplicate:
       "This email is already registered — one jersey per person. Check your inbox for your reference code, or contact the club if you need help.",
     failed: "Sorry, something went wrong. Please try again.",
@@ -74,7 +74,7 @@ const MSG = {
     invalid: "Vui lòng kiểm tra lại thông tin và thử lại.",
     captcha: "Vui lòng hoàn thành xác minh captcha.",
     disposable: "Vui lòng dùng địa chỉ email thường xuyên của bạn.",
-    print: "Hãy nhập tên và số cần in, hoặc bỏ chọn mục in tên.",
+    print: "Hãy nhập tên cần in sau lưng, hoặc bỏ chọn mục in tên.",
     duplicate:
       "Email này đã được đăng ký — mỗi người chỉ một áo. Hãy kiểm tra hộp thư để lấy mã tham chiếu, hoặc liên hệ CLB nếu cần hỗ trợ.",
     failed: "Rất tiếc, đã có lỗi xảy ra. Vui lòng thử lại.",
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: m.disposable }, { status: 400 });
   }
   const printName = body.addPrint ? (body.printName ?? "").toUpperCase().replace(/[^A-Z0-9 .'-]/g, "") : "";
-  if (body.addPrint && (!printName.trim() || body.printNumber === undefined)) {
+  if (body.addPrint && !printName.trim()) {
     return NextResponse.json({ error: m.print }, { status: 400 });
   }
 

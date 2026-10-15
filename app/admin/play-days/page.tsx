@@ -530,7 +530,15 @@ export default async function PlayDaysAdminPage({
                         <td style={{ padding: "6px 8px", ...struck }}>{p.name}</td>
                         <td style={{ padding: "6px 8px", ...struck }}>{p.email}</td>
                         <td style={{ padding: "6px 8px", ...struck }}>{p.phone ?? ""}</td>
-                        <td style={{ padding: "6px 8px", ...struck }}>{PLAN_LABEL[p.type]}</td>
+                        <td style={{ padding: "6px 8px", ...struck }}>
+                          {PLAN_LABEL[p.type]}
+                          {p.type !== "casual" && p.periodStart ? (
+                            <div style={{ fontSize: 12, color: "#666" }}>
+                              {p.periodStart} →{" "}
+                              {p.autoRenews ? "auto-renews" : (p.periodEnd ?? "")}
+                            </div>
+                          ) : null}
+                        </td>
                         <td style={{ padding: "6px 8px", ...struck }}>
                           {p.method === "cash" ? "Cash" : "Card"}
                         </td>

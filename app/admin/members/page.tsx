@@ -197,6 +197,7 @@ function MembersTable({
               <th style={{ padding: "6px 8px" }}>Email</th>
               <th style={{ padding: "6px 8px" }}>Phone</th>
               <th style={{ padding: "6px 8px" }}>Day</th>
+              <th style={{ padding: "6px 8px" }}>Started</th>
               <th style={{ padding: "6px 8px" }}>Renews / ends</th>
               <th style={{ padding: "6px 8px" }}>Billing</th>
               <th style={{ padding: "6px 8px" }}>Payment</th>
@@ -207,7 +208,7 @@ function MembersTable({
           <tbody>
             {members.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: "10px 8px", color: "#888" }}>
+                <td colSpan={10} style={{ padding: "10px 8px", color: "#888" }}>
                   No {title.toLowerCase()}.
                 </td>
               </tr>
@@ -220,6 +221,7 @@ function MembersTable({
                   <td style={{ padding: "6px 8px" }}>
                     {m.day === "wednesday" ? "Wed" : "Fri"}
                   </td>
+                  <td style={{ padding: "6px 8px" }}>{m.periodStart ?? ""}</td>
                   <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
                   <td style={{ padding: "6px 8px" }}>
                     {m.recurring ? "Auto-renews" : "One-time"}
@@ -330,6 +332,7 @@ function RecentlyEndedTable({ members }: { members: MembershipRow[] }) {
               <th style={{ padding: "6px 8px" }}>Email</th>
               <th style={{ padding: "6px 8px" }}>Plan</th>
               <th style={{ padding: "6px 8px" }}>Day</th>
+              <th style={{ padding: "6px 8px" }}>Started</th>
               <th style={{ padding: "6px 8px" }}>Ended</th>
               <th style={{ padding: "6px 8px" }}>Status</th>
             </tr>
@@ -337,7 +340,7 @@ function RecentlyEndedTable({ members }: { members: MembershipRow[] }) {
           <tbody>
             {members.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ padding: "10px 8px", color: "#888" }}>
+                <td colSpan={7} style={{ padding: "10px 8px", color: "#888" }}>
                   No memberships ended recently.
                 </td>
               </tr>
@@ -352,6 +355,7 @@ function RecentlyEndedTable({ members }: { members: MembershipRow[] }) {
                   <td style={{ padding: "6px 8px" }}>
                     {m.day === "wednesday" ? "Wed" : "Fri"}
                   </td>
+                  <td style={{ padding: "6px 8px" }}>{m.periodStart ?? ""}</td>
                   <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
                   <td style={{ padding: "6px 8px", textTransform: "capitalize" }}>
                     {m.status}

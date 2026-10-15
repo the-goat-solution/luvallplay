@@ -1032,6 +1032,11 @@ export type RosterEntry = {
   phone: string | null;
   type: "casual" | "monthly" | "quarterly";
   method: "card" | "cash";
+  /** Members only: the membership window that puts them on this roster. */
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  /** Members only: auto-renews (so the end date keeps moving on). */
+  autoRenews?: boolean;
   // Set when someone is standing in for this player on this date. The
   // original entry is kept (they paid for the spot) — callers render them
   // as replaced rather than dropping them, and headcount is unaffected
@@ -1078,7 +1083,9 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
   const rosterDay = getMembershipDayForDate(date);
   const { rows: memberRows } = rosterDay
     ? await sql.query(
-        `SELECT id, first_name, last_name, email, phone, plan
+        `SELECT id, first_name, last_name, email, phone, plan,
+                period_start::text AS period_start, period_end::text AS period_end,
+                recurring, cancel_at_period_end, stripe_payment_intent_id
          FROM memberships
          WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
          ORDER BY created_at ASC;`,
@@ -1110,7 +1117,12 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
     type: r.plan === "quarterly" ? "quarterly" : "monthly",
-    method: "card",
+    method: (r.stripe_payment_intent_id as string | null)?.startsWith("cash-invoice-")
+      ? "cash"
+      : "card",
+    periodStart: (r.period_start as string | null) ?? null,
+    periodEnd: (r.period_end as string | null) ?? null,
+    autoRenews: Boolean(r.recurring) && !r.cancel_at_period_end,
     fillIn: fillInByMembership.get(r.id as number) ?? null,
   }));
 

@@ -959,6 +959,104 @@
   max-width: 280px;
 }
 
+/* The ledger on a phone: one card per entry — date and amount on top, the
+   name (and notes), then source / type, person / receipt, and the actions,
+   instead of a 960px table that has to be scrolled sideways. */
+@media (max-width: 600px) {
+  .ledgerStack {
+    min-width: 0;
+  }
+  .ledgerStack thead {
+    display: none;
+  }
+  .ledgerStack tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date amount"
+      "name name"
+      "source type"
+      "person invoice"
+      "actions actions";
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    padding: 8px 0;
+  }
+  .ledgerStack tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .ledgerStack td {
+    display: block;
+    border-bottom: 0;
+    padding: 3px 12px;
+  }
+  .ledgerStack td:nth-child(1) {
+    display: none;
+  }
+  .ledgerStack td:nth-child(2) {
+    grid-area: date;
+    color: var(--muted);
+  }
+  .ledgerStack td:nth-child(3) {
+    grid-area: name;
+  }
+  .ledgerStack td:nth-child(4) {
+    grid-area: type;
+    justify-self: end;
+  }
+  .ledgerStack td:nth-child(5) {
+    grid-area: source;
+  }
+  .ledgerStack td:nth-child(6) {
+    grid-area: person;
+    color: var(--muted);
+  }
+  .ledgerStack td:nth-child(6)::before {
+    content: "Person: ";
+  }
+  .ledgerStack td:nth-child(7) {
+    grid-area: amount;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .ledgerStack td:nth-child(8) {
+    grid-area: invoice;
+    justify-self: end;
+  }
+  .ledgerStack td:nth-child(9) {
+    grid-area: actions;
+  }
+  .ledgerStack td:only-child {
+    display: block;
+    grid-area: auto;
+    grid-column: 1 / -1;
+  }
+  .ledgerStack tfoot tr,
+  .ledgerStack tfoot td {
+    display: block;
+  }
+  .ledgerStack .footTotals {
+    justify-content: flex-start;
+  }
+  /* Breakdown by source: fit Source / Received / Spent / Net across the
+     phone (the entry count is on each ledger card anyway). */
+  .breakdownTable {
+    min-width: 0;
+  }
+  .breakdownTable th,
+  .breakdownTable td {
+    padding: 7px 8px;
+  }
+  .breakdownTable th:first-child,
+  .breakdownTable td:first-child {
+    padding-left: 16px;
+  }
+  .breakdownTable th:nth-child(5),
+  .breakdownTable td:nth-child(5) {
+    display: none;
+  }
+}
+
 /* On a phone the reconcile table becomes one card per bank line — date and
    amount on top, description, then the "Reconcile as" controls full width —
    instead of a 960px table with the controls scrolled out of sight. */

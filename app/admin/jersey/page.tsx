@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { AdminLink } from "@/components/admin/AdminLink";
 import { AdminNav } from "@/components/admin/AdminNav";
 import adminStyles from "@/components/admin/admin.module.css";
 import { JerseyExport } from "@/components/admin/JerseyExport";
@@ -130,6 +131,9 @@ function Row({ r }: { r: JerseyRegistration }) {
       <td style={cell}>{nz(r.createdAt)}</td>
       <td style={{ ...cell, whiteSpace: "nowrap" }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <AdminLink href={`/admin/jersey/${r.id}`} style={{ ...btn, textDecoration: "none", display: "inline-block" }}>
+            Edit
+          </AdminLink>
           {r.status === "pending" || r.status === "released" ? (
             <form action={markPaid.bind(null, r.id)}>
               <SubmitButton loadingText="Saving…" style={btnPrimary} confirmMessage={`Mark ${r.firstName} ${r.lastName} as paid and email them?`}>

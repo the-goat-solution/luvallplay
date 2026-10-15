@@ -5,6 +5,7 @@ import {
   JERSEY_SIZES,
   PRINT_COUNTRY_MAX,
   PRINT_NAME_MAX,
+  cleanPrintText,
   isDisposableEmail,
   isJerseyClosed,
   isJerseyOpen,
@@ -116,15 +117,13 @@ export async function POST(request: Request) {
   if (isDisposableEmail(body.email)) {
     return NextResponse.json({ error: m.disposable }, { status: 400 });
   }
-  // Letters (including Vietnamese diacritics), digits and a few separators only.
-  const cleanPrint = (s: string | undefined) => (s ?? "").toUpperCase().replace(/[^\p{L}\p{N} .'-]/gu, "").trim();
-  const printName = body.addPrint ? cleanPrint(body.printName) : "";
+  const printName = body.addPrint ? cleanPrintText(body.printName) : "";
   if (body.addPrint && !printName) {
     return NextResponse.json({ error: m.print }, { status: 400 });
   }
   // The number and the country are alternatives; a number wins if both arrive.
   const printNumber = body.addPrint ? (body.printNumber ?? null) : null;
-  const printCountry = body.addPrint && printNumber === null ? cleanPrint(body.printCountry) || null : null;
+  const printCountry = body.addPrint && printNumber === null ? cleanPrintText(body.printCountry) || null : null;
 
   try {
     await ensureJerseyTables();

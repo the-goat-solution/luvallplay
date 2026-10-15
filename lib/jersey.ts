@@ -15,8 +15,26 @@ export function jerseyOpensAt(): Date {
   return new Date(DEFAULT_OPENS_AT);
 }
 
+// Registration closes at 11:59:59 PM NZ time on Wednesday 21 October 2026
+// (NZDT, UTC+13). JERSEY_CLOSES_AT overrides it.
+const DEFAULT_CLOSES_AT = "2026-10-21T10:59:59Z";
+
+export function jerseyClosesAt(): Date {
+  const override = process.env.JERSEY_CLOSES_AT;
+  if (override) {
+    const d = new Date(override);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return new Date(DEFAULT_CLOSES_AT);
+}
+
+export function isJerseyClosed(now = new Date()): boolean {
+  return now.getTime() > jerseyClosesAt().getTime();
+}
+
+// Accepting registrations: after the opening time, up to the closing time.
 export function isJerseyOpen(now = new Date()): boolean {
-  return now.getTime() >= jerseyOpensAt().getTime();
+  return now.getTime() >= jerseyOpensAt().getTime() && !isJerseyClosed(now);
 }
 
 export const EARLY_BIRD_LIMIT = 10;

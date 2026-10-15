@@ -32,15 +32,17 @@ function deviceId(): string {
 
 export function JerseyForm({
   opensAt,
+  closesAt,
   serverNow,
   earlyBirdsLeft,
 }: {
   opensAt: string;
+  closesAt: string;
   serverNow: string;
   earlyBirdsLeft: number;
 }) {
   const { tr, lang } = useJerseyT();
-  const { open } = useJerseyClock(opensAt, serverNow);
+  const { open, closed } = useJerseyClock(opensAt, serverNow, closesAt);
   const [left, setLeft] = useState(earlyBirdsLeft);
   const [f, setF] = useState({ firstName: "", lastName: "", email: "", phone: "", size: "", website: "" });
   const [addPrint, setAddPrint] = useState(false);
@@ -127,7 +129,7 @@ export function JerseyForm({
   return (
     <form className="jersey-card" onSubmit={submit} noValidate={false}>
       <fieldset disabled={!open || busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-        {!open ? <p className="jersey-warn">{tr("not_open")}</p> : null}
+        {!open ? <p className="jersey-warn">{tr(closed ? "closed_form" : "not_open")}</p> : null}
         <div className="form-row">
           <div className="form-group">
             <label className="form-label" htmlFor="j-first">{tr("first")} <span className="form-required">*</span></label>

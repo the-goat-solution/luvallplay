@@ -208,7 +208,7 @@ A live court board for ordinary play days (not mini game days), in the spirit of
 
 Registration page for the Yonex club jersey (bank-transfer payment, one per person).
 
-- **Opens** 1:30 AM NZ time, Fri 16 Oct 2026; before that the page shows a countdown and the API refuses registrations. Override with `JERSEY_OPENS_AT` (ISO time). Prices and rules live in `lib/jersey.ts`: first 10 registrations $15, then $30, name + number +$5, early-bird spots held 48 hours.
+- **Opens** 1:30 AM NZ time, Fri 16 Oct 2026; before that the page shows a countdown and the API refuses registrations. The form **closes** 11:59 PM NZ time, Wed 21 Oct 2026; after that the page says registration is closed and the API refuses. Override with `JERSEY_OPENS_AT` / `JERSEY_CLOSES_AT` (ISO times). Prices and rules live in `lib/jersey.ts`: first 10 registrations $15, then $30, name + number +$5, early-bird spots held 48 hours.
 - **One per person:** the email (Gmail dots/`+tags` normalised) is unique across live registrations, enforced by a partial unique index. A matching IP (stored hashed), browser, phone or name is allowed but **flagged** on `/admin/jersey`.
 - **Reference code:** every registration gets a unique 5-digit code to put in the bank transfer reference. Whenever bank lines are imported (Akahu, CSV, webhook, nightly cron) `matchJerseyPayments()` finds the code, marks the registration paid, books a *Jersey & merchandise* ledger entry and reconciles the bank line. Paying more than the price is kept as club funds (no refunds); paying less is flagged, never auto-paid.
 - **Admin:** `/admin/jersey` lists registrations, with Mark paid / Undo / Release / Cancel and **Export to Excel** (registrations, printer order, summary).

@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { useJerseyT } from "@/lib/jersey-i18n";
 import { useJerseyClock } from "./useJerseyClock";
 
-type Props = { opensAt: string; serverNow: string; earlyBirdsLeft: number };
+type Props = { opensAt: string; closesAt: string; serverNow: string; earlyBirdsLeft: number };
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
-export function JerseyHero({ opensAt, serverNow, earlyBirdsLeft }: Props) {
+export function JerseyHero({ opensAt, closesAt, serverNow, earlyBirdsLeft }: Props) {
   const { tr } = useJerseyT();
-  const { open, msLeft } = useJerseyClock(opensAt, serverNow);
+  const { started, closed, open, msLeft } = useJerseyClock(opensAt, serverNow, closesAt);
   const [left, setLeft] = useState(earlyBirdsLeft);
 
   // Once open, keep the early-bird count fresh while people register.
@@ -54,7 +54,7 @@ export function JerseyHero({ opensAt, serverNow, earlyBirdsLeft }: Props) {
           {tr("hero_sub")}
         </p>
 
-        {!open ? (
+        {!started ? (
           <div style={{ marginTop: 36 }}>
             <div style={{ fontSize: 13, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--bronze-light)", fontWeight: 700 }}>
               {tr("opens_in")}
@@ -71,12 +71,17 @@ export function JerseyHero({ opensAt, serverNow, earlyBirdsLeft }: Props) {
               {tr("opens_note")}
             </p>
           </div>
+        ) : closed ? (
+          <div style={{ marginTop: 32 }}>
+            <div className="jersey-badge">{tr("closed_msg")}</div>
+          </div>
         ) : (
           <div style={{ marginTop: 32 }}>
             <div className="jersey-badge">
               {left > 0 ? tr("spots_left", { n: left }) : tr("spots_gone")}
             </div>
-            <div style={{ marginTop: 22 }}>
+            <p style={{ marginTop: 14, color: "rgba(255,255,255,.7)", fontSize: 15 }}>{tr("closes_note")}</p>
+            <div style={{ marginTop: 18 }}>
               <a href="#register" className="btn btn-primary">{tr("register_now")}</a>
             </div>
           </div>

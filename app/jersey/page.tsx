@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { JerseyContent } from "@/components/jersey/JerseyContent";
-import { EARLY_BIRD_LIMIT, jerseyOpensAt } from "@/lib/jersey";
+import { EARLY_BIRD_LIMIT, jerseyClosesAt, jerseyOpensAt } from "@/lib/jersey";
 import { earlyBirdsLeft } from "@/lib/jersey-db";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,7 @@ export default async function JerseyPage() {
   return (
     <JerseyContent
       opensAt={jerseyOpensAt().toISOString()}
+      closesAt={jerseyClosesAt().toISOString()}
       serverNow={new Date().toISOString()}
       left={left}
     />

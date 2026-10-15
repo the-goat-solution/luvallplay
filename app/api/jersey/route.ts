@@ -5,7 +5,9 @@ import {
   JERSEY_SIZES,
   PRINT_NAME_MAX,
   isDisposableEmail,
+  isJerseyClosed,
   isJerseyOpen,
+  jerseyClosesAt,
   jerseyOpensAt,
   normalizeEmail,
   normalizeName,
@@ -45,7 +47,7 @@ export async function GET() {
     }
   }
   return NextResponse.json(
-    { opensAt: opensAt.toISOString(), now: new Date().toISOString(), earlyBirdsLeft: left },
+    { opensAt: opensAt.toISOString(), closesAt: jerseyClosesAt().toISOString(), now: new Date().toISOString(), earlyBirdsLeft: left },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -54,6 +56,7 @@ const MSG = {
   en: {
     rate: "Too many attempts. Please wait a minute and try again.",
     closed: "Registration hasn't opened yet.",
+    over: "Registration has closed.",
     unavailable: "Registration is unavailable right now.",
     invalid: "Please check your details and try again.",
     captcha: "Please complete the captcha.",
@@ -66,6 +69,7 @@ const MSG = {
   vi: {
     rate: "Quá nhiều lần thử. Vui lòng đợi một phút rồi thử lại.",
     closed: "Đăng ký chưa mở.",
+    over: "Đã đóng đăng ký.",
     unavailable: "Hiện chưa thể đăng ký. Vui lòng thử lại sau.",
     invalid: "Vui lòng kiểm tra lại thông tin và thử lại.",
     captcha: "Vui lòng hoàn thành xác minh captcha.",
@@ -88,7 +92,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: m.rate }, { status: 429 });
   }
   if (!isJerseyOpen()) {
-    return NextResponse.json({ error: m.closed }, { status: 403 });
+    return NextResponse.json({ error: isJerseyClosed() ? m.over : m.closed }, { status: 403 });
   }
   if (!process.env.POSTGRES_URL) {
     return NextResponse.json({ error: m.unavailable }, { status: 503 });

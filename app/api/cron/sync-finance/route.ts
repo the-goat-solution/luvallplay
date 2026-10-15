@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { syncStripeFinance } from "@/lib/finance-stripe";
 import { akahuConfigured, syncAkahu } from "@/lib/bank-akahu";
 import { autoMatchBankTransactions } from "@/lib/bank-db";
+import { releaseExpired } from "@/lib/jersey-db";
 
 export const runtime = "nodejs";
 
@@ -40,5 +41,7 @@ export async function GET(request: Request) {
     // New Stripe payouts may now match CSV/webhook bank lines.
     result.matched = await autoMatchBankTransactions();
   }
+  // Early-bird spots unpaid after 48 hours go back to the pool.
+  result.jerseyReleased = await releaseExpired().catch(() => 0);
   return NextResponse.json(result, { status: failed ? 503 : 200 });
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /jersey too */
 "use client";
 
 import { useLanguage } from "@/context/LanguageContext";
@@ -50,27 +51,27 @@ export function Footer() {
             </div>
             <ul className="footer-links">
               <li>
-                <a href="#about">
+                <a href="/#about">
                   <Trans k="nav_about" />
                 </a>
               </li>
               <li>
-                <a href="#schedule">
+                <a href="/#schedule">
                   <Trans k="nav_schedule" />
                 </a>
               </li>
               <li>
-                <a href="#gallery">
+                <a href="/#gallery">
                   <Trans k="nav_gallery" />
                 </a>
               </li>
               <li>
-                <a href="#membership">
+                <a href="/#membership">
                   <Trans k="nav_membership" />
                 </a>
               </li>
               <li>
-                <a href="#reviews">Reviews</a>
+                <a href="/#reviews">Reviews</a>
               </li>
               <li>
                 <a href="#donate">

@@ -31,6 +31,7 @@ export const FINANCE_CATEGORIES: FinanceCategory[] = [
   { value: "donation", label: "Donations", kind: "received" },
   { value: "sponsorship", label: "Sponsorship", kind: "received" },
   { value: "grant", label: "Grants & fundraising", kind: "received" },
+  { value: "merchandise", label: "Jersey & merchandise", kind: "received" },
   { value: "other_income", label: "Other income", kind: "received" },
   // Money out
   { value: "court_hire", label: "Court hire", kind: "spent" },

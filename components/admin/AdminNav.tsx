@@ -6,13 +6,14 @@ const TABS = [
   { href: "/admin/play-days", label: "Play days" },
   { href: "/admin/members", label: "Members" },
   { href: "/admin/day-requests", label: "Day requests" },
+  { href: "/admin/jersey", label: "Jersey" },
   { href: "/admin/financials", label: "Financials" },
 ] as const;
 
 export function AdminNav({
   active,
 }: {
-  active: "play-days" | "members" | "day-requests" | "financials";
+  active: "play-days" | "members" | "day-requests" | "jersey" | "financials";
 }) {
   return (
     <nav className={styles.nav}>

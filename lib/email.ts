@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import type { RosterEntry } from "./db";
 import type { MembershipDay, MembershipTier } from "./constants";
+import { BANK_ACCOUNT_NAME, BANK_ACCOUNT_NUMBER } from "./jersey";
 import {
   contactFooterNote,
   contactFooterNoteText,
@@ -787,5 +788,128 @@ export async function sendMembershipRenewalReminderEmail(
     subject: `Your ${planTitle} membership ends ${displayEnd} — renew now`,
     html: renderEmailLayout({ title: "Your membership is ending soon", bodyHtml }),
     text,
+  });
+}
+
+// ── Club jersey ─────────────────────────────────────────────────────────
+
+function jerseyFrom(): string {
+  const from = process.env.EMAIL_FROM;
+  if (!from) throw new Error("EMAIL_FROM is not configured");
+  return from;
+}
+
+export async function sendJerseyRegistrationEmail(input: {
+  to: string;
+  firstName: string;
+  refCode: string;
+  priceCents: number;
+  earlyBird: boolean;
+  deadline: Date | null;
+}): Promise<void> {
+  const price = `$${(input.priceCents / 100).toFixed(2)}`;
+  const deadline = input.deadline
+    ? new Intl.DateTimeFormat("en-NZ", {
+        timeZone: "Pacific/Auckland",
+        dateStyle: "full",
+        timeStyle: "short",
+      }).format(input.deadline)
+    : null;
+  const holdNote = input.earlyBird && deadline
+    ? `Your early-bird price is held until <strong>${escapeHtml(deadline)}</strong>. If we haven't received payment by then, your spot goes to the next person.`
+    : "";
+  const holdText = input.earlyBird && deadline
+    ? `Your early-bird price is held until ${deadline}. If we haven't received payment by then, your spot goes to the next person.`
+    : "";
+
+  const bodyHtml = `
+    ${heading("You're registered for the club jersey")}
+    ${paragraph(`Hi ${escapeHtml(input.firstName)}, thanks for registering! To secure your jersey, please transfer <strong>${price}</strong> to:`)}
+    ${paragraph(`<strong>${escapeHtml(BANK_ACCOUNT_NAME)}</strong><br/>${escapeHtml(BANK_ACCOUNT_NUMBER)}`)}
+    <div style="margin:8px 0 20px;padding:18px;text-align:center;background:#fff;border:2px dashed #C4892A;border-radius:12px">
+      <div style="font-size:13px;color:#3a526a">Your reference code</div>
+      <div style="font-size:38px;font-weight:800;letter-spacing:.2em;color:#184467">${escapeHtml(input.refCode)}</div>
+    </div>
+    ${paragraph(`<strong>Please put ${escapeHtml(input.refCode)} in the reference field of your transfer.</strong> It's how we match your payment to you — without it we may not be able to find your transfer and you could lose your spot.`)}
+    ${holdNote ? paragraph(holdNote) : ""}
+    ${paragraph("If you send more than the price, the difference goes to the club's funds — thank you! Sorry, we can't offer refunds. Jerseys arrive around early November and will be handed out at a play day, to be announced.")}
+    ${contactFooterNote()}
+  `;
+  const text = [
+    `Hi ${input.firstName}, thanks for registering for the club jersey!`,
+    "",
+    `Please transfer ${price} to ${BANK_ACCOUNT_NAME}, ${BANK_ACCOUNT_NUMBER}.`,
+    `Reference code: ${input.refCode}`,
+    "",
+    `Please put ${input.refCode} in the reference field. Without it we may not be able to find your transfer and you could lose your spot.`,
+    holdText,
+    "Any amount over the price goes to club funds (thank you!). No refunds.",
+    "Jerseys arrive around early November and will be handed out at a play day, to be announced.",
+    "",
+    contactFooterNoteText(),
+  ].join("\n");
+
+  await getResend().emails.send({
+    from: withDisplayName(jerseyFrom()),
+    to: input.to,
+    subject: `Your jersey reference code: ${input.refCode} — Three Wolves Badminton Club`,
+    html: renderEmailLayout({ title: "Club jersey registration", bodyHtml }),
+    text,
+  });
+}
+
+export async function sendJerseyPaidEmail(input: {
+  to: string;
+  firstName: string;
+  refCode: string;
+  paidCents: number;
+  priceCents: number;
+}): Promise<void> {
+  const extra = input.paidCents - input.priceCents;
+  const extraHtml = extra > 0
+    ? paragraph(`You sent $${(extra / 100).toFixed(2)} more than the price. That goes to the club's funds — thank you for the support!`)
+    : "";
+  const bodyHtml = `
+    ${heading("Payment received — you're in!")}
+    ${paragraph(`Hi ${escapeHtml(input.firstName)}, we've received your payment for jersey ${escapeHtml(input.refCode)}. Your jersey is confirmed.`)}
+    ${extraHtml}
+    ${paragraph("Jerseys arrive around early November and will be handed out at a play day, to be announced. Wear it to House of Barber for 10% off a haircut!")}
+    ${contactFooterNote()}
+  `;
+  const text = [
+    `Hi ${input.firstName}, we've received your payment for jersey ${input.refCode}. Your jersey is confirmed.`,
+    extra > 0 ? `You sent $${(extra / 100).toFixed(2)} over the price; it goes to club funds — thank you!` : "",
+    "Jerseys arrive around early November and will be handed out at a play day, to be announced. Wear it to House of Barber for 10% off a haircut!",
+    "",
+    contactFooterNoteText(),
+  ].join("\n");
+
+  await getResend().emails.send({
+    from: withDisplayName(jerseyFrom()),
+    to: input.to,
+    subject: "Jersey payment received — Three Wolves Badminton Club",
+    html: renderEmailLayout({ title: "Payment received", bodyHtml }),
+    text,
+  });
+}
+
+export async function sendJerseyAdminAlertEmail(input: {
+  name: string;
+  email: string;
+  refCode: string;
+  flags: string[];
+}): Promise<void> {
+  const to = process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com";
+  const flagText = input.flags.join(", ");
+  const bodyHtml = `
+    ${heading("Jersey registration needs a look")}
+    ${paragraph(`<strong>${escapeHtml(input.name)}</strong> (${escapeHtml(input.email)}), code ${escapeHtml(input.refCode)}, matches another registration: ${escapeHtml(flagText)}. Review it on the Jersey tab in admin.`)}
+  `;
+  await getResend().emails.send({
+    from: withDisplayName(jerseyFrom()),
+    to,
+    subject: `Jersey registration flagged: ${input.name}`,
+    html: renderEmailLayout({ title: "Jersey registration flagged", bodyHtml }),
+    text: `${input.name} (${input.email}), code ${input.refCode}, matches another registration: ${flagText}.`,
   });
 }

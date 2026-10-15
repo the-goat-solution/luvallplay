@@ -8,8 +8,14 @@ import {
   ensureTables,
   getTotalActiveMemberCount,
   listMemberships,
+  listRecentlyEndedMemberships,
+  addDays,
   type MembershipRow,
 } from "@/lib/db";
+import {
+  auditMembershipStatuses,
+  type MembershipAuditResult,
+} from "@/lib/membership-status";
 import { getClubToday } from "@/lib/dates";
 import { getStripe } from "@/lib/stripe";
 import { sendMembershipConfirmationEmail } from "@/lib/email";
@@ -240,6 +246,8 @@ function MembersTable({
                       <span style={{ color: "#b00020" }}>
                         Cancels {m.periodEnd ?? "at period end"}
                       </span>
+                    ) : !m.recurring && m.periodEnd && m.periodEnd < today ? (
+                      <span style={{ color: "#b00020" }}>Expired</span>
                     ) : (
                       <span
                         style={{
@@ -305,17 +313,78 @@ function MembersTable({
   );
 }
 
+// Memberships that ended in the last 60 days — kept visible so it's easy to
+// see who lapsed (and who to nudge to rejoin).
+function RecentlyEndedTable({ members }: { members: MembershipRow[] }) {
+  return (
+    <div style={{ marginBottom: 36 }}>
+      <p style={{ fontWeight: 600, marginBottom: 8 }}>
+        Ended in the last 60 days ({members.length})
+      </p>
+      <div className={adminStyles.tableWrap}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
+              <th style={{ padding: "6px 8px" }}>Name</th>
+              <th style={{ padding: "6px 8px" }}>Email</th>
+              <th style={{ padding: "6px 8px" }}>Plan</th>
+              <th style={{ padding: "6px 8px" }}>Day</th>
+              <th style={{ padding: "6px 8px" }}>Ended</th>
+              <th style={{ padding: "6px 8px" }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ padding: "10px 8px", color: "#888" }}>
+                  No memberships ended recently.
+                </td>
+              </tr>
+            ) : (
+              members.map((m) => (
+                <tr key={m.id} style={{ borderBottom: "1px solid #eee", color: "#666" }}>
+                  <td style={{ padding: "6px 8px" }}>{m.name}</td>
+                  <td style={{ padding: "6px 8px" }}>{m.email}</td>
+                  <td style={{ padding: "6px 8px", textTransform: "capitalize" }}>
+                    {m.plan} · {m.recurring ? "auto-renew" : "one-time"}
+                  </td>
+                  <td style={{ padding: "6px 8px" }}>
+                    {m.day === "wednesday" ? "Wed" : "Fri"}
+                  </td>
+                  <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
+                  <td style={{ padding: "6px 8px", textTransform: "capitalize" }}>
+                    {m.status}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default async function MembersAdminPage() {
-  const { memberships, activeMemberCount } = process.env.POSTGRES_URL
+  const { memberships, activeMemberCount, recentlyEnded, audit } = process.env.POSTGRES_URL
     ? await (async () => {
         await ensureTables();
-        const [memberships, activeMemberCount] = await Promise.all([
+        // Same upkeep the daily cron runs, so the list below never shows a
+        // membership that has already ended as active.
+        let audit: MembershipAuditResult | null = null;
+        try {
+          audit = await auditMembershipStatuses();
+        } catch (err) {
+          console.error("Membership status audit failed", err);
+        }
+        const [memberships, activeMemberCount, recentlyEnded] = await Promise.all([
           listMemberships(),
           getTotalActiveMemberCount(),
+          listRecentlyEndedMemberships(addDays(getClubToday().dateKey, -60)),
         ]);
-        return { memberships, activeMemberCount };
+        return { memberships, activeMemberCount, recentlyEnded, audit };
       })()
-    : { memberships: [], activeMemberCount: 0 };
+    : { memberships: [], activeMemberCount: 0, recentlyEnded: [], audit: null };
 
   const monthly = memberships.filter((m) => m.plan === "monthly");
   const quarterly = memberships.filter((m) => m.plan === "quarterly");
@@ -348,8 +417,37 @@ export default async function MembersAdminPage() {
             play day and per member&apos;s active period, see the{" "}
             <AdminLink href="/admin/play-days">Play days</AdminLink> page for a specific date.
           </p>
+          {audit && audit.changed.length > 0 ? (
+            <div
+              role="status"
+              style={{
+                background: "#fff4e5",
+                color: "#8a4b00",
+                padding: "10px 14px",
+                borderRadius: 6,
+                marginBottom: 20,
+                fontSize: 13,
+              }}
+            >
+              Marked {audit.changed.length} membership
+              {audit.changed.length === 1 ? "" : "s"} as ended — they were
+              past their end date but still showed as active:{" "}
+              {audit.changed
+                .map((c) => `${c.name} (${c.status}, ended ${c.periodEnd ?? "?"})`)
+                .join(", ")}
+              .
+            </div>
+          ) : null}
+          {audit && audit.errors > 0 ? (
+            <p style={{ color: "#b00020", fontSize: 13, marginBottom: 20 }}>
+              {audit.errors} membership{audit.errors === 1 ? "" : "s"} couldn&apos;t
+              be checked against Stripe just now — they&apos;ll be retried
+              automatically.
+            </p>
+          ) : null}
           <MembersTable title="Monthly members" members={monthly} />
           <MembersTable title="Quarterly members" members={quarterly} />
+          <RecentlyEndedTable members={recentlyEnded} />
 
           <h2 style={{ fontSize: 16, marginTop: 32, marginBottom: 8 }}>
             Add cash member

@@ -583,11 +583,11 @@ export async function assignAndReserveMembershipAccessStart(
     // both pass the check below before either has committed a row.
     await client.query(`SELECT pg_advisory_lock(hashtext($1));`, [lockKey]);
 
-    // A lapsed one-time (non-recurring) membership never transitions out of
-    // 'active' (nothing re-checks it once period_end passes), so this must
-    // require period_end >= today rather than trusting status alone —
-    // otherwise a member whose old plan already ended could never sign up
-    // again for the same day.
+    // A lapsed one-time membership is only marked 'expired' by the daily
+    // status upkeep (lib/membership-status.ts), so between its end date and
+    // that run it can still read 'active' — require period_end >= today
+    // rather than trusting status alone, so a member whose old plan already
+    // ended can always sign up again for the same day.
     const { rows: conflictRows } = await client.query(
       `SELECT id FROM memberships
        WHERE lower(email) = lower($1) AND day = $2
@@ -1342,12 +1342,14 @@ export async function applyMembershipRenewal(
 // have re-sent the "membership confirmed" email on every redelivery. A
 // non-null return means "activate + email"; null means "already active,
 // skip" (either a genuine duplicate delivery, or the row doesn't exist).
+// An 'expired' or 'canceled' row is never revived by a late redelivery.
 export async function activateMembershipByPaymentIntentId(
   paymentIntentId: string,
 ): Promise<MembershipRow | null> {
   const { rows } = await sql`
     UPDATE memberships SET status = 'active'
-    WHERE stripe_payment_intent_id = ${paymentIntentId} AND status != 'active'
+    WHERE stripe_payment_intent_id = ${paymentIntentId}
+      AND status NOT IN ('active', 'expired', 'canceled')
     RETURNING id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id;
   `;
   const row = rows[0];
@@ -1616,4 +1618,90 @@ export async function recordFreeDays(
     RETURNING period_end::text AS period_end;
   `;
   return (rows[0]?.period_end as string | undefined) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Membership status upkeep (see lib/membership-status.ts). Run daily by the
+// reminders cron and on every load of the admin Members page.
+
+// One-time memberships have no Stripe subscription to tell us they ended, so
+// they're marked 'expired' here once the club-local day after period_end
+// begins. Returns the rows it changed.
+export async function expireLapsedOneTimeMemberships(
+  today: string,
+): Promise<MembershipRow[]> {
+  const { rows } = await sql.query(
+    `UPDATE memberships
+     SET status = 'expired'
+     WHERE status IN ('active', 'trialing', 'past_due')
+       AND recurring = FALSE
+       AND period_end IS NOT NULL
+       AND period_end < $1::date
+     RETURNING ${MEMBERSHIP_COLUMNS};`,
+    [today],
+  );
+  return rows.map((r) =>
+    mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]),
+  );
+}
+
+// Recurring memberships still marked live whose stored access window ended
+// before `before` — normally a renewal webhook would have moved period_end
+// on (or a cancellation webhook ended it), so these need checking against
+// Stripe.
+export async function getStaleRecurringMemberships(
+  before: string,
+): Promise<MembershipRow[]> {
+  const { rows } = await sql.query(
+    `SELECT ${MEMBERSHIP_COLUMNS} FROM memberships
+     WHERE status IN ('active', 'trialing', 'past_due')
+       AND recurring = TRUE
+       AND stripe_subscription_id IS NOT NULL
+       AND period_end IS NOT NULL
+       AND period_end < $1::date;`,
+    [before],
+  );
+  return rows.map((r) =>
+    mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]),
+  );
+}
+
+// Brings a recurring membership in line with its Stripe subscription. When
+// Stripe says it's still renewing, period_end is rolled forward by whole
+// billing cycles to cover `today` (the same projection access checks
+// already use), so it isn't flagged as stale again tomorrow.
+export async function syncRecurringMembership(
+  membershipId: number,
+  status: string,
+  cancelAtPeriodEnd: boolean,
+  today: string,
+): Promise<void> {
+  await sql.query(
+    `UPDATE memberships
+     SET status = $2,
+         cancel_at_period_end = $3,
+         period_end = CASE
+           WHEN $2 = 'active' AND NOT $3 THEN ${projectedPeriodEndSql("$4")}
+           ELSE period_end
+         END
+     WHERE id = $1;`,
+    [membershipId, status, cancelAtPeriodEnd, today],
+  );
+}
+
+// Memberships that ended recently, for the admin Members page.
+export async function listRecentlyEndedMemberships(
+  since: string,
+): Promise<MembershipRow[]> {
+  const { rows } = await sql.query(
+    `SELECT ${MEMBERSHIP_COLUMNS} FROM memberships
+     WHERE status IN ('expired', 'canceled')
+       AND period_end IS NOT NULL
+       AND period_end >= $1::date
+     ORDER BY period_end DESC;`,
+    [since],
+  );
+  return rows.map((r) =>
+    mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]),
+  );
 }

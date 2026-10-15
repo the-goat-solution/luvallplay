@@ -174,6 +174,7 @@ function MembersTable({
   title: string;
   members: MembershipRow[];
 }) {
+  const { dateKey: today } = getClubToday();
   return (
     <div style={{ marginBottom: 36 }}>
       <p style={{ fontWeight: 600, marginBottom: 8 }}>
@@ -215,6 +216,11 @@ function MembersTable({
                   <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
                   <td style={{ padding: "6px 8px" }}>
                     {m.recurring ? "Auto-renews" : "One-time"}
+                    {m.freeDaysGranted ? (
+                      <div style={{ fontSize: 12, color: "#1a7a3c" }}>
+                        +{Math.round(m.freeDaysGranted / 7)} wks free given
+                      </div>
+                    ) : null}
                     {!m.recurring && m.renewalReminderSentAt ? (
                       <div style={{ fontSize: 12, color: "#666" }}>
                         Renewal email sent{" "}
@@ -262,15 +268,16 @@ function MembersTable({
                           memberName={m.name}
                         />
                       ) : null}
-                      {m.recurring &&
-                      !m.cancelAtPeriodEnd &&
-                      m.plan === "monthly" &&
-                      m.stripeSubscriptionId &&
-                      m.status === "active" ? (
+                      {m.status === "active" &&
+                      (m.recurring
+                        ? !m.cancelAtPeriodEnd && m.stripeSubscriptionId
+                        : m.periodEnd && m.periodEnd >= today) ? (
                         <MemberFreeMonthButton
                           membershipId={m.id}
                           memberName={m.name}
-                          renewsOn={m.periodEnd}
+                          periodEnd={m.periodEnd}
+                          plan={m.plan}
+                          recurring={m.recurring}
                         />
                       ) : null}
                       {m.recurring && !m.cancelAtPeriodEnd ? (

@@ -175,6 +175,36 @@ export async function giveFreeNextPeriod(
   return { alreadyQueued: false };
 }
 
+// Adds `days` free at the end of a subscription's current period without
+// changing what it costs afterwards — used for quarterly members, where a
+// 100%-off "once" coupon (see giveFreeNextPeriod) would make a whole quarter
+// free. Moving trial_end pushes the next charge out by `days`; Stripe shows
+// the subscription as 'trialing' until then (the webhook still treats it as
+// an active membership), and normal billing resumes on the new date. Repeat
+// grants stack. Returns the date billing resumes (unix seconds).
+export async function addFreeDaysBeforeNextCharge(
+  subscriptionId: string,
+  days: number,
+): Promise<number> {
+  const stripeClient = getStripe();
+  const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
+  if (subscription.status !== "active" && subscription.status !== "trialing") {
+    throw new Error(`This subscription is ${subscription.status}, so it can't be extended.`);
+  }
+  const nextCharge =
+    subscription.status === "trialing" && subscription.trial_end
+      ? subscription.trial_end
+      : subscription.items.data[0]?.current_period_end;
+  if (!nextCharge) throw new Error("Couldn't find this subscription's next billing date.");
+
+  const resumesAt = nextCharge + days * 86400;
+  await stripeClient.subscriptions.update(subscriptionId, {
+    trial_end: resumesAt,
+    proration_behavior: "none",
+  });
+  return resumesAt;
+}
+
 const ONE_TIME_TIER_LABEL: Record<MembershipTier, string> = {
   monthly: "Monthly",
   quarterly: "Quarterly",

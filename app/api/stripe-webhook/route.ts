@@ -176,8 +176,12 @@ export async function POST(request: Request) {
       // (see assignAndReserveMembershipAccessStart) and can legitimately
       // differ from Stripe's own billing anchor. Only period_end advances,
       // additively, on renewal — see applyMembershipRenewal.
+      // The only trials this club uses are admin-given free months on
+      // quarterly subscriptions (addFreeDaysBeforeNextCharge) — the member
+      // is still a member while billing is deferred.
+      const membershipStatus = sub.status === "trialing" ? "active" : sub.status;
       await sql`
-        UPDATE memberships SET status = ${sub.status}, cancel_at_period_end = ${sub.cancel_at_period_end}
+        UPDATE memberships SET status = ${membershipStatus}, cancel_at_period_end = ${sub.cancel_at_period_end}
         WHERE stripe_subscription_id = ${sub.id};
       `;
       await sql`

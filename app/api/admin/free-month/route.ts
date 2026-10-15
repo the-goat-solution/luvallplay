@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getMembershipById } from "@/lib/db";
-import { giveFreeNextPeriod } from "@/lib/stripe";
+import {
+  getMembershipById,
+  hasLaterMembership,
+  recordFreeDays,
+} from "@/lib/db";
+import { getClubToday } from "@/lib/dates";
+import { addFreeDaysBeforeNextCharge, giveFreeNextPeriod } from "@/lib/stripe";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -10,10 +15,14 @@ const bodySchema = z.object({
   membershipId: z.number().int().positive(),
 });
 
-// Gives a recurring monthly member their next month free (competition
-// prizes, goodwill) without cancelling or pausing their subscription: the
-// next renewal invoice comes out at $0 and is marked paid, and billing
-// resumes as normal the month after. See giveFreeNextPeriod.
+// 4 weeks — the club's "month" (see MEMBERSHIP_CYCLE_DAYS).
+const FREE_MONTH_DAYS = 28;
+
+// Gives any active member a free month (competition prizes, goodwill):
+// - one-time (card or cash): 4 more weeks added to the end date;
+// - recurring monthly: the next renewal invoice comes out at $0;
+// - recurring quarterly: 4 free weeks after the current quarter, then
+//   quarterly billing carries on.
 export async function POST(request: Request) {
   if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -45,34 +54,69 @@ export async function POST(request: Request) {
       { status: 404 },
     );
   }
-  if (!membership.stripeSubscriptionId || !membership.recurring) {
+  if (membership.status !== "active") {
     return NextResponse.json(
-      {
-        error:
-          "Only auto-renewing card members can be given a free month — cash and one-time memberships aren't billed by Stripe.",
-      },
+      { error: "Only active memberships can be given a free month." },
       { status: 400 },
-    );
-  }
-  // A 100%-off "once" coupon covers one whole billing cycle, which for a
-  // quarterly member would be three months free, not one.
-  if (membership.plan !== "monthly") {
-    return NextResponse.json(
-      { error: "Free months can only be given to monthly members." },
-      { status: 400 },
-    );
-  }
-  if (membership.cancelAtPeriodEnd) {
-    return NextResponse.json(
-      {
-        error:
-          "This membership is set to cancel at period end, so there's no next renewal to make free.",
-      },
-      { status: 409 },
     );
   }
 
   try {
+    // One-time (including cash) memberships: 4 more weeks on the end date.
+    if (!membership.recurring) {
+      const today = getClubToday().dateKey;
+      if (!membership.periodEnd || membership.periodEnd < today) {
+        return NextResponse.json(
+          { error: `${membership.name}'s membership has already ended.` },
+          { status: 409 },
+        );
+      }
+      if (await hasLaterMembership(membership)) {
+        return NextResponse.json(
+          {
+            error: `${membership.name} has already renewed — give the free month on their newer membership instead.`,
+          },
+          { status: 409 },
+        );
+      }
+      const periodEnd = await recordFreeDays(membership.id, FREE_MONTH_DAYS, true);
+      return NextResponse.json({ ok: true, kind: "extended", periodEnd });
+    }
+
+    if (!membership.stripeSubscriptionId) {
+      return NextResponse.json(
+        { error: "This membership has no Stripe subscription to adjust." },
+        { status: 400 },
+      );
+    }
+    if (membership.cancelAtPeriodEnd) {
+      return NextResponse.json(
+        {
+          error:
+            "This membership is set to cancel at period end, so there's no next renewal to make free.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Recurring quarterly: a free month after the current quarter, then
+    // quarterly billing carries on (a 100%-off coupon would free a whole
+    // quarter, so the next charge is pushed back 4 weeks instead).
+    if (membership.plan === "quarterly") {
+      const resumesAt = await addFreeDaysBeforeNextCharge(
+        membership.stripeSubscriptionId,
+        FREE_MONTH_DAYS,
+      );
+      const periodEnd = await recordFreeDays(membership.id, FREE_MONTH_DAYS, true);
+      return NextResponse.json({
+        ok: true,
+        kind: "deferred",
+        periodEnd,
+        billingResumes: new Date(resumesAt * 1000).toISOString().slice(0, 10),
+      });
+    }
+
+    // Recurring monthly: the next renewal invoice comes out at $0.
     const { alreadyQueued } = await giveFreeNextPeriod(
       membership.stripeSubscriptionId,
     );
@@ -84,7 +128,8 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    return NextResponse.json({ ok: true });
+    await recordFreeDays(membership.id, FREE_MONTH_DAYS, false);
+    return NextResponse.json({ ok: true, kind: "free-renewal" });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not reach Stripe";
     return NextResponse.json({ error: message }, { status: 502 });

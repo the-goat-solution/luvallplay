@@ -112,6 +112,9 @@ async function ensureTablesImpl() {
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_token TEXT UNIQUE;`;
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_reminder_sent_at TIMESTAMPTZ;`;
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_of INT;`;
+  // Total free days an admin has given this membership ("Give free month"),
+  // shown on the Members page.
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS free_days_granted INT NOT NULL DEFAULT 0;`;
   await sql`
     CREATE TABLE IF NOT EXISTS donations (
       id SERIAL PRIMARY KEY,
@@ -1198,6 +1201,8 @@ export type MembershipRow = {
   method: "card" | "cash";
   /** When the one-time renewal reminder went out (only selected by listMemberships). */
   renewalReminderSentAt?: string | null;
+  /** Free days given by an admin (only selected by listMemberships). */
+  freeDaysGranted?: number;
 };
 
 function mapMembershipRow(r: {
@@ -1216,6 +1221,7 @@ function mapMembershipRow(r: {
   stripe_subscription_id: string | null;
   stripe_payment_intent_id: string | null;
   renewal_reminder_sent_at?: Date | null;
+  free_days_granted?: number;
 }): MembershipRow {
   return {
     id: r.id,
@@ -1238,6 +1244,7 @@ function mapMembershipRow(r: {
     renewalReminderSentAt: r.renewal_reminder_sent_at
       ? r.renewal_reminder_sent_at.toISOString()
       : null,
+    freeDaysGranted: r.free_days_granted ?? 0,
   };
 }
 
@@ -1246,7 +1253,7 @@ function mapMembershipRow(r: {
 // until Stripe's period-end webhook flips the status).
 export async function listMemberships(): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id, renewal_reminder_sent_at
+    SELECT id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id, renewal_reminder_sent_at, free_days_granted
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due', 'unpaid', 'incomplete')
     ORDER BY plan, created_at DESC;
@@ -1568,4 +1575,45 @@ export async function getActiveRenewalOf(
   );
   const row = rows[0];
   return row ? mapMembershipRow(row as Parameters<typeof mapMembershipRow>[0]) : null;
+}
+
+// Another active membership for the same person and day that starts after
+// this one ends — i.e. it has already been renewed or re-joined, so
+// extending this one would overlap it.
+export async function hasLaterMembership(m: MembershipRow): Promise<boolean> {
+  if (!m.periodEnd) return false;
+  const { rows } = await sql`
+    SELECT 1 FROM memberships
+    WHERE id <> ${m.id}
+      AND lower(email) = lower(${m.email})
+      AND day = ${m.day}
+      AND status = 'active'
+      AND period_start > ${m.periodEnd}
+    LIMIT 1;
+  `;
+  return rows.length > 0;
+}
+
+// Records a free-days grant. `extendPeriodEnd` also moves the access window's
+// end date (one-time memberships, and quarterly subscriptions whose next
+// charge was pushed back); a one-time membership's renewal reminder is reset
+// so it goes out again 5 days before the new end date.
+export async function recordFreeDays(
+  membershipId: number,
+  days: number,
+  extendPeriodEnd: boolean,
+): Promise<string | null> {
+  const { rows } = await sql`
+    UPDATE memberships
+    SET
+      period_end = CASE WHEN ${extendPeriodEnd} THEN period_end + ${days}::int ELSE period_end END,
+      renewal_reminder_sent_at = CASE
+        WHEN ${extendPeriodEnd} AND recurring = FALSE THEN NULL
+        ELSE renewal_reminder_sent_at
+      END,
+      free_days_granted = free_days_granted + ${days}::int
+    WHERE id = ${membershipId}
+    RETURNING period_end::text AS period_end;
+  `;
+  return (rows[0]?.period_end as string | undefined) ?? null;
 }

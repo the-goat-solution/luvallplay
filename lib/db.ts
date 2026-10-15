@@ -1203,6 +1203,8 @@ export type MembershipRow = {
   renewalReminderSentAt?: string | null;
   /** Free days given by an admin (only selected by listMemberships). */
   freeDaysGranted?: number;
+  stripePaymentIntentId?: string | null;
+  createdAt?: string | null;
 };
 
 function mapMembershipRow(r: {
@@ -1222,6 +1224,7 @@ function mapMembershipRow(r: {
   stripe_payment_intent_id: string | null;
   renewal_reminder_sent_at?: Date | null;
   free_days_granted?: number;
+  created_at?: Date | null;
 }): MembershipRow {
   return {
     id: r.id,
@@ -1245,6 +1248,8 @@ function mapMembershipRow(r: {
       ? r.renewal_reminder_sent_at.toISOString()
       : null,
     freeDaysGranted: r.free_days_granted ?? 0,
+    stripePaymentIntentId: r.stripe_payment_intent_id ?? null,
+    createdAt: r.created_at ? r.created_at.toISOString() : null,
   };
 }
 
@@ -1497,7 +1502,7 @@ export async function claimBookingReminder(bookingId: number): Promise<boolean> 
 const MEMBERSHIP_COLUMNS = `id, email, first_name, last_name, phone, plan, day,
   period_start::text AS period_start, period_end::text AS period_end, status,
   cancel_at_period_end, recurring, stripe_subscription_id,
-  stripe_payment_intent_id, renewal_reminder_sent_at`;
+  stripe_payment_intent_id, renewal_reminder_sent_at, free_days_granted, created_at`;
 
 // Active one-time (non-recurring) memberships ending between `from` and
 // `through` (inclusive) that haven't had a renewal reminder yet and haven't
@@ -1704,4 +1709,113 @@ export async function listRecentlyEndedMemberships(
   return rows.map((r) =>
     mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Stripe sync (see lib/stripe-sync.ts).
+
+// Every membership the Stripe sync should look at: everything that has been
+// live at some point, plus pending rows linked to a Stripe payment (a missed
+// webhook leaves a paid membership stuck there).
+export async function listMembershipsForStripeSync(): Promise<MembershipRow[]> {
+  const { rows } = await sql.query(
+    `SELECT ${MEMBERSHIP_COLUMNS} FROM memberships
+     WHERE status <> 'pending'
+        OR stripe_payment_intent_id IS NOT NULL
+        OR stripe_subscription_id IS NOT NULL
+     ORDER BY id;`,
+  );
+  return rows.map((r) =>
+    mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]),
+  );
+}
+
+export async function updateMembershipFromStripe(
+  id: number,
+  patch: {
+    status?: string;
+    plan?: MembershipTier;
+    periodStart?: string;
+    periodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+  },
+): Promise<void> {
+  await sql.query(
+    `UPDATE memberships SET
+       status = COALESCE($2, status),
+       plan = COALESCE($3, plan),
+       period_start = COALESCE($4::date, period_start),
+       period_end = COALESCE($5::date, period_end),
+       cancel_at_period_end = COALESCE($6, cancel_at_period_end)
+     WHERE id = $1;`,
+    [
+      id,
+      patch.status ?? null,
+      patch.plan ?? null,
+      patch.periodStart ?? null,
+      patch.periodEnd ?? null,
+      patch.cancelAtPeriodEnd ?? null,
+    ],
+  );
+}
+
+// A membership paid in Stripe that has no row here (a lost signup).
+export async function insertMembershipFromStripe(input: {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  plan: MembershipTier;
+  day: MembershipDay;
+  periodStart: string;
+  periodEnd: string;
+  recurring: boolean;
+  status: string;
+  stripePaymentIntentId?: string;
+  stripeSubscriptionId?: string;
+}): Promise<number> {
+  const { rows } = await sql.query(
+    `INSERT INTO memberships
+       (email, first_name, last_name, phone, plan, day, period_start, period_end,
+        recurring, status, stripe_payment_intent_id, stripe_subscription_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id;`,
+    [
+      input.email,
+      input.firstName,
+      input.lastName,
+      input.phone,
+      input.plan,
+      input.day,
+      input.periodStart,
+      input.periodEnd,
+      input.recurring,
+      input.status,
+      input.stripePaymentIntentId ?? null,
+      input.stripeSubscriptionId ?? null,
+    ],
+  );
+  return (rows[0] as { id: number }).id;
+}
+
+// The first play day for `day` on or after `fromDate` — a synced session if
+// there is one, otherwise the next date that falls on that weekday.
+export async function firstMembershipDayOnOrAfter(
+  fromDate: string,
+  day: MembershipDay,
+): Promise<string> {
+  const dow = MEMBERSHIP_DAY_TO_DOW[day];
+  const { rows } = await sql.query(
+    `SELECT MIN(date)::text AS date FROM sessions
+     WHERE google_event_id IS NOT NULL
+       AND EXTRACT(DOW FROM date) = $2
+       AND date >= $1::date
+       AND date < ($1::date + 7);`,
+    [fromDate, dow],
+  );
+  const found = (rows[0] as { date: string | null } | undefined)?.date;
+  if (found) return found;
+  const start = new Date(`${fromDate}T00:00:00Z`);
+  const offset = (dow - start.getUTCDay() + 7) % 7;
+  return addDays(fromDate, offset);
 }

@@ -1,9 +1,10 @@
 // Three Wolves casual play: a live court board for ordinary (non mini game)
-// play days. Players are split into two tiers. A play day is 1.5 hours,
-// counted from when the first games go on court: for the first hour (two
-// thirds) every doubles team is one tier 1 player with one tier 2 player;
-// for the last half hour games are played within a tier (four tier 1
-// players, or four tier 2 players), still rotating partners. Whenever a court
+// play days. Players are split into two tiers. A play day is booked as 1.5
+// hours, counted from when the first games go on court: for the first hour
+// (two thirds) every doubles team is one tier 1 player with one tier 2
+// player; after that games are played within a tier (four tier 1 players, or
+// four tier 2 players), still rotating partners, and keep going until the
+// organiser concludes the play day (courts sometimes run over). Whenever a court
 // comes free the next game is picked straight away from whoever has waited
 // longest, so courts never sit idle waiting for a whole "round" to finish.
 //

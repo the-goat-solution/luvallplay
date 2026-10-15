@@ -1,8 +1,10 @@
 // Three Wolves casual play: a live court board for ordinary (non mini game)
-// play days. Players are split into two tiers, and every doubles team is one
-// tier 1 player with one tier 2 player. Whenever a court comes free the next
-// game is picked straight away from whoever has waited longest, so courts
-// never sit idle waiting for a whole "round" to finish.
+// play days. Players are split into two tiers. For the first two thirds of
+// the play day every doubles team is one tier 1 player with one tier 2
+// player; for the last third games are played within a tier (four tier 1
+// players, or four tier 2 players), still rotating partners. Whenever a court
+// comes free the next game is picked straight away from whoever has waited
+// longest, so courts never sit idle waiting for a whole "round" to finish.
 //
 // Everything here is pure and shared by the page and the API. The API owns
 // the stored state and runs every action through applyAction().
@@ -13,6 +15,22 @@ export const MIN_COURTS = 1;
 export const MAX_COURTS = 4;
 export const MAX_GUEST_NAME = 30;
 export const MAX_HISTORY = 400;
+export const MAX_COURT_NUMBER = 6;
+/** Mixed-tier share of the play day; the rest is played within tiers. */
+export const MIXED_SHARE = 2 / 3;
+/**
+ * When the play day has no start and end time on the calendar, within-tier
+ * games start this long after the courts go live (two thirds of a 3 hour night).
+ */
+export const DEFAULT_MIXED_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * mixed: every team is one tier 1 with one tier 2 player.
+ * split: games are four tier 1 players or four tier 2 players.
+ */
+export type TierPhase = "mixed" | "split";
+/** auto follows the clock; the other two are an organiser override. */
+export type TierMode = "auto" | TierPhase;
 
 export type Player = {
   id: string;
@@ -35,6 +53,8 @@ export type Game = {
   teamB: [string, string];
   startedAt: number;
   endedAt?: number;
+  /** Which rule picked it. Only set on the "up next" preview. */
+  phase?: TierPhase;
 };
 
 export type CasualPlayState = {
@@ -54,6 +74,21 @@ export type CasualPlayState = {
    * existed, which reads the same as null.
    */
   concludedAt?: number | null;
+  /** When the courts went live, epoch ms. Missing on older boards. */
+  startedAt?: number | null;
+  /**
+   * When within-tier games take over: two thirds of the way through the play
+   * day's calendar time. Kept in sync with the session on every load; null
+   * when the session has no times (then DEFAULT_MIXED_MS after startedAt).
+   */
+  splitAt?: number | null;
+  /** Organiser override of the mixed/within-tier switch. Missing = auto. */
+  tierMode?: TierMode;
+  /**
+   * The venue's own court numbers, index = court number − 1 ("" = not set,
+   * shown as the board's 1, 2, 3…). Missing on older boards.
+   */
+  courtNumbers?: string[];
 };
 
 export type Action =
@@ -63,6 +98,8 @@ export type Action =
   | { type: "removeGuest"; playerId: string }
   | { type: "setPaused"; playerId: string; paused: boolean }
   | { type: "setCourts"; courts: number }
+  | { type: "setCourtNumber"; court: number; number: string }
+  | { type: "setTierMode"; mode: TierMode }
   | { type: "start" }
   | { type: "finish"; court: number }
   | { type: "void"; court: number }
@@ -83,7 +120,53 @@ export function emptyState(date: string, courts: number): CasualPlayState {
     history: [],
     nextGameId: 1,
     concludedAt: null,
+    startedAt: null,
+    splitAt: null,
+    tierMode: "auto",
+    courtNumbers: Array.from({ length: n }, () => ""),
   };
+}
+
+/** The court's name on the board: the venue's number if set, else its position. */
+export function courtLabel(state: CasualPlayState, court: number): string {
+  return state.courtNumbers?.[court - 1]?.trim() || String(court);
+}
+
+/**
+ * Changes how many courts the board runs. Games on courts that no longer
+ * exist are called off; their players go back to the queue without the game
+ * counting.
+ */
+export function resizeCourts(state: CasualPlayState, courts: number): CasualPlayState {
+  const n = clampCourts(courts);
+  return {
+    ...state,
+    courts: n,
+    onCourt: Array.from({ length: n }, (_, i) => state.onCourt[i] ?? null),
+    courtNumbers: Array.from({ length: n }, (_, i) => state.courtNumbers?.[i] ?? ""),
+  };
+}
+
+/** When the board switches to within-tier games, or null if it can't tell yet. */
+export function splitTime(state: CasualPlayState): number | null {
+  if (state.splitAt) return state.splitAt;
+  return state.startedAt ? state.startedAt + DEFAULT_MIXED_MS : null;
+}
+
+/** Whether games right now are mixed-tier or within a tier. */
+export function tierPhase(state: CasualPlayState, now: number): TierPhase {
+  const mode = state.tierMode ?? "auto";
+  if (mode !== "auto") return mode;
+  const at = splitTime(state);
+  return at !== null && now >= at ? "split" : "mixed";
+}
+
+/** The split point for a session that runs from start to end (ISO strings). */
+export function splitAtForSession(start: string | null, end: string | null): number | null {
+  const a = start ? Date.parse(start) : NaN;
+  const b = end ? Date.parse(end) : NaN;
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return null;
+  return Math.round(a + (b - a) * MIXED_SHARE);
 }
 
 export function isConcluded(state: CasualPlayState): boolean {
@@ -145,11 +228,17 @@ function buildHistory(state: CasualPlayState): History {
   return { partners, opponents, lastFours };
 }
 
-// Cost weights. Fairness (games played) dominates; an all-tier-2 or
-// all-tier-1 team only happens when a tier is genuinely short of players.
+// Cost weights. Fairness (games played) dominates. In the mixed phase an
+// all-tier-2 or all-tier-1 team only happens when a tier is genuinely short
+// of players; in the within-tier phase a game mixing tiers only happens when
+// neither tier has four players free.
 const W_GAME_BEHIND = 100;
 const W_QUEUE_RANK = 4;
 const W_SAME_TIER_TEAM = 1000;
+const W_CROSS_TIER_GAME = 1000;
+// A within-tier fallback game that has to mix tiers still pairs one of each
+// where it can, but weighed lighter than fairness.
+const W_SAME_TIER_TEAM_FALLBACK = 50;
 const W_PARTNER_REPEAT = 30;
 const W_OPPONENT_REPEAT = 8;
 const W_SAME_FOUR = 40;
@@ -175,6 +264,7 @@ function combinations<T>(items: T[], k: number): T[][] {
  */
 export function pickGame(
   state: CasualPlayState,
+  phase: TierPhase = "mixed",
   planned: Set<string> = new Set(),
   random: () => number = Math.random,
 ): Omit<Game, "id" | "court" | "startedAt"> | null {
@@ -209,6 +299,10 @@ export function pickGame(
       (history.lastFours.has(fourKey(four.map((p) => p.id))) ? W_SAME_FOUR : 0) -
       four.filter((p) => planned.has(p.id)).length * W_PLANNED +
       skipped(four) * W_SKIP;
+    const oneTier = four.every((p) => p.tier === four[0].tier);
+    const sameTierTeam =
+      phase === "mixed" ? W_SAME_TIER_TEAM : oneTier ? 0 : W_SAME_TIER_TEAM_FALLBACK;
+    const tierCost = phase === "split" && !oneTier ? W_CROSS_TIER_GAME : 0;
     const [a, b, c, d] = four;
     const pairings: [Player, Player, Player, Player][] = [
       [a, b, c, d],
@@ -216,9 +310,9 @@ export function pickGame(
       [a, d, b, c],
     ];
     for (const [p1, p2, p3, p4] of pairings) {
-      let cost = base + random() * 3;
-      if (p1.tier === p2.tier) cost += W_SAME_TIER_TEAM;
-      if (p3.tier === p4.tier) cost += W_SAME_TIER_TEAM;
+      let cost = base + tierCost + random() * 3;
+      if (p1.tier === p2.tier) cost += sameTierTeam;
+      if (p3.tier === p4.tier) cost += sameTierTeam;
       cost += (history.partners.get(pairKey(p1.id, p2.id)) ?? 0) * W_PARTNER_REPEAT;
       cost += (history.partners.get(pairKey(p3.id, p4.id)) ?? 0) * W_PARTNER_REPEAT;
       for (const x of [p1, p2]) {
@@ -240,8 +334,11 @@ export function pickGame(
  * rotation. They may be mid-game (the preview looks ahead), and fillCourts
  * clears the preview whenever it puts a game on, so it's never stale there.
  */
-function previewStillValid(state: CasualPlayState, game: Game | null): game is Game {
+function previewStillValid(state: CasualPlayState, game: Game | null, phase: TierPhase): game is Game {
   if (!game) return false;
+  // A preview picked before the switch to within-tier games (or before an
+  // organiser override) is picked again under the current rule.
+  if ((game.phase ?? "mixed") !== phase) return false;
   const ok = new Set(state.players.filter((p) => p.tier !== null && !p.paused).map((p) => p.id));
   return gamePlayers(game).every((id) => ok.has(id));
 }
@@ -252,6 +349,7 @@ function fillCourts(state: CasualPlayState, now: number, random: () => number): 
     state.next = null;
     return;
   }
+  const phase = tierPhase(state, now);
   for (let i = 0; i < state.courts; i++) {
     if (state.onCourt[i]) continue;
     // Picked fresh from everyone free right now (including whoever just came
@@ -259,7 +357,7 @@ function fillCourts(state: CasualPlayState, now: number, random: () => number): 
     // exactly four people are waiting, locking the preview in would keep the
     // same two pairs cycling all night.
     const planned = new Set(state.next ? gamePlayers(state.next) : []);
-    const picked = pickGame(state, planned, random);
+    const picked = pickGame(state, phase, planned, random);
     state.next = null;
     if (!picked) break;
     state.onCourt[i] = {
@@ -270,7 +368,7 @@ function fillCourts(state: CasualPlayState, now: number, random: () => number): 
       startedAt: now,
     };
   }
-  refreshNext(state, random);
+  refreshNext(state, now, random);
 }
 
 /**
@@ -294,15 +392,16 @@ function lookahead(state: CasualPlayState): CasualPlayState {
   };
 }
 
-function refreshNext(state: CasualPlayState, random: () => number, force = false): void {
+function refreshNext(state: CasualPlayState, now: number, random: () => number, force = false): void {
   if (!state.started || isConcluded(state)) {
     state.next = null;
     return;
   }
-  if (!force && previewStillValid(state, state.next)) return;
-  const picked = pickGame(lookahead(state), new Set(), random);
+  const phase = tierPhase(state, now);
+  if (!force && previewStillValid(state, state.next, phase)) return;
+  const picked = pickGame(lookahead(state), phase, new Set(), random);
   state.next = picked
-    ? { id: 0, court: 0, teamA: picked.teamA, teamB: picked.teamB, startedAt: 0 }
+    ? { id: 0, court: 0, teamA: picked.teamA, teamB: picked.teamB, startedAt: 0, phase }
     : null;
 }
 
@@ -376,8 +475,10 @@ export function applyAction(
       break;
     }
     case "rename": {
+      // Roster players are named from the play day roster; only walk-ins
+      // are named here.
       const p = findPlayer(state, action.playerId);
-      if (!p) throw new ActionError("Player not found");
+      if (!p || !p.guest) throw new ActionError("Guest not found");
       const name = action.name.trim().slice(0, MAX_GUEST_NAME);
       if (!name) throw new ActionError("Name can't be empty");
       p.name = name;
@@ -418,17 +519,31 @@ export function applyAction(
       break;
     }
     case "setCourts": {
-      const n = clampCourts(action.courts);
-      // Games on courts that no longer exist are called off; their players
-      // go back to the queue without the game counting.
-      state.onCourt = Array.from({ length: n }, (_, i) => state.onCourt[i] ?? null);
-      state.courts = n;
+      Object.assign(state, resizeCourts(state, action.courts));
       break;
+    }
+    case "setCourtNumber": {
+      if (action.court < 1 || action.court > state.courts) throw new ActionError("That court isn't in use");
+      const number = action.number.trim().slice(0, MAX_COURT_NUMBER);
+      const numbers = Array.from({ length: state.courts }, (_, i) => state.courtNumbers?.[i] ?? "");
+      if (number && numbers.some((n, i) => i !== action.court - 1 && n.toLowerCase() === number.toLowerCase())) {
+        throw new ActionError(`Court ${number} is already on the board`);
+      }
+      numbers[action.court - 1] = number;
+      state.courtNumbers = numbers;
+      return state;
+    }
+    case "setTierMode": {
+      if (!["auto", "mixed", "split"].includes(action.mode)) throw new ActionError("Invalid mode");
+      state.tierMode = action.mode;
+      refreshNext(state, now, random);
+      return state;
     }
     case "start": {
       if (state.started) return state;
       state.concludedAt = null;
       state.started = true;
+      state.startedAt = now;
       for (const p of state.players) p.readyAt = now;
       break;
     }
@@ -463,11 +578,13 @@ export function applyAction(
       break;
     }
     case "reshuffleNext": {
-      refreshNext(state, random, true);
+      refreshNext(state, now, random, true);
       return state;
     }
     case "endSession": {
       const reset = emptyState(state.date, state.courts);
+      reset.courtNumbers = Array.from({ length: state.courts }, (_, i) => state.courtNumbers?.[i] ?? "");
+      reset.splitAt = state.splitAt ?? null;
       reset.players = state.players.map((p) => ({ ...p, games: 0, paused: false, readyAt: now }));
       return reset;
     }
@@ -498,6 +615,10 @@ export function isValidAction(value: unknown): value is Action {
       return str(a.playerId) && typeof a.paused === "boolean";
     case "setCourts":
       return court(a.courts);
+    case "setCourtNumber":
+      return court(a.court) && typeof a.number === "string" && a.number.length <= 20;
+    case "setTierMode":
+      return a.mode === "auto" || a.mode === "mixed" || a.mode === "split";
     case "finish":
     case "void":
       return court(a.court);

@@ -6,18 +6,23 @@ import { ModalShell } from "@/components/modals/ModalShell";
 import type { Lang } from "@/lib/i18n";
 import {
   MAX_COURTS,
+  MAX_COURT_NUMBER,
   MAX_GUEST_NAME,
   MIN_COURTS,
+  courtLabel,
   isConcluded,
   onCourtIds,
   queueOrder,
+  splitTime,
   summarise,
+  tierPhase,
   type Action,
   type CasualPlayResponse,
   type CasualPlayState,
   type Game,
   type Player,
   type Tier,
+  type TierMode,
 } from "@/lib/casual-play";
 
 const VIEWER_POLL_MS = 5_000;
@@ -38,6 +43,21 @@ const COPY = {
     tabCourts: "Courts",
     playDay: "Play day",
     courtsInUse: "Courts in use",
+    courtsSynced: "Same as the play day roster: changing it here changes it there too.",
+    courtNumbers: "Court numbers at the venue",
+    courtNumberLabel: (n: number) => `Board court ${n}`,
+    courtNumberPlaceholder: (n: number) => `${n}`,
+    rotation: "Tier rotation",
+    modeAuto: "Auto",
+    modeMixed: "Mixed tiers",
+    modeSplit: "Within tiers",
+    phaseMixedUntil: (t: string) => `Mixed tier 1 + tier 2 teams until ${t}, then games within each tier.`,
+    phaseMixedPending: "Mixed tier 1 + tier 2 teams for the first two thirds of the play day, then games within each tier.",
+    phaseSplitSince: (t: string) => `Games within each tier since ${t}: four tier 1 or four tier 2 players.`,
+    phaseMixedForced: "Mixed tier 1 + tier 2 teams (set by an organiser).",
+    phaseSplitForced: "Games within each tier (set by an organiser).",
+    phaseMixedShort: "Mixed tiers",
+    phaseSplitShort: "Within tiers",
     tier1: "Tier 1",
     tier2: "Tier 2",
     out: "Not playing",
@@ -110,13 +130,14 @@ const COPY = {
     live: "Live",
     howTitle: "How the rotation works",
     how: [
-      "Every team is one tier 1 player with one tier 2 player.",
+      "For the first two thirds of the play day, every team is one tier 1 player with one tier 2 player.",
+      "For the last third, games are played within each tier: four tier 1 players or four tier 2 players, partners still mixed up.",
       "When a court finishes, the next game goes straight onto it: no waiting for other courts.",
       "Whoever has played the fewest games goes on first; ties go to whoever has waited longest.",
       "Partners and opponents are mixed up, so you rarely play with the same person twice.",
     ],
     vs: "vs",
-    onCourt: (n: number) => `on court ${n}`,
+    onCourt: (n: string) => `on court ${n}`,
   },
   vi: {
     eyebrow: "Chơi Tự Do",
@@ -128,6 +149,21 @@ const COPY = {
     tabCourts: "Sân",
     playDay: "Ngày chơi",
     courtsInUse: "Số sân",
+    courtsSynced: "Giống danh sách ngày chơi: đổi ở đây thì bên đó cũng đổi theo.",
+    courtNumbers: "Số sân tại nhà thi đấu",
+    courtNumberLabel: (n: number) => `Sân ${n} trên bảng`,
+    courtNumberPlaceholder: (n: number) => `${n}`,
+    rotation: "Xoay vòng theo nhóm",
+    modeAuto: "Tự động",
+    modeMixed: "Trộn nhóm",
+    modeSplit: "Trong nhóm",
+    phaseMixedUntil: (t: string) => `Đội gồm nhóm 1 + nhóm 2 đến ${t}, sau đó chơi trong từng nhóm.`,
+    phaseMixedPending: "Đội gồm nhóm 1 + nhóm 2 trong hai phần ba đầu buổi, sau đó chơi trong từng nhóm.",
+    phaseSplitSince: (t: string) => `Chơi trong từng nhóm từ ${t}: bốn người nhóm 1 hoặc bốn người nhóm 2.`,
+    phaseMixedForced: "Đội gồm nhóm 1 + nhóm 2 (BTC chọn).",
+    phaseSplitForced: "Chơi trong từng nhóm (BTC chọn).",
+    phaseMixedShort: "Trộn nhóm",
+    phaseSplitShort: "Trong nhóm",
     tier1: "Nhóm 1",
     tier2: "Nhóm 2",
     out: "Không chơi",
@@ -200,13 +236,14 @@ const COPY = {
     live: "Trực tiếp",
     howTitle: "Cách xoay vòng",
     how: [
-      "Mỗi đội gồm một người nhóm 1 và một người nhóm 2.",
+      "Trong hai phần ba đầu buổi, mỗi đội gồm một người nhóm 1 và một người nhóm 2.",
+      "Một phần ba cuối buổi, chơi trong từng nhóm: bốn người nhóm 1 hoặc bốn người nhóm 2, đồng đội vẫn được xáo trộn.",
       "Sân nào xong là trận tiếp theo vào ngay, không cần chờ các sân khác.",
       "Ai chơi ít trận nhất được vào trước; bằng nhau thì ai chờ lâu hơn vào trước.",
       "Đồng đội và đối thủ được xáo trộn để hiếm khi chơi cùng một người hai lần.",
     ],
     vs: "vs",
-    onCourt: (n: number) => `đang ở sân ${n}`,
+    onCourt: (n: string) => `đang ở sân ${n}`,
   },
 } satisfies Record<Lang, Record<string, unknown>>;
 
@@ -563,7 +600,9 @@ export function CasualPlay() {
                 <SetupPanel
                   state={state}
                   copy={c}
+                  lang={lang}
                   busy={busy}
+                  serverNow={serverNow}
                   onAction={act}
                   onDragChange={(d) => (dragging.current = d)}
                   onStarted={() => setTab("courts")}
@@ -574,6 +613,7 @@ export function CasualPlay() {
                   names={names}
                   copy={c}
                   organiser={organiser}
+                  lang={lang}
                   busy={busy}
                   serverNow={serverNow}
                   onAction={act}
@@ -680,9 +720,13 @@ function SetupPanel({
   onAction,
   onDragChange,
   onStarted,
+  lang,
+  serverNow,
 }: {
   state: CasualPlayState;
   copy: Copy;
+  lang: Lang;
+  serverNow: number;
   busy: boolean;
   onAction: (a: Action) => Promise<boolean>;
   onDragChange: (dragging: boolean) => void;
@@ -749,6 +793,22 @@ function SetupPanel({
               +
             </button>
           </div>
+          <p className="cp-field-note">{c.courtsSynced}</p>
+          <div className="cp-court-numbers">
+            <div className="section-label">{c.courtNumbers}</div>
+            <div className="cp-court-number-row">
+              {Array.from({ length: state.courts }, (_, i) => (
+                <CourtNumberField
+                  key={i}
+                  court={i + 1}
+                  value={state.courtNumbers?.[i] ?? ""}
+                  copy={c}
+                  busy={busy}
+                  onSave={(number) => onAction({ type: "setCourtNumber", court: i + 1, number })}
+                />
+              ))}
+            </div>
+          </div>
         </div>
         <div className="mg-card cp-start-card">
           <p className={`cp-balance${t1 === t2 ? " ok" : ""}`}>
@@ -771,6 +831,8 @@ function SetupPanel({
           )}
         </div>
       </div>
+
+      <RotationCard state={state} copy={c} lang={lang} busy={busy} serverNow={serverNow} onAction={onAction} />
 
       <p className="cp-hint">{c.dragHint}</p>
 
@@ -816,6 +878,119 @@ function SetupPanel({
         </ol>
       </details>
     </section>
+  );
+}
+
+function formatClock(ms: number, lang: Lang) {
+  return new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : "en-NZ", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Pacific/Auckland",
+  }).format(new Date(ms));
+}
+
+/** One venue court number; saved when the field loses focus or on Enter. */
+function CourtNumberField({
+  court,
+  value,
+  copy: c,
+  busy,
+  onSave,
+}: {
+  court: number;
+  value: string;
+  copy: Copy;
+  busy: boolean;
+  onSave: (number: string) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const editing = useRef(false);
+  useEffect(() => {
+    if (!editing.current) setDraft(value);
+  }, [value]);
+
+  const save = async () => {
+    editing.current = false;
+    const number = draft.trim();
+    if (number === value) return setDraft(value);
+    if (!(await onSave(number))) setDraft(value);
+  };
+
+  return (
+    <label className="cp-court-number">
+      <span>{c.courtNumberLabel(court)}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={draft}
+        maxLength={MAX_COURT_NUMBER}
+        placeholder={c.courtNumberPlaceholder(court)}
+        disabled={busy && !editing.current}
+        onFocus={() => (editing.current = true)}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+      />
+    </label>
+  );
+}
+
+/** Mixed-tier vs within-tier games: follows the clock unless an organiser overrides it. */
+function RotationCard({
+  state,
+  copy: c,
+  lang,
+  busy,
+  serverNow,
+  onAction,
+}: {
+  state: CasualPlayState;
+  copy: Copy;
+  lang: Lang;
+  busy: boolean;
+  serverNow: number;
+  onAction: (a: Action) => Promise<boolean>;
+}) {
+  const mode = state.tierMode ?? "auto";
+  const phase = tierPhase(state, serverNow);
+  const at = splitTime(state);
+  const status =
+    mode === "mixed"
+      ? c.phaseMixedForced
+      : mode === "split"
+        ? c.phaseSplitForced
+        : at === null
+          ? c.phaseMixedPending
+          : phase === "split"
+            ? c.phaseSplitSince(formatClock(at, lang))
+            : c.phaseMixedUntil(formatClock(at, lang));
+  const modes: [TierMode, string][] = [
+    ["auto", c.modeAuto],
+    ["mixed", c.modeMixed],
+    ["split", c.modeSplit],
+  ];
+  return (
+    <div className="mg-card cp-rotation">
+      <div className="section-label">{c.rotation}</div>
+      <div className="cp-segmented" role="radiogroup" aria-label={c.rotation}>
+        {modes.map(([m, label]) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={mode === m}
+            className={mode === m ? "active" : ""}
+            disabled={busy}
+            onClick={() => mode !== m && onAction({ type: "setTierMode", mode: m })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="cp-field-note">{status}</p>
+    </div>
   );
 }
 
@@ -975,16 +1150,14 @@ function TierBoard({
                     <span className="cp-chip-name">{p.name}</span>
                     {p.guest && <span className="cp-chip-tag">{c.guest}</span>}
                     {started && p.games > 0 && <span className="cp-chip-games">{p.games}</span>}
-                    {selected === p.id && (
+                    {selected === p.id && p.guest && (
                       <span className="cp-chip-tools">
                         <button type="button" onClick={() => onRename(p)}>
                           {c.rename}
                         </button>
-                        {p.guest && (
-                          <button type="button" onClick={() => onRemoveGuest(p.id)}>
-                            {c.remove}
-                          </button>
-                        )}
+                        <button type="button" onClick={() => onRemoveGuest(p.id)}>
+                          {c.remove}
+                        </button>
                       </span>
                     )}
                   </li>
@@ -1011,6 +1184,7 @@ function CourtsPanel({
   names,
   copy: c,
   organiser,
+  lang,
   busy,
   serverNow,
   onAction,
@@ -1021,6 +1195,7 @@ function CourtsPanel({
   names: Map<string, Player>;
   copy: Copy;
   organiser: boolean;
+  lang: Lang;
   busy: boolean;
   serverNow: number;
   onAction: (a: Action) => Promise<boolean>;
@@ -1034,7 +1209,9 @@ function CourtsPanel({
   const resting = inRotation.filter((p) => p.paused).sort((a, b) => a.name.localeCompare(b.name, "vi"));
   const name = (id: string) => names.get(id)?.name ?? "—";
   const courtOf = new Map(
-    state.onCourt.flatMap((g) => (g ? [...g.teamA, ...g.teamB].map((id) => [id, g.court] as const) : [])),
+    state.onCourt.flatMap((g) =>
+      g ? [...g.teamA, ...g.teamB].map((id) => [id, courtLabel(state, g.court)] as const) : [],
+    ),
   );
 
   if (isConcluded(state)) {
@@ -1072,7 +1249,7 @@ function CourtsPanel({
         {state.onCourt.map((game, i) => (
           <CourtCard
             key={`${i}-${game?.id ?? "free"}`}
-            court={i + 1}
+            court={courtLabel(state, i + 1)}
             game={game}
             name={name}
             copy={c}
@@ -1090,6 +1267,14 @@ function CourtsPanel({
         <div className="cp-next">
           <div className="cp-next-head">
             <span className="cp-next-label">{c.upNext}</span>
+            {organiser && (
+              <span className="cp-phase-pill">
+                {tierPhase(state, serverNow) === "split" ? c.phaseSplitShort : c.phaseMixedShort}
+                {(state.tierMode ?? "auto") === "auto" && tierPhase(state, serverNow) === "mixed" && splitTime(state)
+                  ? ` · ${formatClock(splitTime(state)!, lang)}`
+                  : ""}
+              </span>
+            )}
             {organiser && state.next && (
               <button
                 type="button"
@@ -1281,7 +1466,7 @@ function Matchup({
   copy: Copy;
   compact?: boolean;
   /** For the preview: which court a player is still finishing on, if any. */
-  courtOf?: Map<string, number>;
+  courtOf?: Map<string, string>;
 }) {
   const team = (ids: [string, string]) => (
     <div className="cp-team">
@@ -1354,7 +1539,8 @@ function CourtCard({
   onFinish,
   onCallOff,
 }: {
-  court: number;
+  /** The court's name on the board: venue number, or its position. */
+  court: string;
   game: Game | null;
   next: Game | null;
   name: (id: string) => string;

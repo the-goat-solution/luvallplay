@@ -1,14 +1,20 @@
 import crypto from "crypto";
 import { sql } from "@vercel/postgres";
 import {
+  ActionError,
   applyAction,
+  clampCourts,
   emptyState,
+  resizeCourts,
+  splitAtForSession,
   type Action,
   type CasualPlayState,
   type Player,
   type Tier,
 } from "./casual-play";
-import { getCourtsForDate, getRosterForDate } from "./db";
+import { getCourtsForDate, getRosterForDate, listSessionsInRange, setCourtsForDate } from "./db";
+import { notifyWaitlistIfSpotOpened } from "./waitlist-notify";
+import { maxPlayersForCourts } from "./constants";
 import { demoRoster, demoStore, isCasualPlayDemo } from "./casual-play-demo";
 
 // Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
@@ -34,8 +40,9 @@ async function ensureImpl() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
-  // Tier and nickname are remembered per person (by email), so next week's
-  // board starts with everyone already in the right tier.
+  // Tier is remembered per person (by email), so next week's board starts
+  // with everyone already in the right tier. nickname is no longer used: the
+  // board shows names from the play day roster.
   await sql`
     CREATE TABLE IF NOT EXISTS casual_play_profiles (
       email TEXT PRIMARY KEY,
@@ -88,7 +95,7 @@ function displayNames(players: RosterPlayer[]): Map<string, string> {
   );
 }
 
-type Profile = { tier: Tier | null; nickname: string | null };
+type Profile = { tier: Tier | null };
 
 async function profilesFor(emails: string[]): Promise<Map<string, Profile>> {
   if (emails.length === 0) return new Map();
@@ -96,21 +103,18 @@ async function profilesFor(emails: string[]): Promise<Map<string, Profile>> {
     return new Map(emails.flatMap((e) => (demoStore.profiles.has(e) ? [[e, demoStore.profiles.get(e)!]] : [])));
   }
   const { rows } = await sql.query(
-    `SELECT email, tier, nickname FROM casual_play_profiles WHERE email = ANY($1::text[]);`,
+    `SELECT email, tier FROM casual_play_profiles WHERE email = ANY($1::text[]);`,
     [emails],
   );
   return new Map(
-    rows.map((r) => [
-      r.email as string,
-      { tier: r.tier === 1 || r.tier === 2 ? (r.tier as Tier) : null, nickname: (r.nickname as string | null) ?? null },
-    ]),
+    rows.map((r) => [r.email as string, { tier: r.tier === 1 || r.tier === 2 ? (r.tier as Tier) : null }]),
   );
 }
 
 /**
  * Brings the stored board in line with the play day's roster: new sign-ups
  * appear (in their remembered tier), cancellations drop off unless they're
- * mid-game, and nicknames follow the profile. Guests are left alone.
+ * mid-game, and names follow the roster. Guests are left alone.
  */
 function mergeRoster(
   state: CasualPlayState,
@@ -126,7 +130,7 @@ function mergeRoster(
   const players: Player[] = state.players.filter((p) => p.guest || rosterIds.has(p.id) || busy.has(p.id));
   for (const r of roster) {
     const profile = profiles.get(r.email);
-    const name = profile?.nickname || names.get(r.id) || r.firstName;
+    const name = names.get(r.id) || r.firstName;
     const existing = byId.get(r.id);
     if (existing) {
       existing.name = name;
@@ -165,11 +169,32 @@ async function readStored(date: string): Promise<{ state: CasualPlayState; versi
   return rows[0];
 }
 
+/** Courts booked for the date, as set on the play day roster. */
+async function rosterCourts(date: string): Promise<number> {
+  if (isCasualPlayDemo()) return demoStore.courts.get(date) ?? 2;
+  return getCourtsForDate(date);
+}
+
+/** When within-tier games take over, from the session's calendar times. */
+async function sessionSplitAt(date: string): Promise<number | null> {
+  if (isCasualPlayDemo()) return null;
+  const [session] = await listSessionsInRange(date, date);
+  return session ? splitAtForSession(session.eventStartTime, session.eventEndTime) : null;
+}
+
 async function load(date: string, now: number): Promise<Loaded> {
-  const [stored, roster] = await Promise.all([readStored(date), rosterPlayers(date)]);
+  const [stored, roster, courts, splitAt] = await Promise.all([
+    readStored(date),
+    rosterPlayers(date),
+    rosterCourts(date),
+    sessionSplitAt(date),
+  ]);
   const profiles = await profilesFor(roster.map((r) => r.email));
-  const courts = isCasualPlayDemo() ? 2 : await getCourtsForDate(date);
-  const base = stored ? stored.state : emptyState(date, courts);
+  // The roster owns the court count: a change there shows up on the board
+  // the next time anyone loads it.
+  let base = stored ? stored.state : emptyState(date, courts);
+  if (base.courts !== courts || base.courtNumbers?.length !== courts) base = resizeCourts(base, courts);
+  base = { ...base, splitAt };
   return {
     state: mergeRoster(structuredClone(base), roster, profiles, now),
     version: stored ? stored.version : null,
@@ -208,24 +233,32 @@ async function save(date: string, state: CasualPlayState, version: number | null
   return rows.length > 0;
 }
 
-async function rememberProfile(email: string, change: Partial<Profile>): Promise<void> {
+async function rememberProfile(email: string, change: Profile): Promise<void> {
   if (isCasualPlayDemo()) {
-    const current = demoStore.profiles.get(email) ?? { tier: null, nickname: null };
-    demoStore.profiles.set(email, { ...current, ...change });
+    demoStore.profiles.set(email, { ...demoStore.profiles.get(email), ...change });
     return;
   }
-  if ("tier" in change) {
-    await sql`
-      INSERT INTO casual_play_profiles (email, tier) VALUES (${email}, ${change.tier ?? null})
-      ON CONFLICT (email) DO UPDATE SET tier = EXCLUDED.tier, updated_at = NOW();
-    `;
+  await sql`
+    INSERT INTO casual_play_profiles (email, tier) VALUES (${email}, ${change.tier})
+    ON CONFLICT (email) DO UPDATE SET tier = EXCLUDED.tier, updated_at = NOW();
+  `;
+}
+
+/**
+ * Changing the courts on the board changes them on the play day roster too,
+ * with the same rules as the admin page: it can't drop below the players
+ * already signed up, and extra room lets the waitlist know.
+ */
+async function setRosterCourts(date: string, courts: number): Promise<void> {
+  if (isCasualPlayDemo()) {
+    demoStore.courts.set(date, courts);
+    return;
   }
-  if ("nickname" in change) {
-    await sql`
-      INSERT INTO casual_play_profiles (email, nickname) VALUES (${email}, ${change.nickname ?? null})
-      ON CONFLICT (email) DO UPDATE SET nickname = EXCLUDED.nickname, updated_at = NOW();
-    `;
-  }
+  const before = await getCourtsForDate(date);
+  if (before === courts) return;
+  const result = await setCourtsForDate(date, courts);
+  if (!result.ok) throw new ActionError(result.reason);
+  if (maxPlayersForCourts(courts) > maxPlayersForCourts(before)) await notifyWaitlistIfSpotOpened(date);
 }
 
 /**
@@ -234,6 +267,7 @@ async function rememberProfile(email: string, change: Partial<Profile>): Promise
  * was computed from, and a clash is retried on the fresh state.
  */
 export async function runCasualPlayAction(date: string, action: Action): Promise<CasualPlayState> {
+  if (action.type === "setCourts") await setRosterCourts(date, clampCourts(action.courts));
   for (let attempt = 0; attempt < 4; attempt++) {
     const now = Date.now();
     const { state, version, roster } = await load(date, now);
@@ -242,10 +276,6 @@ export async function runCasualPlayAction(date: string, action: Action): Promise
 
     const email = roster.find((r) => "playerId" in action && r.id === action.playerId)?.email;
     if (email && action.type === "setTier") await rememberProfile(email, { tier: action.tier });
-    if (email && action.type === "rename") {
-      const name = next.players.find((p) => p.id === action.playerId)?.name ?? null;
-      await rememberProfile(email, { nickname: name });
-    }
     return next;
   }
   throw new ConflictError("The board is busy. Please try again.");

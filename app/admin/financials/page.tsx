@@ -569,7 +569,7 @@ export default async function FinancialsPage({
       />
 
       <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <table className={`${styles.table} ${styles.ledgerStack}`}>
           <thead>
             <tr>
               <th>No.</th>

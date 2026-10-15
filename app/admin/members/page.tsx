@@ -15,6 +15,7 @@ import { getStripe } from "@/lib/stripe";
 import { sendMembershipConfirmationEmail } from "@/lib/email";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { AdminNav } from "@/components/admin/AdminNav";
+import adminStyles from "@/components/admin/admin.module.css";
 import { CashMemberDayAndDateFields } from "@/components/admin/CashMemberDayAndDateFields";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
 import { MemberRetryButton } from "@/components/admin/MemberRetryButton";
@@ -178,109 +179,111 @@ function MembersTable({
       <p style={{ fontWeight: 600, marginBottom: 8 }}>
         {title} ({members.length})
       </p>
-      <table
-        style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
-      >
-        <thead>
-          <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-            <th style={{ padding: "6px 8px" }}>Name</th>
-            <th style={{ padding: "6px 8px" }}>Email</th>
-            <th style={{ padding: "6px 8px" }}>Phone</th>
-            <th style={{ padding: "6px 8px" }}>Day</th>
-            <th style={{ padding: "6px 8px" }}>Renews / ends</th>
-            <th style={{ padding: "6px 8px" }}>Billing</th>
-            <th style={{ padding: "6px 8px" }}>Payment</th>
-            <th style={{ padding: "6px 8px" }}>Status</th>
-            <th style={{ padding: "6px 8px" }}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {members.length === 0 ? (
-            <tr>
-              <td colSpan={9} style={{ padding: "10px 8px", color: "#888" }}>
-                No {title.toLowerCase()}.
-              </td>
+      <div className={adminStyles.tableWrap}>
+        <table
+          style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
+        >
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
+              <th style={{ padding: "6px 8px" }}>Name</th>
+              <th style={{ padding: "6px 8px" }}>Email</th>
+              <th style={{ padding: "6px 8px" }}>Phone</th>
+              <th style={{ padding: "6px 8px" }}>Day</th>
+              <th style={{ padding: "6px 8px" }}>Renews / ends</th>
+              <th style={{ padding: "6px 8px" }}>Billing</th>
+              <th style={{ padding: "6px 8px" }}>Payment</th>
+              <th style={{ padding: "6px 8px" }}>Status</th>
+              <th style={{ padding: "6px 8px" }}></th>
             </tr>
-          ) : (
-            members.map((m) => (
-              <tr key={m.id} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={{ padding: "6px 8px" }}>{m.name}</td>
-                <td style={{ padding: "6px 8px" }}>{m.email}</td>
-                <td style={{ padding: "6px 8px" }}>{m.phone ?? ""}</td>
-                <td style={{ padding: "6px 8px" }}>
-                  {m.day === "wednesday" ? "Wed" : "Fri"}
-                </td>
-                <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
-                <td style={{ padding: "6px 8px" }}>
-                  {m.recurring ? "Auto-renews" : "One-time"}
-                </td>
-                <td style={{ padding: "6px 8px" }}>
-                  {m.method === "cash" ? "Cash" : "Card"}
-                </td>
-                <td style={{ padding: "6px 8px" }}>
-                  {m.cancelAtPeriodEnd ? (
-                    <span style={{ color: "#b00020" }}>
-                      Cancels {m.periodEnd ?? "at period end"}
-                    </span>
-                  ) : (
-                    <span
-                      style={{
-                        color: OVERDUE_STATUSES.has(m.status)
-                          ? "#b00020"
-                          : "#1a7a3c",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {m.status.replace("_", " ")}
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: "6px 8px" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 6,
-                      alignItems: "flex-start",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {OVERDUE_STATUSES.has(m.status) && m.stripeSubscriptionId ? (
-                      <MemberRetryButton
-                        membershipId={m.id}
-                        memberName={m.name}
-                      />
-                    ) : null}
-                    {m.recurring &&
-                    !m.cancelAtPeriodEnd &&
-                    m.plan === "monthly" &&
-                    m.stripeSubscriptionId &&
-                    m.status === "active" ? (
-                      <MemberFreeMonthButton
-                        membershipId={m.id}
-                        memberName={m.name}
-                        renewsOn={m.periodEnd}
-                      />
-                    ) : null}
-                    {m.recurring && !m.cancelAtPeriodEnd ? (
-                      <MemberCancelButton
-                        membershipId={m.id}
-                        memberName={m.name}
-                        mode="cancel"
-                      />
-                    ) : !m.recurring ? (
-                      <MemberCancelButton
-                        membershipId={m.id}
-                        memberName={m.name}
-                        mode="remove"
-                      />
-                    ) : null}
-                  </div>
+          </thead>
+          <tbody>
+            {members.length === 0 ? (
+              <tr>
+                <td colSpan={9} style={{ padding: "10px 8px", color: "#888" }}>
+                  No {title.toLowerCase()}.
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              members.map((m) => (
+                <tr key={m.id} style={{ borderBottom: "1px solid #eee" }}>
+                  <td style={{ padding: "6px 8px" }}>{m.name}</td>
+                  <td style={{ padding: "6px 8px" }}>{m.email}</td>
+                  <td style={{ padding: "6px 8px" }}>{m.phone ?? ""}</td>
+                  <td style={{ padding: "6px 8px" }}>
+                    {m.day === "wednesday" ? "Wed" : "Fri"}
+                  </td>
+                  <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
+                  <td style={{ padding: "6px 8px" }}>
+                    {m.recurring ? "Auto-renews" : "One-time"}
+                  </td>
+                  <td style={{ padding: "6px 8px" }}>
+                    {m.method === "cash" ? "Cash" : "Card"}
+                  </td>
+                  <td style={{ padding: "6px 8px" }}>
+                    {m.cancelAtPeriodEnd ? (
+                      <span style={{ color: "#b00020" }}>
+                        Cancels {m.periodEnd ?? "at period end"}
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          color: OVERDUE_STATUSES.has(m.status)
+                            ? "#b00020"
+                            : "#1a7a3c",
+                          textTransform: "capitalize",
+                        }}
+                      >
+                        {m.status.replace("_", " ")}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: "6px 8px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 6,
+                        alignItems: "flex-start",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {OVERDUE_STATUSES.has(m.status) && m.stripeSubscriptionId ? (
+                        <MemberRetryButton
+                          membershipId={m.id}
+                          memberName={m.name}
+                        />
+                      ) : null}
+                      {m.recurring &&
+                      !m.cancelAtPeriodEnd &&
+                      m.plan === "monthly" &&
+                      m.stripeSubscriptionId &&
+                      m.status === "active" ? (
+                        <MemberFreeMonthButton
+                          membershipId={m.id}
+                          memberName={m.name}
+                          renewsOn={m.periodEnd}
+                        />
+                      ) : null}
+                      {m.recurring && !m.cancelAtPeriodEnd ? (
+                        <MemberCancelButton
+                          membershipId={m.id}
+                          memberName={m.name}
+                          mode="cancel"
+                        />
+                      ) : !m.recurring ? (
+                        <MemberCancelButton
+                          membershipId={m.id}
+                          memberName={m.name}
+                          mode="remove"
+                        />
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -301,16 +304,9 @@ export default async function MembersAdminPage() {
   const quarterly = memberships.filter((m) => m.plan === "quarterly");
 
   return (
-    <div
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 860,
-        margin: "40px auto",
-        padding: "0 20px",
-      }}
-    >
-      <h1 style={{ fontSize: 22, marginBottom: 4 }}>Members</h1>
-      <p style={{ color: "#666", marginBottom: 20 }}>
+    <div className={adminStyles.page}>
+      <h1 className={adminStyles.title}>Members</h1>
+      <p className={adminStyles.subtitle}>
         Monthly and quarterly members with an active subscription.
       </p>
       <AdminNav active="members" />

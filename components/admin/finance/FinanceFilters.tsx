@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { LoadingIcon } from "@/components/LoadingIcon";
 import {
   FINANCE_CATEGORIES,
   FINANCE_METHODS,
@@ -212,7 +213,12 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
         </button>
       ) : null}
 
-      {isPending ? <span className={styles.pending}>Updating…</span> : null}
+      {isPending ? (
+        <span className={styles.pending} role="status">
+          <LoadingIcon size="sm" />
+          Updating…
+        </span>
+      ) : null}
     </div>
   );
 }

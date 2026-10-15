@@ -16,6 +16,7 @@ import {
   sendMembershipReminderEmail,
 } from "@/lib/email";
 import { sendRenewalReminders } from "@/lib/membership-renewal";
+import { auditMembershipStatuses } from "@/lib/membership-status";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,15 @@ export async function GET(request: Request) {
 
   await ensureTables();
 
+  // Mark ended memberships before anything below reads statuses.
+  let statusAudit: Awaited<ReturnType<typeof auditMembershipStatuses>> | { error: string };
+  try {
+    statusAudit = await auditMembershipStatuses();
+  } catch (err) {
+    console.error("Membership status audit failed", err);
+    statusAudit = { error: "Membership status audit failed" };
+  }
+
   // Renewal reminders for one-time memberships go out every day, whether or
   // not there's a play day tomorrow.
   let renewals: { due: number; sent: number } | { error: string };
@@ -48,7 +58,12 @@ export async function GET(request: Request) {
 
   const hasSession = await sessionExists(tomorrow);
   if (!hasSession) {
-    return NextResponse.json({ ok: true, skipped: "No play day tomorrow", renewals });
+    return NextResponse.json({
+      ok: true,
+      skipped: "No play day tomorrow",
+      renewals,
+      statusAudit,
+    });
   }
 
   const members = await getMembersWithPlayDayTomorrow(tomorrow);
@@ -114,5 +129,6 @@ export async function GET(request: Request) {
     casualBookings: casualBookings.length,
     casualSent,
     renewals,
+    statusAudit,
   });
 }

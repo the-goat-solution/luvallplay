@@ -65,6 +65,10 @@ A day-before cron (`/api/cron/membership-reminders`, schedule in `vercel.json`) 
 
 One-time (non-auto-renewing) memberships, including cash members, get a renewal reminder email **5 days before their end date**, sent by the same daily cron (`/api/cron/membership-reminders`). The email carries a private link to `/renew-membership?token=…`, which opens renewal for that member: they pick monthly or quarterly, pay once by card, and the new membership starts on the first play day with room after the current one ends. Each membership gets one reminder (a failed send is retried the next day), and the admin Members page shows when it went out.
 
+### Membership status upkeep
+
+One-time memberships have no Stripe subscription to report that they've ended, so `lib/membership-status.ts` marks them **expired** once their end date has passed. It also re-checks any recurring membership whose access window ran out more than 3 days ago without a renewal or cancellation webhook, and syncs it from Stripe. This runs daily in the reminders cron and every time `/admin/members` loads. The page reports anything it just fixed and lists memberships that ended in the last 60 days.
+
 ### Free months
 
 The **Give free month** button on `/admin/members` works for every active membership:

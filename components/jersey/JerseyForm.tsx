@@ -76,7 +76,7 @@ export function JerseyForm({
     if (busy) return;
     setError("");
     if (!f.size) return setError(tr("err_size"));
-    if (addPrint && (!printName.trim() || printNumber === "")) {
+    if (addPrint && !printName.trim()) {
       return setError(tr("err_print"));
     }
     if (!consent) return setError(tr("err_consent"));
@@ -89,7 +89,7 @@ export function JerseyForm({
           ...f,
           addPrint,
           printName: addPrint ? printName : undefined,
-          printNumber: addPrint ? Number(printNumber) : undefined,
+          printNumber: addPrint && printNumber !== "" ? Number(printNumber) : undefined,
           deviceId: deviceId(),
           turnstileToken: token || undefined,
           consent: true,

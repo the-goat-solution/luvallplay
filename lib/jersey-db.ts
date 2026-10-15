@@ -6,6 +6,9 @@ import {
   EARLY_BIRD_HOLD_HOURS,
   EARLY_BIRD_LIMIT,
   findRefCodes,
+  normalizeEmail,
+  normalizeName,
+  normalizePhone,
   priceCents,
   type JerseyStatus,
 } from "./jersey";
@@ -240,6 +243,49 @@ export async function getJerseyRegistration(id: number): Promise<JerseyRegistrat
   await ensureJerseyTables();
   const { rows } = await sql`SELECT * FROM jersey_registrations WHERE id = ${id};`;
   return rows[0] ? toReg(rows[0]) : null;
+}
+
+export type JerseyEdit = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  size: string;
+  printName: string | null;
+  printNumber: number | null;
+  printCountry: string | null;
+};
+
+// Admin edit of a registration's details. The search keys (normalised email,
+// phone, name) are recomputed, and the price follows the printing option
+// (early-bird or standard base, plus the print fee). Paid amounts and status
+// are left alone. Another live registration with the same email is refused.
+export async function updateJerseyRegistration(
+  id: number,
+  e: JerseyEdit,
+): Promise<{ ok: true } | { ok: false; reason: "not_found" | "duplicate_email" }> {
+  await ensureJerseyTables();
+  const { rows: cur } = await sql`SELECT early_bird FROM jersey_registrations WHERE id = ${id};`;
+  if (!cur[0]) return { ok: false, reason: "not_found" };
+  const price = priceCents(cur[0].early_bird as boolean, e.printName !== null);
+  try {
+    await sql`
+      UPDATE jersey_registrations SET
+        first_name = ${e.firstName}, last_name = ${e.lastName},
+        email = ${e.email}, email_normalized = ${normalizeEmail(e.email)},
+        phone = ${e.phone}, phone_normalized = ${normalizePhone(e.phone)},
+        name_normalized = ${normalizeName(e.firstName, e.lastName)},
+        size = ${e.size}, print_name = ${e.printName}, print_number = ${e.printNumber},
+        print_country = ${e.printCountry}, price_cents = ${price}
+      WHERE id = ${id};
+    `;
+  } catch (err) {
+    if ((err as { constraint?: string }).constraint === "jersey_one_per_email") {
+      return { ok: false, reason: "duplicate_email" };
+    }
+    throw err;
+  }
+  return { ok: true };
 }
 
 export async function markJerseyPaid(id: number, paidCents: number | null): Promise<boolean> {

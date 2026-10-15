@@ -59,6 +59,12 @@ export const PRINT_NAME_MAX = 12;
 // A country printed instead of a number (e.g. "NZ" or "VIETNAM").
 export const PRINT_COUNTRY_MAX = 12;
 
+// Text to print on a jersey: upper case, letters (including Vietnamese
+// diacritics), digits and a few separators only.
+export function cleanPrintText(s: string | undefined | null): string {
+  return (s ?? "").toUpperCase().replace(/[^\p{L}\p{N} .'-]/gu, "").trim();
+}
+
 export type JerseyStatus = "pending" | "paid" | "released" | "cancelled";
 
 export function priceCents(earlyBird: boolean, withPrint: boolean): number {

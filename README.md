@@ -61,6 +61,10 @@ On a successful **casual card payment**, Stripe emails the customer its own rece
 
 A day-before cron (`/api/cron/membership-reminders`, schedule in `vercel.json`) sends a "see you tomorrow" reminder — date, time, location — to everyone confirmed for tomorrow's play day: active monthly/quarterly members **and** casual bookers with a confirmed booking for that date. Each booking/membership is only ever reminded once per play day (dedup via `bookings.reminder_sent_at` and the `membership_reminders_sent` table).
 
+### One-time membership renewals
+
+One-time (non-auto-renewing) memberships, including cash members, get a renewal reminder email **5 days before their end date**, sent by the same daily cron (`/api/cron/membership-reminders`). The email carries a private link to `/renew-membership?token=…`, which opens renewal for that member: they pick monthly or quarterly, pay once by card, and the new membership starts on the first play day with room after the current one ends. Each membership gets one reminder (a failed send is retried the next day), and the admin Members page shows when it went out.
+
 ### Play day roster
 
 Every day at 4:00 PM NZ time, a Vercel Cron job (`vercel.json` → `/api/cron/send-roster`) checks whether there's a session scheduled for that date (from the synced Google Calendar — not limited to Fridays) and, if so, emails the full player list to `CLUB_ROSTER_EMAIL` (default `threewolvesbadminton@gmail.com`). If no session is scheduled that day, it's a no-op. The roster combines:

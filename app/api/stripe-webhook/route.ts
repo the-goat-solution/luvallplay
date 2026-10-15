@@ -140,6 +140,7 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          renewal: pi.metadata.renewal === "true",
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
         );

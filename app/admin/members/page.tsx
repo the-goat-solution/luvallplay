@@ -215,6 +215,16 @@ function MembersTable({
                   <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
                   <td style={{ padding: "6px 8px" }}>
                     {m.recurring ? "Auto-renews" : "One-time"}
+                    {!m.recurring && m.renewalReminderSentAt ? (
+                      <div style={{ fontSize: 12, color: "#666" }}>
+                        Renewal email sent{" "}
+                        {new Date(m.renewalReminderSentAt).toLocaleDateString("en-NZ", {
+                          timeZone: "Pacific/Auckland",
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </div>
+                    ) : null}
                   </td>
                   <td style={{ padding: "6px 8px" }}>
                     {m.method === "cash" ? "Cash" : "Card"}

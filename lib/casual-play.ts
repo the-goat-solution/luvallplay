@@ -1,7 +1,8 @@
 // Three Wolves casual play: a live court board for ordinary (non mini game)
-// play days. Players are split into two tiers. For the first two thirds of
-// the play day every doubles team is one tier 1 player with one tier 2
-// player; for the last third games are played within a tier (four tier 1
+// play days. Players are split into two tiers. A play day is 1.5 hours,
+// counted from when the first games go on court: for the first hour (two
+// thirds) every doubles team is one tier 1 player with one tier 2 player;
+// for the last half hour games are played within a tier (four tier 1
 // players, or four tier 2 players), still rotating partners. Whenever a court
 // comes free the next game is picked straight away from whoever has waited
 // longest, so courts never sit idle waiting for a whole "round" to finish.
@@ -16,13 +17,10 @@ export const MAX_COURTS = 4;
 export const MAX_GUEST_NAME = 30;
 export const MAX_HISTORY = 400;
 export const MAX_COURT_NUMBER = 6;
+/** Court time per play day, from the first court assignment. */
+export const PLAY_DAY_MS = 90 * 60 * 1000;
 /** Mixed-tier share of the play day; the rest is played within tiers. */
 export const MIXED_SHARE = 2 / 3;
-/**
- * When the play day has no start and end time on the calendar, within-tier
- * games start this long after the courts go live (two thirds of a 3 hour night).
- */
-export const DEFAULT_MIXED_MS = 2 * 60 * 60 * 1000;
 
 /**
  * mixed: every team is one tier 1 with one tier 2 player.
@@ -74,14 +72,11 @@ export type CasualPlayState = {
    * existed, which reads the same as null.
    */
   concludedAt?: number | null;
-  /** When the courts went live, epoch ms. Missing on older boards. */
-  startedAt?: number | null;
   /**
-   * When within-tier games take over: two thirds of the way through the play
-   * day's calendar time. Kept in sync with the session on every load; null
-   * when the session has no times (then DEFAULT_MIXED_MS after startedAt).
+   * When the first games went on court, epoch ms: the play day's clock.
+   * Missing on older boards (then the earliest game stands in).
    */
-  splitAt?: number | null;
+  startedAt?: number | null;
   /** Organiser override of the mixed/within-tier switch. Missing = auto. */
   tierMode?: TierMode;
   /**
@@ -121,7 +116,6 @@ export function emptyState(date: string, courts: number): CasualPlayState {
     nextGameId: 1,
     concludedAt: null,
     startedAt: null,
-    splitAt: null,
     tierMode: "auto",
     courtNumbers: Array.from({ length: n }, () => ""),
   };
@@ -147,10 +141,21 @@ export function resizeCourts(state: CasualPlayState, courts: number): CasualPlay
   };
 }
 
-/** When the board switches to within-tier games, or null if it can't tell yet. */
+/** When the first games went on court, or null before the courts start. */
+export function courtsStartedAt(state: CasualPlayState): number | null {
+  if (!state.started) return null;
+  if (state.startedAt) return state.startedAt;
+  const games = [...state.history, ...state.onCourt.filter((g): g is Game => g !== null)];
+  return games.length ? Math.min(...games.map((g) => g.startedAt)) : null;
+}
+
+/**
+ * When the board switches to within-tier games: two thirds of the way
+ * through the 1.5 hour play day. Null before the courts start.
+ */
 export function splitTime(state: CasualPlayState): number | null {
-  if (state.splitAt) return state.splitAt;
-  return state.startedAt ? state.startedAt + DEFAULT_MIXED_MS : null;
+  const start = courtsStartedAt(state);
+  return start === null ? null : Math.round(start + PLAY_DAY_MS * MIXED_SHARE);
 }
 
 /** Whether games right now are mixed-tier or within a tier. */
@@ -159,14 +164,6 @@ export function tierPhase(state: CasualPlayState, now: number): TierPhase {
   if (mode !== "auto") return mode;
   const at = splitTime(state);
   return at !== null && now >= at ? "split" : "mixed";
-}
-
-/** The split point for a session that runs from start to end (ISO strings). */
-export function splitAtForSession(start: string | null, end: string | null): number | null {
-  const a = start ? Date.parse(start) : NaN;
-  const b = end ? Date.parse(end) : NaN;
-  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return null;
-  return Math.round(a + (b - a) * MIXED_SHARE);
 }
 
 export function isConcluded(state: CasualPlayState): boolean {
@@ -584,7 +581,6 @@ export function applyAction(
     case "endSession": {
       const reset = emptyState(state.date, state.courts);
       reset.courtNumbers = Array.from({ length: state.courts }, (_, i) => state.courtNumbers?.[i] ?? "");
-      reset.splitAt = state.splitAt ?? null;
       reset.players = state.players.map((p) => ({ ...p, games: 0, paused: false, readyAt: now }));
       return reset;
     }

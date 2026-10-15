@@ -6,13 +6,12 @@ import {
   clampCourts,
   emptyState,
   resizeCourts,
-  splitAtForSession,
   type Action,
   type CasualPlayState,
   type Player,
   type Tier,
 } from "./casual-play";
-import { getCourtsForDate, getRosterForDate, listSessionsInRange, setCourtsForDate } from "./db";
+import { getCourtsForDate, getRosterForDate, setCourtsForDate } from "./db";
 import { notifyWaitlistIfSpotOpened } from "./waitlist-notify";
 import { maxPlayersForCourts } from "./constants";
 import { demoRoster, demoStore, isCasualPlayDemo } from "./casual-play-demo";
@@ -175,26 +174,13 @@ async function rosterCourts(date: string): Promise<number> {
   return getCourtsForDate(date);
 }
 
-/** When within-tier games take over, from the session's calendar times. */
-async function sessionSplitAt(date: string): Promise<number | null> {
-  if (isCasualPlayDemo()) return null;
-  const [session] = await listSessionsInRange(date, date);
-  return session ? splitAtForSession(session.eventStartTime, session.eventEndTime) : null;
-}
-
 async function load(date: string, now: number): Promise<Loaded> {
-  const [stored, roster, courts, splitAt] = await Promise.all([
-    readStored(date),
-    rosterPlayers(date),
-    rosterCourts(date),
-    sessionSplitAt(date),
-  ]);
+  const [stored, roster, courts] = await Promise.all([readStored(date), rosterPlayers(date), rosterCourts(date)]);
   const profiles = await profilesFor(roster.map((r) => r.email));
   // The roster owns the court count: a change there shows up on the board
   // the next time anyone loads it.
   let base = stored ? stored.state : emptyState(date, courts);
   if (base.courts !== courts || base.courtNumbers?.length !== courts) base = resizeCourts(base, courts);
-  base = { ...base, splitAt };
   return {
     state: mergeRoster(structuredClone(base), roster, profiles, now),
     version: stored ? stored.version : null,

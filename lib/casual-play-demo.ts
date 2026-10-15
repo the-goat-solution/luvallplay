@@ -50,14 +50,19 @@ type Stored = { state: unknown; version: number };
 
 // On globalThis so the store survives Next's dev hot reloads.
 const g = globalThis as typeof globalThis & {
-  __casualPlayDemo?: { boards: Map<string, Stored>; profiles: Map<string, { tier: 1 | 2 | null; nickname: string | null }> };
+  __casualPlayDemo?: {
+    boards: Map<string, Stored>;
+    profiles: Map<string, { tier: 1 | 2 | null }>;
+    courts: Map<string, number>;
+  };
 };
-export const demoStore = (g.__casualPlayDemo ??= { boards: new Map(), profiles: new Map() });
+export const demoStore = (g.__casualPlayDemo ??= { boards: new Map(), profiles: new Map(), courts: new Map() });
+demoStore.courts ??= new Map();
 
 // Starting tiers so the demo opens on a sorted board; three left unsorted.
 for (const [i] of DEMO_PLAYERS.entries()) {
   const email = `demo${i + 1}@example.com`;
   if (!demoStore.profiles.has(email) && i < 15) {
-    demoStore.profiles.set(email, { tier: i < 7 ? 1 : 2, nickname: null });
+    demoStore.profiles.set(email, { tier: i < 7 ? 1 : 2 });
   }
 }

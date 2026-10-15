@@ -687,6 +687,20 @@ footer{background:var(--navy-dark);color:#fff;padding:80px 0 36px}
 .cp-stepper button:disabled{opacity:.4;cursor:default}
 .cp-stepper-value{font-family:var(--font-display);font-size:40px;font-weight:700;color:var(--navy);min-width:34px;text-align:center;line-height:1}
 .cp-start-card{display:flex;flex-direction:column;justify-content:center;gap:12px}
+.cp-field-note{font-size:12px;color:var(--text-light);line-height:1.45;margin-top:10px;max-width:260px}
+.cp-court-numbers{margin-top:16px}
+.cp-court-number-row{display:flex;flex-wrap:wrap;gap:10px}
+.cp-court-number{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:var(--text-mid)}
+.cp-court-number input{width:76px;height:40px;border:1.5px solid var(--steel-light);border-radius:var(--radius-lg);background:#fff;text-align:center;font-size:18px;font-weight:700;color:var(--navy)}
+.cp-court-number input:focus{outline:none;border-color:var(--bronze)}
+.cp-rotation{padding:18px 22px;margin-bottom:18px}
+.cp-rotation .section-label{margin-bottom:10px}
+.cp-rotation .cp-field-note{max-width:none}
+.cp-segmented{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--cream);border:1px solid var(--steel-light);border-radius:var(--radius-pill);padding:4px}
+.cp-segmented button{border:0;background:transparent;border-radius:var(--radius-pill);padding:8px 16px;font-size:13px;font-weight:700;color:var(--text-mid);transition:all var(--ease)}
+.cp-segmented button.active{background:var(--navy);color:#fff}
+.cp-segmented button:disabled{cursor:default}
+.cp-phase-pill{margin-right:auto;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--bronze-dark);background:rgba(196,137,42,.14);border-radius:var(--radius-pill);padding:4px 10px}
 .cp-balance{font-size:14px;font-weight:600;color:var(--bronze-dark);line-height:1.5}
 .cp-balance.ok{color:#2f7d4f}
 .cp-started-note{font-size:14px;color:var(--text-mid)}
@@ -821,7 +835,9 @@ ol.cp-queue-list li::before{content:counter(q);width:24px;height:24px;flex-shrin
   .cp-courts-2,.cp-courts-3,.cp-courts-4{grid-template-columns:1fr}
   .cp-lower{grid-template-columns:1fr}
   .cp-setup-head{grid-template-columns:1fr}
-  .cp-courts-card{display:flex;align-items:center;justify-content:space-between}
+  .cp-courts-card{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between}
+  .cp-courts-card .cp-field-note,.cp-court-numbers{flex-basis:100%;max-width:none}
+  .cp-courts-card .cp-court-numbers .section-label{margin-bottom:8px}
   .cp-courts-card .section-label{margin-bottom:0}
   .cp-courts-card .section-label::after{display:none}
   .cp-tiers{grid-template-columns:1fr}

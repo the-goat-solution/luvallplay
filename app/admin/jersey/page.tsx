@@ -104,7 +104,7 @@ function Row({ r }: { r: JerseyRegistration }) {
       </td>
       <td style={cell}>
         {r.size}
-        {r.printName ? <div style={{ fontSize: 12, color: "#666" }}>{r.printName}{r.printNumber !== null ? ` #${r.printNumber}` : ""}</div> : null}
+        {r.printName ? <div style={{ fontSize: 12, color: "#666" }}>{r.printName}{r.printNumber !== null ? ` #${r.printNumber}` : r.printCountry ? ` · ${r.printCountry}` : ""}</div> : null}
       </td>
       <td style={cell}>
         {formatDollars(r.priceCents)}

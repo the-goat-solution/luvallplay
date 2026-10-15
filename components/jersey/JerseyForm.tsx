@@ -6,6 +6,7 @@ import {
   EARLY_BIRD_CENTS,
   JERSEY_SIZES,
   PRINT_CENTS,
+  PRINT_COUNTRY_MAX,
   PRINT_NAME_MAX,
   STANDARD_CENTS,
   formatDollars,
@@ -47,7 +48,9 @@ export function JerseyForm({
   const [f, setF] = useState({ firstName: "", lastName: "", email: "", phone: "", size: "", website: "" });
   const [addPrint, setAddPrint] = useState(false);
   const [printName, setPrintName] = useState("");
+  const [printKind, setPrintKind] = useState<"number" | "country">("number");
   const [printNumber, setPrintNumber] = useState("");
+  const [printCountry, setPrintCountry] = useState("");
   const [consent, setConsent] = useState(false);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -89,7 +92,8 @@ export function JerseyForm({
           ...f,
           addPrint,
           printName: addPrint ? printName : undefined,
-          printNumber: addPrint && printNumber !== "" ? Number(printNumber) : undefined,
+          printNumber: addPrint && printKind === "number" && printNumber !== "" ? Number(printNumber) : undefined,
+          printCountry: addPrint && printKind === "country" && printCountry.trim() ? printCountry.trim() : undefined,
           deviceId: deviceId(),
           turnstileToken: token || undefined,
           consent: true,
@@ -165,6 +169,7 @@ export function JerseyForm({
           <span>{tr("add_print", { price: `+${formatDollars(PRINT_CENTS)}` })}</span>
         </label>
         {addPrint ? (
+          <>
           <div className="form-row" style={{ marginTop: 12 }}>
             <div className="form-group">
               <label className="form-label" htmlFor="j-pname">{tr("print_name")}</label>
@@ -172,11 +177,39 @@ export function JerseyForm({
               <div className="form-hint">{tr("print_name_hint", { n: PRINT_NAME_MAX })}</div>
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="j-pnum">{tr("number")}</label>
-              <input id="j-pnum" type="number" min={0} max={99} className="form-input" value={printNumber} onChange={(e) => setPrintNumber(e.target.value)} />
-              <div className="form-hint">{tr("number_hint")}</div>
+              <span className="form-label" id="j-pkind-label">{tr("print_extra")}</span>
+              <div className="jersey-seg" role="radiogroup" aria-labelledby="j-pkind-label">
+                {(["number", "country"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={printKind === k}
+                    className={printKind === k ? "active" : ""}
+                    onClick={() => setPrintKind(k)}
+                  >
+                    {tr(k === "number" ? "kind_number" : "kind_country")}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
+          <div className="form-group">
+            {printKind === "number" ? (
+              <>
+                <label className="form-label" htmlFor="j-pnum">{tr("number")}</label>
+                <input id="j-pnum" type="number" min={0} max={99} className="form-input" value={printNumber} onChange={(e) => setPrintNumber(e.target.value)} />
+                <div className="form-hint">{tr("number_hint")}</div>
+              </>
+            ) : (
+              <>
+                <label className="form-label" htmlFor="j-pcountry">{tr("country")}</label>
+                <input id="j-pcountry" className="form-input" maxLength={PRINT_COUNTRY_MAX} autoComplete="country-name" value={printCountry} onChange={(e) => setPrintCountry(e.target.value.toUpperCase())} />
+                <div className="form-hint">{tr("country_hint", { n: PRINT_COUNTRY_MAX })}</div>
+              </>
+            )}
+          </div>
+          </>
         ) : null}
 
         {/* Honeypot: people never see or fill this. */}

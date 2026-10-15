@@ -56,6 +56,8 @@ export const JERSEY_SIZES = ["S", "M", "L", "XL", "XXL"] as const;
 export type JerseySize = (typeof JERSEY_SIZES)[number];
 
 export const PRINT_NAME_MAX = 12;
+// A country printed instead of a number (e.g. "NZ" or "VIETNAM").
+export const PRINT_COUNTRY_MAX = 12;
 
 export type JerseyStatus = "pending" | "paid" | "released" | "cancelled";
 

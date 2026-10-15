@@ -28,7 +28,7 @@ const JERSEY_I18N = {
     jersey_p:
       "Our official club jersey is made by Yonex, printed in Vietnam and shipped to New Zealand. Delivery is expected around early November. Jerseys will be handed out at a play day, to be announced.",
     price_li1: "**$15** for the first 10 registrations, **$30** after that",
-    price_li2: "Optional name & number on the back for **+$5**",
+    price_li2: "Optional name with a number or country on the back for **+$5**",
     price_li3: "One jersey per person",
     design_alt: "Three Wolves club jersey design: Port Hills Dawn, Yonex edition",
 
@@ -75,11 +75,16 @@ const JERSEY_I18N = {
     size_f: "Size",
     choose_size: "Choose a size",
     size_hint: "Check the size chart above. Between sizes? Size up.",
-    add_print: "Add my name & number on the back ({price})",
+    add_print: "Add my name and a number or country on the back ({price})",
     print_name: "Name on back (required)",
     print_name_hint: "Up to {n} characters.",
+    print_extra: "Also print (optional)",
+    kind_number: "Number",
+    kind_country: "Country",
     number: "Number (optional)",
     number_hint: "0–99.",
+    country: "Country (optional)",
+    country_hint: "Up to {n} characters, e.g. NZ or VIETNAM.",
     consent:
       "I'll pay by bank transfer using my reference code. I understand any amount over the price goes to club funds and there are no refunds.",
     consent_hold: " My $15 spot is released if unpaid after 48 hours.",
@@ -139,7 +144,7 @@ const JERSEY_I18N = {
     jersey_p:
       "Áo đấu chính thức của CLB do Yonex sản xuất, in tại Việt Nam và vận chuyển về New Zealand. Dự kiến nhận hàng khoảng đầu tháng 11. Áo sẽ được phát vào một buổi chơi, thời gian sẽ được thông báo sau.",
     price_li1: "**$15** cho 10 người đăng ký đầu tiên, sau đó **$30**",
-    price_li2: "In tên & số sau lưng tuỳ chọn: thêm **+$5**",
+    price_li2: "In tên kèm số áo hoặc quốc gia sau lưng (tuỳ chọn): thêm **+$5**",
     price_li3: "Mỗi người một áo",
     design_alt: "Thiết kế áo đấu Three Wolves: Port Hills Dawn, phiên bản Yonex",
 
@@ -186,11 +191,16 @@ const JERSEY_I18N = {
     size_f: "Size",
     choose_size: "Chọn size",
     size_hint: "Xem bảng size ở trên. Phân vân giữa hai size? Hãy chọn size lớn hơn.",
-    add_print: "In tên & số của tôi sau lưng ({price})",
+    add_print: "In tên của tôi kèm số áo hoặc quốc gia sau lưng ({price})",
     print_name: "Tên in sau lưng",
     print_name_hint: "Tối đa {n} ký tự.",
+    print_extra: "In thêm (không bắt buộc)",
+    kind_number: "Số áo",
+    kind_country: "Quốc gia",
     number: "Số áo (không bắt buộc)",
     number_hint: "Từ 0–99.",
+    country: "Quốc gia (không bắt buộc)",
+    country_hint: "Tối đa {n} ký tự, ví dụ NZ hoặc VIETNAM.",
     consent:
       "Tôi sẽ chuyển khoản kèm mã tham chiếu của mình. Tôi hiểu rằng số tiền chuyển dư sẽ thuộc về quỹ CLB và không được hoàn lại.",
     consent_hold: " Suất $15 của tôi sẽ bị huỷ nếu chưa thanh toán sau 48 giờ.",

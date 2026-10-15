@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sendJerseyAdminAlertEmail, sendJerseyRegistrationEmail } from "@/lib/email";
 import {
   JERSEY_SIZES,
+  PRINT_COUNTRY_MAX,
   PRINT_NAME_MAX,
   isDisposableEmail,
   isJerseyClosed,
@@ -28,6 +29,7 @@ const bodySchema = z.object({
   addPrint: z.boolean().default(false),
   printName: z.string().trim().max(PRINT_NAME_MAX).optional(),
   printNumber: z.number().int().min(0).max(99).optional(),
+  printCountry: z.string().trim().max(PRINT_COUNTRY_MAX).optional(),
   deviceId: z.string().trim().max(80).optional(),
   website: z.string().max(200).optional(), // honeypot
   turnstileToken: z.string().optional(),
@@ -114,10 +116,15 @@ export async function POST(request: Request) {
   if (isDisposableEmail(body.email)) {
     return NextResponse.json({ error: m.disposable }, { status: 400 });
   }
-  const printName = body.addPrint ? (body.printName ?? "").toUpperCase().replace(/[^A-Z0-9 .'-]/g, "") : "";
-  if (body.addPrint && !printName.trim()) {
+  // Letters (including Vietnamese diacritics), digits and a few separators only.
+  const cleanPrint = (s: string | undefined) => (s ?? "").toUpperCase().replace(/[^\p{L}\p{N} .'-]/gu, "").trim();
+  const printName = body.addPrint ? cleanPrint(body.printName) : "";
+  if (body.addPrint && !printName) {
     return NextResponse.json({ error: m.print }, { status: 400 });
   }
+  // The number and the country are alternatives; a number wins if both arrive.
+  const printNumber = body.addPrint ? (body.printNumber ?? null) : null;
+  const printCountry = body.addPrint && printNumber === null ? cleanPrint(body.printCountry) || null : null;
 
   try {
     await ensureJerseyTables();
@@ -130,8 +137,9 @@ export async function POST(request: Request) {
       phoneNormalized: normalizePhone(body.phone),
       nameNormalized: normalizeName(body.firstName, body.lastName),
       size: body.size,
-      printName: body.addPrint ? printName.trim() : null,
-      printNumber: body.addPrint ? (body.printNumber ?? null) : null,
+      printName: body.addPrint ? printName : null,
+      printNumber,
+      printCountry,
       ipHash: hashIp(ip),
       deviceId: body.deviceId || null,
       lang: body.lang,

@@ -60,6 +60,7 @@ export async function GET(request: Request) {
     { header: "Size", key: "size", width: 7 },
     { header: "Print name", key: "pname", width: 14 },
     { header: "Print no.", key: "pnum", width: 9 },
+    { header: "Print country", key: "pcountry", width: 14 },
     { header: "Price", key: "price", width: 10, style: { numFmt: MONEY } },
     { header: "Early bird", key: "early", width: 10 },
     { header: "Status", key: "status", width: 11 },
@@ -80,6 +81,7 @@ export async function GET(request: Request) {
       size: r.size,
       pname: r.printName ?? "",
       pnum: r.printNumber ?? "",
+      pcountry: r.printCountry ?? "",
       price: r.priceCents / 100,
       early: r.earlyBird ? "Yes" : "No",
       status: r.status,
@@ -90,7 +92,7 @@ export async function GET(request: Request) {
     });
     if (r.status === "paid") row.fill = PAID_FILL;
   }
-  ws.autoFilter = { from: "A1", to: "P1" };
+  ws.autoFilter = { from: "A1", to: "Q1" };
 
   // ── Printer order ───────────────────────────────────────────────────────
   const pr = wb.addWorksheet("Printer order", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -98,6 +100,7 @@ export async function GET(request: Request) {
     { header: "Size", key: "size", width: 8 },
     { header: "Print name", key: "pname", width: 16 },
     { header: "Number", key: "pnum", width: 9 },
+    { header: "Country", key: "pcountry", width: 14 },
     { header: "For (internal)", key: "who", width: 26 },
     { header: "Paid?", key: "paid", width: 8 },
   ];
@@ -108,6 +111,7 @@ export async function GET(request: Request) {
       size: r.size,
       pname: r.printName ?? "",
       pnum: r.printNumber ?? "",
+      pcountry: r.printCountry ?? "",
       who: `${r.firstName} ${r.lastName}`,
       paid: r.status === "paid" ? "Yes" : "No",
     });
@@ -121,12 +125,12 @@ export async function GET(request: Request) {
   sm.addRow([]);
   styleHeader(sm.addRow(["Totals (Registrations sheet)", "Count", "$ amount"]));
   const R = (col: string) => `Registrations!$${col}$2:$${col}$${n}`;
-  sm.addRow(["Registered (pending + paid)", { formula: `COUNTIF(${R("L")},"pending")+COUNTIF(${R("L")},"paid")` }]);
-  sm.addRow(["Paid", { formula: `COUNTIF(${R("L")},"paid")` }, { formula: `SUMIF(${R("L")},"paid",${R("J")})` }]);
-  sm.addRow(["Awaiting payment", { formula: `COUNTIF(${R("L")},"pending")` }, { formula: `SUMIF(${R("L")},"pending",${R("J")})` }]);
-  sm.addRow(["Received in total", null, { formula: `SUMIF(${R("L")},"paid",${R("M")})` }]);
-  sm.addRow(["Over the price (club funds)", null, { formula: `SUMIF(${R("L")},"paid",${R("M")})-SUMIF(${R("L")},"paid",${R("J")})` }]);
-  sm.addRow(["Early birds", { formula: `COUNTIF(${R("K")},"Yes")` }]);
+  sm.addRow(["Registered (pending + paid)", { formula: `COUNTIF(${R("M")},"pending")+COUNTIF(${R("M")},"paid")` }]);
+  sm.addRow(["Paid", { formula: `COUNTIF(${R("M")},"paid")` }, { formula: `SUMIF(${R("M")},"paid",${R("K")})` }]);
+  sm.addRow(["Awaiting payment", { formula: `COUNTIF(${R("M")},"pending")` }, { formula: `SUMIF(${R("M")},"pending",${R("K")})` }]);
+  sm.addRow(["Received in total", null, { formula: `SUMIF(${R("M")},"paid",${R("N")})` }]);
+  sm.addRow(["Over the price (club funds)", null, { formula: `SUMIF(${R("M")},"paid",${R("N")})-SUMIF(${R("M")},"paid",${R("K")})` }]);
+  sm.addRow(["Early birds", { formula: `COUNTIF(${R("L")},"Yes")` }]);
   sm.addRow([]);
   styleHeader(sm.addRow(["Size", "Count"]));
   for (const s of JERSEY_SIZES) sm.addRow([s, { formula: `COUNTIF('Printer order'!$A:$A,"${s}")` }]);

@@ -21,6 +21,7 @@ export type JerseyRegistration = {
   size: string;
   printName: string | null;
   printNumber: number | null;
+  printCountry: string | null;
   priceCents: number;
   earlyBird: boolean;
   status: JerseyStatus;
@@ -70,6 +71,7 @@ export function ensureJerseyTables(): Promise<void> {
         );
       `;
       await sql`ALTER TABLE jersey_registrations ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'en';`;
+      await sql`ALTER TABLE jersey_registrations ADD COLUMN IF NOT EXISTS print_country TEXT;`;
       // The database itself enforces one live registration per person, so
       // two near-simultaneous submissions can't both get in.
       await sql`
@@ -98,6 +100,7 @@ function toReg(r: Row): JerseyRegistration {
     size: r.size as string,
     printName: (r.print_name as string | null) ?? null,
     printNumber: (r.print_number as number | null) ?? null,
+    printCountry: (r.print_country as string | null) ?? null,
     priceCents: r.price_cents as number,
     earlyBird: r.early_bird as boolean,
     status: r.status as JerseyStatus,
@@ -141,6 +144,7 @@ export type RegisterInput = {
   size: string;
   printName: string | null;
   printNumber: number | null;
+  printCountry: string | null;
   ipHash: string | null;
   deviceId: string | null;
   lang: "en" | "vi";
@@ -199,14 +203,14 @@ export async function registerJersey(input: RegisterInput): Promise<RegisterResu
           `INSERT INTO jersey_registrations
              (ref_code, first_name, last_name, email, email_normalized, phone, phone_normalized,
               name_normalized, size, print_name, print_number, price_cents, early_bird,
-              ip_hash, device_id, flags, lang, expires_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$18,
+              ip_hash, device_id, flags, lang, print_country, expires_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$18,$19,
              CASE WHEN $13 THEN NOW() + ($17 || ' hours')::interval ELSE NULL END)
            RETURNING *;`,
           [
             code, input.firstName, input.lastName, input.email, input.emailNormalized, input.phone,
             input.phoneNormalized, input.nameNormalized, input.size, input.printName, input.printNumber,
-            price, earlyBird, input.ipHash, input.deviceId, flags, String(EARLY_BIRD_HOLD_HOURS), input.lang,
+            price, earlyBird, input.ipHash, input.deviceId, flags, String(EARLY_BIRD_HOLD_HOURS), input.lang, input.printCountry,
           ],
         );
         await client.query("COMMIT");

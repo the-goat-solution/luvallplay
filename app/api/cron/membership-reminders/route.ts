@@ -15,6 +15,7 @@ import {
   sendCasualBookingReminderEmail,
   sendMembershipReminderEmail,
 } from "@/lib/email";
+import { sendRenewalReminders } from "@/lib/membership-renewal";
 
 export const runtime = "nodejs";
 
@@ -33,11 +34,21 @@ export async function GET(request: Request) {
 
   await ensureTables();
 
+  // Renewal reminders for one-time memberships go out every day, whether or
+  // not there's a play day tomorrow.
+  let renewals: { due: number; sent: number } | { error: string };
+  try {
+    renewals = await sendRenewalReminders();
+  } catch (err) {
+    console.error("Renewal reminders failed", err);
+    renewals = { error: "Renewal reminders failed" };
+  }
+
   const tomorrow = addDays(getClubToday().dateKey, 1);
 
   const hasSession = await sessionExists(tomorrow);
   if (!hasSession) {
-    return NextResponse.json({ ok: true, skipped: "No play day tomorrow" });
+    return NextResponse.json({ ok: true, skipped: "No play day tomorrow", renewals });
   }
 
   const members = await getMembersWithPlayDayTomorrow(tomorrow);
@@ -102,5 +113,6 @@ export async function GET(request: Request) {
     sent,
     casualBookings: casualBookings.length,
     casualSent,
+    renewals,
   });
 }

@@ -104,6 +104,17 @@ async function ensureTablesImpl() {
   // Which weekday's membership pool this row grants access to — defaults to
   // 'friday' since every membership predating this column was Friday-only.
   await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS day TEXT NOT NULL DEFAULT 'friday';`;
+  // One-time membership renewal (see lib/membership-renewal.ts): the cron
+  // emails a private renewal link 5 days before period_end. The token in that
+  // link is what opens renewal for the member; renewal_reminder_sent_at
+  // guarantees one reminder per membership. A renewal row points back at the
+  // membership it continues via renewal_of.
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_token TEXT UNIQUE;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_reminder_sent_at TIMESTAMPTZ;`;
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_of INT;`;
+  // Total free days an admin has given this membership ("Give free month"),
+  // shown on the Members page.
+  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS free_days_granted INT NOT NULL DEFAULT 0;`;
   await sql`
     CREATE TABLE IF NOT EXISTS donations (
       id SERIAL PRIMARY KEY,
@@ -547,8 +558,18 @@ export async function assignAndReserveMembershipAccessStart(
   // the search uses — so a stale or tampered value can't target a bogus
   // date. `blocked: true, reason: "invalid_date"` if it doesn't hold up.
   preferredDate?: string,
+  // Renewing a one-time membership: that membership doesn't count as a
+  // conflict, and the new one starts on the first play day with room after
+  // it ends (or the usual nearest day, if it has already ended).
+  renewalOf?: { membershipId: number; periodEnd: string },
 ): Promise<MembershipAssignment> {
   const { dateKey: clubToday, cutoffPassed } = getClubToday();
+  const earliestStart = (() => {
+    const fromToday = addDays(clubToday, cutoffPassed ? 1 : 0);
+    if (!renewalOf) return fromToday;
+    const afterCurrent = addDays(renewalOf.periodEnd, 1);
+    return afterCurrent > fromToday ? afterCurrent : fromToday;
+  })();
   const dow = MEMBERSHIP_DAY_TO_DOW[day];
   const lockKey = `${member.email.toLowerCase()}:${day}`;
 
@@ -570,12 +591,19 @@ export async function assignAndReserveMembershipAccessStart(
     const { rows: conflictRows } = await client.query(
       `SELECT id FROM memberships
        WHERE lower(email) = lower($1) AND day = $2
+         AND id <> $5
          AND (
            (status IN ('active', 'trialing', 'past_due') AND (period_end IS NULL OR period_end >= $3))
            OR (status = 'pending' AND created_at > NOW() - ($4 * INTERVAL '1 minute'))
          )
        LIMIT 1;`,
-      [member.email, day, clubToday, PENDING_MEMBERSHIP_HOLD_MINUTES],
+      [
+        member.email,
+        day,
+        clubToday,
+        PENDING_MEMBERSHIP_HOLD_MINUTES,
+        renewalOf?.membershipId ?? 0,
+      ],
     );
     if (conflictRows.length > 0) {
       return { blocked: true, reason: "already_member" };
@@ -585,8 +613,8 @@ export async function assignAndReserveMembershipAccessStart(
       ? await client.query(
           `SELECT date::text AS date FROM sessions
            WHERE date = $1 AND google_event_id IS NOT NULL AND EXTRACT(DOW FROM date) = $2
-             AND date >= ($3::date + $4::int);`,
-          [preferredDate, dow, clubToday, cutoffPassed ? 1 : 0],
+             AND date >= $3::date;`,
+          [preferredDate, dow, earliestStart],
         )
       : await client.query(
           // A play day an admin has locked never becomes a new member's
@@ -595,10 +623,10 @@ export async function assignAndReserveMembershipAccessStart(
            WHERE google_event_id IS NOT NULL
              AND NOT registration_locked
              AND EXTRACT(DOW FROM date) = $2
-             AND date >= ($1::date + $3::int)
-             AND date <= ($1::date + $4::int)
+             AND date >= $1::date
+             AND date <= ($1::date + $3::int)
            ORDER BY date;`,
-          [clubToday, dow, cutoffPassed ? 1 : 0, MEMBERSHIP_START_SEARCH_DAYS],
+          [earliestStart, dow, MEMBERSHIP_START_SEARCH_DAYS],
         );
 
     if (preferredDate && candidates.length === 0) {
@@ -637,8 +665,8 @@ export async function assignAndReserveMembershipAccessStart(
           const periodEnd = addDays(date, MEMBERSHIP_DAYS[plan]);
           const { rows: inserted } = await client.query(
             `INSERT INTO memberships
-               (email, plan, day, first_name, last_name, phone, period_start, period_end, recurring, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+               (email, plan, day, first_name, last_name, phone, period_start, period_end, recurring, status, renewal_of)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10)
              RETURNING id;`,
             [
               member.email,
@@ -650,6 +678,7 @@ export async function assignAndReserveMembershipAccessStart(
               date,
               periodEnd,
               member.recurring,
+              renewalOf?.membershipId ?? null,
             ],
           );
           await client.query("COMMIT");
@@ -1157,6 +1186,8 @@ export async function removeSessionFillIn(
 export type MembershipRow = {
   id: number;
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string | null;
   plan: MembershipTier;
@@ -1168,6 +1199,10 @@ export type MembershipRow = {
   recurring: boolean;
   stripeSubscriptionId: string | null;
   method: "card" | "cash";
+  /** When the one-time renewal reminder went out (only selected by listMemberships). */
+  renewalReminderSentAt?: string | null;
+  /** Free days given by an admin (only selected by listMemberships). */
+  freeDaysGranted?: number;
 };
 
 function mapMembershipRow(r: {
@@ -1185,10 +1220,14 @@ function mapMembershipRow(r: {
   recurring: boolean;
   stripe_subscription_id: string | null;
   stripe_payment_intent_id: string | null;
+  renewal_reminder_sent_at?: Date | null;
+  free_days_granted?: number;
 }): MembershipRow {
   return {
     id: r.id,
     name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || r.email,
+    firstName: r.first_name ?? "",
+    lastName: r.last_name ?? "",
     email: r.email,
     phone: r.phone,
     plan: r.plan === "quarterly" ? "quarterly" : "monthly",
@@ -1202,6 +1241,10 @@ function mapMembershipRow(r: {
     method: r.stripe_payment_intent_id?.startsWith("cash-invoice-")
       ? "cash"
       : "card",
+    renewalReminderSentAt: r.renewal_reminder_sent_at
+      ? r.renewal_reminder_sent_at.toISOString()
+      : null,
+    freeDaysGranted: r.free_days_granted ?? 0,
   };
 }
 
@@ -1210,7 +1253,7 @@ function mapMembershipRow(r: {
 // until Stripe's period-end webhook flips the status).
 export async function listMemberships(): Promise<MembershipRow[]> {
   const { rows } = await sql`
-    SELECT id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id
+    SELECT id, email, first_name, last_name, phone, plan, day, period_start::text AS period_start, period_end::text AS period_end, status, cancel_at_period_end, recurring, stripe_subscription_id, stripe_payment_intent_id, renewal_reminder_sent_at, free_days_granted
     FROM memberships
     WHERE status IN ('active', 'trialing', 'past_due', 'unpaid', 'incomplete')
     ORDER BY plan, created_at DESC;
@@ -1445,4 +1488,132 @@ export async function claimBookingReminder(bookingId: number): Promise<boolean> 
     WHERE id = ${bookingId} AND reminder_sent_at IS NULL;
   `;
   return (rowCount ?? 0) > 0;
+}
+
+// Columns shared by the renewal lookups below — same shape mapMembershipRow
+// expects.
+const MEMBERSHIP_COLUMNS = `id, email, first_name, last_name, phone, plan, day,
+  period_start::text AS period_start, period_end::text AS period_end, status,
+  cancel_at_period_end, recurring, stripe_subscription_id,
+  stripe_payment_intent_id, renewal_reminder_sent_at`;
+
+// Active one-time (non-recurring) memberships ending between `from` and
+// `through` (inclusive) that haven't had a renewal reminder yet and haven't
+// already been continued by another membership for the same email + day.
+export async function getOneTimeMembershipsDueForRenewalReminder(
+  from: string,
+  through: string,
+): Promise<MembershipRow[]> {
+  const { rows } = await sql.query(
+    `SELECT ${MEMBERSHIP_COLUMNS}
+     FROM memberships m
+     WHERE m.status = 'active'
+       AND m.recurring = FALSE
+       AND m.renewal_reminder_sent_at IS NULL
+       AND m.period_end BETWEEN $1::date AND $2::date
+       AND NOT EXISTS (
+         SELECT 1 FROM memberships n
+         WHERE n.id <> m.id
+           AND lower(n.email) = lower(m.email)
+           AND n.day = m.day
+           AND n.status IN ('active', 'trialing', 'past_due')
+           AND (n.period_end IS NULL OR n.period_end > m.period_end)
+       )
+     ORDER BY m.period_end;`,
+    [from, through],
+  );
+  return rows.map((r) =>
+    mapMembershipRow(r as Parameters<typeof mapMembershipRow>[0]),
+  );
+}
+
+// Marks the reminder as sent and stores the renewal token in one step, so a
+// retried or overlapping cron run can't email the same member twice. Returns
+// false if another run already claimed it.
+export async function claimRenewalReminder(
+  membershipId: number,
+  token: string,
+): Promise<boolean> {
+  const { rowCount } = await sql`
+    UPDATE memberships
+    SET renewal_reminder_sent_at = NOW(), renewal_token = ${token}
+    WHERE id = ${membershipId} AND renewal_reminder_sent_at IS NULL;
+  `;
+  return (rowCount ?? 0) > 0;
+}
+
+// Undoes claimRenewalReminder when the email didn't actually send, so the
+// next cron run tries again.
+export async function releaseRenewalReminder(membershipId: number): Promise<void> {
+  await sql`
+    UPDATE memberships
+    SET renewal_reminder_sent_at = NULL, renewal_token = NULL
+    WHERE id = ${membershipId};
+  `;
+}
+
+export async function getMembershipByRenewalToken(
+  token: string,
+): Promise<MembershipRow | null> {
+  const { rows } = await sql.query(
+    `SELECT ${MEMBERSHIP_COLUMNS} FROM memberships WHERE renewal_token = $1;`,
+    [token],
+  );
+  const row = rows[0];
+  return row ? mapMembershipRow(row as Parameters<typeof mapMembershipRow>[0]) : null;
+}
+
+// The paid renewal continuing this membership, if there is one.
+export async function getActiveRenewalOf(
+  membershipId: number,
+): Promise<MembershipRow | null> {
+  const { rows } = await sql.query(
+    `SELECT ${MEMBERSHIP_COLUMNS} FROM memberships
+     WHERE renewal_of = $1 AND status = 'active'
+     ORDER BY created_at DESC LIMIT 1;`,
+    [membershipId],
+  );
+  const row = rows[0];
+  return row ? mapMembershipRow(row as Parameters<typeof mapMembershipRow>[0]) : null;
+}
+
+// Another active membership for the same person and day that starts after
+// this one ends — i.e. it has already been renewed or re-joined, so
+// extending this one would overlap it.
+export async function hasLaterMembership(m: MembershipRow): Promise<boolean> {
+  if (!m.periodEnd) return false;
+  const { rows } = await sql`
+    SELECT 1 FROM memberships
+    WHERE id <> ${m.id}
+      AND lower(email) = lower(${m.email})
+      AND day = ${m.day}
+      AND status = 'active'
+      AND period_start > ${m.periodEnd}
+    LIMIT 1;
+  `;
+  return rows.length > 0;
+}
+
+// Records a free-days grant. `extendPeriodEnd` also moves the access window's
+// end date (one-time memberships, and quarterly subscriptions whose next
+// charge was pushed back); a one-time membership's renewal reminder is reset
+// so it goes out again 5 days before the new end date.
+export async function recordFreeDays(
+  membershipId: number,
+  days: number,
+  extendPeriodEnd: boolean,
+): Promise<string | null> {
+  const { rows } = await sql`
+    UPDATE memberships
+    SET
+      period_end = CASE WHEN ${extendPeriodEnd} THEN period_end + ${days}::int ELSE period_end END,
+      renewal_reminder_sent_at = CASE
+        WHEN ${extendPeriodEnd} AND recurring = FALSE THEN NULL
+        ELSE renewal_reminder_sent_at
+      END,
+      free_days_granted = free_days_granted + ${days}::int
+    WHERE id = ${membershipId}
+    RETURNING period_end::text AS period_end;
+  `;
+  return (rows[0]?.period_end as string | undefined) ?? null;
 }

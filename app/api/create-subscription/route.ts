@@ -4,6 +4,7 @@ import {
   getStripe,
   getInvoicePaymentIntent,
   resolvePriceId,
+  createOneTimeMembershipPaymentIntent,
 } from "@/lib/stripe";
 import { checkRateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
 import {
@@ -12,7 +13,6 @@ import {
   ensureTables,
   type MembershipAssignment,
 } from "@/lib/db";
-import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { getClubToday } from "@/lib/dates";
 import { isDayPaused } from "@/lib/day-requests";
 
@@ -86,45 +86,14 @@ export async function POST(request: Request) {
       assignment?.periodStart ?? getClubToday().dateKey;
 
     if (!body.recurring) {
-      const amount =
-        body.plan === "monthly" ? MONTHLY_PRICE_CENTS : QUARTERLY_PRICE_CENTS;
-
-      const customers = await stripe.customers.list({
+      const paymentIntent = await createOneTimeMembershipPaymentIntent({
+        plan: body.plan,
+        day: body.day,
+        firstName: body.firstName,
+        lastName: body.lastName,
         email: body.email,
-        limit: 1,
+        phone: body.phone,
       });
-      const customer =
-        customers.data[0] ??
-        (await stripe.customers.create({
-          email: body.email,
-          name: `${body.firstName} ${body.lastName}`,
-          phone: body.phone,
-          metadata: { plan: body.plan, day: body.day },
-        }));
-
-      const paymentIntent = await stripe.paymentIntents.create(
-        {
-          amount,
-          currency: "nzd",
-          customer: customer.id,
-          automatic_payment_methods: { enabled: true },
-          receipt_email: body.email,
-          description: `Three Wolves — ${TIER_LABEL[body.plan]} Membership (${DAY_LABEL[body.day]}) — one-time`,
-          metadata: {
-            type: "membership",
-            plan: body.plan,
-            day: body.day,
-            recurring: "false",
-            firstName: body.firstName,
-            lastName: body.lastName,
-            email: body.email,
-            phone: body.phone ?? "",
-          },
-        },
-        {
-          idempotencyKey: `membership-onetime-${body.plan}-${body.email}-${Date.now()}`,
-        },
-      );
 
       if (!paymentIntent.client_secret) {
         return NextResponse.json(

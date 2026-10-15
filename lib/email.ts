@@ -261,6 +261,8 @@ export async function sendMembershipConfirmationEmail(
     periodStart: string;
     periodEnd: string;
     delayed: boolean;
+    /** A paid renewal of an earlier one-time membership. */
+    renewal?: boolean;
   },
 ): Promise<void> {
   const from = process.env.EMAIL_FROM;
@@ -277,7 +279,11 @@ export async function sendMembershipConfirmationEmail(
   const displayStart = formatEmailDate(input.periodStart);
   const displayEnd = formatEmailDate(input.periodEnd);
 
-  const accessParagraph = input.delayed
+  const accessParagraph = input.renewal
+    ? paragraph(
+        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today. Your renewed membership picks up on <strong>${escapeHtml(displayStart)}</strong>, right after your current one — no gap, no need to book sessions.`,
+      )
+    : input.delayed
     ? paragraph(
         `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today. There wasn't an open spot on the very next ${dayName} session, so your membership access starts on <strong>${escapeHtml(displayStart)}</strong> — the next ${dayName} session with room. You were charged today either way; your access simply begins then.`,
       )
@@ -285,19 +291,28 @@ export async function sendMembershipConfirmationEmail(
         `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today, and your membership is active immediately — you're welcome at every ${dayName} session from now through <strong>${escapeHtml(displayEnd)}</strong>.`,
       );
 
+  const greeting = input.renewal
+    ? `Thanks for renewing, ${input.firstName}!`
+    : `Welcome to Three Wolves, ${input.firstName}!`;
+  const intro = input.renewal
+    ? `Your <strong>${planTitle}</strong> membership is renewed (${billingNote}).`
+    : `We're so glad to have you — your <strong>${planTitle}</strong> membership is confirmed (${billingNote}).`;
+
   const bodyHtml = `
-    ${heading(`Welcome to Three Wolves, ${escapeHtml(input.firstName)}!`)}
-    ${paragraph(`We're so glad to have you — your <strong>${planTitle}</strong> membership is confirmed (${billingNote}).`)}
+    ${heading(greeting)}
+    ${paragraph(intro)}
     ${accessParagraph}
     ${paragraph(`Membership window: <strong>${escapeHtml(displayStart)}</strong> to <strong>${escapeHtml(displayEnd)}</strong>. You can show up to any ${dayName} session in that window — no need to book individual sessions. See you on court!`)}
     ${contactFooterNote()}
   `;
   const text = [
-    `Welcome to Three Wolves, ${input.firstName}!`,
+    greeting,
     "",
-    `We're so glad to have you — your ${planTitle} membership is confirmed (${billingNote}).`,
+    intro.replace(/<\/?strong>/g, ""),
     "",
-    input.delayed
+    input.renewal
+      ? `You were charged NZD $${input.priceNzd.toFixed(2)} today. Your renewed membership picks up on ${displayStart}, right after your current one.`
+      : input.delayed
       ? `You were charged NZD $${input.priceNzd.toFixed(2)} today. There wasn't an open spot on the very next ${dayName} session, so your membership access starts on ${displayStart} — the next ${dayName} session with room.`
       : `You were charged NZD $${input.priceNzd.toFixed(2)} today, and your membership is active immediately.`,
     "",
@@ -309,7 +324,9 @@ export async function sendMembershipConfirmationEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `Welcome to Three Wolves — ${planTitle} membership confirmed`,
+    subject: input.renewal
+      ? `Membership renewed — ${planTitle} — Three Wolves Badminton Club`
+      : `Welcome to Three Wolves — ${planTitle} membership confirmed`,
     html: renderEmailLayout({ title: "Membership confirmed", bodyHtml }),
     text,
   });
@@ -709,6 +726,57 @@ export async function sendDayOpenEmail(
     to,
     subject: `${dayLabel} sessions are open — Three Wolves Badminton Club`,
     html: renderEmailLayout({ title: `${dayLabel} sessions are open`, bodyHtml }),
+    text,
+  });
+}
+
+// Sent by the daily reminders cron 5 days before a one-time membership ends.
+// The link carries the membership's private renewal token, which is what
+// opens renewal for this member (see app/renew-membership).
+export async function sendMembershipRenewalReminderEmail(
+  to: string,
+  input: {
+    firstName: string;
+    plan: MembershipTier;
+    day: MembershipDay;
+    periodEnd: string;
+    renewUrl: string;
+  },
+): Promise<void> {
+  const from = process.env.EMAIL_FROM;
+  if (!from) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const planTitle = `${PLAN_NAME[input.plan]} (${DAY_LABEL[input.day]})`;
+  const displayEnd = formatEmailDate(input.periodEnd);
+
+  const bodyHtml = `
+    ${heading("Your membership is ending soon")}
+    ${paragraph(`Hi ${escapeHtml(input.firstName)},`)}
+    ${paragraph(`Your <strong>${planTitle}</strong> membership at Three Wolves Badminton Club ends on <strong>${escapeHtml(displayEnd)}</strong>.`)}
+    ${paragraph(`Renewal is now open for you. Renew before it ends and your next membership starts straight after this one, so you keep your spot on court.`)}
+    ${ctaButton("Renew my membership", input.renewUrl)}
+    ${paragraph(`Not renewing? No action needed — your membership simply ends on ${escapeHtml(displayEnd)}.`)}
+    ${contactFooterNote()}
+  `;
+  const text = [
+    `Hi ${input.firstName},`,
+    "",
+    `Your ${planTitle} membership at Three Wolves Badminton Club ends on ${displayEnd}.`,
+    "",
+    `Renewal is now open for you. Renew before it ends and your next membership starts straight after this one: ${input.renewUrl}`,
+    "",
+    `Not renewing? No action needed — your membership simply ends on ${displayEnd}.`,
+    "",
+    contactFooterNoteText(),
+  ].join("\n");
+
+  await getResend().emails.send({
+    from: withDisplayName(from),
+    to,
+    subject: `Your ${planTitle} membership ends ${displayEnd} — renew now`,
+    html: renderEmailLayout({ title: "Your membership is ending soon", bodyHtml }),
     text,
   });
 }

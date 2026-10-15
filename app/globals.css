@@ -889,3 +889,8 @@ ol.cp-queue-list li::before{content:counter(q);width:24px;height:24px;flex-shrin
 .jersey-total{display:flex;justify-content:space-between;align-items:center;margin:22px 0 14px;padding:14px 16px;background:var(--cream);border-radius:var(--radius-md);font-size:18px;color:var(--navy)}
 .jersey-total strong{font-family:var(--font-display);font-size:28px}
 @media(max-width:860px){.jersey-two{grid-template-columns:1fr;gap:28px}.jersey-steps{grid-template-columns:1fr}.jersey-card{padding:22px}.jersey-hero{padding-top:110px}}
+.jersey-table-wrap{overflow-x:auto;margin-top:20px}
+.jersey-table{border-collapse:collapse;width:100%;font-size:14px;background:#fff;border-radius:var(--radius-md);overflow:hidden}
+.jersey-table th,.jersey-table td{padding:8px 10px;border:1px solid var(--steel-light);text-align:center;white-space:nowrap}
+.jersey-table thead th{background:var(--navy);color:#fff;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.jersey-table tbody th{color:var(--navy);font-weight:700}

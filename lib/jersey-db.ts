@@ -28,6 +28,7 @@ export type JerseyRegistration = {
   paidAt: string | null;
   paidBy: "auto" | "admin" | null;
   flags: string[];
+  lang: "en" | "vi";
   expiresAt: string | null;
   createdAt: string;
 };
@@ -68,6 +69,7 @@ export function ensureJerseyTables(): Promise<void> {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `;
+      await sql`ALTER TABLE jersey_registrations ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'en';`;
       // The database itself enforces one live registration per person, so
       // two near-simultaneous submissions can't both get in.
       await sql`
@@ -103,6 +105,7 @@ function toReg(r: Row): JerseyRegistration {
     paidAt: iso(r.paid_at),
     paidBy: (r.paid_by as "auto" | "admin" | null) ?? null,
     flags: (r.flags as string[]) ?? [],
+    lang: r.lang === "vi" ? "vi" : "en",
     expiresAt: iso(r.expires_at),
     createdAt: iso(r.created_at)!,
   };
@@ -140,6 +143,7 @@ export type RegisterInput = {
   printNumber: number | null;
   ipHash: string | null;
   deviceId: string | null;
+  lang: "en" | "vi";
 };
 
 export type RegisterResult =
@@ -195,14 +199,14 @@ export async function registerJersey(input: RegisterInput): Promise<RegisterResu
           `INSERT INTO jersey_registrations
              (ref_code, first_name, last_name, email, email_normalized, phone, phone_normalized,
               name_normalized, size, print_name, print_number, price_cents, early_bird,
-              ip_hash, device_id, flags, expires_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+              ip_hash, device_id, flags, lang, expires_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$18,
              CASE WHEN $13 THEN NOW() + ($17 || ' hours')::interval ELSE NULL END)
            RETURNING *;`,
           [
             code, input.firstName, input.lastName, input.email, input.emailNormalized, input.phone,
             input.phoneNormalized, input.nameNormalized, input.size, input.printName, input.printNumber,
-            price, earlyBird, input.ipHash, input.deviceId, flags, String(EARLY_BIRD_HOLD_HOURS),
+            price, earlyBird, input.ipHash, input.deviceId, flags, String(EARLY_BIRD_HOLD_HOURS), input.lang,
           ],
         );
         await client.query("COMMIT");
@@ -350,6 +354,7 @@ export async function matchAndNotifyJersey(): Promise<number> {
           refCode: n.registration.refCode,
           paidCents: n.paidCents,
           priceCents: n.registration.priceCents,
+          lang: n.registration.lang,
         });
       } catch (err) {
         console.error("Jersey paid email failed", n.registration.id, err);

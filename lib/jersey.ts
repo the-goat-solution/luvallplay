@@ -33,9 +33,8 @@ export const BANK_ACCOUNT_NUMBER = "01-0798-0949150-00";
 export const SPONSOR_NAME = "House of Barber";
 export const SPONSOR_URL = "https://houseofbarber.co.nz";
 
-// Placeholder size run until the supplier's chart is in; keep in step with
-// the size chart image on the page.
-export const JERSEY_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"] as const;
+// Keep in step with the supplier's size chart (public/uploads/jersey/size-chart.jpg).
+export const JERSEY_SIZES = ["S", "M", "L", "XL", "XXL"] as const;
 export type JerseySize = (typeof JERSEY_SIZES)[number];
 
 export const PRINT_NAME_MAX = 12;

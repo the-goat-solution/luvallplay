@@ -10,6 +10,7 @@ import {
   STANDARD_CENTS,
   formatDollars,
 } from "@/lib/jersey";
+import { useJerseyT } from "@/lib/jersey-i18n";
 import { BankDetails } from "./BankDetails";
 import { useJerseyClock } from "./useJerseyClock";
 
@@ -38,6 +39,7 @@ export function JerseyForm({
   serverNow: string;
   earlyBirdsLeft: number;
 }) {
+  const { tr, lang } = useJerseyT();
   const { open } = useJerseyClock(opensAt, serverNow);
   const [left, setLeft] = useState(earlyBirdsLeft);
   const [f, setF] = useState({ firstName: "", lastName: "", email: "", phone: "", size: "", website: "" });
@@ -71,16 +73,16 @@ export function JerseyForm({
     e.preventDefault();
     if (busy) return;
     setError("");
-    if (!f.size) return setError("Please choose your size.");
+    if (!f.size) return setError(tr("err_size"));
     if (addPrint && (!printName.trim() || printNumber === "")) {
-      return setError("Add a print name and number, or untick the printing option.");
+      return setError(tr("err_print"));
     }
-    if (!consent) return setError("Please tick the box to confirm you understand the payment rules.");
+    if (!consent) return setError(tr("err_consent"));
     setBusy(true);
     try {
       const res = await fetch("/api/jersey", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-jersey-lang": lang },
         body: JSON.stringify({
           ...f,
           addPrint,
@@ -89,14 +91,15 @@ export function JerseyForm({
           deviceId: deviceId(),
           turnstileToken: token || undefined,
           consent: true,
+          lang,
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong. Please try again.");
+      if (!res.ok) throw new Error(data.error ?? tr("err_generic"));
       setDone(data as Done);
       window.scrollTo({ top: document.getElementById("register")?.offsetTop ?? 0, behavior: "smooth" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setError(err instanceof Error ? err.message : tr("err_generic"));
     } finally {
       setBusy(false);
     }
@@ -104,28 +107,19 @@ export function JerseyForm({
 
   if (done) {
     const deadline = done.expiresAt
-      ? new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "full", timeStyle: "short" }).format(new Date(done.expiresAt))
+      ? new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : "en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "full", timeStyle: "short" }).format(new Date(done.expiresAt))
       : null;
     return (
       <div className="jersey-card" role="status">
-        <h3 className="jersey-card-title">You&apos;re registered! 🎉</h3>
-        <p>
-          Transfer <strong>{formatDollars(done.priceCents)}</strong> to secure your jersey. We&apos;ve also emailed these details.
-        </p>
+        <h3 className="jersey-card-title">{tr("done_h")}</h3>
+        <p>{tr("done_p", { price: formatDollars(done.priceCents) })}</p>
         <div className="jersey-code">
-          <div className="jersey-code-lbl">Your reference code</div>
+          <div className="jersey-code-lbl">{tr("code_lbl")}</div>
           <div className="jersey-code-num">{done.refCode}</div>
         </div>
         <BankDetails refCode={done.refCode} />
-        <p className="jersey-warn">
-          Please put <strong>{done.refCode}</strong> in the <strong>reference</strong> field of your bank transfer. It&apos;s how we match your
-          payment to you automatically — without it we may not be able to find your transfer and you could lose your spot. Thank you! 🙏
-        </p>
-        {done.earlyBird && deadline ? (
-          <p style={{ fontSize: 14 }}>
-            Your $15 early-bird price is held until <strong>{deadline}</strong>. After that, an unpaid spot is released to the next person.
-          </p>
-        ) : null}
+        <p className="jersey-warn">{tr("done_warn", { code: done.refCode })}</p>
+        {done.earlyBird && deadline ? <p style={{ fontSize: 14 }}>{tr("done_hold", { deadline })}</p> : null}
       </div>
     );
   }
@@ -133,52 +127,52 @@ export function JerseyForm({
   return (
     <form className="jersey-card" onSubmit={submit} noValidate={false}>
       <fieldset disabled={!open || busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-        {!open ? <p className="jersey-warn">Registration isn&apos;t open yet — the form unlocks when the countdown ends.</p> : null}
+        {!open ? <p className="jersey-warn">{tr("not_open")}</p> : null}
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label" htmlFor="j-first">First name <span className="form-required">*</span></label>
+            <label className="form-label" htmlFor="j-first">{tr("first")} <span className="form-required">*</span></label>
             <input id="j-first" className="form-input" required maxLength={80} autoComplete="given-name" value={f.firstName} onChange={set("firstName")} />
           </div>
           <div className="form-group">
-            <label className="form-label" htmlFor="j-last">Last name <span className="form-required">*</span></label>
+            <label className="form-label" htmlFor="j-last">{tr("last")} <span className="form-required">*</span></label>
             <input id="j-last" className="form-input" required maxLength={80} autoComplete="family-name" value={f.lastName} onChange={set("lastName")} />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label" htmlFor="j-email">Email <span className="form-required">*</span></label>
+          <label className="form-label" htmlFor="j-email">{tr("email")} <span className="form-required">*</span></label>
           <input id="j-email" type="email" className="form-input" required maxLength={200} autoComplete="email" value={f.email} onChange={set("email")} />
-          <div className="form-hint">One jersey per person, one registration per email. Your reference code is sent here.</div>
+          <div className="form-hint">{tr("email_hint")}</div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label" htmlFor="j-phone">Phone <span className="form-required">*</span></label>
+            <label className="form-label" htmlFor="j-phone">{tr("phone")} <span className="form-required">*</span></label>
             <input id="j-phone" type="tel" className="form-input" required minLength={6} maxLength={30} autoComplete="tel" value={f.phone} onChange={set("phone")} />
           </div>
           <div className="form-group">
-            <label className="form-label" htmlFor="j-size">Size <span className="form-required">*</span></label>
+            <label className="form-label" htmlFor="j-size">{tr("size_f")} <span className="form-required">*</span></label>
             <select id="j-size" className="form-input" required value={f.size} onChange={set("size")}>
-              <option value="" disabled>Choose a size</option>
+              <option value="" disabled>{tr("choose_size")}</option>
               {JERSEY_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-            <div className="form-hint">Check the size chart above. Between sizes? Size up.</div>
+            <div className="form-hint">{tr("size_hint")}</div>
           </div>
         </div>
 
         <label className="jersey-check">
           <input type="checkbox" checked={addPrint} onChange={(e) => setAddPrint(e.target.checked)} />
-          <span>Add my name &amp; number on the back <strong>(+{formatDollars(PRINT_CENTS)})</strong></span>
+          <span>{tr("add_print", { price: `+${formatDollars(PRINT_CENTS)}` })}</span>
         </label>
         {addPrint ? (
           <div className="form-row" style={{ marginTop: 12 }}>
             <div className="form-group">
-              <label className="form-label" htmlFor="j-pname">Name on back</label>
+              <label className="form-label" htmlFor="j-pname">{tr("print_name")}</label>
               <input id="j-pname" className="form-input" maxLength={PRINT_NAME_MAX} value={printName} onChange={(e) => setPrintName(e.target.value.toUpperCase())} />
-              <div className="form-hint">Up to {PRINT_NAME_MAX} characters.</div>
+              <div className="form-hint">{tr("print_name_hint", { n: PRINT_NAME_MAX })}</div>
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="j-pnum">Number</label>
+              <label className="form-label" htmlFor="j-pnum">{tr("number")}</label>
               <input id="j-pnum" type="number" min={0} max={99} className="form-input" value={printNumber} onChange={(e) => setPrintNumber(e.target.value)} />
-              <div className="form-hint">0–99.</div>
+              <div className="form-hint">{tr("number_hint")}</div>
             </div>
           </div>
         ) : null}
@@ -191,19 +185,19 @@ export function JerseyForm({
         <label className="jersey-check" style={{ marginTop: 18 }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           <span>
-            I&apos;ll pay by bank transfer using my reference code. I understand any amount over the price goes to club funds and there are
-            no refunds{left > 0 ? ", and that my $15 spot is released if unpaid after 48 hours" : ""}.
+            {tr("consent")}
+            {left > 0 ? tr("consent_hold") : ""}
           </span>
         </label>
 
         {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? <div style={{ marginTop: 16 }}><TurnstileWidget onToken={setToken} /></div> : null}
 
         <div className="jersey-total">
-          <span>Total to pay</span>
+          <span>{tr("total")}</span>
           <strong>{formatDollars(total)}</strong>
         </div>
         {error ? <div className="form-error" role="alert" style={{ fontSize: 14, marginBottom: 12 }}>{error}</div> : null}
-        <button type="submit" className="btn btn-primary btn-full">{busy ? "Registering…" : "Register & get my code"}</button>
+        <button type="submit" className="btn btn-primary btn-full">{busy ? tr("submitting") : tr("submit")}</button>
       </fieldset>
     </form>
   );

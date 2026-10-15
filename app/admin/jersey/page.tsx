@@ -39,6 +39,7 @@ async function markPaid(id: number) {
       refCode: reg.refCode,
       paidCents: reg.priceCents,
       priceCents: reg.priceCents,
+      lang: reg.lang,
     });
   } catch (err) {
     console.error("Jersey paid email failed", err);

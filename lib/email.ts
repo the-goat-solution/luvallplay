@@ -805,55 +805,90 @@ export async function sendJerseyRegistrationEmail(input: {
   refCode: string;
   priceCents: number;
   earlyBird: boolean;
+  lang?: "en" | "vi";
   deadline: Date | null;
 }): Promise<void> {
+  const vi = input.lang === "vi";
   const price = `$${(input.priceCents / 100).toFixed(2)}`;
   const deadline = input.deadline
-    ? new Intl.DateTimeFormat("en-NZ", {
+    ? new Intl.DateTimeFormat(vi ? "vi-VN" : "en-NZ", {
         timeZone: "Pacific/Auckland",
         dateStyle: "full",
         timeStyle: "short",
       }).format(input.deadline)
     : null;
   const holdNote = input.earlyBird && deadline
-    ? `Your early-bird price is held until <strong>${escapeHtml(deadline)}</strong>. If we haven't received payment by then, your spot goes to the next person.`
+    ? vi
+      ? `Giá ưu đãi của bạn được giữ đến <strong>${escapeHtml(deadline)}</strong>. Nếu chưa nhận được thanh toán trước thời điểm đó, suất của bạn sẽ chuyển cho người kế tiếp.`
+      : `Your early-bird price is held until <strong>${escapeHtml(deadline)}</strong>. If we haven't received payment by then, your spot goes to the next person.`
     : "";
-  const holdText = input.earlyBird && deadline
-    ? `Your early-bird price is held until ${deadline}. If we haven't received payment by then, your spot goes to the next person.`
-    : "";
+  const holdText = holdNote.replace(/<[^>]+>/g, "");
+  const code = escapeHtml(input.refCode);
+
+  const T = vi
+    ? {
+        title: "Đăng ký áo đấu CLB",
+        h: "Bạn đã đăng ký áo đấu của CLB",
+        intro: `Xin chào ${escapeHtml(input.firstName)}, cảm ơn bạn đã đăng ký! Để giữ áo, vui lòng chuyển khoản <strong>${price}</strong> vào:`,
+        codeLabel: "Mã tham chiếu của bạn",
+        must: `<strong>Vui lòng ghi ${code} vào ô nội dung (reference) khi chuyển khoản.</strong> Nhờ mã này chúng tôi mới đối chiếu được khoản thanh toán của bạn — nếu thiếu mã, chúng tôi có thể không tìm thấy giao dịch và bạn có thể mất suất.`,
+        rules:
+          "Nếu bạn chuyển dư, phần chênh lệch sẽ thuộc về quỹ CLB — xin cảm ơn! Rất tiếc chúng tôi không hoàn tiền. Áo dự kiến về khoảng đầu tháng 11 và sẽ được phát vào một buổi chơi, thời gian sẽ thông báo sau.",
+        subject: `Mã tham chiếu áo đấu của bạn: ${input.refCode} — Three Wolves Badminton Club`,
+        text: [
+          `Xin chào ${input.firstName}, cảm ơn bạn đã đăng ký áo đấu CLB!`,
+          "",
+          `Vui lòng chuyển khoản ${price} vào ${BANK_ACCOUNT_NAME}, số tài khoản ${BANK_ACCOUNT_NUMBER}.`,
+          `Mã tham chiếu: ${input.refCode}`,
+          "",
+          `Vui lòng ghi ${input.refCode} vào ô nội dung (reference). Nếu thiếu mã, chúng tôi có thể không tìm thấy giao dịch và bạn có thể mất suất.`,
+          holdText,
+          "Số tiền chuyển dư thuộc về quỹ CLB (xin cảm ơn!). Không hoàn tiền.",
+          "Áo dự kiến về khoảng đầu tháng 11 và sẽ được phát vào một buổi chơi, thời gian sẽ thông báo sau.",
+        ],
+      }
+    : {
+        title: "Club jersey registration",
+        h: "You're registered for the club jersey",
+        intro: `Hi ${escapeHtml(input.firstName)}, thanks for registering! To secure your jersey, please transfer <strong>${price}</strong> to:`,
+        codeLabel: "Your reference code",
+        must: `<strong>Please put ${code} in the reference field of your transfer.</strong> It's how we match your payment to you — without it we may not be able to find your transfer and you could lose your spot.`,
+        rules:
+          "If you send more than the price, the difference goes to the club's funds — thank you! Sorry, we can't offer refunds. Jerseys arrive around early November and will be handed out at a play day, to be announced.",
+        subject: `Your jersey reference code: ${input.refCode} — Three Wolves Badminton Club`,
+        text: [
+          `Hi ${input.firstName}, thanks for registering for the club jersey!`,
+          "",
+          `Please transfer ${price} to ${BANK_ACCOUNT_NAME}, ${BANK_ACCOUNT_NUMBER}.`,
+          `Reference code: ${input.refCode}`,
+          "",
+          `Please put ${input.refCode} in the reference field. Without it we may not be able to find your transfer and you could lose your spot.`,
+          holdText,
+          "Any amount over the price goes to club funds (thank you!). No refunds.",
+          "Jerseys arrive around early November and will be handed out at a play day, to be announced.",
+        ],
+      };
 
   const bodyHtml = `
-    ${heading("You're registered for the club jersey")}
-    ${paragraph(`Hi ${escapeHtml(input.firstName)}, thanks for registering! To secure your jersey, please transfer <strong>${price}</strong> to:`)}
+    ${heading(T.h)}
+    ${paragraph(T.intro)}
     ${paragraph(`<strong>${escapeHtml(BANK_ACCOUNT_NAME)}</strong><br/>${escapeHtml(BANK_ACCOUNT_NUMBER)}`)}
     <div style="margin:8px 0 20px;padding:18px;text-align:center;background:#fff;border:2px dashed #C4892A;border-radius:12px">
-      <div style="font-size:13px;color:#3a526a">Your reference code</div>
-      <div style="font-size:38px;font-weight:800;letter-spacing:.2em;color:#184467">${escapeHtml(input.refCode)}</div>
+      <div style="font-size:13px;color:#3a526a">${T.codeLabel}</div>
+      <div style="font-size:38px;font-weight:800;letter-spacing:.2em;color:#184467">${code}</div>
     </div>
-    ${paragraph(`<strong>Please put ${escapeHtml(input.refCode)} in the reference field of your transfer.</strong> It's how we match your payment to you — without it we may not be able to find your transfer and you could lose your spot.`)}
+    ${paragraph(T.must)}
     ${holdNote ? paragraph(holdNote) : ""}
-    ${paragraph("If you send more than the price, the difference goes to the club's funds — thank you! Sorry, we can't offer refunds. Jerseys arrive around early November and will be handed out at a play day, to be announced.")}
+    ${paragraph(T.rules)}
     ${contactFooterNote()}
   `;
-  const text = [
-    `Hi ${input.firstName}, thanks for registering for the club jersey!`,
-    "",
-    `Please transfer ${price} to ${BANK_ACCOUNT_NAME}, ${BANK_ACCOUNT_NUMBER}.`,
-    `Reference code: ${input.refCode}`,
-    "",
-    `Please put ${input.refCode} in the reference field. Without it we may not be able to find your transfer and you could lose your spot.`,
-    holdText,
-    "Any amount over the price goes to club funds (thank you!). No refunds.",
-    "Jerseys arrive around early November and will be handed out at a play day, to be announced.",
-    "",
-    contactFooterNoteText(),
-  ].join("\n");
+  const text = [...T.text, "", contactFooterNoteText()].join("\n");
 
   await getResend().emails.send({
     from: withDisplayName(jerseyFrom()),
     to: input.to,
-    subject: `Your jersey reference code: ${input.refCode} — Three Wolves Badminton Club`,
-    html: renderEmailLayout({ title: "Club jersey registration", bodyHtml }),
+    subject: T.subject,
+    html: renderEmailLayout({ title: T.title, bodyHtml }),
     text,
   });
 }
@@ -864,31 +899,44 @@ export async function sendJerseyPaidEmail(input: {
   refCode: string;
   paidCents: number;
   priceCents: number;
+  lang?: "en" | "vi";
 }): Promise<void> {
+  const vi = input.lang === "vi";
   const extra = input.paidCents - input.priceCents;
-  const extraHtml = extra > 0
-    ? paragraph(`You sent $${(extra / 100).toFixed(2)} more than the price. That goes to the club's funds — thank you for the support!`)
-    : "";
+  const extraAmt = `$${(extra / 100).toFixed(2)}`;
+  const T = vi
+    ? {
+        h: "Đã nhận thanh toán — bạn đã có áo!",
+        p: `Xin chào ${escapeHtml(input.firstName)}, chúng tôi đã nhận được thanh toán cho áo mã ${escapeHtml(input.refCode)}. Áo của bạn đã được xác nhận.`,
+        extra: `Bạn đã chuyển dư ${extraAmt} so với giá áo. Số tiền này thuộc về quỹ CLB — cảm ơn bạn đã ủng hộ!`,
+        pick: "Áo dự kiến về khoảng đầu tháng 11 và sẽ được phát vào một buổi chơi, thời gian sẽ thông báo sau. Mặc áo đến House of Barber để được giảm 10% khi cắt tóc!",
+        subject: "Đã nhận thanh toán áo đấu — Three Wolves Badminton Club",
+        title: "Đã nhận thanh toán",
+        first: `Xin chào ${input.firstName}, chúng tôi đã nhận được thanh toán cho áo mã ${input.refCode}. Áo của bạn đã được xác nhận.`,
+      }
+    : {
+        h: "Payment received — you're in!",
+        p: `Hi ${escapeHtml(input.firstName)}, we've received your payment for jersey ${escapeHtml(input.refCode)}. Your jersey is confirmed.`,
+        extra: `You sent ${extraAmt} more than the price. That goes to the club's funds — thank you for the support!`,
+        pick: "Jerseys arrive around early November and will be handed out at a play day, to be announced. Wear it to House of Barber for 10% off a haircut!",
+        subject: "Jersey payment received — Three Wolves Badminton Club",
+        title: "Payment received",
+        first: `Hi ${input.firstName}, we've received your payment for jersey ${input.refCode}. Your jersey is confirmed.`,
+      };
   const bodyHtml = `
-    ${heading("Payment received — you're in!")}
-    ${paragraph(`Hi ${escapeHtml(input.firstName)}, we've received your payment for jersey ${escapeHtml(input.refCode)}. Your jersey is confirmed.`)}
-    ${extraHtml}
-    ${paragraph("Jerseys arrive around early November and will be handed out at a play day, to be announced. Wear it to House of Barber for 10% off a haircut!")}
+    ${heading(T.h)}
+    ${paragraph(T.p)}
+    ${extra > 0 ? paragraph(T.extra) : ""}
+    ${paragraph(T.pick)}
     ${contactFooterNote()}
   `;
-  const text = [
-    `Hi ${input.firstName}, we've received your payment for jersey ${input.refCode}. Your jersey is confirmed.`,
-    extra > 0 ? `You sent $${(extra / 100).toFixed(2)} over the price; it goes to club funds — thank you!` : "",
-    "Jerseys arrive around early November and will be handed out at a play day, to be announced. Wear it to House of Barber for 10% off a haircut!",
-    "",
-    contactFooterNoteText(),
-  ].join("\n");
+  const text = [T.first, extra > 0 ? T.extra : "", T.pick, "", contactFooterNoteText()].join("\n");
 
   await getResend().emails.send({
     from: withDisplayName(jerseyFrom()),
     to: input.to,
-    subject: "Jersey payment received — Three Wolves Badminton Club",
-    html: renderEmailLayout({ title: "Payment received", bodyHtml }),
+    subject: T.subject,
+    html: renderEmailLayout({ title: T.title, bodyHtml }),
     text,
   });
 }

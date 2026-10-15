@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useJerseyT } from "@/lib/jersey-i18n";
 
-export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+export function CopyButton({ text }: { text: string }) {
+  const { tr } = useJerseyT();
   const [done, setDone] = useState(false);
   return (
     <button
@@ -18,7 +20,7 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
         }
       }}
     >
-      {done ? "Copied ✓" : label}
+      {done ? tr("copied") : tr("copy")}
     </button>
   );
 }

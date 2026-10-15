@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useJerseyT } from "@/lib/jersey-i18n";
 import { useJerseyClock } from "./useJerseyClock";
 
 type Props = { opensAt: string; serverNow: string; earlyBirdsLeft: number };
@@ -10,6 +11,7 @@ function pad(n: number) {
 }
 
 export function JerseyHero({ opensAt, serverNow, earlyBirdsLeft }: Props) {
+  const { tr } = useJerseyT();
   const { open, msLeft } = useJerseyClock(opensAt, serverNow);
   const [left, setLeft] = useState(earlyBirdsLeft);
 
@@ -32,10 +34,10 @@ export function JerseyHero({ opensAt, serverNow, earlyBirdsLeft }: Props) {
 
   const s = Math.floor(msLeft / 1000);
   const parts = [
-    ["Days", Math.floor(s / 86400)],
-    ["Hours", Math.floor((s % 86400) / 3600)],
-    ["Mins", Math.floor((s % 3600) / 60)],
-    ["Secs", s % 60],
+    [tr("days"), Math.floor(s / 86400)],
+    [tr("hours"), Math.floor((s % 86400) / 3600)],
+    [tr("mins"), Math.floor((s % 3600) / 60)],
+    [tr("secs"), s % 60],
   ] as const;
 
   return (
@@ -46,16 +48,16 @@ export function JerseyHero({ opensAt, serverNow, earlyBirdsLeft }: Props) {
           alt="Three Wolves Badminton Club"
           style={{ width: 96, margin: "0 auto 20px" }}
         />
-        <div className="section-label" style={{ justifyContent: "center" }}>Official Club Jersey</div>
-        <h1 className="section-title section-title-white">Wear the pack</h1>
+        <div className="section-label" style={{ justifyContent: "center" }}>{tr("hero_label")}</div>
+        <h1 className="section-title section-title-white">{tr("hero_title")}</h1>
         <p className="section-sub section-sub-light" style={{ margin: "16px auto 0" }}>
-          Authentic Yonex, printed in Vietnam and shipped to Christchurch. Arriving around early November.
+          {tr("hero_sub")}
         </p>
 
         {!open ? (
           <div style={{ marginTop: 36 }}>
             <div style={{ fontSize: 13, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--bronze-light)", fontWeight: 700 }}>
-              Registration opens in
+              {tr("opens_in")}
             </div>
             <div className="jersey-count" role="timer" aria-live="off">
               {parts.map(([label, v]) => (
@@ -66,22 +68,16 @@ export function JerseyHero({ opensAt, serverNow, earlyBirdsLeft }: Props) {
               ))}
             </div>
             <p style={{ marginTop: 18, color: "rgba(255,255,255,.7)", fontSize: 15 }}>
-              Opens 1:30 AM, Friday 16 October (NZ time). First come, first served — the first 10 pay just $15.
+              {tr("opens_note")}
             </p>
           </div>
         ) : (
           <div style={{ marginTop: 32 }}>
             <div className="jersey-badge">
-              {left > 0 ? (
-                <>
-                  <strong>{left}</strong> of 10 early-bird spots left at <strong>$15</strong>
-                </>
-              ) : (
-                <>Early-bird spots are gone — jerseys are now <strong>$30</strong></>
-              )}
+              {left > 0 ? tr("spots_left", { n: left }) : tr("spots_gone")}
             </div>
             <div style={{ marginTop: 22 }}>
-              <a href="#register" className="btn btn-primary">Register now</a>
+              <a href="#register" className="btn btn-primary">{tr("register_now")}</a>
             </div>
           </div>
         )}

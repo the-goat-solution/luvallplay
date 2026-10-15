@@ -34,10 +34,16 @@ const JERSEY_I18N = {
 
     size_label: "Sizing",
     size_h: "Find your size",
-    size_p: "Available sizes: {sizes}. Match your height and weight to the chart. Between sizes? Size up.",
-    size_alt: "Jersey size chart",
-    men: "Men",
-    women: "Women",
+    size_p:
+      "The jersey is unisex and uses men's sizing. Available sizes: {sizes}. Match your height and weight, or compare a shirt you already own with the measurements below. Between sizes? Size up.",
+    size_alt: "Yonex shirt measurements chart (length and width by size)",
+    fit_h: "Fit guide",
+    shirt_h: "Shirt measurements (laid flat)",
+    women_eq: "Women's size (NZ/AU)",
+    length: "Length",
+    width: "Width",
+    size_note:
+      "Women's sizes are approximate: we matched the shirt's chest width (plus roughly 8–10 cm of relaxed room) to typical NZ/AU women's bust sizes. Yonex runs small (Asian sizing), and for a closer fit you can go one size down. Check the measurements above if unsure.",
     size: "Size",
     height: "Height",
     weight: "Weight",
@@ -139,10 +145,16 @@ const JERSEY_I18N = {
 
     size_label: "Kích Cỡ",
     size_h: "Chọn size của bạn",
-    size_p: "Các size: {sizes}. Đối chiếu chiều cao và cân nặng với bảng bên dưới. Nếu phân vân giữa hai size, hãy chọn size lớn hơn.",
-    size_alt: "Bảng size áo đấu",
-    men: "Nam",
-    women: "Nữ",
+    size_p:
+      "Áo là unisex và theo size nam. Các size: {sizes}. Hãy đối chiếu chiều cao, cân nặng, hoặc so với một chiếc áo bạn đang có theo số đo bên dưới. Phân vân giữa hai size? Hãy chọn size lớn hơn.",
+    size_alt: "Bảng số đo áo Yonex (dài áo và ngang áo theo từng size)",
+    fit_h: "Gợi ý chọn size",
+    shirt_h: "Số đo áo (đo phẳng)",
+    women_eq: "Size nữ tương đương (NZ/AU)",
+    length: "Dài áo",
+    width: "Ngang áo",
+    size_note:
+      "Size nữ chỉ mang tính tham khảo: chúng tôi đối chiếu ngang ngực của áo (cộng khoảng 8–10 cm độ rộng thoải mái) với số đo vòng ngực nữ thường dùng ở NZ/AU. Yonex lên size nhỏ (theo size châu Á), nếu thích ôm hơn bạn có thể chọn nhỏ hơn một size. Nếu phân vân, hãy xem số đo ở trên.",
     size: "Size",
     height: "Chiều cao",
     weight: "Cân nặng",

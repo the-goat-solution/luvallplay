@@ -13,15 +13,25 @@ import { JerseyForm } from "./JerseyForm";
 import { JerseyHero } from "./JerseyHero";
 
 const DESIGN_IMG = "/uploads/jersey/design.webp";
-const SIZE_CHART_IMG = "/uploads/jersey/size-chart.jpg";
+const SIZE_CHART_IMG = "/uploads/jersey/shirt-measurements.jpg";
 
-// From the supplier's chart (height / weight), per size.
-const SIZE_ROWS: { size: string; men: [string, string]; women: [string, string] }[] = [
-  { size: "S", men: ["160–165 cm", "55–60 kg"], women: ["148–153 cm", "38–43 kg"] },
-  { size: "M", men: ["164–169 cm", "60–65 kg"], women: ["153–155 cm", "43–46 kg"] },
-  { size: "L", men: ["170–174 cm", "66–70 kg"], women: ["153–158 cm", "46–53 kg"] },
-  { size: "XL", men: ["174–176 cm", "70–76 kg"], women: ["155–162 cm", "53–57 kg"] },
-  { size: "XXL", men: ["165–177 cm", "76–80 kg"], women: ["155–166 cm", "57–66 kg"] },
+// Men's/unisex fit guide from the supplier's chart (height / weight), plus an
+// approximate women's NZ/AU size, estimated from the shirt's chest width.
+const FIT_ROWS: { size: string; height: string; weight: string; women: string }[] = [
+  { size: "S", height: "160–165 cm", weight: "55–60 kg", women: "8–10" },
+  { size: "M", height: "164–169 cm", weight: "60–65 kg", women: "10–12" },
+  { size: "L", height: "170–174 cm", weight: "66–70 kg", women: "12–14" },
+  { size: "XL", height: "174–176 cm", weight: "70–76 kg", women: "14–16" },
+  { size: "XXL", height: "165–177 cm", weight: "76–80 kg", women: "16–18" },
+];
+
+// Real garment measurements, from the Yonex tee size chart (XXL = 2XL).
+const SHIRT_ROWS: { size: string; length: string; width: string }[] = [
+  { size: "S", length: "67 cm · 26.4\"", width: "47 cm · 18.5\"" },
+  { size: "M", length: "70 cm · 27.6\"", width: "50 cm · 19.7\"" },
+  { size: "L", length: "72 cm · 28.3\"", width: "53 cm · 20.9\"" },
+  { size: "XL", length: "74 cm · 29.1\"", width: "56 cm · 22.0\"" },
+  { size: "XXL", length: "76 cm · 29.9\"", width: "59 cm · 23.2\"" },
 ];
 
 // "**bold**" in a dictionary string renders as <strong>.
@@ -71,19 +81,33 @@ export function JerseyContent({
             <div className="section-label">{tr("size_label")}</div>
             <h2 className="section-title">{tr("size_h")}</h2>
             <p className="section-sub">{tr("size_p", { sizes: JERSEY_SIZES.join(", ") })}</p>
+            <h3 className="jersey-table-title">{tr("fit_h")}</h3>
             <div className="jersey-table-wrap">
               <table className="jersey-table">
                 <thead>
-                  <tr><th rowSpan={2}>{tr("size")}</th><th colSpan={2}>{tr("men")}</th><th colSpan={2}>{tr("women")}</th></tr>
-                  <tr><th>{tr("height")}</th><th>{tr("weight")}</th><th>{tr("height")}</th><th>{tr("weight")}</th></tr>
+                  <tr><th>{tr("size")}</th><th>{tr("height")}</th><th>{tr("weight")}</th><th>{tr("women_eq")}</th></tr>
                 </thead>
                 <tbody>
-                  {SIZE_ROWS.map((r) => (
-                    <tr key={r.size}><th scope="row">{r.size}</th><td>{r.men[0]}</td><td>{r.men[1]}</td><td>{r.women[0]}</td><td>{r.women[1]}</td></tr>
+                  {FIT_ROWS.map((r) => (
+                    <tr key={r.size}><th scope="row">{r.size}</th><td>{r.height}</td><td>{r.weight}</td><td>{r.women}</td></tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <h3 className="jersey-table-title">{tr("shirt_h")}</h3>
+            <div className="jersey-table-wrap">
+              <table className="jersey-table">
+                <thead>
+                  <tr><th>{tr("size")}</th><th>{tr("length")}</th><th>{tr("width")}</th></tr>
+                </thead>
+                <tbody>
+                  {SHIRT_ROWS.map((r) => (
+                    <tr key={r.size}><th scope="row">{r.size}</th><td>{r.length}</td><td>{r.width}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="form-hint" style={{ marginTop: 12 }}>{tr("size_note")}</p>
           </div>
         </div>
       </section>

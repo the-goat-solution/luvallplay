@@ -11,6 +11,7 @@ import {
   FLAG_LABEL,
   JERSEY_SIZES,
   formatDollars,
+  jerseyClosesAt,
   jerseyOpensAt,
 } from "@/lib/jersey";
 import {
@@ -62,6 +63,9 @@ async function setStatus(id: number, status: "cancelled" | "released") {
   revalidatePath("/admin/jersey");
   back("toast", status === "cancelled" ? "Registration cancelled." : "Spot released.");
 }
+
+const nzFull = (d: Date) =>
+  new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "full", timeStyle: "short" }).format(d);
 
 const nz = (iso: string | null) =>
   iso
@@ -172,7 +176,7 @@ export default async function JerseyAdminPage() {
     <div className={adminStyles.page}>
       <h1 className={adminStyles.title}>Jersey registrations</h1>
       <p className={adminStyles.subtitle}>
-        Opens {new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "full", timeStyle: "short" }).format(jerseyOpensAt())}.
+        Opens {nzFull(jerseyOpensAt())}; closes {nzFull(jerseyClosesAt())}.
         Bank payments carrying a registration&apos;s 5-digit code are marked paid automatically; mark the rest paid by hand.
       </p>
       <AdminNav active="jersey" />

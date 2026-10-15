@@ -29,12 +29,22 @@ function rich(text: string) {
   return text.split("**").map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : part));
 }
 
-export function JerseyContent({ opensAt, serverNow, left }: { opensAt: string; serverNow: string; left: number }) {
+export function JerseyContent({
+  opensAt,
+  closesAt,
+  serverNow,
+  left,
+}: {
+  opensAt: string;
+  closesAt: string;
+  serverNow: string;
+  left: number;
+}) {
   const { tr } = useJerseyT();
   return (
     <>
       <Navigation />
-      <JerseyHero opensAt={opensAt} serverNow={serverNow} earlyBirdsLeft={left} />
+      <JerseyHero opensAt={opensAt} closesAt={closesAt} serverNow={serverNow} earlyBirdsLeft={left} />
 
       <section className="section">
         <div className="container">
@@ -101,7 +111,7 @@ export function JerseyContent({ opensAt, serverNow, left }: { opensAt: string; s
         <div className="container" style={{ maxWidth: 680 }}>
           <div className="section-label" style={{ justifyContent: "center", display: "flex" }}>{tr("reg_label")}</div>
           <h2 className="section-title section-title-white" style={{ textAlign: "center", marginBottom: 28 }}>{tr("reg_h")}</h2>
-          <JerseyForm opensAt={opensAt} serverNow={serverNow} earlyBirdsLeft={left} />
+          <JerseyForm opensAt={opensAt} closesAt={closesAt} serverNow={serverNow} earlyBirdsLeft={left} />
         </div>
       </section>
 

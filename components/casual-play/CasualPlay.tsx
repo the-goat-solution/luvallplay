@@ -13,6 +13,7 @@ import {
   isConcluded,
   onCourtIds,
   queueOrder,
+  rotationStyle,
   splitTime,
   summarise,
   tierPhase,
@@ -21,6 +22,7 @@ import {
   type CasualPlayState,
   type Game,
   type Player,
+  type RotationStyle,
   type Tier,
   type TierMode,
 } from "@/lib/casual-play";
@@ -48,6 +50,13 @@ const COPY = {
     courtNumberLabel: (n: number) => `Board court ${n}`,
     courtNumberPlaceholder: (n: number) => `${n}`,
     rotation: "Tier rotation",
+    rotationStyle: "Rotation style",
+    styleRounds: "Rounds",
+    styleContinuous: "Continuous",
+    styleRoundsNote:
+      "Every court waits for the last game, then everyone is drawn again onto new courts with new partners. Best when only a few people are waiting.",
+    styleContinuousNote:
+      "A court that finishes takes the next game straight away, from whoever has waited longest. Best on busy nights with plenty of people waiting.",
     modeAuto: "Auto",
     modeMixed: "Mixed tiers",
     modeSplit: "Within tiers",
@@ -91,6 +100,16 @@ const COPY = {
     callOff: "Call off",
     callOffConfirm: "Tap again to call off",
     shuffle: "Shuffle up next",
+    shuffleRound: "Shuffle next round",
+    round: (n: number) => `Round ${n}`,
+    roundProgress: (done: number, total: number) => `${done} of ${total} courts finished`,
+    roundDone: "Finished · waiting for the other courts",
+    nextRound: "Next round",
+    nextRoundReady: "Next round starts as soon as every court has finished.",
+    sittingOut: "Sitting out",
+    finishRound: "Finish · next round",
+    startNextRound: "Start next round now",
+    startNextRoundConfirm: "Tap again · games still on count as played",
     fullscreen: "Full screen",
     exitFullscreen: "Exit full screen",
     conclude: "Conclude play day",
@@ -134,9 +153,10 @@ const COPY = {
       "For the first hour after the first games go on court (two thirds of a 1.5 hour play day), every team is one tier 1 player with one tier 2 player.",
       "After that, games are played within each tier: four tier 1 players or four tier 2 players, partners still mixed up. If a tier is short of players, teams are mixed so no court sits empty.",
       "Games keep going until the organiser concludes the play day, so extra court time is used too.",
-      "When a court finishes, the next game goes straight onto it: no waiting for other courts.",
-      "Whoever has played the fewest games goes on first; ties go to whoever has waited longest.",
+      "Games are played in rounds: once every court has finished, everyone is drawn again across all the courts with new partners and opponents. A court that finishes early waits for the others; the organiser can start the next round early.",
+      "Whoever has played the fewest games goes on first; between equals, whoever has gone longest without a game. Sitting out is shared around evenly.",
       "Partners and opponents are mixed up, so you rarely play with the same person twice.",
+      "On busy nights the organiser can switch to continuous rotation: a court that finishes takes the next game straight away.",
     ],
     vs: "vs",
     onCourt: (n: string) => `on court ${n}`,
@@ -156,6 +176,13 @@ const COPY = {
     courtNumberLabel: (n: number) => `Sân ${n} trên bảng`,
     courtNumberPlaceholder: (n: number) => `${n}`,
     rotation: "Xoay vòng theo nhóm",
+    rotationStyle: "Cách xoay sân",
+    styleRounds: "Theo lượt",
+    styleContinuous: "Liên tục",
+    styleRoundsNote:
+      "Sân nào xong cũng chờ trận cuối cùng, rồi mọi người được xếp lại vào sân mới với đồng đội mới. Hợp khi chỉ có ít người chờ.",
+    styleContinuousNote:
+      "Sân nào xong là trận tiếp theo vào ngay, lấy từ những người chờ lâu nhất. Hợp với tối đông người chờ.",
     modeAuto: "Tự động",
     modeMixed: "Trộn nhóm",
     modeSplit: "Trong nhóm",
@@ -199,6 +226,16 @@ const COPY = {
     callOff: "Huỷ trận",
     callOffConfirm: "Chạm lần nữa để huỷ",
     shuffle: "Đổi trận tiếp theo",
+    shuffleRound: "Xếp lại lượt tiếp theo",
+    round: (n: number) => `Lượt ${n}`,
+    roundProgress: (done: number, total: number) => `${done}/${total} sân đã xong`,
+    roundDone: "Đã xong · chờ các sân khác",
+    nextRound: "Lượt tiếp theo",
+    nextRoundReady: "Lượt mới bắt đầu ngay khi tất cả các sân đã xong.",
+    sittingOut: "Ngồi ngoài",
+    finishRound: "Xong trận · lượt mới",
+    startNextRound: "Bắt đầu lượt mới ngay",
+    startNextRoundConfirm: "Chạm lần nữa · trận đang đánh tính là xong",
     fullscreen: "Toàn màn hình",
     exitFullscreen: "Thoát toàn màn hình",
     conclude: "Kết thúc ngày chơi",
@@ -242,9 +279,10 @@ const COPY = {
       "Trong 1 giờ đầu kể từ khi các trận đầu tiên vào sân (hai phần ba của ngày chơi 1,5 giờ), mỗi đội gồm một người nhóm 1 và một người nhóm 2.",
       "Sau đó, chơi trong từng nhóm: bốn người nhóm 1 hoặc bốn người nhóm 2, đồng đội vẫn được xáo trộn. Nếu một nhóm thiếu người, đội sẽ được trộn để không sân nào bị trống.",
       "Các trận tiếp tục cho đến khi BTC kết thúc ngày chơi, nên thời gian sân thêm cũng được dùng.",
-      "Sân nào xong là trận tiếp theo vào ngay, không cần chờ các sân khác.",
-      "Ai chơi ít trận nhất được vào trước; bằng nhau thì ai chờ lâu hơn vào trước.",
+      "Chơi theo lượt: khi tất cả các sân đã xong, mọi người được xếp lại trên tất cả các sân với đồng đội và đối thủ mới. Sân xong sớm sẽ chờ các sân khác; BTC có thể bắt đầu lượt mới sớm hơn.",
+      "Ai chơi ít trận nhất được vào trước; bằng nhau thì ai lâu chưa được chơi hơn vào trước. Lượt ngồi ngoài được chia đều.",
       "Đồng đội và đối thủ được xáo trộn để hiếm khi chơi cùng một người hai lần.",
+      "Vào tối đông người, BTC có thể chuyển sang xoay liên tục: sân nào xong là trận tiếp theo vào ngay.",
     ],
     vs: "vs",
     onCourt: (n: string) => `đang ở sân ${n}`,
@@ -309,8 +347,8 @@ export function CasualPlay() {
   const [password, setPassword] = useState<string | null>(null);
   const [tab, setTab] = useState<"setup" | "courts" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
   const [concludeOpen, setConcludeOpen] = useState(false);
   const [clockSkew, setClockSkew] = useState(0);
@@ -318,6 +356,14 @@ export function CasualPlay() {
   const [fullscreen, setFullscreen] = useState(false);
   const dragging = useRef(false);
   const pageRef = useRef<HTMLDivElement>(null);
+  // The newest board seen. A poll that left before an action can land after
+  // it; anything older than this is dropped so the board never jumps back.
+  const seen = useRef<{ date: string; version: number } | null>(null);
+  // The play day being shown, so a late answer for another day is ignored.
+  const dateRef = useRef<string | null>(null);
+  // Actions go to the server one at a time, in the order they were made.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const [inFlight, setInFlight] = useState(0);
 
   const [viewer, setViewer] = useState(false);
 
@@ -335,6 +381,11 @@ export function CasualPlay() {
   );
 
   const accept = useCallback((body: CasualPlayResponse) => {
+    if (dateRef.current && body.state.date !== dateRef.current) return;
+    const last = seen.current;
+    if (last && last.date === body.state.date && body.version < last.version) return;
+    seen.current = { date: body.state.date, version: body.version };
+    dateRef.current = body.state.date;
     setData(body);
     setDate(body.state.date);
     setClockSkew(body.serverNow - Date.now());
@@ -399,15 +450,15 @@ export function CasualPlay() {
   const state = data?.state ?? null;
   const activeTab = tab ?? (state?.started ? "courts" : "setup");
 
-  const act = async (action: Action): Promise<boolean> => {
-    if (!state) return false;
-    setBusy(true);
+  const busy = inFlight > 0;
+
+  const send = async (date: string, action: Action): Promise<boolean> => {
     setNotice(null);
     try {
       const res = await fetch("/api/casual-play", {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ date: state.date, action }),
+        body: JSON.stringify({ date, action }),
       });
       const body = (await res.json().catch(() => null)) as (CasualPlayResponse & { error?: string }) | null;
       if (res.status === 401) {
@@ -425,9 +476,16 @@ export function CasualPlay() {
     } catch {
       setNotice(c.errGeneric);
       return false;
-    } finally {
-      setBusy(false);
     }
+  };
+
+  const act = (action: Action): Promise<boolean> => {
+    if (!state) return Promise.resolve(false);
+    const date = state.date;
+    setInFlight((n) => n + 1);
+    const run = queue.current.then(() => send(date, action));
+    queue.current = run.catch(() => {});
+    return run.finally(() => setInFlight((n) => n - 1));
   };
 
   const setLanguage = (l: Lang) => {
@@ -452,6 +510,8 @@ export function CasualPlay() {
   // Admins are organisers without a password, so try that first and only
   // ask for the password if the server says no.
   const enterOrganiser = async () => {
+    if (checkingAdmin) return;
+    setCheckingAdmin(true);
     try {
       const qs = date ? `?date=${encodeURIComponent(date)}` : "";
       const res = await fetch(`/api/casual-play${qs}`, { cache: "no-store", headers: headers(null, false) });
@@ -464,6 +524,8 @@ export function CasualPlay() {
       }
     } catch {
       // Fall through to the password prompt.
+    } finally {
+      setCheckingAdmin(false);
     }
     setUnlockOpen(true);
   };
@@ -521,7 +583,7 @@ export function CasualPlay() {
                   </button>
                 </span>
               ) : (
-                <button type="button" className="cp-ghost-btn" onClick={enterOrganiser}>
+                <button type="button" className="cp-ghost-btn" onClick={enterOrganiser} disabled={checkingAdmin} aria-busy={checkingAdmin}>
                   <KeyIcon />
                   {c.organiser}
                 </button>
@@ -586,6 +648,7 @@ export function CasualPlay() {
                         value={state.date}
                         onChange={(e) => {
                           setTab(null);
+                          dateRef.current = e.target.value;
                           setDate(e.target.value);
                         }}
                       >
@@ -739,22 +802,28 @@ function SetupPanel({
   const [guestName, setGuestName] = useState("");
   const [guestTier, setGuestTier] = useState<Zone>("2");
   // Optimistic placement while a move is in flight, so a dropped chip
-  // doesn't jump back for a moment.
-  const [pendingMoves, setPendingMoves] = useState<Record<string, Zone>>({});
+  // doesn't jump back for a moment. Each move has its own token so an earlier
+  // move finishing doesn't clear a later one for the same player.
+  const [pendingMoves, setPendingMoves] = useState<Record<string, { zone: Zone; token: number }>>({});
+  const moveToken = useRef(0);
 
   const players = state.players.map((p) =>
-    pendingMoves[p.id] ? { ...p, tier: zoneTier(pendingMoves[p.id]) } : p,
+    pendingMoves[p.id] ? { ...p, tier: zoneTier(pendingMoves[p.id].zone) } : p,
   );
   const t1 = players.filter((p) => p.tier === 1).length;
   const t2 = players.filter((p) => p.tier === 2).length;
   const busyIds = onCourtIds(state);
 
   const move = async (id: string, zone: Zone) => {
-    const p = state.players.find((x) => x.id === id);
+    // Compared with where the chip is shown, which may be a move still on its
+    // way: dragging someone across and straight back must send both moves.
+    const p = players.find((x) => x.id === id);
     if (!p || playerZone(p) === zone) return;
-    setPendingMoves((m) => ({ ...m, [id]: zone }));
+    const token = ++moveToken.current;
+    setPendingMoves((m) => ({ ...m, [id]: { zone, token } }));
     await onAction({ type: "setTier", playerId: id, tier: zoneTier(zone) });
     setPendingMoves((m) => {
+      if (m[id]?.token !== token) return m;
       const next = { ...m };
       delete next[id];
       return next;
@@ -975,9 +1044,31 @@ function RotationCard({
     ["mixed", c.modeMixed],
     ["split", c.modeSplit],
   ];
+  const style = rotationStyle(state);
+  const styles: [RotationStyle, string][] = [
+    ["rounds", c.styleRounds],
+    ["continuous", c.styleContinuous],
+  ];
   return (
     <div className="mg-card cp-rotation">
-      <div className="section-label">{c.rotation}</div>
+      <div className="section-label">{c.rotationStyle}</div>
+      <div className="cp-segmented" role="radiogroup" aria-label={c.rotationStyle}>
+        {styles.map(([r, label]) => (
+          <button
+            key={r}
+            type="button"
+            role="radio"
+            aria-checked={style === r}
+            className={style === r ? "active" : ""}
+            disabled={busy}
+            onClick={() => style !== r && onAction({ type: "setRotation", rotation: r })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="cp-field-note">{style === "rounds" ? c.styleRoundsNote : c.styleContinuousNote}</p>
+      <div className="section-label cp-rotation-second">{c.rotation}</div>
       <div className="cp-segmented" role="radiogroup" aria-label={c.rotation}>
         {modes.map(([m, label]) => (
           <button
@@ -1033,8 +1124,28 @@ function TierBoard({
   const [drag, setDrag] = useState<DragState | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef(false);
+  // A drop runs the newest onMove, not the one from when the press began
+  // (the board may have refreshed in between).
+  const onMoveRef = useRef(onMove);
+  onMoveRef.current = onMove;
 
   useEffect(() => () => cleanupRef.current?.(), []);
+
+  // Stops the page scrolling under a finger that is dragging a chip. It has to
+  // be in place before the touch starts: browsers decide whether a touch can
+  // be held back from scrolling when it begins, and a listener added mid-touch
+  // is too late (the drag then gets cancelled as soon as the finger moves).
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const block = (ev: TouchEvent) => {
+      if (activeRef.current && ev.cancelable) ev.preventDefault();
+    };
+    el.addEventListener("touchmove", block, { passive: false });
+    return () => el.removeEventListener("touchmove", block);
+  }, []);
 
   const startPointer = (e: React.PointerEvent, player: Player) => {
     if (e.button !== 0) return;
@@ -1045,12 +1156,27 @@ function TierBoard({
     let active = false;
     let cancelled = false;
 
+    let frame = 0;
+    // Near the top or bottom of the screen the page scrolls, so a chip can be
+    // carried to a box that's off screen (the boxes stack on a phone).
+    const autoScroll = () => {
+      const edge = 70;
+      const y = last.y;
+      const speed = y < edge ? -(edge - y) / 4 : y > window.innerHeight - edge ? (y - (window.innerHeight - edge)) / 4 : 0;
+      if (speed) {
+        window.scrollBy(0, Math.max(-18, Math.min(18, speed)));
+        setDrag({ id: player.id, x: last.x, y: last.y, over: zoneAt(last.x, last.y) });
+      }
+      frame = window.requestAnimationFrame(autoScroll);
+    };
     const begin = () => {
       active = true;
+      activeRef.current = true;
       onDragChange(true);
       setSelected(null);
       setDrag({ id: player.id, x: last.x, y: last.y, over: zoneAt(last.x, last.y) });
       navigator.vibrate?.(12);
+      frame = window.requestAnimationFrame(autoScroll);
     };
     const timer = touch ? window.setTimeout(begin, 220) : undefined;
 
@@ -1073,24 +1199,22 @@ function TierBoard({
       cleanup();
       if (wasActive) {
         const zone = zoneAt(last.x, last.y);
-        if (zone) onMove(player.id, zone);
+        if (zone) onMoveRef.current(player.id, zone);
       } else if (!cancelled) {
         setSelected((s) => (s === player.id ? null : player.id));
       }
     };
     const onCancel = () => cleanup();
-    const blockScroll = (ev: TouchEvent) => {
-      if (active) ev.preventDefault();
-    };
     function cleanup() {
       window.clearTimeout(timer);
+      window.cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onMovePointer);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
-      window.removeEventListener("touchmove", blockScroll);
       cleanupRef.current = null;
       if (active) {
         active = false;
+        activeRef.current = false;
         onDragChange(false);
         setDrag(null);
       }
@@ -1100,7 +1224,6 @@ function TierBoard({
     window.addEventListener("pointermove", onMovePointer);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
-    window.addEventListener("touchmove", blockScroll, { passive: false });
   };
 
   const zones: { zone: Zone; title: string; hint?: string }[] = [
@@ -1113,7 +1236,7 @@ function TierBoard({
 
   return (
     <>
-      <div className={`cp-tiers${drag ? " cp-dragging" : ""}`}>
+      <div ref={boardRef} className={`cp-tiers${drag ? " cp-dragging" : ""}`}>
         {zones.map(({ zone, title, hint }) => {
           const list = players
             .filter((p) => playerZone(p) === zone)
@@ -1206,17 +1329,34 @@ function CourtsPanel({
   onEnd: () => void;
   onConclude: () => void;
 }) {
+  const rounds = rotationStyle(state) === "rounds";
   const busyIds = onCourtIds(state);
-  const nextIds = new Set(state.next ? [...state.next.teamA, ...state.next.teamB] : []);
+  const nextGames = rounds ? (state.nextRound ?? []) : state.next ? [state.next] : [];
+  const nextIds = new Set(nextGames.flatMap((g) => [...g.teamA, ...g.teamB]));
   const inRotation = state.players.filter((p) => p.tier !== null);
-  const waiting = queueOrder(inRotation.filter((p) => !p.paused && !busyIds.has(p.id) && !nextIds.has(p.id)));
+  // Continuous: the queue behind the up-next game. Rounds: everyone off court
+  // (sitting this round out, or already finished on their court).
+  const waiting = queueOrder(
+    inRotation.filter((p) => !p.paused && !busyIds.has(p.id) && (rounds || !nextIds.has(p.id))),
+  );
   const resting = inRotation.filter((p) => p.paused).sort((a, b) => a.name.localeCompare(b.name, "vi"));
+  const sittingNext = rounds
+    ? inRotation
+        .filter((p) => !p.paused && !nextIds.has(p.id))
+        .sort((a, b) => a.name.localeCompare(b.name, "vi"))
+    : [];
   const name = (id: string) => names.get(id)?.name ?? "—";
   const courtOf = new Map(
     state.onCourt.flatMap((g) =>
       g ? [...g.teamA, ...g.teamB].map((id) => [id, courtLabel(state, g.court)] as const) : [],
     ),
   );
+  const running = state.onCourt.filter(Boolean).length;
+  // A round's games all go on together, so the ones already finished this
+  // round are the ones in history with the same start time.
+  const roundStart = state.onCourt.find(Boolean)?.startedAt;
+  const roundCourts = rounds ? running + state.history.filter((g) => g.startedAt === roundStart).length : 0;
+  const nextOnCourt = (court: number) => (rounds ? state.nextRound?.find((g) => g.court === court) ?? null : null);
 
   if (isConcluded(state)) {
     return <ConcludedPanel state={state} copy={c} organiser={organiser} busy={busy} onAction={onAction} onEnd={onEnd} />;
@@ -1247,8 +1387,37 @@ function CourtsPanel({
     );
   }
 
+  const phasePill = organiser && (
+    <span className="cp-phase-pill">
+      {tierPhase(state, serverNow) === "split" ? c.phaseSplitShort : c.phaseMixedShort}
+      {(state.tierMode ?? "auto") === "auto" && tierPhase(state, serverNow) === "mixed" && splitTime(state)
+        ? ` · ${formatClock(splitTime(state)!, lang)}`
+        : ""}
+    </span>
+  );
+
   return (
     <section className="cp-board-wrap">
+      {rounds && (state.round ?? 0) > 0 && (
+        <div className="cp-round-bar">
+          <span className="cp-round-num">{c.round(state.round!)}</span>
+          {running > 0 && running < roundCourts && (
+            <span className="cp-round-progress">{c.roundProgress(roundCourts - running, roundCourts)}</span>
+          )}
+          {organiser && running > 0 && (
+            <ConfirmButton
+              label={c.startNextRound}
+              confirmLabel={c.startNextRoundConfirm}
+              className="cp-link-btn cp-round-now"
+              disabled={busy}
+              onConfirm={() => onAction({ type: "nextRound" })}
+            >
+              <NextIcon />
+            </ConfirmButton>
+          )}
+        </div>
+      )}
+
       <div className={`cp-courts cp-courts-${state.courts}`}>
         {state.onCourt.map((game, i) => (
           <CourtCard
@@ -1260,9 +1429,12 @@ function CourtsPanel({
             organiser={organiser}
             busy={busy}
             serverNow={serverNow}
-            next={state.next}
-            onFinish={() => onAction({ type: "finish", court: i + 1 })}
-            onCallOff={() => onAction({ type: "void", court: i + 1 })}
+            rounds={rounds}
+            roundWaiting={rounds && !game && running > 0}
+            lastInRound={rounds && running === 1}
+            next={rounds ? nextOnCourt(i + 1) : state.next}
+            onFinish={() => game && onAction({ type: "finish", court: i + 1, gameId: game.id })}
+            onCallOff={() => game && onAction({ type: "void", court: i + 1, gameId: game.id })}
           />
         ))}
       </div>
@@ -1270,16 +1442,9 @@ function CourtsPanel({
       <div className="cp-lower">
         <div className="cp-next">
           <div className="cp-next-head">
-            <span className="cp-next-label">{c.upNext}</span>
-            {organiser && (
-              <span className="cp-phase-pill">
-                {tierPhase(state, serverNow) === "split" ? c.phaseSplitShort : c.phaseMixedShort}
-                {(state.tierMode ?? "auto") === "auto" && tierPhase(state, serverNow) === "mixed" && splitTime(state)
-                  ? ` · ${formatClock(splitTime(state)!, lang)}`
-                  : ""}
-              </span>
-            )}
-            {organiser && state.next && (
+            <span className="cp-next-label">{rounds ? c.nextRound : c.upNext}</span>
+            {phasePill}
+            {organiser && nextGames.length > 0 && (
               <button
                 type="button"
                 className="cp-link-btn"
@@ -1287,17 +1452,39 @@ function CourtsPanel({
                 onClick={() => onAction({ type: "reshuffleNext" })}
               >
                 <ShuffleIcon />
-                {c.shuffle}
+                {rounds ? c.shuffleRound : c.shuffle}
               </button>
             )}
           </div>
-          {state.next ? (
+          {nextGames.length === 0 ? (
+            <p className="cp-next-empty">{c.emptyCourt}</p>
+          ) : rounds ? (
             <>
-              <Matchup game={state.next} name={name} copy={c} compact courtOf={courtOf} />
-              <p className="cp-next-ready">{c.getReady}</p>
+              <ol className="cp-next-round">
+                {[...nextGames]
+                  .sort((a, b) => a.court - b.court)
+                  .map((g) => (
+                    <li key={g.court}>
+                      <span className="cp-next-court">
+                        {c.court} <strong>{courtLabel(state, g.court)}</strong>
+                      </span>
+                      <Matchup game={g} name={name} copy={c} compact />
+                    </li>
+                  ))}
+              </ol>
+              {sittingNext.length > 0 && (
+                <p className="cp-next-sitting">
+                  <span>{c.sittingOut}</span>
+                  {sittingNext.map((p) => p.name).join(", ")}
+                </p>
+              )}
+              <p className="cp-next-ready">{c.nextRoundReady}</p>
             </>
           ) : (
-            <p className="cp-next-empty">{c.emptyCourt}</p>
+            <>
+              <Matchup game={state.next!} name={name} copy={c} compact courtOf={courtOf} />
+              <p className="cp-next-ready">{c.getReady}</p>
+            </>
           )}
         </div>
 
@@ -1539,6 +1726,9 @@ function CourtCard({
   organiser,
   busy,
   serverNow,
+  rounds,
+  roundWaiting,
+  lastInRound,
   next,
   onFinish,
   onCallOff,
@@ -1546,6 +1736,12 @@ function CourtCard({
   /** The court's name on the board: venue number, or its position. */
   court: string;
   game: Game | null;
+  rounds: boolean;
+  /** Rounds: this court has finished and waits for the rest of the round. */
+  roundWaiting: boolean;
+  /** Rounds: the only game still on, so finishing it starts the next round. */
+  lastInRound: boolean;
+  /** Continuous: the game for the next free court. Rounds: this court's game next round. */
   next: Game | null;
   name: (id: string) => string;
   copy: Copy;
@@ -1568,24 +1764,32 @@ function CourtCard({
       {game ? (
         <Matchup game={game} name={name} copy={c} />
       ) : (
-        <p className="cp-court-empty">{c.emptyCourt}</p>
+        <div className="cp-court-empty">
+          <span>{roundWaiting ? c.roundDone : c.emptyCourt}</span>
+          {roundWaiting && next && (
+            <p className="cp-court-next">
+              <span>{c.nextRound}</span>
+              {next.teamA.map(name).join(" & ")} <em>{c.vs}</em> {next.teamB.map(name).join(" & ")}
+            </p>
+          )}
+        </div>
       )}
       {organiser && game && (
         <div className="cp-court-actions">
           {next && (
             <p className="cp-court-next">
-              <span>{c.nextOn}</span>
+              <span>{rounds ? c.nextRound : c.nextOn}</span>
               {next.teamA.map(name).join(" & ")} <em>{c.vs}</em> {next.teamB.map(name).join(" & ")}
             </p>
           )}
           <ConfirmButton
-            label={next ? c.finish : c.finishLast}
+            label={rounds ? (lastInRound ? c.finishRound : c.finishLast) : next ? c.finish : c.finishLast}
             confirmLabel={c.confirmFinish}
             className="btn btn-primary cp-finish-btn"
             disabled={busy}
             onConfirm={onFinish}
           >
-            {next ? <NextIcon /> : <CheckIcon />}
+            {rounds ? lastInRound ? <NextIcon /> : <CheckIcon /> : next ? <NextIcon /> : <CheckIcon />}
           </ConfirmButton>
           <ConfirmButton
             label={c.callOff}

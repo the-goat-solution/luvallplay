@@ -5,9 +5,14 @@ import {
   isValidAction,
   publicState,
   type CasualPlayResponse,
-  type CasualPlayState,
 } from "@/lib/casual-play";
-import { ConflictError, ensureCasualPlayTables, getCasualPlayState, runCasualPlayAction } from "@/lib/casual-play-db";
+import {
+  ConflictError,
+  ensureCasualPlayTables,
+  getCasualPlayState,
+  runCasualPlayAction,
+  type VersionedBoard,
+} from "@/lib/casual-play-db";
 import { addDays, ensureTables, listAllSessionDates, listSessionsInRange } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
@@ -16,6 +21,12 @@ import { DEMO_PASSWORD, DEMO_SESSION, demoDates, isCasualPlayDemo } from "@/lib/
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" };
+
+// Per IP per minute. Everyone on the venue's wifi shares one IP: the court
+// screen and each phone poll every 5–8 seconds, so a low limit would freeze
+// the board for the whole room.
+const GET_LIMIT = 600;
+const POST_LIMIT = 240;
 
 // Organisers are either logged in to /admin, or know the organiser password
 // (the same one that runs the mini game draw), sent as a header.
@@ -48,13 +59,14 @@ async function sessionInfo(date: string): Promise<CasualPlayResponse["session"]>
 
 async function respond(
   date: string,
-  state: CasualPlayState,
+  { state, version }: VersionedBoard,
   organiser: boolean,
   dates: string[],
   status = 200,
 ) {
   const body: CasualPlayResponse = {
     state: organiser ? state : publicState(state),
+    version,
     organiser,
     serverNow: Date.now(),
     // A window around today is plenty to pick from on a phone.
@@ -76,7 +88,7 @@ async function resolveDate(requested: string | null): Promise<{ date: string | n
 }
 
 export async function GET(request: Request) {
-  if (!checkRateLimit(`casual-play:get:${getClientIp(request)}`, 120)) {
+  if (!checkRateLimit(`casual-play:get:${getClientIp(request)}`, GET_LIMIT)) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
   if (!process.env.POSTGRES_URL && !isCasualPlayDemo()) {
@@ -99,7 +111,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!checkRateLimit(`casual-play:post:${getClientIp(request)}`, 90)) {
+  if (!checkRateLimit(`casual-play:post:${getClientIp(request)}`, POST_LIMIT)) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
   if (!process.env.POSTGRES_URL && !isCasualPlayDemo()) {

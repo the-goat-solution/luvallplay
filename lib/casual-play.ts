@@ -4,9 +4,17 @@
 // (two thirds) every doubles team is one tier 1 player with one tier 2
 // player; after that games are played within a tier (four tier 1 players, or
 // four tier 2 players), still rotating partners, and keep going until the
-// organiser concludes the play day (courts sometimes run over). Whenever a court
-// comes free the next game is picked straight away from whoever has waited
-// longest, so courts never sit idle waiting for a whole "round" to finish.
+// organiser concludes the play day (courts sometimes run over).
+//
+// Two rotation styles:
+// - rounds (the default): every court waits for the last game of the round,
+//   then everyone is drawn again across all the courts at once. Who sits out
+//   is spread evenly and partners and opponents are mixed up across the whole
+//   round, so the same four can't keep cycling on one court when only a few
+//   people are waiting.
+// - continuous: whenever a court comes free the next game is picked straight
+//   away from whoever has waited longest. Courts never sit idle, which suits
+//   busy nights with plenty of people waiting.
 //
 // Everything here is pure and shared by the page and the API. The API owns
 // the stored state and runs every action through applyAction().
@@ -30,6 +38,8 @@ export const MIXED_SHARE = 2 / 3;
 export type TierPhase = "mixed" | "split";
 /** auto follows the clock; the other two are an organiser override. */
 export type TierMode = "auto" | TierPhase;
+/** See the comment at the top of the file. */
+export type RotationStyle = "rounds" | "continuous";
 
 export type Player = {
   id: string;
@@ -43,6 +53,8 @@ export type Player = {
   games: number;
   /** When they last came off court (or joined the rotation), epoch ms. */
   readyAt: number;
+  /** Rounds rotation: the last round they played in. Missing = not yet. */
+  playedRound?: number;
 };
 
 export type Game = {
@@ -63,8 +75,22 @@ export type CasualPlayState = {
   players: Player[];
   /** Index = court number − 1. */
   onCourt: (Game | null)[];
-  /** Preview of the game that takes the next free court. court is 0. */
+  /** Continuous rotation: preview of the game that takes the next free court. court is 0. */
   next: Game | null;
+  /**
+   * Rounds rotation: the next round as it will go on once every court has
+   * finished, one game per court. Missing on older boards.
+   */
+  nextRound?: Game[] | null;
+  /**
+   * What nextRound was drawn from (see roundKey). The preview goes on as
+   * shown only if the board still matches when the round actually starts.
+   */
+  nextRoundKey?: string | null;
+  /** Rounds rotation: the round now on court (or last played), 0 before the first. */
+  round?: number;
+  /** Missing on boards saved before rounds existed: reads as "rounds". */
+  rotation?: RotationStyle;
   history: Game[];
   nextGameId: number;
   /**
@@ -96,9 +122,13 @@ export type Action =
   | { type: "setCourts"; courts: number }
   | { type: "setCourtNumber"; court: number; number: string }
   | { type: "setTierMode"; mode: TierMode }
+  | { type: "setRotation"; rotation: RotationStyle }
   | { type: "start" }
-  | { type: "finish"; court: number }
-  | { type: "void"; court: number }
+  // gameId (optional) guards against a stale double tap finishing the game
+  // that has just gone on in its place.
+  | { type: "finish"; court: number; gameId?: number }
+  | { type: "void"; court: number; gameId?: number }
+  | { type: "nextRound" }
   | { type: "reshuffleNext" }
   | { type: "conclude" }
   | { type: "reopen" }
@@ -113,6 +143,10 @@ export function emptyState(date: string, courts: number): CasualPlayState {
     players: [],
     onCourt: Array.from({ length: n }, () => null),
     next: null,
+    nextRound: null,
+    nextRoundKey: null,
+    round: 0,
+    rotation: "rounds",
     history: [],
     nextGameId: 1,
     concludedAt: null,
@@ -167,6 +201,10 @@ export function tierPhase(state: CasualPlayState, now: number): TierPhase {
   return at !== null && now >= at ? "split" : "mixed";
 }
 
+export function rotationStyle(state: CasualPlayState): RotationStyle {
+  return state.rotation ?? "rounds";
+}
+
 export function isConcluded(state: CasualPlayState): boolean {
   return Boolean(state.concludedAt);
 }
@@ -205,6 +243,8 @@ type History = {
   partners: Map<string, number>;
   opponents: Map<string, number>;
   lastFours: Set<string>;
+  /** Pairs who shared a court (either side of the net) in the latest round of games. */
+  recent: Set<string>;
 };
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -223,7 +263,12 @@ function buildHistory(state: CasualPlayState): History {
   // The same four players straight back on court together feels stale even
   // when the pairing differs, so the last few line-ups are remembered.
   const lastFours = new Set(games.slice(-Math.max(2, state.courts * 2)).map((g) => fourKey(gamePlayers(g))));
-  return { partners, opponents, lastFours };
+  const recent = new Set<string>();
+  for (const g of games.slice(-state.courts)) {
+    const ids = gamePlayers(g);
+    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) recent.add(pairKey(ids[i], ids[j]));
+  }
+  return { partners, opponents, lastFours, recent };
 }
 
 // Cost weights. Fairness (games played) dominates. In the mixed phase an
@@ -248,6 +293,14 @@ const W_PLANNED = 25;
 // played no more and has been waiting longer. Seen from the side, that looks
 // like queue-jumping, so only a real repeat problem should justify it.
 const W_SKIP = 40;
+// Rounds only: sharing a court again straight after the round you shared one,
+// on top of the partner and opponent repeat costs.
+const W_RECENT = 12;
+// Rounds only: how much a player is owed a game. Games behind dominates; among
+// players level on games, whoever has gone longest since their last game plays.
+const OWED_GAME = 100;
+const OWED_ROUND_WAITED = 10;
+const ROUND_RESTARTS = 40;
 
 function combinations<T>(items: T[], k: number): T[][] {
   if (k === 0) return [[]];
@@ -345,8 +398,19 @@ function previewStillValid(state: CasualPlayState, game: Game | null, phase: Tie
 function fillCourts(state: CasualPlayState, now: number, random: () => number): void {
   if (!state.started || isConcluded(state)) {
     state.next = null;
+    state.nextRound = null;
+    state.nextRoundKey = null;
     return;
   }
+  if (rotationStyle(state) === "rounds") {
+    // A new round only once every court is free; until then finished courts wait.
+    if (!state.onCourt.some(Boolean)) startRound(state, now, random);
+    state.next = null;
+    refreshNextRound(state, now, random);
+    return;
+  }
+  state.nextRound = null;
+  state.nextRoundKey = null;
   const phase = tierPhase(state, now);
   for (let i = 0; i < state.courts; i++) {
     if (state.onCourt[i]) continue;
@@ -391,6 +455,11 @@ function lookahead(state: CasualPlayState): CasualPlayState {
 }
 
 function refreshNext(state: CasualPlayState, now: number, random: () => number, force = false): void {
+  if (rotationStyle(state) === "rounds") {
+    state.next = null;
+    refreshNextRound(state, now, random, force);
+    return;
+  }
   if (!state.started || isConcluded(state)) {
     state.next = null;
     return;
@@ -401,6 +470,203 @@ function refreshNext(state: CasualPlayState, now: number, random: () => number, 
   state.next = picked
     ? { id: 0, court: 0, teamA: picked.teamA, teamB: picked.teamB, startedAt: 0, phase }
     : null;
+}
+
+/* ── Rounds rotation ─────────────────────────────────── */
+
+type Four = [Player, Player, Player, Player];
+
+/** Cost of one game in a round: tier rules, then repeat partners and opponents. */
+function roundGameCost(game: Four, phase: TierPhase, history: History): number {
+  const [a, b, c, d] = game;
+  const oneTier = game.every((p) => p.tier === a.tier);
+  const sameTierTeam = phase === "mixed" ? W_SAME_TIER_TEAM : oneTier ? 0 : W_SAME_TIER_TEAM_FALLBACK;
+  let cost = phase === "split" && !oneTier ? W_CROSS_TIER_GAME : 0;
+  if (a.tier === b.tier) cost += sameTierTeam;
+  if (c.tier === d.tier) cost += sameTierTeam;
+  cost += (history.partners.get(pairKey(a.id, b.id)) ?? 0) * W_PARTNER_REPEAT;
+  cost += (history.partners.get(pairKey(c.id, d.id)) ?? 0) * W_PARTNER_REPEAT;
+  for (const x of [a, b]) {
+    for (const y of [c, d]) cost += (history.opponents.get(pairKey(x.id, y.id)) ?? 0) * W_OPPONENT_REPEAT;
+  }
+  for (let i = 0; i < 4; i++) {
+    for (let j = i + 1; j < 4; j++) if (history.recent.has(pairKey(game[i].id, game[j].id))) cost += W_RECENT;
+  }
+  if (history.lastFours.has(fourKey(game.map((p) => p.id)))) cost += W_SAME_FOUR;
+  return cost;
+}
+
+function shuffled<T>(items: T[], random: () => number): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Splits the players into games (every 4 in a row is one game: first two vs
+ * last two) with the lowest total cost: random starts, each improved by
+ * swapping two players until no swap helps. A round is at most 16 players, so
+ * this is quick and in practice finds the best split.
+ */
+function arrangeRound(players: Player[], phase: TierPhase, history: History, random: () => number): Four[] {
+  const k = players.length / 4;
+  const costOf = (order: Player[], g: number) => roundGameCost(order.slice(g * 4, g * 4 + 4) as Four, phase, history);
+  let best: { order: Player[]; cost: number } | null = null;
+  for (let restart = 0; restart < ROUND_RESTARTS; restart++) {
+    const order = shuffled(players, random);
+    const games = Array.from({ length: k }, (_, g) => costOf(order, g));
+    let improved = true;
+    while (improved) {
+      improved = false;
+      for (let i = 0; i < order.length; i++) {
+        for (let j = i + 1; j < order.length; j++) {
+          const gi = Math.floor(i / 4);
+          const gj = Math.floor(j / 4);
+          // Swapping within a game only matters across the net.
+          if (gi === gj && Math.floor(i / 2) === Math.floor(j / 2)) continue;
+          [order[i], order[j]] = [order[j], order[i]];
+          const ci = costOf(order, gi);
+          const cj = gi === gj ? ci : costOf(order, gj);
+          const delta = gi === gj ? ci - games[gi] : ci + cj - games[gi] - games[gj];
+          if (delta < -1e-9) {
+            games[gi] = ci;
+            games[gj] = cj;
+            improved = true;
+          } else {
+            [order[i], order[j]] = [order[j], order[i]];
+          }
+        }
+      }
+    }
+    const cost = games.reduce((s, c) => s + c, 0);
+    if (!best || cost < best.cost) best = { order: [...order], cost };
+  }
+  return Array.from({ length: k }, (_, g) => best!.order.slice(g * 4, g * 4 + 4) as Four);
+}
+
+/**
+ * Draws a whole round: who plays (the players owed a game most, with the tier
+ * mix the phase wants) and how they split into games. Null when fewer than
+ * four players are free.
+ */
+export function pickRound(
+  state: CasualPlayState,
+  phase: TierPhase = "mixed",
+  random: () => number = Math.random,
+): { teamA: [string, string]; teamB: [string, string] }[] | null {
+  const free = availablePlayers(state);
+  const k = Math.min(state.courts, Math.floor(free.length / 4));
+  if (k === 0) return null;
+  const most = Math.max(...free.map((p) => p.games));
+  const round = state.round ?? 0;
+  const owed = new Map(
+    free.map((p) => [
+      p.id,
+      (most - p.games) * OWED_GAME +
+        (round - (p.playedRound ?? 0)) * OWED_ROUND_WAITED +
+        random(), // fair coin between players level on everything
+    ]),
+  );
+  const byOwed = (tier: Tier) => free.filter((p) => p.tier === tier).sort((a, b) => owed.get(b.id)! - owed.get(a.id)!);
+  const t1 = byOwed(1);
+  const t2 = byOwed(2);
+  const seats = k * 4;
+
+  // How many of each tier go on: the tier rules first (one of each per team
+  // when mixed, four of a tier per game when split), then sitting out whoever
+  // is owed least.
+  let pick: { n1: number; cost: number } | null = null;
+  for (let n1 = Math.max(0, seats - t2.length); n1 <= Math.min(seats, t1.length); n1++) {
+    const n2 = seats - n1;
+    const tierCost =
+      phase === "mixed"
+        ? (2 * k - Math.min(n1, n2)) * W_SAME_TIER_TEAM
+        : (k - Math.floor(n1 / 4) - Math.floor(n2 / 4)) * W_CROSS_TIER_GAME;
+    // Squared, so sitting one person out again costs more than two people once each.
+    const sitting = [...t1.slice(n1), ...t2.slice(n2)].reduce((sum, p) => sum + owed.get(p.id)! ** 2 / OWED_GAME, 0);
+    const cost = tierCost + sitting;
+    if (!pick || cost < pick.cost) pick = { n1, cost };
+  }
+  if (!pick) return null;
+  const playing = [...t1.slice(0, pick.n1), ...t2.slice(0, seats - pick.n1)];
+
+  const games = arrangeRound(playing, phase, buildHistory(state), random);
+  // Tier 1 player listed first in each team so the board reads the same way every game.
+  const order = (x: Player, y: Player): [string, string] =>
+    (x.tier ?? 9) <= (y.tier ?? 9) ? [x.id, y.id] : [y.id, x.id];
+  return games.map(([a, b, c, d]) => ({ teamA: order(a, b), teamB: order(c, d) }));
+}
+
+/**
+ * Everything a round draw depends on. The previewed round goes on as shown
+ * only when this still matches as the round starts; anything else (a game
+ * called off, someone on a break, the switch to within-tier games) means a
+ * fresh draw.
+ */
+function roundKey(state: CasualPlayState, phase: TierPhase): string {
+  const free = availablePlayers(state)
+    .map((p) => `${p.id}:${p.tier}:${p.games}:${p.playedRound ?? 0}`)
+    .sort();
+  return [phase, state.courts, ...free].join("|");
+}
+
+/** The board once every game on court now has finished: what the next round is drawn from. */
+function roundLookahead(state: CasualPlayState): CasualPlayState {
+  const running = state.onCourt.filter((g): g is Game => g !== null);
+  if (running.length === 0) return state;
+  const coming = new Set(running.flatMap(gamePlayers));
+  return {
+    ...state,
+    onCourt: state.onCourt.map(() => null),
+    history: [...state.history, ...running],
+    players: state.players.map((p) => (coming.has(p.id) ? { ...p, games: p.games + 1 } : p)),
+  };
+}
+
+function refreshNextRound(state: CasualPlayState, now: number, random: () => number, force = false): void {
+  if (!state.started || isConcluded(state) || rotationStyle(state) !== "rounds") {
+    state.nextRound = null;
+    state.nextRoundKey = null;
+    return;
+  }
+  const phase = tierPhase(state, now);
+  const ahead = roundLookahead(state);
+  const key = roundKey(ahead, phase);
+  if (!force && state.nextRound && state.nextRoundKey === key) return;
+  const picked = pickRound(ahead, phase, random);
+  state.nextRound = picked
+    ? shuffled(picked, random).map((g, i) => ({ id: 0, court: i + 1, ...g, startedAt: 0, phase }))
+    : null;
+  state.nextRoundKey = picked ? key : null;
+}
+
+/** Puts a whole new round on court (the previewed one if it still fits). */
+function startRound(state: CasualPlayState, now: number, random: () => number): void {
+  const phase = tierPhase(state, now);
+  const planned =
+    state.nextRound && state.nextRoundKey === roundKey(state, phase) ? state.nextRound : null;
+  const games =
+    planned ??
+    shuffled(pickRound(state, phase, random) ?? [], random).map((g, i) => ({ court: i + 1, ...g }));
+  state.nextRound = null;
+  state.nextRoundKey = null;
+  if (games.length === 0) return;
+  const round = (state.round ?? 0) + 1;
+  state.round = round;
+  for (const g of games) {
+    state.onCourt[g.court - 1] = {
+      id: state.nextGameId++,
+      court: g.court,
+      teamA: g.teamA,
+      teamB: g.teamB,
+      startedAt: now,
+    };
+  }
+  const playing = onCourtIds(state);
+  for (const p of state.players) if (playing.has(p.id)) p.playedRound = round;
 }
 
 /** Swaps a player who leaves mid-game for the best free player, ideally from the same tier. */
@@ -415,6 +681,7 @@ function replaceOnCourt(state: CasualPlayState, playerId: string, leaving: Playe
     state.onCourt[index] = null;
     return;
   }
+  if (rotationStyle(state) === "rounds") sub.playedRound = state.round;
   const swap = (team: [string, string]): [string, string] =>
     team.map((id) => (id === playerId ? sub.id : id)) as [string, string];
   state.onCourt[index] = { ...game, teamA: swap(game.teamA), teamB: swap(game.teamB) };
@@ -434,6 +701,14 @@ function finishCourt(state: CasualPlayState, court: number, now: number): void {
       p.readyAt = now;
     }
   }
+}
+
+/** The court has a game on it, and (when the page says which) it's that game. */
+function checkCourt(state: CasualPlayState, court: number, gameId: number | undefined): void {
+  if (court > state.courts) throw new ActionError("That court isn't in use");
+  const game = state.onCourt[court - 1];
+  if (!game) throw new ActionError("That court is already free");
+  if (gameId !== undefined && game.id !== gameId) throw new ActionError("That game has already finished");
 }
 
 function findPlayer(state: CasualPlayState, id: string): Player | undefined {
@@ -537,6 +812,17 @@ export function applyAction(
       refreshNext(state, now, random);
       return state;
     }
+    case "setRotation": {
+      if (action.rotation !== "rounds" && action.rotation !== "continuous") throw new ActionError("Invalid rotation");
+      if (rotationStyle(state) === action.rotation) return state;
+      state.rotation = action.rotation;
+      state.next = null;
+      state.nextRound = null;
+      state.nextRoundKey = null;
+      // Continuous fills any free court straight away; rounds waits for the
+      // games on court now to finish, then draws a full round.
+      break;
+    }
     case "start": {
       if (state.started) return state;
       state.concludedAt = null;
@@ -547,8 +833,18 @@ export function applyAction(
     }
     case "finish": {
       if (isConcluded(state)) throw new ActionError("The play day has been concluded");
-      if (!state.onCourt[action.court - 1]) throw new ActionError("That court is already free");
+      checkCourt(state, action.court, action.gameId);
       finishCourt(state, action.court, now);
+      break;
+    }
+    case "nextRound": {
+      // Rounds rotation: don't wait for the courts still playing. Their games
+      // count as played and everyone is drawn into the next round now.
+      if (!state.started || isConcluded(state)) throw new ActionError("The courts aren't running");
+      if (rotationStyle(state) !== "rounds") throw new ActionError("Only in rounds rotation");
+      for (let court = 1; court <= state.courts; court++) {
+        if (state.onCourt[court - 1]) finishCourt(state, court, now);
+      }
       break;
     }
     case "conclude": {
@@ -558,6 +854,8 @@ export function applyAction(
         if (state.onCourt[court - 1]) finishCourt(state, court, now);
       }
       state.next = null;
+      state.nextRound = null;
+      state.nextRoundKey = null;
       state.concludedAt = now;
       return state;
     }
@@ -570,7 +868,7 @@ export function applyAction(
     case "void": {
       // Called off (wrong players, someone hurt…): the game doesn't count and
       // the four keep their place at the front of the queue.
-      if (!state.onCourt[action.court - 1]) throw new ActionError("That court is already free");
+      checkCourt(state, action.court, action.gameId);
       state.onCourt[action.court - 1] = null;
       state.next = null;
       break;
@@ -582,7 +880,14 @@ export function applyAction(
     case "endSession": {
       const reset = emptyState(state.date, state.courts);
       reset.courtNumbers = Array.from({ length: state.courts }, (_, i) => state.courtNumbers?.[i] ?? "");
-      reset.players = state.players.map((p) => ({ ...p, games: 0, paused: false, readyAt: now }));
+      reset.rotation = rotationStyle(state);
+      reset.players = state.players.map((p) => ({
+        ...p,
+        games: 0,
+        paused: false,
+        readyAt: now,
+        playedRound: undefined,
+      }));
       return reset;
     }
     default:
@@ -616,10 +921,13 @@ export function isValidAction(value: unknown): value is Action {
       return court(a.court) && typeof a.number === "string" && a.number.length <= 20;
     case "setTierMode":
       return a.mode === "auto" || a.mode === "mixed" || a.mode === "split";
+    case "setRotation":
+      return a.rotation === "rounds" || a.rotation === "continuous";
     case "finish":
     case "void":
-      return court(a.court);
+      return court(a.court) && (a.gameId === undefined || (Number.isInteger(a.gameId) && (a.gameId as number) > 0));
     case "start":
+    case "nextRound":
     case "reshuffleNext":
     case "conclude":
     case "reopen":
@@ -641,6 +949,8 @@ export function publicState(state: CasualPlayState): CasualPlayState {
 /** API response for GET and POST /api/casual-play. */
 export type CasualPlayResponse = {
   state: CasualPlayState;
+  /** Saved version of the board; a response with a lower one is out of date. */
+  version: number;
   organiser: boolean;
   serverNow: number;
   /** Play days to choose from (organisers only). */

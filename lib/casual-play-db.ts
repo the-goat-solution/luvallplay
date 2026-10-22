@@ -147,8 +147,10 @@ function mergeRoster(
   }
   // Someone previewed as up next who has since dropped off the roster.
   const kept = new Set(players.map((p) => p.id));
-  const next = state.next && [...state.next.teamA, ...state.next.teamB].every((id) => kept.has(id)) ? state.next : null;
-  return { ...state, players, next };
+  const stillHere = (g: { teamA: string[]; teamB: string[] }) => [...g.teamA, ...g.teamB].every((id) => kept.has(id));
+  const next = state.next && stillHere(state.next) ? state.next : null;
+  const nextRound = state.nextRound?.every(stillHere) ? state.nextRound : null;
+  return { ...state, players, next, nextRound, nextRoundKey: nextRound ? state.nextRoundKey : null };
 }
 
 type Loaded = {
@@ -188,8 +190,15 @@ async function load(date: string, now: number): Promise<Loaded> {
   };
 }
 
-export async function getCasualPlayState(date: string): Promise<CasualPlayState> {
-  return (await load(date, Date.now())).state;
+/**
+ * The board plus its saved version (0 before the first save). The page uses
+ * the version to ignore a response that left before a newer one arrived.
+ */
+export type VersionedBoard = { state: CasualPlayState; version: number };
+
+export async function getCasualPlayState(date: string): Promise<VersionedBoard> {
+  const { state, version } = await load(date, Date.now());
+  return { state, version: version ?? 0 };
 }
 
 export class ConflictError extends Error {}
@@ -252,7 +261,7 @@ async function setRosterCourts(date: string, courts: number): Promise<void> {
  * at once can't overwrite each other: a save only lands on the version it
  * was computed from, and a clash is retried on the fresh state.
  */
-export async function runCasualPlayAction(date: string, action: Action): Promise<CasualPlayState> {
+export async function runCasualPlayAction(date: string, action: Action): Promise<VersionedBoard> {
   if (action.type === "setCourts") await setRosterCourts(date, clampCourts(action.courts));
   for (let attempt = 0; attempt < 4; attempt++) {
     const now = Date.now();
@@ -262,7 +271,7 @@ export async function runCasualPlayAction(date: string, action: Action): Promise
 
     const email = roster.find((r) => "playerId" in action && r.id === action.playerId)?.email;
     if (email && action.type === "setTier") await rememberProfile(email, { tier: action.tier });
-    return next;
+    return { state: next, version: (version ?? 0) + 1 };
   }
   throw new ConflictError("The board is busy. Please try again.");
 }

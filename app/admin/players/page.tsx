@@ -18,7 +18,8 @@ import { getSmsUsage, setSmsSwitch } from "@/lib/sms";
 import { WELCOME_BATCH, sendWelcomeBatch, sendWelcomePreview } from "@/lib/welcome-emails";
 import { adminAlertRecipients } from "@/lib/player-email";
 import { getStripe } from "@/lib/stripe";
-import { getStatsBackfillPreview, runStatsBackfill, listMinigameNameMatches, setMinigameName } from "@/lib/stats-db";
+import { confirmAttendance, getStatsBackfillPreview, listMinigameNameMatches, listUnverifiedAttendance, removeAttendance, runStatsBackfill, setMinigameName } from "@/lib/stats-db";
+import { listRecentFeedback } from "@/lib/membership-self-service";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,14 @@ async function saveMinigameName(formData: FormData) {
   back("toast", `Saved ${name}.`);
 }
 
+async function confirmCheckIn(date: string, email: string, ok: boolean) {
+  "use server";
+  if (ok) await confirmAttendance(date, email);
+  else await removeAttendance(date, email);
+  revalidatePath("/admin/players");
+  back("toast", ok ? `Confirmed ${email} on ${date}.` : `Removed ${email}'s check-in for ${date}.`);
+}
+
 export default async function PlayersPage({ searchParams }: { searchParams: Promise<{ q?: string; import?: string }> }) {
   const { q, import: showImport } = await searchParams;
   const hasDb = Boolean(process.env.POSTGRES_URL);
@@ -117,13 +126,15 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
       </div>
     );
   }
-  const [players, candidates, welcomePending, sms, backfill, nameMatches] = await Promise.all([
+  const [players, candidates, welcomePending, sms, backfill, nameMatches, checkIns, feedback] = await Promise.all([
     listPlayersForAdmin(q),
     showImport ? previewMemberImport() : Promise.resolve(null),
     countWelcomePending(),
     getSmsUsage(),
     getStatsBackfillPreview(),
     listMinigameNameMatches(),
+    listUnverifiedAttendance(),
+    listRecentFeedback(15),
   ]);
   const allPlayers = q ? await listPlayersForAdmin() : players;
   const installed = allPlayers.filter((p) => p.installedAt).length;
@@ -267,6 +278,45 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
           </form>
         </div>
       </section>
+
+      {checkIns.length > 0 && (
+        <section style={card}>
+          <h2 style={{ fontSize: 16, marginTop: 0 }}>Check-ins from connected apps ({checkIns.length})</h2>
+          <p style={{ color: "#666", fontSize: 13 }}>Play days sent in by a player&apos;s connected app. They only count once you confirm them.</p>
+          {checkIns.map((c) => (
+            <div key={`${c.date}-${c.email}`} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: "1px solid #eee", fontSize: 13 }}>
+              <span style={{ flex: 1 }}>
+                <strong>{c.date}</strong> · {c.email}
+              </span>
+              <form action={confirmCheckIn.bind(null, c.date, c.email, true)}>
+                <SubmitButton loadingText="…" style={btn}>
+                  Confirm
+                </SubmitButton>
+              </form>
+              <form action={confirmCheckIn.bind(null, c.date, c.email, false)}>
+                <SubmitButton loadingText="…" style={btnSecondary}>
+                  Reject
+                </SubmitButton>
+              </form>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {feedback.length > 0 && (
+        <section style={card}>
+          <h2 style={{ fontSize: 16, marginTop: 0 }}>Why members are leaving or downgrading</h2>
+          {feedback.map((f, i) => (
+            <div key={i} style={{ padding: "6px 0", borderTop: "1px solid #eee", fontSize: 13 }}>
+              <strong>{f.name || f.email}</strong> · {f.action === "cancel" ? "turned off auto-renew" : "switched to Monthly"} · {formatNz(f.createdAt)}
+              <div style={{ color: "#555" }}>
+                Reason: {f.reason}
+                {f.comment ? ` — “${f.comment}”` : ""}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section style={card}>
         <h2 style={{ fontSize: 16, marginTop: 0 }}>SMS sign-in</h2>

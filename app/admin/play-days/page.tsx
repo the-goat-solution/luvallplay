@@ -28,6 +28,8 @@ import {
   getDayName,
 } from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AttendanceSection } from "@/components/admin/AttendanceSection";
+import { AdminToastBridge } from "@/components/admin/AdminToastBridge";
 import adminStyles from "@/components/admin/admin.module.css";
 import { FillInButton } from "@/components/admin/FillInButton";
 import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
@@ -352,6 +354,7 @@ export default async function PlayDaysAdminPage({
         other days default to 1 court, casual bookings only.
       </p>
       <AdminNav active="play-days" />
+      <AdminToastBridge />
       <PlayDaysToastBridge />
 
       {!process.env.POSTGRES_URL ? (
@@ -735,6 +738,7 @@ export default async function PlayDaysAdminPage({
               Add cash player
             </SubmitButton>
           </form>
+          <AttendanceSection date={selectedDate} roster={roster} />
         </>
       )}
     </div>

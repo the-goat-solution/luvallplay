@@ -45,8 +45,9 @@ export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
         ? images.map((img) => ({
             src: img.src,
             alt: img.alt ? pickLocale(img.alt, lang) : "Gallery photo",
+            credit: img.credit,
           }))
-        : GALLERY_IMAGES.map((img) => ({ src: img.src, alt: img.alt }));
+        : GALLERY_IMAGES.map((img) => ({ src: img.src, alt: img.alt, credit: undefined as string | undefined }));
     return full.map((img, fullIndex) => ({ ...img, fullIndex }));
   }, [images, lang]);
 
@@ -85,7 +86,8 @@ export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
                   window.openLightbox?.(img.fullIndex);
               }}
             >
-              <img src={img.src} alt={img.alt} />
+              <img src={img.src} alt={img.alt} loading={i < 2 ? "eager" : "lazy"} decoding="async" />
+              {img.credit && <span className="gallery-credit">📷 {img.credit}</span>}
               <div className="gallery-overlay">
                 <span className="gallery-zoom">
                   <svg
@@ -105,6 +107,13 @@ export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
             </div>
           ))}
         </div>
+        {fullGalleryImages.length > GALLERY_DISPLAY_LIMIT && (
+          <p style={{ textAlign: "center", marginTop: 28 }}>
+            <a href="/gallery" className="btn btn-bronze-outline">
+              {lang === "vi" ? "Xem tất cả ảnh" : "See all photos"} →
+            </a>
+          </p>
+        )}
       </div>
     </section>
   );

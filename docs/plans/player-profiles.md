@@ -3,7 +3,7 @@
 Status: **approved direction, ready to build**. Nothing has been built yet.
 
 **Decided (16 Nov):**
-- email **and** SMS login codes from day one;
+- email **and** SMS login codes from day one. SMS is **capped at the free allowance**, and only email sign-in is shown once it's used up;
 - **every current active member gets an account created for them** and can sign in straight away with their membership email. Their membership and stats come from what's already in the database (§4a);
 - attendance comes from the court board, the round robin and admin ticks;
 - the round robin leaderboard ranks by RR points (2 per win), with ties broken by point difference;
@@ -41,7 +41,7 @@ Changes to the main site:
 - casual bookings still work as guest checkout, with an invitation to create an account;
 - the Gallery lightbox gets a **Download original** button.
 
-**Expected running cost: about $0/month** on the current stack. The only item that can cost money is SMS codes: the first 10 a day are free, then about US$0.08 each (§3).
+**Expected running cost: $0/month** on the current stack. SMS codes are capped at Google's free 10 texts per day. Once those are used, only email sign-in is offered, so texts never cost money (§3).
 
 ---
 
@@ -74,20 +74,16 @@ There are no user accounts today. Players are identified by **email** everywhere
 | Option | Cost | Verdict |
 |---|---|---|
 | **Email code (6 digits) plus a one-tap link in the same email, built in-house on Postgres and Resend** | **Free.** Resend's free plan is 3,000 emails/month with a 100/day cap. | ✅ **Recommended for launch** |
-| SMS via Firebase / Google Identity Platform | First **10 SMS/day free**, then about **US$0.08 per SMS to NZ** | Optional add-on. Near-free at club scale, but needs a Google Cloud billing account, the Firebase JS SDK and reCAPTCHA (CSP changes). |
+| SMS via Firebase / Google Identity Platform | First **10 SMS/day free**, then about **US$0.08 per SMS to NZ** | ✅ **Chosen for SMS, capped at the free 10** so it never costs money. Needs a Google Cloud billing account and reCAPTCHA (CSP changes). |
 | SMS via Twilio Verify | About **US$0.05 per verification plus the NZ SMS fee**; failed sends are still charged | ❌ Costs more than Firebase |
 | Telegram Gateway | About **US$0.01 per delivered code**; undelivered codes are refunded | Cheap, but only works for players who use Telegram |
 | Clerk, Auth0, Supabase Auth | Email codes free on their free tiers; SMS always paid | ❌ Adds a vendor, off-brand screens, and doesn't solve SMS cost |
 
 **Decision:** launch with **email codes and SMS codes**.
 - **Email codes** are built in-house and are free.
-- **SMS codes** use **Firebase Authentication (phone)**. The first 10 texts a day are free, then about US$0.08 per text to NZ.
-- Sessions last **90 days and extend with use**, so most players sign in only a few times a year. At club size that's realistically a handful of texts a week, so SMS should stay within the free 10 a day almost always.
-- **Guards against SMS cost:**
-  - Firebase's own reCAPTCHA;
-  - our per-number and per-IP rate limits;
-  - SMS restricted to NZ, AU and VN numbers (Firebase SMS region policy);
-  - a Google Cloud **budget alert at US$5/month**.
+- **SMS codes** use **Firebase Authentication (phone)**. The first 10 texts a day are free; after that Google would charge about US$0.08 per text to NZ.
+- **SMS is capped at the free allowance, so it never costs money.** Once the free texts are used up, the login screen only offers email codes until texts are free again. See *SMS free-tier cap* below.
+- Sessions last **90 days and extend with use**, so most players sign in only a few times a year. At club size the cap should rarely be reached.
 - **Setup needed from you:** a Firebase project under the same Google Cloud project as the Calendar service account, with Phone sign-in enabled and a billing account attached. I'll provide the step-by-step guide.
 
 ### Design (in-house, about 300 lines, same style as `lib/admin-session.ts`)
@@ -106,14 +102,59 @@ There are no user accounts today. Players are identified by **email** everywhere
 
 **SMS code flow (Firebase):**
 1. The login screen has two options: **Email me a code** and **Text me a code**.
-2. For a text, the Firebase JS SDK, loaded **only on the login page** to keep other pages fast, sends the code and checks it in the browser.
-3. Firebase returns a signed ID token. Our server verifies it with Google's public keys (`google-auth-library` is already a dependency) and reads the confirmed phone number.
+2. For a text, the browser only completes a reCAPTCHA check, loaded **only on the login page** to keep other pages fast. **Our server** then sends the code through Google and later checks it. This is what makes the hard cap below possible.
+3. When the code is correct, Google returns the confirmed phone number to our server.
 4. That phone number is matched to `players.phone_e164`, and the server issues our **own** session cookie, exactly as for email. Firebase is only used to deliver and check the code, not to hold accounts.
 5. **New players signing in by phone** still need an email: it's the key for Stripe and club emails. After the text code they enter their email and confirm it with an email code, once only. After that, either login method works.
 6. **Existing players** add or confirm their phone from the Account tab, which sends a text code to verify it. Phone numbers must be unique across accounts.
 7. CSP is updated, only where needed, for Firebase and reCAPTCHA (`www.gstatic.com`, `www.google.com/recaptcha`, `*.googleapis.com`).
 
-New env vars: `PLAYER_SESSION_SECRET`, `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`.
+### SMS free-tier cap: never pay for texts
+
+**Rule:** at most **10 texts in any rolling 24 hours**. Once 10 have gone out, the site **only shows email sign-in** until the oldest of those texts is more than 24 hours old.
+
+**Why a rolling 24 hours instead of "per day":** Google doesn't publish exactly when its daily free count resets (UTC, Pacific time or something else). Capping any 24-hour window at 10 guarantees no calendar day, in any time zone, can go over 10. So we stay free whatever Google's reset time is. The cost is that SMS may occasionally come back a few hours later than it strictly needs to.
+
+**What counts:** every text Google sends for us:
+- sign-in codes;
+- **Resend code**;
+- phone confirmation on the Account tab.
+
+They all share the one allowance. A text is counted when it's **sent**, whether or not the player enters the code, because Google bills per text sent.
+
+**How it's enforced (our server is the only thing that can send a text):**
+1. A small table, `sms_sends (id, purpose, phone_hash, sent_at)`, records every text.
+2. Before sending, the server **reserves a slot** in one database transaction. It locks the counter, checks that fewer than 10 texts went out in the last 24 hours, and records the new send. Two people tapping "Text me a code" at the same moment can't both take the 10th slot.
+3. **Only if a slot was reserved** does the server ask Google to send the text, using the Identity Platform REST API (`accounts:sendVerificationCode`) with the reCAPTCHA token from the player's browser.
+   - The code is also checked on the server (`accounts:signInWithPhoneNumber`), so no Firebase sign-in code runs in the browser.
+   - The Google API key stays **server-only** (not a `NEXT_PUBLIC_` variable), so nobody can use it to send texts around our counter.
+   - If Google refuses the send, the slot is released.
+4. Per-number and per-IP limits still apply on top: 3 texts per number per hour, plus Turnstile.
+
+**What the player sees:**
+- **SMS available:** the login screen offers **Email me a code** and **Text me a code**.
+- **SMS used up:** the login screen shows **only** the email option.
+  - The page is rendered with the right options already in place, so the text button never flashes up and then disappears.
+  - No "SMS unavailable" message is shown on the normal login screen. It simply looks like an email login.
+- **Used up between loading the page and tapping "Text me a code"** (someone else took the last slot): the server refuses, the screen switches to the email form with any typed email kept, and shows one line: *"Text codes aren't available right now, so we'll email your code instead."*
+- **Resend code** after the cap is hit: offers "Email me a code instead".
+- **Account tab phone confirmation:** while SMS is used up, the **Confirm phone** button is hidden and replaced with *"Phone confirmation is available again later today."*
+- **Players who normally sign in by phone** are never stuck: every account has a confirmed email (§3, step 5), so email always works.
+
+**Admin view:**
+- `/admin/players` shows **Texts in the last 24 hours: 7 / 10** and when the next slot frees up.
+- Admins get **one email the first time the cap is hit** in a 24-hour period, so you can tell if it happens often.
+- **Turn SMS sign-in off** switch, for example if Google changes its free allowance. The site then shows email only.
+- The cap is a setting (`SMS_FREE_LIMIT_24H`, default 10). Setting it to 0 also turns SMS off.
+
+**Backstops in Google Cloud** (set up once, covered in the setup guide):
+- SMS region policy allows only NZ, AU and VN numbers.
+- A **budget alert at US$1**, so any charge, however it happened, is emailed to you straight away.
+- At setup I'll check whether Google lets server-side sending work with the reCAPTCHA token, as planned in step 3.
+  - **If it doesn't** (sending would have to happen in the browser with a public API key), the counter still controls everything our own pages do. To keep that safe, the API key gets an HTTP-referrer restriction to the club's domain, and Firebase **App Check** is turned on, so other sites and scripts can't use it.
+  - I'll tell you which way it went before anything goes live.
+
+New env vars: `PLAYER_SESSION_SECRET`, `FIREBASE_API_KEY` (server-only), `FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`, `SMS_FREE_LIMIT_24H` (default 10).
 
 ---
 
@@ -153,6 +194,7 @@ player_photos        id, player_id, original_key, display_key, thumb_key, width,
 api_tokens           id, player_id, name, scopes text[], token_hash, last_used_at, revoked_at
 webhook_endpoints    id, player_id, url, secret, events text[], active
 webhook_deliveries   id, endpoint_id, event, payload jsonb, status, attempts, next_attempt_at
+sms_sends            id, purpose (login|phone_confirm), phone_hash, sent_at   -- rolling 24h cap (§3)
 cancellation_feedback id, player_id, membership_id, action (downgrade|cancel|autorenew_off),
                      reason, comment, created_at
 ```
@@ -482,7 +524,7 @@ A **personal iCal feed** of the player's upcoming play days is included almost f
 | Item | Service | Free allowance | Expected cost |
 |---|---|---|---|
 | Email login codes and notifications | Resend (existing) | 3,000/month, 100/day | $0 |
-| SMS login codes | Firebase / Identity Platform | 10/day | $0 at club scale; about US$0.08 per SMS beyond 10/day (budget alert at US$5) |
+| SMS login codes | Firebase / Identity Platform | 10/day | **$0, guaranteed by a hard cap** of 10 texts per rolling 24 hours; email-only sign-in after that (budget alert at US$1 as a backstop) |
 | Photo safety check | Google Cloud Vision SafeSearch | 1,000 images/month | $0 |
 | Photo and product image storage | Vercel Blob (or R2) | 1 GB / 10 GB transfer (R2: 10 GB, free transfer) | $0 |
 | Database | Vercel Postgres / Neon (existing) | current plan | $0 |
@@ -509,7 +551,7 @@ A **personal iCal feed** of the player's upcoming play days is included almost f
 
 | # | Question | Decision |
 |---|---|---|
-| 1 | Login codes | Email **and** SMS (Firebase) from day one |
+| 1 | Login codes | Email **and** SMS (Firebase) from day one. SMS is **capped at the free 10 per rolling 24 hours**, and only email sign-in is shown once it's used up |
 | 2 | Attendance | Court board (≥1 finished game), round robin, and admin ticks. Confirmed casual bookings count for older days with no saved board (§4a). |
 | 3 | Round robin score | RR points (2 per win), with ties broken by point difference |
 | 4 | Leaderboard privacy | Shown by default, opt-out in profile, display name |
@@ -526,7 +568,7 @@ A **personal iCal feed** of the player's upcoming play days is included almost f
 | Phase | Scope | Depends on |
 |---|---|---|
 | **0. Quick win** | Gallery lightbox **Download original** button | none |
-| **1. Accounts** | `players`, `auth_codes`, `player_sessions`, email-code login **and Firebase SMS login**, nav Log in and avatar, `/profile` shell, Account tab details including phone verification. **Member import** (preview, create, link history), `ensurePlayerForEmail()` on every membership path, `/admin/players`, welcome emails (§4a) | Firebase project set up |
+| **1. Accounts** | `players`, `auth_codes`, `player_sessions`, email-code login **and Firebase SMS login with the free-tier cap** (`sms_sends`, email-only fallback, admin counter and switch), nav Log in and avatar, `/profile` shell, Account tab details including phone verification. **Member import** (preview, create, link history), `ensurePlayerForEmail()` on every membership path, `/admin/players`, welcome emails (§4a) | Firebase project set up |
 | **2. Messaging** | Threads and messages, Account tab inbox, `/admin/inbox`, email notifications | 1 |
 | **3. Membership tab** | Plan status, upgrade and day change, step-by-step downgrade and cancel, auto-renew on/off, update card (Portal), invoices, calendar booking, "can't make it". Main site: remove the emailed cancel flow, require an account for membership sign-up, invite casual bookers to create an account | 1 |
 | **4. Shop** | Products, variants, orders, stock holds, Stripe checkout, `/admin/shop`, seeded jersey with cropped images, Financials category | 1 |
@@ -545,10 +587,13 @@ New env vars across all phases:
 - `PHOTO_BLOB_READ_WRITE_TOKEN` (public store), with R2 keys as an alternative;
 - `GOOGLE_VISION_ENABLED`, which reuses the existing service account;
 - `STRIPE_PORTAL_CONFIGURATION_ID`;
-- the Firebase keys listed in §3.
+- the Firebase, reCAPTCHA and SMS cap settings listed in §3.
 
 ### Sources for pricing above
 - Google Identity Platform pricing: https://cloud.google.com/identity-platform/pricing
+- Identity Platform quotas (SMS limits): https://docs.cloud.google.com/identity-platform/quotas
+- Firebase Auth limits: https://firebase.google.com/docs/auth/limits
+- Identity Platform `accounts.sendVerificationCode`: https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/accounts/sendVerificationCode
 - Telegram Gateway: https://core.telegram.org/gateway
 - Twilio Verify pricing: https://www.twilio.com/verify/pricing
 - Cloud Vision pricing: https://cloud.google.com/vision/pricing

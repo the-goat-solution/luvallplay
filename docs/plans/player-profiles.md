@@ -1,14 +1,20 @@
 # Plan: Player accounts, profiles, shop, leaderboard & photo sharing
 
-Status: **draft for review**. Nothing has been built yet.
+Status: **approved direction, ready to build**. Nothing has been built yet.
 
 **Decided (16 Nov):**
 - email **and** SMS login codes from day one;
+- **every current active member gets an account created for them** and can sign in straight away with their membership email. Their membership and stats come from what's already in the database (§4a);
 - attendance comes from the court board, the round robin and admin ticks;
 - the round robin leaderboard ranks by RR points (2 per win), with ties broken by point difference;
-- the cancel/downgrade flow has the extra steps but **no discount offer**.
+- the leaderboard shows everyone by default, and each player can opt out in their profile;
+- the cancel/downgrade flow has the extra steps but **no discount offer**;
+- upgrades take effect at the **next renewal**;
+- player photos are stored in **Vercel Blob** for now;
+- the shop jersey is **$30, no customisation**, paid **by card online or cash at a play day**, with stock editable per size in admin;
+- **q.buzz has no API yet**, so we build the generic API, webhooks and MCP server and add a q.buzz-specific link later.
 
-The remaining open questions are in §12.
+Still needed from you: the new men's and women's **size charts** (§5.2 works without them until then).
 
 ---
 
@@ -26,6 +32,8 @@ Other new pieces:
 - a public **/leaderboard** page;
 - three new admin pages: **Inbox**, **Shop** and **Photos**;
 - a versioned **API with webhooks and an MCP server**, so habit trackers such as q.buzz can read and write player activity.
+
+**Current members don't have to sign up.** An account is created for every active member using the email on their membership. They get a welcome email, sign in with a code sent to that email, and immediately see their membership and their play history (§4a).
 
 Changes to the main site:
 - the emailed cancellation flow is removed;
@@ -94,7 +102,7 @@ There are no user accounts today. Players are identified by **email** everywhere
    - The session lasts 90 days and extends with use.
    - "Sign out of all devices" is available.
 4. The first sign-in **is** sign-up. If the email is new, the player is asked for first name, last name and phone.
-5. The same email check is built into the membership sign-up modal, so joining never leaves the flow (§9).
+5. The same email check is built into the membership sign-up modal, so joining never leaves the flow (§10).
 
 **SMS code flow (Firebase):**
 1. The login screen has two options: **Email me a code** and **Text me a code**.
@@ -116,7 +124,8 @@ All tables are created idempotently in a new `lib/player-db.ts`, following the e
 ```
 players              id, email (unique, lowercased), first_name, last_name, display_name,
                      phone_e164 (unique), phone_verified_at, lang, stripe_customer_id, minigame_name, leaderboard_visible,
-                     avatar_url, created_at, deleted_at
+                     avatar_url, created_via (member_import|signup|admin), claimed_at,
+                     welcome_sent_at, created_at, deleted_at
 auth_codes           id, email, code_hash, link_token_hash, attempts, expires_at, consumed_at, ip_hash
 player_sessions      id, player_id, token_hash, user_agent, created_at, last_seen_at, expires_at
 
@@ -150,9 +159,86 @@ cancellation_feedback id, player_id, membership_id, action (downgrade|cancel|aut
 
 Linking existing records:
 - A nullable `player_id` column is added to `memberships`, `bookings`, `jersey_registrations` and `session_fill_ins`.
-- These are backfilled by email when an account is created. A one-off migration also creates accounts for everyone with an active membership, so existing members can sign in on day one with the email they already use.
+- These are backfilled by email whenever an account is created.
+- Accounts for all current active members are created up front (§4a).
 
 **Stock is held in Postgres, not Sanity**, so that two people can't both buy the last shirt. Reserving a shirt is a single conditional `UPDATE … SET reserved = reserved + n WHERE stock - reserved >= n`. Unpaid holds are released after 15 minutes, the same idea as `PENDING_MEMBERSHIP_HOLD_MINUTES`.
+
+---
+
+## 4a. Accounts for every current member (created up front)
+
+Every player with an **active membership** gets an account before launch. They don't have to sign up: they sign in with the email on their membership and their profile is already filled in.
+
+### Who gets an account
+- Every row in `memberships` that currently grants access. That covers:
+  - auto-renewing and one-time memberships, paid by card or cash;
+  - Friday and Wednesday;
+  - memberships set to cancel at period end, while they're still running.
+- **One account per email.** Emails are compared lower-cased and trimmed, so a member with several membership rows (e.g. past renewals) gets a single account.
+- **Near-duplicates are flagged, not merged.** Emails that only differ by Gmail dots or `+tags` (using the existing `normalizeEmail` rule from the jersey page) are listed on `/admin/players` for an admin to merge or leave.
+- Expired members and past casual players are **not** pre-created. If they sign up themselves later, everything under their email links to their new account automatically.
+
+### What's filled in from the database
+| Profile field | Source |
+|---|---|
+| Name and phone | The member's most recent `memberships` row |
+| Display name (leaderboard and photo credits) | First name plus last initial, e.g. "Hòa N." The player can change it. |
+| Stripe customer | Read from the member's Stripe subscription or payment, not looked up by email, so it's exact |
+| Membership history | Every `memberships` row with that email, including expired ones |
+| Casual bookings | Every `bookings` row with that email |
+| Jersey registration | `jersey_registrations` with that email |
+| Court board tier | `casual_play_profiles` with that email |
+| **Play days attended** | Past saved court boards (`casual_play_sessions`). The board identifies each player by a hash of their email, so each player can be matched exactly. |
+| **Round robin results** | Past mini game draws, once an admin has matched each of the 16 mini game names to a member on `/admin/players` (§6.2) |
+
+**Attendance before the court board existed:** for older play days with no saved board, the import offers one extra source: **confirmed casual bookings** for that date count as attended (`source = booking_history`), because the player paid for that day. Members aren't counted for those days, since there's no record of whether they came. The import shows a preview per player before anything is saved, and admins can correct any day afterwards.
+
+### Phone numbers
+Phone numbers come over from the membership form but have **never been verified**. So:
+- they're imported as *unverified*;
+- **SMS sign-in only works once the player has confirmed their number**. They do this once from the Account tab, with a text code.
+
+This stops someone getting into another person's account through a mistyped number.
+
+### Running the import
+- **Two parts:** accounts and membership/booking links are created in Phase 1. The play-day and round robin backfill runs in Phase 5, together with the stats screens. Both parts are safe to re-run.
+- **Admin preview:** on `/admin/players`, **Import members** shows:
+  - who will get an account;
+  - any duplicate or suspicious emails;
+  - each person's backfilled play-day and round robin counts.
+
+  Then **Create accounts** runs it.
+- **Safe to run again:** re-running only adds members who don't have an account yet and links any new history. It never changes details a player has edited.
+
+### Welcome email
+- **Timing:** accounts are created in Phase 1, but welcome emails are held until **Phase 5 (stats and leaderboard)** is live. That way members' first sign-in already shows their membership **and** their stats, not empty tabs. Admins can still sign in as a test member before then.
+- Sent from `/admin/players` with **Send welcome emails**. You choose the timing and can send yourself a preview first.
+- Bilingual (EN/VI), using the existing branded email layout. It says:
+  - "Your Three Wolves account is ready";
+  - how to sign in: go to the site, tap Log in, enter this email, and type the code;
+  - what's inside: membership, play days, leaderboard and the shop;
+  - **a one-click link to hide them from the leaderboard**, because pre-created accounts appear there by default.
+- Sending is spread to stay under Resend's free limit of 100 emails a day. Each member is emailed once (`welcome_sent_at`), and failed sends are retried.
+
+### Keeping it automatic after launch
+New members are linked to an account at every point a membership can be created:
+- online sign-up, which now requires an account;
+- **Add cash member** on `/admin/members`;
+- the Stripe webhook;
+- the "restored from Stripe" step in `lib/stripe-sync.ts`.
+
+All four call one helper, `ensurePlayerForEmail()`. It creates the account if needed, links the membership, and queues the welcome email for new accounts.
+
+### What the member sees on first sign-in
+- Their membership card in the **Membership** tab: plan, day, renewal or end date, and card on file.
+- Their play days and round robin results in the **Player profile** tab.
+- A one-time "Welcome" card asking them to:
+  - check their name and display name;
+  - confirm their phone, which turns on SMS sign-in;
+  - choose whether to appear on the leaderboard.
+
+`/admin/players` shows each member as **Not signed in yet** or **Active since …**, so you can see who has started using their account.
 
 ---
 
@@ -176,7 +262,10 @@ Each tab is its own server-rendered route, so only that tab's data loads, and ea
   - The open thread refreshes every 20 seconds while the tab is visible. That's free and needs no websockets; the court board already works the same way.
   - The player gets an email when an admin replies. Admins get an email for each new player message (`ALERT_ADMIN_EMAILS`).
   - A red badge on the Account tab shows unread messages.
-- **Privacy:** show me on the leaderboard (on/off), download my data (JSON), delete my account. Payment records are kept as the law requires.
+- **Privacy:**
+  - **Show me on the leaderboard** is on by default, with a toggle to turn it off. Turning it off removes the player from every period straight away.
+  - Download my data (JSON).
+  - Delete my account. Payment records are kept as the law requires.
 - **Signed-in devices:** sign out of all devices.
 
 ### 5.2 Membership tab
@@ -189,7 +278,8 @@ Each tab is its own server-rendered route, so only that tab's data loads, and ea
   - play days left this cycle.
 - **Upgrade** (Monthly → Quarterly):
   - one screen showing the saving, then one confirm;
-  - applied **at the next renewal** with a Stripe subscription schedule, so there are no confusing proration charges (Q7).
+  - applied **at the next renewal** (decided) with a Stripe subscription schedule. There's no charge now; the next invoice is the quarterly price.
+  - **Downgrade** (Quarterly → Monthly) also applies at the next renewal, after the extra steps below.
 - **Change day** (Friday ↔ Wednesday): uses the same capacity checks as sign-up and respects paused days.
 - **Downgrade, turn off auto-renew or cancel:** deliberately takes more steps, but stays honest and clear. NZ consumer law, and good faith, mean cancelling must stay possible online in a few steps, with no tricks.
   1. **What you'll miss:** play days left, your current price, your attendance streak and leaderboard position. A **"Keep my membership"** button is the main, highlighted action.
@@ -216,13 +306,16 @@ Each tab is its own server-rendered route, so only that tab's data loads, and ea
 
 **Shop (while stock lasts):**
 - **Club jersey** card using the cropped front image (`/uploads/shop/jersey-port-hills-dawn-front.webp`, cut from `public/uploads/jersey/design.webp`). The back view is a second image in a swipeable gallery.
+- **Price: $30.** No name or number printing.
 - **Men's / Women's** toggle, then a **size picker S, M, L, XL, 2XL, 3XL**:
   - each size shows a stock badge ("3 left", "Sold out");
   - sold-out sizes are disabled;
-  - a link opens the size guide (the existing men's/unisex chart; a women's chart is needed, Q6).
-- Optional print name and number, if we keep that option (Q6).
-- **Pay by card through Stripe** (PaymentIntent). The shirt is held for 15 minutes during checkout.
-- After paying, the order shows **"Paid: collect at your next play day"**. Admins mark it collected.
+  - a **Size guide** link opens the chart for that fit. Until the new charts are uploaded, it says "Size guide coming soon: ask us at a play day".
+- **Two ways to pay:**
+  - **Card now (Stripe).** The shirt is held for 15 minutes during checkout. Once paid, the order shows **"Paid: collect at your next play day"**.
+  - **Cash at a play day.** The shirt is reserved and the order shows **"Reserved: bring $30 cash to your next play day"**. The reservation lasts until the end of the player's next play day, or 14 days if they have none booked. After that it's released automatically and the player gets an email first. The player can cancel it themselves.
+- **At the play day:** admins open the order list on their phone and tap **Paid cash and collected**, or **Collected** for card orders.
+  - A cash payment is recorded the same way as **Add cash member** today: a Stripe invoice marked paid outside Stripe. Financials picks it up as *Cash* under *Jersey & merchandise* with no extra steps.
 - The product card disappears automatically when every size is sold out.
 - **More merchandise later:** admins add products (name EN/VI, description, price, photos, sizes on or off, stock) in `/admin/shop`. Nothing in the code is jersey-specific.
 - Payments carry `metadata.kind = "shop"`, so `lib/finance-stripe.ts` automatically files them under **Jersey & merchandise** in Financials.
@@ -262,6 +355,7 @@ The mini game currently draws from a hard-coded `ROSTER` of 16 names in `lib/min
 - When a draw's scores are all locked, `rr_results` is written per player: wins, losses, points for and against, **RR points** (the existing 2 per win) and placing.
 - **Backfill:** past draws are mapped to accounts once through a name → player table on the admin side.
 - **Leaderboard score (decided):** total **RR points (2 per win)**, with ties broken by point difference.
+- The name matching is done once, as part of the member import (§4a). After that the mini game picks players from the database, so it stays linked.
 
 ---
 
@@ -298,14 +392,14 @@ Tabs: **Needs review / Blocked / Approved**. Actions: approve, block, hide from 
 
   This is needed because a plain `<a download>` doesn't work across domains. This part doesn't depend on accounts, so it can ship first as a quick win.
 
-### 7.4 Where player photos are stored (Q5)
+### 7.4 Where player photos are stored (decided: Vercel Blob for now)
 
 | Option | Free allowance | Notes |
 |---|---|---|
 | **Vercel Blob** (new *public* store) | 1 GB storage, 10 GB transfer/month on Hobby; Hobby pauses the feature if exceeded, it doesn't charge | Zero new accounts. Room for roughly 250–400 full-size phone originals. |
 | **Cloudflare R2** | 10 GB storage, **free bandwidth** | About 10× the headroom. Needs R2 enabled in the club's Cloudflare account (already used for Turnstile) and a custom domain for public images. |
 
-**Recommendation:** use **Vercel Blob** now, with storage usage shown on `/admin/photos`. Switch to R2 if it passes about 700 MB; the storage layer will be one small module, so switching is a config change.
+**Decision:** use **Vercel Blob** now, with storage usage shown on `/admin/photos`. Switch to R2 if it passes about 700 MB; the storage layer will be one small module, so switching is a config change.
 
 ---
 
@@ -326,7 +420,7 @@ Three layers, all running inside the existing Next.js app at no extra cost:
 
 A **personal iCal feed** of the player's upcoming play days is included almost for free.
 
-For q.buzz itself, I need its API or webhook format before building a direct integration (Q8). Until then, the generic webhook plus `/api/v1` covers it.
+**q.buzz:** it has no API yet, so nothing q.buzz-specific is built now. When it does, connecting it means adding a webhook URL or token for q.buzz on top of what's already here. Because nothing else depends on it, this phase can wait until q.buzz is ready.
 
 ---
 
@@ -337,7 +431,7 @@ For q.buzz itself, I need its API or webhook format before building a direct int
   - **Round robin points**, with wins and point difference as secondary columns.
 - **Periods:** Month, Quarter (calendar quarters), Year and Lifetime, with ‹ › buttons to step back through past periods.
 - **Look:** top 3 as a podium in gold, silver and bronze using the brand's bronze and steel tones. The rest is a clean ranked list with each player's display name and avatar initials. A signed-in player's own row is highlighted, and if they're outside the top 20, it's pinned at the bottom.
-- **Privacy:** only players with accounts who have *Show me on the leaderboard* turned on (Q4). Names show as display name, or first name plus last initial.
+- **Privacy (decided):** every player with an account is shown **by default**, including pre-created member accounts. Anyone can turn it off in Account → Privacy, or from the link in their welcome email. Names show as the player's display name, which defaults to first name plus last initial.
 - **Speed:** one SQL aggregate per board, grouping attendance and `rr_results` by NZ-time periods, with indexes on `(session_date)` and `(player_id)`. Results are cached and refreshed when attendance or scores change, so the page loads like a static page.
 - A **Leaderboard** link is added to the main nav.
 
@@ -352,7 +446,7 @@ For q.buzz itself, I need its API or webhook format before building a direct int
 | **Casual booking** | Stays a one-off **guest checkout**. Changes: (1) a "Have an account? Log in to fill this in" link on the details step; (2) the success screen and the confirmation email say *"Create your free account in one tap: track your play days, climb the leaderboard, share photos"*, with the email pre-filled. The booking is linked automatically when they sign up. |
 | **Membership sign-up** | Requires an account. `MembershipModal` gets an email-code step after choosing the plan, if the player isn't signed in. Signed-in players skip the details step. The Stripe customer is saved on the account (`players.stripe_customer_id`), so we stop looking customers up by email. |
 | **Renewal emails** | Link to `/profile/membership` (after sign-in). Existing token links keep working until they expire. |
-| **`/jersey`** | Registration closed on 21 Oct. The page is kept as is for existing registrations; future jersey sales go through the Shop. (Q6) |
+| **`/jersey`** | Registration closed on 21 Oct. The page is kept as is for existing registrations, and gets a link to the Shop. Future jersey sales go through the Shop. |
 | **Gallery** | Combined pool, photo credits, lazy thumbnails, **Download original** button, and a `/gallery` "see all" page. |
 | **CSP** (`next.config.ts`) | Add the photo storage host to `img-src` and `connect-src` (for direct uploads). |
 
@@ -362,12 +456,19 @@ For q.buzz itself, I need its API or webhook format before building a direct int
   - links to the player's admin record.
 - **Shop** (`/admin/shop`):
   - products (create and edit, EN/VI, images, price, active, order);
-  - a stock grid of **Men's / Women's × S–3XL** with +/− and set-to-number, plus a low-stock highlight;
-  - orders (paid → collected, refund) and Excel export using the existing `exceljs`;
-  - seeded with the Port Hills Dawn jersey.
+  - **stock per size:** a grid of **Men's / Women's × S, M, L, XL, 2XL, 3XL**:
+    - type a number or use +/−;
+    - each cell also shows how many are reserved and sold;
+    - low stock (2 or fewer) is highlighted;
+    - every change is logged with who made it and when;
+  - **size charts:** upload one image per fit, so the new charts can go up as soon as you have them;
+  - **orders:** filter by Reserved (cash), Paid and Collected. Actions are Paid cash and collected, Collected, Cancel, and Refund for card orders. There's a phone-friendly view for play days and Excel export using the existing `exceljs`;
+  - seeded with the Port Hills Dawn jersey at $30, using the cropped front and back images and zero stock until you enter it.
 - **Photos** (`/admin/photos`): the moderation queue (§7.2).
 - **Players** (`/admin/players`):
-  - accounts list and search;
+  - **Import members** (preview, then create accounts) and **Send welcome emails** (§4a);
+  - match the 16 mini game names to members;
+  - accounts list and search, with *Not signed in yet / Active since …*;
   - change email (updates Stripe too), merge duplicates;
   - attendance edits, mini game name and tier.
 - **Play days:** an attendance tick column.
@@ -404,23 +505,19 @@ For q.buzz itself, I need its API or webhook format before building a direct int
 
 ---
 
-## 12. Open questions (with recommended defaults)
+## 12. Decisions log
 
-1. ~~Phone codes~~: **decided**, email and SMS (Firebase) from day one.
-2. ~~Attendance~~: **decided**, court board (≥1 finished game), round robin, and admin ticks.
-3. ~~Round robin score~~: **decided**, RR points (2 per win), with ties broken by point difference.
-4. **Leaderboard privacy:** shown by default with an opt-out, or hidden by default with an opt-in? Show first name plus last initial, or the display name the player chooses? *Default: shown, opt-out, display name.*
-5. **Photo storage:** Vercel Blob now and move later if needed, or Cloudflare R2 from the start? *Default: Blob now.*
-6. **Jersey in the shop:**
-   - price;
-   - keep optional print name and number (+$5)?
-   - card payment through Stripe instead of bank transfer?
-   - pick up at a play day?
-   - starting stock per size and fit;
-   - a **women's size chart** is needed;
-   - the old registration offered S–XXL, while the shop will offer S–3XL.
-7. **Membership changes:** should upgrades apply at the **next renewal** (default) or immediately with a prorated charge? The retention offer is **decided: none**.
-8. **q.buzz:** is there an API or webhook spec to target, and which direction matters most first: sending our data out, or receiving their check-ins?
+| # | Question | Decision |
+|---|---|---|
+| 1 | Login codes | Email **and** SMS (Firebase) from day one |
+| 2 | Attendance | Court board (≥1 finished game), round robin, and admin ticks. Confirmed casual bookings count for older days with no saved board (§4a). |
+| 3 | Round robin score | RR points (2 per win), with ties broken by point difference |
+| 4 | Leaderboard privacy | Shown by default, opt-out in profile, display name |
+| 5 | Photo storage | Vercel Blob for now, R2 if it passes about 700 MB |
+| 6 | Jersey | $30, no customisation, card or cash at a play day, stock editable per size; **size charts to come from you** |
+| 7 | Upgrades | At the next renewal; no discount offer when cancelling |
+| 8 | q.buzz | No API yet; build the generic API, webhooks and MCP server, and add q.buzz later |
+| 9 | Existing members | Accounts created up front for every active member, with history backfilled from the database |
 
 ---
 
@@ -429,13 +526,13 @@ For q.buzz itself, I need its API or webhook format before building a direct int
 | Phase | Scope | Depends on |
 |---|---|---|
 | **0. Quick win** | Gallery lightbox **Download original** button | none |
-| **1. Accounts** | `players`, `auth_codes`, `player_sessions`, email-code login **and Firebase SMS login**, nav Log in and avatar, `/profile` shell, backfill of existing members, Account tab details including phone verification | Firebase project set up |
+| **1. Accounts** | `players`, `auth_codes`, `player_sessions`, email-code login **and Firebase SMS login**, nav Log in and avatar, `/profile` shell, Account tab details including phone verification. **Member import** (preview, create, link history), `ensurePlayerForEmail()` on every membership path, `/admin/players`, welcome emails (§4a) | Firebase project set up |
 | **2. Messaging** | Threads and messages, Account tab inbox, `/admin/inbox`, email notifications | 1 |
-| **3. Membership tab** | Plan status, upgrade and day change, step-by-step downgrade and cancel, auto-renew on/off, update card (Portal), invoices, calendar booking, "can't make it". Main site: remove the emailed cancel flow, require an account for membership sign-up, invite casual bookers to create an account | 1, Q7 |
-| **4. Shop** | Products, variants, orders, stock holds, Stripe checkout, `/admin/shop`, seeded jersey with cropped images, Financials category | 1, Q6 |
-| **5. Player stats and leaderboard** | Attendance capture from the board, mini game and admin; mini game roster moved to the database; `rr_results` with backfill; Player profile stats and charts; `/leaderboard` | 1, Q4 |
-| **6. Photos** | Upload, GPS removal, SafeSearch, admin queue and alerts, Gallery merge and credits, `/gallery` | 1, Q5 |
-| **7. Integrations** | `/api/v1`, tokens, webhooks, MCP server, iCal feed | 5, Q8 |
+| **3. Membership tab** | Plan status, upgrade and day change, step-by-step downgrade and cancel, auto-renew on/off, update card (Portal), invoices, calendar booking, "can't make it". Main site: remove the emailed cancel flow, require an account for membership sign-up, invite casual bookers to create an account | 1 |
+| **4. Shop** | Products, variants, orders, stock holds, Stripe checkout, `/admin/shop`, seeded jersey with cropped images, Financials category | 1 |
+| **5. Player stats and leaderboard** | Attendance capture from the board, mini game and admin; **attendance and round robin backfill for imported members**; **then send the welcome emails**; mini game roster moved to the database; `rr_results`; Player profile stats and charts; `/leaderboard` with opt-out | 1 |
+| **6. Photos** | Upload, GPS removal, SafeSearch, admin queue and alerts, Gallery merge and credits, `/gallery` | 1 |
+| **7. Integrations** | `/api/v1`, tokens, webhooks, MCP server, iCal feed. q.buzz is added later, once it has an API. | 5 |
 
 **Verification for every phase:**
 - `next build` and lint;

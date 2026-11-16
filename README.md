@@ -279,7 +279,7 @@ The profile is an installable web app: manifest, icons, a service worker that ca
 
 ### Photos (`/admin/photos`)
 
-- **Upload:** photos go straight from the browser to the public Blob store (`PHOTO_BLOB_READ_WRITE_TOKEN`). GPS data is removed from originals without re-compressing (`lib/exif-gps.ts`), and the display copy and thumbnail are made in the browser.
+- **Upload:** photos go straight from the browser to the public Blob store (connected with the prefix `PHOTO`, or `PHOTO_BLOB_READ_WRITE_TOKEN`). GPS data is removed from originals without re-compressing (`lib/exif-gps.ts`), and the display copy and thumbnail are made in the browser.
 - **Safety check:** Google Cloud Vision SafeSearch (`GOOGLE_VISION_ENABLED=1`, free for the first 1,000 images a month).
   - Adult, violence or racy rated LIKELY or above → blocked, and the admins are emailed.
   - POSSIBLE → held for review.

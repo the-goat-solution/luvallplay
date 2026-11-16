@@ -2,7 +2,7 @@ import { getCurrentPlayer } from "@/lib/player-auth";
 import { getPlayerStats } from "@/lib/stats-db";
 import { listPhotosForPlayer } from "@/lib/photos-db";
 import { listApiTokens, listWebhookEndpoints } from "@/lib/webhooks";
-import { publicBlobConfigured } from "@/lib/public-blob";
+import { publicBlobUploadMode } from "@/lib/public-blob";
 import { getSiteUrl } from "@/lib/email-layout";
 import { PlayerStatsView } from "@/components/profile/player/PlayerStatsView";
 import { PhotosPanel } from "@/components/profile/player/PhotosPanel";
@@ -27,7 +27,7 @@ export default async function PlayerPage() {
       </h1>
       <div className={styles.stack}>
         <PlayerStatsView stats={stats} leaderboardVisible={player.leaderboardVisible} />
-        <PhotosPanel photos={photos} playerId={player.id} enabled={publicBlobConfigured()} />
+        <PhotosPanel photos={photos} playerId={player.id} uploadMode={publicBlobUploadMode()} />
         <ConnectedApps tokens={tokens} webhooks={webhooks} siteUrl={getSiteUrl()} />
       </div>
     </>

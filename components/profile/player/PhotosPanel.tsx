@@ -23,7 +23,17 @@ const STATUS: Record<string, { key: ProfileKey; cls: string }> = {
  * copy and thumbnail made), uploaded straight to storage, then checked.
  * Uploads continue if the player switches app briefly.
  */
-export function PhotosPanel({ photos, playerId, enabled }: { photos: Photo[]; playerId: number; enabled: boolean }) {
+export function PhotosPanel({
+  photos,
+  playerId,
+  uploadMode,
+}: {
+  photos: Photo[];
+  playerId: number;
+  /** null: no public Blob store connected yet (see lib/public-blob.ts). */
+  uploadMode: "token" | "presigned" | null;
+}) {
+  const enabled = uploadMode !== null;
   const { tr } = useProfileT();
   const router = useRouter();
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -47,7 +57,12 @@ export function PhotosPanel({ photos, playerId, enabled }: { photos: Photo[]; pl
     setBusy(true);
     setJobs(files.map((f) => ({ name: f.name, preview: URL.createObjectURL(f), state: "preparing" })));
     // Loaded only when sharing, to keep the Player tab light.
-    const [{ upload }, { preparePhoto }] = await Promise.all([import("@vercel/blob/client"), import("./imagePrep")]);
+    const [blobClient, { preparePhoto }] = await Promise.all([import("@vercel/blob/client"), import("./imagePrep")]);
+    // Same route either way; it answers in the flavour the store is set up for.
+    // Multipart (for big originals) only with a client token: presigned
+    // uploads go up in one request, which Blob accepts up to the 25 MB cap.
+    const presigned = uploadMode === "presigned";
+    const upload = presigned ? blobClient.uploadPresigned : blobClient.upload;
     for (const [i, file] of files.entries()) {
       try {
         const prepared = await preparePhoto(file);
@@ -55,7 +70,7 @@ export function PhotosPanel({ photos, playerId, enabled }: { photos: Photo[]; pl
         const base = `photos/${playerId}/${Date.now()}-${i}`;
         const opts = { access: "public" as const, handleUploadUrl: "/api/profile/photos/upload" };
         const [original, display, thumb] = await Promise.all([
-          upload(`${base}-original.jpg`, prepared.original, { ...opts, multipart: prepared.original.size > 8 * 1024 * 1024 }),
+          upload(`${base}-original.jpg`, prepared.original, { ...opts, multipart: !presigned && prepared.original.size > 8 * 1024 * 1024 }),
           upload(`${base}-display.${prepared.display.type === "image/webp" ? "webp" : "jpg"}`, prepared.display, opts),
           upload(`${base}-thumb.${prepared.thumb.type === "image/webp" ? "webp" : "jpg"}`, prepared.thumb, opts),
         ]);

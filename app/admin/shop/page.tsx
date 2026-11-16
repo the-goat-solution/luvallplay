@@ -280,7 +280,7 @@ function ProductForm({ product }: { product: Product | null }) {
           Add a photo: <input name="upload" type="file" accept="image/*" />
         </label>
       ) : (
-        <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Photo uploads need PHOTO_BLOB_READ_WRITE_TOKEN (a public Blob store); until then paste image URLs.</p>
+        <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Photo uploads need the public Blob store (connected with the prefix PHOTO); until then paste image URLs.</p>
       )}
       <div>
         <SubmitButton loadingText="Saving…" style={btn}>

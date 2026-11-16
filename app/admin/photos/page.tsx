@@ -96,7 +96,7 @@ export default async function PhotosAdminPage({ searchParams }: { searchParams: 
       <p style={{ fontSize: 13, color: pct > 70 ? "#a12a2a" : "#666", marginTop: 0 }}>
         Storage used: {mb(used)} of the free 1 GB ({pct}%).
         {pct > 70 ? " Time to move photos to Cloudflare R2 (10 GB free) — see the README." : ""}
-        {!publicBlobConfigured() && " Photo sharing is off until PHOTO_BLOB_READ_WRITE_TOKEN is set."}
+        {!publicBlobConfigured() && " Photo sharing is off until the public Blob store is connected (prefix PHOTO)."}
         {process.env.GOOGLE_VISION_ENABLED !== "1" && " SafeSearch is off (GOOGLE_VISION_ENABLED), so every photo waits for review."}
       </p>
 

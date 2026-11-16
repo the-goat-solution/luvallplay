@@ -8,7 +8,7 @@ import { ensureStatsTables } from "./stats-db";
 import { ensurePhotoTables } from "./photos-db";
 import { ensureIntegrationTables } from "./webhooks";
 import { getRecaptchaSiteKey, getSmsUsage } from "./sms";
-import { publicBlobToken } from "./public-blob";
+import { PUBLIC_BLOB_SETUP_HINT, publicBlobAuth } from "./public-blob";
 import { getSiteUrl } from "./email-layout";
 
 // Live checks behind Admin → Setup check: each piece the player accounts
@@ -114,13 +114,14 @@ export async function runSetupChecks(): Promise<Check[]> {
   }
 
   // --- Photos ---------------------------------------------------------------
-  const blobToken = publicBlobToken();
+  const blobAuth = publicBlobAuth();
   checks.push(
-    !blobToken
-      ? { area: "Photos", name: "Photo storage", status: "off", detail: "Photo sharing is switched off (players see “not set up yet”). Shop photo uploads need it too.", fix: "Create a PUBLIC Blob store and set PHOTO_BLOB_READ_WRITE_TOKEN (setup guide, step 3)." }
+    !blobAuth
+      ? { area: "Photos", name: "Photo storage", status: "off", detail: "Photo sharing is switched off (players see “not set up yet”). Shop photo uploads need it too.", fix: PUBLIC_BLOB_SETUP_HINT }
       : await safe("Photos", "Photo storage", async () => {
-          await list({ token: blobToken, limit: 1 });
-          return { area: "Photos", name: "Photo storage", status: "ok", detail: "Connected to the photo Blob store. (It must be a Public store: a Private one fails on the first upload.)" };
+          await list({ ...blobAuth, limit: 1 });
+          const how = "token" in blobAuth ? "with PHOTO_BLOB_READ_WRITE_TOKEN" : "through the project connection (PHOTO_STORE_ID)";
+          return { area: "Photos", name: "Photo storage", status: "ok", detail: `Connected to the photo Blob store ${how}. (It must be a Public store: a Private one fails on the first upload.)` };
         }),
   );
   checks.push(

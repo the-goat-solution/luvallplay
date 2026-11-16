@@ -39,7 +39,7 @@ Vercel → your project → **Settings → Environment Variables**. Add each var
    - `CRON_SECRET`: Vercel sets it automatically for projects with cron jobs.
    - `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, and the four `STRIPE_PRICE_*` variables. Plan changes use the same prices as sign-up.
 
-3. **Leave these until steps 3–5:** `PHOTO_BLOB_READ_WRITE_TOKEN`, `GOOGLE_VISION_ENABLED`, `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`, `SMS_FREE_LIMIT_24H`.
+3. **Leave these until steps 3–5:** the photo store (step 3 adds `PHOTO_STORE_ID`), `GOOGLE_VISION_ENABLED`, `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`, `SMS_FREE_LIMIT_24H`.
 
 Environment variable changes only apply to new deployments. Merging redeploys anyway; if you add one later, use **Deployments → ⋯ → Redeploy**.
 
@@ -85,11 +85,11 @@ The site's existing Blob store is **private** (it holds receipts). Player photos
 
 1. Vercel → **Storage** → **Create Database / Store** → **Blob**.
 2. Name it `three-wolves-photos`. Set **Access: Public**. Choose the region closest to NZ if asked (Sydney).
-3. Click **Create**.
-4. **Important: don't connect it to the project with the default settings.** That would create a second `BLOB_READ_WRITE_TOKEN` and could replace the receipts store's token.
-5. Instead, open the new store → the **.env.local** tab (or **Settings**) → copy the value of `BLOB_READ_WRITE_TOKEN`. It starts with `vercel_blob_rw_`.
-6. In the project: **Settings → Environment Variables** → add **`PHOTO_BLOB_READ_WRITE_TOKEN`** = that value (Production and Preview).
-7. Redeploy. Setup check → Photos → **Photo storage: Working**.
+3. Click **Create**, then connect it to the `three-wolves-badminton` project (Production and Preview).
+4. **Important:** under **Advanced options**, set the **custom prefix** to **`PHOTO`**. Vercel then adds `PHOTO_STORE_ID` and `PHOTO_WEBHOOK_PUBLIC_KEY`, and the site signs in to the store with the deployment's own short-lived token. There's nothing to copy. Without the prefix, the variables would be named for the receipts store (`BLOB_…`), and receipts must stay in a private store.
+5. Redeploy. Setup check → Photos → **Photo storage: Working**.
+
+*Older stores that show a `BLOB_READ_WRITE_TOKEN` (starts with `vercel_blob_rw_`):* instead of connecting, you can add that value as **`PHOTO_BLOB_READ_WRITE_TOKEN`**. If both are set, the token wins. Local development needs the token, because only deployments get the short-lived one.
 
 **Free allowance:** 1 GB of storage and 10 GB of downloads a month. **Admin → Photos** shows how much is used. Past about 700 MB, ask me to move photos to Cloudflare R2 (10 GB free).
 
@@ -225,7 +225,7 @@ Do this on production with your own phone. Payments are real if you use live key
 | Sign-in email links go to the wrong site | Set `NEXT_PUBLIC_SITE_URL` (step 1) and redeploy. |
 | “Update card” shows an error | Customer portal not saved in this Stripe mode (step 2a). |
 | A plan change didn't take effect at renewal | Check the webhook events (step 2b). **Admin → Members → Sync with Stripe now** repairs dates. |
-| Photo upload fails immediately | `PHOTO_BLOB_READ_WRITE_TOKEN` missing, or the store is **Private**. Make a Public one (step 3). |
+| Photo upload fails immediately | The store isn't connected with the prefix `PHOTO` (no `PHOTO_STORE_ID`), the deployment predates the connection (redeploy), or the store is **Private**. Make a Public one (step 3). |
 | Every photo waits for review | The safety check is off or failing: Setup check → Photos (step 4). |
 | “Text me a code” doesn't appear | Not set up, switched off, or the free texts for the last 24 hours are used up (Admin → Players shows which). |
 | Text code fails with “Please complete the check” | Authorised domains (5d) or reCAPTCHA enforcement (end of step 5). |

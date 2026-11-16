@@ -466,21 +466,37 @@ Layouts respond to the **width the page actually has**: the screen, or a window 
 
 | Width (CSS px) | Typical devices | Layout |
 |---|---|---|
-| **< 600** | Phones in portrait; foldable outer screens; narrow iPad windows (Slide Over, ⅓ Split View) | One column, bottom tab bar, bottom sheets, full-width cards |
-| **Phones in landscape** (height < 500) | Phones turned sideways | Slimmer header and tab bar so content gets the height; landscape safe areas for the notch side |
-| **600–1023** | iPad mini / Air portrait, ½ Split View, **unfolded foldables** (iPhone Duo inner screen, Galaxy Z Fold, Pixel Fold) | **Two panes**: Account = thread list beside the open thread; Membership = plan card beside the calendar and shop; Player = 2–3 column stat grid with the heatmap full width. Tabs move to a top segmented bar; bottom sheets become centred dialogs. |
-| **≥ 1024** | iPad landscape, iPad Pro, Stage Manager windows, desktop | A left navigation rail and content up to 1,100 px wide, with a three-column stat grid |
+| **< 600, taller than wide** | Phones in portrait; narrow iPad windows (Slide Over, ⅓ Split View) | One column, bottom tab bar, bottom sheets, full-width cards |
+| **Wider than tall and short** (height < 500) | Phones in landscape; **iPhone Duo outer screen** (Apple: "wider and shorter than the display on other iPhone devices") | Slim header. **The tab bar becomes a vertical rail on the trailing (right) edge**, following Apple's iPhone Duo pattern. The stat grid uses **more columns and fewer rows**, so nothing important falls below the fold. Landscape safe areas apply on the camera side. |
+| **600–1023** | iPad mini / Air portrait, ½ Split View, **unfolded foldables** (iPhone Duo inner screen, Galaxy Z Fold, Pixel Fold) | **Two panes split 50/50**, with the gap between them on the centre line: Account = thread list beside the open thread; Membership = plan card beside the calendar and shop; Player = a **2 or 4 column** stat grid with the heatmap full width. On a portrait-shaped screen the tabs are a top segmented bar; on a landscape-shaped screen they're a trailing-edge rail. Bottom sheets become centred dialogs. |
+| **≥ 1024** | iPad landscape, iPad Pro, Stage Manager windows, desktop | A leading (left) sidebar, the usual iPad and desktop convention, with content up to 1,100 px wide and a **4-column** stat grid |
 
-**iPhone Duo (Apple's foldable):**
-- Reports describe a phone-sized **outer screen** and a nearly square **inner screen** (around 4:3).
-  - Folded, it gets the normal phone layout.
-  - Unfolded, the width puts it in the **two-pane tablet layout**.
-- Because the inner screen is close to square, the two-pane views are designed **not to depend on height or shape**:
-  - content widths are capped;
-  - charts and the podium keep their proportions;
-  - nothing is laid out for a tall, narrow screen only.
-- One report says Safari on the iPhone Duo gives pages between about **382 and 951 px** of width, depending on the screen and window. **I couldn't confirm those figures**, so the layouts don't rely on any exact number. They'll be re-checked against Apple's published sizes before the build is signed off.
-- Apple's foldable is reported to have no visible crease and shows one continuous screen, so nothing special is needed for the fold.
+Grids always use an **even number of columns** (2 or 4, never 3). That way, when a foldable is half-folded, content divides cleanly either side of the fold. This is Apple's iPhone Duo guidance and helps Android foldables too.
+
+**iPhone Duo (Apple's foldable)**
+Source: Apple's [Preparing your app for iPhone Duo](https://developer.apple.com/documentation/technologyoverviews/preparing-your-app-for-iphone-duo) and [Designing for iPhone Duo](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo) (HIG, 9 Sep 2026).
+
+What Apple says, and what it means for the profile:
+
+| Apple's guidance | How the profile follows it |
+|---|---|
+| A compact **outer display** that's "wider and shorter" than other iPhones, and a large **inner display**. "A compact width layout for the outer display and a regular width layout for the inner display give you the fundamentals for every pose." | **Folded:** the phone layout, reshaped for a wide, short screen (trailing rail, more columns, fewer rows). **Unfolded:** the two-pane layout. Both are chosen by the page's size, as Apple advises: *"Size your views relative to their container rather than to fixed iPhone dimensions"*. |
+| People use it "partially folded like a book, placed down on a surface, or standing on its edges." *"Avoid extreme layout changes as people fold the device."* | Folding and unfolding only adds or removes the second pane. Nothing else moves around. |
+| Split views "expand on the inner display and collapse to one pane on the outer display". *"Keep functionality and the state of elements the same between displays."* | **The page keeps its state when it changes size.** The open message thread, the checkout step, a half-typed message, the selected size and the scroll position all survive folding and unfolding. Example: with a thread open on the inner screen, folding the phone shows that same thread full screen on the outer screen, with ‹ Back to the list. |
+| Navigation controls move to a **vertical bar on the side**, on the trailing edge of the outer display. *"The exception is the inner display in portrait."* Controls stay consistent across poses. | The tab bar becomes a **trailing-edge rail** whenever the screen is landscape-shaped, and a **horizontal bar** on portrait-shaped screens, including the inner display in portrait. The same three tabs, in the same order, everywhere. Rail items always have **an icon and a label**; Apple notes title-only items aren't shown vertically. |
+| **Reserved regions:** the **outer front camera always covers part of the screen** (it grows into the Dynamic Island). The **inner front camera** covers part of the screen **only while it's in use**. **When partly open, the fold** splits the inner display. | **Cameras:** all edges respect the safe-area insets (`env(safe-area-inset-*)`), and no button sits in the top corners where the cameras are. **The fold:** two-pane layouts split exactly 50/50 with a **24 px or wider centre gap** and no content in it, so a half-open fold falls in the gap and never cuts through text or a button. |
+| In Split View on the inner display, each app puts its controls along its outer edge. | When the profile shares the inner screen with another app, it gets a narrower window. The width rules give it the phone layout, and the rail sits on its outer edge. |
+| *"Prefer changing the aspect ratio over letterboxing."* | Charts, the attendance heatmap and the leaderboard podium **resize to the space** rather than sitting in a fixed box with empty bars. |
+
+**What Apple doesn't document yet for websites:**
+- Apple's pages are about native apps. The fold and camera areas are reported to apps through native code only. Neither page says whether **Safari** shares the fold position with websites, for example through the Viewport Segments API that Android browsers support.
+- The WebKit blog and the Safari release notes, where this would be announced, couldn't be read from this session.
+- **The plan handles both cases:**
+  - **If Safari doesn't report the fold** (the assumption for now), the 50/50 split with a clear centre gap keeps content safe anyway.
+  - **If Safari does report it**, the same viewport-segments styles written for Android foldables (below) apply automatically.
+- **Real screen sizes:** Apple doesn't publish the CSS pixel sizes either (one unconfirmed report says about 382 to 951 px wide). So the build includes a small **admin-only "screen check" page** (`/admin/device-check`). It shows the page's width and height, safe-area insets, whether the fold is reported, and whether the page is running as a home-screen app.
+  - Opening it on an iPhone Duo, or in Xcode's iPhone Duo simulator on a Mac, gives the real numbers in one screenshot.
+  - Those numbers then go into the automated tests (§5a.7).
 
 **Android foldables:**
 - Chrome and Edge (version 138+) can report a physical fold or hinge through the **Viewport Segments API** (`horizontal-viewport-segments` / `vertical-viewport-segments`). This is used **only as an extra on browsers that support it**:
@@ -512,10 +528,11 @@ How it's met:
   - iPhone SE (375 × 667), iPhone 17 (402 × 874), iPhone 17 Pro Max (440 × 956), iPhone in landscape;
   - iPad mini (744 × 1133), iPad Air 11" (820 × 1180), iPad Pro 13" (1032 × 1376), iPad in ½ and ⅓ Split View widths;
   - Pixel (412 × 915), Galaxy Z Fold outer and inner screens, and Fold book posture with the viewport-segments emulation;
-  - the iPhone Duo outer and inner screens, using Apple's published viewport sizes once confirmed.
+  - the iPhone Duo outer screen (wide and short) and inner screen (near-square). These use the sizes read from `/admin/device-check` on the real device or Xcode's iPhone Duo simulator, plus a folded ↔ unfolded resize mid-flow to prove state is kept (open thread, checkout step, typed message).
 
   Each run includes the tap-target check, a Lighthouse mobile audit, and checks that the install overlay shows once, lasts 45 seconds and pauses on touch.
 - **On real devices before launch:** at least one iPhone with iOS 26, one Android phone, and an iPad if one is available, ideally from a few club members.
+  - **iPhone Duo:** on a club member's device, or in Xcode's iPhone Duo simulator (which runs real Safari) on any Mac. Check folded, unfolded, half-open like a book, and Split View on the inner screen.
   - Check adding to the home screen, sign-in inside the installed app, and SMS/email code autofill.
   - Check payment in Stripe test mode and photo upload from the camera.
 
@@ -703,7 +720,7 @@ A **personal iCal feed** of the player's upcoming play days is included almost f
 | 7 | Upgrades | At the next renewal; no discount offer when cancelling |
 | 8 | q.buzz | No API yet; build the generic API, webhooks and MCP server, and add q.buzz later |
 | 9 | Existing members | Accounts created up front for every active member, with history backfilled from the database |
-| 10 | Mobile | Installable app with a once-only, about 45-second "add to home screen" guide; touch-first design; layouts by width for phones, tablets, iPad multitasking and foldables, including the iPhone Duo (§5a) |
+| 10 | Mobile | Installable app with a once-only, about 45-second "add to home screen" guide; touch-first design; layouts by width for phones, tablets, iPad multitasking and foldables, including the iPhone Duo following Apple's iPhone Duo guidance (§5a.5) |
 
 ---
 
@@ -741,6 +758,8 @@ New env vars across all phases:
 - iOS 26 home screen web apps: https://www.macrumors.com/guide/ios-26-safari-features/ and https://heise.de/-10749652
 - Chrome installability criteria: https://developer.chrome.com/blog/update-install-criteria
 - Viewport Segments API (foldables): https://developer.chrome.com/blog/viewport-segments-api-shipped and https://developer.mozilla.org/en-US/docs/Web/CSS/@media/horizontal-viewport-segments
+- Apple, Preparing your app for iPhone Duo: https://developer.apple.com/documentation/technologyoverviews/preparing-your-app-for-iphone-duo
+- Apple HIG, Designing for iPhone Duo: https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo
 - iPhone Duo / foldable iPhone reports: https://www.macrumors.com/roundup/iphone-duo/ and https://www.macrumors.com/guide/foldable-iphone/
 - Identity Platform `accounts.sendVerificationCode`: https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/accounts/sendVerificationCode
 - Telegram Gateway: https://core.telegram.org/gateway

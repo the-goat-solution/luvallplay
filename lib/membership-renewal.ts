@@ -17,6 +17,13 @@ export function renewalUrl(token: string): string {
   return `${getSiteUrl()}/renew-membership?token=${encodeURIComponent(token)}`;
 }
 
+// Reminders now send members to their profile, where they can renew or turn
+// on auto-renew. The private token is still issued, so links in reminders
+// sent before accounts existed keep working (renewalUrl above).
+export function profileRenewalUrl(email: string): string {
+  return `${getSiteUrl()}/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent("/profile/membership")}`;
+}
+
 // Emails every active one-time membership ending within the next
 // RENEWAL_REMINDER_DAYS_BEFORE days that hasn't been reminded yet. Looking
 // at the whole window (not just exactly 5 days out) means a missed cron day
@@ -44,7 +51,7 @@ export async function sendRenewalReminders(): Promise<{
         plan: m.plan,
         day: m.day,
         periodEnd: m.periodEnd,
-        renewUrl: renewalUrl(token),
+        renewUrl: profileRenewalUrl(m.email),
       });
       sent++;
     } catch (err) {

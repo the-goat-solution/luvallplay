@@ -5,6 +5,7 @@ import { isSessionDatePaused } from "@/lib/day-requests";
 import { getWeekdayForDate } from "@/lib/dates";
 import { CASUAL_PRICE_CENTS, WEEKDAY_LABEL } from "@/lib/constants";
 import { getStripe } from "@/lib/stripe";
+import { getPlayerFromRequest } from "@/lib/player-auth";
 import {
   assertSessionBookable,
   checkRateLimit,
@@ -29,7 +30,11 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await request.json());
-    const turnstileOk = await verifyTurnstile(body.turnstileToken, ip);
+    // Casual play stays bookable without an account. A signed-in player
+    // books under their account email and skips the bot check.
+    const player = process.env.POSTGRES_URL ? await getPlayerFromRequest(request).catch(() => null) : null;
+    if (player) body.email = player.email;
+    const turnstileOk = player ? true : await verifyTurnstile(body.turnstileToken, ip);
     if (!turnstileOk) {
       return NextResponse.json({ error: "Captcha verification failed" }, { status: 403 });
     }

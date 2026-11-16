@@ -5,6 +5,7 @@ import { ensurePlayerTables } from "./player-db";
 import { getClubToday } from "./dates";
 import { computeStandings, type Match, type Score, type Team } from "./mini-game";
 import { PLAYER_NAMES } from "./mini-game-roster";
+import { emitToPlayers } from "./webhooks";
 
 // Player stats: play days attended and round robin results, for the Player
 // tab and the public leaderboard.
@@ -102,6 +103,9 @@ export async function recordAttendance(
      WHERE NOT attendance.removed OR EXCLUDED.source = 'admin';`,
     [date, source, verified, clean],
   );
+  if (verified && rowCount) {
+    await emitToPlayers(clean, "attendance.recorded", () => ({ date, source }));
+  }
   return rowCount ?? 0;
 }
 
@@ -211,6 +215,19 @@ export async function storeDrawResults(drawId: number): Promise<number> {
     [names],
   );
   await recordAttendance(date, linked.map((r) => r.email as string), "minigame");
+  const { rows: linkedNames } = await sql.query(
+    `SELECT email, minigame_name FROM players WHERE lower(minigame_name) = ANY($1::text[]) AND deleted_at IS NULL;`,
+    [names],
+  );
+  const nameByEmail = new Map(linkedNames.map((r) => [r.email as string, (r.minigame_name as string).toLowerCase()]));
+  await emitToPlayers([...nameByEmail.keys()], "round_robin.result", (email) => {
+    const name = nameByEmail.get(email);
+    const index = standings.findIndex((s) => s.team.players.some((p) => p.toLowerCase() === name));
+    const s = standings[index];
+    return s
+      ? { date, placing: index + 1, teams: standings.length, wins: s.won, losses: s.lost, rrPoints: s.points, pointsFor: s.pointsFor, pointsAgainst: s.pointsAgainst }
+      : { date };
+  });
   return written;
 }
 
@@ -631,4 +648,23 @@ export async function listAbsences(email: string, fromDate: string): Promise<str
     SELECT session_date::text AS d FROM player_absences WHERE email = ${email.trim().toLowerCase()} AND session_date >= ${fromDate};
   `;
   return rows.map((r) => r.d as string);
+}
+
+/** Just the streak and this month's attendance rank (for the Membership tab). */
+export async function getQuickStats(player: { id: number; email: string }): Promise<{ streak: number; monthRank: number | null }> {
+  if (!process.env.POSTGRES_URL) return { streak: 0, monthRank: null };
+  await ensureStatsTables();
+  const today = getClubToday().dateKey;
+  const [{ rows: att }, { rows: club }, { rows: abs }, board] = await Promise.all([
+    sql`SELECT session_date::text AS d FROM attendance WHERE email = ${player.email} AND verified AND NOT removed;`,
+    sql`SELECT date::text AS d FROM sessions WHERE date <= ${today};`,
+    sql`SELECT session_date::text AS d FROM player_absences WHERE email = ${player.email};`,
+    getLeaderboard("attendance", periodRange("month", today), player.id),
+  ]);
+  const attended = att.map((r) => r.d as string);
+  const clubDays = [...new Set([...club.map((r) => r.d as string), ...attended])].sort();
+  return {
+    streak: computeStreaks(attended, clubDays, abs.map((r) => r.d as string), today).current,
+    monthRank: board.find((r) => r.playerId === player.id)?.rank ?? null,
+  };
 }

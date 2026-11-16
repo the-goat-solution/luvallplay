@@ -2,16 +2,13 @@
 "use client";
 
 import { useLanguage } from "@/context/LanguageContext";
-import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
-import { CancelMembershipModal } from "@/components/modals/CancelMembershipModal";
 import type { Lang } from "@/lib/i18n";
 
 const FB_URL = "https://www.facebook.com/profile.php?id=61575583556969";
 
 export function Footer() {
   const { lang, setLang } = useLanguage();
-  const { setOpenModal } = useApp();
 
   const setLanguage = (l: Lang) => {
     setLang(l);
@@ -79,9 +76,10 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <button type="button" onClick={() => setOpenModal("cancel")}>
+                {/* Members manage (and cancel) their membership from their profile. */}
+                <a href="/profile/membership">
                   <Trans k="footer_cancel_membership" />
-                </button>
+                </a>
               </li>
             </ul>
           </div>
@@ -190,7 +188,6 @@ export function Footer() {
           <p className="footer-copy">Secured by Stripe · Christchurch, NZ</p>
         </div>
       </div>
-      <CancelMembershipModal />
     </footer>
   );
 }

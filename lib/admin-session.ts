@@ -70,7 +70,7 @@ export async function verifyAdminToken(
 
   // Reject anything that isn't exactly a sha256 hex digest before comparing,
   // and anything that isn't a plain integer expiry — same reasoning as
-  // verifyCancelToken in lib/security.ts.
+  // other signed tokens in this codebase.
   if (!/^[0-9a-f]{64}$/.test(signature)) return false;
   if (!/^\d+$/.test(payload)) return false;
 

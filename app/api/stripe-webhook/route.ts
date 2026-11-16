@@ -1,3 +1,6 @@
+import { getOrder, markOrderPaidByCard } from "@/lib/shop-db";
+import { notifyOrderPlaced, notifyOversold } from "@/lib/shop-notify";
+import { syncPlanFromSubscriptionMetadata } from "@/lib/membership-self-service";
 import { linkMemberAccount } from "@/lib/player-db";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
@@ -156,6 +159,14 @@ export async function POST(request: Request) {
       }
     }
 
+    if (pi.metadata?.type === "shop" && pi.metadata.orderId && process.env.POSTGRES_URL) {
+      const orderId = Number(pi.metadata.orderId);
+      const result = await markOrderPaidByCard(orderId);
+      const order = await getOrder(orderId);
+      if (order && result === "paid") await notifyOrderPlaced(order);
+      if (order && result === "oversold") await notifyOversold(order);
+    }
+
     if (pi.metadata?.type === "donation") {
       if (process.env.POSTGRES_URL) {
         await ensureTables();
@@ -189,6 +200,9 @@ export async function POST(request: Request) {
       // quarterly subscriptions (addFreeDaysBeforeNextCharge) — the member
       // is still a member while billing is deferred.
       const membershipStatus = sub.status === "trialing" ? "active" : sub.status;
+      // A plan/day change scheduled from the profile (lib/membership-
+      // self-service.ts) lands here as new subscription metadata.
+      await syncPlanFromSubscriptionMetadata(sub.id, sub.metadata);
       await sql`
         UPDATE memberships SET status = ${membershipStatus}, cancel_at_period_end = ${sub.cancel_at_period_end}
         WHERE stripe_subscription_id = ${sub.id};
@@ -245,8 +259,14 @@ export async function POST(request: Request) {
       // applyMembershipRenewal is idempotent against Stripe's at-least-once
       // webhook delivery via last_renewal_invoice_id.
       if (invoice.billing_reason === "subscription_cycle" && invoice.id) {
+        // If this renewal starts a scheduled plan change, switch the plan
+        // first so the renewal adds the new cycle length.
+        await syncPlanFromSubscriptionMetadata(
+          subId,
+          invoice.parent?.subscription_details?.metadata as Record<string, string> | undefined,
+        );
         await applyMembershipRenewal(subId, invoice.id);
-      } else if (activated?.periodStart && activated.periodEnd) {
+      } else if (activated?.periodStart && activated.periodEnd && activated.periodEnd >= activated.periodStart) {
         const { dateKey: clubToday } = getClubToday();
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,

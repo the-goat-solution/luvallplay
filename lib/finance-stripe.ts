@@ -95,6 +95,9 @@ function describeFromMetadata(
     const when = shortDate(meta.sessionDate);
     return { name: when ? `Casual session — ${when}` : "Casual session", category: "casual" };
   }
+  if (meta.type === "shop") {
+    return { name: meta.items ? `Shop — ${meta.items}` : "Shop order", category: "merchandise" };
+  }
   if (meta.type === "donation") {
     return { name: subscription ? "Monthly donation" : "Donation", category: "donation" };
   }

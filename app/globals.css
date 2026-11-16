@@ -74,6 +74,7 @@ button{font-family:var(--font-sans);cursor:pointer}
 .nav-links{display:flex;align-items:center;gap:32px;list-style:none}
 .nav-links a{color:rgba(255,255,255,.8);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;transition:color var(--ease)}
 .nav-links a:hover{color:var(--bronze-light)}
+.nav-links a.nav-account{color:var(--bronze-light)}
 .nav-actions{display:flex;align-items:center;gap:14px}
 .lang-toggle{display:flex;align-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-pill);overflow:hidden}
 .lang-btn{padding:5px 13px;font-size:12px;font-weight:700;color:rgba(255,255,255,.55);border:none;background:none;letter-spacing:.06em;transition:all var(--ease)}

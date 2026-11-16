@@ -1,0 +1,143 @@
+/* Even columns only (1, then 2), so a half-open foldable splits cleanly. */
+.grid {
+  display: grid;
+  gap: 18px;
+}
+@media (min-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.product {
+  display: grid;
+  gap: 14px;
+  background: var(--cream);
+  border-radius: 18px;
+  padding: 12px;
+}
+/* Wide-and-short screens (iPhone Duo outer display, phones in landscape) and
+   tablet widths: photo beside the details so the buy buttons stay visible. */
+@media (min-width: 600px), (orientation: landscape) and (max-height: 500px) {
+  .product {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.gallery {
+  position: relative;
+}
+.photos {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  border-radius: 14px;
+  background: #ecebe6;
+  scrollbar-width: none;
+}
+.photos::-webkit-scrollbar {
+  display: none;
+}
+.photos img {
+  flex: 0 0 100%;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  scroll-snap-align: center;
+}
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cfc9b6;
+}
+.dots .dotActive {
+  background: var(--navy);
+}
+.info {
+  padding: 4px 4px 6px;
+  min-width: 0;
+}
+.name {
+  margin: 0;
+  font-family: var(--font-display);
+  color: var(--navy);
+  font-size: 20px;
+  line-height: 1.25;
+}
+.price {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--bronze-dark);
+  margin: 6px 0 8px;
+}
+.segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 4px;
+}
+.segment button {
+  min-height: 44px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text-mid);
+  touch-action: manipulation;
+}
+.segment .segmentOn {
+  background: var(--navy);
+  color: #fff;
+}
+.sizes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.size {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  border-radius: 12px;
+  border: 1.5px solid #d6d0bd;
+  background: #fff;
+  font: inherit;
+  color: var(--text-dark);
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.size span {
+  font-weight: 800;
+  font-size: 16px;
+}
+.size small {
+  font-size: 11px;
+  color: var(--bronze-dark);
+  font-weight: 600;
+}
+.size:disabled {
+  opacity: 0.45;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+.size:disabled small {
+  text-decoration: none;
+  color: var(--text-light);
+}
+.sizeOn {
+  border-color: var(--bronze);
+  background: #fffaf0;
+  box-shadow: 0 0 0 2px rgba(196, 137, 42, 0.25);
+}

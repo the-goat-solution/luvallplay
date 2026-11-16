@@ -370,12 +370,14 @@
 }
 .stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 /* Two panes split exactly 50/50 with the gap on the centre line, so a
    half-open foldable's fold falls in the gap (Apple iPhone Duo guidance). */
 .split {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }

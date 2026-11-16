@@ -233,7 +233,7 @@ Plan and decisions: `docs/plans/player-profiles.md`.
   1. Create a Firebase project on the same Google Cloud project as the Calendar service account.
   2. Enable Phone sign-in, attach billing, and set the SMS region policy (NZ, AU, VN).
   3. Add a US$1 budget alert.
-  4. Set `FIREBASE_API_KEY` and `FIREBASE_PROJECT_ID`.
+  4. Set `FIREBASE_API_KEY`.
 
 ### Accounts for current members
 

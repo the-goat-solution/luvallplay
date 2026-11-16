@@ -39,7 +39,7 @@ Vercel → your project → **Settings → Environment Variables**. Add each var
    - `CRON_SECRET`: Vercel sets it automatically for projects with cron jobs.
    - `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, and the four `STRIPE_PRICE_*` variables. Plan changes use the same prices as sign-up.
 
-3. **Leave these until steps 3–5:** the photo store (step 3 adds `PHOTO_STORE_ID`), `GOOGLE_VISION_ENABLED`, `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`, `SMS_FREE_LIMIT_24H`.
+3. **Leave these until steps 3–5:** the photo store (step 3 adds `PHOTO_STORE_ID`), `GOOGLE_VISION_ENABLED`, `FIREBASE_API_KEY`, `SMS_FREE_LIMIT_24H`.
 
 Environment variable changes only apply to new deployments. Merging redeploys anyway; if you add one later, use **Deployments → ⋯ → Redeploy**.
 
@@ -146,7 +146,6 @@ Sports photos are occasionally rated “possible racy” (bare arms and legs). T
 
 **g. Vercel environment variables**
 - `FIREBASE_API_KEY` = the Web API Key
-- `FIREBASE_PROJECT_ID` = your Firebase project ID
 - `SMS_FREE_LIMIT_24H` = `10`
 
 Redeploy. Setup check → SMS → **Firebase key and reCAPTCHA: Working**.

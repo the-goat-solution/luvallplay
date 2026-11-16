@@ -162,7 +162,7 @@ They all share the one allowance. A text is counted when it's **sent**, whether 
   - **If it doesn't** (sending would have to happen in the browser with a public API key), the counter still controls everything our own pages do. To keep that safe, the API key gets an HTTP-referrer restriction to the club's domain, and Firebase **App Check** is turned on, so other sites and scripts can't use it.
   - I'll tell you which way it went before anything goes live.
 
-New env vars: `PLAYER_SESSION_SECRET`, `FIREBASE_API_KEY` (server-only), `FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`, `SMS_FREE_LIMIT_24H` (default 10).
+New env vars: `PLAYER_SESSION_SECRET`, `FIREBASE_API_KEY` (server-only), `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`, `SMS_FREE_LIMIT_24H` (default 10).
 
 ---
 

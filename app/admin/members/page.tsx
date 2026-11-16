@@ -28,6 +28,7 @@ import { MemberRetryButton } from "@/components/admin/MemberRetryButton";
 import { MemberFreeMonthButton } from "@/components/admin/MemberFreeMonthButton";
 import { MembersToastBridge } from "@/components/admin/MembersToastBridge";
 import { StripeSyncButton } from "@/components/admin/StripeSyncButton";
+import { ExportButton } from "@/components/admin/finance/ExportButton";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -423,6 +424,11 @@ export default async function MembersAdminPage() {
             <AdminLink href="/admin/play-days">Play days</AdminLink> page for a specific date.
           </p>
           <StripeSyncButton />
+          <div style={{ margin: "12px 0" }}>
+            <ExportButton href="/api/admin/players/export">
+              Download all players (Excel)
+            </ExportButton>
+          </div>
           {audit && audit.changed.length > 0 ? (
             <div
               role="status"

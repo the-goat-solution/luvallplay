@@ -148,6 +148,9 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
       </p>
       <AdminNav active="players" />
       <AdminToastBridge />
+      <p style={{ marginTop: 0, fontSize: 13 }}>
+        <AdminLink href="/admin/setup">Setup check →</AdminLink>
+      </p>
 
       <section style={card}>
         <h2 style={{ fontSize: 16, marginTop: 0 }}>1. Accounts for current members</h2>
@@ -415,6 +418,9 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
         </div>
       </section>
 
+      <p style={{ fontSize: 13, color: "#666" }}>
+        Setting up? <AdminLink href="/admin/setup">Setup check</AdminLink> tests email, Stripe, photo storage, the safety check and SMS live.
+      </p>
       <p style={{ fontSize: 13, color: "#666" }}>
         Testing on a new phone, tablet or foldable? Open <AdminLink href="/admin/device-check">Screen check</AdminLink> on it to see the sizes the website gets.
       </p>

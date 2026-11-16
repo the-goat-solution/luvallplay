@@ -216,6 +216,8 @@ Registration page for the Yonex club jersey (bank-transfer payment, one per pers
 
 ## Player accounts
 
+**Setting up after merging: follow `docs/SETUP-player-accounts.md`** (about 15 minutes, plus optional SMS and photo safety check). **Admin → Players → Setup check** (`/admin/setup`) tests every piece live.
+
 Plan and decisions: `docs/plans/player-profiles.md`.
 
 ### Sign-in (`/login`)

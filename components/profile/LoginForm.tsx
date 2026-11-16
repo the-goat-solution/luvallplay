@@ -61,6 +61,9 @@ export function LoginForm({
   const [sessionInfo, setSessionInfo] = useState<string | null>(null);
   const [phoneProof, setPhoneProof] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState("");
+  // Turnstile tokens are single-use: remount the widget after each send so
+  // "Send a new code" and retries get a fresh one.
+  const [turnstileKey, setTurnstileKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(
@@ -97,6 +100,8 @@ export function LoginForm({
     setBusy(true);
     const res = await postJson("/api/auth/email/start", { email: email.trim(), next, lang, turnstileToken });
     setBusy(false);
+    setTurnstileToken("");
+    setTurnstileKey((k) => k + 1);
     if (!res.ok) return showError(res.data.error as string);
     setMethod("email");
     setCode("");
@@ -204,7 +209,7 @@ export function LoginForm({
               required
             />
           </div>
-          <TurnstileWidget onToken={onTurnstile} />
+          <TurnstileWidget key={turnstileKey} onToken={onTurnstile} />
           <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy}>
             {busy ? "…" : tr("login_email_btn")}
           </button>
@@ -285,6 +290,11 @@ export function LoginForm({
           <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy}>
             {busy ? "…" : tr("login_verify_btn")}
           </button>
+          {method === "email" && (
+            <div style={{ marginTop: 12 }}>
+              <TurnstileWidget key={turnstileKey} onToken={onTurnstile} />
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
             {method === "sms" && !smsAvailable ? null : (
               <button type="button" className={styles.linkBtn} onClick={resend} disabled={busy}>

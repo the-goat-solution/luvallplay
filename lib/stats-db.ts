@@ -6,6 +6,16 @@ import { getClubToday } from "./dates";
 import { computeStandings, type Match, type Score, type Team } from "./mini-game";
 import { PLAYER_NAMES } from "./mini-game-roster";
 import { emitToPlayers } from "./webhooks";
+import { revalidateTag } from "next/cache";
+
+/** Refreshes the cached public leaderboard (no-op outside a request). */
+function refreshLeaderboard(): void {
+  try {
+    revalidateTag("leaderboard");
+  } catch {
+    // called outside a request (scripts/tests): nothing cached to refresh
+  }
+}
 
 // Player stats: play days attended and round robin results, for the Player
 // tab and the public leaderboard.
@@ -104,6 +114,7 @@ export async function recordAttendance(
     [date, source, verified, clean],
   );
   if (verified && rowCount) {
+    refreshLeaderboard();
     await emitToPlayers(clean, "attendance.recorded", () => ({ date, source }));
   }
   return rowCount ?? 0;
@@ -116,6 +127,7 @@ export async function removeAttendance(date: string, email: string): Promise<voi
     VALUES (${date}, ${email.trim().toLowerCase()}, 'admin', TRUE, TRUE)
     ON CONFLICT (session_date, email) DO UPDATE SET removed = TRUE, source = 'admin';
   `;
+  refreshLeaderboard();
 }
 
 export async function confirmAttendance(date: string, email: string): Promise<void> {
@@ -214,6 +226,7 @@ export async function storeDrawResults(drawId: number): Promise<number> {
     `SELECT email FROM players WHERE lower(minigame_name) = ANY($1::text[]) AND deleted_at IS NULL;`,
     [names],
   );
+  refreshLeaderboard();
   await recordAttendance(date, linked.map((r) => r.email as string), "minigame");
   const { rows: linkedNames } = await sql.query(
     `SELECT email, minigame_name FROM players WHERE lower(minigame_name) = ANY($1::text[]) AND deleted_at IS NULL;`,

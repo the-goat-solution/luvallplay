@@ -331,7 +331,11 @@ footer{background:var(--navy-dark);color:#fff;padding:80px 0 36px}
 /* ── Lightbox carousel ───────────────────────────────── */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 16px 16px;opacity:0;pointer-events:none;transition:opacity var(--ease)}
 .lightbox.open{opacity:1;pointer-events:all}
-.lightbox-close{position:absolute;top:18px;right:18px;background:rgba(255,255,255,.1);border:none;color:#fff;font-size:24px;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background var(--ease);z-index:1}
+.lb-toolbar{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));display:flex;align-items:center;gap:10px;z-index:1}
+.lb-download{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:var(--radius-pill);background:rgba(255,255,255,.12);color:#fff;font-family:var(--font-sans);font-size:13px;font-weight:600;letter-spacing:.02em;text-decoration:none;transition:background var(--ease);touch-action:manipulation}
+.lb-download:hover,.lb-download:active{background:var(--bronze)}
+.lb-credit{color:rgba(255,255,255,.75);font-size:13px;margin:10px 0 0;font-family:var(--font-sans)}
+.lightbox-close{background:rgba(255,255,255,.1);border:none;color:#fff;font-size:24px;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background var(--ease)}
 .lightbox-close:hover{background:rgba(255,255,255,.2)}
 .lb-carousel{display:flex;align-items:center;gap:14px;flex:1;min-height:0;width:100%;max-width:1080px}
 .lb-img-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden}

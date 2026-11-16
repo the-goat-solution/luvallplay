@@ -38,6 +38,16 @@ export type CmsAbout = {
 export type CmsGalleryImage = {
   src: string;
   alt?: LocaleString;
+  /** Small version for the lightbox thumbnail strip. */
+  thumb?: string;
+  /**
+   * Full-quality original, served as a download. Sanity's CDN sends it with
+   * Content-Disposition: attachment when the URL carries `?dl=`; a plain
+   * <a download> wouldn't work because the image is on another origin.
+   */
+  downloadUrl?: string;
+  /** "📷 Name" credit for photos shared by players. */
+  credit?: string;
 };
 
 export type CmsScheduleSettings = {
@@ -117,7 +127,14 @@ export async function fetchGallery(): Promise<CmsGalleryImage[] | null> {
   const images: CmsGalleryImage[] = [];
   for (const row of rows) {
     const src = imageUrl(row.image);
-    if (src) images.push({ src, alt: row.alt });
+    if (!src || !row.image) continue;
+    const original = urlFor(row.image).url();
+    images.push({
+      src,
+      alt: row.alt,
+      thumb: urlFor(row.image).width(200).height(200).fit("crop").auto("format").url(),
+      downloadUrl: `${original}${original.includes("?") ? "&" : "?"}dl=`,
+    });
   }
   return images.length > 0 ? images : null;
 }

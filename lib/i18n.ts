@@ -54,6 +54,8 @@ const I18N = {
     gal_h: "On the Courts",
     gal_sub: "Moments from our weekly sessions at Graham Condon.",
     gal_view: "View Photo",
+    gal_download: "Download original",
+    gal_photo_by: "Photo by {name}",
     mem_lbl: "Membership",
     mem_h: "Choose Your Commitment",
     mem_sub:
@@ -301,6 +303,8 @@ const I18N = {
     gal_h: "Trên Sân Cầu",
     gal_sub: "Những khoảnh khắc từ các buổi tập tại Graham Condon.",
     gal_view: "Xem Ảnh",
+    gal_download: "Tải ảnh gốc",
+    gal_photo_by: "Ảnh của {name}",
     mem_lbl: "Hội Viên",
     mem_h: "Chọn Gói Phù Hợp",
     mem_sub:

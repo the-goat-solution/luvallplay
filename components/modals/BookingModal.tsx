@@ -33,6 +33,9 @@ export function BookingModal() {
   const [errors, setErrors] = useState<ContactErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const showSubmitting = useDelayedLoading(submitting);
+  // Casual play stays a guest checkout; a signed-in player's details are
+  // simply filled in for them.
+  const [signedIn, setSignedIn] = useState(false);
 
   const close = () => {
     setOpenModal(null);
@@ -49,6 +52,25 @@ export function BookingModal() {
       setStep(1);
       setErrors({});
     }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/api/profile/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((me: { signedIn: boolean; firstName?: string; lastName?: string; email?: string; phone?: string }) => {
+        if (cancelled || !me.signedIn) return;
+        setSignedIn(true);
+        setFn((v) => v || me.firstName || "");
+        setLn((v) => v || me.lastName || "");
+        setEmail(me.email ?? "");
+        setPhone((v) => v || me.phone || "");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   const createIntent = async () => {
@@ -82,13 +104,16 @@ export function BookingModal() {
       return;
     }
     if (step === 2) {
-      const result = validateContact({
-        firstName: fn,
-        lastName: ln,
-        email,
-        phone,
-        turnstileToken,
-      });
+      const result = validateContact(
+        {
+          firstName: fn,
+          lastName: ln,
+          email,
+          phone,
+          turnstileToken,
+        },
+        signedIn ? { requireTurnstile: false } : undefined,
+      );
       if (!result.ok) {
         setErrors(result.errors);
         return;
@@ -172,7 +197,18 @@ export function BookingModal() {
       {step === 2 && (
         <div>
           <StepHeading titleKey="step_details" />
+          {signedIn ? (
+            <p style={{ fontSize: 13, color: "var(--text-mid)", marginBottom: 12 }}>✓ {tr("acct_signed_in", { email })}</p>
+          ) : (
+            <p style={{ fontSize: 13, marginBottom: 12 }}>
+              <a href="/login?next=/profile/membership" style={{ color: "var(--bronze-dark)", fontWeight: 600 }}>
+                {tr("acct_login_prefill")}
+              </a>
+            </p>
+          )}
           <ContactDetailsForm
+            emailReadOnly={signedIn}
+            showTurnstile={!signedIn}
             firstName={fn}
             lastName={ln}
             email={email}
@@ -253,6 +289,18 @@ export function BookingModal() {
             <br />
             📍 {sessionInfo?.eventLocation || "Graham Condon Recreation and Sport Centre"}
           </div>
+          {!signedIn && (
+            <div className="success-detail" style={{ marginTop: 14, textAlign: "left" }}>
+              <strong>{tr("acct_create_cta_title")}</strong>
+              <br />
+              <span style={{ fontSize: 13 }}>{tr("acct_create_cta_body")}</span>
+              <div style={{ marginTop: 10 }}>
+                <a className="btn btn-primary" href={`/login?email=${encodeURIComponent(email.trim())}&next=/profile`}>
+                  {tr("acct_create_cta_btn")}
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </ModalShell>

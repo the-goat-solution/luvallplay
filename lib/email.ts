@@ -119,42 +119,6 @@ export async function sendRosterEmail(
   });
 }
 
-export async function sendCancellationLinkEmail(
-  to: string,
-  planLabel: string,
-  confirmUrl: string,
-): Promise<void> {
-  const from = process.env.EMAIL_FROM;
-  if (!from) {
-    throw new Error("EMAIL_FROM is not configured");
-  }
-
-  const bodyHtml = `
-    ${heading("Confirm your cancellation")}
-    ${paragraph(`We're sorry to see you go! We received a request to cancel your <strong>${escapeHtml(planLabel)}</strong> membership at Three Wolves Badminton Club.`)}
-    ${ctaButton("Confirm cancellation", confirmUrl)}
-    ${paragraph("This link expires in 24 hours. If you didn't request this, no action needed — you can safely ignore this email and your membership will stay active.")}
-    ${contactFooterNote()}
-  `;
-  const text = [
-    `We're sorry to see you go! We received a request to cancel your ${planLabel} membership at Three Wolves Badminton Club.`,
-    "",
-    `Confirm your cancellation: ${confirmUrl}`,
-    "",
-    "This link expires in 24 hours. If you didn't request this, no action needed — you can ignore this email and your membership will stay active.",
-    "",
-    contactFooterNoteText(),
-  ].join("\n");
-
-  await getResend().emails.send({
-    from: withDisplayName(from),
-    to,
-    subject: "Confirm your membership cancellation — Three Wolves Badminton Club",
-    html: renderEmailLayout({ title: "Confirm your cancellation", bodyHtml }),
-    text,
-  });
-}
-
 export async function sendWaitlistConfirmationEmail(
   to: string,
   name: string,
@@ -433,16 +397,21 @@ export async function sendCasualBookingConfirmationEmail(
     ? `at ${input.sessionTime}, ${location}`
     : location;
 
+  const accountUrl = `${getSiteUrl()}/login?email=${encodeURIComponent(to)}&next=/profile`;
   const bodyHtml = `
     ${heading("You're confirmed!")}
     ${paragraph(`Hi ${escapeHtml(input.firstName)}, you're booked in for play on <strong>${escapeHtml(displayDate)}</strong>, ${whenWhere}.`)}
     ${paragraph("Grab your racket and we'll see you on court!")}
+    ${paragraph("<strong>Make it yours:</strong> create a free Three Wolves account to track your play days, climb the leaderboard and share photos. One tap, no password.")}
+    ${ctaButton("Create my account", accountUrl)}
     ${contactFooterNote()}
   `;
   const text = [
     `Hi ${input.firstName}, you're booked in for play on ${displayDate}, ${whenWhereText}.`,
     "",
     "Grab your racket and we'll see you on court!",
+    "",
+    `Create a free Three Wolves account (track your play days, climb the leaderboard, share photos): ${accountUrl}`,
     "",
     contactFooterNoteText(),
   ].join("\n");

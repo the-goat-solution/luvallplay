@@ -59,6 +59,13 @@ export function MembershipModal({
   const [blockedDay, setBlockedDay] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const showSubmitting = useDelayedLoading(submitting);
+  // Joining needs a Three Wolves account. A signed-in player's details are
+  // filled in (email locked); anyone else confirms their email with a code
+  // on the details step, which creates the account.
+  const [account, setAccount] = useState<{ checked: boolean; signedIn: boolean }>({ checked: false, signedIn: false });
+  const [codeStep, setCodeStep] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState(false);
 
   const close = () => {
     setOpenModal(null);
@@ -73,8 +80,32 @@ export function MembershipModal({
   };
 
   useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/api/profile/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((me: { signedIn: boolean; firstName?: string; lastName?: string; email?: string; phone?: string }) => {
+        if (cancelled) return;
+        setAccount({ checked: true, signedIn: me.signedIn });
+        if (me.signedIn) {
+          setFn((v) => v || me.firstName || "");
+          setLn((v) => v || me.lastName || "");
+          setEmail(me.email ?? "");
+          setPhone((v) => v || me.phone || "");
+        }
+      })
+      .catch(() => !cancelled && setAccount({ checked: true, signedIn: false }));
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
+      setCodeStep(false);
+      setCode("");
+      setCodeError(false);
       setStep(1);
       setRecurring(true);
       setErrors({});
@@ -198,19 +229,80 @@ export function MembershipModal({
       openCasualModal();
       return;
     }
+    if (step === 1 && account.signedIn && fn.trim() && ln.trim() && phone.trim() && isMembershipPlan(selectedPlan)) {
+      setSubmitting(true);
+      try {
+        await createSubscription();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "Error");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+    if (step === 2 && !account.signedIn && codeStep) {
+      setSubmitting(true);
+      setCodeError(false);
+      try {
+        const verify = await fetch("/api/auth/email/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+        });
+        if (!verify.ok) {
+          setCodeError(true);
+          return;
+        }
+        await fetch("/api/profile/details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ firstName: fn.trim(), lastName: ln.trim(), phone: phone.trim() || null, lang }),
+        });
+        setAccount({ checked: true, signedIn: true });
+        await createSubscription();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "Error");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     if (step === 2) {
-      const result = validateContact({
-        firstName: fn,
-        lastName: ln,
-        email,
-        phone,
-        turnstileToken,
-      });
+      const result = validateContact(
+        {
+          firstName: fn,
+          lastName: ln,
+          email,
+          phone,
+          turnstileToken,
+        },
+        account.signedIn ? { requireTurnstile: false } : undefined,
+      );
       if (!result.ok) {
         setErrors(result.errors);
         return;
       }
       setErrors({});
+      if (isMembershipPlan(selectedPlan) && !account.signedIn) {
+        // Confirm the email (this creates the account), then pay.
+        setSubmitting(true);
+        try {
+          const res = await fetch("/api/auth/email/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email.trim(), lang, turnstileToken: turnstileToken || undefined, next: "/profile/membership" }),
+          });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error === "too_many" ? "Too many codes requested. Please wait a few minutes." : "Couldn't send the code. Please check your email address.");
+          setCode("");
+          setCodeError(false);
+          setCodeStep(true);
+        } catch (e) {
+          alert(e instanceof Error ? e.message : "Error");
+        } finally {
+          setSubmitting(false);
+        }
+        return;
+      }
       if (isMembershipPlan(selectedPlan)) {
         setSubmitting(true);
         try {
@@ -227,6 +319,10 @@ export function MembershipModal({
   };
 
   const back = () => {
+    if (step === 2 && codeStep) {
+      setCodeStep(false);
+      return;
+    }
     if (step > 1) setStep(step - 1);
   };
 
@@ -393,10 +489,57 @@ export function MembershipModal({
               )}
             </div>
           )}
-          {step === 2 && (
+          {step === 2 && codeStep && (
             <div>
               <StepHeading titleKey="step_details" />
+              <h4 style={{ fontFamily: "var(--font-display)", color: "var(--navy)", fontSize: 17, margin: "0 0 6px" }}>{tr("acct_heading")}</h4>
+              <p style={{ fontSize: 13.5, color: "var(--text-mid)", marginBottom: 14, lineHeight: 1.55 }}>
+                {tr("acct_code_sent", { email: email.trim() })}
+              </p>
+              <div className="form-group">
+                <label className="form-label" htmlFor="acct-code">
+                  {tr("acct_code_label")}
+                </label>
+                <input
+                  id="acct-code"
+                  className="form-input"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                    setCodeError(false);
+                  }}
+                  style={{ fontSize: 24, letterSpacing: "0.4em", textAlign: "center" }}
+                />
+                {codeError && (
+                  <p className="form-hint" style={{ color: "var(--bronze-dark)" }}>
+                    {tr("acct_code_invalid")}
+                  </p>
+                )}
+              </div>
+              <p style={{ fontSize: 12.5, color: "var(--text-light)" }}>{tr("acct_why")}</p>
+            </div>
+          )}
+          {step === 2 && !codeStep && (
+            <div>
+              <StepHeading titleKey="step_details" />
+              {account.signedIn ? (
+                <p style={{ fontSize: 13, color: "var(--text-mid)", marginBottom: 12 }}>
+                  ✓ {tr("acct_signed_in", { email })}
+                </p>
+              ) : (
+                <p style={{ fontSize: 13, color: "var(--text-mid)", marginBottom: 12, lineHeight: 1.55 }}>
+                  {tr("acct_why")}{" "}
+                  <a href="/login?next=/profile/membership" style={{ color: "var(--bronze-dark)", fontWeight: 600 }}>
+                    {tr("acct_login_prefill")}
+                  </a>
+                </p>
+              )}
               <ContactDetailsForm
+                emailReadOnly={account.signedIn}
+                showTurnstile={!account.signedIn}
                 firstName={fn}
                 lastName={ln}
                 email={email}

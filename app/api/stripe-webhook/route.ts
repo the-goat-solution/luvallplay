@@ -1,3 +1,7 @@
+import { getOrder, markOrderPaidByCard } from "@/lib/shop-db";
+import { notifyOrderPlaced, notifyOversold } from "@/lib/shop-notify";
+import { syncPlanFromSubscriptionMetadata } from "@/lib/membership-self-service";
+import { linkMemberAccount } from "@/lib/player-db";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { sql } from "@vercel/postgres";
@@ -129,6 +133,14 @@ export async function POST(request: Request) {
 
     if (pi.metadata?.type === "membership" && process.env.POSTGRES_URL) {
       const activated = await activateMembershipByPaymentIntentId(pi.id);
+      if (activated) {
+        await linkMemberAccount(activated.email, {
+          firstName: activated.firstName,
+          lastName: activated.lastName,
+          phone: activated.phone,
+          stripeCustomerId: typeof pi.customer === "string" ? pi.customer : (pi.customer?.id ?? null),
+        });
+      }
       if (activated?.periodStart && activated.periodEnd) {
         const { dateKey: clubToday } = getClubToday();
         await sendMembershipConfirmationEmail(activated.email, {
@@ -145,6 +157,14 @@ export async function POST(request: Request) {
           console.error("Failed to send membership confirmation email", err),
         );
       }
+    }
+
+    if (pi.metadata?.type === "shop" && pi.metadata.orderId && process.env.POSTGRES_URL) {
+      const orderId = Number(pi.metadata.orderId);
+      const result = await markOrderPaidByCard(orderId);
+      const order = await getOrder(orderId);
+      if (order && result === "paid") await notifyOrderPlaced(order);
+      if (order && result === "oversold") await notifyOversold(order);
     }
 
     if (pi.metadata?.type === "donation") {
@@ -180,6 +200,9 @@ export async function POST(request: Request) {
       // quarterly subscriptions (addFreeDaysBeforeNextCharge) — the member
       // is still a member while billing is deferred.
       const membershipStatus = sub.status === "trialing" ? "active" : sub.status;
+      // A plan/day change scheduled from the profile (lib/membership-
+      // self-service.ts) lands here as new subscription metadata.
+      await syncPlanFromSubscriptionMetadata(sub.id, sub.metadata);
       await sql`
         UPDATE memberships SET status = ${membershipStatus}, cancel_at_period_end = ${sub.cancel_at_period_end}
         WHERE stripe_subscription_id = ${sub.id};
@@ -219,6 +242,14 @@ export async function POST(request: Request) {
       // finds the membership already 'active' and returns null, so it
       // never re-triggers the welcome email below.
       const activated = await activateMembershipBySubscriptionId(subId);
+      if (activated) {
+        await linkMemberAccount(activated.email, {
+          firstName: activated.firstName,
+          lastName: activated.lastName,
+          phone: activated.phone,
+          stripeCustomerId: typeof invoice.customer === "string" ? invoice.customer : (invoice.customer?.id ?? null),
+        });
+      }
       await sql`
         UPDATE donations SET status = 'active'
         WHERE stripe_subscription_id = ${subId};
@@ -228,8 +259,14 @@ export async function POST(request: Request) {
       // applyMembershipRenewal is idempotent against Stripe's at-least-once
       // webhook delivery via last_renewal_invoice_id.
       if (invoice.billing_reason === "subscription_cycle" && invoice.id) {
+        // If this renewal starts a scheduled plan change, switch the plan
+        // first so the renewal adds the new cycle length.
+        await syncPlanFromSubscriptionMetadata(
+          subId,
+          invoice.parent?.subscription_details?.metadata as Record<string, string> | undefined,
+        );
         await applyMembershipRenewal(subId, invoice.id);
-      } else if (activated?.periodStart && activated.periodEnd) {
+      } else if (activated?.periodStart && activated.periodEnd && activated.periodEnd >= activated.periodStart) {
         const { dateKey: clubToday } = getClubToday();
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
@@ -261,6 +298,13 @@ export async function POST(request: Request) {
       const activated = await activateMembershipByPaymentIntentId(
         `cash-invoice-${invoice.id}`,
       );
+      if (activated) {
+        await linkMemberAccount(activated.email, {
+          firstName: activated.firstName,
+          lastName: activated.lastName,
+          phone: activated.phone,
+        }, "admin");
+      }
       if (activated?.periodStart && activated.periodEnd) {
         const { dateKey: clubToday } = getClubToday();
         await sendMembershipConfirmationEmail(activated.email, {

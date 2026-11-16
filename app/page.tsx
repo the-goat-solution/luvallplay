@@ -18,6 +18,7 @@ import {
   fetchScheduleSettings,
   fetchPricingPlans,
 } from "@/lib/sanity-queries";
+import { buildGalleryPool } from "@/lib/gallery-pool";
 
 export const revalidate = 60;
 
@@ -49,6 +50,8 @@ export default async function HomePage() {
   ]);
 
   const calendarSubscribe = getCalendarSubscribeLinks(process.env.GOOGLE_CALENDAR_ID);
+  // Club photos plus approved player photos (see lib/gallery-pool.ts).
+  const galleryPool = await buildGalleryPool(gallery);
 
   return (
     <SignupPauseProvider pausedDays={pausedDays}>
@@ -62,13 +65,13 @@ export default async function HomePage() {
         scheduleSettings={scheduleSettings ?? undefined}
         calendarSubscribe={calendarSubscribe}
       />
-      <Gallery images={gallery ?? undefined} />
+      <Gallery images={galleryPool} />
       <Membership pricingPlans={pricingPlans ?? undefined} />
       <Reviews googleReviewUrl={siteSettings?.googleReviewUrl} />
       <Donate />
       <Footer />
       <ClientShell
-        galleryImages={gallery ?? undefined}
+        galleryImages={galleryPool}
         pricingPlans={pricingPlans ?? undefined}
       />
     </SignupPauseProvider>

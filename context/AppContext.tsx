@@ -16,7 +16,6 @@ type ModalId =
   | "waitlist"
   | "dayRequest"
   | "donate"
-  | "cancel"
   | null;
 
 type SessionDateInfo = {

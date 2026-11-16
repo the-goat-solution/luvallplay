@@ -19,9 +19,13 @@ const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 function PaymentFormInner({
   amountLabel,
   onSuccess,
+  mode,
+  returnPath,
 }: {
   amountLabel: string;
-  onSuccess: () => void;
+  onSuccess: (intentId?: string) => void;
+  mode: "payment" | "setup";
+  returnPath: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -36,21 +40,34 @@ function PaymentFormInner({
     setLoading(true);
     setError(null);
 
-    const { error: submitError } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/?payment=success`,
-      },
-      redirect: "if_required",
-    });
+    // "setup" saves a card for later (e.g. switching to auto-renew) without
+    // charging anything now.
+    const result =
+      mode === "setup"
+        ? await stripe.confirmSetup({
+            elements,
+            confirmParams: { return_url: `${window.location.origin}${returnPath}` },
+            redirect: "if_required",
+          })
+        : await stripe.confirmPayment({
+            elements,
+            confirmParams: { return_url: `${window.location.origin}${returnPath}` },
+            redirect: "if_required",
+          });
 
-    if (submitError) {
-      setError(submitError.message ?? "Payment failed");
+    if (result.error) {
+      setError(result.error.message ?? "Payment failed");
       setLoading(false);
       return;
     }
 
-    onSuccess();
+    const intentId =
+      "setupIntent" in result && result.setupIntent
+        ? result.setupIntent.id
+        : "paymentIntent" in result && result.paymentIntent
+          ? result.paymentIntent.id
+          : undefined;
+    onSuccess(intentId);
     setLoading(false);
   };
 
@@ -90,10 +107,15 @@ export function StripeCardForm({
   clientSecret,
   amountLabel,
   onSuccess,
+  mode = "payment",
+  returnPath = "/?payment=success",
 }: {
   clientSecret: string | null;
   amountLabel: string;
-  onSuccess: () => void;
+  onSuccess: (intentId?: string) => void;
+  mode?: "payment" | "setup";
+  /** Where Stripe sends the player back after a bank redirect (rare). */
+  returnPath?: string;
 }) {
   const { tr } = useLanguage();
 
@@ -119,7 +141,7 @@ export function StripeCardForm({
         },
       }}
     >
-      <PaymentFormInner amountLabel={amountLabel} onSuccess={onSuccess} />
+      <PaymentFormInner amountLabel={amountLabel} onSuccess={onSuccess} mode={mode} returnPath={returnPath} />
     </Elements>
   );
 }

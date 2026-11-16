@@ -253,6 +253,27 @@ async function ensureTablesImpl() {
       ON session_fill_ins (session_date, booking_id)
       WHERE booking_id IS NOT NULL;
   `;
+  // A member saying "Can't make it" for one play day (profile Membership
+  // tab). They don't count toward that day's headcount or roster, so their
+  // spot opens up for a casual player.
+  await sql`
+    CREATE TABLE IF NOT EXISTS player_absences (
+      session_date DATE NOT NULL,
+      email TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (session_date, email)
+    );
+  `;
+}
+
+// A member who said they can't make that play day (see player_absences).
+// `dateExpr` / `alias` as for membershipCoversDateSql.
+export function memberNotAbsentSql(dateExpr: string, alias = ""): string {
+  const c = alias ? `${alias}.` : "";
+  return `NOT EXISTS (
+    SELECT 1 FROM player_absences pa
+    WHERE pa.session_date = ${dateExpr} AND pa.email = lower(trim(${c}email))
+  )`;
 }
 
 // Whether a `memberships` row grants access to a given play day.
@@ -403,6 +424,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
        FROM unnest($1::date[], $2::text[]) AS t(d, day)
        LEFT JOIN memberships m
          ON m.status = 'active' AND m.day = t.day AND ${membershipCoversDateSql("t.d", "m")}
+           AND ${memberNotAbsentSql("t.d", "m")}
        GROUP BY t.d;`,
       [dates, membershipDays],
     ),
@@ -484,6 +506,7 @@ export async function reserveBookingSlot(
          WHERE status = 'active'
            AND day = CASE EXTRACT(DOW FROM sessions.date) WHEN 5 THEN 'friday' WHEN 3 THEN 'wednesday' END
            AND ${membershipCoversDateSql("$1")}
+           AND ${memberNotAbsentSql("$1::date")}
        );`,
     [date, SESSION_CAPACITY],
   );
@@ -840,7 +863,8 @@ export async function getActiveMemberCountForDate(
   if (!day) return 0;
   const { rows } = await sql.query(
     `SELECT COUNT(*)::int AS count FROM memberships
-     WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")};`,
+     WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
+       AND ${memberNotAbsentSql("$1::date")};`,
     [date, day],
   );
   return (rows[0] as { count: number })?.count ?? 0;
@@ -1088,6 +1112,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
                 recurring, cancel_at_period_end, stripe_payment_intent_id
          FROM memberships
          WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
+           AND ${memberNotAbsentSql("$1::date")}
          ORDER BY created_at ASC;`,
         [date, rosterDay],
       )
@@ -1415,7 +1440,8 @@ export async function getMembersWithPlayDayTomorrow(
     `SELECT id, email, first_name, plan, day,
             ${projectedPeriodEndSql("$1")}::text AS period_end
      FROM memberships
-     WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")};`,
+     WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
+       AND ${memberNotAbsentSql("$1::date")};`,
     [date, membershipDay],
   );
   return rows.map((r) => {

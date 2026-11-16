@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /jersey too */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
@@ -13,6 +13,14 @@ export function Navigation() {
   const { lang, setLang } = useLanguage();
   const { openMembershipModal } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // A readable hint cookie (no secret) set at sign-in, so the header can say
+  // "My profile" without asking the server.
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    setSignedIn(document.cookie.split(";").some((c) => c.trim().startsWith("tw_signed_in=1")));
+  }, []);
+  const accountLabel = signedIn ? (lang === "vi" ? "Hồ sơ" : "My profile") : lang === "vi" ? "Đăng nhập" : "Log in";
+  const accountHref = signedIn ? "/profile" : "/login";
 
   const setLanguage = (l: Lang) => {
     setLang(l);
@@ -66,7 +74,15 @@ export function Navigation() {
                 <a href="/#reviews">Reviews</a>
               </li>
               <li>
+                <a href="/leaderboard">{lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}</a>
+              </li>
+              <li>
                 <a href="/jersey">Jersey</a>
+              </li>
+              <li>
+                <a href={accountHref} className="nav-account">
+                  {accountLabel}
+                </a>
               </li>
             </ul>
             <div className="nav-actions">
@@ -141,8 +157,14 @@ export function Navigation() {
         <a href="/#membership" onClick={closeMobile}>
           <Trans k="nav_membership" />
         </a>
+        <a href="/leaderboard" onClick={closeMobile}>
+          {lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}
+        </a>
         <a href="/jersey" onClick={closeMobile}>
           Jersey
+        </a>
+        <a href={accountHref} onClick={closeMobile}>
+          {accountLabel}
         </a>
         <button
           type="button"

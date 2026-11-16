@@ -1,0 +1,313 @@
+.page {
+  background: var(--cream);
+  min-height: 100dvh;
+  font-family: var(--font-sans);
+}
+.hero {
+  background: radial-gradient(120% 90% at 50% 0%, var(--navy-mid) 0%, var(--navy-dark) 70%);
+  color: var(--cream);
+  padding: calc(env(safe-area-inset-top) + 110px) max(18px, env(safe-area-inset-right)) 36px max(18px, env(safe-area-inset-left));
+  text-align: center;
+}
+.heroInner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--bronze-light);
+  font-weight: 700;
+}
+.title {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 8vw, 56px);
+  margin: 6px 0 8px;
+  letter-spacing: 0.02em;
+}
+.sub {
+  opacity: 0.8;
+  font-size: 15px;
+  margin: 0 auto 22px;
+  max-width: 520px;
+  line-height: 1.55;
+}
+.metricToggle {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 4px;
+  border-radius: 999px;
+}
+.metricToggle a {
+  min-height: 44px;
+  padding: 0 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--cream);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+  touch-action: manipulation;
+}
+.metricToggle a.on {
+  background: var(--bronze);
+  color: #fff;
+}
+.body {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 22px max(16px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.note {
+  background: #eef5fa;
+  color: var(--navy);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.periods {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 4px;
+  box-shadow: var(--shadow-card);
+}
+.periods a {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  text-decoration: none;
+  color: var(--text-mid);
+  font-weight: 700;
+  font-size: 13px;
+  touch-action: manipulation;
+}
+.periods a.on {
+  background: var(--navy);
+  color: #fff;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 0 8px;
+}
+.stepper h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  color: var(--navy);
+  font-size: 22px;
+  text-align: center;
+}
+.stepBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: var(--navy);
+  font-size: 26px;
+  text-decoration: none;
+  box-shadow: var(--shadow-card);
+}
+span.stepBtn {
+  background: transparent;
+  box-shadow: none;
+}
+.empty {
+  text-align: center;
+  color: var(--text-light);
+  padding: 40px 0;
+}
+/* Podium: 2nd, 1st, 3rd. Three equal columns, the middle one tallest. */
+.podium {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+.place {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 0;
+}
+.avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: #fff;
+  background: var(--navy-mid);
+  border: 3px solid #fff;
+  box-shadow: var(--shadow-card);
+}
+.p1 .avatar {
+  width: 68px;
+  height: 68px;
+  background: var(--bronze);
+  font-size: 18px;
+}
+.podName {
+  margin-top: 8px;
+  font-weight: 700;
+  color: var(--navy);
+  font-size: 14px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.podValue {
+  font-size: 12.5px;
+  color: var(--text-mid);
+  margin: 2px 0 8px;
+}
+.block {
+  width: 100%;
+  border-radius: 14px 14px 6px 6px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: #fff;
+}
+/* Gold, silver and bronze in the club's own bronze and steel tones. */
+.p1 .block {
+  height: 112px;
+  background: linear-gradient(180deg, var(--bronze-light), var(--bronze));
+}
+.p2 .block {
+  height: 84px;
+  background: linear-gradient(180deg, var(--steel-light), var(--steel));
+  color: var(--navy);
+}
+.p3 .block {
+  height: 64px;
+  background: linear-gradient(180deg, #d9a777, var(--bronze-dark));
+}
+.mine .avatar {
+  outline: 3px solid var(--bronze);
+  outline-offset: 2px;
+}
+.list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 14px;
+  border-top: 1px solid #efebdd;
+}
+.list li:first-child {
+  border-top: none;
+}
+.list li.mine {
+  background: #fffaf0;
+  box-shadow: inset 3px 0 0 var(--bronze);
+}
+.pinned {
+  margin-top: 12px;
+}
+.rank {
+  width: 26px;
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-light);
+}
+.smallAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--cream-dark);
+  color: var(--navy);
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.name em {
+  color: var(--bronze-dark);
+  font-style: normal;
+  font-weight: 700;
+}
+.name small {
+  display: block;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text-light);
+}
+.value {
+  font-weight: 800;
+  color: var(--navy);
+  white-space: nowrap;
+}
+.cta {
+  text-align: center;
+  margin: 22px 0 0;
+}
+.cta a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 14px;
+  background: var(--bronze);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+.how {
+  margin-top: 22px;
+  font-size: 12.5px;
+  color: var(--text-light);
+  text-align: center;
+  line-height: 1.55;
+}
+@media (hover: hover) {
+  .periods a:not(.on):hover,
+  .metricToggle a:not(.on):hover {
+    opacity: 0.8;
+  }
+}

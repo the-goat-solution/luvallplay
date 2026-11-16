@@ -24,6 +24,7 @@ export function ContactDetailsForm({
   onClearError,
   hintKey = "form_email_hint",
   showTurnstile = true,
+  emailReadOnly = false,
 }: {
   firstName: string;
   lastName: string;
@@ -38,6 +39,8 @@ export function ContactDetailsForm({
   onClearError: (key: ContactFieldKey) => void;
   hintKey?: I18nKey;
   showTurnstile?: boolean;
+  /** Signed-in players book under their account email. */
+  emailReadOnly?: boolean;
 }) {
   const { tr } = useLanguage();
 
@@ -84,6 +87,8 @@ export function ContactDetailsForm({
           type="email"
           className="form-input"
           value={email}
+          readOnly={emailReadOnly}
+          autoComplete="email"
           required
           aria-invalid={Boolean(errors.email)}
           onChange={(e) => {

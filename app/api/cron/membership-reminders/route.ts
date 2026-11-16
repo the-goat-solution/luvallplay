@@ -18,6 +18,8 @@ import {
 import { sendRenewalReminders } from "@/lib/membership-renewal";
 import { auditMembershipStatuses } from "@/lib/membership-status";
 import { syncMembershipsWithStripe } from "@/lib/stripe-sync";
+import { runShopDailyUpkeep } from "@/lib/shop-notify";
+import { retryWebhookDeliveries } from "@/lib/webhooks";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -76,6 +78,21 @@ export async function GET(request: Request) {
     console.error("Renewal reminders failed", err);
     renewals = { error: "Renewal reminders failed" };
   }
+
+  // Shop: heads-up for cash reservations ending within a day, then release
+  // lapsed holds (and tell those players). Retry failed outgoing webhooks.
+  let shop: { reminded: number; released: number } | { error: string };
+  try {
+    shop = await runShopDailyUpkeep();
+  } catch (err) {
+    console.error("Shop upkeep failed", err);
+    shop = { error: "Shop upkeep failed" };
+  }
+  const webhookRetries = await retryWebhookDeliveries().catch((err) => {
+    console.error("Webhook retries failed", err);
+    return { error: "Webhook retries failed" };
+  });
+  console.log("Shop upkeep", shop, "webhook retries", webhookRetries);
 
   const tomorrow = addDays(getClubToday().dateKey, 1);
 

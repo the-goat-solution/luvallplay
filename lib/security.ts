@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { BOOKING_WINDOW_DAYS } from "./constants";
 import { ADMIN_COOKIE, verifyAdminToken } from "./admin-session";
 import { isBookable, startOfDay } from "./dates";
@@ -91,59 +90,4 @@ function getCookieFromRequest(request: Request, name: string): string | null {
 // expired session is rejected identically on pages and on API routes.
 export async function isAdminRequest(request: Request): Promise<boolean> {
   return verifyAdminToken(getCookieFromRequest(request, ADMIN_COOKIE));
-}
-
-const CANCEL_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
-
-function getCancelTokenSecret(): string {
-  const secret = process.env.CANCEL_LINK_SECRET;
-  if (!secret) throw new Error("CANCEL_LINK_SECRET is not configured");
-  return secret;
-}
-
-// Stateless signed token (membership id + expiry, HMAC'd) used for the
-// emailed self-service cancellation link — avoids a separate token table.
-export function signCancelToken(membershipId: number): string {
-  const expires = Date.now() + CANCEL_TOKEN_TTL_MS;
-  const payload = `${membershipId}.${expires}`;
-  const sig = crypto
-    .createHmac("sha256", getCancelTokenSecret())
-    .update(payload)
-    .digest("hex");
-  return `${Buffer.from(payload, "utf8").toString("base64url")}.${sig}`;
-}
-
-export function verifyCancelToken(token: string): number | null {
-  const [encodedPayload, sig] = token.split(".");
-  if (!encodedPayload || !sig) return null;
-
-  let payload: string;
-  try {
-    payload = Buffer.from(encodedPayload, "base64url").toString("utf8");
-  } catch {
-    return null;
-  }
-
-  // Node's hex decoder silently drops trailing bytes that aren't valid hex
-  // pairs, so a tampered signature with garbage appended can still decode
-  // to the right length — reject anything that isn't exactly a 64-char
-  // sha256 hex digest before comparing.
-  if (!/^[0-9a-f]{64}$/.test(sig)) return null;
-
-  const expectedSig = crypto
-    .createHmac("sha256", getCancelTokenSecret())
-    .update(payload)
-    .digest("hex");
-  const sigBuf = Buffer.from(sig, "hex");
-  const expectedBuf = Buffer.from(expectedSig, "hex");
-  if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) {
-    return null;
-  }
-
-  const [idStr, expiresStr] = payload.split(".");
-  const id = Number(idStr);
-  const expires = Number(expiresStr);
-  if (!Number.isInteger(id) || !Number.isFinite(expires)) return null;
-  if (Date.now() > expires) return null;
-  return id;
 }

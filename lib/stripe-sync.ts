@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { linkMemberAccount } from "./player-db";
 import { MEMBERSHIP_DAYS, type MembershipDay, type MembershipTier } from "./constants";
 import {
   addDays,
@@ -306,6 +307,11 @@ export async function syncMembershipsWithStripe(): Promise<StripeSyncReport> {
         status: "active",
         stripePaymentIntentId: pi.id,
       });
+      await linkMemberAccount(email, {
+        firstName: pi.metadata.firstName ?? "",
+        lastName: pi.metadata.lastName ?? "",
+        phone: pi.metadata.phone || null,
+      });
       report.changed.push({
         membershipId: id,
         name: `${pi.metadata.firstName ?? ""} ${pi.metadata.lastName ?? ""}`.trim() || email,
@@ -348,6 +354,11 @@ export async function syncMembershipsWithStripe(): Promise<StripeSyncReport> {
         recurring: true,
         status: sub.status === "trialing" ? "active" : sub.status,
         stripeSubscriptionId: sub.id,
+      });
+      await linkMemberAccount(email, {
+        firstName: sub.metadata.firstName ?? "",
+        lastName: sub.metadata.lastName ?? "",
+        stripeCustomerId: customer.id,
       });
       report.changed.push({
         membershipId: id,

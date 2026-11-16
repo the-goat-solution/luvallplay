@@ -15,6 +15,7 @@ import {
 } from "@/lib/db";
 import { getClubToday } from "@/lib/dates";
 import { isDayPaused } from "@/lib/day-requests";
+import { getPlayerFromRequest } from "@/lib/player-auth";
 
 const bodySchema = z.object({
   plan: z.enum(["monthly", "quarterly"]),
@@ -22,7 +23,7 @@ const bodySchema = z.object({
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
   email: z.string().email().max(200),
-  phone: z.string().min(1).max(30),
+  phone: z.string().max(30).default(""),
   recurring: z.boolean().optional().default(true),
   turnstileToken: z.string().optional(),
 });
@@ -38,7 +39,21 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await request.json());
-    const turnstileOk = await verifyTurnstile(body.turnstileToken, ip);
+    // Joining as a member needs a Three Wolves account: the membership is
+    // then managed from the profile. The account's email is the one used,
+    // whatever the form sent. A signed-in player has already proven they're
+    // a person, so the bot check is skipped.
+    const player = process.env.POSTGRES_URL ? await getPlayerFromRequest(request) : null;
+    if (process.env.POSTGRES_URL && !player) {
+      return NextResponse.json({ error: "sign_in_required" }, { status: 401 });
+    }
+    if (player) {
+      body.email = player.email;
+      body.firstName = body.firstName.trim() || player.firstName;
+      body.lastName = body.lastName.trim() || player.lastName;
+      body.phone = body.phone.trim() || player.phone || "";
+    }
+    const turnstileOk = player ? true : await verifyTurnstile(body.turnstileToken, ip);
     if (!turnstileOk) {
       return NextResponse.json(
         { error: "Captcha verification failed" },

@@ -9,6 +9,7 @@ import {
   type Team,
 } from "./mini-game";
 import { PLAYER_NAMES, drawTeams } from "./mini-game-roster";
+import { storeDrawResults } from "./stats-db";
 
 // Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
 let ensurePromise: Promise<void> | null = null;
@@ -146,5 +147,10 @@ export async function lockScore(
     ON CONFLICT (draw_id, match_id) DO NOTHING
     RETURNING match_id;
   `;
+  if (rows.length) {
+    // Keep each player's round robin result (and attendance) up to date for
+    // the Player tab and the leaderboard. Best effort.
+    await storeDrawResults(drawId).catch((err) => console.error("[mini-game] results not stored:", err));
+  }
   return rows.length ? "ok" : "already-locked";
 }

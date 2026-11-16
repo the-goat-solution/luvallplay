@@ -7,6 +7,12 @@ export const metadata: Metadata = {
   title: "Three Wolves Badminton Club — Christchurch, NZ",
   description:
     "Three Wolves Badminton Club — Badminton sessions in Christchurch. All skill levels welcome.",
+  // Home-screen app on iPhone/iPad (the manifest covers Android).
+  appleWebApp: {
+    capable: true,
+    title: "3 Wolves",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({

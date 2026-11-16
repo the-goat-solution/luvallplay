@@ -67,13 +67,14 @@ button{font-family:var(--font-sans);cursor:pointer}
 @media(max-width:768px){.container{padding:0 20px}}
 
 /* ── Navigation ──────────────────────────────────────── */
-.nav{position:fixed;top:0;left:0;right:0;z-index:900;padding:22px 0;transition:background var(--ease),padding var(--ease),box-shadow var(--ease)}
-.nav.scrolled{background:var(--navy-dark);padding:14px 0;box-shadow:0 4px 32px rgba(14,44,63,.4)}
+.nav{position:fixed;top:0;left:0;right:0;z-index:900;padding:calc(22px + env(safe-area-inset-top)) 0 22px;transition:background var(--ease),padding var(--ease),box-shadow var(--ease)}
+.nav.scrolled{background:var(--navy-dark);padding:calc(14px + env(safe-area-inset-top)) 0 14px;box-shadow:0 4px 32px rgba(14,44,63,.4)}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:20px}
 .nav-logo{display:none}
 .nav-links{display:flex;align-items:center;gap:32px;list-style:none}
 .nav-links a{color:rgba(255,255,255,.8);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;transition:color var(--ease)}
 .nav-links a:hover{color:var(--bronze-light)}
+.nav-links a.nav-account{color:var(--bronze-light)}
 .nav-actions{display:flex;align-items:center;gap:14px}
 .lang-toggle{display:flex;align-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-pill);overflow:hidden}
 .lang-btn{padding:5px 13px;font-size:12px;font-weight:700;color:rgba(255,255,255,.55);border:none;background:none;letter-spacing:.06em;transition:all var(--ease)}
@@ -205,6 +206,7 @@ button{font-family:var(--font-sans);cursor:pointer}
 .gallery-item.gi-tall{grid-column:span 1;grid-row:span 2}
 .gallery-item img{width:100%;height:100%;object-fit:cover;transition:transform var(--ease-slow)}
 .gallery-item:hover img{transform:scale(1.06)}
+.gallery-credit{position:absolute;left:10px;bottom:10px;z-index:1;background:rgba(14,44,63,.72);color:#fff;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;pointer-events:none;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gallery-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(14,44,63,.65) 0%,transparent 50%);opacity:0;transition:opacity var(--ease);display:flex;align-items:flex-end;padding:22px}
 .gallery-item:hover .gallery-overlay{opacity:1}
 .gallery-zoom{color:#fff;font-size:13px;display:flex;align-items:center;gap:7px;font-weight:500}
@@ -331,7 +333,11 @@ footer{background:var(--navy-dark);color:#fff;padding:80px 0 36px}
 /* ── Lightbox carousel ───────────────────────────────── */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 16px 16px;opacity:0;pointer-events:none;transition:opacity var(--ease)}
 .lightbox.open{opacity:1;pointer-events:all}
-.lightbox-close{position:absolute;top:18px;right:18px;background:rgba(255,255,255,.1);border:none;color:#fff;font-size:24px;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background var(--ease);z-index:1}
+.lb-toolbar{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));display:flex;align-items:center;gap:10px;z-index:1}
+.lb-download{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:var(--radius-pill);background:rgba(255,255,255,.12);color:#fff;font-family:var(--font-sans);font-size:13px;font-weight:600;letter-spacing:.02em;text-decoration:none;transition:background var(--ease);touch-action:manipulation}
+.lb-download:hover,.lb-download:active{background:var(--bronze)}
+.lb-credit{color:rgba(255,255,255,.75);font-size:13px;margin:10px 0 0;font-family:var(--font-sans)}
+.lightbox-close{background:rgba(255,255,255,.1);border:none;color:#fff;font-size:24px;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background var(--ease)}
 .lightbox-close:hover{background:rgba(255,255,255,.2)}
 .lb-carousel{display:flex;align-items:center;gap:14px;flex:1;min-height:0;width:100%;max-width:1080px}
 .lb-img-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden}
@@ -919,3 +925,12 @@ ol.cp-queue-list li::before{content:counter(q);width:24px;height:24px;flex-shrin
 .jersey-seg button{flex:1;padding:11px 12px;border:0;background:transparent;font-size:14px;font-weight:600;color:var(--text-mid);transition:background var(--ease),color var(--ease)}
 .jersey-seg button+button{border-left:1.5px solid var(--steel-light)}
 .jersey-seg button.active{background:var(--navy);color:#fff}
+
+/* Touch screens: give the header's small controls a 44px tap area without
+   changing how they look (the hit area extends past the visible button). */
+@media (pointer: coarse) {
+  .nav .lang-btn, .nav-fb, .hamburger, .mobile-menu .lang-btn { position: relative; }
+  .nav .lang-btn::after, .nav-fb::after, .hamburger::after, .mobile-menu .lang-btn::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+  }
+}

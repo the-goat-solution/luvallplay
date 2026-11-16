@@ -925,3 +925,12 @@ ol.cp-queue-list li::before{content:counter(q);width:24px;height:24px;flex-shrin
 .jersey-seg button{flex:1;padding:11px 12px;border:0;background:transparent;font-size:14px;font-weight:600;color:var(--text-mid);transition:background var(--ease),color var(--ease)}
 .jersey-seg button+button{border-left:1.5px solid var(--steel-light)}
 .jersey-seg button.active{background:var(--navy);color:#fff}
+
+/* Touch screens: give the header's small controls a 44px tap area without
+   changing how they look (the hit area extends past the visible button). */
+@media (pointer: coarse) {
+  .nav .lang-btn, .nav-fb, .hamburger, .mobile-menu .lang-btn { position: relative; }
+  .nav .lang-btn::after, .nav-fb::after, .hamburger::after, .mobile-menu .lang-btn::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+  }
+}

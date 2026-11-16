@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPlayer, safeNextPath } from "@/lib/player-auth";
 import { getRecaptchaSiteKey, isSmsAvailable } from "@/lib/sms";
@@ -37,10 +38,10 @@ export default async function LoginPage({
   return (
     <main className={styles.authPage}>
       <LangSync />
-      <a href="/" className={styles.authBrand}>
+      <Link href="/" className={styles.authBrand}>
         <img src="/icons/wolf-mark-light.png" alt="" width={96} height={52} />
         <span>Three Wolves</span>
-      </a>
+      </Link>
       <div className={styles.authCard}>
         <LoginForm
           smsAvailable={smsAvailable}
@@ -52,7 +53,7 @@ export default async function LoginPage({
       </div>
       <div className={styles.authFoot}>
         <LangToggle dark />
-        <a href="/">← Three Wolves Badminton Club</a>
+        <Link href="/">← Three Wolves Badminton Club</Link>
       </div>
     </main>
   );

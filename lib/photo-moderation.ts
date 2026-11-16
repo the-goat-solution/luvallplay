@@ -1,5 +1,8 @@
 import { JWT } from "google-auth-library";
 import type { PhotoStatus } from "./photos-db";
+import { decide } from "./moderation-rules";
+
+export { decide } from "./moderation-rules";
 
 // Google Cloud Vision SafeSearch, using the club's existing Google service
 // account (the one that reads the calendar). Free for the first 1,000
@@ -12,9 +15,6 @@ import type { PhotoStatus } from "./photos-db";
 //   otherwise                                      → approved (joins the Gallery)
 // If the check can't run, the photo waits for an admin: nothing unchecked is
 // ever published automatically.
-
-const LIKELIHOOD = ["UNKNOWN", "VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY"] as const;
-type Likelihood = (typeof LIKELIHOOD)[number];
 
 export type ModerationResult = {
   status: PhotoStatus;
@@ -33,18 +33,6 @@ function visionClient(): JWT | null {
     client = new JWT({ email, key, scopes: ["https://www.googleapis.com/auth/cloud-vision"] });
   }
   return client;
-}
-
-function level(v: string | undefined): number {
-  const i = LIKELIHOOD.indexOf((v ?? "UNKNOWN") as Likelihood);
-  return i === -1 ? 0 : i;
-}
-
-export function decide(annotation: Record<string, string>): PhotoStatus {
-  const watched = ["adult", "violence", "racy"].map((k) => level(annotation[k]));
-  if (watched.some((l) => l >= level("LIKELY"))) return "rejected";
-  if (watched.some((l) => l >= level("POSSIBLE"))) return "needs_review";
-  return "approved";
 }
 
 /** Checks one image (the display copy, a public URL). */

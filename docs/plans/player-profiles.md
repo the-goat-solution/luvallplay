@@ -1,6 +1,12 @@
 # Plan: Player accounts, profiles, shop, leaderboard & photo sharing
 
-Status: **approved direction, ready to build**. Nothing has been built yet.
+Status: **built** (all phases). Set-up steps for go-live are in the README under "Player accounts".
+
+**Where the build differs from this plan:**
+- **Linking records to accounts:** existing tables link to accounts by email (as the rest of the club's data already does), not by new `player_id` columns. Old history therefore counts the moment an account exists, and an admin email change updates every table at once.
+- **Mini game roster:** stays in `lib/mini-game-roster.ts` for the draw itself. Each name is linked to a player account on Admin → Players, which is what ties round robin results to profiles.
+- **Welcome emails:** the button is available now; send them whenever you're ready (§4a suggested after the stats screens, which are also built).
+- **Bundle budget:** the per-tab code is 5–12 KB. Next.js and React themselves are about 103 KB shared by every page on the site, so the "< 100 KB first load" target in §5a.6 is measured on top of that baseline. Stripe, the photo upload code and reCAPTCHA load only when they're used.
 
 **Decided (16 Nov):**
 - email **and** SMS login codes from day one. SMS is **capped at the free allowance**, and only email sign-in is shown once it's used up;

@@ -214,6 +214,95 @@ Registration page for the Yonex club jersey (bank-transfer payment, one per pers
 - **Admin:** `/admin/jersey` lists registrations, with Mark paid / Undo / Release / Cancel and **Export to Excel** (registrations, printer order, summary).
 - Jersey and size-chart images are placeholders in `public/uploads/jersey/`; point `DESIGN_IMG` / `SIZE_CHART_IMG` in `app/jersey/page.tsx` at the real files.
 
+## Player accounts
+
+Plan and decisions: `docs/plans/player-profiles.md`.
+
+### Sign-in (`/login`)
+
+- **Email code:** a 6-digit code plus a one-tap link, sent by Resend. Codes are hashed, expire in 10 minutes, allow 5 tries, and at most 3 are sent per email per 15 minutes. Locally, without `RESEND_API_KEY`, the code is printed in the server log.
+- **SMS code:** Google Identity Platform, called from the server (`lib/sms.ts`). The browser only solves Google's invisible reCAPTCHA; the API key is server-only.
+- **Never costs money:** at most `SMS_FREE_LIMIT_24H` (default 10) texts go out in any rolling 24 hours, counted in `sms_sends` under a database lock.
+  - Once they're used up, the login page shows email sign-in only. Admins get one email when that happens.
+  - **Admin → Players** shows the counter and has an on/off switch.
+- **Phone numbers:** a number signs in only after it has been confirmed by text, from the Account tab or during sign-up.
+- **Sessions:** last 90 days and extend with use. "Sign out of all devices" is on the Account tab.
+- **SMS set-up:**
+  1. Create a Firebase project on the same Google Cloud project as the Calendar service account.
+  2. Enable Phone sign-in, attach billing, and set the SMS region policy (NZ, AU, VN).
+  3. Add a US$1 budget alert.
+  4. Set `FIREBASE_API_KEY` and `FIREBASE_PROJECT_ID`.
+
+### Accounts for current members
+
+**Admin → Players** has three steps:
+
+1. **Preview import / Create accounts:** one account per active member's email. Gmail-style near-duplicates are flagged, not merged.
+2. **Run backfill:** play days from saved court boards; round robin results from past mini game draws (match the 16 mini game names to players first); and, for older days with no board, confirmed casual bookings.
+3. **Send welcome emails:** in batches of 40, to stay under Resend's 100 emails a day. Each one has a one-click "hide me from the leaderboard" link.
+
+New members are linked to an account automatically by every membership path: online sign-up (which now requires an account), Add cash member, the Stripe webhook and Stripe sync.
+
+### Profile (`/profile`)
+
+The profile is an installable web app: manifest, icons, a service worker that caches only static files, and an offline page. It has three tabs.
+
+- **Account:** details (email locked), phone confirmation, messages with the admins (**Admin → Inbox**), leaderboard opt-out, data download, account deletion, and an "Add to Home Screen" guide. The guide shows once per player, for about 45 seconds, on a touch device that isn't already running the app.
+- **Membership:**
+  - **Plan and billing:** plan, card and receipts (from Stripe); "Update card" uses Stripe's Customer Portal, limited to the update-card flow.
+  - **Changes at the next renewal:** upgrades and day changes use a Stripe subscription schedule. The new phase's metadata (`plan`/`day`) is copied onto the membership by the webhook before the renewal is applied.
+  - **Downgrading and turning off auto-renew:** both go through four steps; reasons are shown on **Admin → Players**.
+  - **One-time members:** can renew, or switch to auto-renew (save a card; the first charge is on the new period's first play day).
+  - **Play calendar:** casual booking, and "Can't make it" (the member drops off that day's headcount, roster and reminders, so the spot frees up).
+  - **Shop:** card payment, or a cash reservation held until the end of the player's next play day (14 days if none is booked).
+- **Player:** stats, streaks, leaderboard ranks, heatmap, round robin chart and history, photo sharing, and connected apps.
+
+### Attendance and leaderboard
+
+- **How attendance is recorded:**
+  - concluding the court board records everyone with at least one finished game;
+  - locking a mini game score records round robin results (`rr_results`, keyed by mini game name, linked to an account through `players.minigame_name`);
+  - admins can tick or untick players on **Admin → Play days**.
+- **`/leaderboard`** shows play days or RR points (2 per win, ties broken by point difference) by month, quarter, year or all time.
+  - It's cached and refreshed when results change.
+  - Opted-out players aren't listed.
+
+### Shop (`/admin/shop`)
+
+- **Products:** name and description (EN/VI), price, photos, men's/women's fits, sizes S–3XL. The Port Hills Dawn jersey ($30) is added automatically with zero stock.
+- **Stock:** a grid per fit and size. Holds are atomic, so nothing oversells.
+- **Size charts:** one upload per fit; players see "coming soon" until then.
+- **Orders:** "Paid cash & collected" records the cash as a Stripe invoice paid out of band, so Financials imports it as *Cash* under *Jersey & merchandise*. Card sales carry `metadata.type = "shop"`. Orders also export to Excel.
+- **Daily cron:** reminds players about cash reservations ending soon and releases lapsed holds.
+
+### Photos (`/admin/photos`)
+
+- **Upload:** photos go straight from the browser to the public Blob store (`PHOTO_BLOB_READ_WRITE_TOKEN`). GPS data is removed from originals without re-compressing (`lib/exif-gps.ts`), and the display copy and thumbnail are made in the browser.
+- **Safety check:** Google Cloud Vision SafeSearch (`GOOGLE_VISION_ENABLED=1`, free for the first 1,000 images a month).
+  - Adult, violence or racy rated LIKELY or above → blocked, and the admins are emailed.
+  - POSSIBLE → held for review.
+  - Anything else → straight into the Gallery.
+  - Without the check, every photo waits for review.
+- **Gallery:** the homepage Gallery mixes club and approved player photos, with credits; `/gallery` shows them all. The lightbox has "Download original".
+- **Storage:** the free Blob allowance is 1 GB, and the admin page shows how much is used. Past ~700 MB, move photos to Cloudflare R2 (10 GB free).
+
+### API, webhooks, MCP
+
+- **Access keys:** players create them under Player → Connected apps, with scopes `read:stats`, `read:attendance`, `read:calendar` and `write:activity`. Only hashes are stored.
+- **REST** (`Authorization: Bearer tw_…`):
+  - `GET /api/v1/me`, `/me/attendance?from&to`, `/me/round-robin`, `/me/stats`;
+  - `POST /api/v1/me/activity` (`{"date":"YYYY-MM-DD"}`): stored unconfirmed until an admin confirms it on **Admin → Players**;
+  - public: `GET /api/v1/leaderboard?metric&period&key` and `/api/v1/sessions/upcoming`.
+- **Calendar feed:** `/api/v1/me/calendar.ics?token=…`.
+- **MCP server:** `POST /api/mcp` (Streamable HTTP, JSON responses, stateless), with the same data and permissions.
+- **Webhooks:** for `attendance.recorded`, `round_robin.result` and `photo.approved`.
+  - Signed `X-ThreeWolves-Signature: t=<unix>,v1=<HMAC-SHA256 of "t.body">`.
+  - Retried with backoff, and by the daily cron.
+
+### Tests
+
+`npm test` runs unit tests for the pure logic: periods, streaks, ranking, the SafeSearch rule, phone formatting, redirect safety and GPS removal.
+
 ## Development
 
 ```bash
@@ -229,5 +318,6 @@ Push to GitHub and import in Vercel. Add all env vars from `.env.example`.
 - Stripe webhook signature verification
 - Server-side pricing (never trust client amounts)
 - Rate limiting on API routes
+- Player sessions, sign-in codes and API keys stored only as hashes
 - CSP + security headers in `next.config.ts`
 - Optional Cloudflare Turnstile on booking forms

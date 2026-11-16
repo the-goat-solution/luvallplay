@@ -2,12 +2,10 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { upload } from "@vercel/blob/client";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import type { Photo } from "@/lib/photos-db";
 import styles from "../profile.module.css";
 import p from "./photos.module.css";
-import { preparePhoto } from "./imagePrep";
 
 type Job = { name: string; preview: string; state: "preparing" | "uploading" | "checking" | "approved" | "needs_review" | "rejected" | "failed" };
 
@@ -48,6 +46,8 @@ export function PhotosPanel({ photos, playerId, enabled }: { photos: Photo[]; pl
     if (!consent || files.length === 0) return;
     setBusy(true);
     setJobs(files.map((f) => ({ name: f.name, preview: URL.createObjectURL(f), state: "preparing" })));
+    // Loaded only when sharing, to keep the Player tab light.
+    const [{ upload }, { preparePhoto }] = await Promise.all([import("@vercel/blob/client"), import("./imagePrep")]);
     for (const [i, file] of files.entries()) {
       try {
         const prepared = await preparePhoto(file);

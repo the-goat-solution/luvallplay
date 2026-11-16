@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
-import { StripeCardForm } from "@/components/payment/StripeCardForm";
+import { StripeCardForm } from "../LazyStripeCardForm";
 import styles from "../profile.module.css";
 import { fmtDate, postJson } from "./format";
 

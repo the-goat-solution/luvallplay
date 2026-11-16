@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPlayer, safeNextPath } from "@/lib/player-auth";
 import { DetailsForm } from "@/components/profile/DetailsForm";
@@ -17,10 +18,10 @@ export default async function DetailsPage({ searchParams }: { searchParams: Prom
   if (player.firstName.trim()) redirect(next);
   return (
     <main className={styles.authPage}>
-      <a href="/" className={styles.authBrand}>
+      <Link href="/" className={styles.authBrand}>
         <img src="/icons/wolf-mark-light.png" alt="" width={96} height={52} />
         <span>Three Wolves</span>
-      </a>
+      </Link>
       <div className={styles.authCard}>
         <DetailsForm next={next} email={player.email} phone={player.phone ?? ""} lang={player.lang} />
       </div>

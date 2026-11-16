@@ -191,12 +191,4 @@ export async function verifyLinkToken(token: string): Promise<VerifyCodeResult> 
   return email ? { ok: true, email } : { ok: false, reason: "expired" };
 }
 
-/**
- * Only same-site relative paths are allowed after sign-in, so a crafted
- * `next` can't bounce someone to another website.
- */
-export function safeNextPath(next: string | null | undefined, fallback = "/profile"): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return fallback;
-  if (next.startsWith("/api/")) return fallback;
-  return next;
-}
+export { safeNextPath } from "./safe-next";

@@ -1,4 +1,7 @@
-import { createClient, type QueryParams } from "next-sanity";
+// @sanity/client directly (not next-sanity): next-sanity's entry also exports client
+// components, which pulled the Sanity client into the browser bundle of
+// every page whose server code reads pricing or gallery data.
+import { createClient, type QueryParams } from "@sanity/client";
 import imageUrlBuilder from "@sanity/image-url";
 import type { SanityImageSource } from "@sanity/image-url/lib/types/types";
 import { apiVersion, dataset, projectId, useCdn } from "@/sanity/env";

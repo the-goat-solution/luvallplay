@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
-import { StripeCardForm } from "@/components/payment/StripeCardForm";
+import { StripeCardForm } from "../LazyStripeCardForm";
 import type { Billing, MemberView } from "@/lib/membership-self-service";
 import { Sheet } from "../Sheet";
 import styles from "../profile.module.css";

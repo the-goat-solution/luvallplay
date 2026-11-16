@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "node scripts/migrate.mjs",
-    "stripe:setup": "node scripts/stripe-setup.mjs"
+    "stripe:setup": "node scripts/stripe-setup.mjs",
+    "test": "node --test tests/*.test.ts"
   },
   "dependencies": {
     "@sanity/client": "^7.6.0",

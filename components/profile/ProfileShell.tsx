@@ -194,9 +194,9 @@ export function ProfileShell({
               <a href="/leaderboard" role="menuitem">
                 {tr("leaderboard")}
               </a>
-              <a href="/" role="menuitem">
+              <Link href="/" role="menuitem">
                 {tr("view_site")}
-              </a>
+              </Link>
               <form method="POST" action="/api/auth/logout">
                 <button type="submit" role="menuitem">
                   {tr("sign_out")}

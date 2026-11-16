@@ -28,6 +28,8 @@ Players get a Three Wolves account and sign in **without a password**, using a 6
 | **Membership** | Current plan, upgrade or downgrade (downgrade has a few extra steps), auto-renew on/off, payment method and invoices, play calendar to book and pay, **Shop** (club jersey plus later merchandise). |
 | **Player profile** | Play days attended, round robin results, streaks and charts, photo uploads that feed the main site Gallery after an automatic safety check. |
 
+**Works like an app on phones.** The profile can be added to the home screen and opens full screen. A short guide (shown once, for about 45 seconds) walks each player through adding it. It's designed for touch and fast on mobile, with layouts for tablets, iPad multitasking and foldables, including the iPhone Duo (§5a).
+
 Other new pieces:
 - a public **/leaderboard** page;
 - three new admin pages: **Inbox**, **Shop** and **Photos**;
@@ -166,7 +168,7 @@ All tables are created idempotently in a new `lib/player-db.ts`, following the e
 players              id, email (unique, lowercased), first_name, last_name, display_name,
                      phone_e164 (unique), phone_verified_at, lang, stripe_customer_id, minigame_name, leaderboard_visible,
                      avatar_url, created_via (member_import|signup|admin), claimed_at,
-                     welcome_sent_at, created_at, deleted_at
+                     welcome_sent_at, install_hint_shown_at, installed_at, created_at, deleted_at
 auth_codes           id, email, code_hash, link_token_hash, attempts, expires_at, consumed_at, ip_hash
 player_sessions      id, player_id, token_hash, user_agent, created_at, last_seen_at, expires_at
 
@@ -378,6 +380,147 @@ Charts are small hand-written SVG components with no chart library, which keeps 
 
 ---
 
+## 5a. Mobile: an app on the home screen, built for touch
+
+The profile is designed **phone first**. Most players will open it at the hall, on a phone, between games. Tablets and foldables get their own layouts, chosen by the actual screen or window width rather than by guessing the device.
+
+### 5a.1 Make it installable ("add to home screen")
+- **Web app manifest** (`app/manifest.ts`):
+  - name "Three Wolves", short name "3 Wolves";
+  - opens at `/profile`, falling back to sign-in if the player isn't signed in;
+  - `scope: "/"`, so the leaderboard and gallery open inside the app too;
+  - `display: "standalone"` (no browser bars);
+  - navy theme colour (`#184467`) and cream background (`#fcfbf2`);
+  - wolf-logo icons at 192 and 512 px, plus a "maskable" version for Android's rounded icon shapes. The existing `app/apple-icon.png` stays the iPhone icon.
+- **iPhone/iPad settings:** `apple-mobile-web-app-title` and a status bar style that blends into the navy header. On iOS 26 and later, anything added to the Home Screen opens as a web app by default.
+- **Small service worker**, offline-safe:
+  - it caches only the app's static files (JavaScript, fonts, icons), so opening from the home screen is near-instant after the first visit;
+  - it **never caches signed-in pages or data**, so nobody can see stale or another person's details;
+  - with no signal, it shows a branded "You're offline" screen with a Retry button.
+- **Opened from the home screen:** the start link carries `?source=homescreen`, so we can record `players.installed_at` and show admins how many players have installed it.
+- **iPhone note:** a home-screen web app keeps its own sign-in, separate from Safari, so players sign in once more inside the app. Sessions then last 90 days. The install guide says this up front. I'll confirm the exact behaviour on a real iPhone during the build.
+
+### 5a.2 The install guide overlay
+**When it appears:**
+- **once per player**, on their **first signed-in session on a phone or tablet**;
+- it's skipped if the profile is already open as an installed app, or the device has no touch screen (e.g. a laptop);
+- "shown" is stored on the player's account (`players.install_hint_shown_at`), so it doesn't come back on a new phone or after clearing the browser;
+- it can be reopened any time from **Account → Add to Home Screen**.
+
+**How long:**
+- it stays for **about 45 seconds**, then fades away on its own;
+- a thin bronze progress bar along the top shows the time left;
+- the timer **pauses** while the player's finger is on the overlay, or the app is in the background, then carries on;
+- **Got it**, the ✕, or tapping the dimmed background closes it straight away.
+
+**What it looks like:**
+- a **bottom sheet** (thumb-reachable) over a dimmed profile, with the wolf app icon at the top;
+- *"Put Three Wolves on your home screen: one tap to your membership, play days and leaderboard"*;
+- a short animated arrow pointing at the real button the player needs to tap. With reduced motion turned on, the arrow is still.
+- EN/VI, following the site language.
+
+**Instructions are matched to the browser:**
+
+| Device / browser | What the overlay shows |
+|---|---|
+| **iPhone, Safari** (iOS 26+) | 1. Tap **⋯** (bottom right) → **Share**; 2. **Add to Home Screen**; 3. keep **Open as Web App** on → **Add**. The arrow points to the bottom bar. |
+| **iPhone, older iOS** | 1. Tap **Share** ⬆︎; 2. **Add to Home Screen**; 3. **Add**. |
+| **iPad, Safari** | The same steps, with the arrow pointing to the **Share button at the top right**. |
+| **iPhone/iPad, Chrome or Edge** | Share (top right of the address bar) → **Add to Home Screen**. |
+| **Android, Chrome / Edge / Samsung Internet** | A single **Install app** button that opens the phone's own install prompt. When it's accepted, the overlay shows "Done! Find Three Wolves on your home screen" and closes. If the browser doesn't offer it, the steps are shown: ⋮ → **Add to Home screen** / **Install app**. |
+| **Facebook, Messenger or Instagram in-app browser** (common, since the club posts links on Facebook) | Those browsers can't add to the home screen, so the overlay says *"Open this page in Safari/Chrome first"*. It has a **Copy link** button and shows where the "Open in browser" option is. |
+
+The overlay works with screen readers, traps focus while it's open and closes with Escape. It also records shown / dismissed / installed events, so admins can see how well it works.
+
+### 5a.3 When it runs as an app (installed)
+- **App shell:**
+  - a compact navy header with the wolf logo and the player's avatar;
+  - a fixed **bottom tab bar** (Account · Membership · Player), sized for thumbs and with unread and status badges;
+  - the main site's marketing footer and nav are hidden.
+- **Safe areas:** with `viewport-fit=cover` and `env(safe-area-inset-*)` padding, nothing sits under the notch or Dynamic Island, the home indicator, or rounded corners in landscape.
+- **Back buttons on inner screens:** a message thread, the checkout and the cancel steps all get an in-app ‹ Back. An installed app has no browser back button, and the iOS edge-swipe still works.
+- **Pull to refresh** on Messages, Membership and Player. Installed iPhone web apps don't have it built in.
+- **Links outside the club site** (Stripe receipts, Google Maps to the venue) open in the system browser.
+
+### 5a.4 Touch optimisation (all screens)
+- **Tap targets:** at least **44 × 44 pt** (Apple's guideline; 48 dp on Android), with at least 8 px between them. An automated check in the end-to-end tests fails the build if any button or link is smaller.
+- **No hover-only features:** hover effects are only applied when the device has a mouse (`@media (hover: hover)`). Every button has a visible pressed state.
+- **No tap delay:** `touch-action: manipulation` removes the double-tap-to-zoom delay.
+- **Thumb zone:** the main action on each screen (Pay, Send, Confirm) sits in a **sticky bottom action bar**. Choices such as size, plan, day and the cancel steps open as **bottom sheets** that can be swiped down to close.
+- **Forms:**
+  - text inputs are at least 16 px, so iPhones don't zoom in;
+  - each field has the right keyboard and autofill (`email`, `tel`, `given-name`);
+  - the code box uses **`autocomplete="one-time-code"`**, so the iPhone keyboard offers the code straight from Messages or Mail, and Android suggests it from the SMS.
+- **Typing a message:** the composer stays above the on-screen keyboard (using `visualViewport`, plus the `interactive-widget=resizes-content` viewport setting in Chrome). Sent messages show instantly while they finish sending in the background.
+- **Scrolling:**
+  - the tab bar and section headers stay visible;
+  - `overscroll-behavior: contain` stops scrolling a sheet from also scrolling the page behind it;
+  - horizontal swipe gestures between tabs are avoided, because they fight the iOS back-swipe.
+- **Photos:** the upload button offers **Take photo** or choose from the photo library, with per-photo progress. Uploads carry on if the player switches app briefly.
+- **Feedback:**
+  - a short vibration on Android when a payment or booking is confirmed (iPhone web apps can't vibrate);
+  - motion is reduced when the phone's "Reduce motion" setting is on.
+
+### 5a.5 Layouts by screen width (phones, tablets, foldables)
+Layouts respond to the **width the page actually has**: the screen, or a window when the screen is shared. Media and container queries do this, not device detection. So a narrow iPad window or a folded phone automatically gets the phone layout, and unfolding switches layout **live**, with nothing lost.
+
+| Width (CSS px) | Typical devices | Layout |
+|---|---|---|
+| **< 600** | Phones in portrait; foldable outer screens; narrow iPad windows (Slide Over, ⅓ Split View) | One column, bottom tab bar, bottom sheets, full-width cards |
+| **Phones in landscape** (height < 500) | Phones turned sideways | Slimmer header and tab bar so content gets the height; landscape safe areas for the notch side |
+| **600–1023** | iPad mini / Air portrait, ½ Split View, **unfolded foldables** (iPhone Duo inner screen, Galaxy Z Fold, Pixel Fold) | **Two panes**: Account = thread list beside the open thread; Membership = plan card beside the calendar and shop; Player = 2–3 column stat grid with the heatmap full width. Tabs move to a top segmented bar; bottom sheets become centred dialogs. |
+| **≥ 1024** | iPad landscape, iPad Pro, Stage Manager windows, desktop | A left navigation rail and content up to 1,100 px wide, with a three-column stat grid |
+
+**iPhone Duo (Apple's foldable):**
+- Reports describe a phone-sized **outer screen** and a nearly square **inner screen** (around 4:3).
+  - Folded, it gets the normal phone layout.
+  - Unfolded, the width puts it in the **two-pane tablet layout**.
+- Because the inner screen is close to square, the two-pane views are designed **not to depend on height or shape**:
+  - content widths are capped;
+  - charts and the podium keep their proportions;
+  - nothing is laid out for a tall, narrow screen only.
+- One report says Safari on the iPhone Duo gives pages between about **382 and 951 px** of width, depending on the screen and window. **I couldn't confirm those figures**, so the layouts don't rely on any exact number. They'll be re-checked against Apple's published sizes before the build is signed off.
+- Apple's foldable is reported to have no visible crease and shows one continuous screen, so nothing special is needed for the fold.
+
+**Android foldables:**
+- Chrome and Edge (version 138+) can report a physical fold or hinge through the **Viewport Segments API** (`horizontal-viewport-segments` / `vertical-viewport-segments`). This is used **only as an extra on browsers that support it**:
+  - **book posture:** the thread list on one side of the fold and the open thread on the other;
+  - **tabletop posture:** the calendar on the top half, with the booking button on the bottom half.
+- Safari doesn't support this, and every other browser simply gets the normal layout.
+
+**iPad multitasking:**
+- Split View, Slide Over and Stage Manager (resizable windows on iPadOS 26) are covered by the width rules above.
+- Moving a window between sizes changes the layout without losing the page.
+
+### 5a.6 Mobile performance budget
+Measured with Lighthouse's mobile test (simulated mid-range phone on 4G) on every phase that touches the profile:
+
+| Measure | Target |
+|---|---|
+| Largest Contentful Paint (main content visible) | **< 2.0 s** |
+| Interaction to Next Paint (tap response) | **< 200 ms** |
+| Cumulative Layout Shift (no jumping) | **< 0.05** |
+| JavaScript on first load of a profile tab | **< 100 KB** compressed (Stripe, reCAPTCHA and the upload tools load only on the screens that need them) |
+
+How it's met:
+- **Fonts:** only the Montserrat and Copperplate weights actually used are preloaded (`public/uploads` has 20+ font files). Each is limited to the Latin and Vietnamese characters, with `font-display: swap`.
+- **Tabs:** the other tabs load in the background while the phone is idle, so switching tabs is instant. Skeletons are the same size as the final content, so nothing jumps.
+- **Images and caching:** images are pre-sized thumbnails that load lazily, and the service worker cache makes repeat opens from the home screen near-instant.
+
+### 5a.7 Device testing
+- **Automated:** Playwright runs the main flows at these sizes, with screenshots at 2× for the on-brand review:
+  - iPhone SE (375 × 667), iPhone 17 (402 × 874), iPhone 17 Pro Max (440 × 956), iPhone in landscape;
+  - iPad mini (744 × 1133), iPad Air 11" (820 × 1180), iPad Pro 13" (1032 × 1376), iPad in ½ and ⅓ Split View widths;
+  - Pixel (412 × 915), Galaxy Z Fold outer and inner screens, and Fold book posture with the viewport-segments emulation;
+  - the iPhone Duo outer and inner screens, using Apple's published viewport sizes once confirmed.
+
+  Each run includes the tap-target check, a Lighthouse mobile audit, and checks that the install overlay shows once, lasts 45 seconds and pauses on touch.
+- **On real devices before launch:** at least one iPhone with iOS 26, one Android phone, and an iPad if one is available, ideally from a few club members.
+  - Check adding to the home screen, sign-in inside the installed app, and SMS/email code autofill.
+  - Check payment in Stripe test mode and photo upload from the camera.
+
+---
+
 ## 6. Attendance and round robin data
 
 ### 6.1 Attendance: where it comes from
@@ -560,6 +703,7 @@ A **personal iCal feed** of the player's upcoming play days is included almost f
 | 7 | Upgrades | At the next renewal; no discount offer when cancelling |
 | 8 | q.buzz | No API yet; build the generic API, webhooks and MCP server, and add q.buzz later |
 | 9 | Existing members | Accounts created up front for every active member, with history backfilled from the database |
+| 10 | Mobile | Installable app with a once-only, about 45-second "add to home screen" guide; touch-first design; layouts by width for phones, tablets, iPad multitasking and foldables, including the iPhone Duo (§5a) |
 
 ---
 
@@ -568,7 +712,7 @@ A **personal iCal feed** of the player's upcoming play days is included almost f
 | Phase | Scope | Depends on |
 |---|---|---|
 | **0. Quick win** | Gallery lightbox **Download original** button | none |
-| **1. Accounts** | `players`, `auth_codes`, `player_sessions`, email-code login **and Firebase SMS login with the free-tier cap** (`sms_sends`, email-only fallback, admin counter and switch), nav Log in and avatar, `/profile` shell, Account tab details including phone verification. **Member import** (preview, create, link history), `ensurePlayerForEmail()` on every membership path, `/admin/players`, welcome emails (§4a) | Firebase project set up |
+| **1. Accounts** | `players`, `auth_codes`, `player_sessions`, email-code login **and Firebase SMS login with the free-tier cap** (`sms_sends`, email-only fallback, admin counter and switch), nav Log in and avatar, `/profile` shell **as a mobile app shell** (manifest, icons, service worker, bottom tab bar, safe areas, tablet and foldable layouts, **install guide overlay**, §5a), Account tab details including phone verification. **Member import** (preview, create, link history), `ensurePlayerForEmail()` on every membership path, `/admin/players`, welcome emails (§4a) | Firebase project set up |
 | **2. Messaging** | Threads and messages, Account tab inbox, `/admin/inbox`, email notifications | 1 |
 | **3. Membership tab** | Plan status, upgrade and day change, step-by-step downgrade and cancel, auto-renew on/off, update card (Portal), invoices, calendar booking, "can't make it". Main site: remove the emailed cancel flow, require an account for membership sign-up, invite casual bookers to create an account | 1 |
 | **4. Shop** | Products, variants, orders, stock holds, Stripe checkout, `/admin/shop`, seeded jersey with cropped images, Financials category | 1 |
@@ -578,6 +722,7 @@ A **personal iCal feed** of the player's upcoming play days is included almost f
 
 **Verification for every phase:**
 - `next build` and lint;
+- the mobile checks in §5a.7 (screen sizes, tap targets, Lighthouse mobile budget) for every phase that touches the profile;
 - small `node --test` unit tests for the pure logic (code hashing and expiry, stock holds, period maths, leaderboard ranking);
 - an end-to-end run in Stripe **test mode** with Playwright on the local dev server (sign-in, join, change plan, cancel steps, buy a shirt, upload a photo), with screenshots on mobile and desktop for an on-brand check;
 - README sections and `.env.example` updated in the same PR.
@@ -593,6 +738,10 @@ New env vars across all phases:
 - Google Identity Platform pricing: https://cloud.google.com/identity-platform/pricing
 - Identity Platform quotas (SMS limits): https://docs.cloud.google.com/identity-platform/quotas
 - Firebase Auth limits: https://firebase.google.com/docs/auth/limits
+- iOS 26 home screen web apps: https://www.macrumors.com/guide/ios-26-safari-features/ and https://heise.de/-10749652
+- Chrome installability criteria: https://developer.chrome.com/blog/update-install-criteria
+- Viewport Segments API (foldables): https://developer.chrome.com/blog/viewport-segments-api-shipped and https://developer.mozilla.org/en-US/docs/Web/CSS/@media/horizontal-viewport-segments
+- iPhone Duo / foldable iPhone reports: https://www.macrumors.com/roundup/iphone-duo/ and https://www.macrumors.com/guide/foldable-iphone/
 - Identity Platform `accounts.sendVerificationCode`: https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/accounts/sendVerificationCode
 - Telegram Gateway: https://core.telegram.org/gateway
 - Twilio Verify pricing: https://www.twilio.com/verify/pricing

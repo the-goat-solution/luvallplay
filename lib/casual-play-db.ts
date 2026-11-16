@@ -15,6 +15,7 @@ import { getCourtsForDate, getRosterForDate, setCourtsForDate } from "./db";
 import { notifyWaitlistIfSpotOpened } from "./waitlist-notify";
 import { maxPlayersForCourts } from "./constants";
 import { demoRoster, demoStore, isCasualPlayDemo } from "./casual-play-demo";
+import { recordBoardAttendance } from "./stats-db";
 
 // Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
 let ensurePromise: Promise<void> | null = null;
@@ -271,6 +272,13 @@ export async function runCasualPlayAction(date: string, action: Action): Promise
 
     const email = roster.find((r) => "playerId" in action && r.id === action.playerId)?.email;
     if (email && action.type === "setTier") await rememberProfile(email, { tier: action.tier });
+    // Concluding the play day records who played (≥1 finished game) for
+    // player stats and the leaderboard. Best effort: never blocks the board.
+    if (next.concludedAt && !isCasualPlayDemo()) {
+      await recordBoardAttendance(date, next.players, roster).catch((err) =>
+        console.error("[casual-play] attendance not recorded:", err),
+      );
+    }
     return { state: next, version: (version ?? 0) + 1 };
   }
   throw new ConflictError("The board is busy. Please try again.");

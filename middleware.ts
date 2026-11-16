@@ -8,10 +8,24 @@ import {
 } from "@/lib/admin-session";
 
 export const config = {
-  matcher: "/admin/:path*",
+  matcher: ["/admin/:path*", "/profile", "/profile/:path*"],
 };
 
+// Player profile pages: only checks a session cookie is present, so signed-
+// out visitors go straight to sign-in. The session itself is verified (and
+// refreshed) by the page against the database.
+function guardProfile(request: NextRequest): NextResponse {
+  if (request.cookies.get("tw_player")?.value) return NextResponse.next();
+  const loginUrl = new URL("/login", request.url);
+  loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+  return NextResponse.redirect(loginUrl, request.method === "GET" ? 307 : 303);
+}
+
 export async function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname === "/profile" || request.nextUrl.pathname.startsWith("/profile/")) {
+    return guardProfile(request);
+  }
+
   const password = process.env.ADMIN_PASSWORD;
   if (!password) {
     return new NextResponse("Admin access is not configured", { status: 503 });

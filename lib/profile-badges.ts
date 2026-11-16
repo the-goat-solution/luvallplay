@@ -1,0 +1,17 @@
+import { sql } from "@vercel/postgres";
+
+// Little red counters on the profile tabs. Each source is optional: a
+// feature whose tables don't exist yet simply contributes nothing.
+export async function getProfileBadges(playerId: number): Promise<Partial<Record<"account" | "membership" | "player", number>>> {
+  const badges: Partial<Record<"account" | "membership" | "player", number>> = {};
+  try {
+    const { rows } = await sql`
+      SELECT count(*)::int AS n FROM message_threads
+      WHERE player_id = ${playerId} AND unread_for_player = TRUE;
+    `;
+    badges.account = (rows[0]?.n as number) ?? 0;
+  } catch (err) {
+    if ((err as { code?: string }).code !== "42P01") console.error("[profile] badge query failed:", err);
+  }
+  return badges;
+}

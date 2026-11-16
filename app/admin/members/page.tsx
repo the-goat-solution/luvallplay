@@ -1,3 +1,4 @@
+import { linkMemberAccount } from "@/lib/player-db";
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
@@ -148,6 +149,13 @@ async function addCashMember(formData: FormData) {
   // Guarded the same way the Stripe webhook activates card memberships, so
   // it's safe if the webhook for this same invoice also fires and races us.
   const activated = await activateMembershipByPaymentIntentId(paymentIntentId);
+  if (activated) {
+    await linkMemberAccount(activated.email, {
+      firstName: activated.firstName,
+      lastName: activated.lastName,
+      phone: activated.phone,
+    }, "admin");
+  }
   if (activated?.periodStart && activated.periodEnd) {
     const { dateKey: clubToday } = getClubToday();
     await sendMembershipConfirmationEmail(activated.email, {

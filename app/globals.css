@@ -67,8 +67,8 @@ button{font-family:var(--font-sans);cursor:pointer}
 @media(max-width:768px){.container{padding:0 20px}}
 
 /* ── Navigation ──────────────────────────────────────── */
-.nav{position:fixed;top:0;left:0;right:0;z-index:900;padding:22px 0;transition:background var(--ease),padding var(--ease),box-shadow var(--ease)}
-.nav.scrolled{background:var(--navy-dark);padding:14px 0;box-shadow:0 4px 32px rgba(14,44,63,.4)}
+.nav{position:fixed;top:0;left:0;right:0;z-index:900;padding:calc(22px + env(safe-area-inset-top)) 0 22px;transition:background var(--ease),padding var(--ease),box-shadow var(--ease)}
+.nav.scrolled{background:var(--navy-dark);padding:calc(14px + env(safe-area-inset-top)) 0 14px;box-shadow:0 4px 32px rgba(14,44,63,.4)}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:20px}
 .nav-logo{display:none}
 .nav-links{display:flex;align-items:center;gap:32px;list-style:none}

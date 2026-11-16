@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0e2c3f" />
+<title>Offline — Three Wolves</title>
+<style>
+  html,body{margin:0;height:100%}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+    background:radial-gradient(120% 70% at 50% 0%,#1e5a8a 0%,#0e2c3f 62%);color:#fcfbf2;
+    font-family:Montserrat,'Helvetica Neue',Helvetica,Arial,sans-serif;text-align:center;
+    padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px)}
+  img{width:110px;height:auto}
+  h1{font-size:22px;margin:0;letter-spacing:.04em}
+  p{margin:0;max-width:320px;line-height:1.55;opacity:.85}
+  button{min-height:50px;min-width:180px;border:none;border-radius:14px;background:#C4892A;color:#fff;
+    font:inherit;font-weight:700;font-size:15px;touch-action:manipulation}
+</style>
+</head>
+<body>
+  <img src="/icons/wolf-mark-light.png" alt="Three Wolves" />
+  <h1>You're offline</h1>
+  <p>Check your connection and try again. · Bạn đang ngoại tuyến. Hãy kiểm tra kết nối rồi thử lại.</p>
+  <button type="button" onclick="location.reload()">Retry · Thử lại</button>
+</body>
+</html>

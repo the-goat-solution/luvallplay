@@ -1,3 +1,4 @@
+import { linkMemberAccount } from "@/lib/player-db";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { sql } from "@vercel/postgres";
@@ -129,6 +130,14 @@ export async function POST(request: Request) {
 
     if (pi.metadata?.type === "membership" && process.env.POSTGRES_URL) {
       const activated = await activateMembershipByPaymentIntentId(pi.id);
+      if (activated) {
+        await linkMemberAccount(activated.email, {
+          firstName: activated.firstName,
+          lastName: activated.lastName,
+          phone: activated.phone,
+          stripeCustomerId: typeof pi.customer === "string" ? pi.customer : (pi.customer?.id ?? null),
+        });
+      }
       if (activated?.periodStart && activated.periodEnd) {
         const { dateKey: clubToday } = getClubToday();
         await sendMembershipConfirmationEmail(activated.email, {
@@ -219,6 +228,14 @@ export async function POST(request: Request) {
       // finds the membership already 'active' and returns null, so it
       // never re-triggers the welcome email below.
       const activated = await activateMembershipBySubscriptionId(subId);
+      if (activated) {
+        await linkMemberAccount(activated.email, {
+          firstName: activated.firstName,
+          lastName: activated.lastName,
+          phone: activated.phone,
+          stripeCustomerId: typeof invoice.customer === "string" ? invoice.customer : (invoice.customer?.id ?? null),
+        });
+      }
       await sql`
         UPDATE donations SET status = 'active'
         WHERE stripe_subscription_id = ${subId};
@@ -261,6 +278,13 @@ export async function POST(request: Request) {
       const activated = await activateMembershipByPaymentIntentId(
         `cash-invoice-${invoice.id}`,
       );
+      if (activated) {
+        await linkMemberAccount(activated.email, {
+          firstName: activated.firstName,
+          lastName: activated.lastName,
+          phone: activated.phone,
+        }, "admin");
+      }
       if (activated?.periodStart && activated.periodEnd) {
         const { dateKey: clubToday } = getClubToday();
         await sendMembershipConfirmationEmail(activated.email, {

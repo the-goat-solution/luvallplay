@@ -279,7 +279,7 @@ function mapChallenge(r: Record<string, unknown>): ChallengeRow {
   };
 }
 
-export type ArenaPlayer = { id: number; name: string; firstName: string; initials: string; visible: boolean; email: string };
+export type ArenaPlayer = { id: number; name: string; firstName: string; initials: string; visible: boolean; email: string; avatarUrl?: string | null };
 export type PairRow = { id: number; players: [number, number]; name: string | null; formedAt: string; endedAt: string | null };
 
 export type PlayerRank = {
@@ -368,7 +368,7 @@ export function loadWorldCached(maxAgeMs: number): Promise<World> {
 
 // Bump to recalculate everyone once more (each environment's ranks are kept
 // separately, so production and previews each run it once).
-const RECALC_KEY = `points_recalc_2026_11_signups${PREFIX ? `:${PREFIX}` : ""}`;
+const RECALC_KEY = `points_recalc_2026_11_ladder1200${PREFIX ? `:${PREFIX}` : ""}`;
 let pointsSyncedAt = 0;
 
 /**
@@ -406,8 +406,9 @@ function syncPointsLater(): void {
  * Recalculates everyone from the records: play days rebuilt from the sign-up
  * lists, round robin results re-read from every draw, then each player's
  * stored peak rank set back to what their points earn now (a peak reached
- * on points that were wrong no longer holds them up). Seen ranks only go
- * down, so nobody gets a rank-up screen for the recalculation itself.
+ * on points that were wrong no longer holds them up). The new rank counts as
+ * seen, so nobody gets a rank-up screen for the recalculation (or a ladder
+ * change) itself.
  */
 export async function recalculateAllPoints(): Promise<{ attendance: number; roundRobin: number; players: number }> {
   const backfill = await runStatsBackfill();
@@ -417,8 +418,8 @@ export async function recalculateAllPoints(): Promise<{ attendance: number; roun
   for (const [id, r] of world.ranks) {
     const earned = indexForWp(r.wpTotal);
     const { rowCount } = await sql.query(
-      `UPDATE ${T.ranks} SET peak_index = $2, seen_index = LEAST(seen_index, $2), updated_at = NOW()
-       WHERE player_id = $1 AND (peak_index <> $2 OR seen_index > $2);`,
+      `UPDATE ${T.ranks} SET peak_index = $2, seen_index = $2, updated_at = NOW()
+       WHERE player_id = $1 AND (peak_index <> $2 OR seen_index <> $2);`,
       [id, earned],
     );
     players += rowCount ?? 0;
@@ -435,7 +436,7 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
   const today = getClubToday().dateKey;
   const [pl, att, rr, pairs, members, ch, peaks, club] = await Promise.all([
     sql.query(
-      `SELECT p.id, p.email, p.first_name, ${DISPLAY_NAME_SQL} AS name, p.leaderboard_visible
+      `SELECT p.id, p.email, p.first_name, ${DISPLAY_NAME_SQL} AS name, p.leaderboard_visible, p.avatar_url
        FROM players p WHERE p.deleted_at IS NULL;`,
     ),
     sql.query(
@@ -462,6 +463,7 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
       initials: initialsOf(r.name),
       visible: r.leaderboard_visible,
       email: r.email,
+      avatarUrl: (r.avatar_url as string | null) ?? null,
     });
   }
 
@@ -1102,6 +1104,7 @@ export type PointsBoardRow = {
   playerId: number;
   name: string;
   initials: string;
+  avatarUrl: string | null;
   /** Points from the chosen source(s) in the period. */
   value: number;
   /** The same period split by source (for the row's small print). */
@@ -1137,6 +1140,7 @@ export async function getPointsBoard(source: PointsSource, range: PeriodRange, i
       playerId: p.id,
       name: p.name,
       initials: p.initials,
+      avatarUrl: p.avatarUrl ?? null,
       value,
       play: by.play,
       rr: by.rr,

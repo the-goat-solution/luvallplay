@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getPlayerFromRequest } from "@/lib/player-auth";
-import { deletePlayerAccount } from "@/lib/player-db";
+import { deletePlayerAccount, setPlayerAvatar } from "@/lib/player-db";
+import { deletePublicBlobs } from "@/lib/public-blob";
 import { clearPlayerCookies } from "@/lib/player-cookies";
 import { sendAdminAlertEmail } from "@/lib/player-email";
 import { endPlayerArena } from "@/lib/arena-db";
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "confirm" }, { status: 400 });
   }
   await endPlayerArena(player.id).catch((err) => console.error("[profile] arena cleanup failed:", err));
+  // The profile picture goes with the account.
+  await deletePublicBlobs([await setPlayerAvatar(player.id, null).catch(() => null)]);
   await deletePlayerAccount(player.id);
   await sendAdminAlertEmail({
     subject: `Account deleted: ${player.email}`,

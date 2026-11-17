@@ -470,3 +470,34 @@ span.stepBtn {
 .top1 {
   font-size: 18px;
 }
+
+/* Avatar (photo or initials) with the rank icon pinned to its corner. */
+.who {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 42px;
+}
+.face {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cream-dark);
+  color: var(--navy);
+  font-weight: 800;
+  font-size: 13px;
+}
+.faceRank {
+  position: absolute;
+  right: -7px;
+  bottom: -5px;
+  display: inline-flex;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.25));
+}
+.list li .name small {
+  white-space: normal;
+}

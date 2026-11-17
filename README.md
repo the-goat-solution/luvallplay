@@ -248,7 +248,7 @@ New members are linked to an account automatically by every membership path: onl
 
 The profile is an installable web app: manifest, icons, a service worker that caches only static files, and an offline page. It has four tabs, and a **Club site** button in the top bar back to the home page.
 
-- **Account:** details (email locked), phone confirmation, messages with the admins (**Admin → Inbox**), leaderboard opt-out, data download, account deletion, and an "Add to Home Screen" guide. The guide shows once per player, for about 45 seconds, on a touch device that isn't already running the app.
+- **Account:** profile picture (cropped to a 512 px square in the browser, stored in the public Blob store under `avatars/`, shown in the top bar and on the leaderboard; removed with the account), details (email locked), phone confirmation, messages with the admins (**Admin → Inbox**), leaderboard opt-out, data download, account deletion, and an "Add to Home Screen" guide. The guide shows once per player, for about 45 seconds, on a touch device that isn't already running the app.
 - **Membership:**
   - **Plan and billing:** plan, card and receipts (from Stripe); "Update card" uses Stripe's Customer Portal, limited to the update-card flow.
   - **Changes at the next renewal:** upgrades and day changes use a Stripe subscription schedule. The new phase's metadata (`plan`/`day`) is copied onto the membership by the webhook before the renewal is applied.
@@ -275,7 +275,7 @@ The profile is an installable web app: manifest, icons, a service worker that ca
 Plan and decisions: `docs/plans/challenges.md`.
 
 - **Wolf Points (WP):** 1 per play day, 2 per round robin win, 2 per challenge win, plus challenge bonuses (Giant-killer +2, New rival +1, Hot streak +1, Crown bounty +4). Losses never cost points. Everything is worked out from the records (`attendance`, `rr_results`, confirmed challenges), so history counts the moment it's recorded.
-- **Ranks:** 35 steps in four leagues, from Plastic Shuttle to Diamond Racket with a full kit (shoes, jersey, bag, trophy as add-ons between rackets), plus two live Wolf seats (Alpha Wolf and 3 Silver Wolves: top 90-day WP). Thresholds, tarnish and bonus rules are pure functions in `lib/ranks.ts` (tested in `tests/ranks.test.ts`); the art is `lib/rank-art.ts`.
+- **Ranks:** 35 steps in four leagues (Feather Shuttle 8 WP, Wooden Racket 30, Silver-plated 355, Diamond 870, top 1,200), from Plastic Shuttle to Diamond Racket with a full kit (shoes, jersey, bag, trophy as add-ons between rackets), plus two live Wolf seats (Alpha Wolf and 3 Silver Wolves: top 90-day WP). Thresholds, tarnish and bonus rules are pure functions in `lib/ranks.ts` (tested in `tests/ranks.test.ts`); the art is `lib/rank-art.ts`.
 - **Keep it polished:** Precious Racket and Diamond ranks need 5 WP in 60 days; below that they tarnish and slip one rank every 30 days, never below the start of the league reached. Playing again restores them.
 - **Pairs:** team up with a 5-digit code (2 minutes; the code owner confirms). One partner at a time.
 - **Challenges:** post (open today, 3 or 7 days), any other pair accepts, the players sort out time and place themselves, check in with a 5-digit code when they meet, enter a BWF score (one game to 21), the other pair confirms (auto-confirms after 24 hours; "That's not right" goes to **Admin → Challenges**). Caps: the same four players once a day and three times in 30 days; four challenges per player per day.

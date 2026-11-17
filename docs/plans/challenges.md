@@ -113,22 +113,22 @@ Every challenge counts, so the caps work by **stopping a challenge from being po
 - **Precious Racket league:** racket → + Shoes → + Jersey → + Racket Bag → next racket;
 - **Diamond league:** Diamond Racket → + Shoes → + Jersey → + Bag → + **Champion's Trophy (Cúp Vàng)**, the top of the ladder.
 
-Thresholds are **starting proposals**, stretched so the early ranks take weeks, not a couple of play days. Reaching **Diamond is meant to be rare and something to be proud of**. They'll still be tuned on the dry run (§4.4).
+Thresholds (lowered in Nov 2026 so the top is 1,200 WP) are stretched so the early ranks take weeks, not a couple of play days. Reaching **Diamond is meant to be rare and something to be proud of**. They'll still be tuned on the dry run (§4.4).
 
 | League | Racket (EN / VI) | Racket | + Shoes | + Jersey | + Bag | + Trophy |
 |---|---|---|---|---|---|---|
 | **1 · Shuttle** | Plastic Shuttle / Cầu Nhựa | 0 | | | | |
-| | Feather Shuttle / Cầu Lông | 10 | | | | |
-| | Shuttle Tube / Ống Cầu | 25 | | | | |
-| **2 · Racket** | Wooden / Vợt Gỗ | 45 | 65 | 85 | | |
-| | Steel / Vợt Thép | 110 | 135 | 160 | | |
-| | Aluminium / Vợt Nhôm | 190 | 220 | 250 | | |
-| | Carbon Fibre / Vợt Sợi Carbon | 285 | 320 | 355 | | |
-| | Pro / Vợt Đỉnh | 395 | 435 | 475 | | |
-| **3 · Precious Racket** | Silver-plated / Vợt Bạc | 520 | 570 | 620 | 670 | |
-| | Golden / Vợt Vàng | 730 | 790 | 850 | 910 | |
-| | Platinum / Vợt Bạch Kim | 980 | 1,050 | 1,120 | 1,190 | |
-| **4 · Diamond** | Diamond / Vợt Kim Cương | 1,300 | 1,420 | 1,540 | 1,660 | 1,800 |
+| | Feather Shuttle / Cầu Lông | 8 | | | | |
+| | Shuttle Tube / Ống Cầu | 18 | | | | |
+| **2 · Racket** | Wooden / Vợt Gỗ | 30 | 45 | 60 | | |
+| | Steel / Vợt Thép | 75 | 95 | 115 | | |
+| | Aluminium / Vợt Nhôm | 135 | 155 | 175 | | |
+| | Carbon Fibre / Vợt Sợi Carbon | 200 | 225 | 250 | | |
+| | Pro / Vợt Đỉnh | 275 | 300 | 325 | | |
+| **3 · Precious Racket** | Silver-plated / Vợt Bạc | 355 | 390 | 425 | 460 | |
+| | Golden / Vợt Vàng | 500 | 540 | 580 | 620 | |
+| | Platinum / Vợt Bạch Kim | 665 | 710 | 755 | 800 | |
+| **4 · Diamond** | Diamond / Vợt Kim Cương | 870 | 950 | 1,030 | 1,110 | 1,200 |
 
 Kit items (VI): Court Shoes / Giày Thi Đấu · Club Jersey / Áo Club · Racket Bag / Túi Vợt · Champion's Trophy / Cúp Vàng.
 

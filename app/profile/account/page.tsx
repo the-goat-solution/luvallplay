@@ -3,6 +3,7 @@ import { defaultDisplayName } from "@/lib/player-db";
 import { getRecaptchaSiteKey, getSmsUsage } from "@/lib/sms";
 import { AppCard, DetailsCard, PhoneCard, PrivacyCard, WelcomeCard } from "@/components/profile/AccountSections";
 import { MessagesPanel } from "@/components/profile/MessagesPanel";
+import { AvatarCard } from "@/components/profile/AvatarCard";
 import { listThreadsForPlayer } from "@/lib/messages-db";
 import { PT } from "@/components/profile/PT";
 import styles from "@/components/profile/profile.module.css";
@@ -29,6 +30,7 @@ export default async function AccountPage() {
           <AppCard />
         </div>
         <div className={styles.stack}>
+          <AvatarCard url={player.avatarUrl} initials={`${player.firstName.trim()[0] ?? player.email[0] ?? "?"}${player.lastName.trim()[0] ?? ""}`.toUpperCase()} />
           <DetailsCard
             player={{
               email: player.email,

@@ -114,8 +114,11 @@ export function LeaderboardView({
   const row = (r: PointsBoardRow, mine: boolean) => (
     <li key={r.playerId} className={`${s.row} ${mine ? s.mine : ""} ${r.seat ? s.seated : ""}`}>
       <span className={`${s.rank} ${r.rank <= 3 ? s[`top${r.rank}`] : ""}`}>{r.rank}</span>
-      <span className={s.rowIcon} style={r.tarnishing ? { filter: "grayscale(.75)" } : undefined}>
-        <RankIcon index={r.index} px={30} tarnished={r.tarnishing} />
+      <span className={s.who}>
+        {r.avatarUrl ? <img src={r.avatarUrl} alt="" className={s.face} loading="lazy" /> : <span className={s.face}>{r.initials}</span>}
+        <span className={s.faceRank} style={r.tarnishing ? { filter: "grayscale(.75)" } : undefined}>
+          <RankIcon index={r.index} px={22} tarnished={r.tarnishing} />
+        </span>
       </span>
       <span className={s.name}>
         <span className={s.nameLine}>

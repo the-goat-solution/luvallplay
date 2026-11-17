@@ -110,6 +110,7 @@ export type ShellPlayer = {
   lastName: string;
   email: string;
   lang: Lang;
+  avatarUrl?: string | null;
 };
 
 function initials(p: ShellPlayer): string {
@@ -255,7 +256,7 @@ export function ProfileShell({
             aria-label={`${player.firstName} ${player.lastName}`.trim() || player.email}
             onClick={() => setMenuOpen((o) => !o)}
           >
-            {initials(player)}
+            {player.avatarUrl ? <img src={player.avatarUrl} alt="" className={styles.avatarImg} /> : initials(player)}
           </button>
           {menuOpen && (
             <div className={styles.menu} role="menu">

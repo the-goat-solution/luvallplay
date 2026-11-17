@@ -30,16 +30,17 @@ test("ladder: 35 steps, kit add-ons between rackets, increasing thresholds", () 
   assert.equal(LADDER.find((r) => r.item === "pro")?.item, "pro");
   assert.equal(rankName(LADDER.find((r) => r.item === "pro")!, "vi"), "Vợt Đỉnh");
   assert.equal(LADDER[LEAGUE_START[4]].item, "diamond");
-  assert.ok(LADDER[LEAGUE_START[4]].wp >= 1000, "Diamond is meant to be hard");
+  assert.ok(LADDER[LEAGUE_START[4]].wp >= 800, "Diamond is meant to be hard");
+  assert.equal(LADDER[TOP_INDEX].wp, 1200, "the top is 1200 WP");
 });
 
 test("indexForWp and progress", () => {
   assert.equal(indexForWp(0), 0);
-  assert.equal(indexForWp(9), 0);
-  assert.equal(indexForWp(10), 1);
-  assert.equal(indexForWp(45), WOODEN_INDEX);
+  assert.equal(indexForWp(7), 0);
+  assert.equal(indexForWp(8), 1);
+  assert.equal(indexForWp(30), WOODEN_INDEX);
   assert.equal(indexForWp(100000), TOP_INDEX);
-  assert.equal(progressToNext(5, 0), 0.5);
+  assert.equal(progressToNext(4, 0), 0.5);
   assert.equal(progressToNext(5000, TOP_INDEX), 1);
 });
 

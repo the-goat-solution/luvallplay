@@ -26,7 +26,7 @@ export default async function ProfileLayout({ children }: { children: React.Reac
   const [badges, liveMatchId] = await Promise.all([getProfileBadges(player.id), liveMatchFor(player.id).catch(() => null)]);
   return (
     <ProfileShell
-      player={{ firstName: player.firstName, lastName: player.lastName, email: player.email, lang: player.lang }}
+      player={{ firstName: player.firstName, lastName: player.lastName, email: player.email, lang: player.lang, avatarUrl: player.avatarUrl }}
       showInstallGuide={!player.installHintShown && !player.installedAt}
       badges={badges}
       liveMatchId={liveMatchId}

@@ -68,17 +68,17 @@ export type Rank = {
 // next racket; the Precious league adds a bag; Diamond ends with the trophy.
 const LADDER_SPEC: [ItemKey, number[]][] = [
   ["plastic", [0]],
-  ["feather", [10]],
-  ["tube", [25]],
-  ["wooden", [45, 65, 85]],
-  ["steel", [110, 135, 160]],
-  ["aluminium", [190, 220, 250]],
-  ["carbon", [285, 320, 355]],
-  ["pro", [395, 435, 475]],
-  ["silver", [520, 570, 620, 670]],
-  ["golden", [730, 790, 850, 910]],
-  ["platinum", [980, 1050, 1120, 1190]],
-  ["diamond", [1300, 1420, 1540, 1660, 1800]],
+  ["feather", [8]],
+  ["tube", [18]],
+  ["wooden", [30, 45, 60]],
+  ["steel", [75, 95, 115]],
+  ["aluminium", [135, 155, 175]],
+  ["carbon", [200, 225, 250]],
+  ["pro", [275, 300, 325]],
+  ["silver", [355, 390, 425, 460]],
+  ["golden", [500, 540, 580, 620]],
+  ["platinum", [665, 710, 755, 800]],
+  ["diamond", [870, 950, 1030, 1110, 1200]],
 ];
 const KIT_ORDER: KitKey[] = ["shoes", "jersey", "bag", "trophy"];
 

@@ -27,7 +27,7 @@ const cachedBoard = unstable_cache(
     const range = periodFromKey(period, key) ?? periodRange(period, getClubToday().dateKey);
     return getPointsBoard(source, range);
   },
-  [`points-board-${process.env.VERCEL_ENV ?? "local"}`],
+  [`points-board-v2-${process.env.VERCEL_ENV ?? "local"}`],
   { tags: ["leaderboard"], revalidate: 300 },
 );
 

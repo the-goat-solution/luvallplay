@@ -353,7 +353,7 @@ const EN = {
 
   // Leaderboard page
   lb_title: "Leaderboard",
-  lb_sub: "Play days attended and round robin points, by month, quarter, year and all time.",
+  lb_sub: "Wolf Points, challenges, play days and round robin points, by month, quarter, year and all time.",
   lb_attendance: "Play days",
   lb_rr: "Round robin",
   lb_month: "Month",
@@ -366,6 +366,10 @@ const EN = {
   lb_day: "1 play day",
   lb_pts: "{n} pts",
   lb_rr_meta: "{w} wins · {d} diff",
+  lb_wp: "Wolf Points",
+  lb_ch: "Challenges",
+  lb_wp_val: "{n} WP",
+  lb_ch_meta: "{w} wins · {p} games",
   lb_empty: "No results for this period yet.",
   lb_you: "You",
   lb_hidden_ok: "Done: you're hidden from the leaderboard. You can show yourself again any time in your profile.",
@@ -427,7 +431,7 @@ const EN = {
   ca_calendar_body: "Subscribe in your calendar app with this link (needs a key with calendar access):",
   ca_docs: "API: GET /api/v1/me, /api/v1/me/attendance, /api/v1/me/round-robin, /api/v1/me/stats, /api/v1/leaderboard; POST /api/v1/me/activity.",
   ca_invalid_url: "Use a public https:// address.",
-  lb_how: "Play days count when you finish at least one game on the court board or play in the round robin. Round robin: 2 points per win; ties go to point difference.",
+  lb_how: "Wolf Points: 1 WP per play day, 2 per round robin or challenge win, plus challenge bonuses. Play days count when you finish at least one game on the court board or play in the round robin. Round robin: 2 points per win; ties go to point difference.",
 } as const;
 
 type Dict = { [K in keyof typeof EN]: string };
@@ -767,7 +771,7 @@ const VI: Dict = {
   ord_n: "Hạng {n}",
 
   lb_title: "Bảng xếp hạng",
-  lb_sub: "Số buổi chơi và điểm vòng tròn theo tháng, quý, năm và tất cả.",
+  lb_sub: "Điểm Sói, thách đấu, buổi chơi và điểm vòng tròn, theo tháng, quý, năm và mọi thời điểm.",
   lb_attendance: "Buổi chơi",
   lb_rr: "Vòng tròn",
   lb_month: "Tháng",
@@ -780,6 +784,10 @@ const VI: Dict = {
   lb_day: "1 buổi",
   lb_pts: "{n} điểm",
   lb_rr_meta: "{w} trận thắng · hiệu số {d}",
+  lb_wp: "Điểm Sói",
+  lb_ch: "Thách đấu",
+  lb_wp_val: "{n} WP",
+  lb_ch_meta: "{w} trận thắng · {p} trận",
   lb_empty: "Chưa có kết quả cho giai đoạn này.",
   lb_you: "Bạn",
   lb_hidden_ok: "Xong: bạn đã được ẩn khỏi bảng xếp hạng. Có thể hiện lại bất cứ lúc nào trong hồ sơ.",
@@ -839,7 +847,7 @@ const VI: Dict = {
   ca_calendar_body: "Đăng ký trong ứng dụng lịch bằng liên kết này (cần khoá có quyền lịch):",
   ca_docs: "API: GET /api/v1/me, /api/v1/me/attendance, /api/v1/me/round-robin, /api/v1/me/stats, /api/v1/leaderboard; POST /api/v1/me/activity.",
   ca_invalid_url: "Hãy dùng địa chỉ https:// công khai.",
-  lb_how: "Một buổi được tính khi bạn hoàn thành ít nhất một trận trên bảng sân hoặc chơi vòng tròn. Vòng tròn: thắng được 2 điểm; bằng điểm xét hiệu số.",
+  lb_how: "Điểm Sói: 1 WP mỗi buổi chơi, 2 WP mỗi trận thắng vòng tròn hoặc thách đấu, cộng thưởng. Một buổi được tính khi bạn hoàn thành ít nhất một trận trên bảng sân hoặc chơi vòng tròn.",
 };
 
 const DICT: Record<Lang, Dict> = { en: EN, vi: VI };

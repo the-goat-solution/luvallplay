@@ -72,7 +72,8 @@ button{font-family:var(--font-sans);cursor:pointer}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:20px}
 .nav-logo{display:none}
 .nav-links{display:flex;align-items:center;gap:32px;list-style:none}
-.nav-links a{color:rgba(255,255,255,.8);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;transition:color var(--ease)}
+.nav-links a{color:rgba(255,255,255,.8);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;transition:color var(--ease);white-space:nowrap}
+@media(max-width:1340px){.nav-links{gap:22px}.nav-links a{letter-spacing:.12em}}
 .nav-links a:hover{color:var(--bronze-light)}
 .nav-links a.nav-account{color:var(--bronze-light)}
 .nav-actions{display:flex;align-items:center;gap:14px}

@@ -1,6 +1,10 @@
 # Plan: Wolf Points, rank ladder, pair challenges & crowns
 
-Status: **draft for discussion**. Nothing built yet apart from the draft art (§9). Items marked **(proposed)** are recommendations waiting on a decision; the open questions are in §15.
+Status: **built, on a preview deployment** (17 Nov). Set-up and behaviour are in the README under "The Arena". The live art is `lib/rank-art.ts`; the files in `challenge-graphics/` are the earlier drafts and mockups.
+
+**Not in this build yet:** Web Push notifications (§12; in-app badges and polling only for now), rank icons on the court board, API/webhook/MCP additions, season-end badges beyond the Season champion line, and a share image (the rank-up card shares a link).
+
+Originally a draft for discussion. Items marked **(proposed)** are recommendations waiting on a decision; the open questions are in §15.
 
 **Decided:**
 
@@ -13,8 +17,10 @@ Status: **draft for discussion**. Nothing built yet apart from the draft art (§
 | 17 Nov | **Every challenge is competitive.** No friendlies; every point counts. |
 | 17 Nov | Each player has an **individual rank** on a badminton-themed ladder, earned with **Wolf Points** from **play-day attendance, round robin results and challenge results**. No Elo rating. |
 | 17 Nov | **Everyone starts at the bottom, but history counts:** attendance and round robin results already in the database count on launch day. |
-| 17 Nov | **Demotion = "keep it polished":** Shuttle and Racket ranks are permanent; Precious Racket and Legend Kit ranks tarnish if you stop playing (never below the start of a league you've reached); the Wolf seats are live, limited and change hands. |
+| 17 Nov | **Demotion = "keep it polished":** Shuttle and Racket ranks are permanent; Precious Racket and Diamond ranks tarnish if you stop playing (never below the start of a league you've reached); the Wolf seats are live, limited and change hands. |
 | 17 Nov | Challenge bonuses: **Giant-killer +2, New rival +1, Crown bounty +4, Hot streak +1**. |
+| 17 Nov (rev.) | **Stretched ladder: 35 steps.** Kit items (shoes, jersey, bag, trophy) are add-ons collected between rackets; Diamond is very hard. VI names fixed: Cầu Lông, Vợt Đỉnh, Vợt Bạc, Áo Club, Cúp Vàng. |
+| 17 Nov | Build it and put it on a **preview deployment** (not production). The preview shares the production database, so the new feature uses **`pv_`-prefixed tables on preview**; it only reads the real attendance and round robin history. |
 | 17 Nov | A play day is worth **1 WP**. |
 | 17 Nov | Ladder: **Carbon** becomes **Carbon Fibre Racket**; **Player's Racket is removed** (16 ranks + 2 Wolf seats). |
 | 17 Nov | **Players arrange time and place themselves.** The site doesn't handle coordination: no chat, no phone sharing, no venue list, and no time or place on a challenge. |
@@ -80,7 +86,7 @@ Expected running cost: **$0/month** (same stack; the art is static SVG).
 | Play day attended | **1** per play day | Yes: `attendance` (court board, round robin, admin ticks, roster) |
 | Round robin win | **2** per win, 0 per loss (the existing RR points) | Yes: `rr_results` |
 | Challenge win | **2** per win, 0 per loss | New |
-| **Giant-killer** | **+2**: win against a pair whose average rank is in a **higher league** than your pair's | New |
+| **Giant-killer** | **+2**: win against a pair whose average rank is **at least 4 steps above** your pair's | New |
 | **New rival** | **+1** each for playing (win or lose) a pair in which **neither player** has faced you in a challenge before | New |
 | **Hot streak** | **+1** for each challenge win after **3 wins in a row** (resets on a loss) | New |
 | **Crown bounty** | **+4** each for beating the Crown pair (they lose the crown) | New |
@@ -100,42 +106,54 @@ Every challenge counts, so the caps work by **stopping a challenge from being po
 
 ## 4. The rank ladder
 
-### 4.1 Ranks (16, plus 2 Wolf seats, in 4 leagues)
+### 4.1 Ranks: 35 steps in 4 leagues, plus 2 Wolf seats (revised 17 Nov)
 
-Thresholds are **starting proposals** for 1 WP per play day. They'll be tuned after a dry run on the real history (§4.4).
+**Kit add-ons:** there is no separate kit league. Kit items are **add-ons collected on the way to the next racket**, so every racket has several steps and there's lots of room for lifetime points:
+- **Racket league:** racket → racket + Court Shoes → racket + Shoes + Club Jersey → next racket;
+- **Precious Racket league:** racket → + Shoes → + Jersey → + Racket Bag → next racket;
+- **Diamond league:** Diamond Racket → + Shoes → + Jersey → + Bag → + **Champion's Trophy (Cúp Vàng)**, the top of the ladder.
 
-| League | # | Rank (EN) | Rank (VI, to check) | Total WP |
-|---|---|---|---|---|
-| **1 · Shuttle** | 1 | Plastic Shuttle | Cầu Nhựa | 0 |
-| | 2 | Feather Shuttle | Cầu Lông Vũ | 3 |
-| | 3 | Shuttle Tube | Ống Cầu | 8 |
-| **2 · Racket** | 4 | Wooden Racket | Vợt Gỗ | 16 |
-| | 5 | Steel Racket | Vợt Thép | 28 |
-| | 6 | Aluminium Racket | Vợt Nhôm | 44 |
-| | 7 | Carbon Fibre Racket | Vợt Sợi Carbon | 64 |
-| | 8 | Pro Racket | Vợt Chuyên Nghiệp | 90 |
-| **3 · Precious Racket** | 9 | Silver-plated Racket | Vợt Mạ Bạc | 125 |
-| | 10 | Golden Racket | Vợt Vàng | 165 |
-| | 11 | Platinum Racket | Vợt Bạch Kim | 210 |
-| | 12 | Diamond Racket | Vợt Kim Cương | 260 |
-| **4 · Legend Kit** | 13 | Racket Bag | Túi Vợt | 330 |
-| | 14 | Court Shoes | Giày Thi Đấu | 400 |
-| | 15 | Club Jersey (Three Wolves) | Áo Câu Lạc Bộ | 480 |
-| | 16 | Champion's Trophy | Cúp Vô Địch | 570 |
-| **Wolf seats** | – | **Silver Wolf** (3 seats) | Sói Bạc | 2nd–4th by WP in the last 90 days, among Precious Racket or above |
-| | – | **Alpha Wolf** (1 seat) | Sói Đầu Đàn | 1st by WP in the last 90 days, among Precious Racket or above |
+Thresholds are **starting proposals**, stretched so the early ranks take weeks, not a couple of play days. Reaching **Diamond is meant to be rare and something to be proud of**. They'll still be tuned on the dry run (§4.4).
 
-Pace for a typical regular (one play day and two challenges a week, the odd round robin) is about **4–5 WP a week**:
-- a newcomer reaches Feather Shuttle with their first win (or three play days);
-- Wooden Racket in about a month;
-- Pro Racket in about 5 months;
-- Diamond Racket in just over a year;
-- Champion's Trophy is a 2–3 year goal.
+| League | Racket (EN / VI) | Racket | + Shoes | + Jersey | + Bag | + Trophy |
+|---|---|---|---|---|---|---|
+| **1 · Shuttle** | Plastic Shuttle / Cầu Nhựa | 0 | | | | |
+| | Feather Shuttle / Cầu Lông | 10 | | | | |
+| | Shuttle Tube / Ống Cầu | 25 | | | | |
+| **2 · Racket** | Wooden / Vợt Gỗ | 45 | 65 | 85 | | |
+| | Steel / Vợt Thép | 110 | 135 | 160 | | |
+| | Aluminium / Vợt Nhôm | 190 | 220 | 250 | | |
+| | Carbon Fibre / Vợt Sợi Carbon | 285 | 320 | 355 | | |
+| | Pro / Vợt Đỉnh | 395 | 435 | 475 | | |
+| **3 · Precious Racket** | Silver-plated / Vợt Bạc | 520 | 570 | 620 | 670 | |
+| | Golden / Vợt Vàng | 730 | 790 | 850 | 910 | |
+| | Platinum / Vợt Bạch Kim | 980 | 1,050 | 1,120 | 1,190 | |
+| **4 · Diamond** | Diamond / Vợt Kim Cương | 1,300 | 1,420 | 1,540 | 1,660 | 1,800 |
+
+Kit items (VI): Court Shoes / Giày Thi Đấu · Club Jersey / Áo Club · Racket Bag / Túi Vợt · Champion's Trophy / Cúp Vàng.
+
+| Wolf seat | Who |
+|---|---|
+| **Alpha Wolf** (1) / Sói Đầu Đàn | 1st by WP in the last 90 days, among players at Wooden Racket or above |
+| **Silver Wolf** (3) / Sói Bạc | 2nd–4th by WP in the last 90 days, same rule |
+
+Pace for a typical regular (one play day and two challenges a week, the odd round robin) is about **4–5 WP a week, ~230 a year**:
+
+| Milestone | Regular (~230 WP a year) | Very active (~500 WP a year) |
+|---|---|---|
+| Feather Shuttle | 2–3 weeks | 1 week |
+| Wooden Racket | ~10 weeks | ~5 weeks |
+| Pro Racket | ~1.7 years | ~9 months |
+| Silver-plated Racket | ~2.3 years | ~1 year |
+| Diamond Racket | ~5.5 years | ~2.6 years |
+| Champion's Trophy | ~8 years | ~3.6 years |
+
+**Giant-killer** (revised for the longer ladder): beat a pair whose average rank is **at least 4 steps above** yours.
 
 ### 4.2 Demotion: "keep it polished" (decided)
 
-- **Shuttle and Racket leagues are permanent.** You never lose a racket you've earned.
-- **Precious Racket and Legend Kit ranks need upkeep:** at least **5 WP in the last 60 days** (one play day and two challenge wins, for example).
+- **Shuttle and Racket leagues are permanent.** You never lose a racket (or kit) you've earned.
+- **Precious Racket and Diamond ranks need upkeep:** at least **5 WP in the last 60 days** (one play day and two challenge wins, for example).
   - **Day 60** below that: "Your Golden Racket is tarnishing. Play within 30 days to keep it shiny." The icon dulls (§9.3).
   - **Each further 30 days** below it: the shown rank slips **one rank**, but never below the **start of the highest league you've reached**.
   - **As soon as you're back above 5 WP in 60 days, the rank is restored.** Points were never removed, so returning players get a "Polished!" moment instead of a punishment.
@@ -154,7 +172,7 @@ Pace for a typical regular (one play day and two challenges a week, the odd roun
 ### 4.4 Launch calibration
 
 1. Before launch, run the ladder over the real history as a **dry run**: Admin → Players shows how many players land in each rank.
-2. Tune the thresholds so that **regulars land in the Racket league, a handful in Precious Racket, and nobody in Legend Kit**.
+2. Tune the thresholds so that **regulars land in the Racket league, very few in Precious Racket, and nobody in Diamond**.
 3. Thresholds live in one file (`lib/ranks.ts`). Raising one later never takes away a rank someone already holds, because the peak is stored.
 
 ---
@@ -270,7 +288,7 @@ The art borrows from the club crest and the profile app rather than from game ar
 - **Line:** navy outlines with round joins, like the profile tab icons. Fine strings and feather lines at large sizes echo the drawn rackets and shuttles in the crest.
 - **Shapes from the crest:**
   - the Precious Racket shield is cut with the same angular facets as the crest's wolves;
-  - Legend Kit carries the crest's banner ribbon;
+  - the Diamond league carries the crest's banner ribbon;
   - the Wolf seats are a simplified faceted wolf head.
 - **Cards:** on the same white cards, 16 px radius and soft navy shadow as the leaderboard; the rank-up card uses the leaderboard hero's navy gradient and Copperplate heading.
 
@@ -280,7 +298,8 @@ The art borrows from the club crest and the profile app rather than from game ar
   - Shuttle: round token;
   - Racket: rounded shield;
   - Precious Racket: faceted shield;
-  - Legend Kit: shield with ribbon;
+  - Diamond: shield with ribbon;
+  - kit add-ons: small round badges (shoes, jersey, bag, trophy) along the bottom of the frame, one per item collected;
   - Wolf seats: navy crest.
 - **Rank = the item:** shuttle, feathers, tube; rackets with different head shapes (round wooden head with a T-joint, squarer modern heads, slim pro head with a bronze grip); bag, shoes, jersey, trophy.
 - **Material = colour and finish**, as a secondary cue.
@@ -485,8 +504,8 @@ The rank ladder can go live **before** challenges, because attendance and round 
 ## 15. Open questions (defaults in brackets)
 
 1. Can someone who speaks Vietnamese check the **VI rank names**?
-2. **Thresholds:** fine to tune after the dry run, aiming for nobody in Legend Kit on launch day? [yes]
-3. **Draft art:** happy with the direction in `challenge-graphics/preview.png`? Anything to change (e.g. the Legend Kit ribbon, the wolf heads)?
+2. **Thresholds:** fine to tune after the dry run, aiming for nobody in Diamond on launch day? [yes]
+3. **Draft art:** happy with the direction in `challenge-graphics/preview.png`? Anything to change (e.g. the Diamond ribbon, the wolf heads)?
 4. **The Arena:** happy with the night-court look, the coral/teal corners and the page name "The Arena" (VI "Đấu Trường")? [yes]
 5. One current partner per player, or several pairs at once? [one]
 6. Optional **pair names**, with a word filter? [yes]

@@ -1,3 +1,4 @@
+import { arenaExport } from "./arena-db";
 import { sql } from "@vercel/postgres";
 import type { Player } from "./player-db";
 
@@ -79,5 +80,6 @@ export async function collectPlayerData(player: Player): Promise<Record<string, 
     attendance,
     roundRobin,
     photos,
+    challenges: await arenaExport(player.id).catch(() => null),
   };
 }

@@ -2,6 +2,7 @@ import { AdminLink } from "@/components/admin/AdminLink";
 import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
 import { countUnreadForAdmin } from "@/lib/messages-db";
 import { countPhotosNeedingReview } from "@/lib/photos-db";
+import { countDisputes } from "@/lib/arena-db";
 import styles from "./admin.module.css";
 
 const TABS = [
@@ -11,6 +12,7 @@ const TABS = [
   { href: "/admin/inbox", label: "Inbox" },
   { href: "/admin/shop", label: "Shop" },
   { href: "/admin/photos", label: "Photos" },
+  { href: "/admin/challenges", label: "Challenges" },
   { href: "/admin/day-requests", label: "Day requests" },
   { href: "/admin/jersey", label: "Jersey" },
   { href: "/admin/financials", label: "Financials" },
@@ -23,6 +25,7 @@ export type AdminTab =
   | "inbox"
   | "shop"
   | "photos"
+  | "challenges"
   | "day-requests"
   | "jersey"
   | "financials";
@@ -41,11 +44,12 @@ const badgeStyle = {
 } as const;
 
 export async function AdminNav({ active }: { active: AdminTab }) {
-  const [unread, photosToReview] = await Promise.all([
+  const [unread, photosToReview, disputes] = await Promise.all([
     countUnreadForAdmin().catch(() => 0),
     countPhotosNeedingReview().catch(() => 0),
+    countDisputes().catch(() => 0),
   ]);
-  const badges: Partial<Record<string, number>> = { "/admin/inbox": unread, "/admin/photos": photosToReview };
+  const badges: Partial<Record<string, number>> = { "/admin/inbox": unread, "/admin/photos": photosToReview, "/admin/challenges": disputes };
   return (
     <nav className={styles.nav}>
       <div className={styles.tabs}>

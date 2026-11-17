@@ -74,6 +74,9 @@ export function Navigation() {
                 <a href="/#reviews">Reviews</a>
               </li>
               <li>
+                <a href="/challenges">{lang === "vi" ? "Đấu Trường" : "Arena"}</a>
+              </li>
+              <li>
                 <a href="/leaderboard">{lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}</a>
               </li>
               <li>
@@ -156,6 +159,9 @@ export function Navigation() {
         </a>
         <a href="/#membership" onClick={closeMobile}>
           <Trans k="nav_membership" />
+        </a>
+        <a href="/challenges" onClick={closeMobile}>
+          {lang === "vi" ? "Đấu Trường" : "Arena"}
         </a>
         <a href="/leaderboard" onClick={closeMobile}>
           {lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}

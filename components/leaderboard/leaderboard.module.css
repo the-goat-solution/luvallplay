@@ -35,7 +35,7 @@
 }
 .metricToggle {
   display: inline-grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, auto);
   gap: 4px;
   background: rgba(255, 255, 255, 0.1);
   padding: 4px;
@@ -43,7 +43,7 @@
 }
 .metricToggle a {
   min-height: 44px;
-  padding: 0 22px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -310,4 +310,26 @@ span.stepBtn {
   .metricToggle a:not(.on):hover {
     opacity: 0.8;
   }
+}
+
+@media (max-width: 560px) {
+  .metricToggle {
+    grid-template-columns: 1fr 1fr;
+    border-radius: 22px;
+  }
+}
+.rankIcon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.podRank {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+.avatarWrap {
+  position: relative;
+  display: inline-block;
 }

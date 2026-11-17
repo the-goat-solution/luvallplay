@@ -13,7 +13,7 @@ git push origin main
 1. Import repo at [vercel.com/new](https://vercel.com/new)
 2. Add **Vercel Postgres** storage from the project Storage tab
 3. Copy env vars from `.env.example` into Project Settings → Environment Variables
-4. Deploy (region: Sydney `syd1` is set in `vercel.json`)
+4. Deploy (region: US East `iad1` is set in `vercel.json`, next to the database; see "Speed" in the README)
 
 ## 3. Stripe
 

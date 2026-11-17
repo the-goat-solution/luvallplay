@@ -4,6 +4,7 @@ import { getPlayerFromRequest } from "@/lib/player-auth";
 import { checkRateLimit } from "@/lib/security";
 import {
   ArenaError,
+  invalidateWorld,
   acceptChallenge,
   answerAfterGame,
   callOffChallenge,
@@ -33,7 +34,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL) return NextResponse.json({ error: "no_database" }, { status: 503 });
   const player = await getPlayerFromRequest(request);
-  const state = await buildArenaState(player ? { id: player.id } : null);
+  // Polling: a snapshot up to 3 s old is fine; your own status is always read fresh.
+  const state = await buildArenaState(player ? { id: player.id } : null, { maxAgeMs: 3000 });
   return NextResponse.json(state, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
   }
 
   let code: { code: string; expiresAt: string } | null = null;
+  invalidateWorld();
   try {
     switch (body.action) {
       case "pair_code":
@@ -130,6 +133,7 @@ export async function POST(request: Request) {
         break;
     }
   } catch (err) {
+    invalidateWorld();
     if (err instanceof ArenaError) {
       const state = await buildArenaState({ id: player.id });
       return NextResponse.json({ error: err.code, state }, { status: 409 });
@@ -137,6 +141,7 @@ export async function POST(request: Request) {
     console.error("[arena] action failed:", body.action, err);
     return NextResponse.json({ error: "server" }, { status: 500 });
   }
+  invalidateWorld();
   const state = await buildArenaState({ id: player.id });
   return NextResponse.json({ ok: true, code, state }, { headers: { "Cache-Control": "no-store" } });
 }

@@ -319,6 +319,13 @@ Plan and decisions: `docs/plans/challenges.md`.
 
 `npm test` runs unit tests for the pure logic: periods, streaks, ranking, the SafeSearch rule, phone formatting, redirect safety and GPS removal.
 
+## Speed
+
+- **Functions run next to the database.** The database (Vercel Postgres / Neon) is in AWS `us-east-1`, so `vercel.json` runs functions in `iad1` (Washington, D.C.). Each page crosses the Pacific once instead of once per query. Measured on 17 Nov with functions in Sydney: ~217 ms per query, and ~16 s for the first visit after a quiet spell.
+- **Moving everything to Sydney** (faster still for NZ): create a Neon database in AWS `ap-southeast-2`, copy the data across (Neon's import tool, or `pg_dump`/`pg_restore`), connect it to the project in Vercel → Storage, and set `"regions": ["syd1"]` in `vercel.json`. Neon's free plan sleeps after 5 idle minutes, so the first visit after a quiet spell waits for it to wake up.
+- **Start-up table checks run once per deployment** (`lib/schema-gate.ts`): the first server of a new deployment runs each module's `CREATE TABLE IF NOT EXISTS ...` and records it in `schema_runs`; later cold starts do one query and skip the rest. Local development always runs them.
+- **Speed check:** `GET /api/health/db` shows the function and database regions, five round-trip times and the start-up cost (open on previews; admins only in production).
+
 ## Development
 
 ```bash

@@ -40,6 +40,7 @@ import {
   type Seat,
   type WpEvent,
 } from "./ranks";
+import { onceThisDeploy } from "./schema-gate";
 
 // The challenge feature ("The Arena"): pairs, 5-digit codes, challenges, and
 // Wolf Points worked out from play days, round robin results and challenges.
@@ -67,7 +68,7 @@ export const MIN_GAME_MINUTES = Number(process.env.ARENA_MIN_GAME_MINUTES ?? (pr
 let ensurePromise: Promise<void> | null = null;
 export function ensureArenaTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = (async () => {
+    ensurePromise = onceThisDeploy("arena", async () => {
       await ensurePlayerTables();
       await ensureStatsTables();
       await sql.query(`
@@ -161,7 +162,7 @@ export function ensureArenaTables(): Promise<void> {
           polished_at TIMESTAMPTZ,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );`);
-    })().catch((err) => {
+    }).catch((err) => {
       ensurePromise = null;
       throw err;
     });
@@ -322,22 +323,41 @@ let lastTick = 0;
 export async function tick(force = false): Promise<void> {
   if (!force && Date.now() - lastTick < 15_000) return;
   lastTick = Date.now();
-  await sql.query(`UPDATE ${T.challenges} SET status = 'expired' WHERE status = 'open' AND available_until < NOW();`);
-  await sql.query(
-    `UPDATE ${T.challenges} SET status = 'lapsed' WHERE status = 'accepted' AND accepted_at < NOW() - ($1 * INTERVAL '1 day');`,
-    [ACCEPTED_LAPSE_DAYS],
-  );
-  await sql.query(
-    `UPDATE ${T.challenges} SET status = 'lapsed' WHERE status = 'live' AND checked_in_at < NOW() - ($1 * INTERVAL '1 hour');`,
-    [SCORE_WINDOW_HOURS],
-  );
-  const { rowCount } = await sql.query(
-    `UPDATE ${T.challenges} SET status = 'completed', auto_confirmed = TRUE, completed_at = NOW()
-     WHERE status = 'awaiting' AND entered_at < NOW() - ($1 * INTERVAL '1 hour');`,
-    [AUTO_CONFIRM_HOURS],
-  );
-  await sql.query(`UPDATE ${T.codes} SET status = 'expired' WHERE status IN ('live', 'requested') AND expires_at < NOW();`);
+  // Independent housekeeping updates: one round trip together.
+  const [, , , confirmed] = await Promise.all([
+    sql.query(`UPDATE ${T.challenges} SET status = 'expired' WHERE status = 'open' AND available_until < NOW();`),
+    sql.query(`UPDATE ${T.challenges} SET status = 'lapsed' WHERE status = 'accepted' AND accepted_at < NOW() - ($1 * INTERVAL '1 day');`, [ACCEPTED_LAPSE_DAYS]),
+    sql.query(`UPDATE ${T.challenges} SET status = 'lapsed' WHERE status = 'live' AND checked_in_at < NOW() - ($1 * INTERVAL '1 hour');`, [SCORE_WINDOW_HOURS]),
+    sql.query(
+      `UPDATE ${T.challenges} SET status = 'completed', auto_confirmed = TRUE, completed_at = NOW()
+       WHERE status = 'awaiting' AND entered_at < NOW() - ($1 * INTERVAL '1 hour');`,
+      [AUTO_CONFIRM_HOURS],
+    ),
+    sql.query(`UPDATE ${T.codes} SET status = 'expired' WHERE status IN ('live', 'requested') AND expires_at < NOW();`),
+  ]);
+  const rowCount = confirmed.rowCount;
   if (rowCount) refresh();
+}
+
+let cachedWorld: { at: number; world: Promise<World> } | null = null;
+
+/** Drops the cached snapshot (after any change). */
+export function invalidateWorld(): void {
+  cachedWorld = null;
+}
+
+/**
+ * The read-only board can reuse a snapshot for a few seconds (many players
+ * polling every 5 s); every action loads fresh.
+ */
+export function loadWorldCached(maxAgeMs: number): Promise<World> {
+  if (cachedWorld && Date.now() - cachedWorld.at < maxAgeMs) return cachedWorld.world;
+  const world = loadWorld();
+  cachedWorld = { at: Date.now(), world };
+  world.catch(() => {
+    if (cachedWorld?.world === world) cachedWorld = null;
+  });
+  return world;
 }
 
 export async function loadWorld(): Promise<World> {
@@ -880,7 +900,16 @@ export async function markRankSeen(playerId: number): Promise<void> {
 export async function syncPlayerRank(world: World, playerId: number): Promise<{ seen: number; polishedAt: string | null }> {
   const r = world.ranks.get(playerId);
   if (!r) return { seen: 0, polishedAt: null };
-  const stored = world.peaks.get(playerId);
+  // Read fresh: the world may be a cached snapshot.
+  const { rows: own } = await sql.query(`SELECT * FROM ${T.ranks} WHERE player_id = $1;`, [playerId]);
+  const stored = own[0]
+    ? {
+        seen: own[0].seen_index as number,
+        peak: own[0].peak_index as number,
+        wasTarnished: own[0].was_tarnished as boolean,
+        polishedAt: own[0].polished_at ? new Date(own[0].polished_at).toISOString() : null,
+      }
+    : undefined;
   if (!stored) {
     await sql.query(
       `INSERT INTO ${T.ranks} (player_id, seen_index, peak_index, was_tarnished) VALUES ($1, $2, $2, $3) ON CONFLICT DO NOTHING;`,

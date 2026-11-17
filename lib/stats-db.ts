@@ -21,6 +21,8 @@ import {
 export { PERIODS, computeStreaks, periodFromKey, periodRange, weekKey } from "./stats-periods";
 export type { Period, PeriodRange } from "./stats-periods";
 import { revalidateTag } from "next/cache";
+import { after } from "next/server";
+import { onceThisDeploy } from "./schema-gate";
 
 /** Refreshes the cached public leaderboard (no-op outside a request). */
 function refreshLeaderboard(): void {
@@ -55,7 +57,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensureStatsTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = (async () => {
+    ensurePromise = onceThisDeploy("stats", async () => {
       await ensureTables();
       await ensurePlayerTables();
       await sql`
@@ -97,7 +99,7 @@ export function ensureStatsTables(): Promise<void> {
           PRIMARY KEY (session_date, email)
         );
       `;
-    })().catch((err) => {
+    }).catch((err) => {
       ensurePromise = null;
       throw err;
     });
@@ -359,6 +361,15 @@ export async function recordRosterAttendance(): Promise<number> {
 let rosterSyncedAt = 0;
 const HISTORY_BACKFILL_KEY = "stats_history_backfilled_at";
 
+/** Starts the roster sync after the response is sent, so the page doesn't wait for it. */
+function syncRosterAttendanceLater(): void {
+  try {
+    after(() => syncRosterAttendance());
+  } catch {
+    void syncRosterAttendance();
+  }
+}
+
 /**
  * Keeps play-day history current without anyone pressing a button. The
  * first time, it runs the full backfill (saved court boards, round robin
@@ -579,7 +590,7 @@ export async function getPlayerStats(player: { id: number; email: string; miniga
   };
   if (!process.env.POSTGRES_URL) return empty;
   await ensureStatsTables();
-  await syncRosterAttendance();
+  syncRosterAttendanceLater();
 
   const [{ rows: att }, { rows: club }, { rows: abs }, rr] = await Promise.all([
     sql`SELECT session_date::text AS d FROM attendance WHERE email = ${player.email} AND verified AND NOT removed ORDER BY session_date DESC;`,
@@ -625,14 +636,20 @@ export async function getPlayerStats(player: { id: number; email: string; miniga
     bestPlacing: stats.rrHistory.length ? Math.min(...stats.rrHistory.map((r) => r.placing)) : null,
   };
 
-  for (const p of PERIODS) {
-    const range = periodRange(p, today);
-    const [a, r] = await Promise.all([getLeaderboard("attendance", range, player.id), getLeaderboard("rr", range, player.id)]);
+  // All eight boards at once (they used to run four rounds one after another).
+  const boards = await Promise.all(
+    PERIODS.map((p) => {
+      const range = periodRange(p, today);
+      return Promise.all([getLeaderboard("attendance", range, player.id), getLeaderboard("rr", range, player.id)]);
+    }),
+  );
+  PERIODS.forEach((p, i) => {
+    const [a, r] = boards[i];
     stats.ranks[p] = {
       attendance: a.find((x) => x.playerId === player.id)?.rank ?? null,
       rr: r.find((x) => x.playerId === player.id)?.rank ?? null,
     };
-  }
+  });
   return stats;
 }
 
@@ -662,7 +679,7 @@ export async function listAbsences(email: string, fromDate: string): Promise<str
 export async function getQuickStats(player: { id: number; email: string }): Promise<{ streak: number; monthRank: number | null }> {
   if (!process.env.POSTGRES_URL) return { streak: 0, monthRank: null };
   await ensureStatsTables();
-  await syncRosterAttendance();
+  syncRosterAttendanceLater();
   const today = getClubToday().dateKey;
   const [{ rows: att }, { rows: club }, { rows: abs }, board] = await Promise.all([
     sql`SELECT session_date::text AS d FROM attendance WHERE email = ${player.email} AND verified AND NOT removed;`,

@@ -36,6 +36,12 @@ export async function GET(request: Request) {
     databaseRegion: dbRegion(),
     coldInstance: cold,
     instanceAgeSeconds: Math.round((Date.now() - bootedAt) / 1000),
+    // Present or not (values are never shown).
+    settings: {
+      email: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM),
+      adminPassword: Boolean(process.env.ADMIN_PASSWORD),
+      playerSessionSecret: Boolean(process.env.PLAYER_SESSION_SECRET),
+    },
   };
   let t = performance.now();
   await ensureArenaTables();

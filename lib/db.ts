@@ -26,6 +26,7 @@ import {
   getClubToday,
   getMembershipDayForDate,
 } from "./dates";
+import { onceThisDeploy } from "./schema-gate";
 
 // Every route touching the DB calls ensureTables() first, and it's ~24
 // sequential DDL statements — cheap individually but a heavy tax when paid
@@ -36,7 +37,7 @@ let ensureTablesPromise: Promise<void> | null = null;
 
 export function ensureTables(): Promise<void> {
   if (!ensureTablesPromise) {
-    ensureTablesPromise = ensureTablesImpl().catch((err) => {
+    ensureTablesPromise = onceThisDeploy("core", ensureTablesImpl).catch((err) => {
       ensureTablesPromise = null;
       throw err;
     });

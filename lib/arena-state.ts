@@ -9,6 +9,7 @@ import {
   bonusesOnOffer,
   headToHead,
   loadWorld,
+  loadWorldCached,
   packLeader,
   pairRecord,
   seasonChampion,
@@ -91,8 +92,8 @@ export type ArenaState = {
   feed: FeedItem[];
 };
 
-export async function buildArenaState(viewer: { id: number } | null): Promise<ArenaState> {
-  const world = await loadWorld();
+export async function buildArenaState(viewer: { id: number } | null, opts: { maxAgeMs?: number } = {}): Promise<ArenaState> {
+  const world = opts.maxAgeMs ? await loadWorldCached(opts.maxAgeMs) : await loadWorld();
   const chip = (id: number): PlayerChip => {
     const p = world.players.get(id);
     const r = world.ranks.get(id);
@@ -222,10 +223,10 @@ async function meView(
   const p = world.players.get(id);
   const rank = world.ranks.get(id);
   if (!p || !rank) return null;
-  const { seen, polishedAt } = await syncPlayerRank(world, id);
   const pair = world.activePairOf.get(id);
 
-  const [incoming, outgoing, answered] = await Promise.all([
+  const [{ seen, polishedAt }, incoming, outgoing, answered] = await Promise.all([
+    syncPlayerRank(world, id),
     sql.query(
       `SELECT consumed_by FROM ${T.codes} WHERE purpose = 'pair' AND owner_id = $1 AND status = 'requested' AND expires_at > NOW() ORDER BY id DESC LIMIT 1;`,
       [id],

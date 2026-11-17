@@ -3,6 +3,7 @@ import { ensureTables } from "./db";
 import { getClubToday } from "./dates";
 import type { Lang } from "./i18n";
 import { toE164 } from "./phone";
+import { onceThisDeploy } from "./schema-gate";
 
 // Player accounts. Everything a player has done is already stored under
 // their email (memberships, bookings, jersey registrations, court board
@@ -17,7 +18,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensurePlayerTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = ensureImpl().catch((err) => {
+    ensurePromise = onceThisDeploy("players", ensureImpl).catch((err) => {
       ensurePromise = null;
       throw err;
     });

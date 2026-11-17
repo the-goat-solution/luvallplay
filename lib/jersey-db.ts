@@ -13,6 +13,7 @@ import {
   type JerseyStatus,
 } from "./jersey";
 import { generateRefCode } from "./jersey-server";
+import { onceThisDeploy } from "./schema-gate";
 
 export type JerseyRegistration = {
   id: number;
@@ -42,7 +43,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensureJerseyTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = (async () => {
+    ensurePromise = onceThisDeploy("jersey", async () => {
       await ensureTables();
       await sql`
         CREATE TABLE IF NOT EXISTS jersey_registrations (
@@ -85,7 +86,7 @@ export function ensureJerseyTables(): Promise<void> {
         CREATE UNIQUE INDEX IF NOT EXISTS jersey_one_per_email
         ON jersey_registrations (email_normalized) WHERE status IN ('pending', 'paid');
       `;
-    })().catch((err) => {
+    }).catch((err) => {
       ensurePromise = null;
       throw err;
     });

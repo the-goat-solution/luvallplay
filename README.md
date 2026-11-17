@@ -321,9 +321,10 @@ Plan and decisions: `docs/plans/challenges.md`.
 
 ## Speed
 
-- **Functions run next to the database.** The database (Vercel Postgres / Neon) is in AWS `us-east-1`, so `vercel.json` runs functions in `iad1` (Washington, D.C.). Each page crosses the Pacific once instead of once per query. Measured on 17 Nov with functions in Sydney: ~217 ms per query, and ~16 s for the first visit after a quiet spell.
+- **Functions run next to the database, in Sydney.** On 17 Nov the database moved from AWS `us-east-1` to a Neon database in `ap-southeast-2` (Sydney), connected with the prefix `SYD`; `DATABASE_URL_VAR=SYD_POSTGRES_URL` points the app at it and `vercel.json` runs functions in `syd1`. Before: ~217 ms per query from Sydney to the US, and ~16 s for the first visit after a quiet spell. The old database is kept as a backup for a couple of weeks.
 - **Moving everything to Sydney** (faster still for NZ): create a Neon database in AWS `ap-southeast-2`, copy the data across (Neon's import tool, or `pg_dump`/`pg_restore`), connect it to the project in Vercel → Storage, and set `"regions": ["syd1"]` in `vercel.json`. Neon's free plan sleeps after 5 idle minutes, so the first visit after a quiet spell waits for it to wake up.
 - **Start-up table checks run once per deployment** (`lib/schema-gate.ts`): the first server of a new deployment runs each module's `CREATE TABLE IF NOT EXISTS ...` and records it in `schema_runs`; later cold starts do one query and skip the rest. Local development always runs them.
+- **Moving the database** (tooling, remove after the move): connect the new database with the prefix `SYD`, then on a preview deployment `GET /api/admin/db-move?token=…&mode=check|copy|catchup` (needs `DB_MOVE_TOKEN`; previews only). `copy` recreates every table, constraint, index and sequence in the new database and copies all rows (refuses if the tables already exist); `catchup` copies rows added to the old database since. Setting `DATABASE_URL_VAR=SYD_POSTGRES_URL` then switches the site to it (`lib/db-switch.ts`, applied in `instrumentation.ts` and `next.config.ts`); unset it to switch back.
 - **Speed check:** `GET /api/health/db` shows the function and database regions, five round-trip times and the start-up cost (open on previews; admins only in production).
 
 ## Development

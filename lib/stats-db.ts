@@ -1,7 +1,8 @@
 import crypto from "crypto";
 import { sql } from "@vercel/postgres";
 import { ensureTables } from "./db";
-import { ensurePlayerTables } from "./player-db";
+import { MEMBERSHIP_DAY_TO_DOW } from "./constants";
+import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";
 import { getClubToday } from "./dates";
 import { computeStandings, type Match, type Score, type Team } from "./mini-game";
 import { PLAYER_NAMES } from "./mini-game-roster";
@@ -39,8 +40,11 @@ function refreshLeaderboard(): void {
 //   admin    – ticked on /admin/play-days
 //   board    – finished at least one game on the court board that day
 //   minigame – played in that day's round robin
-//   booking_history – a confirmed casual booking on an older day that has
-//                     no saved court board (backfill only)
+//   roster   – on a past play day with no saved court board: on that day's
+//              roster (confirmed booking, or a membership covering the day),
+//              not marked "Can't make it"; a fill-in counts instead of the
+//              person they replaced (recordRosterAttendance, automatic)
+//   booking_history – older backfill rows (now covered by roster)
 //   api      – sent in by a connected app; unverified until an admin confirms
 //
 // Round robin results are keyed by the mini game name; players.minigame_name
@@ -101,7 +105,7 @@ export function ensureStatsTables(): Promise<void> {
   return ensurePromise;
 }
 
-export type AttendanceSource = "admin" | "board" | "minigame" | "booking_history" | "api";
+export type AttendanceSource = "admin" | "board" | "minigame" | "roster" | "booking_history" | "api";
 
 /**
  * Records attendance. Verified records win over unverified ones, and an
@@ -285,6 +289,101 @@ export async function setMinigameName(name: string, playerId: number | null): Pr
 }
 
 // ---------------------------------------------------------------------------
+// Play days from the roster (all time, automatic)
+// ---------------------------------------------------------------------------
+
+// Membership statuses that once gave access. 'pending' never paid, so it
+// never put anyone on a roster.
+const ROSTER_MEMBERSHIP_STATUSES = ["active", "trialing", "past_due", "expired", "canceled"];
+
+/**
+ * Records attendance for every past play day that has no saved court board,
+ * from that day's roster: confirmed casual bookings, plus members whose
+ * membership covered the date on its weekday, minus "Can't make it", with a
+ * fill-in counted instead of the person they replaced. The same rules as the
+ * admin roster (lib/db.ts getRosterForDate), applied to all history in one
+ * statement.
+ *
+ * Idempotent (ON CONFLICT DO NOTHING): it never overrides a court board,
+ * round robin or admin record, and an admin's removal sticks.
+ */
+export async function recordRosterAttendance(): Promise<number> {
+  if (!process.env.POSTGRES_URL) return 0;
+  await ensureStatsTables();
+  const today = getClubToday().dateKey;
+  // Weekday of each membership pool, e.g. friday → 5 (Postgres DOW: Sunday = 0).
+  const dowCase = Object.entries(MEMBERSHIP_DAY_TO_DOW)
+    .map(([day, dow]) => `WHEN ${Number(dow)} THEN '${day.replace(/[^a-z]/g, "")}'`)
+    .join(" ");
+  const { rows: reg } = await sql`SELECT to_regclass('casual_play_sessions') IS NOT NULL AS has_board;`;
+  const noBoard = reg[0]?.has_board
+    ? "AND NOT EXISTS (SELECT 1 FROM casual_play_sessions c WHERE c.date = s.date)"
+    : "";
+  const { rowCount } = await sql.query(
+    `WITH days AS (
+       SELECT s.date AS d, CASE EXTRACT(DOW FROM s.date)::int ${dowCase} END AS pool
+       FROM sessions s
+       WHERE s.date < $1::date ${noBoard}
+     ),
+     casual AS (
+       SELECT b.session_date AS d, lower(trim(coalesce(f.email, b.email))) AS e
+       FROM bookings b
+       JOIN days ON days.d = b.session_date
+       LEFT JOIN session_fill_ins f ON f.booking_id = b.id AND f.session_date = b.session_date
+       WHERE b.status = 'confirmed'
+     ),
+     members AS (
+       SELECT days.d, lower(trim(coalesce(f.email, m.email))) AS e
+       FROM days
+       JOIN memberships m
+         ON days.pool IS NOT NULL
+        AND m.day = days.pool
+        AND m.status = ANY($2::text[])
+        AND m.period_start <= days.d
+        AND (m.period_end >= days.d OR (m.status = 'active' AND m.recurring AND m.cancel_at_period_end = FALSE))
+       LEFT JOIN session_fill_ins f ON f.membership_id = m.id AND f.session_date = days.d
+       WHERE NOT EXISTS (
+         SELECT 1 FROM player_absences pa WHERE pa.session_date = days.d AND pa.email = lower(trim(m.email))
+       )
+     )
+     INSERT INTO attendance (session_date, email, source, verified, removed)
+     SELECT DISTINCT d, e, 'roster', TRUE, FALSE FROM (SELECT * FROM casual UNION SELECT * FROM members) r
+     WHERE e IS NOT NULL AND e <> ''
+     ON CONFLICT (session_date, email) DO NOTHING;`,
+    [today, ROSTER_MEMBERSHIP_STATUSES],
+  );
+  if (rowCount) refreshLeaderboard();
+  return rowCount ?? 0;
+}
+
+let rosterSyncedAt = 0;
+const HISTORY_BACKFILL_KEY = "stats_history_backfilled_at";
+
+/**
+ * Keeps play-day history current without anyone pressing a button. The
+ * first time, it runs the full backfill (saved court boards, round robin
+ * draws, rosters) and remembers that in player_settings; after that only
+ * the cheap roster sync runs, since new boards and draws are recorded as
+ * they're saved. At most every 6 hours per server instance; the daily cron
+ * runs it too.
+ */
+export async function syncRosterAttendance(): Promise<void> {
+  if (Date.now() - rosterSyncedAt < 6 * 60 * 60 * 1000) return;
+  rosterSyncedAt = Date.now();
+  try {
+    if (!(await getPlayerSetting(HISTORY_BACKFILL_KEY))) {
+      await runStatsBackfill();
+      await setPlayerSetting(HISTORY_BACKFILL_KEY, new Date().toISOString());
+    } else {
+      await recordRosterAttendance();
+    }
+  } catch (err) {
+    rosterSyncedAt = 0;
+    console.error("[stats] play-day history sync failed:", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Backfill for imported members (§4a)
 // ---------------------------------------------------------------------------
 
@@ -305,9 +404,8 @@ export async function getStatsBackfillPreview(): Promise<{ boardDays: number; dr
     count(`SELECT count(*)::int AS n FROM casual_play_sessions WHERE date <= $1::date;`, [today]),
     count(`SELECT count(DISTINCT draw_id)::int AS n FROM mini_game_scores;`),
     count(
-      `SELECT count(DISTINCT b.session_date)::int AS n FROM bookings b
-       WHERE b.status = 'confirmed' AND b.session_date < $1::date
-         AND NOT EXISTS (SELECT 1 FROM casual_play_sessions c WHERE c.date = b.session_date);`,
+      `SELECT count(*)::int AS n FROM sessions s
+       WHERE s.date < $1::date AND NOT EXISTS (SELECT 1 FROM casual_play_sessions c WHERE c.date = s.date);`,
       [today],
     ).catch(() => 0),
   ]);
@@ -365,20 +463,8 @@ export async function runStatsBackfill(): Promise<{ attendance: number; roundRob
     if ((err as { code?: string }).code !== "42P01") throw err;
   }
 
-  // 3. Older play days with no saved board: confirmed casual bookings (the
-  //    player paid for that day). A fill-in played instead of the booker.
-  const { rows: bookings } = await sql`
-    SELECT b.session_date::text AS d, lower(trim(coalesce(f.email, b.email))) AS email
-    FROM bookings b
-    LEFT JOIN session_fill_ins f ON f.booking_id = b.id AND f.session_date = b.session_date
-    WHERE b.status = 'confirmed' AND b.session_date < ${today};
-  `;
-  const byDate = new Map<string, string[]>();
-  for (const b of bookings) {
-    if (boardDates.has(b.d as string)) continue;
-    byDate.set(b.d as string, [...(byDate.get(b.d as string) ?? []), b.email as string]);
-  }
-  for (const [d, emails] of byDate) attendance += await recordAttendance(d, emails, "booking_history");
+  // 3. Every other past play day (no saved board): the day's roster.
+  attendance += await recordRosterAttendance();
 
   return { attendance, roundRobin };
 }
@@ -493,6 +579,7 @@ export async function getPlayerStats(player: { id: number; email: string; miniga
   };
   if (!process.env.POSTGRES_URL) return empty;
   await ensureStatsTables();
+  await syncRosterAttendance();
 
   const [{ rows: att }, { rows: club }, { rows: abs }, rr] = await Promise.all([
     sql`SELECT session_date::text AS d FROM attendance WHERE email = ${player.email} AND verified AND NOT removed ORDER BY session_date DESC;`,
@@ -575,6 +662,7 @@ export async function listAbsences(email: string, fromDate: string): Promise<str
 export async function getQuickStats(player: { id: number; email: string }): Promise<{ streak: number; monthRank: number | null }> {
   if (!process.env.POSTGRES_URL) return { streak: 0, monthRank: null };
   await ensureStatsTables();
+  await syncRosterAttendance();
   const today = getClubToday().dateKey;
   const [{ rows: att }, { rows: club }, { rows: abs }, board] = await Promise.all([
     sql`SELECT session_date::text AS d FROM attendance WHERE email = ${player.email} AND verified AND NOT removed;`,

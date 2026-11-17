@@ -19,6 +19,7 @@ import { sendRenewalReminders } from "@/lib/membership-renewal";
 import { auditMembershipStatuses } from "@/lib/membership-status";
 import { syncMembershipsWithStripe } from "@/lib/stripe-sync";
 import { runShopDailyUpkeep } from "@/lib/shop-notify";
+import { recordRosterAttendance } from "@/lib/stats-db";
 import { retryWebhookDeliveries } from "@/lib/webhooks";
 
 export const runtime = "nodejs";
@@ -92,7 +93,14 @@ export async function GET(request: Request) {
     console.error("Webhook retries failed", err);
     return { error: "Webhook retries failed" };
   });
-  console.log("Shop upkeep", shop, "webhook retries", webhookRetries);
+  // Yesterday's play day (and any earlier one) without a saved court board:
+  // record attendance from the roster so streaks and the leaderboard stay
+  // current.
+  const rosterAttendance = await recordRosterAttendance().catch((err) => {
+    console.error("Roster attendance failed", err);
+    return { error: "Roster attendance failed" };
+  });
+  console.log("Shop upkeep", shop, "webhook retries", webhookRetries, "roster attendance", rosterAttendance);
 
   const tomorrow = addDays(getClubToday().dateKey, 1);
 

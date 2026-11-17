@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useProfileT } from "@/lib/profile-i18n";
 import { StripeCardForm } from "../LazyStripeCardForm";
 import type { Order, Product, Variant } from "@/lib/shop-db";
 import { Sheet } from "../Sheet";
+import { BusyLabel } from "../BusyLabel";
+import { useBusyAction } from "../useBusyAction";
 import styles from "../profile.module.css";
 import shop from "./shop.module.css";
 import { fmtMoney, postJson } from "../membership/format";
@@ -24,7 +25,7 @@ function fmtDateTime(iso: string | null, lang: string): string {
 
 function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg: string) => void }) {
   const { tr, lang } = useProfileT();
-  const router = useRouter();
+  const { refresh, refreshing } = useBusyAction();
   const fits = product.hasFit ? (["men", "women"] as const) : (["unisex"] as const);
   const [fit, setFit] = useState<string>(fits[0]);
   const [variantId, setVariantId] = useState<number | null>(null);
@@ -54,13 +55,13 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
     setBusy(null);
     if (!res.ok) {
       setError(tr(res.data.error === "sold_out" ? "shop_sold_out_now" : "shop_failed"));
-      if (res.data.error === "sold_out") router.refresh();
+      if (res.data.error === "sold_out") refresh();
       return;
     }
     const o = res.data.order as Order;
     if (method === "cash") {
       onOrdered(tr("shop_reserved", { price, date: fmtDateTime(o.holdExpiresAt, lang) }));
-      router.refresh();
+      refresh();
       return;
     }
     setCheckout({ orderId: o.id, clientSecret: res.data.clientSecret as string });
@@ -71,7 +72,7 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
     await postJson(`/api/profile/shop/order/${checkout.orderId}/confirm`);
     setCheckout(null);
     onOrdered(tr("shop_paid"));
-    router.refresh();
+    refresh();
   };
 
   const closeCheckout = async () => {
@@ -155,11 +156,11 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
         {error && <div className={styles.error} style={{ marginTop: 12 }}>{error}</div>}
 
         <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-          <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={!effectiveVariant || busy !== null} onClick={() => order("card")}>
-            {busy === "card" ? "…" : effectiveVariant ? tr("shop_pay_card", { price }) : tr("shop_pick_size")}
+          <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={!effectiveVariant || busy !== null || refreshing} aria-busy={busy === "card"} onClick={() => order("card")}>
+            <BusyLabel busy={busy === "card"}>{effectiveVariant ? tr("shop_pay_card", { price }) : tr("shop_pick_size")}</BusyLabel>
           </button>
-          <button type="button" className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`} disabled={!effectiveVariant || busy !== null} onClick={() => order("cash")}>
-            {busy === "cash" ? "…" : tr("shop_pay_cash")}
+          <button type="button" className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`} disabled={!effectiveVariant || busy !== null || refreshing} aria-busy={busy === "cash" || (refreshing && busy === null)} onClick={() => order("cash")}>
+            <BusyLabel busy={busy === "cash"}>{tr("shop_pay_cash")}</BusyLabel>
           </button>
         </div>
       </div>
@@ -185,14 +186,18 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
 
 export function ShopSection({ products, orders }: { products: Product[]; orders: Order[] }) {
   const { tr, lang } = useProfileT();
-  const router = useRouter();
+  const { busy, run, refresh } = useBusyAction();
   const [message, setMessage] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<number | null>(null);
   if (products.length === 0 && orders.length === 0) return null;
 
   const cancel = async (id: number) => {
-    await postJson(`/api/profile/shop/order/${id}/cancel`);
-    router.refresh();
+    setCancelling(id);
+    await run(() => postJson(`/api/profile/shop/order/${id}/cancel`));
+    refresh();
   };
+  // Spinner from the tap until the refreshed list arrives.
+  const cancelBusy = (id: number) => busy && cancelling === id;
 
   return (
     <section id="shop" className={styles.card} aria-labelledby="shop-title">
@@ -223,8 +228,8 @@ export function ShopSection({ products, orders }: { products: Product[]; orders:
                   </span>
                 </span>
                 {o.status === "reserved_cash" && (
-                  <button type="button" className={`${styles.btn} ${styles.ghost}`} style={{ fontSize: 13 }} onClick={() => cancel(o.id)}>
-                    {tr("shop_cancel_reservation")}
+                  <button type="button" className={`${styles.btn} ${styles.ghost}`} style={{ fontSize: 13 }} disabled={busy} aria-busy={cancelBusy(o.id)} onClick={() => cancel(o.id)}>
+                    <BusyLabel busy={cancelBusy(o.id)}>{tr("shop_cancel_reservation")}</BusyLabel>
                   </button>
                 )}
               </li>

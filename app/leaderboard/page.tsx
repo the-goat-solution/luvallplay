@@ -9,6 +9,7 @@ import { PLAYER_COOKIE, getCurrentPlayer } from "@/lib/player-auth";
 import {
   PERIODS,
   getLeaderboard,
+  syncRosterAttendance,
   periodFromKey,
   periodRange,
   type LeaderboardRow,
@@ -29,6 +30,7 @@ export const viewport: Viewport = { themeColor: "#0e2c3f", viewportFit: "cover" 
 const cachedBoard = unstable_cache(
   async (metric: Metric, period: Period, key: string): Promise<LeaderboardRow[]> => {
     const range = periodFromKey(period, key) ?? periodRange(period, getClubToday().dateKey);
+    await syncRosterAttendance();
     return getLeaderboard(metric, range);
   },
   ["leaderboard-v1"],

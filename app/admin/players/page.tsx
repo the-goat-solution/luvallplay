@@ -1,3 +1,4 @@
+import Form from "next/form";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
@@ -208,8 +209,9 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
         <h2 style={{ fontSize: 16, marginTop: 0 }}>2. Play history for imported members</h2>
         <p style={{ color: "#666", fontSize: 13 }}>
           Fills in play days from saved court boards ({backfill.boardDays} day{backfill.boardDays === 1 ? "" : "s"}), round robin results from past mini game
-          draws ({backfill.draws} draw{backfill.draws === 1 ? "" : "s"}), and, for older play days with no saved board, confirmed casual bookings (
-          {backfill.bookingDays} day{backfill.bookingDays === 1 ? "" : "s"}). Match the mini game names below first so round robin results reach the right people.
+          draws ({backfill.draws} draw{backfill.draws === 1 ? "" : "s"}), and, for the other past play days ({backfill.bookingDays}), that day&apos;s roster:
+          casual bookings and members, minus &ldquo;Can&apos;t make it&rdquo;, with fill-ins counted instead. This runs automatically once and then daily;
+          the button re-runs it (nothing is counted twice, and attendance you removed stays removed). Match the mini game names below first so round robin results reach the right people.
           Safe to run again.
         </p>
         <form action={backfillStats}>
@@ -348,12 +350,12 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
       <section style={card}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
           <h2 style={{ fontSize: 16, margin: 0 }}>All players</h2>
-          <form style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          <Form action="/admin/players" style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
             <input name="q" defaultValue={q ?? ""} placeholder="Search name or email" style={input} />
-            <button type="submit" style={btnSecondary}>
+            <SubmitButton loadingText="Searching…" style={btnSecondary}>
               Search
-            </button>
-          </form>
+            </SubmitButton>
+          </Form>
         </div>
         <div className={adminStyles.tableWrap}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>

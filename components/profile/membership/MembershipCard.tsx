@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import { StripeCardForm } from "../LazyStripeCardForm";
 import type { Billing, MemberView } from "@/lib/membership-self-service";
 import { Sheet } from "../Sheet";
+import { BusyLabel, Spinner } from "../BusyLabel";
+import { useBusyAction } from "../useBusyAction";
 import styles from "../profile.module.css";
 import { LeaveFlow } from "./LeaveFlow";
 import { fmtDate, fmtMoney, postJson } from "./format";
@@ -35,12 +37,16 @@ export function MembershipCard({
   pausedDays: string[];
 }) {
   const { tr, lang } = useProfileT();
-  const router = useRouter();
+  const { refresh, refreshing } = useBusyAction();
   const searchParams = useSearchParams();
   const [billing, setBilling] = useState<Billing | null>(null);
   const [billingFailed, setBillingFailed] = useState(false);
   const [sheet, setSheet] = useState<SheetKind>(null);
-  const [busy, setBusy] = useState(false);
+  const [working, setBusy] = useState(false);
+  // Which button started the work, so only that one shows a spinner.
+  const [active, setActive] = useState<string | null>(null);
+  const busy = working || refreshing;
+  const spin = (key: string) => busy && active === key;
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(
     searchParams.get("card") === "updated" ? { kind: "success", text: tr("mem_card_updated") } : null,
   );
@@ -77,6 +83,7 @@ export function MembershipCard({
         : { label: tr("mem_status_active"), bg: "#e9f6ee", color: "#1d6b3d" };
 
   const act = async (body: Record<string, unknown>, success: (data: Record<string, unknown>) => string) => {
+    setActive(String(body.action));
     setBusy(true);
     setMessage(null);
     const res = await postJson("/api/profile/membership/action", body);
@@ -89,19 +96,25 @@ export function MembershipCard({
     setMessage({ kind: "success", text: success(res.data) });
     setSheet(null);
     void loadBilling();
-    router.refresh();
+    refresh();
     return res.data;
   };
 
   const openPortal = async () => {
+    setActive("portal");
     setBusy(true);
     const res = await postJson("/api/profile/membership/portal");
+    if (res.ok && typeof res.data.url === "string") {
+      // Stay busy: Stripe's page is loading.
+      window.location.href = res.data.url;
+      return;
+    }
     setBusy(false);
-    if (res.ok && typeof res.data.url === "string") window.location.href = res.data.url;
-    else setMessage({ kind: "error", text: tr("mem_err_generic") });
+    setMessage({ kind: "error", text: tr("mem_err_generic") });
   };
 
   const startRenew = async () => {
+    setActive("pay");
     setBusy(true);
     const res = await postJson("/api/profile/membership/action", { action: "renew", plan: renewPlan });
     setBusy(false);
@@ -119,6 +132,7 @@ export function MembershipCard({
   };
 
   const startAutoRenew = async () => {
+    setActive("pay");
     setBusy(true);
     const res = await postJson("/api/profile/membership/action", { action: "autorenew_setup" });
     setBusy(false);
@@ -138,7 +152,7 @@ export function MembershipCard({
     } else {
       setMessage({ kind: "success", text: tr("mem_renewed", { date: fmtDate(payment?.periodStart, lang, true) }) });
       setSheet(null);
-      window.setTimeout(() => router.refresh(), 1500);
+      window.setTimeout(() => refresh(), 1500);
     }
     setPayment(null);
   };
@@ -196,8 +210,9 @@ export function MembershipCard({
             style={{ marginTop: 12 }}
             disabled={busy}
             onClick={() => act({ action: "resume" }, () => tr("mem_resumed"))}
+            aria-busy={spin("resume")}
           >
-            {tr("mem_resume")}
+            <BusyLabel busy={spin("resume")}>{tr("mem_resume")}</BusyLabel>
           </button>
         </div>
       )}
@@ -217,7 +232,7 @@ export function MembershipCard({
           })}
           <div>
             <button type="button" className={styles.linkBtn} disabled={busy} onClick={() => act({ action: "cancel_change" }, () => tr("saved"))}>
-              {tr("mem_cancel_change")}
+              {spin("cancel_change") && <Spinner />} {tr("mem_cancel_change")}
             </button>
           </div>
         </div>
@@ -232,7 +247,7 @@ export function MembershipCard({
               ? `${billing.card.brand.toUpperCase()} •••• ${billing.card.last4} · ${String(billing.card.expMonth).padStart(2, "0")}/${String(billing.card.expYear).slice(-2)}`
               : billing || billingFailed
                 ? tr("mem_card_none")
-                : "…"}
+                : <Spinner label={tr("loading")} />}
           </span>
           {billing?.nextCharge && (
             <span className={styles.small} style={{ display: "block" }}>
@@ -241,8 +256,8 @@ export function MembershipCard({
           )}
         </div>
         {(m.recurring || billing?.card) && (
-          <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={openPortal} disabled={busy}>
-            {tr("mem_update_card")}
+          <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={openPortal} disabled={busy} aria-busy={spin("portal")}>
+            <BusyLabel busy={spin("portal")}>{tr("mem_update_card")}</BusyLabel>
           </button>
         )}
       </div>
@@ -321,7 +336,7 @@ export function MembershipCard({
           disabled={busy}
           onClick={() => act({ action: "change", plan: "quarterly", day: m.day }, (d) => tr("mem_upgraded", { date: fmtDate((d.from as string) ?? renewsOn, lang, true) }))}
         >
-          {busy ? "…" : tr("mem_upgrade_confirm", { date: fmtDate(renewsOn, lang) })}
+          <BusyLabel busy={spin("change")}>{tr("mem_upgrade_confirm", { date: fmtDate(renewsOn, lang) })}</BusyLabel>
         </button>
       </Sheet>
 
@@ -340,7 +355,7 @@ export function MembershipCard({
             )
           }
         >
-          {busy ? "…" : tr("mem_change_day_confirm", { day: dayName(otherDay) })}
+          <BusyLabel busy={spin("change")}>{tr("mem_change_day_confirm", { day: dayName(otherDay) })}</BusyLabel>
         </button>
       </Sheet>
 
@@ -372,7 +387,7 @@ export function MembershipCard({
               ))}
             </div>
             <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy} onClick={sheet === "renew" ? startRenew : startAutoRenew}>
-              {busy ? "…" : tr("mem_continue_to_pay")}
+              <BusyLabel busy={spin("pay")}>{tr("mem_continue_to_pay")}</BusyLabel>
             </button>
           </>
         ) : (

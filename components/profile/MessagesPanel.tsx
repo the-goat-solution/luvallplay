@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useProfileT } from "@/lib/profile-i18n";
 import type { Message, ThreadDetail, ThreadSummary } from "@/lib/messages-db";
+import { BusyLabel, Spinner } from "./BusyLabel";
 import styles from "./profile.module.css";
 import m from "./messages.module.css";
 
@@ -165,8 +166,10 @@ export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummar
             <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={() => setComposing(false)}>
               {tr("cancel")}
             </button>
-            <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={sending || !subject.trim() || !draft.trim()}>
-              {sending ? tr("msg_sending") : tr("msg_send")}
+            <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={sending || !subject.trim() || !draft.trim()} aria-busy={sending}>
+              <BusyLabel busy={sending} busyText={tr("msg_sending")}>
+                {tr("msg_send")}
+              </BusyLabel>
             </button>
           </div>
         </form>
@@ -206,7 +209,13 @@ export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummar
           <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={backToList} style={{ marginLeft: -12 }}>
             ‹ {tr("msg_back")}
           </button>
-          {thread && <h3 className={m.subject}>{thread.subject}</h3>}
+          {thread?.id === openId ? (
+            <h3 className={m.subject}>{thread.subject}</h3>
+          ) : (
+            <div className={styles.loadingLine}>
+              <Spinner label={tr("loading")} /> {tr("loading")}
+            </div>
+          )}
           <div className={m.bubbles} aria-live="polite">
             {thread?.messages.map((msg) => (
               <div key={msg.id} className={`${m.bubble} ${msg.sender === "player" ? m.mine : m.theirs} ${msg.id < 0 ? m.pending : ""}`}>
@@ -229,8 +238,8 @@ export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummar
               onChange={(e) => setDraft(e.target.value)}
               aria-label={tr("msg_body")}
             />
-            <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={sending || !draft.trim()}>
-              {tr("msg_send")}
+            <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={sending || !draft.trim()} aria-busy={sending}>
+              <BusyLabel busy={sending}>{tr("msg_send")}</BusyLabel>
             </button>
           </form>
         </div>

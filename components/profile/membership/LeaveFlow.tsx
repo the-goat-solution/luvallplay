@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import { Sheet } from "../Sheet";
+import { BusyLabel } from "../BusyLabel";
+import { useBusyAction } from "../useBusyAction";
 import styles from "../profile.module.css";
 import { fmtDate, postJson } from "./format";
 
@@ -51,7 +52,7 @@ export function LeaveFlow({
   onChangeDay: () => void;
 }) {
   const { tr, lang } = useProfileT();
-  const router = useRouter();
+  const { refresh } = useBusyAction();
   const [step, setStep] = useState(1);
   const [reason, setReason] = useState("");
   const [comment, setComment] = useState("");
@@ -70,7 +71,7 @@ export function LeaveFlow({
   const close = () => {
     reset();
     onClose();
-    if (done) router.refresh();
+    if (done) refresh();
   };
 
   const effective = kind === "cancel" ? periodEnd : renewsOn ?? periodEnd;
@@ -213,8 +214,8 @@ export function LeaveFlow({
                 <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} onClick={close}>
                   {tr("leave_keep")}
                 </button>
-                <button type="button" className={`${styles.btn} ${styles.danger} ${styles.btnBlock}`} onClick={confirm} disabled={busy}>
-                  {busy ? "…" : kind === "cancel" ? tr("leave_confirm_btn_cancel") : tr("leave_confirm_btn_downgrade")}
+                <button type="button" className={`${styles.btn} ${styles.danger} ${styles.btnBlock}`} onClick={confirm} disabled={busy} aria-busy={busy}>
+                  <BusyLabel busy={busy}>{kind === "cancel" ? tr("leave_confirm_btn_cancel") : tr("leave_confirm_btn_downgrade")}</BusyLabel>
                 </button>
               </div>
             </>

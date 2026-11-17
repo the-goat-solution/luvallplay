@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useProfileT } from "@/lib/profile-i18n";
 import type { Lang } from "@/lib/i18n";
+import { isMobileDevice } from "@/lib/device";
 import { OPEN_INSTALL_GUIDE_EVENT } from "./InstallGuide";
 import { Sheet } from "./Sheet";
 import { useRecaptcha } from "./useRecaptcha";
+import { BusyLabel, Spinner } from "./BusyLabel";
+import { useBusyAction } from "./useBusyAction";
+import { SignOutForm } from "./SignOutForm";
 import styles from "./profile.module.css";
 
 export type AccountPlayer = {
@@ -62,7 +65,7 @@ export function WelcomeCard({ firstName, onDone }: { firstName: string; onDone?:
 export function DetailsCard({ player }: { player: AccountPlayer }) {
   const { tr } = useProfileT();
   const { setLang } = useLanguage();
-  const router = useRouter();
+  const { refresh, refreshing } = useBusyAction();
   const [form, setForm] = useState({
     firstName: player.firstName,
     lastName: player.lastName,
@@ -98,7 +101,7 @@ export function DetailsCard({ player }: { player: AccountPlayer }) {
       localStorage.setItem("tw_lang", form.lang);
     } catch {}
     setState("saved");
-    router.refresh();
+    refresh();
     window.setTimeout(() => setState("idle"), 2000);
   };
 
@@ -177,8 +180,10 @@ export function DetailsCard({ player }: { player: AccountPlayer }) {
             <option value="vi">Tiếng Việt</option>
           </select>
         </div>
-        <button type="submit" className={`${styles.btn} ${styles.navy} ${styles.btnBlock}`} disabled={!dirty || state === "saving"}>
-          {state === "saving" ? tr("saving") : state === "saved" ? `✓ ${tr("saved")}` : tr("save")}
+        <button type="submit" className={`${styles.btn} ${styles.navy} ${styles.btnBlock}`} disabled={!dirty || state === "saving" || refreshing} aria-busy={state === "saving" || refreshing}>
+          <BusyLabel busy={state === "saving" || (refreshing && state !== "saved")} busyText={tr("saving")}>
+            {state === "saved" ? `✓ ${tr("saved")}` : tr("save")}
+          </BusyLabel>
         </button>
       </form>
     </section>
@@ -199,7 +204,7 @@ export function PhoneCard({
   recaptchaSiteKey: string | null;
 }) {
   const { tr } = useProfileT();
-  const router = useRouter();
+  const { refresh, refreshing } = useBusyAction();
   const canText = smsAvailable && Boolean(recaptchaSiteKey);
   const { containerRef, getToken } = useRecaptcha(canText ? recaptchaSiteKey : null);
   const [step, setStep] = useState<"idle" | "code" | "done">(verified ? "done" : "idle");
@@ -245,7 +250,7 @@ export function PhoneCard({
     }
     setStep("done");
     setMessage({ kind: "notice", text: tr("acc_phone_confirmed_now") });
-    router.refresh();
+    refresh();
   };
 
   return (
@@ -256,8 +261,10 @@ export function PhoneCard({
           <span className={styles.small}>{step === "done" ? `✓ ${tr("acc_phone_confirmed")}` : tr("acc_phone_unconfirmed")}</span>
         </div>
         {step === "idle" && !unavailable && (
-          <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={send} disabled={busy}>
-            {busy ? "…" : tr("acc_confirm_phone")}
+          <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={send} disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} busyText={tr("sending")}>
+              {tr("acc_confirm_phone")}
+            </BusyLabel>
           </button>
         )}
       </div>
@@ -278,8 +285,8 @@ export function PhoneCard({
               onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               aria-label={tr("login_code_label")}
             />
-            <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={busy || code.length !== 6}>
-              {tr("continue")}
+            <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={busy || refreshing || code.length !== 6} aria-busy={busy || refreshing}>
+              <BusyLabel busy={busy || refreshing}>{tr("continue")}</BusyLabel>
             </button>
           </div>
         </form>
@@ -291,15 +298,18 @@ export function PhoneCard({
 
 export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolean }) {
   const { tr } = useProfileT();
-  const router = useRouter();
+  const { replace, refreshing: leaving } = useBusyAction();
   const [visible, setVisible] = useState(leaderboardVisible);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [toggling, setToggling] = useState(false);
 
   const toggle = async (next: boolean) => {
     setVisible(next);
+    setToggling(true);
     const { ok } = await postJson("/api/profile/privacy", { leaderboardVisible: next });
+    setToggling(false);
     if (!ok) setVisible(!next);
   };
 
@@ -307,10 +317,7 @@ export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolea
     setBusy(true);
     const { ok } = await postJson("/api/profile/delete", { confirm: confirmText });
     setBusy(false);
-    if (ok) {
-      router.replace("/login?signed_out=1");
-      router.refresh();
-    }
+    if (ok) replace("/login?signed_out=1");
   };
 
   return (
@@ -323,8 +330,9 @@ export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolea
           <strong>{tr("acc_leaderboard_toggle")}</strong>
           <span className={styles.small}>{tr("acc_leaderboard_hint")}</span>
         </span>
+        {toggling && <Spinner />}
         <span className={styles.switch}>
-          <input type="checkbox" role="switch" checked={visible} onChange={(e) => toggle(e.target.checked)} />
+          <input type="checkbox" role="switch" checked={visible} disabled={toggling} aria-busy={toggling} onChange={(e) => toggle(e.target.checked)} />
           <span className={styles.switchTrack} />
         </span>
       </label>
@@ -358,10 +366,11 @@ export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolea
           <button
             type="button"
             className={`${styles.btn} ${styles.danger}`}
-            disabled={confirmText.trim().toUpperCase() !== "DELETE" || busy}
+            disabled={confirmText.trim().toUpperCase() !== "DELETE" || busy || leaving}
+            aria-busy={busy || leaving}
             onClick={deleteAccount}
           >
-            {tr("acc_delete")}
+            <BusyLabel busy={busy || leaving}>{tr("acc_delete")}</BusyLabel>
           </button>
         </div>
       </Sheet>
@@ -371,39 +380,43 @@ export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolea
 
 export function AppCard() {
   const { tr } = useProfileT();
+  // "Add to Home Screen" is for phones and tablets only. Known after mount
+  // (the server can't tell), so it never flashes on desktop.
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => setMobile(isMobileDevice()), []);
   return (
     <section className={styles.card}>
-      <div className={styles.row}>
-        <img src="/icons/icon-192.png" alt="" width={48} height={48} style={{ borderRadius: 12 }} />
-        <div className={styles.rowText}>
-          <strong>{tr("acc_install")}</strong>
-          <span className={styles.small}>{tr("acc_install_hint")}</span>
-        </div>
-      </div>
-      <button
-        type="button"
-        className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`}
-        style={{ marginTop: 10 }}
-        onClick={() => window.dispatchEvent(new Event(OPEN_INSTALL_GUIDE_EVENT))}
-      >
-        {tr("acc_install")}
-      </button>
-      <hr className={styles.divider} />
+      {mobile && (
+        <>
+          <div className={styles.row}>
+            <img src="/icons/icon-192.png" alt="" width={48} height={48} style={{ borderRadius: 12 }} />
+            <div className={styles.rowText}>
+              <strong>{tr("acc_install")}</strong>
+              <span className={styles.small}>{tr("acc_install_hint")}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`}
+            style={{ marginTop: 10 }}
+            onClick={() => window.dispatchEvent(new Event(OPEN_INSTALL_GUIDE_EVENT))}
+          >
+            {tr("acc_install")}
+          </button>
+          <hr className={styles.divider} />
+        </>
+      )}
       <div className={styles.rowText} style={{ marginBottom: 10 }}>
         <strong>{tr("acc_devices")}</strong>
         <span className={styles.small}>{tr("acc_devices_hint")}</span>
       </div>
       <div className={styles.btnRow}>
-        <form method="POST" action="/api/auth/logout">
-          <button type="submit" className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`}>
-            {tr("sign_out")}
-          </button>
-        </form>
-        <form method="POST" action="/api/auth/logout?all=1">
-          <button type="submit" className={`${styles.btn} ${styles.danger} ${styles.btnBlock}`}>
-            {tr("sign_out_all")}
-          </button>
-        </form>
+        <SignOutForm action="/api/auth/logout" className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`}>
+          {tr("sign_out")}
+        </SignOutForm>
+        <SignOutForm action="/api/auth/logout?all=1" className={`${styles.btn} ${styles.danger} ${styles.btnBlock}`}>
+          {tr("sign_out_all")}
+        </SignOutForm>
       </div>
     </section>
   );

@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import { useRecaptcha } from "./useRecaptcha";
+import { BusyLabel } from "./BusyLabel";
 import styles from "./profile.module.css";
 
 type Method = "email" | "sms";
@@ -64,7 +65,10 @@ export function LoginForm({
   // Turnstile tokens are single-use: remount the widget after each send so
   // "Send a new code" and retries get a fresh one.
   const [turnstileKey, setTurnstileKey] = useState(0);
-  const [busy, setBusy] = useState(false);
+  const [working, setBusy] = useState(false);
+  // Signing in navigates to the profile; keep the spinner until it has loaded.
+  const [navigating, startNavigation] = useTransition();
+  const busy = working || navigating;
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(
     notice === "expired" ? tr("login_expired_link") : notice === "signed_out" ? tr("login_signed_out") : null,
@@ -84,12 +88,10 @@ export function LoginForm({
   const finish = (data: Record<string, unknown>) => {
     const target = typeof data.next === "string" ? data.next : next;
     if (data.phoneTaken) sessionStorage.setItem("tw_phone_taken", "1");
-    if (data.needsDetails) {
-      router.replace(`/login/details?next=${encodeURIComponent(target)}`);
-    } else {
-      router.replace(target);
-    }
-    router.refresh();
+    startNavigation(() => {
+      router.replace(data.needsDetails ? `/login/details?next=${encodeURIComponent(target)}` : target);
+      router.refresh();
+    });
   };
 
   const startEmail = async (e?: React.FormEvent) => {
@@ -210,8 +212,10 @@ export function LoginForm({
             />
           </div>
           <TurnstileWidget key={turnstileKey} onToken={onTurnstile} />
-          <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy}>
-            {busy ? "…" : tr("login_email_btn")}
+          <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} busyText={tr("sending")}>
+              {tr("login_email_btn")}
+            </BusyLabel>
           </button>
           {smsAvailable && !phoneProof && (
             <>
@@ -248,8 +252,10 @@ export function LoginForm({
               required
             />
           </div>
-          <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy}>
-            {busy ? "…" : tr("login_sms_btn")}
+          <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} busyText={tr("sending")}>
+              {tr("login_sms_btn")}
+            </BusyLabel>
           </button>
           <div style={{ textAlign: "center", marginTop: 10 }}>
             <button type="button" className={styles.linkBtn} onClick={switchToEmail}>
@@ -267,7 +273,7 @@ export function LoginForm({
                 ? tr("login_code_sent_email", { to: email.trim() })
                 : tr("login_code_sent_sms", { to: phone })}
             </span>
-            <button type="button" className={styles.linkBtn} onClick={() => setStep("enter")}>
+            <button type="button" className={styles.linkBtn} onClick={() => setStep("enter")} disabled={busy}>
               {tr("login_change")}
             </button>
           </div>
@@ -284,11 +290,14 @@ export function LoginForm({
               autoComplete="one-time-code"
               maxLength={7}
               value={code}
+              readOnly={busy}
               onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6))}
             />
           </div>
-          <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy}>
-            {busy ? "…" : tr("login_verify_btn")}
+          <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} busyText={navigating ? tr("signing_in") : tr("working")}>
+              {tr("login_verify_btn")}
+            </BusyLabel>
           </button>
           {method === "email" && (
             <div style={{ marginTop: 12 }}>
@@ -302,7 +311,7 @@ export function LoginForm({
               </button>
             )}
             {method === "sms" && (
-              <button type="button" className={styles.linkBtn} onClick={switchToEmail}>
+              <button type="button" className={styles.linkBtn} onClick={switchToEmail} disabled={busy}>
                 {tr("login_resend_email_instead")}
               </button>
             )}

@@ -1078,3 +1078,94 @@
   font-size: 14.5px;
   margin-bottom: 16px;
 }
+
+/* ---------- Loading states ---------- */
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 1.05em;
+  height: 1.05em;
+  border: 2.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.15em;
+  animation: twSpin 0.7s linear infinite;
+}
+@keyframes twSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* A button that's working stays readable (disabled ones fade to 0.5). */
+.btn[aria-busy="true"],
+.btn:disabled[aria-busy="true"] {
+  opacity: 0.85;
+  cursor: progress;
+  pointer-events: none;
+}
+.tabPending > * {
+  opacity: 0.6;
+}
+.tabPending svg {
+  animation: twPulse 0.9s ease-in-out infinite;
+}
+@keyframes twPulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.skeleton {
+  border-radius: 18px;
+  background: linear-gradient(90deg, rgba(24, 68, 103, 0.06) 25%, rgba(24, 68, 103, 0.12) 50%, rgba(24, 68, 103, 0.06) 75%);
+  background-size: 200% 100%;
+  animation: twShimmer 1.2s ease-in-out infinite;
+}
+@keyframes twShimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.loadingLine {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 0 4px;
+  color: var(--navy);
+  font-weight: 600;
+  font-size: 14px;
+}
+.navBar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 200;
+  overflow: hidden;
+  pointer-events: none;
+}
+.navBar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--bronze);
+  animation: twBar 1s ease-in-out infinite;
+}
+@keyframes twBar {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .skeleton,
+  .navBar::after,
+  .tabPending svg {
+    animation-duration: 2.4s;
+  }
+}

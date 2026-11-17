@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useProfileT } from "@/lib/profile-i18n";
+import { BusyLabel } from "./BusyLabel";
+import { useBusyAction } from "./useBusyAction";
 import styles from "./profile.module.css";
 
 export function DetailsForm({ next, email, phone: initialPhone, lang: initialLang }: { next: string; email: string; phone: string; lang: "en" | "vi" }) {
   const { tr, lang } = useProfileT();
-  const router = useRouter();
+  const { busy, setWorking: setBusy, replace } = useBusyAction();
   const [firstName, setFirst] = useState("");
   const [lastName, setLast] = useState("");
   const [phone, setPhone] = useState(initialPhone);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
@@ -30,8 +30,7 @@ export function DetailsForm({ next, email, phone: initialPhone, lang: initialLan
       setError(tr(data.error === "invalid_number" ? "login_err_invalid_number" : "login_err_generic"));
       return;
     }
-    router.replace(next);
-    router.refresh();
+    replace(next);
   };
 
   return (
@@ -55,8 +54,10 @@ export function DetailsForm({ next, email, phone: initialPhone, lang: initialLan
         <label htmlFor="d-phone">{tr("phone")}</label>
         <input id="d-phone" className={styles.input} type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="021 123 4567" />
       </div>
-      <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy || !firstName.trim()}>
-        {busy ? tr("saving") : tr("continue")}
+      <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy || !firstName.trim()} aria-busy={busy}>
+        <BusyLabel busy={busy} busyText={tr("saving")}>
+          {tr("continue")}
+        </BusyLabel>
       </button>
     </form>
   );

@@ -425,9 +425,9 @@ export default async function ShopAdminPage({ searchParams }: { searchParams: Pr
                             view
                           </a>{" "}
                           <form action={removeSizeChart.bind(null, p.id, fit)} style={{ display: "inline" }}>
-                            <button type="submit" style={{ ...btnSecondary, padding: "2px 8px", fontSize: 12 }}>
+                            <SubmitButton loadingText="Removing…" style={{ ...btnSecondary, padding: "2px 8px", fontSize: 12 }}>
                               Remove
-                            </button>
+                            </SubmitButton>
                           </form>
                         </>
                       ) : (

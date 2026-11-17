@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import type { Photo } from "@/lib/photos-db";
+import { BusyLabel, Spinner } from "../BusyLabel";
+import { useBusyAction } from "../useBusyAction";
 import styles from "../profile.module.css";
 import p from "./photos.module.css";
 
@@ -35,7 +36,8 @@ export function PhotosPanel({
 }) {
   const enabled = uploadMode !== null;
   const { tr } = useProfileT();
-  const router = useRouter();
+  const { refresh } = useBusyAction();
+  const [deleting, setDeleting] = useState<number | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -99,13 +101,14 @@ export function PhotosPanel({
     setBusy(false);
     setFiles([]);
     setCaption("");
-    router.refresh();
+    refresh();
   };
 
   const remove = async (id: number) => {
     if (!window.confirm(tr("ph_delete_confirm"))) return;
+    setDeleting(id);
     await fetch(`/api/profile/photos/${id}`, { method: "DELETE" });
-    router.refresh();
+    refresh();
   };
 
   const jobLabel = (s: Job["state"]) =>
@@ -162,8 +165,10 @@ export function PhotosPanel({
                   {tr("ph_consent")}
                 </span>
               </label>
-              <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={!consent || busy} onClick={share}>
-                {busy ? tr("ph_uploading") : tr("ph_upload", { n: files.length })}
+              <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={!consent || busy} aria-busy={busy} onClick={share}>
+                <BusyLabel busy={busy} busyText={tr("ph_uploading")}>
+                  {tr("ph_upload", { n: files.length })}
+                </BusyLabel>
               </button>
             </div>
           )}
@@ -195,8 +200,8 @@ export function PhotosPanel({
                 {blocked ? <div className={p.blocked}>{tr("ph_blocked_note")}</div> : <img src={ph.thumbUrl} alt={ph.caption ?? ""} loading="lazy" decoding="async" />}
                 <figcaption>
                   <span className={st.cls}>{tr(st.key)}</span>
-                  <button type="button" onClick={() => remove(ph.id)} aria-label={tr("ph_delete")}>
-                    ×
+                  <button type="button" onClick={() => remove(ph.id)} aria-label={tr("ph_delete")} disabled={deleting === ph.id} aria-busy={deleting === ph.id}>
+                    {deleting === ph.id ? <Spinner /> : "×"}
                   </button>
                 </figcaption>
               </figure>

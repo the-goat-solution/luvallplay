@@ -2,12 +2,13 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
+import { isMobileDevice } from "@/lib/device";
 import { Sheet } from "./Sheet";
 import styles from "./profile.module.css";
 
 // "Add to Home Screen" guide (docs/plans/player-profiles.md §5a.2): shown
-// once per player, on their first signed-in visit from a touch device that
-// isn't already running the installed app. Stays about 45 seconds with a
+// once per player, on their first signed-in visit from a phone or tablet
+// (lib/device.ts, never on desktop) that isn't already running the app. Stays about 45 seconds with a
 // progress bar, pauses while touched or while the app is in the background,
 // and can be reopened from Account → Add to Home Screen.
 
@@ -27,10 +28,6 @@ function isStandalone(): boolean {
     window.matchMedia("(display-mode: fullscreen)").matches ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true
   );
-}
-
-function isTouchDevice(): boolean {
-  return window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 1;
 }
 
 function detectPlatform(): Platform {
@@ -92,6 +89,7 @@ export function InstallGuide({ autoShow }: { autoShow: boolean }) {
       window.setTimeout(() => setOpen(false), 2500);
     };
     const onManualOpen = () => {
+      if (!isMobileDevice()) return;
       setElapsed(0);
       setInstalled(false);
       setOpen(true);
@@ -106,7 +104,7 @@ export function InstallGuide({ autoShow }: { autoShow: boolean }) {
         sessionStorage.setItem("tw_homescreen_logged", "1");
         void sendEvent("opened_homescreen");
       }
-    } else if (autoShow && isTouchDevice()) {
+    } else if (autoShow && isMobileDevice()) {
       const t = window.setTimeout(() => {
         setOpen(true);
         void sendEvent("install_hint_shown", detectPlatform());

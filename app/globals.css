@@ -934,3 +934,31 @@ ol.cp-queue-list li::before{content:counter(q);width:24px;height:24px;flex-shrin
     content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
   }
 }
+
+/* Navigation loading (components/LinkPending.tsx) */
+.tw-nav-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1000;
+  overflow: hidden;
+  pointer-events: none;
+}
+.tw-nav-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--bronze, #c4892a);
+  animation: twNavBar 1s ease-in-out infinite;
+}
+@keyframes twNavBar {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(260%); }
+}
+.tw-link-pending {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}

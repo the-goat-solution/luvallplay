@@ -1,17 +1,13 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import type { z } from "zod";
+import { emailVerifySchema } from "@/lib/auth-schemas";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 import { createPlayerSession, safeNextPath, verifyEmailCode } from "@/lib/player-auth";
 import { ensurePlayerForEmail, markPhoneVerified } from "@/lib/player-db";
 import { verifyPhoneProof } from "@/lib/phone-proof";
 import { setPlayerCookies } from "@/lib/player-cookies";
 
-const bodySchema = z.object({
-  email: z.string().trim().email().max(200),
-  code: z.string().trim().min(6).max(12),
-  next: z.string().max(300).optional(),
-  phoneProof: z.string().max(400).optional(),
-});
+const bodySchema = emailVerifySchema;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -22,7 +18,7 @@ export async function POST(request: Request) {
   try {
     body = bodySchema.parse(await request.json());
   } catch {
-    return NextResponse.json({ error: "invalid" }, { status: 400 });
+    return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
   try {
     const result = await verifyEmailCode(body.email, body.code);

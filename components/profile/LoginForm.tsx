@@ -147,7 +147,7 @@ export function LoginForm({
     if (digits.length !== 6) return showError("invalid");
     setBusy(true);
     if (method === "email") {
-      const res = await postJson("/api/auth/email/verify", { email: email.trim(), code: digits, next, phoneProof });
+      const res = await postJson("/api/auth/email/verify", { email: email.trim(), code: digits, next, ...(phoneProof ? { phoneProof } : {}) });
       setBusy(false);
       if (!res.ok) return showError(res.data.error as string);
       return finish(res.data);

@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import type { z } from "zod";
+import { emailStartSchema } from "@/lib/auth-schemas";
 import { checkRateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
 import { issueEmailCode, safeNextPath } from "@/lib/player-auth";
 import { sendLoginCodeEmail } from "@/lib/player-email";
 import { getSiteUrl } from "@/lib/email-layout";
 
-const bodySchema = z.object({
-  email: z.string().trim().email().max(200),
-  next: z.string().max(300).optional(),
-  lang: z.enum(["en", "vi"]).optional().default("en"),
-  turnstileToken: z.string().optional(),
-});
+const bodySchema = emailStartSchema;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -23,7 +19,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "invalid_email" }, { status: 400 });
   }
-  if (!(await verifyTurnstile(body.turnstileToken, ip))) {
+  if (!(await verifyTurnstile(body.turnstileToken ?? undefined, ip))) {
     return NextResponse.json({ error: "captcha" }, { status: 403 });
   }
 

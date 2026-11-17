@@ -20,6 +20,8 @@ export type ModerationResult = {
   status: PhotoStatus;
   safesearch: Record<string, string> | null;
   reason: "checked" | "not_configured" | "error";
+  /** What went wrong, in Google's words (no secrets), when reason is "error". */
+  detail?: string;
 };
 
 let client: JWT | null = null;
@@ -54,7 +56,9 @@ export async function moderateImage(imageUrl: string): Promise<ModerationResult>
     const ann = first.safeSearchAnnotation;
     return { status: decide(ann), safesearch: ann, reason: "checked" };
   } catch (err) {
-    console.error("[photos] SafeSearch failed:", err);
-    return { status: "needs_review", safesearch: null, reason: "error" };
+    const e = err as { message?: string; response?: { data?: { error?: { message?: string } } } };
+    const detail = e.response?.data?.error?.message ?? e.message ?? String(err);
+    console.error("[photos] SafeSearch failed:", detail);
+    return { status: "needs_review", safesearch: null, reason: "error", detail };
   }
 }

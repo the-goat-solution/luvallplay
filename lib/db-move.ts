@@ -13,7 +13,7 @@ import { createPool, type VercelPool } from "@vercel/postgres";
 // timestamps, arrays and JSON keep their exact Postgres values.
 // Preview test tables (pv_*) and schema_runs are skipped.
 
-export type MoveMode = "check" | "copy" | "catchup";
+export type MoveMode = "check" | "copy" | "catchup" | "finish";
 
 const q = (ident: string) => `"${ident.replace(/"/g, '""')}"`;
 
@@ -202,6 +202,59 @@ async function catchUp(src: VercelPool, dst: VercelPool, list: string[], log: st
   log.push(`catch-up added ${added} rows`);
 }
 
+/**
+ * Compares structure (constraints, indexes, sequences) and adds whatever the
+ * target is missing. Safe to run any number of times.
+ */
+async function finish(src: VercelPool, dst: VercelPool, list: string[], log: string[]): Promise<void> {
+  const wanted = new Set(list);
+  const bare = (x: string) => x.replace(/^public\./, "").replace(/^"|"$/g, "");
+  const consQ = `SELECT c.conrelid::regclass::text AS tbl, c.conname, c.contype, pg_get_constraintdef(c.oid) AS def
+     FROM pg_constraint c WHERE c.connamespace = 'public'::regnamespace AND c.contype IN ('p','u','c','f')
+     ORDER BY CASE c.contype WHEN 'p' THEN 0 WHEN 'u' THEN 1 WHEN 'c' THEN 2 ELSE 3 END;`;
+  const [{ rows: sc }, { rows: dc }] = await Promise.all([src.query(consQ), dst.query(consQ)]);
+  const have = new Set(dc.map((c) => c.conname as string));
+  let added = 0;
+  for (const c of sc) {
+    if (!wanted.has(bare(c.tbl)) || have.has(c.conname)) continue;
+    await dst.query(`ALTER TABLE public.${q(bare(c.tbl))} ADD CONSTRAINT ${q(c.conname)} ${c.def};`);
+    added++;
+  }
+  const idxQ = `SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname = 'public';`;
+  const [{ rows: si }, { rows: di }] = await Promise.all([src.query(idxQ), dst.query(idxQ)]);
+  const haveIdx = new Set(di.map((i) => i.indexname as string));
+  let addedIdx = 0;
+  for (const i of si) {
+    if (!wanted.has(i.tablename) || haveIdx.has(i.indexname)) continue;
+    await dst.query(i.indexdef);
+    addedIdx++;
+  }
+  const seqQ = `SELECT sequencename, last_value FROM pg_sequences WHERE schemaname = 'public';`;
+  const [{ rows: ss }, { rows: ds }] = await Promise.all([src.query(seqQ), dst.query(seqQ)]);
+  let bumped = 0;
+  for (const s of ss) {
+    const d = ds.find((x) => x.sequencename === s.sequencename);
+    if (!d) continue;
+    if (Number(d.last_value ?? 0) < Number(s.last_value ?? 0) + 1000) {
+      await dst.query(`SELECT setval('public.${q(s.sequencename)}', $1::bigint + 1000, true);`, [s.last_value ?? 0]);
+      bumped++;
+    }
+  }
+  const { rows: owned } = await src.query(
+    `SELECT s.relname AS seq, t.relname AS tbl, a.attname AS col FROM pg_depend d
+     JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S' JOIN pg_class t ON t.oid = d.refobjid
+     JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+     WHERE d.deptype = 'a' AND s.relnamespace = 'public'::regnamespace;`,
+  );
+  for (const o of owned) {
+    if (!wanted.has(o.tbl) || !ds.some((x) => x.sequencename === o.seq)) continue;
+    await dst.query(`ALTER SEQUENCE public.${q(o.seq)} OWNED BY public.${q(o.tbl)}.${q(o.col)};`);
+  }
+  log.push(`constraints: source ${sc.filter((c) => wanted.has(bare(c.tbl))).length}, target had ${dc.length}, added ${added}`);
+  log.push(`indexes: source ${si.filter((i) => wanted.has(i.tablename)).length}, target had ${di.length}, added ${addedIdx}`);
+  log.push(`sequences: ${ss.length} in source, ${ds.length} in target, ${bumped} moved ahead`);
+}
+
 export async function runMove(mode: MoveMode): Promise<Record<string, unknown>> {
   const { source, target, targetVar } = moveUrls();
   const log: string[] = [];
@@ -218,6 +271,8 @@ export async function runMove(mode: MoveMode): Promise<Record<string, unknown>> 
       await copySchemaAndData(src, dst, list, log);
     } else if (mode === "catchup") {
       await catchUp(src, dst, list, log);
+    } else if (mode === "finish") {
+      await finish(src, dst, list, log);
     }
     const [a, b] = await Promise.all([counts(src, list), counts(dst, list)]);
     const mismatched = list.filter((t) => a[t] !== b[t]);

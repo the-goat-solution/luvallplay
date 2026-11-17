@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   if (!allowedHere || !tokenOk(url.searchParams.get("token"))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  const mode = (["check", "copy", "catchup"] as const).includes(url.searchParams.get("mode") as MoveMode)
+  const mode = (["check", "copy", "catchup", "finish"] as const).includes(url.searchParams.get("mode") as MoveMode)
     ? (url.searchParams.get("mode") as MoveMode)
     : "check";
   try {

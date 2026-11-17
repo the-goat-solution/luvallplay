@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>The Arena · match flow mockups</title>
+<style>
+@font-face{font-family:Copperplate;src:url(../../../public/fonts/UTM-CopperplateB.ttf);font-weight:700}
+@font-face{font-family:Montserrat;src:url(../../../public/uploads/Montserrat-Medium.ttf);font-weight:500}
+@font-face{font-family:Montserrat;src:url(../../../public/uploads/Montserrat-Bold.ttf);font-weight:700}
+@font-face{font-family:Montserrat;src:url(../../../public/uploads/Montserrat-ExtraBold.ttf);font-weight:800}
+@font-face{font-family:Montserrat;src:url(../../../public/uploads/Montserrat-BlackItalic.ttf);font-weight:900;font-style:italic}
+:root{--night:#08131f;--night-2:#0d2033;--night-3:#14304a;--coral:#ff6b57;--coral-soft:#ff8f7f;--teal:#2fd4b5;--teal-soft:#7ee7d3;--flood:#ffd54a;--bronze-light:#e2ae60;--cream:#fcfbf2;--steel:#b4ccd9;--ink:#08131f;--display:Copperplate,serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#050c14;font-family:Montserrat,sans-serif;font-weight:500;color:var(--cream);-webkit-font-smoothing:antialiased;padding:28px}
+.strip{display:flex;gap:26px}
+.col{width:360px}
+.cap{font-size:11px;letter-spacing:.24em;text-transform:uppercase;font-weight:800;color:var(--flood);margin:0 0 10px 6px}
+.cap span{color:var(--steel);letter-spacing:.04em;text-transform:none;font-weight:700;margin-left:6px}
+.phone{position:relative;width:360px;height:740px;border-radius:40px;overflow:hidden;background:var(--night);box-shadow:0 0 0 8px #1a2633,0 30px 60px rgba(0,0,0,.5)}
+.big{font-weight:900;font-style:italic;text-transform:uppercase}
+.btn{display:block;width:100%;border:0;border-radius:16px;padding:16px;font-family:inherit;font-weight:900;font-style:italic;text-transform:uppercase;font-size:16px;color:var(--ink)}
+.btn.y{background:var(--flood);box-shadow:0 5px 0 #c9a12a}
+.btn.t{background:var(--teal);box-shadow:0 5px 0 #1fa58c}
+.btn.g{background:rgba(255,255,255,.1);color:#fff;box-shadow:none}
+.av{position:relative;width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-style:italic;font-size:22px;color:var(--ink);flex:none}
+.av.c{background:linear-gradient(160deg,var(--coral-soft),var(--coral))}.av.t{background:linear-gradient(160deg,var(--teal-soft),var(--teal))}
+.av img{position:absolute;right:-6px;bottom:-5px;width:28px;height:28px}
+.duo{display:flex}.duo .av+.av{margin-left:-12px}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:6px 11px;font-size:12px;font-weight:800}
+.chip.gk{background:rgba(255,213,74,.18);color:var(--flood)}.chip.nr{background:rgba(47,212,181,.18);color:var(--teal-soft)}
+
+/* 1 versus */
+.vsx{position:absolute;inset:0;background:var(--night)}
+.half{position:absolute;left:0;right:0;height:56%;display:flex;flex-direction:column;justify-content:center;padding:0 28px}
+.half.top{top:0;background:linear-gradient(160deg,#ff8f7f,#e2483a);clip-path:polygon(0 0,100% 0,100% 82%,0 100%);align-items:flex-start;padding-bottom:70px}
+.half.bot{bottom:0;background:linear-gradient(160deg,#2a9c88,#16725f);clip-path:polygon(0 18%,100% 0,100% 100%,0 100%);align-items:flex-end;text-align:right;padding-top:90px;justify-content:flex-start}
+.half .who{font-family:var(--display);font-size:26px;letter-spacing:.04em;color:#fff;margin-top:12px;line-height:1.05;text-shadow:0 2px 0 rgba(0,0,0,.15)}
+.half .sub{font-weight:800;font-size:12.5px;color:rgba(255,255,255,.85);margin-top:4px}
+.half .av{box-shadow:0 0 0 4px #fff,0 8px 20px rgba(0,0,0,.25)}.half .duo .av+.av{margin-left:-8px}
+.halftone{position:absolute;inset:0;background:radial-gradient(rgba(255,255,255,.22) 1.2px,transparent 1.6px) 0 0/10px 10px;mask:linear-gradient(135deg,#000,transparent 60%)}
+.vsbig{position:absolute;left:50%;top:50%;transform:translate(-50%,-62%) rotate(-10deg);font-weight:900;font-style:italic;font-size:118px;line-height:1;color:var(--flood);
+  -webkit-text-stroke:5px var(--ink);paint-order:stroke fill;text-shadow:6px 6px 0 var(--ink),0 0 40px rgba(255,213,74,.6);letter-spacing:-.02em}
+.spark{position:absolute;left:50%;top:50%;width:300px;height:300px;transform:translate(-50%,-58%);background:repeating-conic-gradient(rgba(255,255,255,.18) 0 4deg,transparent 4deg 14deg);border-radius:50%;mask:radial-gradient(circle,transparent 18%,#000 26%,transparent 66%)}
+.accepted{position:absolute;left:0;right:0;bottom:22px;padding:0 22px;text-align:center}
+.accepted .k{display:inline-block;background:var(--ink);color:var(--flood);border-radius:999px;padding:6px 14px;font-weight:900;font-style:italic;text-transform:uppercase;font-size:13px}
+.accepted p{font-size:12.5px;color:#e8fff9;margin:8px 0 10px}
+
+/* 2 check-in code */
+.scr{position:absolute;inset:0;padding:54px 22px 22px;display:flex;flex-direction:column;
+  background:radial-gradient(70% 40% at 50% 0%,rgba(47,212,181,.25),transparent 70%),linear-gradient(180deg,var(--night-2),var(--night))}
+.scr h3{font-family:var(--display);font-size:28px;letter-spacing:.05em;text-align:center}
+.scr .lead{text-align:center;font-size:13.5px;color:var(--steel);margin:6px 0 0}
+.tiles{display:flex;gap:7px;justify-content:center;margin:34px 0 10px}
+.tile{position:relative;width:56px;height:80px;border-radius:12px;background:linear-gradient(180deg,#1f3a55 0 50%,#18304a 50% 100%);display:grid;place-items:center;
+  font-weight:900;font-style:italic;font-size:46px;color:#fff;box-shadow:0 6px 0 #0a1a29,inset 0 1px 0 rgba(255,255,255,.12)}
+.tile::after{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:var(--night)}
+.tile.gap{margin-left:10px}
+.ring{width:96px;height:96px;margin:22px auto 6px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--teal) 0 70%,rgba(255,255,255,.1) 70% 100%)}
+.ring div{width:80px;height:80px;border-radius:50%;background:var(--night-2);display:grid;place-items:center;font-weight:900;font-style:italic;font-size:22px}
+.small{text-align:center;font-size:12px;color:#7f9bb0}
+.pairline{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:auto;background:rgba(255,255,255,.06);border-radius:16px;padding:12px}
+.pairline .av{width:40px;height:40px;font-size:15px}.pairline .av img{width:20px;height:20px}
+.pairline span{font-size:13px;color:var(--steel)}.pairline b{color:#fff}
+
+/* 3 scoreboard */
+.board{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}
+.team{border-radius:20px;padding:12px 10px 14px;text-align:center}
+.team.c{background:linear-gradient(180deg,rgba(255,107,87,.3),rgba(255,107,87,.08));border:1px solid rgba(255,107,87,.5)}
+.team.t{background:linear-gradient(180deg,rgba(47,212,181,.3),rgba(47,212,181,.08));border:1px solid rgba(47,212,181,.5)}
+.team .n{font-weight:800;font-size:13px}
+.flip{position:relative;margin:10px auto 12px;width:118px;height:132px;border-radius:14px;display:grid;place-items:center;font-weight:900;font-style:italic;font-size:84px;
+  background:linear-gradient(180deg,#fcfbf2 0 50%,#ecead9 50% 100%);color:var(--ink);box-shadow:0 7px 0 rgba(0,0,0,.35)}
+.flip::after{content:"";position:absolute;left:0;right:0;top:50%;height:3px;background:rgba(8,19,31,.55)}
+.flip::before{content:"";position:absolute;left:-6px;right:-6px;top:-8px;height:14px;background:radial-gradient(circle,#40576c 3px,transparent 3.5px) 22px 0/74px 14px no-repeat,radial-gradient(circle,#40576c 3px,transparent 3.5px) 82px 0/74px 14px no-repeat}
+.pm{display:flex;gap:8px;justify-content:center}
+.pm button{width:52px;height:46px;border-radius:12px;border:0;font-weight:900;font-size:24px;font-family:inherit;color:var(--ink)}
+.team.c .pm button{background:var(--coral)}.team.t .pm button{background:var(--teal)}
+.winner{margin:2px auto 0;display:inline-block;background:var(--flood);color:var(--ink);font-weight:900;font-style:italic;font-size:11px;border-radius:6px;padding:2px 8px;text-transform:uppercase;transform:rotate(-4deg)}
+.rules{display:flex;gap:8px;justify-content:center;margin:18px 0 0;flex-wrap:wrap}
+.rules span{font-size:11.5px;font-weight:700;color:var(--steel);background:rgba(255,255,255,.06);border-radius:999px;padding:5px 10px}
+.ok{color:var(--teal-soft)!important}
+
+/* 4 victory */
+.win{position:absolute;inset:0;padding:50px 22px 22px;display:flex;flex-direction:column;align-items:center;text-align:center;
+  background:radial-gradient(60% 35% at 50% 18%,rgba(255,213,74,.35),transparent 70%),linear-gradient(180deg,#14304a,var(--night))}
+.rays{position:absolute;left:50%;top:-120px;width:620px;height:620px;transform:translateX(-50%);background:repeating-conic-gradient(rgba(255,213,74,.12) 0 6deg,transparent 6deg 15deg);border-radius:50%;mask:radial-gradient(circle,#000 10%,transparent 60%)}
+.win>*{position:relative}.win>.rays,.win>.feathers{position:absolute}
+.vic{font-weight:900;font-style:italic;font-size:58px;line-height:1;color:var(--flood);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;text-shadow:4px 4px 0 var(--ink);transform:rotate(-4deg);margin-top:4px}
+.score{font-weight:900;font-style:italic;font-size:22px;margin-top:10px}.score i{color:var(--coral-soft)}
+.wp{margin-top:16px;font-weight:900;font-style:italic;font-size:44px;color:#fff}.wp small{font-size:18px;color:var(--flood)}
+.break{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.break span{font-size:11.5px;font-weight:800;border-radius:999px;padding:5px 10px;background:rgba(255,255,255,.08)}
+.rk{display:flex;align-items:center;gap:12px;width:100%;margin-top:18px;background:rgba(255,255,255,.06);border-radius:16px;padding:10px 12px;text-align:left}
+.rk img{width:44px;height:44px}.rk .bar{height:8px;border-radius:99px;background:rgba(255,255,255,.12);margin-top:6px;overflow:hidden}.rk .bar i{display:block;height:100%;width:78%;background:linear-gradient(90deg,var(--bronze-light),var(--flood))}
+.rk .t{flex:1;font-size:12px;color:var(--steel)}.rk .t b{color:#fff;font-size:13px}
+.q{width:100%;margin-top:14px;text-align:left}
+.q p{font-weight:800;font-size:13.5px;margin-bottom:8px}
+.yn{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.yn .btn{padding:12px;font-size:14px}
+.feathers{position:absolute;inset:0;pointer-events:none}
+/* 5 good game (the losing pair) */
+.gg{position:absolute;inset:0;padding:60px 22px 22px;display:flex;flex-direction:column;align-items:center;text-align:center;
+  background:radial-gradient(60% 35% at 50% 15%,rgba(180,204,217,.22),transparent 70%),linear-gradient(180deg,#14304a,var(--night))}
+.gg .hand{width:92px;height:92px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.08);font-size:44px}
+.gg h4{font-weight:900;font-style:italic;font-size:44px;line-height:1;color:#fff;margin-top:14px;transform:rotate(-3deg)}
+.gg .lead{font-size:13.5px;color:var(--steel);margin-top:10px;line-height:1.5}
+.tip{width:100%;margin-top:18px;border-radius:16px;padding:12px 14px;text-align:left;font-size:12.5px;line-height:1.45;background:linear-gradient(90deg,rgba(255,213,74,.16),rgba(47,212,181,.10));border:1px solid rgba(255,213,74,.25)}
+.tip b{color:var(--flood)}
+</style>
+<body>
+<div class="strip">
+
+<div class="col"><div class="cap">1 · Accept <span>the versus moment</span></div>
+<div class="phone"><div class="vsx">
+  <div class="half top"><div class="halftone"></div><div class="duo"><div class="av c">H<img src="ranks/platinum-racket.sm.svg" alt=""></div><div class="av c">J<img src="ranks/aluminium-racket.sm.svg" alt=""></div></div><div class="who">Huy &amp; Jason</div><div class="sub">Platinum · Aluminium · threw it down</div></div>
+  <div class="half bot"><div class="halftone" style="mask:linear-gradient(315deg,#000,transparent 60%)"></div><div class="duo"><div class="av t">T<img src="ranks/pro-racket.sm.svg" alt=""></div><div class="av t">L<img src="ranks/carbon-fibre-racket.sm.svg" alt=""></div></div><div class="who">Timba &amp; Ly</div><div class="sub">Pro · Carbon Fibre · took it on</div></div>
+  <div class="spark"></div>
+  <div class="vsbig">VS</div>
+  <div class="accepted"><span class="k">Challenge accepted!</span><p>Sort out a time and place with them, then check in when you meet.</p>
+    <div style="display:flex;gap:6px;justify-content:center"><span class="chip gk" style="background:var(--ink)">Giant-killer +2 on offer</span></div></div>
+</div></div></div>
+
+<div class="col"><div class="cap">2 · Check in <span>proof you met</span></div>
+<div class="phone"><div class="scr">
+  <h3>WE'RE HERE</h3>
+  <p class="lead">Read this code to <b style="color:#fff">Huy</b> or <b style="color:#fff">Jason</b>.<br>They type it in, and the game is on.</p>
+  <div class="tiles"><div class="tile">4</div><div class="tile">8</div><div class="tile gap">2</div><div class="tile">1</div><div class="tile">3</div></div>
+  <div class="ring"><div>1:42</div></div>
+  <p class="small">New code in 1:42 · only works for this challenge</p>
+  <div class="pairline"><div class="duo"><div class="av c">H</div><div class="av c">J</div></div><span>vs</span><div class="duo"><div class="av t">T</div><div class="av t">L</div></div><span><b>Game to 21</b></span></div>
+</div></div></div>
+
+<div class="col"><div class="cap">3 · Score <span>the umpire's flip board</span></div>
+<div class="phone"><div class="scr" style="background:radial-gradient(70% 40% at 50% 0%,rgba(255,213,74,.18),transparent 70%),linear-gradient(180deg,var(--night-2),var(--night))">
+  <h3>FINAL SCORE</h3>
+  <p class="lead">One game to 21 · 18 min on court</p>
+  <div class="board">
+    <div class="team c"><div class="n">Huy &amp; Jason</div><div class="flip">18</div><div class="pm"><button>−</button><button>+</button></div></div>
+    <div class="team t"><div class="n">You &amp; Ly</div><div class="flip">21</div><div class="pm"><button>−</button><button>+</button></div><span class="winner">Winners</span></div>
+  </div>
+  <div class="rules"><span class="ok">✓ Valid score</span><span>Win by 2 · 30 caps it</span></div>
+  <div style="margin-top:auto"><button class="btn y">Send to Huy &amp; Jason</button><p class="small" style="margin-top:10px">They confirm it, and the points land.</p></div>
+</div></div></div>
+
+<div class="col"><div class="cap">4 · Result <span>confirmed, points land</span></div>
+<div class="phone"><div class="win">
+  <div class="rays"></div>
+  <svg class="feathers" viewBox="0 0 360 740"><g opacity=".9">
+    <g transform="translate(40 90) rotate(-30)"><path d="M0 0l10-4v12l-10-4z" fill="#fff"/><circle cx="11" cy="2" r="3" fill="#ffd54a"/></g>
+    <g transform="translate(300 70) rotate(40)"><path d="M0 0l10-4v12l-10-4z" fill="#fff"/><circle cx="11" cy="2" r="3" fill="#ff6b57"/></g>
+    <rect x="70" y="200" width="8" height="4" fill="#2fd4b5" transform="rotate(30 74 202)"/><rect x="290" y="190" width="8" height="4" fill="#ff6b57" transform="rotate(-25 294 192)"/>
+    <rect x="24" y="300" width="7" height="4" fill="#ffd54a" transform="rotate(60 27 302)"/><rect x="326" y="280" width="7" height="4" fill="#2fd4b5" transform="rotate(-50 330 282)"/>
+    <circle cx="120" cy="40" r="3" fill="#ff6b57"/><circle cx="250" cy="130" r="2.5" fill="#ffd54a"/><circle cx="330" cy="380" r="2.5" fill="#fff"/></g></svg>
+  <div class="vic">VICTORY!</div>
+  <div class="score">21 <i>–</i> 18 vs Huy &amp; Jason</div>
+  <div class="wp">+5 <small>WP</small></div>
+  <div class="break"><span>Win 2</span><span style="color:var(--flood)">Giant-killer +2</span><span style="color:var(--teal-soft)">New rival +1</span></div>
+  <div class="rk"><img src="ranks/pro-racket.lg.svg" alt=""><div class="t"><b>Pro Racket</b> · 117 WP<div class="bar"><i></i></div>8 WP to Silver-plated Racket</div></div>
+  <div class="q"><p>Keep playing together?</p><div class="yn"><button class="btn t">Yes, same pair</button><button class="btn g">Split up</button></div></div>
+  <div class="q"><p>Up for another challenge?</p><div class="yn"><button class="btn y">Throw down</button><button class="btn g">New rival</button></div></div>
+</div></div></div>
+
+<div class="col"><div class="cap">5 · Result <span>the other side</span></div>
+<div class="phone"><div class="gg">
+  <div class="hand">🤝</div>
+  <h4>GOOD GAME!</h4>
+  <div class="score" style="font-size:18px">18 <i>–</i> 21 vs Timba &amp; Ly</div>
+  <p class="lead">Close one. Losses never cost points,<br>and you're still on Platinum Racket.</p>
+  <div class="break" style="margin-top:14px"><span>Win 0</span><span style="color:var(--teal-soft)">New rival +1</span></div>
+  <div class="rk"><img src="ranks/platinum-racket.lg.svg" alt=""><div class="t"><b>Platinum Racket</b> · 228 WP<div class="bar"><i style="width:36%"></i></div>32 WP to Diamond Racket</div></div>
+  <div class="tip"><b>Next up:</b> Kelcee &amp; Uyên are open and you've never played them: <b>New rival +1</b>.</div>
+  <div class="q"><p>Keep playing together?</p><div class="yn"><button class="btn t">Yes, same pair</button><button class="btn g">Split up</button></div></div>
+  <div class="q"><p>Run it back?</p><div class="yn"><button class="btn y">Rematch</button><button class="btn g">New rival</button></div></div>
+</div></div></div>
+
+</div>
+</body>
+</html>

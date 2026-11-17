@@ -1,6 +1,6 @@
 # Plan: Wolf Points, rank ladder, pair challenges & crowns
 
-Status: **draft for discussion**. Nothing built yet apart from the draft art (§9). Items marked **(proposed)** are recommendations waiting on a decision; the open questions are in §14.
+Status: **draft for discussion**. Nothing built yet apart from the draft art (§9). Items marked **(proposed)** are recommendations waiting on a decision; the open questions are in §15.
 
 **Decided:**
 
@@ -19,6 +19,7 @@ Status: **draft for discussion**. Nothing built yet apart from the draft art (§
 | 17 Nov | Ladder: **Carbon** becomes **Carbon Fibre Racket**; **Player's Racket is removed** (16 ranks + 2 Wolf seats). |
 | 17 Nov | **Players arrange time and place themselves.** The site doesn't handle coordination: no chat, no phone sharing, no venue list, and no time or place on a challenge. |
 | 17 Nov | **New graphics for everything that needs them**, following the site's style but kept subtle. A draft set is in `docs/plans/challenge-graphics/` (§9). |
+| 17 Nov | The challenge page gets its own **bolder, playful look ("The Arena")**, with extra colours beyond the brand palette (§10). |
 
 ---
 
@@ -42,7 +43,7 @@ Every player climbs a **rank ladder from a Plastic Shuttle to a Champion's Troph
 |---|---|
 | **Rank & kit bag** | Your current item (e.g. *Carbon Fibre Racket*), a progress bar to the next one, and a kit bag showing every item earned, with locked silhouettes for what's next. |
 | **Pairs** | "Team up" on the Player tab: show my code, or type theirs. One current partner; the pair's record. |
-| **Challenge board** | `/challenges`: pairs up for a game, with rank icons, head-to-head records and a bonus preview ("Giant-killer +2 available"). |
+| **The Arena** (challenge board) | `/challenges`: a floodlit night-court page where every open challenge is a fight card with an empty "You?" corner, a big VS, rank icons, head-to-head records and the bonuses on offer. |
 | **Check-in** | When they meet, one player reads out a 5-digit code and an opponent types it in. The match is live. |
 | **Score** | Either pair enters it; the other pair confirms. Disputes go to the admins. |
 | **Celebrations** | A rank-up screen, a shareable rank card, and shout-outs on the challenge board feed. |
@@ -245,7 +246,7 @@ open ──accept──▶ accepted ──code check-in──▶ live ──scor
 | Area | Change |
 |---|---|
 | **Profile → Player tab** | Rank card and kit bag at the top; pair card (Team up / Unpair); "My challenges" (open, up next, needs confirming); achievements; season badges. A tab badge when a score needs confirming. |
-| **`/challenges`** (new; public to view, signed in to act) | Pairs up for a challenge, accepted and live games, a results feed with rank-up shout-outs, the current crowns. Refreshes every few seconds while visible (same polling as the court board). |
+| **`/challenges` · The Arena** (new; public to view, signed in to act) | The playful challenge page (§10): your pair and "Throw down a challenge", the Crown spotlight, live games, open challenges as fight cards, and a results feed with stickers and rank-up shout-outs. Refreshes every few seconds while visible (same polling as the court board). |
 | **`/leaderboard`** | Two new tabs, **Wolf Points** (overall) and **Challenges**, alongside Play days and Round robin. Rank icons and crowns beside names; Wolf seats pinned at the top of Wolf Points. |
 | **Admin → Challenges** (new) | Disputes, void a result, end a crown, weekly activity. |
 | **Admin → Players** | Rank dry run and threshold check (§4.4); a player's WP breakdown. |
@@ -303,16 +304,100 @@ The art borrows from the club crest and the profile app rather than from game ar
 ### 9.4 Still to draw in the build
 
 These use the same system:
-- empty states for `/challenges` ("No one's up yet; put your pair up") and the kit bag;
-- the Team up and check-in code screens (big digits, a two-phones motif);
+- an empty state for the kit bag;
+- the Team up code screen (same flip tiles as the check-in code in §10);
 - the share image layout;
 - the season badge (league frame plus quarter label).
 
 The set becomes one `<RankIcon rank size state />` component (inline SVG, about 1–2 KB per icon, no images to load), so rank icons cost nothing extra on the leaderboard.
 
+## 10. The Arena: the challenge page
+
+The rest of the profile stays calm and on brand. **`/challenges` is where the club lets loose:** it should feel like walking into a floodlit court on match night.
+
+**Mockups** (in `docs/plans/challenge-graphics/`; open the `.html` files in a browser to see the motion):
+
+| File | Shows |
+|---|---|
+| `arena-mobile.png` | The board on a phone |
+| `arena-desktop.png` | The board on a desktop (two columns) |
+| `arena-flow.png` | A match from start to finish: Accept (versus) → Check in → Score → Victory / Good game |
+| `arena.html`, `flow.html` | The working mockups |
+
+### 10.1 Research
+
+- **Versus screens** (fighting and sports games) turn the wait before a match into a "hype moment": two sides split across the screen, names above, a big **VS** in the middle, and a plain background so the players stand out. We use this when a challenge is accepted.
+- **Challenge lobbies** (fantasy sports, esports challenge boards) work when each open challenge is a **card with three or four things you can scan at a glance** and joining takes **two taps or fewer**. Each fight card shows: who, their ranks, your head-to-head record, the bonus on offer and how long it's open, with **Accept** right there.
+- **Live sports apps** borrow game mechanics: challenge boards, streaks, rewards chips. Those are our bonus chips, the "on fire" streak strip and the results feed.
+- **Celebrations:** confetti and big motion should be **one-off and skippable**. With "reduce motion" turned on, each effect becomes a simple fade or still image, and nothing important is shown by motion alone.
+
+### 10.2 Look: "night court"
+
+- **Background:** the brand navy pushed darker (`#08131f` → `#0d2033`), lit by two soft **floodlight beams** from the top corners, with faint **badminton court lines** in perspective behind the title.
+- **Extra colours, for this page only:**
+
+  | Colour | Hex | Used for |
+  |---|---|---|
+  | Smash coral | `#ff6b57` | The pair that threw the challenge down ("their corner"); LIVE |
+  | Court teal | `#2fd4b5` | The pair taking it on ("your corner"); Accept |
+  | Floodlight yellow | `#ffd54a` | VS badges, the main button, stickers, highlights |
+  | Bronze | `#c4892a` / `#e2ae60` | Crowns and Wolf Points, so the brand still runs through it |
+
+  Text on coral, teal and yellow is always the dark ink colour, never white, so it passes contrast checks (white on coral doesn't).
+- **Type:**
+  - **Copperplate** stays for titles ("THE ARENA", names), so it's still Three Wolves;
+  - **Montserrat Black Italic** (already in the site's fonts) for anything sporty: VS, scores, buttons, stickers.
+- **Texture:** halftone dots in corners, slanted dividers, slightly tilted stickers ("GOLDEN POINT!", "GIANT-KILLER!"), sunburst rays behind the Crown and the Victory screen.
+
+### 10.3 The board, top to bottom
+
+1. **Title:** "THE ARENA" (VI: "Đấu Trường") with the line *Throw down. Show up. Every point counts.* Below it, live counters: pairs up, live now, games this week.
+2. **Your pair:** both avatars with rank icons, the pair record and current streak, and a big tilted yellow **THROW DOWN A CHALLENGE** button that gives a small bounce every few seconds. Underneath: "Any pair can take you on. You sort out when and where." With no pair yet, this card becomes **Team up**.
+3. **The Crown:** a gold spotlight card with slowly turning rays, the Crown pair, how long they've held it and how many times they've defended it, and **"Dethrone them: +4 each"**.
+4. **Live now:** checked-in games as a coral/teal split card with a pulsing LIVE badge, minutes on court, and a shuttle flying back and forth along a dotted arc.
+5. **Open challenges, as fight cards:**
+   - the card is split on a slant: the posting pair in the coral corner, and an **empty teal "You & Ly?" corner** with a dashed "?", so the card reads as an invitation;
+   - a yellow **VS** disc in the middle, and a "HOT" ribbon on the most-watched challenge;
+   - chips for the bonus on offer (Giant-killer +2 / New rival +1 / Even match), how long it's open, and their note;
+   - **Accept** in teal, one tap, then the versus screen.
+6. **Just happened:** results with stickers (Golden point!, Giant-killer!, Crown defended), rank-ups with a small burst of confetti and the new rank icon, and an **"on fire"** strip for the hottest streak.
+
+On a desktop the page splits in two: your pair, live games and open challenges on the left; the Crown and the feed on the right.
+
+### 10.4 A match, screen by screen (`arena-flow.png`)
+
+1. **Accept → versus screen:** the screen splits diagonally, coral on top and teal below, and a huge yellow **VS** slams in with a starburst behind it. Then "Challenge accepted! Sort out a time and place with them, then check in when you meet," plus the bonus on offer. Shown to both pairs.
+2. **Check in:** "WE'RE HERE", with the 5-digit code on **scoreboard-style flip tiles**, a countdown ring until the code refreshes, and "Read this to Huy or Jason".
+3. **Score:** an **umpire's flip scoreboard**, one big flip card per pair in its corner colour, with − / + buttons. It checks the score is valid as you go ("✓ Valid score · win by 2 · 30 caps it") and marks the winners with a sticker. **Send to Huy & Jason** to confirm.
+4. **Victory:** sunburst, feather-and-confetti burst, a tilted **VICTORY!**, the points counting up ("+5 WP: Win 2 · Giant-killer 2 · New rival 1"), the rank bar filling, then the two questions (keep the pair? throw down again?).
+5. **Good game** (the other pair): a calm steel-toned screen with a 🤝, "Good game!", the reminder that losses never cost points, any bonus they still earned, their rank bar, and a suggested **next rival**. It's encouraging, never a defeat screen. This matters most for keeping the community healthy.
+
+### 10.5 Motion (all skipped with "reduce motion")
+
+| Moment | Motion | With reduce motion |
+|---|---|---|
+| Versus | The halves slide in from opposite sides, the VS slams in and settles (~600 ms) | Still split screen |
+| Throw down button | A small bounce every few seconds | Still |
+| LIVE | Pulsing dot; a shuttle flies along the arc | Still dot and shuttle |
+| Crown | Rays turn slowly | Still rays |
+| Check-in code | Tiles flip in one after another | Shown at once |
+| Score | The flip card flips on +/− | Number changes |
+| Victory / rank up | Confetti and feathers once, WP counts up | Fade in, final number |
+
+- Motion is CSS only, with no animation library; confetti is a few SVG shapes.
+- Nothing loops on the Victory screen; the confetti plays once.
+- Every effect runs inside `@media (prefers-reduced-motion: no-preference)`.
+
+### 10.6 Making it real
+
+- The page has its own `arena.module.css` with the night-court palette as local variables, so none of it leaks into the rest of the site.
+- Fight cards, the versus screen and the flip tiles are small client components.
+- Images: none beyond the rank icons (inline SVG). Floodlights, court lines, halftone and rays are CSS gradients and inline SVG, so the page stays as light as the leaderboard.
+- Check for every screen: 16 px icons, contrast on coral, teal and yellow, phone and desktop screenshots, and a run with reduce motion on.
+
 ---
 
-## 10. Data model (new tables in `lib/challenge-db.ts` and `lib/ranks-db.ts`, `ensure*Tables()` pattern)
+## 11. Data model (new tables in `lib/challenge-db.ts` and `lib/ranks-db.ts`, `ensure*Tables()` pattern)
 
 ```
 pairs                 id, player_low_id, player_high_id, name, formed_at,
@@ -353,7 +438,7 @@ push_subscriptions    id, player_id, endpoint UNIQUE, p256dh, auth, created_at, 
 
 ---
 
-## 11. Notifications
+## 12. Notifications
 
 | Event | In-app | Web Push (opt-in) | Email |
 |---|---|---|---|
@@ -367,7 +452,7 @@ Web Push is free, but on iPhone it works only once the app is added to the Home 
 
 ---
 
-## 12. Delivery plan (one PR per phase)
+## 13. Delivery plan (one PR per phase)
 
 The rank ladder can go live **before** challenges, because attendance and round robin data already exist.
 
@@ -375,7 +460,7 @@ The rank ladder can go live **before** challenges, because attendance and round 
 |---|---|---|
 | **1. Wolf Points, ranks & art** | `lib/ranks.ts`; `player_ranks`, `rank_events`; `<RankIcon>` from the draft art; rank card, kit bag, rank-up card and share image; Wolf Points leaderboard tab; dry run and calibration on Admin → Players; daily cron for tarnish and seats | – |
 | **2. Pairs** | `pairs`, `pair_members`, `match_codes`; Team up (show code / enter code / both confirm); pair card; unpair | – |
-| **3. Challenges** | `challenges`, `challenge_scores`, `challenge_results`; `/challenges` board; post, accept, call off, expire, lapse; code check-in; score entry with BWF validation, confirm and auto-confirm; after-game prompts; caps; Admin → Challenges; Challenges leaderboard tab | 1, 2 |
+| **3. Challenges** | `challenges`, `challenge_scores`, `challenge_results`; **The Arena** (`/challenges`) with fight cards, versus screen, flip-tile check-in, flip scoreboard and Victory / Good game screens (§10); post, accept, call off, expire, lapse; code check-in; score entry with BWF validation, confirm and auto-confirm; after-game prompts; caps; Admin → Challenges; Challenges leaderboard tab | 1, 2 |
 | **4. Bonuses, crowns, achievements, seasons** | The four bonuses; `crown_holds`, `achievements`; season badges and champion; feed shout-outs | 3 |
 | **5. Notifications & extras** | Web Push; rank icons on the court board; API, webhooks and MCP additions | 3 |
 
@@ -387,7 +472,7 @@ The rank ladder can go live **before** challenges, because attendance and round 
 
 ---
 
-## 13. Risks
+## 14. Risks
 
 - **Games away from the club:** the code check-in, the 8-minute minimum, opponent confirmation, the caps and the dispute queue are what keep results honest.
 - **Attendance vs results:** at 1 WP per play day, results drive most of a rank. The dry run shows the split per player.
@@ -397,21 +482,22 @@ The rank ladder can go live **before** challenges, because attendance and round 
 
 ---
 
-## 14. Open questions (defaults in brackets)
+## 15. Open questions (defaults in brackets)
 
 1. Can someone who speaks Vietnamese check the **VI rank names**?
 2. **Thresholds:** fine to tune after the dry run, aiming for nobody in Legend Kit on launch day? [yes]
 3. **Draft art:** happy with the direction in `challenge-graphics/preview.png`? Anything to change (e.g. the Legend Kit ribbon, the wolf heads)?
-4. One current partner per player, or several pairs at once? [one]
-5. Optional **pair names**, with a word filter? [yes]
-6. One open board, or separate men's / women's / mixed? [one open board]
-7. Auto-confirm an unconfirmed score after 24 h? [yes]
-8. Caps: same matchup once a day and 3 times in 30 days; 4 challenges per player per day? [yes]
-9. **Retired / couldn't finish** gives the opponents the win (2 WP, no bonuses), unless an admin voids it for injury? [yes]
-10. Availability options when posting: today / 3 days / 7 days? [yes]
-11. Crown names: Crown pair / Pack Leader / Season champion, or something more Three Wolves? [as listed]
-12. A line in the terms that challenge games outside club sessions are arranged by the players, not run by the club? [yes]
-13. Season finale: any physical prize from the club? [your call]
+4. **The Arena:** happy with the night-court look, the coral/teal corners and the page name "The Arena" (VI "Đấu Trường")? [yes]
+5. One current partner per player, or several pairs at once? [one]
+6. Optional **pair names**, with a word filter? [yes]
+7. One open board, or separate men's / women's / mixed? [one open board]
+8. Auto-confirm an unconfirmed score after 24 h? [yes]
+9. Caps: same matchup once a day and 3 times in 30 days; 4 challenges per player per day? [yes]
+10. **Retired / couldn't finish** gives the opponents the win (2 WP, no bonuses), unless an admin voids it for injury? [yes]
+11. Availability options when posting: today / 3 days / 7 days? [yes]
+12. Crown names: Crown pair / Pack Leader / Season champion, or something more Three Wolves? [as listed]
+13. A line in the terms that challenge games outside club sessions are arranged by the players, not run by the club? [yes]
+14. Season finale: any physical prize from the club? [your call]
 
 ---
 
@@ -428,3 +514,6 @@ The rank ladder can go live **before** challenges, because attendance and round 
 - Rank icon sets (shape per tier, consistent line weight, small-size legibility): https://layerlab.itch.io/2d-tier-icon-pack-1, https://roblox-icon-pack-ranks.pages.dev/
 - WCAG 1.4.1 Use of Color: https://www.w3.org/TR/UNDERSTANDING-WCAG20/visual-audio-contrast-without-color, https://alphagov.github.io/wcag-primer/sc/1.4.1.html
 - Web Push on iOS: https://documentation.onesignal.com/docs/web-push-for-ios
+- Versus screens: https://giantbomb.com/wiki/Concepts/Versus_Screen, https://ssbwiki.com/Versus_splash_screen, https://www.tvtropes.org/pmwiki/pmwiki.php/Main/VersusCharacterSplash
+- Challenge lobbies and gamified sports apps: https://contra.com/p/oPBOq2YF-fantasy-football-predictor-app-design, https://geekvibesnation.com/leveling-up-the-viewing-experience-how-live-sports-apps-are-borrowing-video-game-mechanics-to-engage-fans/, https://docs.viewlift.com/docs/configure-matchup-cards
+- Reduced motion: https://developer.mozilla.org/en-us/docs/Web/CSS/Guides/Media_queries/Using_for_accessibility, https://primer.style/accessibility/design-guidance/motion-and-animation, https://digitalthriveai.com/en-ca/resources/web-design/write-code-get-confetti/

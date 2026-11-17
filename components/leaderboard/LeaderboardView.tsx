@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LinkPending } from "@/components/LinkPending";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import type { LeaderboardRow, Metric, Period, PeriodRange } from "@/lib/stats-db";
 import s from "./leaderboard.module.css";
@@ -73,7 +74,7 @@ export function LeaderboardView({
           <div className={s.metricToggle} role="tablist" aria-label={tr("lb_title")}>
             {(["attendance", "rr"] as const).map((m) => (
               <Link key={m} href={href(m, period, isCurrent ? null : range.key)} role="tab" aria-selected={metric === m} className={metric === m ? s.on : undefined} scroll={false}>
-                {tr(m === "attendance" ? "lb_attendance" : "lb_rr")}
+                <LinkPending>{tr(m === "attendance" ? "lb_attendance" : "lb_rr")}</LinkPending>
               </Link>
             ))}
           </div>
@@ -87,7 +88,7 @@ export function LeaderboardView({
         <nav className={s.periods} aria-label="Period">
           {(Object.keys(PERIOD_LABEL) as Period[]).map((p) => (
             <Link key={p} href={href(metric, p)} className={period === p ? s.on : undefined} aria-current={period === p ? "page" : undefined} scroll={false}>
-              {tr(PERIOD_LABEL[p])}
+              <LinkPending>{tr(PERIOD_LABEL[p])}</LinkPending>
             </Link>
           ))}
         </nav>
@@ -95,7 +96,7 @@ export function LeaderboardView({
         <div className={s.stepper}>
           {prevKey ? (
             <Link href={href(metric, period, prevKey)} aria-label={tr("lb_prev")} className={s.stepBtn} scroll={false}>
-              ‹
+              <LinkPending>‹</LinkPending>
             </Link>
           ) : (
             <span className={s.stepBtn} aria-hidden="true" />
@@ -103,7 +104,7 @@ export function LeaderboardView({
           <h2>{rangeTitle(range, lang, tr("lb_lifetime"))}</h2>
           {nextKey ? (
             <Link href={href(metric, period, nextKey)} aria-label={tr("lb_next")} className={s.stepBtn} scroll={false}>
-              ›
+              <LinkPending>›</LinkPending>
             </Link>
           ) : (
             <span className={s.stepBtn} aria-hidden="true" />

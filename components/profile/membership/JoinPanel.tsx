@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import { StripeCardForm } from "../LazyStripeCardForm";
+import { BusyLabel } from "../BusyLabel";
+import { useBusyAction } from "../useBusyAction";
 import styles from "../profile.module.css";
 import { fmtDate, postJson } from "./format";
 
@@ -24,7 +25,7 @@ export function JoinPanel({
   player: { firstName: string; lastName: string; email: string; phone: string };
 }) {
   const { tr, lang } = useProfileT();
-  const router = useRouter();
+  const { refresh } = useBusyAction();
   const [day, setDay] = useState<Day>(pausedDays.includes("friday") && !pausedDays.includes("wednesday") ? "wednesday" : "friday");
   const [tier, setTier] = useState<Tier>("quarterly");
   const [recurring, setRecurring] = useState(true);
@@ -157,8 +158,8 @@ export function JoinPanel({
                   </label>
                 ))}
               </div>
-              <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy} onClick={start}>
-                {busy ? "…" : `${tr("mem_continue_to_pay")} · $${price}`}
+              <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy} aria-busy={busy} onClick={start}>
+                <BusyLabel busy={busy}>{`${tr("mem_continue_to_pay")} · $${price}`}</BusyLabel>
               </button>
             </>
           )}
@@ -175,7 +176,7 @@ export function JoinPanel({
             returnPath="/profile/membership"
             onSuccess={() => {
               setDone(true);
-              window.setTimeout(() => router.refresh(), 2500);
+              window.setTimeout(() => refresh(), 2500);
             }}
           />
         </>

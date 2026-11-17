@@ -33,6 +33,9 @@ function PaymentFormInner({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const showLoading = useDelayedLoading(loading);
+  // Stripe draws the card fields a moment after mounting; show that it's
+  // loading rather than an empty box.
+  const [ready, setReady] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +79,13 @@ function PaymentFormInner({
       <div className="form-group">
         <label className="form-label">{tr("card_lbl")}</label>
         <div className="stripe-wrap">
-          <PaymentElement />
+          {!ready && (
+            <div role="status" aria-live="polite" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 4px", color: "var(--text-light)", fontSize: 14 }}>
+              <LoadingIcon size="sm" />
+              {tr("card_loading")}
+            </div>
+          )}
+          <PaymentElement onReady={() => setReady(true)} />
         </div>
         <p className="form-hint">{tr("card_hint")}</p>
         {error && (
@@ -88,7 +97,8 @@ function PaymentFormInner({
       <button
         type="submit"
         className="btn btn-primary btn-full"
-        disabled={!stripe || loading}
+        disabled={!stripe || !ready || loading}
+        aria-busy={loading}
       >
         {showLoading ? (
           <>

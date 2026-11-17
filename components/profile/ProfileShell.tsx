@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import type { Lang } from "@/lib/i18n";
 import { LangSync } from "./LangToggle";
 import { InstallGuide } from "./InstallGuide";
+import { SignOutForm } from "./SignOutForm";
 import styles from "./profile.module.css";
 
 const TABS: { href: string; key: ProfileKey; icon: ReactNode }[] = [
@@ -41,6 +42,25 @@ const TABS: { href: string; key: ProfileKey; icon: ReactNode }[] = [
     ),
   },
 ];
+
+/** Inside each tab link: dims and pulses while that tab is loading. */
+function TabContent({ icon, label, badge }: { icon: ReactNode; label: string; badge: number }) {
+  const { pending } = useLinkStatus();
+  return (
+    <>
+      {pending && <span className={styles.navBar} aria-hidden="true" />}
+      <span className={pending ? styles.tabPending : undefined} style={{ display: "contents" }} aria-busy={pending || undefined}>
+        {icon}
+        <span>{label}</span>
+      </span>
+      {badge > 0 && (
+        <span className={styles.badge} aria-label={`${badge} new`}>
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
+    </>
+  );
+}
 
 export type ShellPlayer = {
   firstName: string;
@@ -197,11 +217,9 @@ export function ProfileShell({
               <Link href="/" role="menuitem">
                 {tr("view_site")}
               </Link>
-              <form method="POST" action="/api/auth/logout">
-                <button type="submit" role="menuitem">
-                  {tr("sign_out")}
-                </button>
-              </form>
+              <SignOutForm action="/api/auth/logout" role="menuitem">
+                {tr("sign_out")}
+              </SignOutForm>
             </div>
           )}
         </div>
@@ -224,13 +242,7 @@ export function ProfileShell({
               className={`${styles.tab} ${active ? styles.tabActive : ""}`}
               aria-current={active ? "page" : undefined}
             >
-              {t.icon}
-              <span>{tr(t.key)}</span>
-              {badge > 0 && (
-                <span className={styles.badge} aria-label={`${badge} new`}>
-                  {badge > 9 ? "9+" : badge}
-                </span>
-              )}
+              <TabContent icon={t.icon} label={tr(t.key)} badge={badge} />
             </Link>
           );
         })}

@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useProfileT } from "@/lib/profile-i18n";
 import { StripeCardForm } from "../LazyStripeCardForm";
 import { Sheet } from "../Sheet";
+import { BusyLabel, Spinner } from "../BusyLabel";
+import { useBusyAction } from "../useBusyAction";
 import styles from "../profile.module.css";
 import { fmtDate, postJson } from "./format";
 
@@ -40,7 +41,7 @@ export function PlayCalendar({
   casualPriceNzd: number;
 }) {
   const { tr, lang } = useProfileT();
-  const router = useRouter();
+  const { refresh } = useBusyAction();
   const [state, setState] = useState(days);
   const [booking, setBooking] = useState<CalDay | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export function PlayCalendar({
   };
 
   const startBooking = async (d: CalDay) => {
+    setBusyDate(d.date);
     setBooking(d);
     setClientSecret(null);
     setMessage(null);
@@ -80,6 +82,7 @@ export function PlayCalendar({
       email: player.email,
       phone: player.phone || undefined,
     });
+    setBusyDate(null);
     if (!res.ok) {
       setBooking(null);
       setMessage({ kind: "error", text: tr("cal_booking_failed") });
@@ -95,7 +98,7 @@ export function PlayCalendar({
     setMessage({ kind: "success", text: tr("cal_booked_done", { date: fmtDate(date, lang) }) });
     setBooking(null);
     setClientSecret(null);
-    window.setTimeout(() => router.refresh(), 2500);
+    window.setTimeout(() => refresh(), 2500);
   };
 
   return (
@@ -152,13 +155,14 @@ export function PlayCalendar({
                       className={`${styles.btn} ${styles.ghost}`}
                       style={{ fontSize: 13, padding: "0 10px" }}
                       disabled={busyDate === d.date}
+                      aria-busy={busyDate === d.date}
                       onClick={() => toggleAbsence(d)}
                     >
-                      {d.absent ? tr("cal_undo_absence") : tr("cal_cant_make_it")}
+                      <BusyLabel busy={busyDate === d.date}>{d.absent ? tr("cal_undo_absence") : tr("cal_cant_make_it")}</BusyLabel>
                     </button>
                   ) : d.booked ? null : d.bookable && !d.paused && !d.closed && d.spots > 0 ? (
-                    <button type="button" className={`${styles.btn} ${styles.primary}`} style={{ minHeight: 44, padding: "0 14px", fontSize: 14 }} onClick={() => startBooking(d)}>
-                      {tr("cal_book")}
+                    <button type="button" className={`${styles.btn} ${styles.primary}`} style={{ minHeight: 44, padding: "0 14px", fontSize: 14 }} disabled={busyDate === d.date} aria-busy={busyDate === d.date} onClick={() => startBooking(d)}>
+                      <BusyLabel busy={busyDate === d.date}>{tr("cal_book")}</BusyLabel>
                     </button>
                   ) : (
                     <span className={styles.small} style={{ whiteSpace: "nowrap" }}>
@@ -189,7 +193,9 @@ export function PlayCalendar({
             {clientSecret ? (
               <StripeCardForm clientSecret={clientSecret} amountLabel={tr("mem_pay", { amount: casualPriceNzd })} onSuccess={onPaid} returnPath="/profile/membership" />
             ) : (
-              <p className={styles.small}>…</p>
+              <div className={styles.loadingLine}>
+                <Spinner label={tr("loading")} /> {tr("loading")}
+              </div>
             )}
           </>
         )}

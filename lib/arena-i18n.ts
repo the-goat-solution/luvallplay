@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import type { Lang } from "@/lib/i18n";
+import { CAPS, REPEAT_WINDOW_DAYS } from "@/lib/ranks";
 
 // Text for The Arena (challenges), the rank card and the Wolf Points
 // leaderboard tabs. Same {var} placeholders as lib/profile-i18n.ts.
@@ -96,9 +97,8 @@ const EN = {
   block_no_pair: "Team up first",
   block_own: "Your pair",
   block_pair_busy: "You're in a challenge",
-  block_cap_today: "Played them today",
-  block_cap_month: "3 games vs them this month",
-  block_cap_player: "4 challenges today is the max",
+  block_cap_today: `Played them ${CAPS.sameFourPerDay} times today`,
+  block_cap_month: `${CAPS.sameFourPer30Days} games vs them this month`,
   block_not_open: "Taken",
 
   feed: "Just happened",
@@ -205,9 +205,8 @@ const EN = {
   err_no_pair: "Team up with a partner first.",
   err_already_up: "Your pair is already up for a challenge.",
   err_not_open: "Someone else took that challenge.",
-  err_cap_today: "You've already played them today.",
-  err_cap_month: "3 games against them this month: find a new rival!",
-  err_cap_player: "4 challenges a day is the most that count.",
+  err_cap_today: `You've played them ${CAPS.sameFourPerDay} times today. Come back tomorrow or find a new rival!`,
+  err_cap_month: `${CAPS.sameFourPer30Days} games against them in ${REPEAT_WINDOW_DAYS} days: time to find a new rival!`,
   err_too_soon: "Play the game first! You can enter the score {n} min after check-in.",
   err_bad_score: "That isn't a valid score for a game to 21.",
   err_other_pair_confirms: "The other pair confirms the score.",
@@ -309,9 +308,8 @@ const VI: Dict = {
   block_no_pair: "Ghép cặp trước",
   block_own: "Cặp của bạn",
   block_pair_busy: "Bạn đang có trận",
-  block_cap_today: "Đã đấu hôm nay",
-  block_cap_month: "Đã 3 trận với họ tháng này",
-  block_cap_player: "Tối đa 4 trận mỗi ngày",
+  block_cap_today: `Đã đấu họ ${CAPS.sameFourPerDay} trận hôm nay`,
+  block_cap_month: `Đã ${CAPS.sameFourPer30Days} trận với họ tháng này`,
   block_not_open: "Đã có người nhận",
 
   feed: "Vừa diễn ra",
@@ -418,9 +416,8 @@ const VI: Dict = {
   err_no_pair: "Hãy ghép cặp trước.",
   err_already_up: "Cặp bạn đã đăng thách đấu rồi.",
   err_not_open: "Đã có cặp khác nhận lời.",
-  err_cap_today: "Hôm nay bạn đã đấu với họ rồi.",
-  err_cap_month: "Đã 3 trận với họ tháng này: tìm đối thủ mới nhé!",
-  err_cap_player: "Mỗi ngày chỉ tính tối đa 4 trận.",
+  err_cap_today: `Hôm nay bạn đã đấu họ ${CAPS.sameFourPerDay} trận rồi. Mai quay lại hoặc tìm đối thủ mới nhé!`,
+  err_cap_month: `Đã ${CAPS.sameFourPer30Days} trận với họ trong ${REPEAT_WINDOW_DAYS} ngày: tìm đối thủ mới nhé!`,
   err_too_soon: "Đánh xong đã! Có thể nhập tỉ số sau {n} phút.",
   err_bad_score: "Tỉ số không hợp lệ cho ván đến 21.",
   err_other_pair_confirms: "Cặp bên kia sẽ xác nhận tỉ số.",

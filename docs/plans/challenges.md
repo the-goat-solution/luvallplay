@@ -96,11 +96,11 @@ Expected running cost: **$0/month** (same stack; the art is static SVG).
 - WP is **worked out from the records**, not stored as a running balance, the same as today's leaderboard. Linking a mini game name or fixing attendance updates everyone's rank at once.
 - **History counts:** on launch day, every play day and round robin result already in the database counts.
 
-### 3.2 Caps (anti-farming; proposed)
+### 3.2 Caps (anti-farming; revised 17 Nov to allow revenge)
 
-Every challenge counts, so the caps work by **stopping a challenge from being posted or accepted**:
-- the same two pairs (or the same four players in any split) can play each other **once a day and three times in 30 days**. The board says "You've played them 3 times this month. Find a new rival (+1)!";
-- a player can play at most **4 challenges a day**.
+Every challenge counts, so the one cap works by **stopping a challenge from being accepted**:
+- the same two pairs (or the same four players in any split) can play each other **3 times a day and 10 times in 30 days**. That leaves room for a game, a revenge and a decider on the night, and for a real rivalry over the month, while two friends can't trade wins all month for points. The board says "10 games against them in 30 days: time to find a new rival!";
+- there is **no limit** on how many challenges one player plays in a day. Each game still needs a code check-in and an opponent-confirmed score, and admins can void a result.
 
 ---
 
@@ -224,7 +224,7 @@ open ──accept──▶ accepted ──code check-in──▶ live ──scor
 1. **Points:** "+5 WP: win 2 · Giant-killer 2 · New rival 1", with the rank bar filling. If they ranked up, the rank-up card follows.
 2. "**Keep playing together?**" **Yes** keeps the pair; **No** ends it.
 3. "**Up for another challenge?**" **Yes** puts the pair straight back on the board.
-4. **Rematch** (only if the caps allow) or **Find a new rival**, which lists open pairs they've never played.
+4. **Rematch** (as long as the same-four cap isn't reached) or **Find a new rival**, which lists open pairs they've never played.
 
 ---
 
@@ -511,7 +511,7 @@ The rank ladder can go live **before** challenges, because attendance and round 
 6. Optional **pair names**, with a word filter? [yes]
 7. One open board, or separate men's / women's / mixed? [one open board]
 8. Auto-confirm an unconfirmed score after 24 h? [yes]
-9. Caps: same matchup once a day and 3 times in 30 days; 4 challenges per player per day? [yes]
+9. Caps: same four 3 times a day and 10 times in 30 days; no per-player daily limit. [revised]
 10. **Retired / couldn't finish** gives the opponents the win (2 WP, no bonuses), unless an admin voids it for injury? [yes]
 11. Availability options when posting: today / 3 days / 7 days? [yes]
 12. Crown names: Crown pair / Pack Leader / Season champion, or something more Three Wolves? [as listed]

@@ -10,7 +10,6 @@ import { DISPLAY_NAME_SQL, computeStreaks, initialsOf, periodRange, rankRows, ty
 import {
   ACCEPTED_LAPSE_DAYS,
   AUTO_CONFIRM_HOURS,
-  CAPS,
   CHECKIN_MIN_MINUTES_BEFORE_SCORE,
   CODE_ATTEMPTS_PER_10_MIN,
   CODE_TTL_SECONDS,
@@ -23,11 +22,11 @@ import {
   achievementsFrom,
   assignSeats,
   crownStillHeld,
-  daysBetween,
   foursomeKey,
   indexForWp,
   isValidGameScore,
   pairKey,
+  repeatMatchupBlocker,
   polish,
   progressToNext,
   replayChallenges,
@@ -817,16 +816,12 @@ export function acceptBlocker(world: World, c: ChallengeRow, playerId: number): 
   const four = foursomeKey([...pair.players, ...c.postingPlayers]);
   const counted = world.challenges.filter((x) => x.acceptedAt && [...ACTIVE, "completed"].includes(x.status));
   const sameFour = counted.filter((x) => x.acceptingPlayers && foursomeKey([...x.postingPlayers, ...x.acceptingPlayers]) === four);
-  const accDate = (x: ChallengeRow) => clubDateKeyForInstant(new Date(x.acceptedAt!));
-  if (sameFour.filter((x) => accDate(x) === world.today).length >= CAPS.sameFourPerDay) return "cap_today";
-  if (sameFour.filter((x) => daysBetween(accDate(x), world.today) < 30).length >= CAPS.sameFourPer30Days) return "cap_month";
-  for (const p of [...pair.players, ...c.postingPlayers]) {
-    const n = counted.filter(
-      (x) => accDate(x) === world.today && (x.postingPlayers.includes(p) || x.acceptingPlayers?.includes(p)),
-    ).length;
-    if (n >= CAPS.perPlayerPerDay) return "cap_player";
-  }
-  return null;
+  // Revenge rematches are welcome; only the same four trading wins over and
+  // over is capped (lib/ranks.ts CAPS). A player's own daily total isn't.
+  return repeatMatchupBlocker(
+    sameFour.map((x) => clubDateKeyForInstant(new Date(x.acceptedAt!))),
+    world.today,
+  );
 }
 
 export async function acceptChallenge(playerId: number, id: number): Promise<void> {

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  CAPS,
   LADDER,
   LEAGUE_START,
   TOP_INDEX,
@@ -10,6 +11,7 @@ import {
   crownStillHeld,
   indexForWp,
   isValidGameScore,
+  repeatMatchupBlocker,
   polish,
   progressToNext,
   rankName,
@@ -182,4 +184,23 @@ test("achievements from history", () => {
   assert.equal(a["giant-killer"], "2027-01-03");
   assert.equal(a["hot-streak"], "2027-01-06");
   assert.equal(a["social-wolf"], undefined);
+});
+
+test("caps: revenge is allowed, the same four can't trade wins without end", () => {
+  const today = "2027-03-10";
+  assert.equal(repeatMatchupBlocker([], today), null);
+  // A game and a revenge the same day are fine, and so is a third (the decider).
+  assert.equal(repeatMatchupBlocker([today], today), null);
+  assert.equal(repeatMatchupBlocker([today, today], today), null);
+  assert.equal(repeatMatchupBlocker(Array(CAPS.sameFourPerDay).fill(today), today), "cap_today");
+  // Games spread over the month: still fine below the monthly cap, blocked at it.
+  const spread = (n: number) => Array.from({ length: n }, (_, i) => `2027-02-${String(20 + (i % 8)).padStart(2, "0")}`);
+  assert.equal(repeatMatchupBlocker(spread(CAPS.sameFourPer30Days - 1), today), null);
+  assert.equal(repeatMatchupBlocker(spread(CAPS.sameFourPer30Days), today), "cap_month");
+  // Games older than 30 days no longer count.
+  assert.equal(repeatMatchupBlocker(Array(20).fill("2027-01-01"), today), null);
+});
+
+test("caps: there is no per-player daily limit any more", () => {
+  assert.deepEqual(Object.keys(CAPS).sort(), ["sameFourPer30Days", "sameFourPerDay"]);
 });

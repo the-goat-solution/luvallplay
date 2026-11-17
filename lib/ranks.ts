@@ -480,11 +480,29 @@ export function foursomeKey(players: number[]): string {
 // Caps
 // ---------------------------------------------------------------------------
 
+// Revenge is part of the game, so the same four players can meet again the
+// same day (a game, a revenge and a decider) and often over a month. There is
+// no limit on how many challenges one player can play in a day: every game is
+// against a different (or consenting) pair and still needs a code check-in and
+// an opponent-confirmed score. The only cap left stops two pairs trading wins
+// all month for points; admins can still void a result.
 export const CAPS = {
-  sameFourPerDay: 1,
-  sameFourPer30Days: 3,
-  perPlayerPerDay: 4,
+  sameFourPerDay: 3,
+  sameFourPer30Days: 10,
 };
+
+export const REPEAT_WINDOW_DAYS = 30;
+
+/**
+ * Whether the same four players may play again. `dates` are the club dates on
+ * which earlier challenges between exactly these four (in any split) were
+ * accepted; `today` is the club date now.
+ */
+export function repeatMatchupBlocker(dates: string[], today: string): "cap_today" | "cap_month" | null {
+  if (dates.filter((d) => d === today).length >= CAPS.sameFourPerDay) return "cap_today";
+  if (dates.filter((d) => daysBetween(d, today) < REPEAT_WINDOW_DAYS).length >= CAPS.sameFourPer30Days) return "cap_month";
+  return null;
+}
 
 export const CODE_TTL_SECONDS = 120;
 export const PAIR_REQUEST_TTL_SECONDS = 300;

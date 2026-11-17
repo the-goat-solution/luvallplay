@@ -38,12 +38,128 @@
 .photos::-webkit-scrollbar {
   display: none;
 }
-.photos img {
+/* The whole photo, whatever its shape: no cropping. */
+.photos {
+  align-items: center;
+  background: #efede6;
+}
+.photoBtn {
+  position: relative;
   flex: 0 0 100%;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
   scroll-snap-align: center;
+}
+.photoBtn img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(70vh, 560px);
+  object-fit: contain;
+}
+.zoomHint {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(14, 44, 63, 0.72);
+  color: #fff;
+  pointer-events: none;
+}
+
+/* ---------- Full-screen photo viewer ---------- */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(6, 14, 22, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.viewerStrip {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.viewerStrip::-webkit-scrollbar {
+  display: none;
+}
+.viewerSlide {
+  flex: 0 0 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top) + 56px) max(12px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 48px)
+    max(12px, env(safe-area-inset-left));
+  scroll-snap-align: center;
+  touch-action: pan-x pinch-zoom;
+}
+.viewerSlide img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.viewerClose,
+.viewerNav {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+}
+.viewerClose {
+  top: calc(env(safe-area-inset-top) + 10px);
+  right: max(12px, env(safe-area-inset-right));
+}
+.viewerNav {
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 30px;
+}
+.viewerPrev {
+  left: max(12px, env(safe-area-inset-left));
+}
+.viewerNext {
+  right: max(12px, env(safe-area-inset-right));
+}
+.viewerCount {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+@media (hover: none) {
+  .viewerNav {
+    display: none;
+  }
 }
 .dots {
   display: flex;

@@ -1,9 +1,8 @@
-/* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /jersey too */
+/* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /leaderboard too */
 "use client";
 
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
-import { useApp } from "@/context/AppContext";
 import { Trans } from "@/components/Trans";
 import type { Lang } from "@/lib/i18n";
 
@@ -11,7 +10,6 @@ const FB_URL = "https://www.facebook.com/profile.php?id=61575583556969";
 
 export function Navigation() {
   const { lang, setLang } = useLanguage();
-  const { openMembershipModal } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
   // A readable hint cookie (no secret) set at sign-in, so the header can say
   // "My profile" without asking the server.
@@ -19,7 +17,7 @@ export function Navigation() {
   useEffect(() => {
     setSignedIn(document.cookie.split(";").some((c) => c.trim().startsWith("tw_signed_in=1")));
   }, []);
-  const accountLabel = signedIn ? (lang === "vi" ? "Hồ sơ" : "My profile") : lang === "vi" ? "Đăng nhập" : "Log in";
+  const accountLabel = signedIn ? (lang === "vi" ? "Hồ sơ của tôi" : "My profile") : lang === "vi" ? "Đăng ký / Đăng nhập" : "Sign up / Sign in";
   const accountHref = signedIn ? "/profile" : "/login";
 
   const setLanguage = (l: Lang) => {
@@ -74,18 +72,7 @@ export function Navigation() {
                 <a href="/#reviews">Reviews</a>
               </li>
               <li>
-                <a href="/challenges">{lang === "vi" ? "Đấu Trường" : "Arena"}</a>
-              </li>
-              <li>
                 <a href="/leaderboard">{lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}</a>
-              </li>
-              <li>
-                <a href="/jersey">Jersey</a>
-              </li>
-              <li>
-                <a href={accountHref} className="nav-account">
-                  {accountLabel}
-                </a>
               </li>
             </ul>
             <div className="nav-actions">
@@ -116,13 +103,9 @@ export function Navigation() {
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                 </svg>
               </a>
-              <button
-                type="button"
-                className="nav-cta btn"
-                onClick={() => openMembershipModal("fridayMonthly")}
-              >
-                <Trans k="nav_join" />
-              </button>
+              <a href={accountHref} className="nav-cta btn">
+                {accountLabel}
+              </a>
               <button
                 type="button"
                 className="hamburger"
@@ -160,28 +143,12 @@ export function Navigation() {
         <a href="/#membership" onClick={closeMobile}>
           <Trans k="nav_membership" />
         </a>
-        <a href="/challenges" onClick={closeMobile}>
-          {lang === "vi" ? "Đấu Trường" : "Arena"}
-        </a>
         <a href="/leaderboard" onClick={closeMobile}>
           {lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}
         </a>
-        <a href="/jersey" onClick={closeMobile}>
-          Jersey
-        </a>
-        <a href={accountHref} onClick={closeMobile}>
+        <a href={accountHref} className="mobile-menu-join" onClick={closeMobile}>
           {accountLabel}
         </a>
-        <button
-          type="button"
-          className="mobile-menu-join"
-          onClick={() => {
-            openMembershipModal("fridayMonthly");
-            closeMobile();
-          }}
-        >
-          <Trans k="nav_join" />
-        </button>
         <div className="lang-toggle" style={{ marginTop: 4 }}>
           <button
             type="button"

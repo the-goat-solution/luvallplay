@@ -83,6 +83,7 @@ button{font-family:var(--font-sans);cursor:pointer}
 .nav-fb{display:flex;align-items:center;color:rgba(255,255,255,.65);transition:color var(--ease)}
 .nav-fb:hover{color:var(--bronze-light)}
 .nav-cta{background:var(--bronze);color:#fff;padding:9px 22px;border-radius:var(--radius-md);font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;border:2px solid var(--bronze);transition:all var(--ease)}
+.nav-cta{text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center}
 .nav-cta:hover{background:var(--bronze-dark);border-color:var(--bronze-dark);transform:translateY(-1px)}
 .hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;padding:4px}
 .hamburger span{display:block;width:24px;height:2px;background:#fff;border-radius:2px;transition:all var(--ease)}

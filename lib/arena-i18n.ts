@@ -151,6 +151,10 @@ const EN = {
   vs_took: "took it on",
   vs_body: "Sort out a time and place with them, then check in when you meet.",
   vs_go: "Let's go",
+  vs_minimize: "Minimize: look around and come back to it",
+  vs_minimize_short: "Later",
+  vs_open: "Open",
+  vs_waiting: "Your match is on",
 
   victory: "Victory!",
   good_game: "Good game!",
@@ -360,6 +364,10 @@ const VI: Dict = {
   vs_took: "nhận lời",
   vs_body: "Hãy hẹn giờ và sân với họ, rồi xác nhận khi gặp nhau.",
   vs_go: "Chiến thôi",
+  vs_minimize: "Thu nhỏ: xem chỗ khác rồi quay lại",
+  vs_minimize_short: "Để sau",
+  vs_open: "Mở",
+  vs_waiting: "Trận của bạn đã sẵn sàng",
 
   victory: "Chiến thắng!",
   good_game: "Trận hay!",

@@ -62,7 +62,7 @@ export default async function ChallengesAdminPage() {
     <div className={adminStyles.page}>
       <h1 className={adminStyles.title}>Challenges</h1>
       <p className={adminStyles.subtitle}>
-        Pair challenges in The Arena (<a href="/challenges">/challenges</a>). Disputed scores wait here; you can also void any result. Ranks and points
+        Pair challenges in The Arena (<a href="/profile/arena">Profile → Arena</a>). Disputed scores wait here; you can also void any result. Ranks and points
         recalculate straight away.
       </p>
       <AdminNav active="challenges" />

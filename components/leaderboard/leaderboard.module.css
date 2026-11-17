@@ -333,3 +333,140 @@ span.stepBtn {
   position: relative;
   display: inline-block;
 }
+
+/* ---------- One list: source filter, tier lines, Wolf titles ---------- */
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.filterLabel {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sources a {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid #e2dccb;
+  background: #fff;
+  color: var(--text-mid);
+  font-weight: 700;
+  font-size: 13px;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+.sources a.on {
+  background: var(--bronze);
+  border-color: var(--bronze);
+  color: #fff;
+}
+.nextTier {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  align-items: center;
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 4px 0 6px;
+  box-shadow: var(--shadow-card);
+}
+.nextTier div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nextTier strong {
+  color: var(--navy);
+  font-size: 14px;
+}
+.nextTier span {
+  color: var(--text-light);
+  font-size: 12.5px;
+}
+.nextBar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: #efebdd;
+  overflow: hidden;
+}
+.nextBar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--bronze-light), var(--bronze));
+  border-radius: 3px;
+}
+.list li.tierLine {
+  min-height: 0;
+  padding: 7px 14px;
+  gap: 8px;
+  background: linear-gradient(90deg, #f3eedf, #faf7ee);
+  border-top: 2px solid #e2d9bf;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.list li.tierLine small {
+  margin-left: auto;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-light);
+}
+.rowIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+.wolfTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 4px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.alpha {
+  background: linear-gradient(90deg, #f7e2b4, #f1cf86);
+  color: #6b4a0c;
+}
+.silver {
+  background: linear-gradient(90deg, #e8eef3, #d3dee7);
+  color: #33485c;
+}
+.list li.seated .rank {
+  color: var(--bronze-dark);
+}
+.top1,
+.top2,
+.top3 {
+  color: var(--navy) !important;
+}
+.top1 {
+  font-size: 18px;
+}

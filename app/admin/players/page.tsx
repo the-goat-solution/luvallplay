@@ -19,7 +19,8 @@ import { getSmsUsage, setSmsSwitch } from "@/lib/sms";
 import { WELCOME_BATCH, sendWelcomeBatch, sendWelcomePreview } from "@/lib/welcome-emails";
 import { adminAlertRecipients } from "@/lib/player-email";
 import { getStripe } from "@/lib/stripe";
-import { confirmAttendance, getStatsBackfillPreview, listMinigameNameMatches, listUnverifiedAttendance, removeAttendance, runStatsBackfill, setMinigameName } from "@/lib/stats-db";
+import { confirmAttendance, getStatsBackfillPreview, listMinigameNameMatches, listUnverifiedAttendance, removeAttendance, setMinigameName } from "@/lib/stats-db";
+import { recalculateAllPoints } from "@/lib/arena-db";
 import { listRecentFeedback } from "@/lib/membership-self-service";
 
 export const dynamic = "force-dynamic";
@@ -89,9 +90,9 @@ async function changeEmail(playerId: number, formData: FormData) {
 
 async function backfillStats() {
   "use server";
-  const r = await runStatsBackfill();
+  const r = await recalculateAllPoints();
   revalidatePath("/admin/players");
-  back("toast", `Backfill done: ${r.attendance} play days and ${r.roundRobin} round robin results recorded.`);
+  back("toast", `Points recalculated: ${r.attendance} play days added, ${r.roundRobin} round robin results re-read, ${r.players} rank${r.players === 1 ? "" : "s"} corrected.`);
 }
 
 async function saveMinigameName(formData: FormData) {
@@ -206,17 +207,17 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
       </section>
 
       <section style={card}>
-        <h2 style={{ fontSize: 16, marginTop: 0 }}>2. Play history for imported members</h2>
+        <h2 style={{ fontSize: 16, marginTop: 0 }}>2. Play days and points</h2>
         <p style={{ color: "#666", fontSize: 13 }}>
-          Fills in play days from saved court boards ({backfill.boardDays} day{backfill.boardDays === 1 ? "" : "s"}), round robin results from past mini game
-          draws ({backfill.draws} draw{backfill.draws === 1 ? "" : "s"}), and, for the other past play days ({backfill.bookingDays}), that day&apos;s roster:
-          casual bookings and members, minus &ldquo;Can&apos;t make it&rdquo;, with fill-ins counted instead. This runs automatically once and then daily;
-          the button re-runs it (nothing is counted twice, and attendance you removed stays removed). Match the mini game names below first so round robin results reach the right people.
-          Safe to run again.
+          Play days count automatically from each day&apos;s sign-up list (the day after): casual bookings and members, minus &ldquo;Can&apos;t make it&rdquo;,
+          with fill-ins counted instead. No check-in needed. Saved court boards ({backfill.boardDays} day{backfill.boardDays === 1 ? "" : "s"}) and round robin
+          draws ({backfill.draws}) add anyone who played without signing up. This keeps itself up to date hourly; the button recalculates everyone&apos;s
+          points and ranks from scratch (nothing is counted twice, and attendance you removed stays removed). Match the mini game names below first so
+          round robin results reach the right people.
         </p>
         <form action={backfillStats}>
-          <SubmitButton loadingText="Backfilling…" style={btn}>
-            Run backfill
+          <SubmitButton loadingText="Recalculating…" style={btn}>
+            Recalculate everyone&apos;s points
           </SubmitButton>
         </form>
 

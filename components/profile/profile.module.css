@@ -129,7 +129,7 @@
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: saturate(1.4) blur(10px);
   -webkit-backdrop-filter: saturate(1.4) blur(10px);
@@ -144,10 +144,10 @@
   justify-content: center;
   gap: 3px;
   min-height: var(--tabbar-h);
-  color: var(--text-light);
+  color: #4f6577;
   text-decoration: none;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.04em;
 }
 .tab svg {
@@ -310,11 +310,15 @@
   .app {
     padding: 0 0 env(safe-area-inset-bottom) calc(var(--sidebar-w) + env(safe-area-inset-left));
   }
+  /* Explicitly fixed: wide portrait screens (iPad Pro) also match the
+     tablet-portrait rule above, which makes the bar sticky. */
   .tabs {
+    position: fixed;
     top: 0;
     left: 0;
     right: auto;
     bottom: 0;
+    justify-content: flex-start;
     width: calc(var(--sidebar-w) + env(safe-area-inset-left));
     display: flex;
     flex-direction: column;
@@ -324,28 +328,35 @@
     border-right: 1px solid var(--line);
     background: #fff;
     z-index: 40;
+    overflow-y: auto;
   }
   .tab {
     flex-direction: row;
     justify-content: flex-start;
     gap: 12px;
-    min-height: 48px;
+    min-height: 50px;
     padding: 0 16px;
     border-radius: 12px;
+    color: var(--navy);
     font-size: 15px;
     letter-spacing: 0.02em;
   }
+  .tab:not(.tabActive) {
+    background: transparent;
+  }
   .tabActive {
-    background: var(--cream);
+    background: var(--navy);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(14, 44, 63, 0.22);
   }
   .tabActive::before {
     top: 12px;
     bottom: 12px;
-    left: 0;
+    left: -14px;
     right: auto;
-    width: 3px;
+    width: 4px;
     height: auto;
-    border-radius: 0 3px 3px 0;
+    border-radius: 0 4px 4px 0;
   }
   .badge {
     position: static;
@@ -658,8 +669,9 @@
   .ghost:hover {
     background: var(--cream-dark);
   }
-  .tab:hover {
+  .tab:not(.tabActive):hover {
     color: var(--navy);
+    background: var(--cream-dark);
   }
   .menu a:hover,
   .menu button:hover {
@@ -1194,4 +1206,88 @@
   font-weight: 700;
   font-size: 16px;
   white-space: nowrap;
+}
+
+/* ---------- Back to the club site ---------- */
+.siteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 14px 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(252, 251, 242, 0.3);
+  color: var(--cream);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.siteBtn:active {
+  background: rgba(252, 251, 242, 0.12);
+}
+@media (hover: hover) {
+  .siteBtn:hover {
+    background: rgba(252, 251, 242, 0.12);
+  }
+}
+@media (max-width: 420px) {
+  .brandTitle {
+    display: none;
+  }
+}
+@media (max-width: 340px) {
+  .siteBtn span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .siteBtn {
+    padding: 0 10px;
+  }
+}
+
+/* ---------- Minimized challenge pill (other tabs) ---------- */
+.matchPill {
+  position: fixed;
+  z-index: 55;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 28px);
+  padding: 8px 16px 8px 8px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #0d2033, #14304a);
+  color: #fcfbf2;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  box-shadow: 0 12px 30px rgba(8, 19, 31, 0.35), inset 0 0 0 1px rgba(255, 213, 74, 0.4);
+}
+.matchPillVs {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #ffd54a;
+  color: #08131f;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 14px;
+}
+@media (orientation: landscape) and (max-height: 500px), (min-width: 600px) {
+  .matchPill {
+    bottom: calc(env(safe-area-inset-bottom) + 18px);
+  }
+}
+@media (orientation: landscape) and (max-height: 500px), (min-width: 600px) and (max-width: 1023px) and (orientation: landscape) {
+  .matchPill {
+    right: calc(var(--rail-w) + env(safe-area-inset-right) + 14px);
+  }
 }

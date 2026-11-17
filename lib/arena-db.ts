@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import { sql, db } from "@vercel/postgres";
 import { revalidateTag } from "next/cache";
-import { ensurePlayerTables } from "./player-db";
-import { ensureStatsTables } from "./stats-db";
+import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";
+import { ensureStatsTables, runStatsBackfill, syncRosterAttendance } from "./stats-db";
+import { after } from "next/server";
 import { hmac } from "./player-auth";
 import { clubDateKeyForInstant, getClubToday } from "./dates";
 import { DISPLAY_NAME_SQL, computeStreaks, initialsOf, periodRange, rankRows, type PeriodRange } from "./stats-periods";
@@ -39,6 +40,7 @@ import {
   type ReplayPlayerResult,
   type Seat,
   type WpEvent,
+  type WpSource,
 } from "./ranks";
 import { onceThisDeploy } from "./schema-gate";
 
@@ -360,8 +362,75 @@ export function loadWorldCached(maxAgeMs: number): Promise<World> {
   return world;
 }
 
-export async function loadWorld(): Promise<World> {
+// ---------------------------------------------------------------------------
+// Keeping points current
+// ---------------------------------------------------------------------------
+
+// Bump to recalculate everyone once more (each environment's ranks are kept
+// separately, so production and previews each run it once).
+const RECALC_KEY = `points_recalc_2026_11_signups${PREFIX ? `:${PREFIX}` : ""}`;
+let pointsSyncedAt = 0;
+
+/**
+ * Play days from the sign-up list, hourly per server instance; the first
+ * time (per RECALC_KEY) a full recalculation instead. Runs after the
+ * response, so nobody waits for it.
+ */
+export async function syncPoints(): Promise<void> {
+  if (!process.env.POSTGRES_URL || Date.now() - pointsSyncedAt < 60 * 60 * 1000) return;
+  pointsSyncedAt = Date.now();
+  try {
+    if (!(await getPlayerSetting(RECALC_KEY))) {
+      await recalculateAllPoints();
+      await setPlayerSetting(RECALC_KEY, new Date().toISOString());
+    } else {
+      await syncRosterAttendance(true);
+    }
+    invalidateWorld();
+  } catch (err) {
+    pointsSyncedAt = 0;
+    console.error("[arena] points sync failed:", err);
+  }
+}
+
+function syncPointsLater(): void {
+  if (Date.now() - pointsSyncedAt < 60 * 60 * 1000) return;
+  try {
+    after(() => syncPoints());
+  } catch {
+    void syncPoints();
+  }
+}
+
+/**
+ * Recalculates everyone from the records: play days rebuilt from the sign-up
+ * lists, round robin results re-read from every draw, then each player's
+ * stored peak rank set back to what their points earn now (a peak reached
+ * on points that were wrong no longer holds them up). Seen ranks only go
+ * down, so nobody gets a rank-up screen for the recalculation itself.
+ */
+export async function recalculateAllPoints(): Promise<{ attendance: number; roundRobin: number; players: number }> {
+  const backfill = await runStatsBackfill();
+  invalidateWorld();
+  const world = await loadWorld({ skipSync: true });
+  let players = 0;
+  for (const [id, r] of world.ranks) {
+    const earned = indexForWp(r.wpTotal);
+    const { rowCount } = await sql.query(
+      `UPDATE ${T.ranks} SET peak_index = $2, seen_index = LEAST(seen_index, $2), updated_at = NOW()
+       WHERE player_id = $1 AND (peak_index <> $2 OR seen_index > $2);`,
+      [id, earned],
+    );
+    players += rowCount ?? 0;
+  }
+  invalidateWorld();
+  refresh();
+  return { ...backfill, players };
+}
+
+export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<World> {
   await ensureArenaTables();
+  if (!opts.skipSync) syncPointsLater();
   await tick();
   const today = getClubToday().dateKey;
   const [pl, att, rr, pairs, members, ch, peaks, club] = await Promise.all([
@@ -400,12 +469,12 @@ export async function loadWorld(): Promise<World> {
   const attendedDates = new Map<number, string[]>();
   const push = (m: Map<number, WpEvent[]>, id: number, e: WpEvent) => m.set(id, [...(m.get(id) ?? []), e]);
   for (const r of att.rows) {
-    push(baseEvents, r.id, { date: r.d, points: WP.playDay });
+    push(baseEvents, r.id, { date: r.d, points: WP.playDay, source: "play" });
     attendedDates.set(r.id, [...(attendedDates.get(r.id) ?? []), r.d]);
   }
   const rrTotals = new Map<number, number>();
   for (const r of rr.rows) {
-    push(baseEvents, r.id, { date: r.d, points: r.rr_points });
+    push(baseEvents, r.id, { date: r.d, points: r.rr_points, source: "rr" });
     rrTotals.set(r.id, (rrTotals.get(r.id) ?? 0) + (r.rr_points as number));
   }
 
@@ -458,7 +527,7 @@ export async function loadWorld(): Promise<World> {
 
   const events = new Map<number, WpEvent[]>();
   for (const [id, ev] of baseEvents) events.set(id, [...ev]);
-  for (const r of replay.results) push(events, r.playerId, { date: r.date, points: r.total });
+  for (const r of replay.results) push(events, r.playerId, { date: r.date, points: r.total, source: "challenge" });
 
   const peakMap = new Map<number, { seen: number; peak: number; wasTarnished: boolean; polishedAt: string | null }>();
   for (const r of peaks.rows) {
@@ -1025,46 +1094,63 @@ export function seasonChampion(world: World): { playerId: number; wp: number; ke
 // Leaderboards (Wolf Points and Challenges tabs)
 // ---------------------------------------------------------------------------
 
-export type ArenaBoardRow = {
+export type PointsSource = "all" | "challenges" | "play" | "rr";
+const SOURCE_OF: Record<Exclude<PointsSource, "all">, WpSource> = { challenges: "challenge", play: "play", rr: "rr" };
+
+export type PointsBoardRow = {
   rank: number;
   playerId: number;
   name: string;
   initials: string;
+  /** Points from the chosen source(s) in the period. */
   value: number;
-  wins?: number;
-  played?: number;
+  /** The same period split by source (for the row's small print). */
+  play: number;
+  rr: number;
+  challenges: number;
+  /** Ladder position (from all-time WP) and Wolf title. */
+  index: number;
+  seat: Seat | null;
+  tarnishing: boolean;
 };
 
-export async function getArenaLeaderboard(metric: "wp" | "challenges", range: PeriodRange, includePlayerId?: number): Promise<ArenaBoardRow[]> {
+/**
+ * The leaderboard: one list of Wolf Points from every source (play days,
+ * round robin, challenges with bonuses) in the period, or from one source.
+ * Only players who show themselves on the leaderboard (plus, for their own
+ * eyes, `includePlayerId`).
+ */
+export async function getPointsBoard(source: PointsSource, range: PeriodRange, includePlayerId?: number): Promise<PointsBoardRow[]> {
   if (!process.env.POSTGRES_URL) return [];
   const world = await loadWorld();
   const inRange = (d: string) => (!range.start || d >= range.start) && (!range.end || d <= range.end);
-  const rows: (ArenaBoardRow & { tie: string })[] = [];
+  const rows: (PointsBoardRow & { tie: string })[] = [];
   for (const p of world.players.values()) {
     if (!p.visible && p.id !== includePlayerId) continue;
-    if (metric === "wp") {
-      const value = (world.events.get(p.id) ?? []).reduce((s, e) => (inRange(e.date) ? s + e.points : s), 0);
-      if (value > 0) rows.push({ rank: 0, playerId: p.id, name: p.name, initials: p.initials, value, tie: "" });
-    } else {
-      const res = world.results.filter((r) => r.playerId === p.id && inRange(r.date));
-      if (!res.length) continue;
-      const wins = res.filter((r) => r.won).length;
-      rows.push({
-        rank: 0,
-        playerId: p.id,
-        name: p.name,
-        initials: p.initials,
-        value: res.reduce((s, r) => s + r.total, 0),
-        wins,
-        played: res.length,
-        tie: `${wins}`,
-      });
-    }
+    const by = { play: 0, rr: 0, challenge: 0 } as Record<WpSource, number>;
+    for (const e of world.events.get(p.id) ?? []) if (inRange(e.date) && e.source) by[e.source] += e.points;
+    const value = source === "all" ? by.play + by.rr + by.challenge : by[SOURCE_OF[source]];
+    if (value <= 0) continue;
+    const r = world.ranks.get(p.id);
+    rows.push({
+      rank: 0,
+      playerId: p.id,
+      name: p.name,
+      initials: p.initials,
+      value,
+      play: by.play,
+      rr: by.rr,
+      challenges: by.challenge,
+      index: r?.shown ?? 0,
+      seat: r?.seat ?? null,
+      tarnishing: r?.tarnishing ?? false,
+      tie: "",
+    });
   }
-  rows.sort((a, b) => b.value - a.value || (b.wins ?? 0) - (a.wins ?? 0) || a.name.localeCompare(b.name));
+  rows.sort((a, b) => b.value - a.value || b.index - a.index || a.name.localeCompare(b.name));
   return rankRows(rows)
     .slice(0, 200)
-    .map((r) => ({ rank: r.rank, playerId: r.playerId, name: r.name, initials: r.initials, value: r.value, wins: r.wins, played: r.played }));
+    .map(({ tie: _tie, ...r }) => r);
 }
 
 /** Rank icon data for every player (leaderboards show it beside names). */
@@ -1076,7 +1162,17 @@ export async function getRankBadges(): Promise<Record<number, { index: number; s
   return out;
 }
 
-/** Things waiting on the player (badge on the Player tab): a score to confirm, a team-up request. Two cheap queries. */
+/** The player's accepted challenge that hasn't been played yet, if any (one cheap query). */
+export async function liveMatchFor(playerId: number): Promise<number | null> {
+  await ensureArenaTables();
+  const { rows } = await sql.query(
+    `SELECT id FROM ${T.challenges} WHERE status = 'accepted' AND $1 IN (p1, p2, a1, a2) ORDER BY accepted_at DESC LIMIT 1;`,
+    [playerId],
+  );
+  return (rows[0]?.id as number | undefined) ?? null;
+}
+
+/** Things waiting on the player (badge on the Arena tab): a score to confirm, a team-up request. Two cheap queries. */
 export async function countArenaActions(playerId: number): Promise<number> {
   await ensureArenaTables();
   const [scores, requests] = await Promise.all([

@@ -1528,3 +1528,125 @@
     opacity: 0;
   }
 }
+
+/* ---------- Inside the profile (Arena tab) ---------- */
+.embedded {
+  min-height: 0;
+  border-radius: 24px;
+  box-shadow: 0 18px 50px rgba(8, 19, 31, 0.25);
+}
+.embedded .wrap {
+  padding: 22px max(14px, 2vw) 36px;
+}
+@media (max-width: 599px) {
+  .embedded {
+    border-radius: 0;
+    margin: -16px calc(-1 * max(16px, env(safe-area-inset-left))) -28px;
+  }
+}
+
+/* ---------- "Let's go" minimized ---------- */
+.vsMinBtn {
+  position: absolute;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 14px);
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(8, 19, 31, 0.55);
+  backdrop-filter: blur(6px);
+  color: var(--cream);
+  font: inherit;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+}
+@media (min-width: 600px) {
+  .vsMinBtn {
+    top: 16px;
+  }
+}
+.vsMini {
+  position: fixed;
+  z-index: 1100;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: calc(var(--tabbar-h, 0px) + env(safe-area-inset-bottom) + 14px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 28px));
+  padding: 8px 8px 8px 8px;
+  border: none;
+  border-radius: 18px;
+  background: linear-gradient(120deg, #0d2033, #14304a);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 213, 74, 0.35);
+  color: var(--cream);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  animation: vsMiniIn 0.35s ease-out;
+}
+.vsMiniVs {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--flood);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 900;
+}
+.vsMiniText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.vsMiniText strong {
+  font-size: 14px;
+}
+.vsMiniText small {
+  font-size: 12px;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vsMiniOpen {
+  flex: none;
+  margin-left: auto;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 800;
+  font-size: 13px;
+}
+@keyframes vsMiniIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vsMini {
+    animation: none;
+  }
+}
+@media (orientation: landscape) and (max-height: 500px), (min-width: 600px) {
+  .vsMini {
+    bottom: calc(env(safe-area-inset-bottom) + 18px);
+  }
+}
+/* Profile tab rail on the trailing edge: keep the pill clear of it. */
+@media (orientation: landscape) and (max-height: 500px), (min-width: 600px) and (max-width: 1023px) and (orientation: landscape) {
+  .embedded .vsMini {
+    right: calc(var(--rail-w, 0px) + env(safe-area-inset-right) + 14px);
+  }
+}

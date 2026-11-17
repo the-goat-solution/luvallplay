@@ -146,8 +146,10 @@ export const GIANT_KILLER_STEPS = 4;
 /** Hot streak: each win after this many wins in a row. */
 export const HOT_STREAK_AFTER = 3;
 
+/** Where WP came from: play days, round robin, or challenges (wins and bonuses). */
+export type WpSource = "play" | "rr" | "challenge";
 /** A dated amount of WP from any source, for windows (60/90 days) and replays. */
-export type WpEvent = { date: string; points: number };
+export type WpEvent = { date: string; points: number; source?: WpSource };
 
 export function addDays(dateKey: string, days: number): string {
   const d = new Date(`${dateKey}T00:00:00Z`);
@@ -222,10 +224,10 @@ export type Seat = "alpha" | "silver";
 export const SEAT_WINDOW_DAYS = 90;
 export const SILVER_SEATS = 3;
 
-/** Alpha Wolf: 1st on 90-day WP; Silver Wolves: the next three. Wooden Racket or above only. */
+/** Alpha Wolf: 1st on 90-day WP; Silver Wolves: the next three. Anyone with WP in the window. */
 export function assignSeats(players: { id: number; earned: number; wp90: number; wpTotal: number }[]): Map<number, Seat> {
   const eligible = players
-    .filter((p) => p.earned >= WOODEN_INDEX && p.wp90 > 0)
+    .filter((p) => p.wp90 > 0)
     .sort((a, b) => b.wp90 - a.wp90 || b.wpTotal - a.wpTotal || a.id - b.id);
   const seats = new Map<number, Seat>();
   eligible.slice(0, 1 + SILVER_SEATS).forEach((p, i) => seats.set(p.id, i === 0 ? "alpha" : "silver"));

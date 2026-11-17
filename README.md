@@ -204,15 +204,14 @@ A live court board for ordinary play days (not mini game days), in the spirit of
 - **Local preview without a database:** `CASUAL_PLAY_DEMO=1 npm run dev`, then open http://localhost:3000/casual-play. It uses 18 sample players kept in memory (reset on restart), and the organiser password is `demo` unless `MINI_GAME_PASSWORD` is set. Demo mode is ignored in production builds.
 - **Access:** anyone can view. Organisers unlock with `MINI_GAME_PASSWORD` (same password as the mini game draw); a logged-in admin is an organiser automatically. Every change is saved in Postgres (`casual_play_sessions`, `casual_play_profiles`) and shown on every open screen within a few seconds. Two organisers tapping at once can't overwrite each other.
 
-### Club jersey (`/jersey`)
+### Club jersey
 
-Registration page for the Yonex club jersey (bank-transfer payment, one per person).
+The public `/jersey` page is retired (it redirects home); registrations and payments stay on **Admin → Jersey**.
 
 - **Opens** 1:30 AM NZ time, Fri 16 Oct 2026; before that the page shows a countdown and the API refuses registrations. The form **closes** 11:59 PM NZ time, Wed 21 Oct 2026; after that the page says registration is closed and the API refuses. Override with `JERSEY_OPENS_AT` / `JERSEY_CLOSES_AT` (ISO times). Prices and rules live in `lib/jersey.ts`: first 10 registrations $15, then $30, name + number +$5, early-bird spots held 48 hours.
 - **One per person:** the email (Gmail dots/`+tags` normalised) is unique across live registrations, enforced by a partial unique index. A matching IP (stored hashed), browser, phone or name is allowed but **flagged** on `/admin/jersey`.
 - **Reference code:** every registration gets a unique 5-digit code to put in the bank transfer reference. Whenever bank lines are imported (Akahu, CSV, webhook, nightly cron) `matchJerseyPayments()` finds the code, marks the registration paid, books a *Jersey & merchandise* ledger entry and reconciles the bank line. Paying more than the price is kept as club funds (no refunds); paying less is flagged, never auto-paid.
 - **Admin:** `/admin/jersey` lists registrations, with Mark paid / Undo / Release / Cancel and **Export to Excel** (registrations, printer order, summary).
-- Jersey and size-chart images are placeholders in `public/uploads/jersey/`; point `DESIGN_IMG` / `SIZE_CHART_IMG` in `app/jersey/page.tsx` at the real files.
 
 ## Player accounts
 
@@ -240,14 +239,14 @@ Plan and decisions: `docs/plans/player-profiles.md`.
 **Admin → Players** has three steps:
 
 1. **Preview import / Create accounts:** one account per active member's email. Gmail-style near-duplicates are flagged, not merged.
-2. **Run backfill:** play days from saved court boards; round robin results from past mini game draws (match the 16 mini game names to players first); and, for older days with no board, confirmed casual bookings.
+2. **Recalculate everyone's points:** rebuilds play days from every sign-up list, re-reads round robin results from past mini game draws (match the 16 mini game names to players first), and resets stored peak ranks to what the points earn now.
 3. **Send welcome emails:** in batches of 40, to stay under Resend's 100 emails a day. Each one has a one-click "hide me from the leaderboard" link.
 
 New members are linked to an account automatically by every membership path: online sign-up (which now requires an account), Add cash member, the Stripe webhook and Stripe sync.
 
 ### Profile (`/profile`)
 
-The profile is an installable web app: manifest, icons, a service worker that caches only static files, and an offline page. It has three tabs.
+The profile is an installable web app: manifest, icons, a service worker that caches only static files, and an offline page. It has four tabs, and a **Club site** button in the top bar back to the home page.
 
 - **Account:** details (email locked), phone confirmation, messages with the admins (**Admin → Inbox**), leaderboard opt-out, data download, account deletion, and an "Add to Home Screen" guide. The guide shows once per player, for about 45 seconds, on a touch device that isn't already running the app.
 - **Membership:**
@@ -256,32 +255,35 @@ The profile is an installable web app: manifest, icons, a service worker that ca
   - **Downgrading and turning off auto-renew:** both go through four steps; reasons are shown on **Admin → Players**.
   - **One-time members:** can renew, or switch to auto-renew (save a card; the first charge is on the new period's first play day).
   - **Play calendar:** casual booking, and "Can't make it" (the member drops off that day's headcount, roster and reminders, so the spot frees up).
-  - **Shop:** card payment, or a cash reservation held until the end of the player's next play day (14 days if none is booked).
-- **Player:** stats, streaks, leaderboard ranks, heatmap, round robin chart and history, photo sharing, and connected apps.
+  - **Shop:** photos shown whole (never cropped) with a full-screen viewer; card payment, or a cash reservation held until the end of the player's next play day (14 days if none is booked).
+- **Arena:** the pair challenges (below). `/challenges` redirects here.
+- **Player:** rank card, stats, streaks, leaderboard ranks, heatmap, round robin chart and history, photo sharing, and connected apps.
 
 ### Attendance and leaderboard
 
 - **How attendance is recorded:**
-  - concluding the court board records everyone with at least one finished game;
+  - **the sign-up list:** everyone on a past play day's roster counts, the day after (confirmed casual bookings, plus members whose membership covers that weekday, minus "Can't make it", with a fill-in counted instead of the person they replaced). No check-in needed. The roster rows are rebuilt hourly, so a later "Can't make it" or cancellation drops off;
+  - concluding the court board also records anyone with at least one finished game;
   - locking a mini game score records round robin results (`rr_results`, keyed by mini game name, linked to an account through `players.minigame_name`);
   - admins can tick or untick players on **Admin → Play days**.
-- **`/leaderboard`** shows play days or RR points (2 per win, ties broken by point difference) by month, quarter, year or all time.
+- **`/leaderboard`** is one list of Wolf Points from every source (play days, round robin, challenges) by month, quarter, year to date or all time, filterable to one source. Alpha/Silver Wolf titles show beside the holders, and tier lines (Plastic Shuttle … Diamond Racket) are drawn wherever the list runs in tier order (always for All time). Signed-in players see how far they are from the next rank. Old `?metric=` links still work.
   - It's cached and refreshed when results change.
   - Opted-out players aren't listed.
 
-### The Arena: pair challenges and Wolf Points (`/challenges`)
+### The Arena: pair challenges and Wolf Points (Profile → Arena)
 
 Plan and decisions: `docs/plans/challenges.md`.
 
 - **Wolf Points (WP):** 1 per play day, 2 per round robin win, 2 per challenge win, plus challenge bonuses (Giant-killer +2, New rival +1, Hot streak +1, Crown bounty +4). Losses never cost points. Everything is worked out from the records (`attendance`, `rr_results`, confirmed challenges), so history counts the moment it's recorded.
-- **Ranks:** 35 steps in four leagues, from Plastic Shuttle to Diamond Racket with a full kit (shoes, jersey, bag, trophy as add-ons between rackets), plus two live Wolf seats (Alpha Wolf and 3 Silver Wolves: top 90-day WP, Wooden Racket or above). Thresholds, tarnish and bonus rules are pure functions in `lib/ranks.ts` (tested in `tests/ranks.test.ts`); the art is `lib/rank-art.ts`.
+- **Ranks:** 35 steps in four leagues, from Plastic Shuttle to Diamond Racket with a full kit (shoes, jersey, bag, trophy as add-ons between rackets), plus two live Wolf seats (Alpha Wolf and 3 Silver Wolves: top 90-day WP). Thresholds, tarnish and bonus rules are pure functions in `lib/ranks.ts` (tested in `tests/ranks.test.ts`); the art is `lib/rank-art.ts`.
 - **Keep it polished:** Precious Racket and Diamond ranks need 5 WP in 60 days; below that they tarnish and slip one rank every 30 days, never below the start of the league reached. Playing again restores them.
 - **Pairs:** team up with a 5-digit code (2 minutes; the code owner confirms). One partner at a time.
 - **Challenges:** post (open today, 3 or 7 days), any other pair accepts, the players sort out time and place themselves, check in with a 5-digit code when they meet, enter a BWF score (one game to 21), the other pair confirms (auto-confirms after 24 hours; "That's not right" goes to **Admin → Challenges**). Caps: the same four players once a day and three times in 30 days; four challenges per player per day.
 - **Admin → Challenges:** disputes (score is right / winner / void), recent results with Void, and a ladder dry run showing where everyone lands.
-- **Leaderboard:** Wolf Points and Challenges tabs (Wolf Points is the default), with rank icons beside every name.
+- **"Let's go" screen:** can be minimized ("Later") to a pill; the pill follows the player across profile tabs until they open it again.
+- **Recalculation:** the first load after a deploy with a new `RECALC_KEY` (`lib/arena-db.ts`) recalculates everyone once; the admin button does it on demand.
 - **No cron needed:** expiry, lapsing and auto-confirm run when the Arena is loaded.
-- **Preview deployments** share the production database, so on a preview (`VERCEL_ENV=preview`) every Arena table gets a `pv_` prefix (`pv_arena_*`): test pairs and games never mix with the real ones, while real play days and round robin results are read (never written). Previews also let a score be entered 1 minute after check-in instead of 8. Drop the `pv_arena_*` tables any time to clear test data.
+- **Preview deployments** share the production database, so on a preview (`VERCEL_ENV=preview`) every Arena table gets a `pv_` prefix (`pv_arena_*`): test pairs and games never mix with the real ones, while real play days and round robin results are read. (The play-day sync from sign-up lists does write `attendance` from previews too: it's the same deterministic rule, so it agrees with production.) Previews also let a score be entered 1 minute after check-in instead of 8. Drop the `pv_arena_*` tables any time to clear test data.
 
 ### Shop (`/admin/shop`)
 

@@ -84,11 +84,11 @@ test("polish: precious ranks tarnish after the upkeep window, slip monthly, keep
   assert.equal(back.tarnishing, false);
 });
 
-test("Wolf seats: 90-day WP, Wooden Racket or above, one Alpha and three Silver", () => {
+test("Wolf seats: 90-day WP, one Alpha and three Silver", () => {
   const seats = assignSeats([
     { id: 1, earned: WOODEN_INDEX, wp90: 40, wpTotal: 50 },
     { id: 2, earned: WOODEN_INDEX + 3, wp90: 30, wpTotal: 200 },
-    { id: 3, earned: 1, wp90: 90, wpTotal: 12 },
+    { id: 3, earned: 1, wp90: 3, wpTotal: 12 },
     { id: 4, earned: WOODEN_INDEX, wp90: 30, wpTotal: 60 },
     { id: 5, earned: WOODEN_INDEX, wp90: 10, wpTotal: 60 },
     { id: 6, earned: WOODEN_INDEX, wp90: 5, wpTotal: 60 },
@@ -98,7 +98,7 @@ test("Wolf seats: 90-day WP, Wooden Racket or above, one Alpha and three Silver"
   assert.equal(seats.get(2), "silver");
   assert.equal(seats.get(4), "silver");
   assert.equal(seats.get(5), "silver");
-  assert.equal(seats.has(3), false, "below Wooden Racket");
+  assert.equal(seats.has(3), false, "fewer 90-day WP than the top four");
   assert.equal(seats.has(6), false, "only three Silver seats");
   assert.equal(seats.has(7), false, "no points in 90 days");
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useProfileT } from "@/lib/profile-i18n";
 import { StripeCardForm } from "../LazyStripeCardForm";
 import type { Order, Product, Variant } from "@/lib/shop-db";
@@ -23,6 +23,66 @@ function fmtDateTime(iso: string | null, lang: string): string {
   });
 }
 
+/** Full-screen photo viewer: swipe or arrows between photos, Esc or ✕ to close, pinch to zoom. */
+function PhotoViewer({ images, start, alt, onClose }: { images: string[]; start: number; alt: (i: number) => string; onClose: () => void }) {
+  const { tr } = useProfileT();
+  const [i, setI] = useState(start);
+  const strip = useRef<HTMLDivElement>(null);
+  const go = (n: number) => {
+    const next = (n + images.length) % images.length;
+    setI(next);
+    strip.current?.scrollTo({ left: next * strip.current.clientWidth, behavior: "smooth" });
+  };
+  useEffect(() => {
+    strip.current?.scrollTo({ left: start * strip.current.clientWidth });
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") go(i + 1);
+      if (e.key === "ArrowLeft") go(i - 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i]);
+  return (
+    <div className={shop.viewer} role="dialog" aria-modal="true" aria-label={alt(i)} onClick={onClose}>
+      <button type="button" className={shop.viewerClose} onClick={onClose} aria-label={tr("close")}>
+        ✕
+      </button>
+      <div
+        ref={strip}
+        className={shop.viewerStrip}
+        onClick={(e) => e.stopPropagation()}
+        onScroll={(e) => setI(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth)))}
+      >
+        {images.map((src, n) => (
+          <div key={src} className={shop.viewerSlide} onClick={onClose}>
+            <img src={src} alt={alt(n)} onClick={(e) => e.stopPropagation()} />
+          </div>
+        ))}
+      </div>
+      {images.length > 1 && (
+        <>
+          <button type="button" className={`${shop.viewerNav} ${shop.viewerPrev}`} onClick={(e) => (e.stopPropagation(), go(i - 1))} aria-label={tr("shop_prev_photo")}>
+            ‹
+          </button>
+          <button type="button" className={`${shop.viewerNav} ${shop.viewerNext}`} onClick={(e) => (e.stopPropagation(), go(i + 1))} aria-label={tr("shop_next_photo")}>
+            ›
+          </button>
+          <div className={shop.viewerCount}>
+            {i + 1} / {images.length}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg: string) => void }) {
   const { tr, lang } = useProfileT();
   const { refresh, refreshing } = useBusyAction();
@@ -30,6 +90,7 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
   const [fit, setFit] = useState<string>(fits[0]);
   const [variantId, setVariantId] = useState<number | null>(null);
   const [photo, setPhoto] = useState(0);
+  const [viewing, setViewing] = useState<number | null>(null);
   const [sizeGuide, setSizeGuide] = useState(false);
   const [busy, setBusy] = useState<"card" | "cash" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,9 +149,20 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
           setPhoto(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
         }}>
           {product.images.map((src, i) => (
-            <img key={src} src={src} alt={`${name} — ${tr("shop_photo", { n: i + 1 })}`} loading={i === 0 ? "eager" : "lazy"} decoding="async" />
+            <button key={src} type="button" className={shop.photoBtn} onClick={() => setViewing(i)} aria-label={tr("shop_view_photo", { n: i + 1 })}>
+              <img src={src} alt={`${name} — ${tr("shop_photo", { n: i + 1 })}`} loading={i === 0 ? "eager" : "lazy"} decoding="async" />
+              <span className={shop.zoomHint} aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="M16 16l4.5 4.5M11 8v6M8 11h6" />
+                </svg>
+              </span>
+            </button>
           ))}
         </div>
+        {viewing !== null && (
+          <PhotoViewer images={product.images} start={viewing} alt={(i) => `${name} — ${tr("shop_photo", { n: i + 1 })}`} onClose={() => setViewing(null)} />
+        )}
         {product.images.length > 1 && (
           <div className={shop.dots} aria-hidden="true">
             {product.images.map((src, i) => (

@@ -32,6 +32,19 @@ const TABS: { href: string; key: ProfileKey; icon: ReactNode }[] = [
     ),
   },
   {
+    href: "/profile/arena",
+    key: "tab_arena",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 4l9 9M20 4l-9 9" />
+        <ellipse cx="5.6" cy="5.6" rx="2.6" ry="3.4" transform="rotate(-45 5.6 5.6)" />
+        <ellipse cx="18.4" cy="5.6" rx="2.6" ry="3.4" transform="rotate(45 18.4 5.6)" />
+        <path d="M11 15l-5 5M13 15l5 5" />
+        <circle cx="12" cy="19.5" r="1.6" />
+      </svg>
+    ),
+  },
+  {
     href: "/profile/player",
     key: "tab_player",
     icon: (
@@ -59,6 +72,36 @@ function TabContent({ icon, label, badge }: { icon: ReactNode; label: string; ba
         </span>
       )}
     </>
+  );
+}
+
+/**
+ * On the other tabs: a small pill back to an accepted challenge whose
+ * "Let's go" screen was minimized in the Arena.
+ */
+function MatchPill({ id }: { id: number | null }) {
+  const { tr } = useProfileT();
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!id) return;
+    const read = () => {
+      try {
+        const min = JSON.parse(localStorage.getItem("tw-arena-vs-min") || "[]") as number[];
+        setShow(Array.isArray(min) && min.includes(id));
+      } catch {
+        setShow(false);
+      }
+    };
+    read();
+    window.addEventListener("storage", read);
+    return () => window.removeEventListener("storage", read);
+  }, [id]);
+  if (!id || !show) return null;
+  return (
+    <Link href="/profile/arena" className={styles.matchPill}>
+      <span className={styles.matchPillVs}>VS</span>
+      <span>{tr("match_waiting")}</span>
+    </Link>
   );
 }
 
@@ -129,11 +172,14 @@ export function ProfileShell({
   player,
   showInstallGuide,
   badges,
+  liveMatchId = null,
   children,
 }: {
   player: ShellPlayer;
   showInstallGuide: boolean;
-  badges?: Partial<Record<"account" | "membership" | "player", number>>;
+  badges?: Partial<Record<"account" | "membership" | "player" | "arena", number>>;
+  /** An accepted challenge waiting to be played (for the minimized "Let's go" pill). */
+  liveMatchId?: number | null;
   children: ReactNode;
 }) {
   const { tr } = useProfileT();
@@ -181,7 +227,7 @@ export function ProfileShell({
   }, [menuOpen]);
 
   const badgeFor = (href: string) => {
-    const key = href.split("/").pop() as "account" | "membership" | "player";
+    const key = href.split("/").pop() as "account" | "membership" | "player" | "arena";
     return badges?.[key] ?? 0;
   };
 
@@ -194,6 +240,12 @@ export function ProfileShell({
           <span className={styles.brandTitle}>{tr("app_title")}</span>
         </Link>
         <div className={styles.topbarSpacer} />
+        <Link href="/" className={styles.siteBtn}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          <span>{tr("back_to_site")}</span>
+        </Link>
         <div ref={menuRef} style={{ position: "static" }}>
           <button
             type="button"
@@ -249,6 +301,7 @@ export function ProfileShell({
       </nav>
 
       <main className={styles.main}>{children}</main>
+      {!pathname?.startsWith("/profile/arena") && <MatchPill id={liveMatchId} />}
       <InstallGuide autoShow={showInstallGuide} />
     </div>
   );

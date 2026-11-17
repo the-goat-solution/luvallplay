@@ -11,6 +11,7 @@ import {
   withDisplayName,
 } from "./email-layout";
 import type { Lang } from "./i18n";
+import { renderWelcomeEmail } from "./welcome-email-template";
 
 // Emails for player accounts. Same branded layout as every other club email
 // (lib/email-layout.ts).
@@ -75,51 +76,17 @@ export async function sendLoginCodeEmail(input: {
 }
 
 /**
- * "Your Three Wolves account is ready" for members whose accounts were
- * created for them. English and Vietnamese together, since imported
- * accounts have no language preference yet.
+ * The welcome for members whose accounts were created for them: the launch
+ * email ("Your Three Wolves profile is here"), personalised. Template in
+ * lib/welcome-email-template.ts.
  */
 export async function sendWelcomeEmail(input: {
   to: string;
   firstName: string;
   optOutUrl: string;
 }): Promise<void> {
-  const site = getSiteUrl();
-  const loginUrl = `${site}/login?email=${encodeURIComponent(input.to)}`;
-  const name = escapeHtml(input.firstName || "there");
-  const bodyHtml = `
-    ${heading("Your Three Wolves account is ready")}
-    ${paragraph(`Hi ${name}, we've set up a Three Wolves account for you, using this email address.`)}
-    ${paragraph("<strong>To sign in:</strong> go to the website, tap <strong>Log in</strong>, enter this email and type the code we send you. No password needed.")}
-    ${paragraph("Inside: your membership, your play days and round robin results, the leaderboard, and the club shop.")}
-    ${ctaButton("Open my profile", loginUrl)}
-    ${paragraph(`You're shown on the club leaderboard by default. Prefer not to be? <a href="${escapeHtml(input.optOutUrl)}" style="color:#C4892A">Hide me from the leaderboard</a>.`)}
-    <hr style="border:none;border-top:1px solid #e5e0cf;margin:28px 0" />
-    ${heading("Tài khoản Three Wolves của bạn đã sẵn sàng")}
-    ${paragraph(`Chào ${name}, chúng tôi đã tạo tài khoản Three Wolves cho bạn bằng địa chỉ email này.`)}
-    ${paragraph("<strong>Cách đăng nhập:</strong> vào trang web, chọn <strong>Đăng nhập</strong>, nhập email này và nhập mã chúng tôi gửi cho bạn. Không cần mật khẩu.")}
-    ${paragraph("Bên trong: thẻ thành viên, các buổi bạn đã chơi, kết quả vòng tròn, bảng xếp hạng và cửa hàng của CLB.")}
-    ${paragraph(`Bạn được hiển thị trên bảng xếp hạng theo mặc định. <a href="${escapeHtml(input.optOutUrl)}" style="color:#C4892A">Ẩn tôi khỏi bảng xếp hạng</a>.`)}
-    ${contactFooterNote()}
-  `;
-  await getResend().emails.send({
-    from: from(),
-    to: input.to,
-    subject: "Your Three Wolves account is ready · Tài khoản Three Wolves đã sẵn sàng",
-    html: renderEmailLayout({
-      title: "Your Three Wolves account is ready",
-      preheader: "Sign in with a code sent to this email. No password needed.",
-      bodyHtml,
-    }),
-    text: [
-      `Hi ${input.firstName || "there"}, we've set up a Three Wolves account for you, using this email address.`,
-      "To sign in: go to the website, tap Log in, enter this email and type the code we send you.",
-      `Open my profile: ${loginUrl}`,
-      `Hide me from the leaderboard: ${input.optOutUrl}`,
-      "",
-      contactFooterNoteText(),
-    ].join("\n"),
-  });
+  const email = renderWelcomeEmail({ ...input, siteUrl: getSiteUrl() });
+  await getResend().emails.send({ from: from(), to: input.to, subject: email.subject, html: email.html, text: email.text });
 }
 
 /** Short notice to the club admins (ALERT_ADMIN_EMAILS, else the club inbox). */

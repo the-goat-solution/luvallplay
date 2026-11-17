@@ -261,7 +261,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
         <h2 style={{ fontSize: 16, marginTop: 0 }}>3. Welcome emails</h2>
         <p style={{ color: "#666", fontSize: 13 }}>
           {welcomePending} imported member{welcomePending === 1 ? "" : "s"} still to email. Each click sends up to {WELCOME_BATCH}, to stay under the free limit of
-          100 emails a day. The email (English and Vietnamese) explains how to sign in and has a one-click link to hide from the leaderboard.
+          100 emails a day. It&apos;s the launch email (“Your Three Wolves profile is here”), greeting each member by name, with a sign-in button that fills in their email and a one-click link to hide from the leaderboard.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <form action={previewWelcome}>

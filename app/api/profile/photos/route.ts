@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     bytes: body.bytes,
     caption: body.caption || null,
   });
-  const result = await moderateImage(body.displayUrl);
+  const result = await moderateImage(body.displayUrl, body.originalUrl);
   await setPhotoModeration(id, result.status, result.safesearch);
   const who = `${player.firstName} ${player.lastName}`.trim() || player.email;
   if (result.status === "rejected") {

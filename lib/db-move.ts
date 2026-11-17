@@ -143,8 +143,10 @@ async function syncSequences(
   wanted: Set<string>,
 ): Promise<void> {
   for (const s of seqList) {
-    const { rows } = await src.query(`SELECT last_value, is_called FROM public.${q(String(s.sequencename))};`);
-    await dst.query(`SELECT setval('public.${q(String(s.sequencename))}', $1, $2);`, [rows[0].last_value, rows[0].is_called]);
+    // Start 1,000 ahead: rows the old database gets during the switch keep
+    // their own ids when the catch-up copies them, with no clash.
+    const { rows } = await src.query(`SELECT last_value FROM public.${q(String(s.sequencename))};`);
+    await dst.query(`SELECT setval('public.${q(String(s.sequencename))}', $1::bigint + 1000, true);`, [rows[0].last_value]);
     const o = owned.find((x) => x.seq === s.sequencename);
     if (o && wanted.has(String(o.tbl))) {
       await dst.query(`ALTER SEQUENCE public.${q(String(s.sequencename))} OWNED BY public.${q(String(o.tbl))}.${q(String(o.col))};`);
@@ -152,33 +154,47 @@ async function syncSequences(
   }
 }
 
-/** After the switch: copies rows added to the old database in the meantime (tables keyed by a numeric id). */
+/**
+ * After the switch: copies rows added to the old database in the meantime.
+ * Every table with a primary key is re-read and any row the new database
+ * doesn't have yet is inserted (existing rows are left alone).
+ */
 async function catchUp(src: VercelPool, dst: VercelPool, list: string[], log: string[]): Promise<void> {
   const { rows: pks } = await src.query(
-    `SELECT c.conrelid::regclass::text AS tbl, a.attname AS col, format_type(a.atttypid, a.atttypmod) AS type
-     FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
-     WHERE c.contype = 'p' AND array_length(c.conkey, 1) = 1 AND c.connamespace = 'public'::regnamespace;`,
+    `SELECT DISTINCT c.conrelid::regclass::text AS tbl FROM pg_constraint c
+     WHERE c.contype = 'p' AND c.connamespace = 'public'::regnamespace;`,
   );
+  const withPk = new Set(pks.map((r) => String(r.tbl).replace(/^public\./, "").replace(/^"|"$/g, "")));
   let added = 0;
-  for (const pk of pks) {
-    const t = String(pk.tbl).replace(/^public\./, "").replace(/^"|"$/g, "");
-    if (!list.includes(t) || !/^(integer|bigint|smallint)$/.test(pk.type)) continue;
-    const { rows: mx } = await dst.query(`SELECT coalesce(max(${q(pk.col)}), 0)::bigint AS m FROM public.${q(t)};`);
-    const { rows } = await src.query(
-      `SELECT coalesce(json_agg(r), '[]'::json)::text AS batch FROM (SELECT * FROM public.${q(t)} WHERE ${q(pk.col)} > $1) r;`,
-      [mx[0].m],
-    );
-    if (rows[0].batch === "[]") continue;
-    const res = await dst.query(`INSERT INTO public.${q(t)} SELECT * FROM json_populate_recordset(NULL::public.${q(t)}, $1::json) ON CONFLICT DO NOTHING;`, [rows[0].batch]);
-    added += res.rowCount ?? 0;
-    log.push(`${t}: +${res.rowCount ?? 0}`);
+  for (const t of list) {
+    if (!withPk.has(t)) {
+      log.push(`${t}: no primary key, skipped`);
+      continue;
+    }
+    let tableAdded = 0;
+    for (let offset = 0; ; offset += 500) {
+      const { rows } = await src.query(
+        `SELECT coalesce(json_agg(r), '[]'::json)::text AS batch FROM (SELECT * FROM public.${q(t)} ORDER BY 1 LIMIT 500 OFFSET ${offset}) r;`,
+      );
+      if (rows[0].batch === "[]") break;
+      const res = await dst.query(
+        `INSERT INTO public.${q(t)} SELECT * FROM json_populate_recordset(NULL::public.${q(t)}, $1::json) ON CONFLICT DO NOTHING;`,
+        [rows[0].batch],
+      );
+      tableAdded += res.rowCount ?? 0;
+    }
+    if (tableAdded) log.push(`${t}: +${tableAdded}`);
+    added += tableAdded;
   }
   const { rows: seqs } = await src.query(`SELECT sequencename FROM pg_sequences WHERE schemaname = 'public';`);
   for (const s of seqs) {
     if (String(s.sequencename).startsWith("pv_")) continue;
     try {
       const { rows } = await src.query(`SELECT last_value, is_called FROM public.${q(s.sequencename)};`);
-      await dst.query(`SELECT setval('public.${q(s.sequencename)}', greatest($1::bigint, (SELECT last_value FROM public.${q(s.sequencename)})), $2);`, [rows[0].last_value, rows[0].is_called]);
+      await dst.query(
+        `SELECT setval('public.${q(s.sequencename)}', greatest($1::bigint, (SELECT last_value FROM public.${q(s.sequencename)})), $2);`,
+        [rows[0].last_value, rows[0].is_called],
+      );
     } catch {
       // sequence of a skipped table
     }

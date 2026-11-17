@@ -1,6 +1,6 @@
 # Plan: Wolf Points, rank ladder, pair challenges & crowns
 
-Status: **draft for discussion**. Nothing built yet. Items marked **(proposed)** are recommendations waiting on a decision; the open questions are in §12.
+Status: **draft for discussion**. Nothing built yet apart from the draft art (§9). Items marked **(proposed)** are recommendations waiting on a decision; the open questions are in §14.
 
 **Decided:**
 
@@ -9,41 +9,46 @@ Status: **draft for discussion**. Nothing built yet. Items marked **(proposed)**
 | 17 Nov | Challenges can be played **anywhere, anytime**; they aren't tied to club play days. |
 | 17 Nov | A challenge is **one game to 21** (BWF scoring: win by 2, golden point at 29–29). |
 | 17 Nov | **Any account holder** can team up and play (members and casual players). |
-| 17 Nov (rev.) | Teaming up and challenge check-in use a **5-digit code**, not a QR code. |
-| 17 Nov (rev.) | **Every challenge is competitive.** No friendlies; every point counts. |
-| 17 Nov (rev.) | Each player has an **individual rank** on a badminton-themed ladder (~18 ranks in **4 leagues**, plus 2 limited "Wolf" seats). It is earned with **Wolf Points** from **play-day attendance, round robin results and challenge results**. This replaces the earlier "skill rating sets the tier" idea, so there's no Elo rating. |
-| 17 Nov (rev.) | **Everyone starts at the bottom, but history counts:** attendance and round robin results already in the database count on launch day, so ranks form from real play. |
-| 17 Nov (rev.) | **Demotion = "keep it polished":** Shuttle and Racket ranks are permanent; Precious Racket and Legend Kit ranks tarnish if you stop playing (never below the start of a league you've reached); the Wolf seats are live, limited and change hands. |
-| 17 Nov (rev.) | Challenge bonuses: **Giant-killer +2, New rival +1, Crown bounty +4, Hot streak +1**. |
+| 17 Nov | Teaming up and challenge check-in use a **5-digit code**, not a QR code. |
+| 17 Nov | **Every challenge is competitive.** No friendlies; every point counts. |
+| 17 Nov | Each player has an **individual rank** on a badminton-themed ladder, earned with **Wolf Points** from **play-day attendance, round robin results and challenge results**. No Elo rating. |
+| 17 Nov | **Everyone starts at the bottom, but history counts:** attendance and round robin results already in the database count on launch day. |
+| 17 Nov | **Demotion = "keep it polished":** Shuttle and Racket ranks are permanent; Precious Racket and Legend Kit ranks tarnish if you stop playing (never below the start of a league you've reached); the Wolf seats are live, limited and change hands. |
+| 17 Nov | Challenge bonuses: **Giant-killer +2, New rival +1, Crown bounty +4, Hot streak +1**. |
+| 17 Nov | A play day is worth **1 WP**. |
+| 17 Nov | Ladder: **Carbon** becomes **Carbon Fibre Racket**; **Player's Racket is removed** (16 ranks + 2 Wolf seats). |
+| 17 Nov | **Players arrange time and place themselves.** The site doesn't handle coordination: no chat, no phone sharing, no venue list, and no time or place on a challenge. |
+| 17 Nov | **New graphics for everything that needs them**, following the site's style but kept subtle. A draft set is in `docs/plans/challenge-graphics/` (§9). |
 
 ---
 
 ## 1. Summary
 
 Every player climbs a **rank ladder from a Plastic Shuttle to a Champion's Trophy**, and the very best hold one of the **Wolf seats** at the top (3 Silver Wolves, 1 Alpha Wolf). Ranks are earned with **Wolf Points (WP)**:
-- turning up to a play day: **2 WP**;
-- each round robin win: **2 WP**;
-- each challenge win: **2 WP**, plus bonuses.
+- **1 WP** for each play day attended;
+- **2 WP** for each round robin win;
+- **2 WP** for each challenge win, plus bonuses.
 
-**Challenges** are how players earn points between play days, anywhere they like:
+**Challenges** are how players earn points between play days:
 1. Two players **team up** by typing the 5-digit code on their partner's screen.
-2. The pair **puts itself up for a challenge**, saying when and where.
+2. The pair **puts itself up for a challenge**.
 3. Another pair **accepts** on the website.
-4. When they meet, one player from each pair **checks in with a 5-digit code**.
-5. After the game, one pair enters the score and the other pair **confirms it**.
-6. Both pairs are asked whether to **keep the pairing** and whether to **go back up for a challenge**.
+4. The four players arrange when and where among themselves.
+5. When they meet, one player from each pair **checks in with a 5-digit code**.
+6. After the game, one pair enters the score and the other pair **confirms it**.
+7. Both pairs are asked whether to **keep the pairing** and whether to **go back up for a challenge**.
 
 | Piece | What players see |
 |---|---|
-| **Rank & kit bag** | Your current item (e.g. *Carbon Racket*), a progress bar to the next one, and a kit bag showing every item earned so far, with locked silhouettes for what's next. |
+| **Rank & kit bag** | Your current item (e.g. *Carbon Fibre Racket*), a progress bar to the next one, and a kit bag showing every item earned, with locked silhouettes for what's next. |
 | **Pairs** | "Team up" on the Player tab: show my code, or type theirs. One current partner; the pair's record. |
-| **Challenge board** | `/challenges`: pairs up for a game with when and where, rank badges, head-to-head records and a bonus preview ("Giant-killer +2 available"). |
-| **Check-in** | At the court, one player reads out a 5-digit code and an opponent types it in. The match is live. |
+| **Challenge board** | `/challenges`: pairs up for a game, with rank icons, head-to-head records and a bonus preview ("Giant-killer +2 available"). |
+| **Check-in** | When they meet, one player reads out a 5-digit code and an opponent types it in. The match is live. |
 | **Score** | Either pair enters it; the other pair confirms. Disputes go to the admins. |
 | **Celebrations** | A rank-up screen, a shareable rank card, and shout-outs on the challenge board feed. |
 | **Leaderboard** | New **Wolf Points** and **Challenges** tabs, with rank icons beside every name and crowns. |
 
-Expected running cost: **$0/month** (same stack; no camera, QR library or paid service).
+Expected running cost: **$0/month** (same stack; the art is static SVG).
 
 ---
 
@@ -51,20 +56,17 @@ Expected running cost: **$0/month** (same stack; no camera, QR library or paid s
 
 | Platform | Mechanic | What we take from it |
 |---|---|---|
-| **Gunbound** (the reference you gave) | Ranks climb through item icons (hammers, axes, wands) on fixed point (GP) thresholds. The very top ranks (the dragons) are **limited seats** held by the top players, not a points threshold. Single then double icons make rank-ups frequent. | An item ladder on fixed thresholds, with **limited "Wolf" seats** at the top. Our items and art are original and badminton-themed (no Gunbound names or icons). |
-| **League of Legends ranked** | Tiers are grouped into bands; **decay only at the top**; protection after promotion. | Ranks grouped into **4 leagues**; only the upper two leagues tarnish when inactive; you never drop out of a league you've reached. |
-| **Strava Local Legend** | A crown for the person who did a segment **the most times in 90 days**, not the fastest; the rolling window means it must be defended. | The **Pack Leader** crown, and Wolf seats decided on **90-day** points so they stay live. |
+| **Gunbound** (your reference) | Ranks climb through item icons (hammers, axes, wands) on fixed point thresholds. The very top ranks (the dragons) are **limited seats** for the top players. | An item ladder on fixed thresholds, with **limited Wolf seats** at the top. Our items and art are original and badminton-themed. |
+| **League of Legends ranked** | Tiers grouped into bands; **decay only at the top**; protection after promotion. | Ranks grouped into **4 leagues**; only the upper two leagues tarnish; you never drop out of a league you've reached. |
+| **Strava Local Legend** | A crown for doing a segment **the most times in 90 days**, not the fastest. | The **Pack Leader** crown, and Wolf seats decided on **90-day** points. |
 | **Strava KOM / king of the hill** | One holder; beat them to take it. | The **Crown pair**, with a **Crown bounty**. |
-| **Duolingo leagues** | Demotion drives return visits but also causes anxiety; critics note grinding easy wins. | Inactivity, not losing, is what lowers a rank. **Giant-killer** and **New rival** bonuses reward harder and more varied games over grinding. |
-| **Club challenge ladders** (tennis/badminton, Skedge) | **No-response forfeit**; **one open challenge per player**; a challenge range. | Challenges expire; one open challenge per pair; no range limit, but bonuses for challenging up. |
-| **DUPR** (pickleball ratings) | A self-reported result stays **pending** until the opponents **validate** it. | Score entered by one pair, **confirmed by the other** before points count. |
-| **Playtomic** (padel) | Friendly vs competitive matches; team strength = combined level of both partners. | **No friendlies** (your call: every point counts). A pair's strength = the **average rank of both partners**, used for the Giant-killer bonus and "good match" hints. |
-| **Reclub** (the court board's model) | Doubles ladders with **fixed partners**. | Fixed partners for the length of a challenge. |
-| **Chess.com / Lichess** | Fair-play teams watch for **farming** the same opponent. | Caps on repeat matchups, and admins can void a result. |
-
-Technical findings:
-- **No camera needed:** a 5-digit code works on any phone, can be read out loud across a court, and avoids Safari's missing `BarcodeDetector` (a QR scanner on iPhone would have needed an extra decoder library).
-- **Notifications:** Resend's free tier is 100 emails/day, too few for per-challenge emails. **Web Push** is free and works on iPhone **only for Home Screen web apps** (iOS 16.4+), which the profile already is, with an install guide.
+| **Duolingo leagues** | Demotion drives return visits but causes anxiety; critics note grinding easy wins. | Only inactivity lowers a rank. **Giant-killer** and **New rival** reward harder and more varied games. |
+| **Club challenge ladders** (Skedge) | **No-response forfeit**; **one open challenge per player**. | Challenges expire; one open challenge per pair. |
+| **DUPR** (pickleball ratings) | A self-reported result stays **pending** until the opponents **validate** it. | The other pair **confirms** the score before points count. |
+| **Playtomic** (padel) | Team strength = combined level of both partners. | A pair's strength = the **average rank** of both partners, used for Giant-killer and "good match" hints. |
+| **Chess.com / Lichess** | Fair-play teams watch for **farming** the same opponent. | Caps on repeat matchups; admins can void a result. |
+| **Rank icon sets** (game UI asset packs) | One shape per tier; consistent line weight and palette; simpler drawings at small sizes. | Frame shape per league, item per rank, two detail levels (§9). |
+| **WCAG 1.4.1 Use of Color** | Colour can't be the only way to tell things apart. | Every rank differs in shape, not just material colour, and always has its name as text or an accessible label. |
 
 ---
 
@@ -74,22 +76,22 @@ Technical findings:
 
 | Source | Points | Already recorded? |
 |---|---|---|
-| Play day attended | **2** per play day (proposed: the same as a win, because turning up is what keeps the club going) | Yes: `attendance` (court board, round robin, admin ticks, roster) |
+| Play day attended | **1** per play day | Yes: `attendance` (court board, round robin, admin ticks, roster) |
 | Round robin win | **2** per win, 0 per loss (the existing RR points) | Yes: `rr_results` |
 | Challenge win | **2** per win, 0 per loss | New |
-| **Giant-killer** | **+2**: win against a pair whose average rank is in a **higher league** than your pair's average | New |
+| **Giant-killer** | **+2**: win against a pair whose average rank is in a **higher league** than your pair's | New |
 | **New rival** | **+1** each for playing (win or lose) a pair in which **neither player** has faced you in a challenge before | New |
-| **Hot streak** | **+1** for each challenge win after **3 wins in a row** (the streak resets on a loss) | New |
+| **Hot streak** | **+1** for each challenge win after **3 wins in a row** (resets on a loss) | New |
 | **Crown bounty** | **+4** each for beating the Crown pair (they lose the crown) | New |
 
-- Points go **to each player**, not to the pair, because pairs change and players are the constant.
+- Points go **to each player**, not to the pair.
 - Points are never taken away for a loss.
-- A player's WP total is **worked out from the records**, not stored as a running balance, the same as today's leaderboard. Linking a mini game name or fixing attendance on Admin → Play days updates everyone's rank at once.
-- **History counts (decided):** on launch day, every play day and round robin result already in the database counts.
+- WP is **worked out from the records**, not stored as a running balance, the same as today's leaderboard. Linking a mini game name or fixing attendance updates everyone's rank at once.
+- **History counts:** on launch day, every play day and round robin result already in the database counts.
 
 ### 3.2 Caps (anti-farming; proposed)
 
-Every challenge counts, so the caps work by **stopping a challenge from being posted or accepted**, not by making it count for nothing:
+Every challenge counts, so the caps work by **stopping a challenge from being posted or accepted**:
 - the same two pairs (or the same four players in any split) can play each other **once a day and three times in 30 days**. The board says "You've played them 3 times this month. Find a new rival (+1)!";
 - a player can play at most **4 challenges a day**.
 
@@ -97,79 +99,74 @@ Every challenge counts, so the caps work by **stopping a challenge from being po
 
 ## 4. The rank ladder
 
-### 4.1 Ranks (~18 plus 2 seats, in 4 leagues)
+### 4.1 Ranks (16, plus 2 Wolf seats, in 4 leagues)
 
-Thresholds are **starting proposals**. They'll be tuned after a dry run on the real history (§4.4).
+Thresholds are **starting proposals** for 1 WP per play day. They'll be tuned after a dry run on the real history (§4.4).
 
 | League | # | Rank (EN) | Rank (VI, to check) | Total WP |
 |---|---|---|---|---|
 | **1 · Shuttle** | 1 | Plastic Shuttle | Cầu Nhựa | 0 |
-| | 2 | Feather Shuttle | Cầu Lông Vũ | 4 |
-| | 3 | Shuttle Tube | Ống Cầu | 10 |
-| **2 · Racket** | 4 | Wooden Racket | Vợt Gỗ | 20 |
-| | 5 | Steel Racket | Vợt Thép | 35 |
-| | 6 | Aluminium Racket | Vợt Nhôm | 55 |
-| | 7 | Carbon Racket | Vợt Carbon | 80 |
-| | 8 | Player's Racket | Vợt Tuyển Thủ | 110 |
-| | 9 | Pro Racket | Vợt Chuyên Nghiệp | 150 |
-| **3 · Precious Racket** | 10 | Silver-plated Racket | Vợt Mạ Bạc | 200 |
-| | 11 | Golden Racket | Vợt Vàng | 260 |
-| | 12 | Platinum Racket | Vợt Bạch Kim | 330 |
-| | 13 | Diamond Racket | Vợt Kim Cương | 410 |
-| **4 · Legend Kit** | 14 | Racket Bag | Túi Vợt | 500 |
-| | 15 | Court Shoes | Giày Thi Đấu | 600 |
-| | 16 | Club Jersey (Three Wolves) | Áo Câu Lạc Bộ | 720 |
-| | 17 | Champion's Trophy | Cúp Vô Địch | 850 |
-| **Wolf seats** | – | **Silver Wolf** (3 seats) | Sói Bạc | top 2–4 by WP in the last 90 days, among Precious Racket or above |
-| | – | **Alpha Wolf** (1 seat) | Sói Đầu Đàn | top 1 by WP in the last 90 days, among Precious Racket or above |
+| | 2 | Feather Shuttle | Cầu Lông Vũ | 3 |
+| | 3 | Shuttle Tube | Ống Cầu | 8 |
+| **2 · Racket** | 4 | Wooden Racket | Vợt Gỗ | 16 |
+| | 5 | Steel Racket | Vợt Thép | 28 |
+| | 6 | Aluminium Racket | Vợt Nhôm | 44 |
+| | 7 | Carbon Fibre Racket | Vợt Sợi Carbon | 64 |
+| | 8 | Pro Racket | Vợt Chuyên Nghiệp | 90 |
+| **3 · Precious Racket** | 9 | Silver-plated Racket | Vợt Mạ Bạc | 125 |
+| | 10 | Golden Racket | Vợt Vàng | 165 |
+| | 11 | Platinum Racket | Vợt Bạch Kim | 210 |
+| | 12 | Diamond Racket | Vợt Kim Cương | 260 |
+| **4 · Legend Kit** | 13 | Racket Bag | Túi Vợt | 330 |
+| | 14 | Court Shoes | Giày Thi Đấu | 400 |
+| | 15 | Club Jersey (Three Wolves) | Áo Câu Lạc Bộ | 480 |
+| | 16 | Champion's Trophy | Cúp Vô Địch | 570 |
+| **Wolf seats** | – | **Silver Wolf** (3 seats) | Sói Bạc | 2nd–4th by WP in the last 90 days, among Precious Racket or above |
+| | – | **Alpha Wolf** (1 seat) | Sói Đầu Đàn | 1st by WP in the last 90 days, among Precious Racket or above |
 
-Pace for a typical regular (one play day a week, two challenges a week, the odd round robin) is about **5–6 WP a week**:
-- first rank-up on their **first play day**;
-- Wooden Racket within about a month;
-- Pro Racket in about 6 months;
-- Diamond Racket in about 18 months;
-- Champion's Trophy is a multi-year goal.
-
-The early ranks come quickly on purpose, so newcomers feel progress straight away. The club jersey as a rank ties in with the real Port Hills Dawn jersey in the shop.
+Pace for a typical regular (one play day and two challenges a week, the odd round robin) is about **4–5 WP a week**:
+- a newcomer reaches Feather Shuttle with their first win (or three play days);
+- Wooden Racket in about a month;
+- Pro Racket in about 5 months;
+- Diamond Racket in just over a year;
+- Champion's Trophy is a 2–3 year goal.
 
 ### 4.2 Demotion: "keep it polished" (decided)
 
 - **Shuttle and Racket leagues are permanent.** You never lose a racket you've earned.
-- **Precious Racket and Legend Kit ranks need upkeep:** at least **6 WP in the last 60 days** (one play day and one challenge win, for example).
-  - **Day 60** below that: "Your Golden Racket is tarnishing. Play within 30 days to keep it shiny." The icon shows a dull finish.
-  - **Each further 30 days** below it: the shown rank slips **one rank**, but never below the **start of the highest league you've reached** (a Golden Racket stays at least Silver-plated).
-  - **As soon as you're back above 6 WP in 60 days, the rank is restored.** Points were never removed, so returning players get a "Polished!" moment instead of a punishment.
-- **Wolf seats are live:** recalculated whenever results change, from the last 90 days. They change hands, and they're the only ranks you can lose to someone else.
-- Losses never cost points, so nobody has a reason to avoid playing stronger pairs.
+- **Precious Racket and Legend Kit ranks need upkeep:** at least **5 WP in the last 60 days** (one play day and two challenge wins, for example).
+  - **Day 60** below that: "Your Golden Racket is tarnishing. Play within 30 days to keep it shiny." The icon dulls (§9.3).
+  - **Each further 30 days** below it: the shown rank slips **one rank**, but never below the **start of the highest league you've reached**.
+  - **As soon as you're back above 5 WP in 60 days, the rank is restored.** Points were never removed, so returning players get a "Polished!" moment instead of a punishment.
+- **Wolf seats are live:** recalculated whenever results change, from the last 90 days.
+- Losses never cost points.
 
 ### 4.3 What players see
 
-- **Rank card** (Player tab): item icon, rank name, WP total, a progress bar ("14 WP to Carbon Racket"), and how each source contributed (play days / round robin / challenges / bonuses).
-- **Kit bag:** a grid of every item earned, in order, with locked silhouettes for the next three. Tapping an item shows the date it was earned and the game that earned it ("Carbon Racket, 12 Mar, beat Sơn & Huy 21–18").
-- **Rank-up moment:** the next time the player opens the app, a full-screen card with the new item and a **Share** button (an image made with Next.js's built-in `next/og`, for Messenger, Facebook or Zalo).
-- **Shout-out** on the challenge board feed: "Ly reached **Carbon Racket** 🎉".
-- **Rank icon beside every name:** leaderboards, the challenge board, pair cards, and (optional) the court board's player list.
-- **Item art:** about 20 original flat icons in brand colours. Materials show as colour and finish: wood, brushed steel, aluminium, carbon weave, silver, gold, platinum, diamond sparkle. Wolves for the top seats. Drawn as SVG, so they're small and easy to swap if a designer redraws them later.
-- Opted-out players (Account → Privacy) still have a rank, visible only to them, as today.
+- **Rank card** (Player tab): item icon, rank name, WP total, a progress bar ("26 WP to Pro Racket"), and a breakdown by source (play days / round robin / challenges / bonuses).
+- **Kit bag:** every item earned, with locked silhouettes for the next three. Tapping an item shows when and how it was earned ("Carbon Fibre Racket, 12 Mar, beat Sơn & Huy 21–18").
+- **Rank-up moment:** the next time the player opens the app, a full-screen card with the new item and a **Share** button (an image made with Next.js's built-in `next/og`).
+- **Shout-out** on the challenge board feed: "Ly reached **Carbon Fibre Racket** 🎉".
+- **Rank icon beside every name:** leaderboards, the challenge board, pair cards, and optionally the court board.
+- Opted-out players (Account → Privacy) still have a rank, visible only to them.
 
 ### 4.4 Launch calibration
 
 1. Before launch, run the ladder over the real history as a **dry run**: Admin → Players shows how many players land in each rank.
-2. Tune the thresholds so that **regulars land in the Racket league, a handful in Precious Racket, and nobody in Legend Kit** (something to aim for).
-3. Confirm, then switch it on.
-4. Thresholds live in one file (`lib/ranks.ts`). Raising a threshold later never takes away a rank someone already holds, because the peak is stored.
+2. Tune the thresholds so that **regulars land in the Racket league, a handful in Precious Racket, and nobody in Legend Kit**.
+3. Thresholds live in one file (`lib/ranks.ts`). Raising one later never takes away a rank someone already holds, because the peak is stored.
 
 ---
 
 ## 5. Pairs (teaming up)
 
 1. Player A taps **Team up → Show my code**. A big **5-digit code** appears (e.g. `48 213`), valid for **2 minutes**, with **New code** to refresh it.
-2. Player B taps **Team up → Enter code**, types it and sees "Team up with **Hòa** (Golden Racket)?"; B confirms.
+2. Player B taps **Team up → Enter code**, types it, sees "Team up with **Hòa** (Golden Racket)?" and confirms.
 3. A's screen asks "**Ly** wants to team up. Accept?" Once both have confirmed, the pair exists. Asking both sides means a guessed code can't pair you with a stranger.
 
 - **One current partner per player (proposed).** Forming a new pair ends the old one (after a confirmation). Past pairs and their record are kept.
 - **Unpair** any time, except while a challenge is accepted or live.
-- **Pair name (proposed):** optional, e.g. "Smash Bros", checked against a word filter. It shows on the board alongside both names.
+- **Pair name (proposed):** optional, e.g. "Smash Bros", checked against a word filter.
 - **Pair card:** record together, current streak, best win, and the pair's average rank.
 
 ---
@@ -181,27 +178,27 @@ The early ranks come quickly on purpose, so newcomers feel progress straight awa
 ```
 open ──accept──▶ accepted ──code check-in──▶ live ──score entered──▶ awaiting confirmation ──confirm──▶ completed
   │                  │                                                        │
-  └─expire/cancel    └─expire/cancel (no check-in by the end of the window)   └─dispute ──▶ admin decides
+  └─expire/cancel    └─lapses if no check-in within 7 days                    └─dispute ──▶ admin decides
                                                                               └─no reply in 24 h ──▶ auto-confirmed
 ```
 
-- **Put us up:** either partner posts the pair as available with:
-  - **When:** a window, e.g. "Sat 22 Nov, 2–5 pm" or "any evening this week" (at most 7 days ahead, proposed);
-  - **Where:** pick from the club's venue list (Admin → Challenges) or type one;
-  - optional note ("happy to play anyone", "we bring shuttles").
-- **One open challenge per pair**, expiring at the end of its window.
-- **Accept:** any partner of another pair can accept the stated time and place. Before accepting they see:
+- **Put us up:** either partner taps **We're up for a challenge**, with:
+  - how long they're available (today, 3 days or 7 days; proposed);
+  - an optional short note ("any level welcome").
+- **When and where are up to the players (decided).** The site shows who's up; the players sort out the rest themselves, the way they already do. The site never shares contact details.
+- **One open challenge per pair**; it expires at the end of its availability.
+- **Accept:** any partner of another pair can accept. Before accepting they see:
   - both pairs' ranks;
   - their head-to-head record ("You're 2–3 against them");
   - the bonuses on offer ("Giant-killer +2 · New rival +1").
-- **Talking it through:** once accepted, the four players need to sort out details. See Q15 (in-app chat, or opt-in phone sharing).
+- **Accepted challenges** show on both pairs' Player tab ("Up next: vs Sơn & Huy"). Either pair can **call it off** before check-in. If nobody checks in within **7 days**, it lapses.
 - **Check-in:** a player in the accepting pair taps **We're here** and gets a 5-digit code. A player in the posting pair types it in. The code works only for that one challenge and only for the other pair, with 5 tries. With games away from the club, this is the proof the pairs actually met.
 - **Score:** either pair enters it, **no sooner than 8 minutes after check-in and no later than 24 hours after**. The other pair gets "Confirm 21–17?" with Confirm / That's not right. Points count once confirmed. With no reply within 24 hours it auto-confirms (proposed). "That's not right" goes to **Admin → Challenges** with both versions.
 - **Valid scores** (one game to 21, BWF):
   - the winner has 21 and the loser 19 or less; or
   - the winner has 22–29 and leads by exactly 2; or
   - the winner has 30 and the loser 28 or 29.
-- **Retired / couldn't finish:** the opponents win 2 WP (no bonuses), so retiring is never a way to dodge a loss. An admin can void it instead for an injury.
+- **Retired / couldn't finish:** the opponents win 2 WP (no bonuses), so retiring is never a way to dodge a loss. An admin can void it for an injury.
 
 ### 6.2 After the game (both pairs, at the same time)
 
@@ -219,12 +216,11 @@ open ──accept──▶ accepted ──code check-in──▶ live ──scor
 | Crown | Who holds it | Notes |
 |---|---|---|
 | **👑 Crown pair** | The pair that most recently beat the Crown pair. The first holder is the winner of the first challenge between two Precious Racket+ pairs. | **+4 Crown bounty** each for taking it. The holders must play at least one challenge every **14 days**, or the crown goes vacant. If the pair splits, it's vacant. |
-| **🐺 Pack Leader** | Most challenges played in the last 90 days. | Rewards showing up, not winning (Strava's Local Legend). |
+| **🐺 Pack Leader** | Most challenges played in the last 90 days. | Rewards showing up, not winning. |
 | **🏆 Season champion** | Most WP earned in the quarter. | Permanent trophy on the profile. |
 
 ### 7.2 Achievements (one-off badges, no points)
 
-Small, collectable, and mostly about *how* people play, so every level of player can earn them:
 - **First Blood:** first challenge win.
 - **Golden Point:** win 30–29.
 - **Nail-biter:** win 22–20 or closer.
@@ -233,14 +229,14 @@ Small, collectable, and mostly about *how* people play, so every level of player
 - **Giant-killer:** first Giant-killer win.
 - **Crown Taker.**
 - **Hot Streak:** 5 challenge wins in a row.
-- **Iron Wolf:** 10 play days in a row (uses the existing streaks).
-- **Polished:** came back and restored a tarnished rank.
+- **Iron Wolf:** 10 play days in a row.
+- **Polished:** restored a tarnished rank.
 
 ### 7.3 Seasons
 
-- Seasons are **calendar quarters** (the leaderboard already has quarter periods). They decide the Season champion and the **season badge** ("Q1 2027 · Golden Racket peak").
+- Seasons are **calendar quarters**. They decide the Season champion and the **season badge** ("Q1 2027 · Golden Racket peak").
 - Ranks **don't** reset at season end; the ladder is a career. Seasons give everyone a fresh race on the Wolf Points leaderboard.
-- **Season finale (proposed):** on the last play day of the quarter, the Season champion, Alpha Wolf, Crown pair and Pack Leader are announced at the hall. Any physical prize (e.g. a tube of shuttles) is the club's call (Q19).
+- **Season finale (proposed):** on the last play day of the quarter, the Season champion, Alpha Wolf, Crown pair and Pack Leader are announced at the hall.
 
 ---
 
@@ -248,18 +244,75 @@ Small, collectable, and mostly about *how* people play, so every level of player
 
 | Area | Change |
 |---|---|
-| **Profile → Player tab** | Rank card and kit bag at the top; pair card (Team up / Unpair); "My challenges" (open, upcoming, needs confirming); achievements; season badges. A tab badge when a score needs confirming. |
-| **`/challenges`** (new; public to view, signed in to act) | Open challenges by date, accepted and live games, results feed with rank-up shout-outs, the current crowns. Venues and times shown only to signed-in players. Refreshes every few seconds while visible (same polling as the court board). |
-| **`/leaderboard`** | Two new tabs, **Wolf Points** (overall) and **Challenges**, alongside Play days and Round robin. Same periods; rank icons and crowns beside names; the Wolf seats pinned at the top of Wolf Points. |
-| **Admin → Challenges** (new) | Disputes, void a result, venues, end a crown, weekly activity. |
+| **Profile → Player tab** | Rank card and kit bag at the top; pair card (Team up / Unpair); "My challenges" (open, up next, needs confirming); achievements; season badges. A tab badge when a score needs confirming. |
+| **`/challenges`** (new; public to view, signed in to act) | Pairs up for a challenge, accepted and live games, a results feed with rank-up shout-outs, the current crowns. Refreshes every few seconds while visible (same polling as the court board). |
+| **`/leaderboard`** | Two new tabs, **Wolf Points** (overall) and **Challenges**, alongside Play days and Round robin. Rank icons and crowns beside names; Wolf seats pinned at the top of Wolf Points. |
+| **Admin → Challenges** (new) | Disputes, void a result, end a crown, weekly activity. |
 | **Admin → Players** | Rank dry run and threshold check (§4.4); a player's WP breakdown. |
-| **Court board** (`/casual-play`) | Optional, later: rank icons on player chips; a "Challenge court" an organiser can set aside on a play day (Q13). |
+| **Court board** (`/casual-play`) | Optional, later: rank icons on player chips. |
 | **API / webhooks / MCP** | `GET /api/v1/me/rank`, `GET /api/v1/me/challenges`; webhook events `rank.changed` and `challenge.result`; MCP tools. Included in data export and account deletion. |
 | **Attendance** | Challenges **don't** count as play-day attendance, since they can happen anywhere. |
 
 ---
 
-## 9. Data model (new tables in `lib/challenge-db.ts` and `lib/ranks-db.ts`, `ensure*Tables()` pattern)
+## 9. Graphics
+
+**Draft set:** `docs/plans/challenge-graphics/`
+- `preview.png` / `preview.html`: the whole set, plus in-context examples;
+- `ranks/`, `crowns/`, `bonuses/`, `achievements/`: one SVG per graphic, each in two detail levels;
+- `generate.mjs`: the source the SVGs are generated from.
+
+### 9.1 How it follows the site
+
+The art borrows from the club crest and the profile app rather than from game art:
+- **Palette:** only the site's own colours (navy `#184467`, cream, steel, bronze) plus soft material tints: wood, brushed steel, aluminium, carbon, silver, the brand's bronze for gold, platinum and diamond. Nothing saturated, so icons sit quietly beside names.
+- **Line:** navy outlines with round joins, like the profile tab icons. Fine strings and feather lines at large sizes echo the drawn rackets and shuttles in the crest.
+- **Shapes from the crest:**
+  - the Precious Racket shield is cut with the same angular facets as the crest's wolves;
+  - Legend Kit carries the crest's banner ribbon;
+  - the Wolf seats are a simplified faceted wolf head.
+- **Cards:** on the same white cards, 16 px radius and soft navy shadow as the leaderboard; the rank-up card uses the leaderboard hero's navy gradient and Copperplate heading.
+
+### 9.2 How ranks are told apart (shape first, then colour)
+
+- **League = frame shape:**
+  - Shuttle: round token;
+  - Racket: rounded shield;
+  - Precious Racket: faceted shield;
+  - Legend Kit: shield with ribbon;
+  - Wolf seats: navy crest.
+- **Rank = the item:** shuttle, feathers, tube; rackets with different head shapes (round wooden head with a T-joint, squarer modern heads, slim pro head with a bronze grip); bag, shoes, jersey, trophy.
+- **Material = colour and finish**, as a secondary cue.
+- **Step within the league = pips** along the bottom of the frame.
+- **Sparkles** count up through the Precious league (1 to 4), so silver, gold, platinum and diamond differ in more than colour.
+- Every icon carries its name as an accessible label, and the name is shown as text wherever there's room (WCAG 1.4.1).
+
+### 9.3 Sizes and states
+
+| Use | Size | Detail level |
+|---|---|---|
+| Next to names (leaderboards, board, chips) | 16–24 px | **Bold set** (`*.sm.svg`): thicker lines, no strings or pips |
+| Rank card, kit bag, achievements | 48–72 px | **Fine set** (`*.lg.svg`) |
+| Rank-up card, share image | 120–240 px | Fine set |
+
+- **Tarnished:** the same icon, desaturated and slightly dulled with a CSS filter, plus the word "tarnishing". No separate art is needed.
+- **Locked** (kit bag): a pale silhouette.
+- **On navy backgrounds:** outlines switch to cream (the icons use `currentColor` once they're inline SVG in a component).
+- **Crowns and achievements** are round medallions, so they're never mistaken for a rank. **Bonus chips** are simple line icons in the profile-tab style.
+
+### 9.4 Still to draw in the build
+
+These use the same system:
+- empty states for `/challenges` ("No one's up yet; put your pair up") and the kit bag;
+- the Team up and check-in code screens (big digits, a two-phones motif);
+- the share image layout;
+- the season badge (league frame plus quarter label).
+
+The set becomes one `<RankIcon rank size state />` component (inline SVG, about 1–2 KB per icon, no images to load), so rank icons cost nothing extra on the leaderboard.
+
+---
+
+## 10. Data model (new tables in `lib/challenge-db.ts` and `lib/ranks-db.ts`, `ensure*Tables()` pattern)
 
 ```
 pairs                 id, player_low_id, player_high_id, name, formed_at,
@@ -267,18 +320,15 @@ pairs                 id, player_low_id, player_high_id, name, formed_at,
 pair_members          pair_id, player_id, active BOOLEAN   -- partial UNIQUE (player_id) WHERE active
 match_codes           id, purpose (pair|checkin), code_hash, owner_player_id, challenge_id NULL,
                       expires_at, consumed_at, consumed_by, attempts
-challenges            id, posting_pair_id, accepting_pair_id NULL, window_start, window_end,
-                      venue_id NULL, venue_text, note,
-                      status (open|accepted|live|awaiting|completed|disputed|void|expired|cancelled|retired),
-                      posted_at, accepted_at, checked_in_at, completed_at, expires_at
+challenges            id, posting_pair_id, accepting_pair_id NULL, note, available_until,
+                      status (open|accepted|live|awaiting|completed|disputed|void|expired|cancelled|lapsed|retired),
+                      posted_at, accepted_at, checked_in_at, completed_at
 challenge_scores      challenge_id PK, posting_score, accepting_score, winner_pair_id,
                       entered_by, entered_at, confirmed_by, confirmed_at, auto_confirmed,
                       disputed_by, disputed_at, dispute_note
 challenge_results     challenge_id, player_id, pair_id, won, base_points,
                       bonus_giant_killer, bonus_new_rival, bonus_streak, bonus_crown,
                       points_for, points_against, played_on        -- one row per player
-challenge_venues      id, name, address, active, sort
-challenge_messages    id, challenge_id, sender_player_id, body, created_at   -- only if Q15 = chat
 player_ranks          player_id PK, wp_total, wp_90d, wp_60d, earned_rank, shown_rank,
                       peak_rank, league_floor, tarnish_warned_at, seat (alpha|silver|NULL),
                       updated_at                                    -- cache, rebuilt from records
@@ -291,100 +341,90 @@ push_subscriptions    id, player_id, endpoint UNIQUE, p256dh, auth, created_at, 
 ```
 
 - **WP is worked out from the records:**
-  - 2 × verified, not-removed `attendance` rows;
+  - 1 × each verified, not-removed `attendance` row;
   - `rr_results.rr_points` (through `players.minigame_name`);
   - `challenge_results` base points plus bonuses.
 
-  `player_ranks` is just a cache, rebuilt whenever results change (the same moments that already refresh the leaderboard with `revalidateTag("leaderboard")`), plus a daily cron for tarnish and Wolf seats.
+  `player_ranks` is just a cache, rebuilt whenever results change (the moments that already call `revalidateTag("leaderboard")`), plus a daily cron for tarnish and Wolf seats.
 - Ranks, thresholds, tarnish and bonus rules are **pure functions in `lib/ranks.ts`**, unit-tested like `lib/stats-periods.ts`.
 - "One active pair per player" is a partial unique index, so two confirmations at the same moment can't both succeed.
-- Challenge state changes are a single conditional `UPDATE … WHERE status = '<expected>'` (the court board and shop pattern), so two pairs can't accept the same challenge.
-- Codes: 5 digits, unique among live codes for the same purpose, stored hashed, 2-minute expiry, **5 wrong tries per 10 minutes per player**. Pairing always needs both players to confirm.
+- Challenge state changes are a single conditional `UPDATE … WHERE status = '<expected>'`, so two pairs can't accept the same challenge.
+- Codes: 5 digits, unique among live codes for the same purpose, stored hashed, 2-minute expiry, **5 wrong tries per 10 minutes per player**.
 
 ---
 
-## 10. Notifications
+## 11. Notifications
 
 | Event | In-app | Web Push (opt-in) | Email |
 |---|---|---|---|
-| Someone wants to team up / your challenge was accepted | ✓ | ✓ | – |
+| Someone wants to team up / your challenge was accepted / called off | ✓ | ✓ | – |
 | Score needs your confirmation | ✓ (tab badge) | ✓ | – |
 | Rank up / Wolf seat won or lost / crown won or lost | ✓ | ✓ | – |
 | Rank tarnishing (day 60) | ✓ | ✓ | ✓ (rare; one email) |
 | Score disputed or voided | ✓ | ✓ | ✓ |
 
-Web Push needs VAPID keys (two new env vars) and a `push` handler in `public/sw.js`. Email is kept for rare events, to stay well under Resend's 100/day.
+Web Push is free, but on iPhone it works only once the app is added to the Home Screen (iOS 16.4+). It needs VAPID keys (two new env vars) and a `push` handler in `public/sw.js`. Email is kept for rare events, to stay well under Resend's 100/day.
 
 ---
 
-## 11. Delivery plan (one PR per phase)
+## 12. Delivery plan (one PR per phase)
 
-The rank ladder can go live **before** challenges, because attendance and round robin data already exist. That gives players something new straight away, and lets us tune the thresholds on real numbers.
+The rank ladder can go live **before** challenges, because attendance and round robin data already exist.
 
 | Phase | Scope | Depends on |
 |---|---|---|
-| **1. Wolf Points & ranks** | `lib/ranks.ts` (thresholds, leagues, tarnish, seats); `player_ranks`, `rank_events`; rank card, kit bag and item icons; rank-up card with share image; Wolf Points leaderboard tab with rank icons; dry run and calibration on Admin → Players; daily cron for tarnish and seats | – |
+| **1. Wolf Points, ranks & art** | `lib/ranks.ts`; `player_ranks`, `rank_events`; `<RankIcon>` from the draft art; rank card, kit bag, rank-up card and share image; Wolf Points leaderboard tab; dry run and calibration on Admin → Players; daily cron for tarnish and seats | – |
 | **2. Pairs** | `pairs`, `pair_members`, `match_codes`; Team up (show code / enter code / both confirm); pair card; unpair | – |
-| **3. Challenges** | `challenges`, `challenge_scores`, `challenge_results`, `challenge_venues`; `/challenges` board; post, accept, cancel, expire; coordination (Q15); code check-in; score entry with BWF validation, confirm and auto-confirm; after-game prompts; caps; Admin → Challenges; Challenges leaderboard tab | 1, 2 |
-| **4. Bonuses, crowns, achievements, seasons** | Giant-killer, New rival, Hot streak, Crown bounty; `crown_holds`, `achievements`; season badges and champion; board feed shout-outs | 3 |
-| **5. Notifications & extras** | Web Push; rank icons on the court board; Challenge court; API, webhooks and MCP additions | 3 |
+| **3. Challenges** | `challenges`, `challenge_scores`, `challenge_results`; `/challenges` board; post, accept, call off, expire, lapse; code check-in; score entry with BWF validation, confirm and auto-confirm; after-game prompts; caps; Admin → Challenges; Challenges leaderboard tab | 1, 2 |
+| **4. Bonuses, crowns, achievements, seasons** | The four bonuses; `crown_holds`, `achievements`; season badges and champion; feed shout-outs | 3 |
+| **5. Notifications & extras** | Web Push; rank icons on the court board; API, webhooks and MCP additions | 3 |
 
 **Verification each phase:**
 - `next build` and lint;
 - `node --test` units for thresholds, tarnish timing, league floors, seat assignment, each bonus rule, the caps, BWF score validation, code expiry and attempts, and challenge state transitions;
-- a Playwright run with **two browser contexts** acting as two players (team up by code, post, accept, check in, score, confirm), with phone and desktop screenshots.
-
----
-
-## 12. Open questions (defaults in brackets)
-
-**Points and ranks**
-1. Is a play day worth **2 WP**, the same as a win? [yes]
-2. Are the **rank names** right? Is "Player's Racket" what you meant by "play racket"? Should anything else go in the Legend Kit league (e.g. strings, grips, a Shuttle Machine)? [as in §4.1]
-3. Can someone who speaks Vietnamese check the **VI rank names**?
-4. **Thresholds:** fine to tune after the dry run, aiming for nobody in Legend Kit on launch day? [yes]
-5. **Item art:** I draw a simple original SVG set in brand colours, or a designer draws them? [I draw a first set; easy to replace]
-
-**Pairs and challenges**
-6. One current partner per player, or several pairs at once? [one]
-7. Optional **pair names**, with a word filter? [yes]
-8. One open board, or separate men's / women's / mixed? [one open board]
-9. Auto-confirm an unconfirmed score after 24 h? [yes]
-10. Caps: same matchup once a day and 3 times in 30 days; 4 challenges per player per day? [yes]
-11. **Retired / couldn't finish** gives the opponents the win (2 WP, no bonuses), unless an admin voids it for injury? [yes]
-12. How far ahead can a challenge be posted? [7 days]
-
-**Community**
-13. Court board: rank icons on chips, and a Challenge court organisers can set aside? [later, optional]
-14. Crown names: Crown pair / Pack Leader / Season champion, or something more Three Wolves? [as listed]
-15. **How do two pairs arrange a game once accepted?** A short in-app chat per challenge (closes 2 days after the game), or opt-in phone number sharing with the other pair? [in-app chat; phone sharing opt-in]
-16. Which **venues** go on the starting list?
-17. A line in the terms that challenge games outside club sessions are arranged by the players, not run by the club? [yes]
-18. Should the round robin and play days tabs stay on the leaderboard next to Wolf Points? [yes]
-19. Season finale: any physical prize from the club? [your call]
+- a Playwright run with two browser contexts acting as two players (team up, post, accept, check in, score, confirm);
+- phone and desktop screenshots, including the icons at 16 px on cream and navy.
 
 ---
 
 ## 13. Risks
 
 - **Games away from the club:** the code check-in, the 8-minute minimum, opponent confirmation, the caps and the dispute queue are what keep results honest.
-- **Attendance outweighing play:** if play days dominate WP, ranks reward turning up over winning. The dry run shows the split per player; the play-day value is one constant to adjust.
+- **Attendance vs results:** at 1 WP per play day, results drive most of a rank. The dry run shows the split per player.
 - **Small pool:** with ~40 active players, a few strong pairs could hold the crowns. New rival and Giant-killer reward everyone else for mixing and challenging up, and Pack Leader goes to whoever plays most.
-- **Meeting people you don't know:** venues and times are shown only to signed-in players; contact details are never shared without opting in.
+- **No in-app coordination:** players who don't already know each other need another way to connect (the club's existing group chats). That's by design.
 - **iPhone push only after install:** players who use the site in Safari rely on the in-app badge.
+
+---
+
+## 14. Open questions (defaults in brackets)
+
+1. Can someone who speaks Vietnamese check the **VI rank names**?
+2. **Thresholds:** fine to tune after the dry run, aiming for nobody in Legend Kit on launch day? [yes]
+3. **Draft art:** happy with the direction in `challenge-graphics/preview.png`? Anything to change (e.g. the Legend Kit ribbon, the wolf heads)?
+4. One current partner per player, or several pairs at once? [one]
+5. Optional **pair names**, with a word filter? [yes]
+6. One open board, or separate men's / women's / mixed? [one open board]
+7. Auto-confirm an unconfirmed score after 24 h? [yes]
+8. Caps: same matchup once a day and 3 times in 30 days; 4 challenges per player per day? [yes]
+9. **Retired / couldn't finish** gives the opponents the win (2 WP, no bonuses), unless an admin voids it for injury? [yes]
+10. Availability options when posting: today / 3 days / 7 days? [yes]
+11. Crown names: Crown pair / Pack Leader / Season champion, or something more Three Wolves? [as listed]
+12. A line in the terms that challenge games outside club sessions are arranged by the players, not run by the club? [yes]
+13. Season finale: any physical prize from the club? [your call]
 
 ---
 
 ### Sources
 
-- Gunbound ranks: https://urgametips.com/?p=791, https://cf-inc.shapes.inc/fandom/gunbound/ranking-system (fan pages; the exact thresholds and seat counts aren't officially documented)
+- Gunbound ranks: https://urgametips.com/?p=791, https://cf-inc.shapes.inc/fandom/gunbound/ranking-system (fan pages; exact thresholds and seat counts aren't officially documented)
 - League of Legends tiers and decay: https://support-leagueoflegends.riotgames.com/hc/en-us/articles/4405783687443
 - Strava Local Legends: https://www.cyclingnews.com/news/how-local-legends-are-made-on-strava, https://dcrainmaker.com/2020/06/strava-legends-feature.html
 - Duolingo leagues: https://duolingo.deconstructoroffun.com/mechanics/leagues
-- Challenge ladder conventions: https://skedge-web.web.app/help/running-a-ladder, https://skedge-web.web.app/blog/run-a-tennis-ladder, https://en.wikipedia.org/wiki/Ladder_tournament
+- Challenge ladder conventions: https://skedge-web.web.app/help/running-a-ladder, https://skedge-web.web.app/blog/run-a-tennis-ladder
 - DUPR match validation: https://dupr.com/post/ensuring-fair-play-the-importance-of-match-validation-on-dupr
-- Playtomic levels and match types: https://playerhelp.playtomic.com/hc/en-gb/articles/43310980754193-How-the-Playtomic-level-system-works, https://help.playtomic.com/en/articles/5689294-friendly-vs-competitive-open-matches
-- Reclub: https://help.reclub.co/hc/reclub-help/en/categories/reclub
+- Playtomic levels: https://playerhelp.playtomic.com/hc/en-gb/articles/43310980754193-How-the-Playtomic-level-system-works
 - Rating manipulation handling: https://support.chess.com/en/articles/8639319-how-does-matchmaking-work-in-live-chess
-- BarcodeDetector on Safari: https://caniuse.com/mdn-api_barcodedetector
+- Rank icon sets (shape per tier, consistent line weight, small-size legibility): https://layerlab.itch.io/2d-tier-icon-pack-1, https://roblox-icon-pack-ranks.pages.dev/
+- WCAG 1.4.1 Use of Color: https://www.w3.org/TR/UNDERSTANDING-WCAG20/visual-audio-contrast-without-color, https://alphagov.github.io/wcag-primer/sc/1.4.1.html
 - Web Push on iOS: https://documentation.onesignal.com/docs/web-push-for-ios

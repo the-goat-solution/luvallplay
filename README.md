@@ -269,6 +269,20 @@ The profile is an installable web app: manifest, icons, a service worker that ca
   - It's cached and refreshed when results change.
   - Opted-out players aren't listed.
 
+### The Arena: pair challenges and Wolf Points (`/challenges`)
+
+Plan and decisions: `docs/plans/challenges.md`.
+
+- **Wolf Points (WP):** 1 per play day, 2 per round robin win, 2 per challenge win, plus challenge bonuses (Giant-killer +2, New rival +1, Hot streak +1, Crown bounty +4). Losses never cost points. Everything is worked out from the records (`attendance`, `rr_results`, confirmed challenges), so history counts the moment it's recorded.
+- **Ranks:** 35 steps in four leagues, from Plastic Shuttle to Diamond Racket with a full kit (shoes, jersey, bag, trophy as add-ons between rackets), plus two live Wolf seats (Alpha Wolf and 3 Silver Wolves: top 90-day WP, Wooden Racket or above). Thresholds, tarnish and bonus rules are pure functions in `lib/ranks.ts` (tested in `tests/ranks.test.ts`); the art is `lib/rank-art.ts`.
+- **Keep it polished:** Precious Racket and Diamond ranks need 5 WP in 60 days; below that they tarnish and slip one rank every 30 days, never below the start of the league reached. Playing again restores them.
+- **Pairs:** team up with a 5-digit code (2 minutes; the code owner confirms). One partner at a time.
+- **Challenges:** post (open today, 3 or 7 days), any other pair accepts, the players sort out time and place themselves, check in with a 5-digit code when they meet, enter a BWF score (one game to 21), the other pair confirms (auto-confirms after 24 hours; "That's not right" goes to **Admin → Challenges**). Caps: the same four players once a day and three times in 30 days; four challenges per player per day.
+- **Admin → Challenges:** disputes (score is right / winner / void), recent results with Void, and a ladder dry run showing where everyone lands.
+- **Leaderboard:** Wolf Points and Challenges tabs (Wolf Points is the default), with rank icons beside every name.
+- **No cron needed:** expiry, lapsing and auto-confirm run when the Arena is loaded.
+- **Preview deployments** share the production database, so on a preview (`VERCEL_ENV=preview`) every Arena table gets a `pv_` prefix (`pv_arena_*`): test pairs and games never mix with the real ones, while real play days and round robin results are read (never written). Previews also let a score be entered 1 minute after check-in instead of 8. Drop the `pv_arena_*` tables any time to clear test data.
+
 ### Shop (`/admin/shop`)
 
 - **Products:** name and description (EN/VI), price, photos, men's/women's fits, sizes S–3XL. The Port Hills Dawn jersey ($30) is added automatically with zero stock.
@@ -304,6 +318,13 @@ The profile is an installable web app: manifest, icons, a service worker that ca
 ### Tests
 
 `npm test` runs unit tests for the pure logic: periods, streaks, ranking, the SafeSearch rule, phone formatting, redirect safety and GPS removal.
+
+## Speed
+
+- **Functions run next to the database.** The database (Vercel Postgres / Neon) is in AWS `us-east-1`, so `vercel.json` runs functions in `iad1` (Washington, D.C.). Each page crosses the Pacific once instead of once per query. Measured on 17 Nov with functions in Sydney: ~217 ms per query, and ~16 s for the first visit after a quiet spell.
+- **Moving everything to Sydney** (faster still for NZ): create a Neon database in AWS `ap-southeast-2`, copy the data across (Neon's import tool, or `pg_dump`/`pg_restore`), connect it to the project in Vercel → Storage, and set `"regions": ["syd1"]` in `vercel.json`. Neon's free plan sleeps after 5 idle minutes, so the first visit after a quiet spell waits for it to wake up.
+- **Start-up table checks run once per deployment** (`lib/schema-gate.ts`): the first server of a new deployment runs each module's `CREATE TABLE IF NOT EXISTS ...` and records it in `schema_runs`; later cold starts do one query and skip the rest. Local development always runs them.
+- **Speed check:** `GET /api/health/db` shows the function and database regions, five round-trip times and the start-up cost (open on previews; admins only in production).
 
 ## Development
 

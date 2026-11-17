@@ -16,6 +16,7 @@ import { notifyWaitlistIfSpotOpened } from "./waitlist-notify";
 import { maxPlayersForCourts } from "./constants";
 import { demoRoster, demoStore, isCasualPlayDemo } from "./casual-play-demo";
 import { recordBoardAttendance } from "./stats-db";
+import { onceThisDeploy } from "./schema-gate";
 
 // Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
 let ensurePromise: Promise<void> | null = null;
@@ -23,7 +24,7 @@ let ensurePromise: Promise<void> | null = null;
 export function ensureCasualPlayTables(): Promise<void> {
   if (isCasualPlayDemo()) return Promise.resolve();
   if (!ensurePromise) {
-    ensurePromise = ensureImpl().catch((err) => {
+    ensurePromise = onceThisDeploy("casual_play", ensureImpl).catch((err) => {
       ensurePromise = null;
       throw err;
     });

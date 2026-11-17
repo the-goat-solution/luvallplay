@@ -1,5 +1,6 @@
 import { sql } from "@vercel/postgres";
 import { ensurePlayerTables } from "./player-db";
+import { onceThisDeploy } from "./schema-gate";
 
 // Conversations between a player and the club admins (Account tab ↔
 // /admin/inbox). One thread per topic; a reply to a closed thread reopens it.
@@ -8,7 +9,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensureMessageTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = (async () => {
+    ensurePromise = onceThisDeploy("messages", async () => {
       await ensurePlayerTables();
       await sql`
         CREATE TABLE IF NOT EXISTS message_threads (
@@ -34,7 +35,7 @@ export function ensureMessageTables(): Promise<void> {
         );
       `;
       await sql`CREATE INDEX IF NOT EXISTS messages_thread_idx ON messages (thread_id, created_at);`;
-    })().catch((err) => {
+    }).catch((err) => {
       ensurePromise = null;
       throw err;
     });

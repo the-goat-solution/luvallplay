@@ -2,6 +2,7 @@ import { db, sql } from "@vercel/postgres";
 import { ensureTables, addDays } from "./db";
 import { ensurePlayerTables } from "./player-db";
 import { getClubToday } from "./dates";
+import { onceThisDeploy } from "./schema-gate";
 
 // Club shop: the jersey now, more merchandise later. Nothing here is
 // jersey-specific: a product has a price, photos, optional men's/women's
@@ -25,7 +26,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensureShopTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = (async () => {
+    ensurePromise = onceThisDeploy("shop", async () => {
       await ensureTables();
       await ensurePlayerTables();
       await sql`
@@ -101,7 +102,7 @@ export function ensureShopTables(): Promise<void> {
         );
       `;
       await seedJersey();
-    })().catch((err) => {
+    }).catch((err) => {
       ensurePromise = null;
       throw err;
     });

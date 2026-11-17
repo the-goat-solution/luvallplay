@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { sql } from "@vercel/postgres";
 import { ensurePlayerTables } from "./player-db";
+import { onceThisDeploy } from "./schema-gate";
 
 // Personal access tokens and outgoing webhooks, so habit trackers (q.buzz
 // once it has an API) and AI assistants (MCP) can read a player's activity
@@ -17,7 +18,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensureIntegrationTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = (async () => {
+    ensurePromise = onceThisDeploy("integrations", async () => {
       await ensurePlayerTables();
       await sql`
         CREATE TABLE IF NOT EXISTS api_tokens (
@@ -59,7 +60,7 @@ export function ensureIntegrationTables(): Promise<void> {
         );
       `;
       await sql`CREATE INDEX IF NOT EXISTS webhook_deliveries_due_idx ON webhook_deliveries (status, next_attempt_at);`;
-    })().catch((err) => {
+    }).catch((err) => {
       ensurePromise = null;
       throw err;
     });

@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { LinkPending } from "@/components/LinkPending";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
-import type { LeaderboardRow, Metric, Period, PeriodRange } from "@/lib/stats-db";
+import type { LeaderboardRow, Period, PeriodRange } from "@/lib/stats-db";
+import { RankIcon } from "@/components/arena/RankIcon";
+
+export type BoardMetric = "attendance" | "rr" | "wp" | "challenges";
+export type RankBadges = Record<number, { index: number; seat: "alpha" | "silver" | null; tarnishing: boolean }>;
+const METRIC_LABEL: Record<BoardMetric, ProfileKey> = { wp: "lb_wp", challenges: "lb_ch", attendance: "lb_attendance", rr: "lb_rr" };
 import s from "./leaderboard.module.css";
 
 const PERIOD_LABEL: Record<Period, ProfileKey> = {
@@ -37,8 +42,10 @@ export function LeaderboardView({
   hiddenRank,
   signedIn,
   justHidden,
+  badges = {},
 }: {
-  metric: Metric;
+  badges?: RankBadges;
+  metric: BoardMetric;
   period: Period;
   range: PeriodRange;
   rows: LeaderboardRow[];
@@ -52,10 +59,31 @@ export function LeaderboardView({
   justHidden: boolean;
 }) {
   const { tr, lang } = useProfileT();
-  const href = (m: Metric, p: Period, key?: string | null) =>
+  const href = (m: BoardMetric, p: Period, key?: string | null) =>
     `/leaderboard?metric=${m}&period=${p}${key ? `&key=${encodeURIComponent(key)}` : ""}`;
-  const value = (r: LeaderboardRow) => (metric === "rr" ? tr("lb_pts", { n: r.value }) : r.value === 1 ? tr("lb_day") : tr("lb_days", { n: r.value }));
-  const meta = (r: LeaderboardRow) => (metric === "rr" ? tr("lb_rr_meta", { w: r.wins ?? 0, d: (r.diff ?? 0) > 0 ? `+${r.diff}` : String(r.diff ?? 0) }) : "");
+  const value = (r: LeaderboardRow) =>
+    metric === "wp"
+      ? tr("lb_wp_val", { n: r.value })
+      : metric === "rr" || metric === "challenges"
+        ? tr("lb_pts", { n: r.value })
+        : r.value === 1
+          ? tr("lb_day")
+          : tr("lb_days", { n: r.value });
+  const meta = (r: LeaderboardRow) =>
+    metric === "rr"
+      ? tr("lb_rr_meta", { w: r.wins ?? 0, d: (r.diff ?? 0) > 0 ? `+${r.diff}` : String(r.diff ?? 0) })
+      : metric === "challenges"
+        ? tr("lb_ch_meta", { w: r.wins ?? 0, p: r.days ?? 0 })
+        : "";
+  const icon = (id: number, px: number, cls?: string) => {
+    const b = badges[id];
+    if (!b) return null;
+    return (
+      <span className={cls ?? s.rankIcon} style={b.tarnishing ? { filter: "grayscale(.75)" } : undefined}>
+        <RankIcon index={b.index} seat={b.seat} px={px} tarnished={b.tarnishing} />
+      </span>
+    );
+  };
 
   const top = rows.slice(0, 3);
   const rest = rows.slice(3, 20);
@@ -72,9 +100,9 @@ export function LeaderboardView({
           <h1 className={s.title}>{tr("lb_title")}</h1>
           <p className={s.sub}>{tr("lb_sub")}</p>
           <div className={s.metricToggle} role="tablist" aria-label={tr("lb_title")}>
-            {(["attendance", "rr"] as const).map((m) => (
+            {(["wp", "challenges", "attendance", "rr"] as const).map((m) => (
               <Link key={m} href={href(m, period, isCurrent ? null : range.key)} role="tab" aria-selected={metric === m} className={metric === m ? s.on : undefined} scroll={false}>
-                <LinkPending>{tr(m === "attendance" ? "lb_attendance" : "lb_rr")}</LinkPending>
+                <LinkPending>{tr(METRIC_LABEL[m])}</LinkPending>
               </Link>
             ))}
           </div>
@@ -118,7 +146,10 @@ export function LeaderboardView({
             <ol className={s.podium} aria-label="Top 3">
               {podium.map((r) => (
                 <li key={r.playerId} className={`${s.place} ${s[`p${r.rank}`] ?? ""} ${r.playerId === meId ? s.mine : ""}`}>
-                  <div className={s.avatar}>{r.initials}</div>
+                  <span className={s.avatarWrap}>
+                    <div className={s.avatar}>{r.initials}</div>
+                    {icon(r.playerId, 30, s.podRank)}
+                  </span>
                   <div className={s.podName}>{r.name}</div>
                   <div className={s.podValue}>{value(r)}</div>
                   <div className={s.block}>
@@ -135,6 +166,7 @@ export function LeaderboardView({
                     <span className={s.rank}>{r.rank}</span>
                     <span className={s.smallAvatar}>{r.initials}</span>
                     <span className={s.name}>
+                      {icon(r.playerId, 20)}
                       {r.name}
                       {r.playerId === meId && <em> · {tr("lb_you")}</em>}
                       {meta(r) && <small>{meta(r)}</small>}
@@ -150,6 +182,7 @@ export function LeaderboardView({
                   <span className={s.rank}>{me.rank}</span>
                   <span className={s.smallAvatar}>{me.initials}</span>
                   <span className={s.name}>
+                    {icon(me.playerId, 20)}
                     {me.name} <em>· {tr("lb_you")}</em>
                   </span>
                   <span className={s.value}>{value(me)}</span>

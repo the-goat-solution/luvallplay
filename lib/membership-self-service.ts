@@ -21,6 +21,7 @@ import {
 import { MEMBERSHIP_CYCLE_DAYS, type MembershipDay, type MembershipTier } from "./constants";
 import { ensurePlayerTables, type Player } from "./player-db";
 import { sendAdminAlertEmail, sendPlayerNoticeEmail } from "./player-email";
+import { onceThisDeploy } from "./schema-gate";
 
 // Self-service membership management from the profile's Membership tab.
 //
@@ -327,7 +328,7 @@ export async function cancelPendingChange(m: MemberView): Promise<void> {
 let feedbackReady: Promise<void> | null = null;
 async function ensureFeedbackTable() {
   if (!feedbackReady) {
-    feedbackReady = (async () => {
+    feedbackReady = onceThisDeploy("cancellation_feedback", async () => {
       await ensurePlayerTables();
       await sql`
         CREATE TABLE IF NOT EXISTS cancellation_feedback (
@@ -340,7 +341,7 @@ async function ensureFeedbackTable() {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `;
-    })().catch((e) => {
+    }).catch((e) => {
       feedbackReady = null;
       throw e;
     });

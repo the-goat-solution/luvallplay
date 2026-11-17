@@ -10,13 +10,14 @@ import {
 } from "./mini-game";
 import { PLAYER_NAMES, drawTeams } from "./mini-game-roster";
 import { storeDrawResults } from "./stats-db";
+import { onceThisDeploy } from "./schema-gate";
 
 // Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
 let ensurePromise: Promise<void> | null = null;
 
 export function ensureMiniGameTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = ensureImpl().catch((err) => {
+    ensurePromise = onceThisDeploy("mini_game", ensureImpl).catch((err) => {
       ensurePromise = null;
       throw err;
     });

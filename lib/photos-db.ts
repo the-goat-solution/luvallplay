@@ -1,5 +1,6 @@
 import { sql } from "@vercel/postgres";
 import { ensurePlayerTables } from "./player-db";
+import { onceThisDeploy } from "./schema-gate";
 
 // Photos players share from their profile. Approved photos join the main
 // site Gallery pool. Every upload is checked by Google Cloud Vision
@@ -10,7 +11,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensurePhotoTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = (async () => {
+    ensurePromise = onceThisDeploy("photos", async () => {
       await ensurePlayerTables();
       await sql`
         CREATE TABLE IF NOT EXISTS player_photos (
@@ -36,7 +37,7 @@ export function ensurePhotoTables(): Promise<void> {
       `;
       await sql`CREATE INDEX IF NOT EXISTS player_photos_player_idx ON player_photos (player_id, created_at DESC);`;
       await sql`CREATE INDEX IF NOT EXISTS player_photos_status_idx ON player_photos (status, created_at DESC);`;
-    })().catch((err) => {
+    }).catch((err) => {
       ensurePromise = null;
       throw err;
     });

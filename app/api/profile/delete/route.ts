@@ -4,6 +4,7 @@ import { getPlayerFromRequest } from "@/lib/player-auth";
 import { deletePlayerAccount } from "@/lib/player-db";
 import { clearPlayerCookies } from "@/lib/player-cookies";
 import { sendAdminAlertEmail } from "@/lib/player-email";
+import { endPlayerArena } from "@/lib/arena-db";
 
 const bodySchema = z.object({ confirm: z.literal("DELETE") });
 
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "confirm" }, { status: 400 });
   }
+  await endPlayerArena(player.id).catch((err) => console.error("[profile] arena cleanup failed:", err));
   await deletePlayerAccount(player.id);
   await sendAdminAlertEmail({
     subject: `Account deleted: ${player.email}`,

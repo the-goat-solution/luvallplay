@@ -7,6 +7,7 @@ import type {
   FinanceTotals,
 } from "./finance";
 import { ensureTables } from "./db";
+import { onceThisDeploy } from "./schema-gate";
 
 // The club's money ledger. One row per movement of money:
 //
@@ -23,7 +24,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensureFinanceTables(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = ensureFinanceTablesImpl().catch((err) => {
+    ensurePromise = onceThisDeploy("finance", ensureFinanceTablesImpl).catch((err) => {
       ensurePromise = null;
       throw err;
     });

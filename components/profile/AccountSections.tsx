@@ -11,6 +11,7 @@ import { useRecaptcha } from "./useRecaptcha";
 import { BusyLabel, Spinner } from "./BusyLabel";
 import { useBusyAction } from "./useBusyAction";
 import { SignOutForm } from "./SignOutForm";
+import { isSmsNumberAllowed, toE164 } from "@/lib/phone";
 import styles from "./profile.module.css";
 
 export type AccountPlayer = {
@@ -215,6 +216,7 @@ export function PhoneCard({
   const [unavailable, setUnavailable] = useState(!canText);
 
   if (!phone) return null;
+  const textable = isSmsNumberAllowed(toE164(phone));
 
   const send = async () => {
     setBusy(true);
@@ -224,7 +226,7 @@ export function PhoneCard({
       const { ok, data } = await postJson("/api/auth/sms/start", { phone, recaptchaToken: token, purpose: "phone_confirm" });
       if (!ok) {
         if (data.smsAvailable === false) setUnavailable(true);
-        else setMessage({ kind: "error", text: tr(data.error === "invalid_number" ? "login_err_invalid_number" : data.error === "too_many_for_number" ? "login_err_number_limit" : data.error === "region_not_allowed" ? "login_err_region" : "login_err_generic") });
+        else setMessage({ kind: "error", text: tr(data.error === "invalid_number" ? "login_err_invalid_number" : data.error === "too_many_for_number" ? "login_err_number_limit" : data.error === "region_not_allowed" ? "login_err_region" : data.error === "sms_setup" ? "login_err_sms_setup" : "login_err_generic") });
         return;
       }
       setSessionInfo(data.sessionInfo as string);
@@ -260,7 +262,7 @@ export function PhoneCard({
           <strong>{phone}</strong>
           <span className={styles.small}>{step === "done" ? `✓ ${tr("acc_phone_confirmed")}` : tr("acc_phone_unconfirmed")}</span>
         </div>
-        {step === "idle" && !unavailable && (
+        {step === "idle" && !unavailable && textable && (
           <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={send} disabled={busy} aria-busy={busy}>
             <BusyLabel busy={busy} busyText={tr("sending")}>
               {tr("acc_confirm_phone")}
@@ -268,7 +270,8 @@ export function PhoneCard({
           </button>
         )}
       </div>
-      {step === "idle" && unavailable && smsConfigured && <p className={styles.small}>{tr("acc_confirm_phone_later")}</p>}
+      {step === "idle" && unavailable && smsConfigured && textable && <p className={styles.small}>{tr("acc_confirm_phone_later")}</p>}
+      {step === "idle" && !textable && smsConfigured && <p className={styles.small}>{tr("acc_phone_nz_only")}</p>}
       {message && <div className={message.kind === "error" ? styles.error : styles.success} style={{ marginTop: 12 }}>{message.text}</div>}
       {step === "code" && (
         <form onSubmit={verify} style={{ marginTop: 12 }}>

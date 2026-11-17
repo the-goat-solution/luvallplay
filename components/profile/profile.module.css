@@ -1169,3 +1169,29 @@
     animation-duration: 2.4s;
   }
 }
+
+/* ---------- Phone number with a fixed country code ---------- */
+.phoneField {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.phoneField .input {
+  flex: 1;
+  min-width: 0;
+}
+.phonePrefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 50px;
+  padding: 0 12px;
+  border: 1.5px solid #d6d0bd;
+  border-radius: 12px;
+  background: var(--cream-dark);
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 16px;
+  white-space: nowrap;
+}

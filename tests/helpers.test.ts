@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { decide } from "../lib/moderation-rules.ts";
-import { toE164 } from "../lib/phone.ts";
+import { formatSmsNumber, isSmsNumberAllowed, smsNumberFromLocal, toE164 } from "../lib/phone.ts";
 import { safeNextPath } from "../lib/safe-next.ts";
 
 test("SafeSearch rule: block likely, review possible, approve the rest", () => {
@@ -29,4 +29,20 @@ test("safeNextPath only allows same-site paths", () => {
   assert.equal(safeNextPath("/\\evil.example"), "/profile");
   assert.equal(safeNextPath("/api/auth/logout"), "/profile");
   assert.equal(safeNextPath(undefined, "/x"), "/x");
+});
+
+
+test("text sign-in takes NZ mobiles only", () => {
+  assert.equal(smsNumberFromLocal("21 123 4567"), "+64211234567");
+  assert.equal(smsNumberFromLocal("021 123 4567"), "+64211234567");
+  assert.equal(smsNumberFromLocal("+64 21 123 4567"), "+64211234567");
+  assert.equal(smsNumberFromLocal("6421 123 4567"), "+64211234567");
+  assert.equal(smsNumberFromLocal("027 1234 567"), "+64271234567");
+  assert.equal(smsNumberFromLocal("022 123 45678"), "+642212345678");
+  assert.equal(smsNumberFromLocal("03 123 4567"), null, "landline");
+  assert.equal(smsNumberFromLocal("21 12"), null, "too short");
+  assert.equal(isSmsNumberAllowed("+61412345678"), false, "Australia");
+  assert.equal(isSmsNumberAllowed("+84912345678"), false, "Vietnam");
+  assert.equal(isSmsNumberAllowed("+64211234567"), true);
+  assert.equal(formatSmsNumber("+64211234567"), "+64 21 123 4567");
 });

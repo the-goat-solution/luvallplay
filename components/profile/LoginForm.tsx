@@ -6,6 +6,7 @@ import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import { useRecaptcha } from "./useRecaptcha";
 import { BusyLabel } from "./BusyLabel";
+import { SMS_COUNTRIES, formatSmsNumber, smsNumberFromLocal } from "@/lib/phone";
 import styles from "./profile.module.css";
 
 type Method = "email" | "sms";
@@ -23,6 +24,7 @@ const ERROR_KEY: Record<string, ProfileKey> = {
   captcha_failed: "login_err_captcha",
   too_many_for_number: "login_err_number_limit",
   region_not_allowed: "login_err_region",
+  sms_setup: "login_err_sms_setup",
 };
 
 async function postJson(url: string, body: unknown): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
@@ -115,7 +117,11 @@ export function LoginForm({
     e?.preventDefault();
     setError(null);
     setInfo(null);
-    if (phone.replace(/\D/g, "").length < 7) return showError("invalid_number");
+    const e164 = smsNumberFromLocal(phone);
+    if (!e164) {
+      setError(tr("login_err_nz_mobile"));
+      return;
+    }
     setBusy(true);
     let token: string;
     try {
@@ -124,7 +130,7 @@ export function LoginForm({
       setBusy(false);
       return showError("captcha");
     }
-    const res = await postJson("/api/auth/sms/start", { phone, recaptchaToken: token, purpose: "login" });
+    const res = await postJson("/api/auth/sms/start", { phone: e164, recaptchaToken: token, purpose: "login" });
     setBusy(false);
     if (!res.ok) {
       if (res.data.smsAvailable === false) {
@@ -241,17 +247,23 @@ export function LoginForm({
         <form onSubmit={startSms} noValidate>
           <div className={styles.field}>
             <label htmlFor="login-phone">{tr("login_phone")}</label>
-            <input
-              id="login-phone"
-              className={styles.input}
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="021 123 4567"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-            />
+            {/* New Zealand only for now (lib/phone.ts SMS_COUNTRIES). */}
+            <div className={styles.phoneField}>
+              <span className={styles.phonePrefix} aria-label={`${tr("login_phone_country")}: ${SMS_COUNTRIES[0].name} +${SMS_COUNTRIES[0].dial}`}>
+                <span aria-hidden="true">{SMS_COUNTRIES[0].flag}</span> +{SMS_COUNTRIES[0].dial}
+              </span>
+              <input
+                id="login-phone"
+                className={styles.input}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel-national"
+                placeholder={SMS_COUNTRIES[0].example}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
+            </div>
           </div>
           <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy} aria-busy={busy}>
             <BusyLabel busy={busy} busyText={tr("sending")}>
@@ -272,7 +284,7 @@ export function LoginForm({
             <span>
               {method === "email"
                 ? tr("login_code_sent_email", { to: email.trim() })
-                : tr("login_code_sent_sms", { to: phone })}
+                : tr("login_code_sent_sms", { to: formatSmsNumber(smsNumberFromLocal(phone) ?? phone) })}
             </span>
             <button type="button" className={styles.linkBtn} onClick={() => setStep("enter")} disabled={busy}>
               {tr("login_change")}

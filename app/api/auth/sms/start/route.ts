@@ -4,6 +4,7 @@ import { checkRateLimit, getClientIp } from "@/lib/security";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { toE164 } from "@/lib/player-db";
 import { sendSmsCode } from "@/lib/sms";
+import { isSmsNumberAllowed } from "@/lib/phone";
 
 const bodySchema = z.object({
   phone: z.string().trim().min(6).max(30),
@@ -27,6 +28,10 @@ export async function POST(request: Request) {
   }
   const phoneE164 = toE164(body.phone);
   if (!phoneE164) return NextResponse.json({ error: "invalid_number" }, { status: 400 });
+  // NZ mobiles only for now (lib/phone.ts SMS_COUNTRIES).
+  if (!isSmsNumberAllowed(phoneE164)) {
+    return NextResponse.json({ error: phoneE164.startsWith("+64") ? "invalid_number" : "region_not_allowed", smsAvailable: true }, { status: 400 });
+  }
 
   try {
     const result = await sendSmsCode({ phoneE164, recaptchaToken: body.recaptchaToken, purpose: body.purpose, ip });

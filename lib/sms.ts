@@ -143,7 +143,7 @@ export type SendSmsResult =
   | { ok: true; sessionInfo: string }
   | {
       ok: false;
-      reason: "unavailable" | "cap_reached" | "too_many_for_number" | "invalid_number" | "captcha_failed" | "region_not_allowed" | "send_failed";
+      reason: "unavailable" | "cap_reached" | "too_many_for_number" | "invalid_number" | "captcha_failed" | "region_not_allowed" | "sms_setup" | "send_failed";
     };
 
 /**
@@ -214,6 +214,13 @@ export async function sendSmsCode(input: {
     if (message.startsWith("INVALID_PHONE_NUMBER") || message.startsWith("MISSING_PHONE_NUMBER")) {
       return { ok: false, reason: "invalid_number" };
     }
+    // "CAPTCHA_CHECK_FAILED : Hostname match not found": the site's address
+    // isn't in Firebase → Authentication → Settings → Authorized domains.
+    // Not the player's fault, so don't ask them to redo the check.
+    if (message.startsWith("CAPTCHA_CHECK_FAILED") && /hostname/i.test(message)) {
+      await alertSmsSetupOnce(message);
+      return { ok: false, reason: "sms_setup" };
+    }
     if (message.startsWith("CAPTCHA_CHECK_FAILED") || message.startsWith("MISSING_RECAPTCHA_TOKEN")) {
       return { ok: false, reason: "captcha_failed" };
     }
@@ -258,6 +265,27 @@ export async function verifySmsCode(sessionInfo: string, code: string): Promise<
 }
 
 /** One admin email per 24 hours the first time the free texts run out. */
+/** Tells the admins (at most once a day) that Firebase needs a setting fixed. */
+async function alertSmsSetupOnce(googleMessage: string): Promise<void> {
+  try {
+    const key = "sms_setup_alert_at";
+    const last = await getPlayerSetting(key);
+    if (last && Date.now() - new Date(last).getTime() < 24 * 60 * 60 * 1000) return;
+    await setPlayerSetting(key, new Date().toISOString());
+    await sendAdminAlertEmail({
+      subject: "SMS sign-in needs a Firebase setting",
+      heading: "Text codes are failing: website address not authorised",
+      lines: [
+        `Google refused to send a sign-in text: "${googleMessage}".`,
+        "Fix: Firebase console → Authentication → Settings → Authorized domains → add both threewolvesbadminton.org and www.threewolvesbadminton.org.",
+        "Players are told to use email in the meantime.",
+      ],
+    });
+  } catch (err) {
+    console.error("[sms] setup alert failed:", err);
+  }
+}
+
 async function alertCapReachedOnce(): Promise<void> {
   try {
     const last = await getPlayerSetting(CAP_ALERT_KEY);

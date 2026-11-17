@@ -7,7 +7,7 @@ import { ensureShopTables } from "./shop-db";
 import { ensureStatsTables } from "./stats-db";
 import { ensurePhotoTables } from "./photos-db";
 import { ensureIntegrationTables } from "./webhooks";
-import { getRecaptchaSiteKey, getSmsUsage } from "./sms";
+import { getSmsUsage, lookupRecaptchaSiteKey } from "./sms";
 import { PUBLIC_BLOB_SETUP_HINT, publicBlobAuth } from "./public-blob";
 import { getSiteUrl } from "./email-layout";
 
@@ -152,10 +152,21 @@ export async function runSetupChecks(): Promise<Check[]> {
   } else {
     checks.push(
       await safe("SMS", "Firebase key and reCAPTCHA", async () => {
-        const siteKey = await getRecaptchaSiteKey();
-        return siteKey
-          ? { area: "SMS", name: "Firebase key and reCAPTCHA", status: "ok", detail: "Google accepted the key and returned the reCAPTCHA site key." }
-          : { area: "SMS", name: "Firebase key and reCAPTCHA", status: "fail", detail: "Google rejected FIREBASE_API_KEY or phone sign-in isn't enabled.", fix: "Check the key (Firebase → Project settings → Web API key), that Identity Toolkit API is allowed for it, and that Phone sign-in is enabled." };
+        const result = await lookupRecaptchaSiteKey();
+        if (result.siteKey !== null) {
+          return { area: "SMS", name: "Firebase key and reCAPTCHA", status: "ok", detail: "Google accepted the key and returned the reCAPTCHA site key." };
+        }
+        const r = result.reason.toLowerCase();
+        const fix = r.includes("not valid") || r.includes("api_key_invalid")
+          ? "The key in Vercel isn't a valid key. Copy the Web API Key again from Firebase → Project settings → General, update FIREBASE_API_KEY in Vercel, then redeploy."
+          : r.includes("referer") || r.includes("referrer") || r.includes("ip address") || r.includes("android") || r.includes("ios")
+            ? "The key has an application restriction. Google Cloud → APIs & Services → Credentials → the key → Application restrictions: None → Save (takes up to 5 minutes)."
+            : r.includes("has not been used") || r.includes("disabled") || r.includes("service_disabled")
+              ? "Enable the Identity Toolkit API: Google Cloud → APIs & Services → Library → “Identity Toolkit API” → Enable (on the same project as the key), wait a few minutes."
+              : r.includes("blocked") || r.includes("api_key_service_blocked")
+                ? "The key's API restrictions don't include Identity Toolkit. Credentials → the key → API restrictions → tick Identity Toolkit API → Save."
+                : "Check the key (Firebase → Project settings → Web API Key), that Identity Toolkit API is allowed for it, and that Phone sign-in is enabled.";
+        return { area: "SMS", name: "Firebase key and reCAPTCHA", status: "fail", detail: `Google said: ${result.reason}`, fix };
       }),
     );
     const usage = await getSmsUsage().catch(() => null);

@@ -96,20 +96,47 @@ export async function isSmsAvailable(): Promise<boolean> {
 let cachedSiteKey: { key: string; at: number } | null = null;
 
 /** The reCAPTCHA site key Google wants solved before it sends a text. Public. */
+export type RecaptchaLookup = { siteKey: string } | { siteKey: null; status: number; reason: string };
+
+/**
+ * Asks Google for the reCAPTCHA site key with our API key. On failure it
+ * returns Google's own error (never the key), e.g. "API key not valid" or
+ * "Identity Toolkit API has not been used in project … or it is disabled",
+ * so Admin → Setup check can say exactly what to fix.
+ */
+export async function lookupRecaptchaSiteKey(): Promise<RecaptchaLookup> {
+  const key = apiKey();
+  if (!key) return { siteKey: null, status: 0, reason: "FIREBASE_API_KEY is not set." };
+  let res: Response;
+  try {
+    res = await fetch(`${IDENTITY_TOOLKIT}/recaptchaParams?key=${encodeURIComponent(key)}`, { cache: "no-store" });
+  } catch (err) {
+    return { siteKey: null, status: 0, reason: `Couldn't reach Google: ${(err as Error).message}` };
+  }
+  const data = (await res.json().catch(() => ({}))) as {
+    recaptchaSiteKey?: string;
+    error?: { message?: string; status?: string; details?: { reason?: string }[] };
+  };
+  if (res.ok && data.recaptchaSiteKey) return { siteKey: data.recaptchaSiteKey };
+  const e = data.error;
+  const detail = e?.details?.find((d) => d.reason)?.reason;
+  const reason = [e?.message, detail && detail !== e?.message ? `(${detail})` : null].filter(Boolean).join(" ") ||
+    (res.ok ? "Google answered without a reCAPTCHA site key (is Phone sign-in enabled?)." : `HTTP ${res.status}`);
+  return { siteKey: null, status: res.status, reason: reason.replace(key, "[key]").slice(0, 400) };
+}
+
 export async function getRecaptchaSiteKey(): Promise<string | null> {
   const fromEnv = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim();
   if (fromEnv) return fromEnv;
-  const key = apiKey();
-  if (!key) return null;
+  if (!apiKey()) return null;
   if (cachedSiteKey && Date.now() - cachedSiteKey.at < 6 * 60 * 60 * 1000) return cachedSiteKey.key;
-  const res = await fetch(`${IDENTITY_TOOLKIT}/recaptchaParams?key=${encodeURIComponent(key)}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as { recaptchaSiteKey?: string };
-  if (!data.recaptchaSiteKey) return null;
-  cachedSiteKey = { key: data.recaptchaSiteKey, at: Date.now() };
-  return data.recaptchaSiteKey;
+  const result = await lookupRecaptchaSiteKey();
+  if (result.siteKey === null) {
+    console.error(`[sms] Google refused the reCAPTCHA lookup (${result.status}): ${result.reason}`);
+    return null;
+  }
+  cachedSiteKey = { key: result.siteKey, at: Date.now() };
+  return result.siteKey;
 }
 
 export type SendSmsResult =

@@ -22,6 +22,7 @@ const ERROR_KEY: Record<string, ProfileKey> = {
   captcha: "login_err_captcha",
   captcha_failed: "login_err_captcha",
   too_many_for_number: "login_err_number_limit",
+  region_not_allowed: "login_err_region",
 };
 
 async function postJson(url: string, body: unknown): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {

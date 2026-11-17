@@ -224,7 +224,7 @@ export function PhoneCard({
       const { ok, data } = await postJson("/api/auth/sms/start", { phone, recaptchaToken: token, purpose: "phone_confirm" });
       if (!ok) {
         if (data.smsAvailable === false) setUnavailable(true);
-        else setMessage({ kind: "error", text: tr(data.error === "invalid_number" ? "login_err_invalid_number" : data.error === "too_many_for_number" ? "login_err_number_limit" : "login_err_generic") });
+        else setMessage({ kind: "error", text: tr(data.error === "invalid_number" ? "login_err_invalid_number" : data.error === "too_many_for_number" ? "login_err_number_limit" : data.error === "region_not_allowed" ? "login_err_region" : "login_err_generic") });
         return;
       }
       setSessionInfo(data.sessionInfo as string);

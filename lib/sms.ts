@@ -143,7 +143,7 @@ export type SendSmsResult =
   | { ok: true; sessionInfo: string }
   | {
       ok: false;
-      reason: "unavailable" | "cap_reached" | "too_many_for_number" | "invalid_number" | "captcha_failed" | "send_failed";
+      reason: "unavailable" | "cap_reached" | "too_many_for_number" | "invalid_number" | "captcha_failed" | "region_not_allowed" | "send_failed";
     };
 
 /**
@@ -216,6 +216,12 @@ export async function sendSmsCode(input: {
     }
     if (message.startsWith("CAPTCHA_CHECK_FAILED") || message.startsWith("MISSING_RECAPTCHA_TOKEN")) {
       return { ok: false, reason: "captcha_failed" };
+    }
+    // Firebase → Authentication → Settings → SMS region policy doesn't allow
+    // this number's country ("SMS unable to be sent until this region
+    // enabled by the app developer").
+    if (message.startsWith("OPERATION_NOT_ALLOWED") || /region/i.test(message)) {
+      return { ok: false, reason: "region_not_allowed" };
     }
     if (message.startsWith("QUOTA_EXCEEDED") || message.startsWith("TOO_MANY_ATTEMPTS")) {
       return { ok: false, reason: "cap_reached" };

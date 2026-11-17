@@ -42,7 +42,7 @@ function refreshLeaderboard(): void {
 //   admin    – ticked on /admin/play-days
 //   board    – finished at least one game on the court board that day
 //   minigame – played in that day's round robin
-//   roster   – on a past play day with no saved court board: on that day's
+//   roster   – on a past play day's sign-up list:
 //              roster (confirmed booking, or a membership covering the day),
 //              not marked "Can't make it"; a fill-in counts instead of the
 //              person they replaced (recordRosterAttendance, automatic)
@@ -299,15 +299,16 @@ export async function setMinigameName(name: string, playerId: number | null): Pr
 const ROSTER_MEMBERSHIP_STATUSES = ["active", "trialing", "past_due", "expired", "canceled"];
 
 /**
- * Records attendance for every past play day that has no saved court board,
- * from that day's roster: confirmed casual bookings, plus members whose
- * membership covered the date on its weekday, minus "Can't make it", with a
- * fill-in counted instead of the person they replaced. The same rules as the
- * admin roster (lib/db.ts getRosterForDate), applied to all history in one
- * statement.
+ * Play days come from the sign-up list: everyone on a past play day's
+ * roster counts (confirmed casual bookings, plus members whose membership
+ * covered the date on its weekday), minus "Can't make it", with a fill-in
+ * counted instead of the person they replaced. The same rules as the admin
+ * roster (lib/db.ts getRosterForDate), applied to all history at once, so
+ * nobody has to be checked in by hand. A day counts from the day after.
  *
- * Idempotent (ON CONFLICT DO NOTHING): it never overrides a court board,
- * round robin or admin record, and an admin's removal sticks.
+ * Rebuilds the roster rows each time: someone who later said "Can't make
+ * it" (or whose booking was cancelled) drops off. Court board, round robin
+ * and admin records are never touched, and an admin's removal sticks.
  */
 export async function recordRosterAttendance(): Promise<number> {
   if (!process.env.POSTGRES_URL) return 0;
@@ -317,15 +318,10 @@ export async function recordRosterAttendance(): Promise<number> {
   const dowCase = Object.entries(MEMBERSHIP_DAY_TO_DOW)
     .map(([day, dow]) => `WHEN ${Number(dow)} THEN '${day.replace(/[^a-z]/g, "")}'`)
     .join(" ");
-  const { rows: reg } = await sql`SELECT to_regclass('casual_play_sessions') IS NOT NULL AS has_board;`;
-  const noBoard = reg[0]?.has_board
-    ? "AND NOT EXISTS (SELECT 1 FROM casual_play_sessions c WHERE c.date = s.date)"
-    : "";
-  const { rowCount } = await sql.query(
-    `WITH days AS (
+  const roster = `WITH days AS (
        SELECT s.date AS d, CASE EXTRACT(DOW FROM s.date)::int ${dowCase} END AS pool
        FROM sessions s
-       WHERE s.date < $1::date ${noBoard}
+       WHERE s.date < $1::date
      ),
      casual AS (
        SELECT b.session_date AS d, lower(trim(coalesce(f.email, b.email))) AS e
@@ -347,15 +343,30 @@ export async function recordRosterAttendance(): Promise<number> {
        WHERE NOT EXISTS (
          SELECT 1 FROM player_absences pa WHERE pa.session_date = days.d AND pa.email = lower(trim(m.email))
        )
-     )
-     INSERT INTO attendance (session_date, email, source, verified, removed)
-     SELECT DISTINCT d, e, 'roster', TRUE, FALSE FROM (SELECT * FROM casual UNION SELECT * FROM members) r
-     WHERE e IS NOT NULL AND e <> ''
-     ON CONFLICT (session_date, email) DO NOTHING;`,
-    [today, ROSTER_MEMBERSHIP_STATUSES],
+     ),
+     signed_up AS (
+       SELECT DISTINCT d, e FROM (SELECT * FROM casual UNION SELECT * FROM members) r
+       WHERE e IS NOT NULL AND e <> ''
+     )`;
+  const params = [today, ROSTER_MEMBERSHIP_STATUSES];
+  // Off the list now: drop the roster row (other sources keep theirs).
+  const { rowCount: dropped } = await sql.query(
+    `${roster}
+     DELETE FROM attendance a
+     WHERE a.source IN ('roster', 'booking_history') AND NOT a.removed AND a.session_date < $1::date
+       AND NOT EXISTS (SELECT 1 FROM signed_up u WHERE u.d = a.session_date AND u.e = a.email);`,
+    params,
   );
-  if (rowCount) refreshLeaderboard();
-  return rowCount ?? 0;
+  const { rowCount: added } = await sql.query(
+    `${roster}
+     INSERT INTO attendance (session_date, email, source, verified, removed)
+     SELECT d, e, 'roster', TRUE, FALSE FROM signed_up
+     ON CONFLICT (session_date, email) DO UPDATE SET verified = TRUE
+     WHERE NOT attendance.removed AND NOT attendance.verified;`,
+    params,
+  );
+  if (dropped || added) refreshLeaderboard();
+  return added ?? 0;
 }
 
 let rosterSyncedAt = 0;
@@ -375,11 +386,11 @@ function syncRosterAttendanceLater(): void {
  * first time, it runs the full backfill (saved court boards, round robin
  * draws, rosters) and remembers that in player_settings; after that only
  * the cheap roster sync runs, since new boards and draws are recorded as
- * they're saved. At most every 6 hours per server instance; the daily cron
- * runs it too.
+ * they're saved. At most hourly per server instance (forced by the Arena's
+ * points sync, lib/arena-db.ts syncPoints).
  */
-export async function syncRosterAttendance(): Promise<void> {
-  if (Date.now() - rosterSyncedAt < 6 * 60 * 60 * 1000) return;
+export async function syncRosterAttendance(force = false): Promise<void> {
+  if (!force && Date.now() - rosterSyncedAt < 60 * 60 * 1000) return;
   rosterSyncedAt = Date.now();
   try {
     if (!(await getPlayerSetting(HISTORY_BACKFILL_KEY))) {

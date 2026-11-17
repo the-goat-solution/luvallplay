@@ -1,4 +1,4 @@
-/* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /jersey too */
+/* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /leaderboard too */
 "use client";
 
 import { useLanguage } from "@/context/LanguageContext";

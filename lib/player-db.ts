@@ -54,6 +54,7 @@ async function ensureImpl() {
       deleted_at TIMESTAMPTZ
     );
   `;
+  await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
   // A confirmed phone number signs in exactly one account.
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS players_phone_verified_idx
@@ -144,6 +145,8 @@ export type Player = {
   welcomeCardDismissed: boolean;
   installHintShown: boolean;
   installedAt: string | null;
+  /** Profile picture (public Blob URL), or null for initials. */
+  avatarUrl: string | null;
   createdAt: string;
 };
 
@@ -166,13 +169,14 @@ export type PlayerRow = {
   welcome_card_dismissed_at: Date | null;
   install_hint_shown_at: Date | null;
   installed_at: Date | null;
+  avatar_url?: string | null;
   created_at: Date;
 };
 
 export const PLAYER_COLUMNS = `p.id, p.email, p.first_name, p.last_name, p.display_name, p.phone,
   p.phone_e164, p.phone_verified_at, p.lang, p.stripe_customer_id, p.leaderboard_visible,
   p.minigame_name, p.created_via, p.claimed_at, p.welcome_sent_at, p.welcome_card_dismissed_at,
-  p.install_hint_shown_at, p.installed_at, p.created_at`;
+  p.install_hint_shown_at, p.installed_at, p.avatar_url, p.created_at`;
 
 /** "Hòa N." from first and last name: the default public name. */
 export function defaultDisplayName(first: string, last: string, email = ""): string {
@@ -203,6 +207,7 @@ export function mapPlayer(r: PlayerRow): Player {
     welcomeCardDismissed: Boolean(r.welcome_card_dismissed_at),
     installHintShown: Boolean(r.install_hint_shown_at),
     installedAt: r.installed_at ? r.installed_at.toISOString() : null,
+    avatarUrl: r.avatar_url ?? null,
     createdAt: r.created_at.toISOString(),
   };
 }
@@ -602,4 +607,16 @@ export async function ensureOptOutToken(playerId: number): Promise<string> {
 
 export async function markWelcomeSent(playerId: number): Promise<void> {
   await sql`UPDATE players SET welcome_sent_at = NOW() WHERE id = ${playerId};`;
+}
+
+/** Sets (or clears) a player's profile picture; returns the previous URL so the caller can delete it. */
+export async function setPlayerAvatar(playerId: number, url: string | null): Promise<string | null> {
+  await ensurePlayerTables();
+  const { rows } = await sql.query(
+    `UPDATE players p SET avatar_url = $2
+     FROM (SELECT id, avatar_url AS old FROM players WHERE id = $1) o
+     WHERE p.id = o.id RETURNING o.old;`,
+    [playerId, url],
+  );
+  return (rows[0]?.old as string | null) ?? null;
 }

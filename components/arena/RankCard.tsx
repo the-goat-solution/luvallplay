@@ -61,7 +61,7 @@ export function RankCard({ me }: { me: MeView }) {
             {t("wp_bonuses")}
           </div>
         </div>
-        <a className={r.arena} href="/challenges">
+        <a className={r.arena} href="/profile/arena">
           ⚔️ {t("go_arena")}
         </a>
         <p className={r.how}>

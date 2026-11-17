@@ -35,6 +35,25 @@ type Screen =
   | null;
 
 const VS_SEEN_KEY = "tw-arena-vs-seen";
+/** Matches whose "Let's go" screen is minimized (the profile shows a pill to reopen it). */
+export const VS_MIN_KEY = "tw-arena-vs-min";
+
+function readIds(key: string): number[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "number") : [];
+  } catch {
+    return [];
+  }
+}
+function writeIds(key: string, ids: number[]): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(ids.slice(-50)));
+    window.dispatchEvent(new Event("tw-arena-vs"));
+  } catch {
+    // private mode
+  }
+}
 
 // ── Small pieces ──────────────────────────────────────────────────────
 
@@ -170,22 +189,27 @@ function Confetti() {
 
 // ── The page ──────────────────────────────────────────────────────────
 
-export function ArenaView({ initial }: { initial: ArenaState }) {
+export function ArenaView({ initial, embedded = false }: { initial: ArenaState; embedded?: boolean }) {
   const { t, lang } = useArenaT();
   const [state, setState] = useState<ArenaState>(initial);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>(null);
   const [vsSeen, setVsSeen] = useState<number[]>([]);
+  const [vsMin, setVsMin] = useState<number[]>([]);
   const [rankDismissed, setRankDismissed] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    try {
-      setVsSeen(JSON.parse(localStorage.getItem(VS_SEEN_KEY) || "[]"));
-    } catch {
-      setVsSeen([]);
-    }
+    setVsSeen(readIds(VS_SEEN_KEY));
+    setVsMin(readIds(VS_MIN_KEY));
+    const sync = () => setVsMin(readIds(VS_MIN_KEY));
+    window.addEventListener("tw-arena-vs", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("tw-arena-vs", sync);
+      window.removeEventListener("storage", sync);
+    };
   }, []);
 
   const showToast = useCallback((msg: string) => {
@@ -269,20 +293,26 @@ export function ArenaView({ initial }: { initial: ArenaState }) {
 
   const me = state.me;
   const mine = state.mine;
-  const versusFor = mine.find(
+  const versusPending = mine.find(
     (c) => c.status === "accepted" && c.accepting && !vsSeen.includes(c.id),
   );
+  const versusFor = versusPending && !vsMin.includes(versusPending.id) ? versusPending : undefined;
+  const versusMinimized = versusPending && vsMin.includes(versusPending.id) ? versusPending : undefined;
   const after = me?.after[0] ?? null;
   const rankUp = me?.rankUp && !rankDismissed ? me.rankUp : null;
 
   const dismissVs = (id: number) => {
     const next = [...vsSeen, id].slice(-50);
     setVsSeen(next);
-    try {
-      localStorage.setItem(VS_SEEN_KEY, JSON.stringify(next));
-    } catch {
-      // private mode
-    }
+    writeIds(VS_SEEN_KEY, next);
+    const min = vsMin.filter((x) => x !== id);
+    setVsMin(min);
+    writeIds(VS_MIN_KEY, min);
+  };
+  const minimizeVs = (id: number, minimized: boolean) => {
+    const next = minimized ? [...vsMin.filter((x) => x !== id), id] : vsMin.filter((x) => x !== id);
+    setVsMin(next);
+    writeIds(VS_MIN_KEY, next);
   };
 
   let overlay: ReactNode = null;
@@ -338,7 +368,7 @@ export function ArenaView({ initial }: { initial: ArenaState }) {
       );
   }
   if (!overlay && versusFor)
-    overlay = <Versus c={versusFor} onGo={() => dismissVs(versusFor.id)} />;
+    overlay = <Versus c={versusFor} onGo={() => dismissVs(versusFor.id)} onMinimize={() => minimizeVs(versusFor.id, true)} />;
   if (!overlay && after)
     overlay = (
       <Result
@@ -363,7 +393,7 @@ export function ArenaView({ initial }: { initial: ArenaState }) {
     );
 
   return (
-    <main className={s.page}>
+    <main className={`${s.page} ${embedded ? s.embedded : ""}`}>
       <div className={s.wrap}>
         <Hero state={state} />
         <div className={s.grid}>
@@ -457,6 +487,18 @@ export function ArenaView({ initial }: { initial: ArenaState }) {
           {overlay}
         </div>
       )}
+      {versusMinimized && !overlay && versusMinimized.accepting && (
+        <button type="button" className={s.vsMini} onClick={() => minimizeVs(versusMinimized.id, false)}>
+          <span className={s.vsMiniVs}>{t("vs")}</span>
+          <span className={s.vsMiniText}>
+            <strong>{t("vs_accepted")}</strong>
+            <small>
+              {pairTitle(versusMinimized.posting)} · {pairTitle(versusMinimized.accepting)}
+            </small>
+          </span>
+          <span className={s.vsMiniOpen}>{t("vs_open")}</span>
+        </button>
+      )}
       {toast && (
         <div className={s.toast} role="status">
           {toast}
@@ -546,7 +588,7 @@ function MePanel({
         </p>
         <a
           className={`${s.cta} ${s.ctaBounce}`}
-          href="/login?next=/challenges"
+          href="/login?next=/profile/arena"
           style={{ textDecoration: "none" }}
         >
           <span>{t("signin_btn")}</span>
@@ -1159,7 +1201,7 @@ function FightCard({
           ) : (
             <a
               className={`${s.btn} ${s.btnTeal}`}
-              href="/login?next=/challenges"
+              href="/login?next=/profile/arena"
               style={{
                 textDecoration: "none",
                 display: "inline-flex",
@@ -1400,12 +1442,18 @@ function Feed({ items, lang }: { items: FeedItem[]; lang: "en" | "vi" }) {
 
 // ── Full-screen moments ───────────────────────────────────────────────
 
-function Versus({ c, onGo }: { c: ChallengeView; onGo: () => void }) {
+function Versus({ c, onGo, onMinimize }: { c: ChallengeView; onGo: () => void; onMinimize: () => void }) {
   const { t } = useArenaT();
   if (!c.accepting) return null;
   const offer = c.mySide === "accepting" ? c.offer : null;
   return (
     <div className={s.vsScreen}>
+      <button type="button" className={s.vsMinBtn} onClick={onMinimize} aria-label={t("vs_minimize")} title={t("vs_minimize")}>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+          <path d="M5 12h14" />
+        </svg>
+        <span>{t("vs_minimize_short")}</span>
+      </button>
       <div className={`${s.half} ${s.halfTop}`}>
         <div className={s.halftone} />
         <Duo pair={c.posting} tone="c" size="lg" />

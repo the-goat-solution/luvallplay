@@ -20,6 +20,8 @@ export type ModerationResult = {
   status: PhotoStatus;
   safesearch: Record<string, string> | null;
   reason: "checked" | "not_configured" | "error";
+  /** What went wrong, in Google's words (no secrets), when reason is "error". */
+  detail?: string;
 };
 
 let client: JWT | null = null;
@@ -35,26 +37,67 @@ function visionClient(): JWT | null {
   return client;
 }
 
-/** Checks one image (the display copy, a public URL). */
-export async function moderateImage(imageUrl: string): Promise<ModerationResult> {
+async function fetchImage(url: string): Promise<Buffer> {
+  // A just-uploaded Blob can take a moment to reach the CDN: try a few times.
+  let last = "";
+  for (let i = 0; i < 3; i++) {
+    try {
+      const img = await fetch(url, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
+      const type = img.headers.get("content-type") ?? "";
+      if (img.ok && type.startsWith("image/")) return Buffer.from(await img.arrayBuffer());
+      last = `image fetch ${img.status} ${type}`;
+    } catch (err) {
+      last = (err as Error).message;
+    }
+    await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+  }
+  throw new Error(last || "image fetch failed");
+}
+
+/** Checks image bytes with SafeSearch. */
+export async function moderateBytes(bytes: Buffer): Promise<ModerationResult> {
   const vision = visionClient();
   if (!vision) return { status: "needs_review", safesearch: null, reason: "not_configured" };
   try {
-    // Send the bytes rather than the URL, so Google never needs to fetch from us.
-    const img = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
-    if (!img.ok) throw new Error(`image fetch ${img.status}`);
-    const content = Buffer.from(await img.arrayBuffer()).toString("base64");
     const res = await vision.request<{ responses: { safeSearchAnnotation?: Record<string, string>; error?: { message: string } }[] }>({
       url: "https://vision.googleapis.com/v1/images:annotate",
       method: "POST",
-      data: { requests: [{ image: { content }, features: [{ type: "SAFE_SEARCH_DETECTION" }] }] },
+      data: { requests: [{ image: { content: bytes.toString("base64") }, features: [{ type: "SAFE_SEARCH_DETECTION" }] }] },
     });
     const first = res.data.responses?.[0];
     if (!first?.safeSearchAnnotation) throw new Error(first?.error?.message ?? "no annotation");
     const ann = first.safeSearchAnnotation;
     return { status: decide(ann), safesearch: ann, reason: "checked" };
   } catch (err) {
-    console.error("[photos] SafeSearch failed:", err);
-    return { status: "needs_review", safesearch: null, reason: "error" };
+    return failed(err);
   }
 }
+
+function failed(err: unknown): ModerationResult {
+  const e = err as { message?: string; response?: { data?: { error?: { message?: string } } } };
+  const detail = e.response?.data?.error?.message ?? e.message ?? String(err);
+  console.error("[photos] SafeSearch failed:", detail);
+  return { status: "needs_review", safesearch: null, reason: "error", detail };
+}
+
+/**
+ * Checks one uploaded photo (public URLs). Sends the bytes rather than the
+ * URL, so Google never needs to fetch from us. Tries the display copy, then
+ * the original if Google can't read the display copy.
+ */
+export async function moderateImage(...urls: string[]): Promise<ModerationResult> {
+  if (!visionClient()) return { status: "needs_review", safesearch: null, reason: "not_configured" };
+  let result: ModerationResult | null = null;
+  for (const url of urls) {
+    try {
+      result = await moderateBytes(await fetchImage(url));
+    } catch (err) {
+      result = failed(err);
+    }
+    if (result.reason === "checked") return result;
+  }
+  return result ?? { status: "needs_review", safesearch: null, reason: "error", detail: "no image" };
+}
+
+/** A small JPEG for the health check (proves the key, the API and billing). */
+export const TEST_JPEG = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCABAAEADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDnqKKK+xPjAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD//Z", "base64");

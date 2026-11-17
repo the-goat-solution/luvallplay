@@ -3,8 +3,8 @@ import { countArenaActions } from "./arena-db";
 
 // Little red counters on the profile tabs. Each source is optional: a
 // feature whose tables don't exist yet simply contributes nothing.
-export async function getProfileBadges(playerId: number): Promise<Partial<Record<"account" | "membership" | "player", number>>> {
-  const badges: Partial<Record<"account" | "membership" | "player", number>> = {};
+export async function getProfileBadges(playerId: number): Promise<Partial<Record<"account" | "membership" | "player" | "arena", number>>> {
+  const badges: Partial<Record<"account" | "membership" | "player" | "arena", number>> = {};
   try {
     const { rows } = await sql`
       SELECT count(*)::int AS n FROM message_threads
@@ -15,7 +15,7 @@ export async function getProfileBadges(playerId: number): Promise<Partial<Record
     if ((err as { code?: string }).code !== "42P01") console.error("[profile] badge query failed:", err);
   }
   try {
-    badges.player = await countArenaActions(playerId);
+    badges.arena = await countArenaActions(playerId);
   } catch (err) {
     console.error("[profile] arena badge failed:", err);
   }

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentPlayer } from "@/lib/player-auth";
 import { getProfileBadges } from "@/lib/profile-badges";
+import { liveMatchFor } from "@/lib/arena-db";
 import { ProfileShell } from "@/components/profile/ProfileShell";
 
 export const metadata: Metadata = {
@@ -22,12 +23,13 @@ export const dynamic = "force-dynamic";
 export default async function ProfileLayout({ children }: { children: React.ReactNode }) {
   const player = await getCurrentPlayer();
   if (!player) redirect("/login?next=/profile");
-  const badges = await getProfileBadges(player.id);
+  const [badges, liveMatchId] = await Promise.all([getProfileBadges(player.id), liveMatchFor(player.id).catch(() => null)]);
   return (
     <ProfileShell
-      player={{ firstName: player.firstName, lastName: player.lastName, email: player.email, lang: player.lang }}
+      player={{ firstName: player.firstName, lastName: player.lastName, email: player.email, lang: player.lang, avatarUrl: player.avatarUrl }}
       showInstallGuide={!player.installHintShown && !player.installedAt}
       badges={badges}
+      liveMatchId={liveMatchId}
     >
       {children}
     </ProfileShell>

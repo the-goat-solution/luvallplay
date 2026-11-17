@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import type { z } from "zod";
+import { smsVerifySchema } from "@/lib/auth-schemas";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 import { createPlayerSession, getPlayerFromRequest, safeNextPath } from "@/lib/player-auth";
 import { getPlayerByVerifiedPhone, markPhoneVerified } from "@/lib/player-db";
@@ -7,12 +8,7 @@ import { verifySmsCode } from "@/lib/sms";
 import { signPhoneProof } from "@/lib/phone-proof";
 import { setPlayerCookies } from "@/lib/player-cookies";
 
-const bodySchema = z.object({
-  sessionInfo: z.string().min(10).max(4000),
-  code: z.string().trim().min(6).max(12),
-  purpose: z.enum(["login", "phone_confirm"]).default("login"),
-  next: z.string().max(300).optional(),
-});
+const bodySchema = smsVerifySchema;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -23,7 +19,7 @@ export async function POST(request: Request) {
   try {
     body = bodySchema.parse(await request.json());
   } catch {
-    return NextResponse.json({ error: "invalid_code" }, { status: 400 });
+    return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
   const result = await verifySmsCode(body.sessionInfo, body.code);
   if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 400 });

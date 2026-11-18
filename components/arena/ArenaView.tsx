@@ -24,6 +24,7 @@ import type {
   PairView,
   PlayerChip,
 } from "@/lib/arena-state";
+import { MatchStatsModal } from "./MatchStatsModal";
 import { BonusIcon, RankIcon } from "./RankIcon";
 import s from "./arena.module.css";
 
@@ -437,7 +438,7 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
               {state.live.length === 0 ? (
                 <p className={s.empty}>{t("live_empty")}</p>
               ) : (
-                state.live.map((c) => <LiveCard key={c.id} c={c} />)
+                state.live.map((c) => <LiveCard key={c.id} c={c} signedIn={state.signedIn} />)
               )}
             </section>
             <section className={s.aOpen}>
@@ -466,7 +467,7 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
             </section>
             <section className={s.aFeed}>
               <h2 className={s.h2}>{t("feed")}</h2>
-              <Feed items={state.feed} lang={lang} />
+              <Feed items={state.feed} lang={lang} signedIn={state.signedIn} />
               {state.hot && (
                 <div className={s.fire}>
                   <BonusIcon kind="hot-streak" px={28} />
@@ -1032,7 +1033,7 @@ function CrownCard({ state }: { state: ArenaState }) {
   );
 }
 
-function LiveCard({ c }: { c: ChallengeView }) {
+function LiveCard({ c, signedIn }: { c: ChallengeView; signedIn: boolean }) {
   const { t } = useArenaT();
   const mins = c.checkedInAt
     ? Math.max(0, Math.round((Date.now() - Date.parse(c.checkedInAt)) / 60000))
@@ -1087,6 +1088,19 @@ function LiveCard({ c }: { c: ChallengeView }) {
           )}
         </div>
       </div>
+      {c.tracking ? (
+        <a className={`${s.statsLink} ${s.trackingLive}`} href={signedIn ? `/match-analyzer?challenge=${c.id}` : undefined}>
+          <span>
+            <i /> {t("wv_live")}
+          </span>
+          <small>{t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</small>
+        </a>
+      ) : signedIn ? (
+        <a className={s.statsLink} href={`/match-analyzer?challenge=${c.id}`}>
+          {t("rec_stats")}
+          <small>{t("rec_stats_hint")}</small>
+        </a>
+      ) : null}
     </article>
   );
 }
@@ -1300,6 +1314,9 @@ function MyChallenge({
               {t("score_wait", { n: minMinutes })}
             </span>
           )}
+          <a className={`${s.btn} ${s.btnGhost}`} href={`/match-analyzer?challenge=${c.id}`} style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+            {t("rec_stats")}
+          </a>
         </div>
       </>
     );
@@ -1381,8 +1398,9 @@ function MyChallenge({
   );
 }
 
-function Feed({ items, lang }: { items: FeedItem[]; lang: "en" | "vi" }) {
+function Feed({ items, lang, signedIn }: { items: FeedItem[]; lang: "en" | "vi"; signedIn: boolean }) {
   const { t } = useArenaT();
+  const [statsFor, setStatsFor] = useState<number | null>(null);
   if (!items.length) return <p className={s.empty}>{t("feed_empty")}</p>;
   const when = (iso: string) =>
     new Date(iso).toLocaleString(lang === "vi" ? "vi-VN" : "en-NZ", {
@@ -1417,6 +1435,11 @@ function Feed({ items, lang }: { items: FeedItem[]; lang: "en" | "vi" }) {
                   {t(`st_${st}` as ArenaKey)}
                 </span>
               ))}
+              {it.hasStats && signedIn && (
+                <button type="button" className={s.statsChip} onClick={() => setStatsFor(it.id)}>
+                  {t("stats_btn")}
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -1436,6 +1459,7 @@ function Feed({ items, lang }: { items: FeedItem[]; lang: "en" | "vi" }) {
           </div>
         ),
       )}
+      {statsFor !== null && <MatchStatsModal challengeId={statsFor} onClose={() => setStatsFor(null)} />}
     </div>
   );
 }

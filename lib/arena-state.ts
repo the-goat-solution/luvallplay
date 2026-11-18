@@ -44,9 +44,13 @@ export type ChallengeView = {
   h2h: { won: number; lost: number } | null;
   offer: { giantKiller: boolean; newRival: boolean; crown: boolean } | null;
   crownMatch: boolean;
+  /** Match Analyzer stats were saved for this game. */
+  hasStats: boolean;
+  /** A phone is tracking this game with Wolf Vision right now (only games where one was set up). */
+  tracking: { rallies: number; hits: number; quality: number } | null;
 };
 export type FeedItem =
-  | { kind: "result"; id: number; at: string; winners: PairView; losers: PairView; scoreW: number | null; scoreL: number | null; retired: boolean; stickers: string[] }
+  | { kind: "result"; id: number; at: string; winners: PairView; losers: PairView; scoreW: number | null; scoreL: number | null; retired: boolean; stickers: string[]; hasStats: boolean }
   | { kind: "rankup"; at: string; player: PlayerChip; rank: number };
 export type AfterGame = {
   challengeId: number;
@@ -140,6 +144,8 @@ export async function buildArenaState(viewer: { id: number } | null, opts: { max
       h2h: canCompare ? headToHead(world, myPair!.players, c.postingPlayers) : null,
       offer: canCompare ? { ...bonusesOnOffer(world, myPair!.players, c.postingPlayers), crown: c.postingPair === crownPairId } : null,
       crownMatch: crownPairId !== null && (c.postingPair === crownPairId || c.acceptingPair === crownPairId),
+      hasStats: world.statsFor.has(c.id),
+      tracking: world.trackingFor.get(c.id) ?? null,
     };
   };
 
@@ -176,7 +182,7 @@ export async function buildArenaState(viewer: { id: number } | null, opts: { max
     if (w.giantKiller) stickers.push("giant_killer");
     const crownEvent = world.crownEvents.get(c.id);
     if (crownEvent) stickers.push(`crown_${crownEvent}`);
-    feed.push({ kind: "result", id: c.id, at: c.completedAt!, winners, losers, scoreW, scoreL, retired: Boolean(c.retiredBy), stickers });
+    feed.push({ kind: "result", id: c.id, at: c.completedAt!, winners, losers, scoreW, scoreL, retired: Boolean(c.retiredBy), stickers, hasStats: world.statsFor.has(c.id) });
     for (const r of rs) if (r.rankAfter > r.rankBefore) feed.push({ kind: "rankup", at: c.completedAt!, player: chip(r.playerId), rank: r.rankAfter });
   }
   feed.sort((a, b) => b.at.localeCompare(a.at));

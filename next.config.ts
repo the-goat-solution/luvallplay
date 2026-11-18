@@ -8,6 +8,9 @@ applyDatabaseSwitch();
 // *.public.blob.vercel-storage.com, uploaded straight from the browser via
 // vercel.com/api/blob) and Google reCAPTCHA (required by Google before it
 // sends an SMS sign-in code; loaded only on pages that can send a text).
+// The Match Analyzer (/match-analyzer) plays a video picked from the device
+// (a blob: URL) and downloads its person-detection model from Google's
+// MediaPipe model storage; the WebAssembly runtime is served from /mediapipe.
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://challenges.cloudflare.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/",
@@ -15,7 +18,8 @@ const csp = [
   "img-src 'self' data: blob: https://cdn.sanity.io https://*.public.blob.vercel-storage.com",
   "font-src 'self'",
   "frame-src https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/",
-  "connect-src 'self' https://api.stripe.com https://*.sanity.io https://challenges.cloudflare.com https://vercel.com/api/blob https://*.blob.vercel-storage.com https://www.google.com/recaptcha/",
+  "media-src 'self' blob:",
+  "connect-src 'self' https://storage.googleapis.com https://api.stripe.com https://*.sanity.io https://challenges.cloudflare.com https://vercel.com/api/blob https://*.blob.vercel-storage.com https://www.google.com/recaptcha/",
   "worker-src 'self'",
   "manifest-src 'self'",
 ].join("; ");
@@ -44,8 +48,9 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            // camera=(self): "Take photo" on the Player tab opens the camera.
-            value: "camera=(self), microphone=(), geolocation=()",
+            // camera=(self): "Take photo" on the Player tab, and Wolf Vision (the Match
+            // Analyzer) filming a game. microphone=(self): Wolf Vision listens for racket impacts.
+            value: "camera=(self), microphone=(self), geolocation=()",
           },
           {
             key: "Strict-Transport-Security",

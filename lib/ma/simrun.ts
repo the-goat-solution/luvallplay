@@ -58,6 +58,8 @@ export type SimRunResult = {
   quality: number;
   breakdown: Record<Hit["status"], number>;
   distanceError: number;
+  /** Measured ÷ true distance, averaged over the players (1 = exact; above 1 = jitter counted as running). */
+  distanceRatio: number;
   frames: number;
 };
 
@@ -104,6 +106,7 @@ export function runSim(opts: SimOptions & { audio?: boolean }, seconds: number, 
     quality: fin.quality,
     breakdown: fin.breakdown,
     distanceError: distErr,
+    distanceRatio: fin.players.reduce((a, p, i) => a + p.distance / Math.max(1, truthDist[i]), 0) / 4,
     frames,
   };
 }

@@ -698,3 +698,181 @@
     border-radius: 0;
   }
 }
+
+/* ── Guided setup (3 steps, thumb-friendly) ─────────────────────────── */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--steel);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.stepper i {
+  width: 28px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.stepper i.stepOn {
+  background: var(--flood);
+}
+.stepper span:first-of-type {
+  margin-left: 6px;
+}
+.awakeOn,
+.awakeOff {
+  margin-left: auto;
+  font-size: 0.9rem;
+}
+.statusPill .awakeOn,
+.statusPill .awakeOff {
+  margin-left: 8px;
+}
+.awakeOn {
+  color: var(--flood);
+}
+.awakeOff {
+  color: var(--coral);
+}
+.viewTiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.viewTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  padding: 10px 6px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-height: 112px;
+  touch-action: manipulation;
+}
+.viewTile b {
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+.viewTile small {
+  font-size: 0.7rem;
+  color: var(--steel);
+  line-height: 1.2;
+}
+.viewTile[aria-checked="true"] {
+  border-color: var(--flood);
+  background: rgba(255, 213, 74, 0.12);
+  box-shadow: 0 0 0 1px var(--flood);
+}
+.more {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+.more summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--steel);
+  padding: 6px 0;
+}
+.stickyBar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 0 calc(4px + env(safe-area-inset-bottom));
+  margin-top: 8px;
+  background: linear-gradient(180deg, transparent, var(--night-2) 35%);
+}
+.stickyBar .btn {
+  min-width: 50%;
+}
+.lastCourt {
+  width: 100%;
+  margin: 8px 0 0;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--flood);
+  background: rgba(255, 213, 74, 0.12);
+  color: var(--flood);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.names {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.face {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  vertical-align: middle;
+}
+.price {
+  display: inline-block;
+  margin-top: 8px;
+  font-style: normal;
+  font-weight: 900;
+  color: var(--flood);
+}
+@media (max-width: 560px) {
+  .toolbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(8, 19, 31, 0.6), var(--night) 40%);
+  }
+  .toolbar .btn {
+    flex: 1 1 auto;
+  }
+  .stage canvas {
+    max-height: calc(100dvh - 230px);
+  }
+  .pickerOverlay {
+    height: min(40%, 220px);
+    min-height: 120px;
+  }
+}
+@media (max-width: 560px) {
+  /* Portrait phone: the diagram goes under the video (over it, it would hide the court). */
+  .pickerOverlay {
+    position: relative;
+    top: auto;
+    right: auto;
+    height: 150px;
+    min-height: 0;
+    margin: 0;
+    border: none;
+    border-top: 1px solid rgba(255, 213, 74, 0.3);
+    border-radius: 0;
+    display: flex;
+    justify-content: center;
+  }
+  .pickerShow {
+    top: 8px;
+    bottom: auto;
+  }
+  .banner {
+    top: 8px;
+    bottom: auto;
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+}

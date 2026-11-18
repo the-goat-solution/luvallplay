@@ -22,6 +22,7 @@ import { getStripe } from "@/lib/stripe";
 import { confirmAttendance, getStatsBackfillPreview, listMinigameNameMatches, listUnverifiedAttendance, removeAttendance, setMinigameName } from "@/lib/stats-db";
 import { recalculateAllPoints } from "@/lib/arena-db";
 import { listRecentFeedback } from "@/lib/membership-self-service";
+import { accessList, listRecentSessions, paywallOn, setAccess, wolfVisionPrices } from "@/lib/wolf-vision-db";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,18 @@ async function changeEmail(playerId: number, formData: FormData) {
   back("toast", `Email changed to ${result.newEmail} (site and Stripe).`);
 }
 
+async function wolfVisionAccess(formData: FormData) {
+  "use server";
+  const playerId = Number(formData.get("playerId"));
+  const on = formData.get("on") === "1";
+  if (!Number.isInteger(playerId) || playerId <= 0) back("toastError", "Choose a player.");
+  const p = await getPlayerById(playerId);
+  if (!p) back("toastError", "Player not found.");
+  await setAccess(playerId, on);
+  revalidatePath("/admin/players");
+  back("toast", on ? `Wolf Vision switched on for ${p.firstName} ${p.lastName}.` : `Wolf Vision switched off for ${p.firstName} ${p.lastName}.`);
+}
+
 async function backfillStats() {
   "use server";
   const r = await recalculateAllPoints();
@@ -128,7 +141,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
       </div>
     );
   }
-  const [players, candidates, welcomePending, sms, backfill, nameMatches, checkIns, feedback] = await Promise.all([
+  const [players, candidates, welcomePending, sms, backfill, nameMatches, checkIns, feedback, wvAccess, wvSessions] = await Promise.all([
     listPlayersForAdmin(q),
     showImport ? previewMemberImport() : Promise.resolve(null),
     countWelcomePending(),
@@ -137,6 +150,8 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     listMinigameNameMatches(),
     listUnverifiedAttendance(),
     listRecentFeedback(15),
+    accessList().catch(() => [] as number[]),
+    listRecentSessions(15).catch(() => []),
   ]);
   const allPlayers = q ? await listPlayersForAdmin() : players;
   const installed = allPlayers.filter((p) => p.installedAt).length;
@@ -204,6 +219,84 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
             </table>
           </div>
         )}
+      </section>
+
+      <section style={card} id="wolf-vision">
+        <h2 style={{ fontSize: 16, marginTop: 0 }}>Wolf Vision access</h2>
+        <p style={{ color: "#666", fontSize: 13 }}>
+          Players switched on here get <strong>Wolf Vision</strong> in their profile (Player tab) to film or upload any game, not just Arena challenges, and never
+          pay for it. Arena challenges stay open to every signed-in player. Pay per use is <strong>{paywallOn() ? "ON" : "off"}</strong> (set
+          WOLF_VISION_PAYWALL=1 to charge NZ${(wolfVisionPrices().upload / 100).toFixed(2)} per upload and NZ${(wolfVisionPrices().live / 100).toFixed(2)} per live
+          session; technical failures are refunded automatically). WOLF_VISION_OPEN=1 offers it in every profile.
+        </p>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {allPlayers
+            .filter((p) => wvAccess.includes(p.id))
+            .map((p) => (
+              <form key={p.id} action={wolfVisionAccess} style={{ display: "inline-flex" }}>
+                <input type="hidden" name="playerId" value={p.id} />
+                <input type="hidden" name="on" value="0" />
+                <span style={{ ...pill("#e9f6ee", "#1d6b3d"), display: "inline-flex", gap: 6, alignItems: "center" }}>
+                  {p.firstName} {p.lastName}
+                  <SubmitButton
+                    loadingText="…"
+                    style={{ border: "none", background: "none", cursor: "pointer", padding: 0, color: "#a12a2a" }}
+                    confirmMessage={`Switch Wolf Vision off for ${p.firstName}?`}
+                  >
+                    Remove
+                  </SubmitButton>
+                </span>
+              </form>
+            ))}
+          {wvAccess.length === 0 ? <span style={{ color: "#666", fontSize: 13 }}>Nobody yet.</span> : null}
+        </div>
+        <form action={wolfVisionAccess} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <input type="hidden" name="on" value="1" />
+          <select name="playerId" defaultValue="" style={input} aria-label="Player">
+            <option value="">— choose a player —</option>
+            {allPlayers
+              .filter((p) => !wvAccess.includes(p.id))
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.firstName} {p.lastName} ({p.email})
+                </option>
+              ))}
+          </select>
+          <SubmitButton loadingText="Saving…" style={btn}>
+            Switch on
+          </SubmitButton>
+        </form>
+        {wvSessions.length ? (
+          <div className={adminStyles.tableWrap} style={{ marginTop: 14 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #ddd" }}>
+                  <th style={th}>When</th>
+                  <th style={th}>Who</th>
+                  <th style={th}>Session</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {wvSessions.map((x) => (
+                  <tr key={x.id} style={{ borderBottom: "1px solid #eee" }}>
+                    <td style={td}>{formatNz(x.createdAt, true)}</td>
+                    <td style={td}>{x.owner}</td>
+                    <td style={td}>
+                      {x.kind === "arena" ? "Arena" : "Own game"} · {x.mode === "live" ? "live" : "upload"}
+                    </td>
+                    <td style={td}>
+                      {x.status === "review" ? <span style={pill("#fff4e5", "#8a4b00")}>Refund to review</span> : x.status}
+                      {x.failure ? <span style={{ color: "#666" }}> · {x.failure}</span> : null}
+                    </td>
+                    <td style={td}>{x.priceCents ? `NZ$${(x.priceCents / 100).toFixed(2)}${x.refunded ? " (refunded)" : ""}` : "free"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
 
       <section style={card}>

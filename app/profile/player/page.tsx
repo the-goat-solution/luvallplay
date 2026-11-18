@@ -7,6 +7,8 @@ import { RankCard } from "@/components/arena/RankCard";
 import { buildArenaState } from "@/lib/arena-state";
 import { PhotosPanel } from "@/components/profile/player/PhotosPanel";
 import { PT } from "@/components/profile/PT";
+import { WolfVisionCard } from "@/components/profile/player/WolfVisionCard";
+import { canUseFromProfile, listPlayerStats } from "@/lib/wolf-vision-db";
 import styles from "@/components/profile/profile.module.css";
 
 export default async function PlayerPage() {
@@ -15,13 +17,18 @@ export default async function PlayerPage() {
   // Connected apps (API tokens and webhooks, components/profile/player/
   // ConnectedApps.tsx) are hidden for now; the API itself still works.
   // The rank card is extra: if the Arena can't load, the rest of the tab still works.
-  const [stats, photos, arena] = await Promise.all([
+  const [stats, photos, arena, wvItems, wvAccess] = await Promise.all([
     getPlayerStats(player),
     listPhotosForPlayer(player.id),
     buildArenaState({ id: player.id }).catch((err) => {
       console.error("[arena] rank card failed:", err);
       return null;
     }),
+    listPlayerStats(player.id).catch((err) => {
+      console.error("[wolf-vision] stats failed:", err);
+      return [];
+    }),
+    canUseFromProfile(player).catch(() => false),
   ]);
 
   return (
@@ -31,6 +38,7 @@ export default async function PlayerPage() {
       </h1>
       <div className={styles.stack}>
         {arena?.me && <RankCard me={arena.me} />}
+        {wvAccess || wvItems.length ? <WolfVisionCard items={wvItems} canTrack={wvAccess} /> : null}
         <PlayerStatsView stats={stats} leaderboardVisible={player.leaderboardVisible} />
         <PhotosPanel photos={photos} playerId={player.id} uploadMode={publicBlobUploadMode()} />
       </div>

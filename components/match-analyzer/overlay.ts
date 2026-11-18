@@ -30,7 +30,12 @@ export type OverlayPlayer = {
   distance: number;
   topSpeed: number;
   speed: number;
+  /** Profile picture, when the player has one (drawn on the tag and card). */
+  face?: HTMLImageElement | null;
 };
+
+/** A starting position shown on the court before tracking (who stands where). */
+export type OverlaySlot = { at: Pt; name: string; color: string; face?: HTMLImageElement | null; selected?: boolean };
 
 export type OverlayState = {
   cam: CourtCamera | null;
@@ -45,6 +50,8 @@ export type OverlayState = {
   waiting: number;
   /** Corner taps while calibrating. */
   calibration?: { taps: Pt[]; selected?: number } | null;
+  /** "Who's where" markers on the court (players step). */
+  slots?: OverlaySlot[] | null;
   /** Untagged people (when the assistant is fixing identities). */
   untagged?: Box[];
   logo?: CanvasImageSource | null;
@@ -105,6 +112,10 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, vw: number, vh: numbe
   ctx.textBaseline = "alphabetic";
   if (st.cam && st.calibration) drawCourtLines(ctx, st.cam, u);
   if (st.calibration) drawTaps(ctx, st.calibration, u);
+  if (st.cam && st.slots) {
+    drawCourtLines(ctx, st.cam, u);
+    drawSlots(ctx, st.slots, u);
+  }
   if (st.cam && st.show.players) {
     drawRings(ctx, st, u);
     drawShuttle(ctx, st.shuttle, st.t, u);
@@ -202,7 +213,7 @@ function drawBrackets(ctx: CanvasRenderingContext2D, st: OverlayState, u: number
     const label = tagLabel(st, p);
     const tw = ctx.measureText(label).width;
     spaced(ctx, 0);
-    tags.push({ x: x + w / 2, y: Math.max(40 * u, y - 18 * u), w: tw + 76 * u, p, label });
+    tags.push({ x: x + w / 2, y: Math.max(40 * u, y - 18 * u), w: tw + 76 * u + (p.face ? 30 * u : 0), p, label });
   });
   // Stack tags that would overlap (partners side by side).
   tags.sort((a, b) => b.y - a.y);
@@ -229,10 +240,12 @@ function drawBrackets(ctx: CanvasRenderingContext2D, st: OverlayState, u: number
     ctx.strokeStyle = tg.p.color;
     ctx.lineWidth = 2 * u;
     ctx.stroke();
+    const faceW = tg.p.face ? 30 * u : 0;
+    if (tg.p.face) drawFace(ctx, tg.p.face, x0 + 26 * u, y - h / 2, 12 * u, tg.p.color);
     ctx.fillStyle = tg.p.color;
     ctx.font = f(800, 22 * u, SANS, true);
     spaced(ctx, 1.5 * u);
-    ctx.fillText(tg.label, x0 + 16 * u, y - 9 * u);
+    ctx.fillText(tg.label, x0 + 16 * u + faceW, y - 9 * u);
     spaced(ctx, 0);
     ctx.font = f(700, 15 * u);
     ctx.fillStyle = STEEL;
@@ -413,8 +426,10 @@ function drawCards(ctx: CanvasRenderingContext2D, players: OverlayPlayer[], x: n
     ctx.font = f(900, 26 * u, SANS, true);
     spaced(ctx, 1 * u);
     let name = upper(p.name);
-    while (ctx.measureText(name).width > cw * 0.42 && name.length > 3) name = name.slice(0, -1);
-    ctx.fillText(name, cx + 18 * u, cy + 34 * u);
+    const faceW = p.face ? 34 * u : 0;
+    if (p.face) drawFace(ctx, p.face, cx + 32 * u, cy + 26 * u, 13 * u, p.color);
+    while (ctx.measureText(name).width > cw * 0.42 - faceW && name.length > 3) name = name.slice(0, -1);
+    ctx.fillText(name, cx + 18 * u + faceW, cy + 34 * u);
     spaced(ctx, 0);
     // Stats on the right: hits and top speed.
     ctx.textAlign = "right";
@@ -590,6 +605,74 @@ function drawCourtLines(ctx: CanvasRenderingContext2D, cam: CourtCamera, u: numb
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/** A round profile picture with a coloured ring. */
+function drawFace(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, r: number, ring: string) {
+  if (!img.complete || !img.naturalWidth) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.save();
+  ctx.clip();
+  const k = Math.max((2 * r) / img.naturalWidth, (2 * r) / img.naturalHeight);
+  const w = img.naturalWidth * k, h = img.naturalHeight * k;
+  ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+  ctx.restore();
+  ctx.lineWidth = Math.max(1.5, r * 0.18);
+  ctx.strokeStyle = ring;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Starting positions: a ring on the floor, a pin and a name tag with the player's picture. */
+function drawSlots(ctx: CanvasRenderingContext2D, slots: OverlaySlot[], u: number) {
+  for (const sl of slots) {
+    const { x, y } = sl.at;
+    ctx.save();
+    ctx.strokeStyle = sl.color;
+    ctx.lineWidth = (sl.selected ? 6 : 4) * u;
+    ctx.shadowColor = sl.color;
+    ctx.shadowBlur = (sl.selected ? 22 : 10) * u;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 46 * u, 18 * u, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y - 70 * u);
+    ctx.stroke();
+    ctx.font = f(800, 26 * u, SANS, true);
+    const label = upper(sl.name.split(" ")[0]);
+    const tw = ctx.measureText(label).width;
+    const r = 22 * u;
+    const w = tw + 2 * r + 34 * u;
+    const h = 2 * r + 8 * u;
+    const x0 = x - w / 2, y0 = y - 70 * u - h;
+    rr(ctx, x0, y0, w, h, h / 2);
+    ctx.fillStyle = sl.selected ? sl.color : NIGHT;
+    ctx.fill();
+    ctx.lineWidth = 3 * u;
+    ctx.stroke();
+    const fx = x0 + 4 * u + r, fy = y0 + h / 2;
+    if (sl.face && sl.face.complete && sl.face.naturalWidth) drawFace(ctx, sl.face, fx, fy, r, sl.selected ? NIGHT : sl.color);
+    else {
+      ctx.beginPath();
+      ctx.arc(fx, fy, r, 0, Math.PI * 2);
+      ctx.fillStyle = sl.color;
+      ctx.fill();
+      ctx.fillStyle = NIGHT;
+      ctx.font = f(900, 22 * u);
+      ctx.textAlign = "center";
+      ctx.fillText(upper(sl.name.trim()[0] ?? "?"), fx, fy + 8 * u);
+      ctx.textAlign = "left";
+    }
+    ctx.fillStyle = sl.selected ? NIGHT : "#fff";
+    ctx.font = f(800, 26 * u, SANS, true);
+    ctx.fillText(label, fx + r + 12 * u, fy + 9 * u);
+    ctx.restore();
+  }
 }
 
 function drawTaps(ctx: CanvasRenderingContext2D, cal: NonNullable<OverlayState["calibration"]>, u: number) {

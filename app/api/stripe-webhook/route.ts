@@ -1,3 +1,4 @@
+import { markPaidFromWebhook } from "@/lib/wolf-vision-db";
 import { getOrder, markOrderPaidByCard } from "@/lib/shop-db";
 import { notifyOrderPlaced, notifyOversold } from "@/lib/shop-notify";
 import { syncPlanFromSubscriptionMetadata } from "@/lib/membership-self-service";
@@ -63,6 +64,9 @@ export async function POST(request: Request) {
 
   if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object as Stripe.PaymentIntent;
+    if (pi.metadata?.type === "wolf_vision" && pi.metadata.sessionId && process.env.POSTGRES_URL) {
+      await markPaidFromWebhook(Number(pi.metadata.sessionId), pi.id).catch((err) => console.error("[stripe-webhook] wolf vision:", err));
+    }
     if (pi.metadata?.type === "casual" && pi.metadata.sessionDate) {
       if (process.env.POSTGRES_URL) {
         await ensureTables();

@@ -11,7 +11,7 @@
 // produced from the true bodies with jitter, dropouts and merges instead.
 
 import { COURT, courtLandmarks, solveHomography, invertMat3, type Box, type CourtTap, type Detection, type Pt } from "../match-analyzer.ts";
-import { distort, makeLens, type CourtCamera, type LensPreset } from "./lens.ts";
+import { distort, makeLens, undistort, type CourtCamera, type LensPreset } from "./lens.ts";
 import type { Onset } from "./audio.ts";
 
 export type SimOptions = {
@@ -33,7 +33,38 @@ export type SimOptions = {
   detectorMiss?: number;
   /** False impact sounds per second (neighbouring courts). */
   crowdNoise?: number;
+  /** Long detector dropouts per player per minute (1–4 s each: a far player under the score cut, hidden by a partner). */
+  dropouts?: number;
+  /** Where the phone stands (see CAMERA_VIEWS). Default: behind the near baseline. */
+  view?: CameraView;
+  /** Exact camera position and aim point (court metres), overriding `view`. */
+  camPos?: [number, number, number];
+  camTarget?: [number, number, number];
 };
+
+/** Phone positions the engine must cope with (tripod, fence, chair, balcony). */
+export type CameraView = "baseline" | "low" | "balcony" | "offcentre" | "side" | "corner";
+export const CAMERA_VIEWS: CameraView[] = ["baseline", "low", "balcony", "offcentre", "side", "corner"];
+
+/** Camera position and aim point per view and lens (1×: 69° wide, 0.5×: 108°), all keeping the whole court in shot. */
+export function cameraPlacement(view: CameraView, lens: LensPreset): { pos: [number, number, number]; target: [number, number, number] } {
+  const u = lens === "ultrawide";
+  const centre: [number, number, number] = [3.05, 6.7, 0.3];
+  switch (view) {
+    case "low":
+      return u ? { pos: [3.05, -2.8, 1.25], target: [3.05, 6.7, 0.6] } : { pos: [3.05, -6.8, 1.3], target: [3.05, 6.7, 0.6] };
+    case "balcony":
+      return u ? { pos: [3.05, -2.5, 6.5], target: [3.05, 5.6, 0] } : { pos: [3.05, -5.5, 7.5], target: [3.05, 5.4, 0] };
+    case "offcentre":
+      return u ? { pos: [-0.6, -2.6, 2.6], target: [3.4, 6.4, 0.2] } : { pos: [-1.2, -5.6, 3.0], target: [3.3, 6.4, 0.2] };
+    case "side":
+      return u ? { pos: [-4.3, 6.7, 2.6], target: centre } : { pos: [-10, 6.7, 3.6], target: centre };
+    case "corner":
+      return u ? { pos: [-2.4, -2.8, 2.8], target: centre } : { pos: [-5.2, -5.6, 3.6], target: centre };
+    default:
+      return u ? { pos: [3.05, -2.6, 2.6], target: [3.05, 6.2, 0.2] } : { pos: [3.05, -5.6, 3.0], target: [3.05, 6.2, 0.2] };
+  }
+}
 
 export type SimTruth = { players: Pt[]; shuttle: [number, number, number] | null; rallyLive: boolean };
 export type SimFrame = { t: number; rgba: Uint8ClampedArray; persons: Detection[]; onsets: Onset[]; truth: SimTruth };
@@ -124,7 +155,7 @@ export class MatchSim {
   readonly W: number;
   readonly H: number;
   readonly fps: number;
-  readonly opts: Required<Omit<SimOptions, "seed" | "w" | "h" | "fps" | "lens">> & { lens: LensPreset };
+  readonly opts: Required<Omit<SimOptions, "seed" | "w" | "h" | "fps" | "lens" | "view" | "camPos" | "camTarget">> & { lens: LensPreset; view: CameraView };
   /** The true court camera (for tests that skip tapping). */
   readonly cam: CourtCamera;
   readonly players: SimPlayer[];
@@ -152,6 +183,7 @@ export class MatchSim {
   private pendingHit: { t: number; player: number; at: V3 } | null = null;
   private lastHitter = -1;
   private onsetQueue: Onset[] = [];
+  private dropUntil = [0, 0, 0, 0];
   private spectators: { pos: Pt; color: Rgb; seated: boolean; walk?: { from: Pt; to: Pt; speed: number } }[] = [];
 
   constructor(o: SimOptions) {
@@ -167,12 +199,15 @@ export class MatchSim {
       sameShorts: o.sameShorts ?? false,
       detectorMiss: o.detectorMiss ?? 0.04,
       crowdNoise: o.crowdNoise ?? 0.3,
+      dropouts: o.dropouts ?? 0,
+      view: o.view ?? "baseline",
     };
     this.rand = mulberry32(o.seed ?? 7);
-    // Camera: behind the near baseline, raised, like a phone on a tripod or fence.
+    // Camera: a phone on a tripod, fence, chair or balcony (default: behind the near baseline).
     const ultra = this.opts.lens === "ultrawide";
-    this.C = ultra ? [3.05, -2.6, 2.6] : [3.05, -5.6, 3.0];
-    const target: V3 = [3.05, 6.2, 0.2];
+    const place = cameraPlacement(this.opts.view, this.opts.lens);
+    this.C = o.camPos ?? place.pos;
+    const target: V3 = o.camTarget ?? place.target;
     const hfov = ((ultra ? 108 : 69) * Math.PI) / 180;
     this.F = norm(sub(target, this.C));
     this.R = norm(cross(this.F, [0, 0, 1]));
@@ -339,15 +374,34 @@ export class MatchSim {
     this.fillPoly(buf, out, c, alpha);
   }
 
+  /** Unit vector across a person as the camera sees them (their billboard's width direction, on the floor). */
+  private across(pos: Pt): [number, number] {
+    const dx = pos.x - this.C[0], dy = pos.y - this.C[1];
+    const l = Math.hypot(dx, dy) || 1;
+    return [dy / l, -dx / l];
+  }
+
   private renderStatic() {
     const b = this.staticLayer;
-    // Walls: blue with a lighter band, like a sports hall.
+    // Each pixel's ray: the hall floor where it meets it, walls (blue with a lighter band) elsewhere.
     for (let y = 0; y < this.H; y++) {
-      const f = y / this.H;
-      const c: Rgb = [40 + 60 * f, 90 + 60 * f, 150 + 50 * f];
-      for (let x = 0; x < this.W; x++) this.put(b, x, y, c, 1);
+      for (let x = 0; x < this.W; x++) {
+        const u = undistort(this.lensL, { x, y });
+        const a = (u.x - this.W / 2) / this.fpx, c = -(u.y - this.H / 2) / this.fpx;
+        const d: V3 = [this.F[0] + a * this.R[0] + c * this.U[0], this.F[1] + a * this.R[1] + c * this.U[1], this.F[2] + a * this.R[2] + c * this.U[2]];
+        let col: Rgb | null = null;
+        if (d[2] < -1e-6) {
+          const k = -this.C[2] / d[2];
+          const gx = this.C[0] + d[0] * k, gy = this.C[1] + d[1] * k;
+          if (gx > -12 && gx < 18 && gy > -12 && gy < 22) col = [38, 105, 82];
+        }
+        if (!col) {
+          const f = y / this.H;
+          col = [40 + 60 * f, 90 + 60 * f, 150 + 50 * f];
+        }
+        this.put(b, x, y, col, 1);
+      }
     }
-    this.quad3(b, [[-8, this.C[1] + 0.5, 0], [14, this.C[1] + 0.5, 0], [14, 17, 0], [-8, 17, 0]], [38, 105, 82], 1, false, 12);
     this.quad3(b, [[0, 0, 0], [COURT.width, 0, 0], [COURT.width, COURT.length, 0], [0, COURT.length, 0]], [44, 128, 98], 1, false, 16);
     const lines: [Pt, Pt][] = [];
     const { width: W, length: L, net, singlesInset: si, shortService: ss, longServiceDoubles: ld } = COURT;
@@ -370,26 +424,30 @@ export class MatchSim {
   }
 
   private drawPerson(buf: Uint8ClampedArray, pos: Pt, height: number, shirt: Rgb, shorts: Rgb, skin: Rgb, hair: Rgb, shoes: Rgb, racket: { head: V3; hand: V3 } | null, shake = true) {
-    const x = pos.x, y = pos.y, H = height;
+    const H = height;
+    // Drawn as a billboard facing the camera: a = across (as seen), b = towards the camera.
+    const [ax, ay] = this.across(pos);
+    const bx = -ay, by = ax;
+    const P = (a: number, z: number, b = 0): V3 => [pos.x + ax * a - bx * b, pos.y + ay * a - by * b, z];
     const lat = 0.13;
     // Legs and shoes.
     for (const s of [-1, 1]) {
-      this.seg3(buf, [x + s * lat, y, 0.08], [x + s * 0.09, y, H * 0.5], 0.13, skin, 1, shake);
-      this.seg3(buf, [x + s * lat - 0.03, y, 0.03], [x + s * lat + 0.05, y - 0.04, 0.03], 0.11, shoes, 1, shake);
+      this.seg3(buf, P(s * lat, 0.08), P(s * 0.09, H * 0.5), 0.13, skin, 1, shake);
+      this.seg3(buf, P(s * lat - 0.03, 0.03), P(s * lat + 0.05, 0.03, 0.04), 0.11, shoes, 1, shake);
     }
     // Shorts, shirt, head.
-    this.quad3(buf, [[x - 0.19, y, H * 0.44], [x + 0.19, y, H * 0.44], [x + 0.2, y, H * 0.57], [x - 0.2, y, H * 0.57]], shorts, 1, shake);
-    this.quad3(buf, [[x - 0.21, y, H * 0.55], [x + 0.21, y, H * 0.55], [x + 0.24, y, H * 0.82], [x - 0.24, y, H * 0.82]], shirt, 1, shake);
-    const head = this.project([x, y, H * 0.91], shake);
+    this.quad3(buf, [P(-0.19, H * 0.44), P(0.19, H * 0.44), P(0.2, H * 0.57), P(-0.2, H * 0.57)], shorts, 1, shake);
+    this.quad3(buf, [P(-0.21, H * 0.55), P(0.21, H * 0.55), P(0.24, H * 0.82), P(-0.24, H * 0.82)], shirt, 1, shake);
+    const head = this.project(P(0, H * 0.91), shake);
     if (head) {
-      const r = (0.105 * this.fpx) / this.depth([x, y, H * 0.91]);
+      const r = (0.105 * this.fpx) / this.depth(P(0, H * 0.91));
       this.disc(buf, head, r, skin, 1);
       this.disc(buf, { x: head.x, y: head.y - r * 0.35 }, r * 0.8, hair, 1);
     }
-    // Non-racket arm resting, racket arm to the hand, then the racket.
-    this.seg3(buf, [x - 0.23, y, H * 0.8], [x - 0.3, y - 0.05, H * 0.55], 0.08, skin, 1, shake);
+    // Non-racket arm resting, racket arm (from the right shoulder in court space) to the hand, then the racket.
+    this.seg3(buf, P(-0.23, H * 0.8), P(-0.3, H * 0.55, 0.05), 0.08, skin, 1, shake);
     if (racket) {
-      this.seg3(buf, [x + 0.23, y, H * 0.8], racket.hand, 0.08, skin, 1, shake);
+      this.seg3(buf, [pos.x + 0.23, pos.y, H * 0.8], racket.hand, 0.08, skin, 1, shake);
       this.seg3(buf, racket.hand, racket.head, 0.025, [60, 60, 60], 1, shake);
       const hp = this.project(racket.head, shake);
       if (hp) this.disc(buf, hp, (0.11 * this.fpx) / this.depth(racket.head), [210, 210, 210], 0.85);
@@ -622,8 +680,9 @@ export class MatchSim {
       }
     }
     for (const s of this.spectators.filter((x) => !x.seated)) this.drawPerson(b, s.pos, 1.7, s.color, [40, 40, 40], [200, 160, 130], [20, 20, 20], [50, 50, 50], null);
-    // Players far to near (painter's order).
-    const order = this.players.map((p, i) => ({ p, i })).sort((a, c) => c.p.pos.y - a.p.pos.y);
+    // Players far to near (painter's order, by distance from the camera).
+    const dist = (q: Pt) => Math.hypot(q.x - this.C[0], q.y - this.C[1]);
+    const order = this.players.map((p, i) => ({ p, i })).sort((a, c) => dist(c.p.pos) - dist(a.p.pos));
     const drawShuttle = () => {
       if (!this.shuttle) {
         this.prevShuttleImg = null;
@@ -638,7 +697,7 @@ export class MatchSim {
     };
     let shuttleDrawn = false;
     for (const { p } of order) {
-      if (!shuttleDrawn && this.shuttle && this.shuttle.p[1] > p.pos.y) {
+      if (!shuttleDrawn && this.shuttle && dist({ x: this.shuttle.p[0], y: this.shuttle.p[1] }) > dist(p.pos)) {
         drawShuttle();
         shuttleDrawn = true;
       }
@@ -665,7 +724,9 @@ export class MatchSim {
     const out: Detection[] = [];
     const boxes = this.players.map((p) => {
       const pts: Pt[] = [];
-      for (const P of [[p.pos.x - 0.25, p.pos.y, 0], [p.pos.x + 0.25, p.pos.y, 0], [p.pos.x, p.pos.y, p.height + 0.03], [p.pos.x - 0.3, p.pos.y, p.height * 0.8], [p.pos.x + 0.3, p.pos.y, p.height * 0.8]] as V3[]) {
+      const [ax, ay] = this.across(p.pos);
+      const at = (a: number, z: number): V3 => [p.pos.x + ax * a, p.pos.y + ay * a, z];
+      for (const P of [at(-0.25, 0), at(0.25, 0), at(0, p.height + 0.03), at(-0.3, p.height * 0.8), at(0.3, p.height * 0.8), [p.pos.x + 0.23, p.pos.y, p.height * 0.8]] as V3[]) {
         const q = this.project(P);
         if (q) pts.push(q);
       }
@@ -681,6 +742,8 @@ export class MatchSim {
       if (used.has(i)) return;
       const p = this.players[i];
       const miss = this.opts.detectorMiss + (1 - this.opts.light) * 0.12;
+      if (this.opts.dropouts > 0 && this.t >= this.dropUntil[i] && r() < (this.opts.dropouts / 60) * (2 / this.fps)) this.dropUntil[i] = this.t + 1 + r() * 3;
+      if (this.t < this.dropUntil[i]) return;
       if (r() < miss) return;
       // Two partners overlapping heavily are sometimes reported as one person.
       for (let j = i + 1; j < boxes.length; j++) {
@@ -710,8 +773,9 @@ export class MatchSim {
     // Spectators get detected too (off court: the engine has to ignore them).
     for (const s of this.spectators) {
       if (r() < 0.3) continue;
-      const a = this.project([s.pos.x - 0.25, s.pos.y, 0]);
-      const c = this.project([s.pos.x + 0.25, s.pos.y, s.seated ? 1.2 : 1.7]);
+      const [ax, ay] = this.across(s.pos);
+      const a = this.project([s.pos.x - 0.25 * ax, s.pos.y - 0.25 * ay, 0]);
+      const c = this.project([s.pos.x + 0.25 * ax, s.pos.y + 0.25 * ay, s.seated ? 1.2 : 1.7]);
       if (!a || !c) continue;
       out.push({ box: [Math.min(a.x, c.x), Math.min(a.y, c.y), Math.abs(c.x - a.x), Math.abs(c.y - a.y)], score: 0.3 + r() * 0.2 });
     }

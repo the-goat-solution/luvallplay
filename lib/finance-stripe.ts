@@ -98,6 +98,9 @@ function describeFromMetadata(
   if (meta.type === "shop") {
     return { name: meta.items ? `Shop — ${meta.items}` : "Shop order", category: "merchandise" };
   }
+  if (meta.type === "wolf_vision") {
+    return { name: meta.mode === "live" ? "Wolf Vision — live session" : "Wolf Vision — video analysis", category: "other_income" };
+  }
   if (meta.type === "donation") {
     return { name: subscription ? "Monthly donation" : "Donation", category: "donation" };
   }

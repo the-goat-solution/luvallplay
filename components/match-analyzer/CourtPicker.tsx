@@ -2,13 +2,38 @@
 
 import { COURT, courtLandmarks, courtLines, landmarkId, type CourtTap, type Pt } from "@/lib/match-analyzer";
 
-/** The four outer corners, asked for first: near baseline left, right, then far right, far left. */
-export const DEFAULT_CORNERS: Pt[] = [
-  { x: 0, y: 0 },
-  { x: COURT.width, y: 0 },
-  { x: COURT.width, y: COURT.length },
-  { x: 0, y: COURT.length },
-];
+/** Where the phone stands. The court is symmetric, so each view just fixes which corner is called what. */
+export type CourtView = "baseline" | "side" | "corner";
+
+const W_ = COURT.width, L_ = COURT.length;
+/**
+ * The four outer corners in the order they are asked for, as the phone sees
+ * them: behind a baseline — near-left, near-right, far-right, far-left; from
+ * the side — near-left, near-right, far-right, far-left (near = the sideline
+ * by the phone); from a corner — the nearest, then right, farthest, left.
+ */
+export const CORNERS: Record<CourtView, Pt[]> = {
+  baseline: [{ x: 0, y: 0 }, { x: W_, y: 0 }, { x: W_, y: L_ }, { x: 0, y: L_ }],
+  side: [{ x: 0, y: L_ }, { x: 0, y: 0 }, { x: W_, y: 0 }, { x: W_, y: L_ }],
+  corner: [{ x: 0, y: 0 }, { x: W_, y: 0 }, { x: W_, y: L_ }, { x: 0, y: L_ }],
+};
+/** Behind-the-baseline corners (the old default). */
+export const DEFAULT_CORNERS: Pt[] = CORNERS.baseline;
+
+const CORNER_WORDS: Record<CourtView, { en: string[]; vi: string[] }> = {
+  baseline: {
+    en: ["near-left corner", "near-right corner", "far-right corner", "far-left corner"],
+    vi: ["góc gần bên trái", "góc gần bên phải", "góc xa bên phải", "góc xa bên trái"],
+  },
+  side: {
+    en: ["near-left corner", "near-right corner", "far-right corner", "far-left corner"],
+    vi: ["góc gần bên trái", "góc gần bên phải", "góc xa bên phải", "góc xa bên trái"],
+  },
+  corner: {
+    en: ["nearest corner", "corner on the right", "farthest corner", "corner on the left"],
+    vi: ["góc gần nhất", "góc bên phải", "góc xa nhất", "góc bên trái"],
+  },
+};
 
 const X_NAMES = {
   en: ["left sideline", "left singles sideline", "centre line", "right singles sideline", "right sideline"],
@@ -22,7 +47,10 @@ const XS = [0, COURT.singlesInset, COURT.width / 2, COURT.width - COURT.singlesI
 const YS = [0, COURT.longServiceDoubles, COURT.net - COURT.shortService, COURT.net, COURT.net + COURT.shortService, COURT.length - COURT.longServiceDoubles, COURT.length];
 
 /** Plain words for a court point, used in the "tap the …" prompt. */
-export function describePoint(p: Pt, lang: "en" | "vi"): string {
+export function describePoint(p: Pt, lang: "en" | "vi", view: CourtView = "baseline"): string {
+  const ci = CORNERS[view].findIndex((c) => Math.abs(c.x - p.x) < 0.01 && Math.abs(c.y - p.y) < 0.01);
+  if (ci >= 0) return CORNER_WORDS[view][lang][ci] + (lang === "vi" ? " (ngoài cùng)" : " (outer lines)");
+  if (view !== "baseline") return lang === "vi" ? "điểm nhấp nháy trên sơ đồ" : "point flashing on the diagram";
   const xi = XS.findIndex((x) => Math.abs(x - p.x) < 0.01);
   const yi = YS.findIndex((y) => Math.abs(y - p.y) < 0.01);
   if (xi < 0 || yi < 0) return lang === "vi" ? "điểm đã chọn" : "chosen point";
@@ -42,25 +70,52 @@ export function describePoint(p: Pt, lang: "en" | "vi"): string {
  * placed, highlights the one the next video tap will set, and lets the
  * assistant choose any visible line crossing instead.
  */
-export function CourtPicker({ taps, target, onPick, compact = false }: { taps: CourtTap[]; target: Pt | null; onPick: (p: Pt) => void; compact?: boolean }) {
+export function CourtPicker({
+  taps,
+  target,
+  onPick,
+  compact = false,
+  view = "baseline",
+}: {
+  taps: CourtTap[];
+  target: Pt | null;
+  onPick: (p: Pt) => void;
+  compact?: boolean;
+  view?: CourtView;
+}) {
   const pad = 0.9;
-  const W = COURT.width + pad * 2;
-  const L = COURT.length + pad * 2;
-  // Court y runs away from the camera, so it is drawn upwards.
-  const sx = (x: number) => x + pad;
-  const sy = (y: number) => COURT.length - y + pad;
+  // Drawn as the phone sees it, phone at the bottom. Behind a baseline: court y
+  // runs up the screen. From the side: the near sideline (x = 0) is at the
+  // bottom and y runs right to left. From a corner: the baseline drawing turned
+  // 45° so the nearest corner points down.
+  const side = view === "side";
+  const W = (side ? COURT.length : COURT.width) + pad * 2;
+  const L = (side ? COURT.width : COURT.length) + pad * 2;
+  const tx = (p: Pt) => (side ? COURT.length - p.y + pad : p.x + pad);
+  const ty = (p: Pt) => (side ? COURT.width - p.x + pad : COURT.length - p.y + pad);
+  const sx = (x: number, y = 0) => tx({ x, y });
+  const sy = (y: number, x = 0) => ty({ x, y });
+  const D = Math.hypot(W, L);
+  const rot = view === "corner" ? -45 : 0;
+  const box = view === "corner" ? { x: W / 2 - D / 2, y: L / 2 - D / 2, w: D, h: D } : { x: 0, y: 0, w: W, h: L };
   const placed = new Map(taps.map((t, i) => [landmarkId(t.court), i + 1]));
   const targetId = target ? landmarkId(target) : null;
   return (
-    <svg viewBox={`0 0 ${W} ${L + 0.8}`} style={compact ? { height: "100%", width: "auto", display: "block" } : { height: 300, width: "auto", maxWidth: "100%", display: "block", margin: "0 auto" }} role="group" aria-label="Court points">
-      <rect x={sx(0)} y={sy(COURT.length)} width={COURT.width} height={COURT.length} fill="#14532d" opacity={0.55} />
+    <svg
+      viewBox={`${box.x} ${box.y} ${box.w} ${box.h + 0.8}`}
+      style={compact ? { height: "100%", width: "auto", maxWidth: "100%", display: "block" } : { height: 300, width: "auto", maxWidth: "100%", display: "block", margin: "0 auto" }}
+      role="group"
+      aria-label="Court points"
+    >
+      <g transform={`rotate(${rot} ${W / 2} ${L / 2})`}>
+      <rect x={pad} y={pad} width={W - 2 * pad} height={L - 2 * pad} fill="#14532d" opacity={0.55} />
       {courtLines().map((seg, i) => (
         <line
           key={i}
-          x1={sx(seg.a.x)}
-          y1={sy(seg.a.y)}
-          x2={sx(seg.b.x)}
-          y2={sy(seg.b.y)}
+          x1={sx(seg.a.x, seg.a.y)}
+          y1={sy(seg.a.y, seg.a.x)}
+          x2={sx(seg.b.x, seg.b.y)}
+          y2={sy(seg.b.y, seg.b.x)}
           stroke={seg.dashed ? "#e2e8f0" : "#f8fafc"}
           strokeWidth={seg.dashed ? 0.06 : 0.05}
           strokeDasharray={seg.dashed ? "0.25 0.18" : undefined}
@@ -71,10 +126,10 @@ export function CourtPicker({ taps, target, onPick, compact = false }: { taps: C
         const isTarget = lm.id === targetId;
         return (
           <g key={lm.id} onClick={() => onPick(lm.p)} style={{ cursor: "pointer" }} data-testid={`lm-${lm.id}`}>
-            <circle cx={sx(lm.p.x)} cy={sy(lm.p.y)} r={0.42} fill="transparent" />
+            <circle cx={sx(lm.p.x, lm.p.y)} cy={sy(lm.p.y, lm.p.x)} r={0.42} fill="transparent" />
             <circle
-              cx={sx(lm.p.x)}
-              cy={sy(lm.p.y)}
+              cx={sx(lm.p.x, lm.p.y)}
+              cy={sy(lm.p.y, lm.p.x)}
               r={isTarget ? 0.3 : n ? 0.27 : 0.16}
               fill={isTarget ? "#facc15" : n ? "#0e2c3f" : "#94a3b8"}
               stroke={isTarget || n ? "#facc15" : "none"}
@@ -83,14 +138,15 @@ export function CourtPicker({ taps, target, onPick, compact = false }: { taps: C
               {isTarget ? <animate attributeName="r" values="0.24;0.36;0.24" dur="1.2s" repeatCount="indefinite" /> : null}
             </circle>
             {n ? (
-              <text x={sx(lm.p.x)} y={sy(lm.p.y) + 0.11} fontSize={0.32} textAnchor="middle" fill="#fff" fontWeight={800} pointerEvents="none">
+              <text x={sx(lm.p.x, lm.p.y)} y={sy(lm.p.y, lm.p.x) + 0.11} fontSize={0.32} textAnchor="middle" fill="#fff" fontWeight={800} pointerEvents="none">
                 {n}
               </text>
             ) : null}
           </g>
         );
       })}
-      <text x={W / 2} y={L + 0.55} fontSize={0.42} textAnchor="middle" fill="#b4ccd9">
+      </g>
+      <text x={box.x + box.w / 2} y={box.y + box.h + 0.55} fontSize={0.42 * (box.w / W)} textAnchor="middle" fill="#b4ccd9">
         📷
       </text>
     </svg>

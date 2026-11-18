@@ -23,7 +23,7 @@ import type { AchievementKey, Seat } from "./ranks";
 // One JSON snapshot of the Arena for a viewer (signed in or not). The page
 // renders it on the server, then polls /api/arena for fresh copies.
 
-export type PlayerChip = { id: number; name: string; initials: string; rank: number; seat: Seat | null; tarnishing: boolean };
+export type PlayerChip = { id: number; name: string; initials: string; rank: number; seat: Seat | null; tarnishing: boolean; /** Profile picture (never for hidden players). */ avatarUrl: string | null };
 export type PairView = { id: number; name: string | null; players: [PlayerChip, PlayerChip]; avgRank: number };
 export type ChallengeView = {
   id: number;
@@ -106,6 +106,7 @@ export async function buildArenaState(viewer: { id: number } | null, opts: { max
       id,
       name: hidden || !p ? "Wolf" : p.name,
       initials: hidden || !p ? "W" : p.initials,
+      avatarUrl: hidden || !p ? null : p.avatarUrl ?? null,
       rank: r?.shown ?? 0,
       seat: r?.seat ?? null,
       tarnishing: r?.tarnishing ?? false,

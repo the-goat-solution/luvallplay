@@ -27,7 +27,7 @@ export function MatchStatsModal({ challengeId, onClose }: { challengeId: number;
   }, [challengeId]);
 
   const stats = data?.stats;
-  const names = data ? data.setup.teams.flatMap((tm) => tm.players.map((p) => p.name)) : [];
+  const people = data ? data.setup.teams.flatMap((tm) => tm.players) : [];
   // Rendered on <body>: inside the Arena the profile's bottom bar would sit on top of it.
   if (typeof document === "undefined") return null;
   return createPortal(
@@ -66,8 +66,12 @@ export function MatchStatsModal({ challengeId, onClose }: { challengeId: number;
                 <tr key={p.playerId}>
                   <td>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <i style={{ width: 10, height: 10, borderRadius: "50%", background: COLORS[i], display: "inline-block" }} />
-                      {names[i] ?? "Wolf"}
+                      {people[i]?.avatarUrl ? (
+                        <img src={people[i].avatarUrl!} alt="" style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover", boxShadow: `0 0 0 2px ${COLORS[i]}` }} />
+                      ) : (
+                        <i style={{ width: 10, height: 10, borderRadius: "50%", background: COLORS[i], display: "inline-block" }} />
+                      )}
+                      {people[i]?.name ?? "Wolf"}
                     </span>
                   </td>
                   <td>{p.hits}</td>

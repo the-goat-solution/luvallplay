@@ -79,6 +79,8 @@ export type EngineView = {
 type SwingState = { hist: { t: number; e: number }[]; peak: { t: number; z: number } | null; lastT: number; events: { t: number; s: number }[] };
 
 const RALLY_GAP = 3.5;
+/** Shortest gap between analysed frames (s): ~30 fps analysis whatever the camera rate. */
+const MIN_FRAME_GAP = 0.026;
 
 export class MatchEngine {
   readonly identity: IdentityTracker;
@@ -119,16 +121,24 @@ export class MatchEngine {
     this.audioOn = opts.audioOn ?? true;
     this.cam3 = cameraFromHomography(opts.cam.toImage, opts.videoW, opts.videoH, opts.hfov ?? HFOV_PRIOR[opts.lens ?? "wide"]);
     this.identity = new IdentityTracker(this.slots);
-    this.identity.centreX = (p) => courtToImage(this.cam, { x: COURT.width / 2, y: p.y }).x;
     this.shuttle = new ShuttleTracker({ width: this.W });
     this.swings = this.slots.map(() => ({ hist: [], peak: null, lastT: -Infinity, events: [] }));
     this.boxHist = this.slots.map(() => []);
     this.raw = this.slots.map(() => []);
     this.trackers = this.slots.map(() => new MotionTracker());
     this.quality.court = courtFactor((opts.cam.rms * 1920) / opts.videoW, opts.courtPoints ?? 4);
-    // A 7 cm shuttle at the far baseline, in a 480-wide analysis frame.
-    const far = courtToImage(this.cam, { x: 3.05, y: 13.4 });
-    const mpp = metresPerPixel(this.cam, far);
+    // A 7 cm shuttle at the court's farthest point from the camera (whichever
+    // corner or baseline that is), in a 480-wide analysis frame.
+    const mpp = Math.max(
+      ...[
+        { x: 0, y: 0 },
+        { x: COURT.width, y: 0 },
+        { x: COURT.width, y: COURT.length },
+        { x: 0, y: COURT.length },
+        { x: COURT.width / 2, y: 0 },
+        { x: COURT.width / 2, y: COURT.length },
+      ].map((c) => metresPerPixel(this.cam, courtToImage(this.cam, c))),
+    );
     this.quality.resolution = resolutionFactor((0.07 / Math.max(1e-6, mpp)) * (480 / this.W));
   }
 
@@ -144,6 +154,26 @@ export class MatchEngine {
   process(f: EngineFrame) {
     if (this.startT === null) this.startT = f.t;
     this.lastT = f.t;
+    // The motion detectors (shuttle, swings) are tuned for ~30 frames a second:
+    // at 60 fps a shuttle moves half as far between frames and swings smear over
+    // twice the samples (measured: recall 73 % → 60 %). Faster cameras are
+    // analysed at every other frame; people and sounds still use every frame.
+    const last = this.frames[this.frames.length - 1];
+    const analyse = !last || f.t - last.t >= MIN_FRAME_GAP;
+    // People first (positions, identities, motion history): this frame's swings
+    // and shuttle cues are judged against this frame's boxes, not the last ones.
+    if (f.persons) this.updatePeople(f.t, f.persons);
+    if (analyse) this.processMotion(f);
+    for (const o of f.onsets ?? []) this.fusion.addCue({ t: o.t, kind: "audio", strength: o.strength });
+
+    // Identity confidence feeds the quality score.
+    const confs = this.identity.players.map((p) => (p.kf ? p.conf : 0));
+    this.quality.identity = this.identity.ready ? confs.reduce((x, y) => x + y, 0) / confs.length : 0.5;
+    this.fusion.update(f.t, this.context());
+  }
+
+  /** Frame differencing, shake, light, shuttle and swings for one analysed frame. */
+  private processMotion(f: EngineFrame) {
     const scale = f.gw / this.W;
     const proj = projections(f.gray, f.gw, f.gh);
     const prev = this.frames[this.frames.length - 1];
@@ -159,18 +189,22 @@ export class MatchEngine {
     this.frames.push({ t: f.t, g, proj, shift });
     // Drift against the calibration frame (a bumped tripod): re-measured every half second.
     if (!this.ref) this.ref = proj;
+    // Between those checks, follow the frame-to-frame shake too, so a hand-held
+    // or wobbly phone does not make the players' feet (and distances) jump.
+    let measured = false;
     if (this.frameNo++ % 15 === 0) {
       const d = estimateShift(this.ref, proj, 20);
-      if (d.score > 0.6) this.cam = { ...this.cam, shift: { x: d.dx / scale, y: d.dy / scale } };
+      if (d.score > 0.6) {
+        this.cam = { ...this.cam, shift: { x: d.dx / scale, y: d.dy / scale } };
+        measured = true;
+      }
     }
+    if (!measured && (shift.dx || shift.dy)) this.cam = { ...this.cam, shift: { x: this.cam.shift.x + shift.dx / scale, y: this.cam.shift.y + shift.dy / scale } };
 
     // Light and shake.
     const br = brightness(f.gray);
     const noise = prev ? noiseSigma(prev.g, f.gray, shift.dx, shift.dy, f.gw) : 3;
     this.quality.push(br.mean, br.std, noise, Math.hypot(shift.dx, shift.dy));
-
-    // People: positions, identities, motion history.
-    if (f.persons) this.updatePeople(f.t, f.persons);
 
     // Motion between the last three frames: shuttle and swings (at the middle frame's time).
     if (this.frames.length === 3) {
@@ -192,13 +226,8 @@ export class MatchEngine {
       this.updateSwings(b.t, boxes, scale, f.gw, f.gh);
     }
 
-    for (const o of f.onsets ?? []) this.fusion.addCue({ t: o.t, kind: "audio", strength: o.strength });
-
-    // Identity confidence feeds the quality score.
-    const confs = this.identity.players.map((p) => (p.kf ? p.conf : 0));
-    this.quality.identity = this.identity.ready ? confs.reduce((x, y) => x + y, 0) / confs.length : 0.5;
-    this.fusion.update(f.t, this.context());
   }
+
 
   /**
    * 3D check of who could have made this contact (player-anchored flight

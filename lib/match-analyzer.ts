@@ -479,10 +479,23 @@ export function sideOf(p: Pt): 0 | 1 {
 
 // ── Movement ──────────────────────────────────────────────────────────────
 
-/** Gaps in a track shorter than this are bridged by interpolation, in seconds. */
-const MAX_GAP = 1.0;
+/**
+ * Gaps in a track shorter than this are bridged by interpolation, in seconds.
+ * Past 1 s only if the straight line between the two ends is a pace a player
+ * can keep (≤ 6 m/s): a player hidden for two seconds still covered the
+ * ground in between.
+ */
+const MAX_GAP = 3.0;
+const SHORT_GAP = 1.0;
 /** Speeds above this are detector glitches, not players, in m/s. */
 const SPEED_CAP = 9;
+/**
+ * Share of the local detector wobble that a step must exceed to count as
+ * movement. Tuned on the simulator across six camera positions (distance
+ * within ~10 % of the truth; with no floor jitter doubled it, up to ×3 with a
+ * low camera).
+ */
+const NOISE_K = 0.2;
 
 /** A player's smoothed path with running distance and speed at each sample. */
 export type Motion = {
@@ -500,11 +513,29 @@ export function computeMotion(times: number[], track: (TrackPoint | null)[]): Mo
   const p: (Pt | null)[] = track.map((tp) => (tp ? tp.p : null));
   const box: (Box | null)[] = track.map((tp) => (tp ? tp.box : null));
 
+  // A detector glitch (a box on the wrong person for one frame) is dropped: a
+  // point farther from its neighbours' median than anyone can run is not the
+  // player. The gap it leaves is bridged below.
+  const raw = [...p];
+  for (let k = 0; k < n; k++) {
+    if (!raw[k]) continue;
+    const near: Pt[] = [];
+    for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) if (j !== k && raw[j] && Math.abs(times[j] - times[k]) <= 0.6) near.push(raw[j]!);
+    if (near.length < 2) continue;
+    const med = (v: number[]) => [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)];
+    const m = { x: med(near.map((q) => q.x)), y: med(near.map((q) => q.y)) };
+    if (dist(raw[k]!, m) > 1.5) {
+      p[k] = null;
+      box[k] = null;
+    }
+  }
+
   // Bridge short gaps so a missed detection or two does not break the path.
   let prev = -1;
   for (let k = 0; k < n; k++) {
     if (!p[k]) continue;
-    if (prev >= 0 && k - prev > 1 && times[k] - times[prev] <= MAX_GAP) {
+    const gap = prev >= 0 ? times[k] - times[prev] : Infinity;
+    if (prev >= 0 && k - prev > 1 && (gap <= SHORT_GAP || (gap <= MAX_GAP && dist(p[prev]!, p[k]!) / gap <= 6))) {
       for (let m = prev + 1; m < k; m++) {
         const f = (times[m] - times[prev]) / (times[k] - times[prev]);
         p[m] = lerpPt(p[prev]!, p[k]!, f);
@@ -514,20 +545,34 @@ export function computeMotion(times: number[], track: (TrackPoint | null)[]): Mo
     prev = k;
   }
 
-  // Centred moving average over ±2 samples takes out detector jitter. Points
-  // are added in symmetric pairs only, so the ends of a path and steady
-  // movement are not pulled off line.
+  // Centred, Gaussian-weighted average over ±4 samples takes out detector
+  // jitter. Points are added in symmetric pairs only, so the ends of a path
+  // and steady movement are not pulled off line.
+  const W8 = [1, 0.88, 0.61, 0.32, 0.14];
   const smooth: (Pt | null)[] = p.map((pt, k) => {
     if (!pt) return null;
     let sx = pt.x, sy = pt.y, c = 1;
-    for (let r = 1; r <= 2; r++) {
+    for (let r = 1; r < W8.length; r++) {
       const a = p[k - r];
       const b = p[k + r];
       if (k - r < 0 || k + r >= n || !a || !b) break;
-      sx += a.x + b.x; sy += a.y + b.y; c += 2;
+      sx += W8[r] * (a.x + b.x); sy += W8[r] * (a.y + b.y); c += 2 * W8[r];
     }
     return { x: sx / c, y: sy / c };
   });
+
+  // How much the detector wobbles here (robust spread of the raw points around
+  // the smooth path, ±7 samples). Far from the camera a few pixels of box
+  // jitter are tens of centimetres on the floor; standing still must not add up
+  // to metres. Each step only counts what it moved beyond that wobble.
+  const resid = p.map((pt, k) => (pt && smooth[k] ? dist(pt, smooth[k]!) : NaN));
+  const wobble = (k: number): number => {
+    const r: number[] = [];
+    for (let j = Math.max(0, k - 7); j <= Math.min(n - 1, k + 7); j++) if (!Number.isNaN(resid[j])) r.push(resid[j]);
+    if (r.length < 5) return 0;
+    r.sort((x, y) => x - y);
+    return r[Math.floor(r.length / 2)];
+  };
 
   const cumDist: number[] = new Array(n).fill(0);
   const speed: number[] = new Array(n).fill(0);
@@ -538,8 +583,8 @@ export function computeMotion(times: number[], track: (TrackPoint | null)[]): Mo
     const dt = times[k] - times[k - 1];
     if (!a || !b || dt <= 0) continue;
     const d = dist(a, b);
-    // Ignore sub-centimetre drift and anything faster than a human.
-    if (d >= 0.02 && d / dt <= SPEED_CAP) cumDist[k] += d;
+    // Ignore drift within the wobble and anything faster than a human.
+    if (d >= 0.005 && d / dt <= SPEED_CAP) cumDist[k] += Math.max(0, d - NOISE_K * wobble(k));
   }
   for (let k = 0; k < n; k++) {
     const a = smooth[k - 1];
@@ -613,7 +658,7 @@ export class MotionTracker {
     let ws = this.settled;
     const from = this.settled > 0 ? m.t[this.settled] ?? t : t;
     while (ws > 0 && m.t[ws - 1] >= from - (MAX_GAP + 0.2)) ws--;
-    ws = Math.max(0, ws - 4);
+    ws = Math.max(0, ws - 12);
     const part = computeMotion(m.t.slice(ws), this.raw.slice(ws));
     const anchor = this.settled - 1;
     const base = anchor >= ws ? m.cumDist[anchor] - part.cumDist[anchor - ws] : 0;

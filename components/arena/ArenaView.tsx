@@ -71,7 +71,7 @@ function Avatar({
   const badge = size === "lg" ? 28 : size === "sm" ? 18 : 22;
   return (
     <div className={cls}>
-      {p.initials}
+      {p.avatarUrl ? <img src={p.avatarUrl} alt="" className={s.avImg} loading="lazy" /> : p.initials}
       <span className={`${s.avBadge} ${p.tarnishing ? s.tarnish : ""}`}>
         <RankIcon
           index={p.rank}
@@ -470,7 +470,16 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
               <Feed items={state.feed} lang={lang} signedIn={state.signedIn} />
               {state.hot && (
                 <div className={s.fire}>
-                  <BonusIcon kind="hot-streak" px={28} />
+                  {state.hot.player.avatarUrl ? (
+                    <span className={s.miniFace} aria-hidden="true">
+                      <img src={state.hot.player.avatarUrl} alt="" loading="lazy" />
+                      <i>
+                        <BonusIcon kind="hot-streak" px={16} />
+                      </i>
+                    </span>
+                  ) : (
+                    <BonusIcon kind="hot-streak" px={28} />
+                  )}
                   <div>
                     {t("on_fire", {
                       name: state.hot.player.name,
@@ -999,9 +1008,16 @@ function CrownCard({ state }: { state: ArenaState }) {
       </div>
       {state.packLeader && (
         <div className={s.mini}>
-          <span style={{ fontSize: 26 }} aria-hidden="true">
-            🐺
-          </span>
+          {state.packLeader.player.avatarUrl ? (
+            <span className={s.miniFace} aria-hidden="true">
+              <img src={state.packLeader.player.avatarUrl} alt="" loading="lazy" />
+              <i>🐺</i>
+            </span>
+          ) : (
+            <span style={{ fontSize: 26 }} aria-hidden="true">
+              🐺
+            </span>
+          )}
           <div>
             <b>{t("pack_leader")}</b>
             {t("pack_leader_body", {
@@ -1013,9 +1029,16 @@ function CrownCard({ state }: { state: ArenaState }) {
       )}
       {state.champion && (
         <div className={s.mini}>
-          <span style={{ fontSize: 26 }} aria-hidden="true">
-            🏆
-          </span>
+          {state.champion.player.avatarUrl ? (
+            <span className={s.miniFace} aria-hidden="true">
+              <img src={state.champion.player.avatarUrl} alt="" loading="lazy" />
+              <i>🏆</i>
+            </span>
+          ) : (
+            <span style={{ fontSize: 26 }} aria-hidden="true">
+              🏆
+            </span>
+          )}
           <div>
             <b>
               {t("champion", {

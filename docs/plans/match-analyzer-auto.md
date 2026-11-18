@@ -2,17 +2,25 @@
 
 How `/match-analyzer` tracks a doubles game with no operator taps: the four
 players' identities, every hit and who made it, plus an estimate of the hits
-it missed. Code: `lib/ma/`. Tests: `tests/match-analyzer-auto.test.ts`.
+it missed, from a phone anywhere around the court. Code: `lib/ma/`. Tests:
+`tests/match-analyzer-auto.test.ts`, `tests/wolf-vision.test.ts`. Stress test:
+`scripts/wolf-vision-eval.mts`; test videos: `scripts/wolf-vision-render.mts`.
 
 ## Pipeline (per frame)
 
 1. **Frame in**: phone camera (1080p, 30–60 fps), an uploaded video, or the
    simulator. Only newly presented frames are analysed
    (`requestVideoFrameCallback`): a repeated frame looks like "nothing moved"
-   to the motion detectors. Analysis copy: 640 px wide, greyscale.
+   to the motion detectors. Analysis copy: 640 px wide, greyscale. Motion
+   (shuttle, swings, shake) is analysed at ~30 fps whatever the camera rate:
+   at 60 fps the detectors, tuned on 30 fps frame gaps, lost a fifth of the
+   hits (recall 73 % → 60 %); people and sounds still use every frame.
 2. **Camera shake**: integer shift between frames from row/column gradient
    projections (`imaging.ts`), compensated before frame differencing; its
-   size feeds the stability factor.
+   size feeds the stability factor. The court mapping follows it too
+   (re-anchored on the calibration frame every half second, frame-to-frame in
+   between), so a wobbling phone does not move the players' feet: before
+   this, 2.5 px of shake added 22–37 % to every distance.
 3. **People**: MediaPipe EfficientDet-Lite0 "person" boxes every other frame
    (live: never more than half the main thread; uploads: always, and playback
    slows down instead). Each box gets a 3-part colour fingerprint
@@ -112,7 +120,128 @@ The summary reports detected, inferred and predicted hits and
 
     N̂ = N_seen · P(Q) / R(Q)      ± √(N̂·(1 − R)) / R
 
+## Camera positions
+
+The phone can stand anywhere the whole court is in shot (the setup asks
+where): **behind a baseline** (tripod, fence; low on a chair or high on a
+balcony), **side-on** at the net, or **in a corner**. Nothing in the engine
+assumes a view:
+
+- Player slots are in **court coordinates** (which half × which side of the
+  centre line), not "left/right on screen". With a side camera both partners
+  of a half sit at the same screen x; ordering them by screen x mixed them up
+  half the time (identity 50 % → 100 % after the change).
+- The resolution factor uses the court point farthest from the camera (any
+  corner), not the far baseline.
+- The calibration asks for the four corners in on-screen order for the
+  chosen view (near-left… or nearest/right/farthest/left from a corner), and
+  the court diagram is drawn the way the phone sees it. The court is
+  symmetric, so a mirrored or rotated labelling changes nothing.
+- The simulator renders all six positions × both lenses (`CAMERA_VIEWS` in
+  `sim.ts`), with people drawn facing the camera and the floor ray-cast.
+
+## Distance covered
+
+Detector boxes wobble by a few pixels; far from the camera that is tens of
+centimetres on the floor, and summing every wobble counted standing still as
+running (measured ÷ true distance 1.8× behind a baseline, 3.3× from a low
+camera). Now each track is cleaned and smoothed before distance is summed:
+
+1. A point farther than 1.5 m from the median of its ±2 neighbours is a
+   detector glitch (a box on the wrong person) and is dropped; the gap is
+   bridged.
+2. Gaussian-weighted centred average over ±4 samples.
+3. Each step counts only what it moved beyond 0.2 × the local wobble (median
+   distance of the raw points from the smooth path over ±7 samples).
+
+Result: 0.90–0.95 × the true distance in every view and lens, 0.91 with a
+shaky phone (slightly under: a little real movement is inside the wobble).
+
 ## Measured on the simulator
+
+### Every camera position (40 s × 3 seeds, 640×360, same shirts, with sound)
+
+`node --experimental-strip-types scripts/wolf-vision-eval.mts 40 views`
+
+| condition | Q | precision | recall | right hitter | right side | identity | distance (measured ÷ true) |
+|---|---|---|---|---|---|---|---|
+| baseline 1× | 0.82 |   95% |   73% |   79% |   81% |  100% | ×0.91 |
+| low 1× | 0.65 |   89% |   78% |   62% |   66% |   92% | ×0.97 |
+| balcony 1× | 0.97 |   78% |   77% |   93% |   95% |  100% | ×0.92 |
+| offcentre 1× | 0.78 |   89% |   67% |   64% |   69% |  100% | ×0.90 |
+| side 1× | 0.89 |   97% |   88% |   59% |   95% |  100% | ×0.91 |
+| corner 1× | 0.77 |   93% |   78% |   81% |   97% |  100% | ×0.90 |
+| baseline 0.5× | 0.70 |   80% |   68% |   78% |   82% |   93% | ×0.91 |
+| low 0.5× | 0.65 |   86% |   70% |   57% |   66% |   94% | ×0.95 |
+| balcony 0.5× | 0.85 |   76% |   81% |   71% |   76% |  100% | ×0.94 |
+| offcentre 0.5× | 0.64 |   93% |   72% |   82% |   90% |  100% | ×0.91 |
+| side 0.5× | 0.84 |   96% |   72% |   67% |   95% |  100% | ×0.91 |
+| corner 0.5× | 0.63 |   89% |   65% |   83% |   92% |  100% | ×0.91 |
+
+Before the changes above, side-on identity was 50 % and distances were
+×1.8–×3.3; hit numbers are unchanged. Reading the table: **side-on and
+corner** cameras are best for which *side* hit (the net runs across the
+picture: 90–97 %); **balcony and behind-baseline** are best for which
+*partner* (78–93 %). A low camera (a chair) is the weakest: the near pair
+hides the far pair.
+
+### Hard conditions (40 s × 3 seeds)
+
+`node --experimental-strip-types scripts/wolf-vision-eval.mts 40 stress`
+
+| condition | Q | precision | recall | right hitter | right side | identity | distance (measured ÷ true) |
+|---|---|---|---|---|---|---|---|
+| baseline, no sound | 0.82 |   52% |   48% |   69% |   69% |  100% | ×0.91 |
+| side, no sound | 0.89 |   68% |   42% |   76% |   94% |  100% | ×0.91 |
+| dim + noisy | 0.40 |   82% |   64% |   68% |   77% |  100% | ×0.93 |
+| side, dim + noisy | 0.41 |   95% |   73% |   75% |   96% |   91% | ×0.95 |
+| shaky 2.5 px | 0.75 |   68% |   79% |   44% |   62% |  100% | ×0.91 |
+| corner, shaky 2.5 px | 0.71 |   73% |   71% |   60% |   78% |  100% | ×0.90 |
+| same shirts + shorts | 0.81 |   95% |   73% |   78% |   81% |  100% | ×0.91 |
+| side, same shirts + shorts | 0.89 |   96% |   80% |   56% |   94% |   88% | ×0.91 |
+| loud hall (2 false sounds/s) | 0.82 |   78% |   79% |   72% |   77% |  100% | ×0.90 |
+| detector misses 20 % | 0.82 |   86% |   77% |   67% |   74% |  100% | ×0.99 |
+| 24 fps phone | 0.83 |   86% |   76% |   78% |   89% |  100% | ×0.91 |
+| 60 fps phone | 0.83 |   86% |   76% |   65% |   66% |  100% | ×0.90 |
+| low res 480×270 | 0.82 |   90% |   71% |   79% |   84% |  100% | ×0.91 |
+| everything bad, baseline | 0.44 |   65% |   57% |   50% |   57% |  100% | ×0.98 |
+| everything bad, side | 0.45 |   68% |   66% |   74% |   87% |   84% | ×0.97 |
+| long dropouts (1–4 s, 6/min/player) | 0.83 | 83% | 73% | 45% | 73% | 60% | ×0.97 |
+| side, long dropouts | 0.89 | 88% | 67% | 65% | 93% | 77% | ×0.89 |
+| corner, long dropouts | 0.78 | 84% | 60% | 61% | 89% | 77% | ×0.92 |
+
+What the stress run found and fixed:
+
+- **60 fps** lost a fifth of the hits (recall 60 %): motion is now analysed
+  at ~30 fps (recall 76 %).
+- **Shake** added 22–37 % to distances: the court mapping now follows the
+  shake frame to frame (×0.90–0.91).
+- **Long detector dropouts** (a far player under the score cut, hidden by a
+  partner; seen with the real detector) let a player's predicted position
+  coast on at full speed, off court and through the net, and out of reach of
+  re-acquisition for the rest of the game. A player unseen for over a second
+  now slows to a stop and stays on their own half; gaps up to 3 s are bridged
+  for distance when the pace is possible. Same seeds without → with: recall
+  76/55/47 % → 73/67/60 % (baseline/side/corner), distance ×0.80/0.87/0.65
+  → ×0.97/0.89/0.92, identity 53/83/79 % → 60/77/77 %. Identity under long
+  dropouts is the weakest number left.
+- **Order of work per frame**: people are updated before the frame's motion
+  is analysed, so swings and shuttle cues are judged against this frame's
+  boxes (doing it the other way round cost 15 points of "right side" with the
+  0.5× lens).
+
+### In a real browser, end to end
+
+`scripts/wolf-vision-render.mts` writes a simulated game as an MP4 with
+sound (racket cracks and hall hiss) and the true hits; Playwright on an
+emulated iPhone uploads it through the normal flow (phone position → four
+corner taps → players → tracking to the end), with the real MediaPipe
+detector and the sound decoded from the file. This also checks the second
+upload of a session shows a picture (it used to stay black).
+
+E2E_RESULTS
+
+## Measured on the simulator (original, behind the baseline only)
 
 The simulator (`sim.ts`) renders a doubles game in pixels through a pinhole
 camera with the lens's distortion, drag physics for the shuttle (terminal
@@ -140,7 +269,9 @@ precision ~85 %, recall ~85 %, right hitter ~70–85 %, identity 100 %.
 
 ## Limits
 
-- Accuracy above is on simulated games. Real halls add things the simulator
+- Real footage could not be fetched for this round (the sandbox's network
+  blocks video sites; Wikimedia Commons rate-limited it). Accuracy above is on
+  simulated games, rendered and run through the real browser pipeline. Real halls add things the simulator
   does not: other courts' shuttles and sounds, white walls behind a white
   shuttle, motion blur at 30 fps. Use 60 fps and good light where possible.
 - Visual-only (no sound) finds roughly half the hits with ~55 % precision;
@@ -149,10 +280,20 @@ precision ~85 %, recall ~85 %, right hitter ~70–85 %, identity 100 %.
   net is right ~75–85 % of the time.
 - Same shirts **and** same shorts lower identity to ~0.86 in the worst
   seed; height and position momentum carry it.
-- The phone should be on a tripod behind a baseline, high enough to see
-  the far baseline; the 0.5× lens needs 6+ court points.
+- Any position works if all four corners are in shot. Behind a baseline
+  or a balcony for who-hit-it between partners, side-on or a corner for which
+  side; avoid a low camera (a chair): the near pair hides the far one. The
+  0.5× lens needs 6+ court points (the setup asks for the net posts).
+- A shaky phone still costs precision (false hits from its own movement):
+  use a tripod or the fence.
 
 ## References
+
+- Hsu et al., Sensors 2024 (TrackNet + YOLOv7 swing detection, 69 BWF
+  matches; hit detection F1 90.5 %, TrackNet alone 58.8 % accuracy):
+  https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11244353/
+- Automated hit-frame detection for badminton: https://ar5iv.labs.arxiv.org/html/2307.16000
+- Badminton stroke-type transformer (ShuttleSet): https://arxiv.org/pdf/2502.21085v2
 
 - MonoTrack (badminton, monocular 3D shuttle): https://arxiv.org/abs/2204.01899
 - Shuttle tracking / hit detection: https://arxiv.org/pdf/2308.12645,

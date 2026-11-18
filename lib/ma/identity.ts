@@ -13,9 +13,11 @@
 //      (appearance, height and where each was heading) and, if swapped wins,
 //      swaps them back from the moment they met (a SwapEvent lets the engine
 //      fix the stats and hits recorded in between).
-//   4. Players start on four slots (near/far × left/right as the camera sees
-//      them, set before the game) and are picked up automatically once two
-//      people stand on each half; a tap can still pin someone.
+//   4. Players start on four slots (which half × which side of the centre
+//      line, in court coordinates, so any camera position works: behind a
+//      baseline, side-on, in a corner, up on a balcony) and are picked up
+//      automatically once two people stand on each half; a tap can still pin
+//      someone.
 
 import { COURT, iou, type Box, type Pt } from "../match-analyzer.ts";
 import { hungarian } from "./hungarian.ts";
@@ -151,8 +153,6 @@ export class IdentityTracker {
   /** Typical time between detection frames (seconds, smoothed). */
   private detGap = 0.1;
   private lastUpdateT: number | null = null;
-  /** Image x of the centre line at a court point's depth (to tell left from right as the camera sees it). */
-  centreX: ((p: Pt) => number) | null = null;
   /** The last frame's detections and which player took each (for taps). */
   lastObs: PersonObs[] = [];
   lastAssign: (number | null)[] = [];
@@ -209,10 +209,22 @@ export class IdentityTracker {
     const P = this.players;
     if (this.lastUpdateT !== null && t > this.lastUpdateT) this.detGap += (Math.min(3, t - this.lastUpdateT) - this.detGap) * 0.3;
     this.lastUpdateT = t;
-    // Predict everyone to now.
+    // Predict everyone to now. Someone the detector has not seen for a moment
+    // (hidden by their partner, too small far away) slows to a stop and stays
+    // on their own half: coasting on at full speed would carry them off court
+    // (or through the net) and out of reach of the re-acquisition gate for good.
     for (const p of P) {
       if (p.kf) {
-        p.kf = kfPredict(p.kf, Math.max(0, t - p.lastT));
+        const dt = Math.max(0, t - p.lastT);
+        p.kf = kfPredict(p.kf, dt);
+        if (t - p.lastObsT > 1) {
+          const damp = Math.exp(-dt / 0.8);
+          p.kf.x[2] *= damp;
+          p.kf.x[3] *= damp;
+        }
+        const [y0, y1] = p.slot.side === 0 ? [-1.2, COURT.net - 0.1] : [COURT.net + 0.1, COURT.length + 1.2];
+        p.kf.x[0] = Math.min(COURT.width + 0.8, Math.max(-0.8, p.kf.x[0]));
+        p.kf.x[1] = Math.min(y1, Math.max(y0, p.kf.x[1]));
         p.lastT = t;
       }
     }
@@ -231,7 +243,7 @@ export class IdentityTracker {
           if (lost < 1) {
             if (d2 > GATE_D2) return 1e6;
           } else {
-            // Re-acquiring after a long gap: by position on their half and by looks.
+            // Re-acquiring after a long gap: anywhere on their half, by looks (and, below, by how near).
             const d = Math.hypot(o.p.x - p.kf!.x[0], o.p.y - p.kf!.x[1]);
             if (d > 6 || app > 0.45) return 1e6;
           }
@@ -286,8 +298,9 @@ export class IdentityTracker {
   /**
    * Before the game (and after someone is lost for good): picks players up on
    * their slots. With as many people as empty slots on a half, they are
-   * ordered left to right as the camera sees them; with fewer (someone hidden
-   * or out of shot), each goes to the side of the centre line they stand on.
+   * ordered across the court (court x, so it does not matter where the camera
+   * stands); with fewer (someone hidden or out of shot), each goes to the side
+   * of the centre line they stand on.
    * Detections flicker (a far player can drop under the score cut for a few
    * frames), so evidence is kept per slot: the same spot (within 1.2 m) seen
    * 4 times, with gaps under a second, acquires that slot. Only people inside
@@ -301,7 +314,7 @@ export class IdentityTracker {
       const free = obs
         .map((o, j) => ({ o, j }))
         .filter(({ o, j }) => !taken.has(j) && o.score >= 0.3 && inPlay(o.p) && sideOf(o.p) === side && Math.abs(o.p.y - COURT.net) > NET_TOL)
-        .sort((a, b) => a.o.box[0] + a.o.box[2] / 2 - (b.o.box[0] + b.o.box[2] / 2));
+        .sort((a, b) => a.o.p.x - b.o.p.x);
       if (!free.length) continue;
       if (free.length > waiting.length) {
         // More people than places: keep the most confident ones, still left to right.
@@ -317,8 +330,7 @@ export class IdentityTracker {
         pairs = [];
         const used = new Set<number>();
         for (const f of free) {
-          const fx = f.o.box[0] + f.o.box[2] / 2;
-          const lr = this.centreX ? (fx < this.centreX(f.o.p) ? 0 : 1) : f.o.p.x < COURT.width / 2 ? 0 : 1;
+          const lr = f.o.p.x < COURT.width / 2 ? 0 : 1;
           // Someone standing near the centre line keeps the slot they were already building evidence for.
           let near: (typeof waiting)[number] | undefined;
           let best = 1.5;

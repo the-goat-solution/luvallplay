@@ -38,3 +38,6 @@ next-env.d.ts
 
 # local tooling
 .claude/settings.local.json
+
+# MediaPipe runtime, copied from node_modules by scripts/copy-mediapipe.mjs
+/public/mediapipe

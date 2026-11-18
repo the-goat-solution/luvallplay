@@ -5,11 +5,25 @@ import type { ObjectDetector } from "@mediapipe/tasks-vision";
 import { useLanguage } from "@/context/LanguageContext";
 import { formatClock, landmarkId, type CourtTap, type Pt } from "@/lib/match-analyzer";
 import { MatchEngine } from "@/lib/ma/engine";
-import { LENS_PRIOR, fitCamera, type CourtCamera, type LensPreset } from "@/lib/ma/lens";
+import { LENS_PRIOR, fitCamera, suspectTap, type CourtCamera, type LensPreset } from "@/lib/ma/lens";
+import type { CheckerWeights } from "@/lib/ma/checker";
 import { MatchSim, type SimOptions } from "@/lib/ma/sim";
 import { scoreHits } from "@/lib/ma/simrun";
 import type { MatchSetup, SavedMatchStats } from "@/lib/match-stats-db";
 import { CourtPicker, DEFAULT_CORNERS, describePoint } from "./CourtPicker";
+import {
+  AUTOSAVE_EVERY_MS,
+  ChunkRecorder,
+  FrameStats,
+  Throttle,
+  addTotals,
+  clearAutosave,
+  loadAutosave,
+  saveAutosave,
+  totalsAsSummary,
+  type Autosave,
+  type CarriedTotals,
+} from "./session";
 import { isPhone, listCameras, openCamera, pickCamera, type CameraChoice } from "./camera";
 import { loadPersonDetector } from "./detector";
 import { PLAYER_COLORS, drawOverlay, type OverlayPlayer } from "./overlay";
@@ -29,6 +43,11 @@ const HEARTBEAT_MS = 15_000;
 function pickMime(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
   return ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m));
+}
+
+/** AI layers running in this session, for the overlay label. */
+function aiLayers(p: Pipeline | null): string[] {
+  return p ? p.aiLayers() : [];
 }
 
 export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: number | null; sandbox: boolean; demo: boolean }) {
@@ -64,6 +83,41 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
       alive = false;
     };
   }, [challengeId]);
+
+  // ── Passes ────────────────────────────────────────────────────────────
+  const loadPasses = useCallback(async () => {
+    const url = new URL(window.location.href);
+    const paidKind = url.searchParams.get("wv_paid");
+    const sessionId = url.searchParams.get("session_id");
+    const one = async (kind: "live" | "upload") => {
+      const q = new URLSearchParams({ kind });
+      if (sessionId && paidKind === kind) q.set("session_id", sessionId);
+      const res = await fetch(`/api/wolf-vision/pass?${q}`, { cache: "no-store" });
+      if (res.status === 401) return "signed_out" as const;
+      if (res.status === 503) return "free" as const;
+      if (!res.ok) throw new Error("pass");
+      return (await res.json()) as { pass: PassInfo; testMode: boolean };
+    };
+    try {
+      const [live, upload] = await Promise.all([one("live"), one("upload")]);
+      if (live === "free" || upload === "free") return setPayState("free");
+      if (live === "signed_out" || upload === "signed_out") return setPayState("signed_out");
+      setPasses({ live: live.pass, upload: upload.pass });
+      setTestMode(live.testMode);
+      setPayState("ready");
+      if (paidKind) {
+        // Back from Stripe Checkout: tidy the address bar.
+        url.searchParams.delete("wv_paid");
+        url.searchParams.delete("session_id");
+        window.history.replaceState(null, "", url.toString());
+      }
+    } catch {
+      setPayState("ready");
+    }
+  }, []);
+  useEffect(() => {
+    void loadPasses();
+  }, [loadPasses]);
 
   // ── Session state ─────────────────────────────────────────────────────
   const [phone, setPhone] = useState(false);
@@ -106,7 +160,26 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   const micRef = useRef<MicListener | null>(null);
   const simRef = useRef<MatchSim | null>(null);
   const simCanvas = useRef<HTMLCanvasElement | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recorderRef = useRef<ChunkRecorder | null>(null);
+  const statsRef = useRef(new FrameStats());
+  const throttleRef = useRef(new Throttle());
+  /** Totals from before a resume (added to this part's numbers). */
+  const carriedRef = useRef<CarriedTotals | null>(null);
+  /** Upload resume: where to continue in the video. */
+  const resumeAtRef = useRef(0);
+  const lastAutosave = useRef(0);
+  const [resumable, setResumable] = useState<Autosave | null>(null);
+  // ── Paywall: $5 live match, $2 video analysis (the test scenario is free) ──
+  type PassInfo = { id: number; kind: "live" | "upload"; test: boolean } | null;
+  const [passes, setPasses] = useState<{ live: PassInfo; upload: PassInfo }>({ live: null, upload: null });
+  /** "free": no paywall here (local runs without a database). */
+  const [payState, setPayState] = useState<"loading" | "ready" | "signed_out" | "free">("loading");
+  const [testMode, setTestMode] = useState(false);
+  const [paywallFor, setPaywallFor] = useState<"live" | "upload" | null>(null);
+  const [buying, setBuying] = useState(false);
+  const [shareTraining, setShareTraining] = useState(true);
+  const passIdRef = useRef<number | null>(null);
+  const [recNote, setRecNote] = useState<string | null>(null);
   const logoRef = useRef<HTMLImageElement | null>(null);
   const clock0 = useRef(0);
   const dragging = useRef<number | null>(null);
@@ -123,6 +196,10 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     } catch {
       /* storage blocked */
     }
+    const saved = loadAutosave();
+    // Only offer a match that belongs here (same challenge, or a free session).
+    if (saved && saved.challengeId === challengeId) setResumable(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pickTarget = (p: Pt | null) => {
@@ -142,6 +219,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     () => (videoW ? fitCamera(taps, videoW, videoH, LENS_PRIOR[lens]) : null),
     [taps, lens, videoW, videoH],
   );
+  const suspect = useMemo(() => (cam ? suspectTap(cam, taps, videoW) : null), [cam, taps, videoW]);
 
   const ensureDetector = useCallback(async () => {
     if (detectorRef.current) return detectorRef.current;
@@ -163,10 +241,43 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   const stopEverything = () => {
     micRef.current?.stop();
     micRef.current = null;
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    if (recorderRef.current?.active) recorderRef.current.stop();
   };
 
   // ── Starting ──────────────────────────────────────────────────────────
+  /** Opens a mode if a pass covers it, otherwise shows the paywall for it. */
+  const gate = (kind: "live" | "upload", go: () => void) => {
+    if (payState === "free" || passes[kind]) {
+      passIdRef.current = passes[kind]?.id ?? null;
+      go();
+    } else setPaywallFor(kind);
+  };
+
+  const buyPass = async (kind: "live" | "upload") => {
+    setBuying(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/wolf-vision/pass", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind, challengeId, returnTo: `${window.location.pathname}${window.location.search}` }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; pass?: PassInfo; error?: string };
+      if (data.url) {
+        window.location.href = data.url; // Stripe Checkout; comes back with ?wv_paid=…
+        return;
+      }
+      if (data.pass) {
+        setPasses((p) => ({ ...p, [kind]: data.pass! }));
+        setPaywallFor(null);
+        setNotice(c.passReady(kind));
+      } else setError(c.payFailed);
+    } catch {
+      setError(c.payFailed);
+    }
+    setBuying(false);
+  };
+
   const chooseCamera = async () => {
     setError(null);
     setMode("camera");
@@ -178,6 +289,31 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     } catch {
       setError(c.cameraFailed);
     }
+  };
+
+  // ── Resume after a crash / closed tab ───────────────────────────────────
+  const resumeMatch = () => {
+    const a = resumable;
+    if (!a) return;
+    carriedRef.current = a.totals;
+    resumeAtRef.current = a.mode === "video" ? (a.videoTime ?? 0) : 0;
+    setLens(a.lens);
+    setOrder(a.order);
+    setSound(a.sound);
+    setTaps(a.taps);
+    pickTarget(null);
+    setResumable(null);
+    setNotice(c.resumedNote(Math.round(a.totals.duration / 60)));
+    if (a.mode === "camera") void chooseCamera();
+    else {
+      setNotice(c.resumeVideo);
+      fileRef.current?.click();
+    }
+  };
+
+  const discardResume = () => {
+    clearAutosave();
+    setResumable(null);
   };
 
   const chooseVideo = (file: File) => {
@@ -338,12 +474,41 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     } catch {
       /* storage blocked */
     }
+    // Paywall: this session uses the pass (a resume within 6 hours reuses it).
+    if (payState !== "free" && mode !== "demo") {
+      const kind = mode === "camera" ? "live" : "upload";
+      const id = passIdRef.current ?? passes[kind]?.id;
+      const ok = id
+        ? await fetch("/api/wolf-vision/pass", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ passId: id }) })
+            .then((r) => r.ok || r.status === 503)
+            .catch(() => false)
+        : false;
+      if (!ok) return setError(c.passNeeded);
+    }
     const det = await ensureDetector();
     if (!det) return setError(c.modelFailed);
-    const engine = new MatchEngine({ cam, videoW: d.w, videoH: d.h, courtPoints: taps.length, lens, audioOn: sound });
+    // The shared AI model (improved by everyone's sessions); the bundled one if it cannot load in time.
+    const shared = await Promise.race([
+      fetch("/api/wolf-vision/model")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { model?: { weights?: CheckerWeights } } | null) => j?.model?.weights ?? undefined)
+        .catch(() => undefined),
+      new Promise<undefined>((r) => setTimeout(() => r(undefined), 2500)),
+    ]);
+    const engine = new MatchEngine({ cam, videoW: d.w, videoH: d.h, courtPoints: taps.length, lens, audioOn: sound, checker: shared, autoTrain: true });
     const pipe = new Pipeline(engine, d.w, d.h, det);
     pipe.realtime = mode === "camera";
     pipeRef.current = pipe;
+    // AI pose layer: loads in the background; tracking starts without waiting for it.
+    void import("./pose")
+      .then(async ({ loadPose, PoseRunner }) => {
+        const { softwareGpu } = await import("./detector");
+        const model = await loadPose(!softwareGpu());
+        if (pipeRef.current === pipe) pipe.pose = new PoseRunner(model);
+      })
+      .catch(() => {
+        /* no pose layer: the motion swing detector still runs */
+      });
     // Test environments only: lets the browser test harness read the engine.
     if (sandbox) (window as unknown as { __wolfVision?: Pipeline }).__wolfVision = pipe;
     const v = videoRef.current!;
@@ -351,6 +516,8 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
       clock0.current = performance.now();
       const clock = () => (performance.now() - clock0.current) / 1000;
       srcRef.current = { kind: "video", video: v, clock };
+      const track = streamRef.current?.getVideoTracks()[0];
+      statsRef.current.cameraFps = track?.getSettings().frameRate ?? null;
       if (sound) {
         const mic = new MicListener();
         micRef.current = mic;
@@ -362,7 +529,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
       const onsets = sound && fileObj.current ? await onsetsFromFile(fileObj.current) : null;
       if (onsets) pipe.setOfflineOnsets(onsets);
       engine.setAudio(!!onsets);
-      v.currentTime = 0;
+      v.currentTime = resumeAtRef.current;
       v.playbackRate = 1;
       await v.play().catch(() => {});
     }
@@ -375,12 +542,27 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     if (!e) return;
     stopEverything();
     videoRef.current?.pause();
-    setSummary(e.finish());
+    const part = e.finish();
+    // Auto-training: send this session's fine-tuned checker weights (numbers only, never video).
+    if (shareTraining && e.checker && e.training.trained >= 200 && mode !== "demo" && payState !== "free") {
+      void fetch("/api/wolf-vision/model", {
+        method: "POST",
+        keepalive: true,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "checker",
+          weights: e.checker.toJSON(),
+          trained: e.training.trained,
+          meta: { mode: mode === "camera" ? "live" : "upload", quality: part.quality, pos: e.training.pos, neg: e.training.neg },
+        }),
+      }).catch(() => {});
+    }
+    setSummary(carriedRef.current ? totalsAsSummary(addTotals(carriedRef.current, part), part) : part);
+    clearAutosave();
     setSaveState({ kind: "idle" });
     setStep("summary");
     heartbeat("end");
-     
-  }, [heartbeat]);
+  }, [heartbeat, shareTraining, mode, payState]);
 
   // Drawing + processing loop.
   useEffect(() => {
@@ -444,8 +626,17 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
           if (v.readyState >= 2 && fresh) {
             lastVideoT = t;
             vfDone = vfSeq;
-            pipe.step(src, t);
+            const stats = statsRef.current;
+            stats.frameDelivered(now);
+            const r = pipe.step(src, t);
+            stats.frameAnalysed(r.ms, r.detected, now);
             rateSteps++;
+            if (v.srcObject) {
+              // Live: when the phone falls behind (heat, a busy main thread), run the person
+              // detector less often; motion analysis (shuttle, swings) keeps every frame.
+              const snap = stats.snapshot(now);
+              pipe.detectEvery = throttleRef.current.update(snap.workMs, 1000 / Math.max(10, snap.delivered), now);
+            }
           }
           if (!v.srcObject) {
             // An upload is analysed at the same cadence on any device: when fewer
@@ -512,6 +703,10 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
         shuttle: view.shuttle,
         hits: view.hits,
         quality: view.quality,
+        perf: (() => {
+          const sn = statsRef.current.snapshot(now);
+          return { camera: sn.cameraFps ?? (mode === "camera" ? sn.delivered : null), analysed: sn.analysed, detector: sn.detector, throttled: throttleRef.current.throttled, ai: aiLayers(pipe) };
+        })(),
         estimate: view.estimate,
         waiting: view.waiting,
         logo: logoRef.current,
@@ -520,6 +715,23 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
       if (now - lastUi > 250) {
         lastUi = now;
         setTick((x) => x + 1);
+      }
+      // Autosave the running totals (resume after a crash, a locked phone or a closed tab).
+      if (step === "track" && e && mode !== "demo" && now - lastAutosave.current > AUTOSAVE_EVERY_MS) {
+        lastAutosave.current = now;
+        saveAutosave({
+          v: 1,
+          savedAt: Date.now(),
+          challengeId,
+          mode: mode === "camera" ? "camera" : "video",
+          lens,
+          taps,
+          order,
+          sound,
+          totals: addTotals(carriedRef.current, e.snapshot()),
+          videoTime: mode === "video" ? videoRef.current?.currentTime : undefined,
+          videoName: mode === "video" ? fileObj.current?.name : undefined,
+        });
       }
     };
     raf = requestAnimationFrame(loop);
@@ -577,21 +789,21 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   };
 
   const toggleRecording = () => {
-    if (recorderRef.current?.state === "recording") return recorderRef.current.stop();
+    if (recorderRef.current?.active) return recorderRef.current.stop();
     const canvas = canvasRef.current;
     const mime = pickMime();
     if (!canvas || !mime || !canvas.captureStream) return setError(c.unsupported);
-    const rec = new MediaRecorder(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 8_000_000 });
-    const chunks: Blob[] = [];
-    rec.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
-    rec.onstop = () => {
-      const blob = new Blob(chunks, { type: mime.split(";")[0] });
+    // Chunks go to the phone's storage as they are made (a whole match in memory crashes Safari).
+    const rec = new ChunkRecorder(mime);
+    recorderRef.current = rec;
+    setRecNote(null);
+    void rec.start(canvas.captureStream(30), (blob) => {
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       setDownload({ url: URL.createObjectURL(blob), name: `wolf-vision-${stamp}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}` });
       setRecording(false);
-    };
-    rec.start(1000);
-    recorderRef.current = rec;
+      if (rec.stoppedFor) setRecNote(rec.stoppedFor === "limit" ? c.recLimit : c.recStorage);
+    });
     setRecording(true);
   };
 
@@ -649,6 +861,9 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     simRef.current = null;
     setMode(null);
     setStep("start");
+    carriedRef.current = null;
+    resumeAtRef.current = 0;
+    clearAutosave();
     setTaps([]);
     pickTarget(DEFAULT_CORNERS[0]);
     setSummary(null);
@@ -728,7 +943,14 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
         {step === "start" ? (
           <>
             <section className={`${s.card} ${s.hero}`}>
+              <span className={s.aiBadge} data-testid="ai-badge">✦ {c.aiBadge}</span>
               <p>{c.intro}</p>
+              <p className={s.muted}>{c.aiLayers}</p>
+              <p className={s.muted}>
+                <a href="/match-analyzer/label" style={{ color: "inherit" }}>
+                  {c.labelLink}
+                </a>
+              </p>
               <p className={s.muted}>{c.privacy}</p>
               {setupError === "signed_out" ? (
                 <div className={s.notice}>
@@ -742,6 +964,21 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
               ) : null}
               {existing ? <div className={s.notice}>{c.savedBefore(existing.recordedBy.name)}</div> : null}
             </section>
+
+            {resumable ? (
+              <section className={s.card} data-testid="resume-card">
+                <h2>{c.resumeTitle}</h2>
+                <p>{c.resumeText(Math.max(1, Math.round(resumable.totals.duration / 60)), new Date(resumable.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</p>
+                <div className={s.row}>
+                  <button className={s.btn} type="button" onClick={resumeMatch} data-testid="resume">
+                    {c.resumeMatch}
+                  </button>
+                  <button className={s.btnGhost} type="button" onClick={discardResume}>
+                    {c.discard}
+                  </button>
+                </div>
+              </section>
+            ) : null}
 
             {setup ? (
               <section className={s.matchup}>
@@ -760,14 +997,43 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
               </section>
             ) : null}
 
+            {paywallFor ? (
+              <section className={`${s.card} ${s.paywall}`} data-testid="paywall">
+                <span className={s.aiBadge}>✦ {c.aiBadge}</span>
+                <h2>{c.payTitle(paywallFor)}</h2>
+                <p>{c.payText(paywallFor)}</p>
+                <p className={s.muted}>{c.aiLayers}</p>
+                {payState === "signed_out" ? (
+                  <div className={s.notice}>
+                    {c.paySignIn}{" "}
+                    <a href={`/login?next=${encodeURIComponent(`/match-analyzer${challengeId ? `?challenge=${challengeId}` : ""}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
+                      {c.signInBtn}
+                    </a>
+                  </div>
+                ) : (
+                  <div className={s.row}>
+                    <button className={s.btn} type="button" disabled={buying || payState === "loading"} onClick={() => void buyPass(paywallFor)} data-testid="buy-pass">
+                      {buying ? c.payWorking : c.payBtn(paywallFor)}
+                    </button>
+                    <button className={s.btnGhost} type="button" onClick={() => setPaywallFor(null)}>
+                      {c.cancel}
+                    </button>
+                    {testMode ? <span className={s.hint}>{c.payTest}</span> : null}
+                  </div>
+                )}
+              </section>
+            ) : null}
+
             <div className={s.modes}>
-              <button className={s.mode} type="button" onClick={chooseCamera} disabled={blocked || !phone} data-testid="mode-camera">
+              <button className={s.mode} type="button" onClick={() => gate("live", () => void chooseCamera())} disabled={blocked || !phone} data-testid="mode-camera">
                 <strong>📱 {c.cameraTitle}</strong>
                 <small>{phone ? c.cameraSub : c.cameraOnlyPhone}</small>
+                <span className={s.price}>{passes.live ? c.passReady("live") : c.priceLive}</span>
               </button>
-              <button className={s.mode} type="button" onClick={() => fileRef.current?.click()} disabled={blocked}>
+              <button className={s.mode} type="button" onClick={() => gate("upload", () => fileRef.current?.click())} disabled={blocked} data-testid="mode-video">
                 <strong>🎞️ {c.videoTitle}</strong>
                 <small>{c.videoSub}</small>
+                <span className={s.price}>{passes.upload ? c.passReady("upload") : c.priceUpload}</span>
               </button>
               {sandbox ? (
                 <button className={`${s.mode} ${s.modeDemo}`} type="button" onClick={() => startDemo()} data-testid="demo">
@@ -831,6 +1097,9 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
                   {mode === "camera" ? c.sound : c.soundVideo}
                 </label>
                 <p className={s.hint}>{c.soundHint}</p>
+                <label className={s.check}>
+                  <input type="checkbox" checked={shareTraining} onChange={(e) => setShareTraining(e.target.checked)} data-testid="share-training" /> {c.shareTraining}
+                </label>
               </div>
               <div>
                 <div className={s.label}>{c.positions}</div>
@@ -890,7 +1159,8 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
           {step === "calibrate" ? (
             showPicker ? (
               <div className={s.pickerOverlay}>
-                <button type="button" className={s.pickerHide} onClick={() => setShowPicker(false)} aria-label={c.hideDiagram}>
+                {/* Beside the diagram, never on it: a corner of the court sits in each corner of the drawing. */}
+                <button type="button" className={s.pickerHide} onClick={() => setShowPicker(false)} aria-label={c.hideDiagram} data-testid="picker-hide">
                   ×
                 </button>
                 <CourtPicker taps={taps} target={target} onPick={pickTarget} compact />
@@ -940,6 +1210,11 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
                   </button>
                 ) : null}
                 {cam ? <span className={s.hint}>{c.calQuality((cam.rms * 1920) / Math.max(1, videoW), cam.lens.lambda)}</span> : null}
+                {suspect ? (
+                  <span className={s.warn} role="status" data-testid="cal-suspect">
+                    {c.calSuspect(suspect.index + 1, describePoint(taps[suspect.index].court, lang))}
+                  </span>
+                ) : null}
               </div>
               <button className={s.btn} type="button" disabled={!cam || detectorState === "loading"} onClick={startTracking}>
                 {detectorState === "loading" ? c.model : c.start}
@@ -1092,6 +1367,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
                 </a>
               </div>
             ) : null}
+            {recNote ? <div className={s.notice}>{recNote}</div> : null}
           </>
         ) : null}
 

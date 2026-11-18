@@ -4,6 +4,24 @@ export const COPY = {
   en: {
     title: "Wolf Vision",
     sub: "AI match tracking for the Arena",
+    aiBadge: "AI-enhanced tracker",
+    aiLayers: "Person detection (two passes), pose tracking, an AI shuttle checker and self-training that adapts to your hall: all on your phone.",
+    labelLink: "Help train it: mark the hits on a match video (labelling set) →",
+    priceLive: "$5 a match",
+    priceUpload: "$2 a video",
+    payTitle: (kind: "live" | "upload") => (kind === "live" ? "Track a live match" : "Analyse a match video"),
+    payText: (kind: "live" | "upload") =>
+      kind === "live"
+        ? "One live doubles match tracked by the AI-enhanced tracker: hits, rallies, speed and distance for all four players. NZ$5."
+        : "One uploaded match video analysed by the AI-enhanced tracker: hits, rallies, speed and distance for all four players. NZ$2.",
+    payBtn: (kind: "live" | "upload") => (kind === "live" ? "Pay NZ$5 and start" : "Pay NZ$2 and choose the video"),
+    payTest: "Preview: test pass, no charge.",
+    paySignIn: "Sign in to buy a pass (it is kept on your account).",
+    payWorking: "Opening secure checkout…",
+    payFailed: "Could not start the payment. Try again.",
+    passReady: (kind: "live" | "upload") => (kind === "live" ? "Live match pass ready." : "Video analysis pass ready."),
+    passNeeded: "This session needs a pass.",
+    shareTraining: "Help train Wolf Vision (shares the AI's learned numbers only, never video)",
     back: "Back to the Arena",
     intro:
       "Set a phone on a tripod behind a baseline and Wolf Vision does the rest: it finds the four players, follows them even in matching shirts, hears and sees every hit, and works out who hit it and how far and fast everyone moved.",
@@ -48,6 +66,8 @@ export const COPY = {
     calHelp:
       "Mark at least 4 court points you can see (6+ with the 0.5× lens), not all on one line. Corners first; if one is out of shot, choose another point on the diagram (service line corners, the T, net post feet).",
     calQuality: (px: number, lambda: number) => `Fit error ${px.toFixed(1)} px · lens curve λ ${lambda.toFixed(2)}`,
+    calSuspect: (n: number, what: string) =>
+      `These points don't line up. Check each one sits exactly on its line crossing (the edge of the court mat is not a line); point ${n} (${what}) fits worst.`,
     undo: "Undo",
     reset: "Reset",
     lastCourt: "Use last court",
@@ -69,6 +89,14 @@ export const COPY = {
     noPerson: "No person found there.",
     cancel: "Cancel",
     recordingReady: "Recording ready",
+    recLimit: "Recording stopped at 40 minutes to protect the phone's storage; tracking carries on.",
+    recStorage: "Recording stopped: the phone is low on storage. Tracking carries on.",
+    resumeTitle: "Unfinished match",
+    resumeText: (mins: number, at: string) => `${mins} min tracked, last saved at ${at}. Carry on where it stopped?`,
+    resumeVideo: "Choose the same video again to carry on from where it stopped.",
+    resumeMatch: "Resume match",
+    discard: "Discard",
+    resumedNote: (mins: number) => `Resumed: ${mins} min from before are included in the totals.`,
     download: "Download video",
     summaryTitle: "Match stats",
     duration: "Duration",
@@ -119,6 +147,24 @@ export const COPY = {
   vi: {
     title: "Wolf Vision",
     sub: "Theo dõi trận đấu bằng AI cho Đấu Trường",
+    aiBadge: "Theo dõi tăng cường AI",
+    aiLayers: "Nhận diện người (hai lượt), theo dõi tư thế, AI kiểm tra cầu và tự học theo nhà thi đấu của bạn: tất cả chạy trên điện thoại.",
+    labelLink: "Giúp huấn luyện: đánh dấu các cú đánh trên video trận đấu (bộ nhãn) →",
+    priceLive: "$5 một trận",
+    priceUpload: "$2 một video",
+    payTitle: (kind: "live" | "upload") => (kind === "live" ? "Theo dõi trận trực tiếp" : "Phân tích video trận đấu"),
+    payText: (kind: "live" | "upload") =>
+      kind === "live"
+        ? "Một trận đôi trực tiếp được theo dõi bằng AI: cú đánh, pha cầu, tốc độ và quãng đường của cả bốn người. NZ$5."
+        : "Một video trận đấu được phân tích bằng AI: cú đánh, pha cầu, tốc độ và quãng đường của cả bốn người. NZ$2.",
+    payBtn: (kind: "live" | "upload") => (kind === "live" ? "Trả NZ$5 và bắt đầu" : "Trả NZ$2 và chọn video"),
+    payTest: "Bản xem trước: vé thử, không thu tiền.",
+    paySignIn: "Đăng nhập để mua vé (vé được lưu trong tài khoản).",
+    payWorking: "Đang mở trang thanh toán an toàn…",
+    payFailed: "Không thể bắt đầu thanh toán. Thử lại.",
+    passReady: (kind: "live" | "upload") => (kind === "live" ? "Vé trận trực tiếp đã sẵn sàng." : "Vé phân tích video đã sẵn sàng."),
+    passNeeded: "Phiên này cần một vé.",
+    shareTraining: "Giúp huấn luyện Wolf Vision (chỉ chia sẻ các thông số AI đã học, không bao giờ gửi video)",
     back: "Quay lại Đấu Trường",
     intro:
       "Đặt điện thoại trên chân máy sau đường biên cuối, Wolf Vision lo phần còn lại: tìm bốn người chơi, theo dõi họ kể cả khi mặc áo giống nhau, nghe và thấy từng cú đánh, xác định ai đánh, mỗi người di chuyển bao xa và nhanh thế nào.",
@@ -162,6 +208,8 @@ export const COPY = {
     calCheck: "Kiểm tra các đường vàng trùng vạch sân. Kéo điểm để chỉnh.",
     calHelp: "Đánh dấu ít nhất 4 điểm thấy rõ (6+ với ống 0.5×), không thẳng hàng. Góc trước; nếu góc nào khuất, chọn điểm khác trên sơ đồ.",
     calQuality: (px: number, lambda: number) => `Sai số ${px.toFixed(1)} px · độ cong λ ${lambda.toFixed(2)}`,
+    calSuspect: (n: number, what: string) =>
+      `Các điểm chưa khớp nhau. Kiểm tra từng điểm nằm đúng giao điểm của vạch (mép thảm sân không phải là vạch); điểm ${n} (${what}) lệch nhiều nhất.`,
     undo: "Hoàn tác",
     reset: "Làm lại",
     lastCourt: "Dùng sân lần trước",
@@ -183,6 +231,14 @@ export const COPY = {
     noPerson: "Không thấy người ở đó.",
     cancel: "Hủy",
     recordingReady: "Bản quay đã sẵn sàng",
+    recLimit: "Đã dừng quay sau 40 phút để bảo vệ bộ nhớ máy; việc theo dõi vẫn tiếp tục.",
+    recStorage: "Đã dừng quay: máy sắp hết bộ nhớ. Việc theo dõi vẫn tiếp tục.",
+    resumeTitle: "Trận đấu chưa xong",
+    resumeText: (mins: number, at: string) => `Đã theo dõi ${mins} phút, lưu lần cuối lúc ${at}. Tiếp tục từ chỗ đã dừng?`,
+    resumeVideo: "Chọn lại đúng video đó để tiếp tục từ chỗ đã dừng.",
+    resumeMatch: "Tiếp tục trận",
+    discard: "Bỏ",
+    resumedNote: (mins: number) => `Đã tiếp tục: ${mins} phút trước đó được cộng vào tổng.`,
     download: "Tải video",
     summaryTitle: "Thống kê trận",
     duration: "Thời lượng",

@@ -64,17 +64,17 @@ export const FUSION = {
 /**
  * Detection recall and precision vs capture quality, fitted on the simulator
  * (3 seeds × 60 s per condition; see docs/plans/match-analyzer-auto.md):
- *   R(Q) = 0.79·Q^0.12      P(Q) = 0.6 + 0.35·Q
+ *   R(Q) = 0.76·Q^0.12      P(Q) = 0.8 + 0.18·Q
  */
-export const RECALL_MODEL = { rMax: 0.79, gamma: 0.12 };
-export const PRECISION_MODEL = { a: 0.6, b: 0.35 };
+export const RECALL_MODEL = { rMax: 0.76, gamma: 0.12 };
+export const PRECISION_MODEL = { a: 0.8, b: 0.18 };
 /**
  * Without sound (mic off or failed, a file with no audio track) the picture
  * alone is much less certain; fitted the same way:
- *   R(Q) = 0.56·Q^0.12      P(Q) = 0.4 + 0.2·Q
+ *   R(Q) = 0.43·Q^0.12      P(Q) = 0.45 + 0.18·Q
  */
-export const RECALL_MODEL_SILENT = { rMax: 0.56, gamma: 0.12 };
-export const PRECISION_MODEL_SILENT = { a: 0.4, b: 0.2 };
+export const RECALL_MODEL_SILENT = { rMax: 0.43, gamma: 0.12 };
+export const PRECISION_MODEL_SILENT = { a: 0.45, b: 0.18 };
 
 export function expectedPrecision(q: number, audio = true): number {
   const m = audio ? PRECISION_MODEL : PRECISION_MODEL_SILENT;

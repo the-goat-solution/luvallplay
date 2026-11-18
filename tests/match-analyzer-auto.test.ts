@@ -219,3 +219,32 @@ test("court geometry sanity: the net is in the middle", () => {
   const p: Pt = { x: 0, y: 0 };
   assert.equal(p.x, 0);
 });
+
+test("calibration: taps on the court mat's edge instead of the lines are flagged (real broadcast taps)", async () => {
+  const { suspectTap } = await import("../lib/ma/lens.ts");
+  const mk = (a: number[][]) => a.map(([x, y, ix, iy]) => ({ court: { x, y }, image: { x: ix, y: iy } }));
+  // All England 2026, Birmingham (1920×1080): outer corners, the near T, singles corners.
+  const good = mk([[0, 0, 414, 1018], [6.1, 0, 1506, 1019], [0, 13.4, 607, 589], [6.1, 13.4, 1316, 589], [3.05, 4.72, 963, 822], [0.46, 0, 500, 1018], [5.64, 0, 1422, 1018]]);
+  const camGood = fitCamera(good, 1920, 1080, 0)!;
+  assert.ok(camGood.rms < 3, `good fit ${camGood.rms}`);
+  close(camGood.lens.lambda, 0, 0.03);
+  assert.equal(suspectTap(camGood, good, 1920), null);
+  // Far corners tapped on the edge of the grey mat, ~60 px outside the outer lines.
+  const bad = mk([[0, 0, 414, 1018], [6.1, 0, 1506, 1019], [0, 13.4, 544, 588], [6.1, 13.4, 1372, 588], [3.05, 4.72, 963, 822], [0.46, 0, 500, 1018], [5.64, 0, 1422, 1018]]);
+  const camBad = fitCamera(bad, 1920, 1080, 0)!;
+  // The lens curve may not soak up the mistake as a strong (unphysical) distortion...
+  assert.ok(camBad.lens.lambda <= 0.05 + 1e-9, `lambda ${camBad.lens.lambda}`);
+  // ...and the assistant is told.
+  assert.ok(suspectTap(camBad, bad, 1920));
+});
+
+test("shuttle candidates: feet are masked, an isolated blob in flight is kept, the racket zone stays open", async () => {
+  const { shuttleCandidates } = await import("../lib/ma/shuttle.ts");
+  const blob = (x: number, y: number, area = 4) => ({ x, y, area, minX: x - 1, maxX: x + 1, minY: y - 1, maxY: y + 1, bright: 200 });
+  const player: [number, number, number, number] = [200, 100, 60, 150]; // analysis px = video px here
+  const out = shuttleCandidates([blob(205, 245), blob(400, 60), blob(205, 120)], 1, [player], 640 * 360);
+  const at = (x: number, y: number) => out.some((c) => Math.abs(c.x - x) < 1 && Math.abs(c.y - y) < 1);
+  assert.ok(!at(205, 245), "a moving shoe at the box's bottom corner is not a shuttle");
+  assert.ok(at(400, 60), "an isolated blob away from players is a candidate");
+  assert.ok(at(205, 120), "beside the shoulders (racket zone) stays a candidate");
+});

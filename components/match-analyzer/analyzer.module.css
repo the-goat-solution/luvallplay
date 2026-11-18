@@ -507,13 +507,16 @@
   cursor: pointer;
 }
 .pickerHide {
+  /* Outside the panel, to its left (over the video), so it never covers a court point. */
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 0;
+  left: -38px;
   width: 30px;
   height: 30px;
   border-radius: 50%;
   font-size: 1.1rem;
+  line-height: 1;
+  border: 1px solid rgba(255, 213, 74, 0.35);
 }
 .pickerShow {
   position: absolute;
@@ -697,4 +700,48 @@
     border: none;
     border-radius: 0;
   }
+  /* Full-width strip here: the diagram is centred, so the panel's own corner is clear of it. */
+  .pickerHide {
+    left: 8px;
+    top: 6px;
+  }
+}
+
+.warn {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #ffd54a;
+  background: rgba(255, 213, 74, 0.1);
+  border: 1px solid rgba(255, 213, 74, 0.35);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+/* AI-enhanced label and paywall */
+.aiBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #2fd4b5;
+  background: rgba(47, 212, 181, 0.1);
+  border: 1px solid rgba(47, 212, 181, 0.4);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-bottom: 8px;
+}
+.paywall {
+  border-color: rgba(255, 213, 74, 0.45);
+  box-shadow: 0 0 24px rgba(255, 213, 74, 0.08);
+}
+.price {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #ffd54a;
 }

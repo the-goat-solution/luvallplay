@@ -3,6 +3,7 @@ import { notifyOrderPlaced, notifyOversold } from "@/lib/shop-notify";
 import { syncPlanFromSubscriptionMetadata } from "@/lib/membership-self-service";
 import { linkMemberAccount } from "@/lib/player-db";
 import { NextResponse } from "next/server";
+import { markPassPaid } from "@/lib/wolf-vision-db";
 import type Stripe from "stripe";
 import { sql } from "@vercel/postgres";
 import { getStripe } from "@/lib/stripe";
@@ -353,6 +354,15 @@ export async function POST(request: Request) {
           cashInvoice: true,
         }).catch((err) => console.error("Failed to send admin race alert", err));
       }
+    }
+  }
+
+  // Wolf Vision passes (Stripe Checkout). The return page also confirms the payment, so
+  // this only matters when the buyer closes the tab before coming back.
+  if (event.type === "checkout.session.completed") {
+    const cs = event.data.object as Stripe.Checkout.Session;
+    if (cs.metadata?.type === "wolf_vision" && cs.payment_status === "paid" && process.env.POSTGRES_URL) {
+      await markPassPaid(cs.id).catch((err) => console.error("[wolf-vision] mark paid failed", err));
     }
   }
 

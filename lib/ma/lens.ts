@@ -108,18 +108,22 @@ export function fitCamera(taps: CourtTap[], w: number, h: number, lambdaPrior = 
   if (taps.length < 4) return null;
   if (taps.length < 6) return fitWithLambda(taps, w, h, lambdaPrior);
   const score = (l: number) => fitWithLambda(taps, w, h, l)?.rms ?? Infinity;
+
   // Coarse scan, then golden-section refinement around the best value.
   let best = lambdaPrior;
   let bestS = score(best);
-  for (let l = -0.5; l <= 0.2001; l += 0.05) {
+  // Physically plausible range around the lens's own value (iPhone video is mostly
+  // corrected in the camera: barrel at most, never strong pincushion).
+  const lo = lambdaPrior - 0.25, hi = lambdaPrior + 0.05;
+  for (let l = lo; l <= hi + 1e-9; l += 0.025) {
     const s = score(l);
     if (s < bestS) {
       bestS = s;
       best = l;
     }
   }
-  let a = best - 0.05;
-  let b = best + 0.05;
+  let a = Math.max(lo, best - 0.025);
+  let b = Math.min(hi, best + 0.025);
   const g = (Math.sqrt(5) - 1) / 2;
   let c = b - g * (b - a);
   let d = a + g * (b - a);
@@ -147,6 +151,26 @@ export function fitCamera(taps: CourtTap[], w: number, h: number, lambdaPrior = 
   if (!fitted) return prior;
   if (prior && prior.rms <= fitted.rms * 1.1 + 0.3) return prior;
   return fitted;
+}
+
+/**
+ * Taps that do not line up: with 5 or more taps a court has more than enough
+ * points, so a fit error over 6 px (at 1920 wide) means at least one is off
+ * its line crossing (a common slip: the edge of the court mat instead of the
+ * outer line). Returns the fit error and the tap that fits worst, as a hint.
+ */
+export function suspectTap(cam: CourtCamera, taps: CourtTap[], w: number): { index: number; rms: number } | null {
+  if (taps.length < 5 || cam.rms <= (6 * w) / 1920) return null;
+  let index = 0, worst = -1;
+  taps.forEach((t, i) => {
+    const q = courtToImage(cam, t.court);
+    const e = Math.hypot(q.x - t.image.x, q.y - t.image.y);
+    if (e > worst) {
+      worst = e;
+      index = i;
+    }
+  });
+  return { index, rms: cam.rms };
 }
 
 /** A court line sampled densely enough to follow the lens curvature, in video pixels. */

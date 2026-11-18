@@ -30,7 +30,7 @@ export const DOUBLES_SLOTS: Slot[] = [
 ];
 
 /** A detected person on court: box (video px), court position, metres per pixel at their feet. */
-export type PersonObs = { box: Box; score: number; look?: number[]; p: Pt; mpp: number };
+export type PersonObs = { box: Box; score: number; look?: number[]; p: Pt; mpp: number; h3?: number; edge?: boolean };
 export type SwapEvent = { a: number; b: number; from: number };
 
 type KF = { x: number[]; P: number[] };
@@ -45,6 +45,8 @@ type PlayerState = {
   height: number;
   box: Box | null;
   conf: number;
+  /** Where they were last seen (court metres). */
+  lastPos: Pt | null;
 };
 
 type Interaction = {
@@ -72,10 +74,15 @@ function kfInit(p: Pt): KF {
   return { x: [p.x, p.y, 0, 0], P: [0.3, 0, 0, 0, 0, 0.3, 0, 0, 0, 0, 4, 0, 0, 0, 0, 4] };
 }
 
+/** Velocity memory (s): a badminton player changes direction within a second, so an unseen player's velocity fades instead of carrying them off court. */
+const V_TAU = 0.6;
+
 function kfPredict(k: KF, dt: number): KF {
   const [x, y, vx, vy] = k.x;
   const P = k.P;
-  const nx = [x + vx * dt, y + vy * dt, vx, vy];
+  const fade = Math.exp(-dt / V_TAU);
+  const travel = V_TAU * (1 - fade);
+  const nx = [x + vx * travel, y + vy * travel, vx * fade, vy * fade];
   // P' = F P Fᵀ + Q, F = [[I, dt·I],[0, I]] (axes independent).
   const out = new Array(16).fill(0);
   for (const [i, j] of [[0, 2], [1, 3]] as const) {
@@ -124,7 +131,9 @@ function kfUpdate(k: KF, z: Pt, r: number): KF {
 function heightOf(o: PersonObs): number | null {
   // Only standing poses: crouches and jumps would add noise.
   if (o.box[3] / Math.max(1, o.box[2]) < 1.7) return null;
-  return o.box[3] * o.mpp;
+  // Real height from the 3D camera when there is one (box height × floor scale is badly
+  // off when the camera is low: the floor shrinks with depth much faster than people do).
+  return o.h3 ?? o.box[3] * o.mpp;
 }
 
 function blendLook(old: number[] | undefined, next: number[] | undefined, rate: number): number[] | undefined {
@@ -143,6 +152,17 @@ function inPlay(p: Pt): boolean {
   return p.x > -0.6 && p.x < COURT.width + 0.6 && p.y > -0.6 && p.y < COURT.length + 0.6;
 }
 
+/**
+ * Could this be a player rather than someone sitting beside the court? Only
+ * checked when (re)acquiring, against the tracked players' own median height
+ * (so an uncertain focal length scales both alike): well under it is a seated
+ * spectator, a child or a partial box.
+ */
+function plausibleHeight(o: PersonObs, ref: number | null, min = 0.72): boolean {
+  if (!o.h3 || !ref) return true;
+  return o.h3 >= min * ref;
+}
+
 export class IdentityTracker {
   readonly players: PlayerState[];
   private interactions: Interaction[] = [];
@@ -158,11 +178,18 @@ export class IdentityTracker {
   lastAssign: (number | null)[] = [];
 
   constructor(slots: Slot[] = DOUBLES_SLOTS) {
-    this.players = slots.map((slot) => ({ slot, kf: null, lastT: 0, lastObsT: -Infinity, heights: [], height: 0, box: null, conf: 0 }));
+    this.players = slots.map((slot) => ({ slot, kf: null, lastT: 0, lastObsT: -Infinity, heights: [], height: 0, box: null, conf: 0, lastPos: null }));
   }
 
   get ready(): boolean {
     return this.players.every((p) => p.kf !== null);
+  }
+
+  /** Median standing height of the tracked players (3D camera units), once known. */
+  private refHeight(): number | null {
+    const hs = this.players.filter((p) => p.kf && p.heights.length >= 8).map((p) => p.height);
+    if (hs.length < 2) return null;
+    return quantile(hs, 0.5);
   }
 
   /** Current position estimate (Kalman prediction) for drawing between detections. */
@@ -186,6 +213,7 @@ export class IdentityTracker {
     }
     me.kf = kfInit(o.p);
     me.lastT = me.lastObsT = t;
+    me.lastPos = o.p;
     me.look = o.look;
     me.box = o.box;
     me.conf = 1;
@@ -196,7 +224,7 @@ export class IdentityTracker {
   private swapStates(a: number, b: number) {
     const A = this.players[a];
     const B = this.players[b];
-    for (const key of ["kf", "lastT", "lastObsT", "look", "heights", "height", "box"] as const) {
+    for (const key of ["kf", "lastT", "lastObsT", "look", "heights", "height", "box", "lastPos"] as const) {
       const tmp = A[key];
       (A as Record<string, unknown>)[key] = B[key];
       (B as Record<string, unknown>)[key] = tmp;
@@ -218,6 +246,7 @@ export class IdentityTracker {
     }
 
     const active = P.map((p, i) => (p.kf ? i : -1)).filter((i) => i >= 0);
+    const refH = this.refHeight();
     const assign: (number | null)[] = P.map(() => null);
     if (active.length && obs.length) {
       const cost = active.map((i) => {
@@ -225,15 +254,21 @@ export class IdentityTracker {
         const lost = t - p.lastObsT;
         const row = obs.map((o) => {
           if (Math.abs(o.p.y - COURT.net) > NET_TOL && sideOf(o.p) !== p.slot.side) return 1e6;
+          // Even mid-lunge a player stands well over half their height; someone seated does not.
+          if (!plausibleHeight(o, refH, 0.6)) return 1e6;
           const r = Math.min(1, Math.max(0.08, 4 * o.mpp));
           const app = lookDistance3(p.look, o.look);
           const d2 = kfD2(p.kf!, o.p, r);
           if (lost < 1) {
             if (d2 > GATE_D2) return 1e6;
           } else {
-            // Re-acquiring after a long gap: by position on their half and by looks.
-            const d = Math.hypot(o.p.x - p.kf!.x[0], o.p.y - p.kf!.x[1]);
-            if (d > 6 || app > 0.45) return 1e6;
+            // Re-acquiring after a gap: near where they were last seen (they can have moved
+            // about 3.5 m a second, up to a whole half), and looking like them.
+            if (!plausibleHeight(o, refH)) return 1e6;
+            const last = p.lastPos ?? { x: p.kf!.x[0], y: p.kf!.x[1] };
+            const d = Math.hypot(o.p.x - last.x, o.p.y - last.y);
+            if (d > 1.5 + 3.5 * Math.min(2, lost) || app > 0.55) return 1e6;
+            return 0.5 * Math.min(GATE_D2, (d / (0.8 + lost)) ** 2) + W_APP * app + 2;
           }
           const h = heightOf(o);
           const hTerm = h && p.height ? Math.min(4, Math.abs(Math.log(h / p.height)) / 0.07) : 0;
@@ -260,6 +295,7 @@ export class IdentityTracker {
       const r = Math.min(1, Math.max(0.08, 4 * o.mpp));
       p.kf = kfUpdate(p.kf!, o.p, r);
       p.lastObsT = t;
+      p.lastPos = o.p;
       p.box = o.box;
       // Learn looks and height only when nobody else overlaps (no mixing two people).
       const clear = !interacting.has(i) && obs.every((q, k) => k === j || iou(q.box, o.box) < 0.1);
@@ -294,13 +330,14 @@ export class IdentityTracker {
    * the court lines (0.6 m margin) count, not spectators just off court.
    */
   private autoAssign(t: number, obs: PersonObs[], assign: (number | null)[]) {
+    const refH = this.refHeight();
     for (const side of [0, 1] as const) {
       const waiting = this.players.map((p, i) => ({ p, i })).filter(({ p }) => p.slot.side === side && !p.kf);
       if (!waiting.length) continue;
       const taken = new Set(assign.filter((j): j is number => j !== null));
       const free = obs
         .map((o, j) => ({ o, j }))
-        .filter(({ o, j }) => !taken.has(j) && o.score >= 0.3 && inPlay(o.p) && sideOf(o.p) === side && Math.abs(o.p.y - COURT.net) > NET_TOL)
+        .filter(({ o, j }) => !taken.has(j) && o.score >= 0.3 && inPlay(o.p) && sideOf(o.p) === side && Math.abs(o.p.y - COURT.net) > NET_TOL && plausibleHeight(o, refH) && !o.edge)
         .sort((a, b) => a.o.box[0] + a.o.box[2] / 2 - (b.o.box[0] + b.o.box[2] / 2));
       if (!free.length) continue;
       if (free.length > waiting.length) {
@@ -350,6 +387,7 @@ export class IdentityTracker {
         const p = slot.p;
         p.kf = kfInit(f.o.p);
         p.lastT = p.lastObsT = t;
+        p.lastPos = f.o.p;
         p.look = f.o.look;
         p.box = f.o.box;
         p.conf = 0.8;

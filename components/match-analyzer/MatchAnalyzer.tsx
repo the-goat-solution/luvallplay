@@ -10,6 +10,19 @@ import { MatchSim, type SimOptions } from "@/lib/ma/sim";
 import { scoreHits } from "@/lib/ma/simrun";
 import type { MatchSetup, SavedMatchStats } from "@/lib/match-stats-db";
 import { CourtPicker, DEFAULT_CORNERS, describePoint } from "./CourtPicker";
+import {
+  AUTOSAVE_EVERY_MS,
+  ChunkRecorder,
+  FrameStats,
+  Throttle,
+  addTotals,
+  clearAutosave,
+  loadAutosave,
+  saveAutosave,
+  totalsAsSummary,
+  type Autosave,
+  type CarriedTotals,
+} from "./session";
 import { isPhone, listCameras, openCamera, pickCamera, type CameraChoice } from "./camera";
 import { loadPersonDetector } from "./detector";
 import { PLAYER_COLORS, drawOverlay, type OverlayPlayer } from "./overlay";
@@ -29,6 +42,11 @@ const HEARTBEAT_MS = 15_000;
 function pickMime(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
   return ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m));
+}
+
+/** AI layers running in this session, for the overlay label. */
+function aiLayers(p: Pipeline | null): string[] {
+  return p ? p.aiLayers() : [];
 }
 
 export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: number | null; sandbox: boolean; demo: boolean }) {
@@ -106,7 +124,16 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   const micRef = useRef<MicListener | null>(null);
   const simRef = useRef<MatchSim | null>(null);
   const simCanvas = useRef<HTMLCanvasElement | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recorderRef = useRef<ChunkRecorder | null>(null);
+  const statsRef = useRef(new FrameStats());
+  const throttleRef = useRef(new Throttle());
+  /** Totals from before a resume (added to this part's numbers). */
+  const carriedRef = useRef<CarriedTotals | null>(null);
+  /** Upload resume: where to continue in the video. */
+  const resumeAtRef = useRef(0);
+  const lastAutosave = useRef(0);
+  const [resumable, setResumable] = useState<Autosave | null>(null);
+  const [recNote, setRecNote] = useState<string | null>(null);
   const logoRef = useRef<HTMLImageElement | null>(null);
   const clock0 = useRef(0);
   const dragging = useRef<number | null>(null);
@@ -123,6 +150,10 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     } catch {
       /* storage blocked */
     }
+    const saved = loadAutosave();
+    // Only offer a match that belongs here (same challenge, or a free session).
+    if (saved && saved.challengeId === challengeId) setResumable(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pickTarget = (p: Pt | null) => {
@@ -164,7 +195,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   const stopEverything = () => {
     micRef.current?.stop();
     micRef.current = null;
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    if (recorderRef.current?.active) recorderRef.current.stop();
   };
 
   // ── Starting ──────────────────────────────────────────────────────────
@@ -179,6 +210,31 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     } catch {
       setError(c.cameraFailed);
     }
+  };
+
+  // ── Resume after a crash / closed tab ───────────────────────────────────
+  const resumeMatch = () => {
+    const a = resumable;
+    if (!a) return;
+    carriedRef.current = a.totals;
+    resumeAtRef.current = a.mode === "video" ? (a.videoTime ?? 0) : 0;
+    setLens(a.lens);
+    setOrder(a.order);
+    setSound(a.sound);
+    setTaps(a.taps);
+    pickTarget(null);
+    setResumable(null);
+    setNotice(c.resumedNote(Math.round(a.totals.duration / 60)));
+    if (a.mode === "camera") void chooseCamera();
+    else {
+      setNotice(c.resumeVideo);
+      fileRef.current?.click();
+    }
+  };
+
+  const discardResume = () => {
+    clearAutosave();
+    setResumable(null);
   };
 
   const chooseVideo = (file: File) => {
@@ -352,6 +408,8 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
       clock0.current = performance.now();
       const clock = () => (performance.now() - clock0.current) / 1000;
       srcRef.current = { kind: "video", video: v, clock };
+      const track = streamRef.current?.getVideoTracks()[0];
+      statsRef.current.cameraFps = track?.getSettings().frameRate ?? null;
       if (sound) {
         const mic = new MicListener();
         micRef.current = mic;
@@ -363,7 +421,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
       const onsets = sound && fileObj.current ? await onsetsFromFile(fileObj.current) : null;
       if (onsets) pipe.setOfflineOnsets(onsets);
       engine.setAudio(!!onsets);
-      v.currentTime = 0;
+      v.currentTime = resumeAtRef.current;
       v.playbackRate = 1;
       await v.play().catch(() => {});
     }
@@ -376,7 +434,9 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     if (!e) return;
     stopEverything();
     videoRef.current?.pause();
-    setSummary(e.finish());
+    const part = e.finish();
+    setSummary(carriedRef.current ? totalsAsSummary(addTotals(carriedRef.current, part), part) : part);
+    clearAutosave();
     setSaveState({ kind: "idle" });
     setStep("summary");
     heartbeat("end");
@@ -445,8 +505,17 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
           if (v.readyState >= 2 && fresh) {
             lastVideoT = t;
             vfDone = vfSeq;
-            pipe.step(src, t);
+            const stats = statsRef.current;
+            stats.frameDelivered(now);
+            const r = pipe.step(src, t);
+            stats.frameAnalysed(r.ms, r.detected, now);
             rateSteps++;
+            if (v.srcObject) {
+              // Live: when the phone falls behind (heat, a busy main thread), run the person
+              // detector less often; motion analysis (shuttle, swings) keeps every frame.
+              const snap = stats.snapshot(now);
+              pipe.detectEvery = throttleRef.current.update(snap.workMs, 1000 / Math.max(10, snap.delivered), now);
+            }
           }
           if (!v.srcObject) {
             // An upload is analysed at the same cadence on any device: when fewer
@@ -513,6 +582,10 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
         shuttle: view.shuttle,
         hits: view.hits,
         quality: view.quality,
+        perf: (() => {
+          const sn = statsRef.current.snapshot(now);
+          return { camera: sn.cameraFps ?? (mode === "camera" ? sn.delivered : null), analysed: sn.analysed, detector: sn.detector, throttled: throttleRef.current.throttled, ai: aiLayers(pipe) };
+        })(),
         estimate: view.estimate,
         waiting: view.waiting,
         logo: logoRef.current,
@@ -521,6 +594,23 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
       if (now - lastUi > 250) {
         lastUi = now;
         setTick((x) => x + 1);
+      }
+      // Autosave the running totals (resume after a crash, a locked phone or a closed tab).
+      if (step === "track" && e && mode !== "demo" && now - lastAutosave.current > AUTOSAVE_EVERY_MS) {
+        lastAutosave.current = now;
+        saveAutosave({
+          v: 1,
+          savedAt: Date.now(),
+          challengeId,
+          mode: mode === "camera" ? "camera" : "video",
+          lens,
+          taps,
+          order,
+          sound,
+          totals: addTotals(carriedRef.current, e.snapshot()),
+          videoTime: mode === "video" ? videoRef.current?.currentTime : undefined,
+          videoName: mode === "video" ? fileObj.current?.name : undefined,
+        });
       }
     };
     raf = requestAnimationFrame(loop);
@@ -578,21 +668,21 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   };
 
   const toggleRecording = () => {
-    if (recorderRef.current?.state === "recording") return recorderRef.current.stop();
+    if (recorderRef.current?.active) return recorderRef.current.stop();
     const canvas = canvasRef.current;
     const mime = pickMime();
     if (!canvas || !mime || !canvas.captureStream) return setError(c.unsupported);
-    const rec = new MediaRecorder(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 8_000_000 });
-    const chunks: Blob[] = [];
-    rec.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
-    rec.onstop = () => {
-      const blob = new Blob(chunks, { type: mime.split(";")[0] });
+    // Chunks go to the phone's storage as they are made (a whole match in memory crashes Safari).
+    const rec = new ChunkRecorder(mime);
+    recorderRef.current = rec;
+    setRecNote(null);
+    void rec.start(canvas.captureStream(30), (blob) => {
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       setDownload({ url: URL.createObjectURL(blob), name: `wolf-vision-${stamp}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}` });
       setRecording(false);
-    };
-    rec.start(1000);
-    recorderRef.current = rec;
+      if (rec.stoppedFor) setRecNote(rec.stoppedFor === "limit" ? c.recLimit : c.recStorage);
+    });
     setRecording(true);
   };
 
@@ -650,6 +740,9 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     simRef.current = null;
     setMode(null);
     setStep("start");
+    carriedRef.current = null;
+    resumeAtRef.current = 0;
+    clearAutosave();
     setTaps([]);
     pickTarget(DEFAULT_CORNERS[0]);
     setSummary(null);
@@ -743,6 +836,21 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
               ) : null}
               {existing ? <div className={s.notice}>{c.savedBefore(existing.recordedBy.name)}</div> : null}
             </section>
+
+            {resumable ? (
+              <section className={s.card} data-testid="resume-card">
+                <h2>{c.resumeTitle}</h2>
+                <p>{c.resumeText(Math.max(1, Math.round(resumable.totals.duration / 60)), new Date(resumable.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</p>
+                <div className={s.row}>
+                  <button className={s.btn} type="button" onClick={resumeMatch} data-testid="resume">
+                    {c.resumeMatch}
+                  </button>
+                  <button className={s.btnGhost} type="button" onClick={discardResume}>
+                    {c.discard}
+                  </button>
+                </div>
+              </section>
+            ) : null}
 
             {setup ? (
               <section className={s.matchup}>
@@ -1099,6 +1207,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
                 </a>
               </div>
             ) : null}
+            {recNote ? <div className={s.notice}>{recNote}</div> : null}
           </>
         ) : null}
 

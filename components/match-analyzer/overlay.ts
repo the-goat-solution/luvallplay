@@ -41,6 +41,8 @@ export type OverlayState = {
   shuttle: ShuttlePoint[];
   hits: Hit[];
   quality: { q: number; factors: QualityFactors; threshold: number; recall: number; audio?: boolean } | null;
+  /** Frame rates (camera, analysed, detector), whether the detector is slowed down, and which AI layers run. */
+  perf?: { camera: number | null; analysed: number; detector: number; throttled: boolean; ai: string[] };
   estimate: { seen: number; predicted: number; estimated: number; plusMinus: number } | null;
   waiting: number;
   /** Corner taps while calibrating. */
@@ -120,7 +122,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, vw: number, vh: numbe
     else drawCards(ctx, st.players, m, hudBottom + 14 * u, vw - 2 * m, u, true);
   }
   if (st.show.map && st.cam) drawMap(ctx, st, vw - m - 400 * u, vh - m - 240 * u, 400 * u, 240 * u, u);
-  if (st.show.system && st.quality) drawSystem(ctx, st, m, vh - m - 236 * u, 360 * u, 236 * u, u);
+  if (st.show.system && st.quality) drawSystem(ctx, st, m, vh - m - 258 * u, 360 * u, 258 * u, u);
   if (st.waiting > 0 && st.show.players) drawAcquiring(ctx, vw, vh, st, u);
   ctx.restore();
 }
@@ -473,8 +475,15 @@ function drawSystem(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, 
   ctx.font = f(800, 15 * u);
   spaced(ctx, 3 * u);
   ctx.fillStyle = "rgba(226,174,96,0.95)";
-  ctx.fillText("AI SYSTEM", x + 20 * u, y + 28 * u);
+  ctx.fillText("AI-ENHANCED TRACKER", x + 20 * u, y + 28 * u);
   spaced(ctx, 0);
+  if (st.perf?.ai.length) {
+    ctx.font = f(700, 10 * u);
+    ctx.fillStyle = "rgba(47,212,181,0.9)";
+    ctx.textAlign = "right";
+    ctx.fillText(st.perf.ai.join(" · "), x + w - 16 * u, y + 28 * u);
+    ctx.textAlign = "left";
+  }
   // Quality gauge.
   const gx = x + 70 * u, gy = y + 110 * u, gr = 46 * u;
   ctx.lineWidth = 10 * u;
@@ -523,6 +532,13 @@ function drawSystem(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, 
   ctx.font = f(700, 12 * u);
   ctx.fillStyle = STEEL;
   ctx.fillText(`ACCEPT ≥ ${(q.threshold * 100).toFixed(0)}%   RECALL ≈ ${(q.recall * 100).toFixed(0)}%   SOUND ${q.audio === false ? "OFF" : "ON"}`, x + 20 * u, y + h - 40 * u);
+  if (st.perf) {
+    const pf = st.perf;
+    ctx.font = f(700, 11 * u);
+    ctx.fillStyle = pf.throttled ? FLOOD : STEEL;
+    const cam = pf.camera ? `CAM ${Math.round(pf.camera)}` : "CAM –";
+    ctx.fillText(`${cam} · ANALYSED ${Math.round(pf.analysed)} · DETECT ${Math.round(pf.detector)} FPS${pf.throttled ? " · THROTTLED" : ""}`, x + 20 * u, y + h - 62 * u);
+  }
   if (est) {
     ctx.fillStyle = "#fff";
     ctx.font = f(800, 13 * u);

@@ -12,7 +12,7 @@
 import type { Box, Pt } from "../match-analyzer.ts";
 import type { Blob } from "./imaging.ts";
 
-export type ShuttlePoint = { t: number; x: number; y: number; inZone?: boolean };
+export type ShuttlePoint = { t: number; x: number; y: number; inZone?: boolean; p?: number };
 /** A hit-like event on a shuttle track, with the flight points before and after it (for 3D fitting). */
 export type TrajCue = {
   t: number;
@@ -24,7 +24,10 @@ export type TrajCue = {
   after: ShuttlePoint[];
 };
 
-type Track = { id: number; pts: ShuttlePoint[]; miss: number; confirmed: boolean; lastCueT: number };
+type Track = { id: number; pts: ShuttlePoint[]; miss: number; confirmed: boolean; lastCueT: number; cids: number[] };
+
+/** A shuttle candidate: video px position and score, plus what the AI checker needs (analysis px, blob measures). */
+export type Candidate = { x: number; y: number; score: number; ax: number; ay: number; area: number; bright: number; isolation: number; background: number; id?: number; p?: number };
 
 /** Points of a track after its last hit-like event (one flight), so a 3D fit never mixes two shots. */
 function sinceCue(tr: Track, end: number): ShuttlePoint[] {
@@ -46,13 +49,13 @@ export type ShuttleOptions = {
  * head, where contacts happen. Crowded blobs (a body breaking into fragments
  * in the difference image) score low; a shuttle in flight is isolated.
  */
-export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], frameArea: number, background?: BackgroundActivity): { x: number; y: number; score: number }[] {
+export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], frameArea: number, background?: BackgroundActivity): Candidate[] {
   const maxArea = Math.max(6, frameArea * 0.00045);
   // Analysis-frame pixel scale (sizes below were set on a 640-wide frame).
   const k = Math.sqrt(frameArea / (640 * 360));
   const maxSide = 16 * k;
   const crowdR = 14 * k;
-  const out: { x: number; y: number; score: number }[] = [];
+  const out: Candidate[] = [];
   for (const b of blobs) {
     const bw = b.maxX - b.minX + 1;
     const bh = b.maxY - b.minY + 1;
@@ -83,7 +86,7 @@ export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], 
     // Brighter and more compact blobs look more like a white shuttle.
     const score = Math.min(1, 0.4 + b.bright / 400) * (b.area <= 2 ? 0.8 : 1) * isolation * bg;
     if (score < 0.15) continue;
-    out.push({ x, y, score });
+    out.push({ x, y, score, ax: b.x, ay: b.y, area: b.area, bright: b.bright, isolation, background: bg });
   }
   // Too many candidates means noise or a moving background: keep the best.
   out.sort((a, b) => b.score - a.score);
@@ -158,6 +161,14 @@ export class BackgroundActivity {
   }
 }
 
+/**
+ * AI checker: mean shuttle probability a flight's points need. Mild on purpose:
+ * on the simulator (where the motion tracker is already precise) 0.1–0.15 is
+ * neutral and 0.3+ starts to lose dim flights; on real footage it removes
+ * tracks that clearly are not a shuttle (feet, rackets, the crowd).
+ */
+const FLIGHT_MIN_P = 0.15;
+
 function angleBetween(ax: number, ay: number, bx: number, by: number): number {
   const d = Math.hypot(ax, ay) * Math.hypot(bx, by);
   if (d < 1e-9) return 0;
@@ -185,7 +196,10 @@ export class ShuttleTracker {
   }
 
   /** Feeds one frame's candidates (time t of the middle frame). Returns new trajectory cues. */
-  update(t: number, cands: { x: number; y: number; score: number }[], players: Box[]): TrajCue[] {
+  /** Self-labels for the AI checker: candidate id → 1 (became part of a flight) or 0 (a fragment that died). */
+  labels: { id: number; y: 0 | 1 }[] = [];
+
+  update(t: number, cands: { x: number; y: number; score: number; id?: number; p?: number }[], players: Box[]): TrajCue[] {
     const cues: TrajCue[] = [];
     // Around each player (racket reach): rackets and arms move here all the time. A real
     // flight leaves these zones, so a track only counts once it has points outside them.
@@ -218,11 +232,25 @@ export class ShuttleTracker {
       });
       if (best >= 0) {
         used.add(best);
-        tr.pts.push({ t, x: cands[best].x, y: cands[best].y, inZone: inZone(cands[best].x, cands[best].y) });
+        tr.pts.push({ t, x: cands[best].x, y: cands[best].y, inZone: inZone(cands[best].x, cands[best].y), p: cands[best].p });
+        const cid = cands[best].id;
+        if (cid !== undefined) {
+          // Positive only in clear flight: outside racket reach and moving fast.
+          if (tr.confirmed) {
+            const q = tr.pts[tr.pts.length - 2];
+            const sp = q ? Math.hypot(cands[best].x - q.x, cands[best].y - q.y) / Math.max(1e-3, t - q.t) : 0;
+            if (!tr.pts[tr.pts.length - 1].inZone && sp > minSpeed) this.labels.push({ id: cid, y: 1 });
+          } else tr.cids.push(cid);
+        }
         if (tr.pts.length > 90) tr.pts.shift();
         tr.miss = 0;
         if (!tr.confirmed && this.isFlight(tr, minSpeed, players)) {
           tr.confirmed = true;
+          // The points that made it a flight (outside racket reach) are shuttles.
+          tr.pts.slice(-tr.cids.length).forEach((p, i) => {
+            if (!p.inZone) this.labels.push({ id: tr.cids[i], y: 1 });
+          });
+          tr.cids = [];
           const c = this.onConfirmed(tr, players);
           if (c) cues.push(c);
         }
@@ -247,15 +275,22 @@ export class ShuttleTracker {
         if (tr.confirmed) this.ended.push(tr);
       }
     }
+    for (const tr of this.tracks) {
+      // An unconfirmed track that dies young was not a flight: its candidates were not shuttles.
+      if (tr.miss > this.maxMiss && !tr.confirmed) for (const id of tr.cids) this.labels.push({ id, y: 0 });
+    }
     this.tracks = this.tracks.filter((tr) => tr.miss <= this.maxMiss);
     this.ended = this.ended.filter((tr) => t - tr.pts[tr.pts.length - 1].t < 0.6);
     // New tentative tracks from unused candidates.
     cands.forEach((c, j) => {
       if (used.has(j)) return;
       if (this.tracks.length >= 10) return;
-      this.tracks.push({ id: this.nextId++, pts: [{ t, x: c.x, y: c.y, inZone: inZone(c.x, c.y) }], miss: 0, confirmed: false, lastCueT: -Infinity });
+      this.tracks.push({ id: this.nextId++, pts: [{ t, x: c.x, y: c.y, inZone: inZone(c.x, c.y) }], miss: 0, confirmed: false, lastCueT: -Infinity, cids: c.id !== undefined ? [c.id] : [] });
     });
     // Drop tentative tracks that never confirm.
+    for (const tr of this.tracks) {
+      if (!tr.confirmed && tr.pts.length < 2 && tr.miss > 2) for (const id of tr.cids) this.labels.push({ id, y: 0 });
+    }
     this.tracks = this.tracks.filter((tr) => tr.confirmed || tr.pts.length >= 2 || tr.miss <= 2);
     return cues;
   }
@@ -281,6 +316,9 @@ export class ShuttleTracker {
     }
     if (span < Math.max(this.w * 0.03, h * 0.8)) return false;
     if (span / Math.max(1e-3, b.t - a.t) <= minSpeed) return false;
+    // AI checker: the points in flight (outside racket reach) must look like a shuttle on average.
+    const scored = tr.pts.filter((p) => !p.inZone && p.p !== undefined);
+    if (scored.length >= 3 && scored.reduce((s, p) => s + p.p!, 0) / scored.length < FLIGHT_MIN_P) return false;
     // A flight is smooth: a parabola in each image axis fits within a few pixels. Body
     // fragments and noise picked up one after another zig-zag.
     return smoothness(tr.pts.slice(-8)) < this.w * 0.008;

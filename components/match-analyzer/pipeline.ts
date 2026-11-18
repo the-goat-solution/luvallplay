@@ -9,6 +9,7 @@ import { OnsetDetector, onsetsFromSamples, type Onset } from "@/lib/ma/audio";
 import { partLooks, toGray } from "@/lib/ma/imaging";
 import type { MatchSim, SimFrame } from "@/lib/ma/sim";
 import { detectPeople } from "./detector";
+import { fromCrop, mergeDetections } from "@/lib/ma/detections";
 
 /** Analysis frame width: enough for a shuttle at the far baseline, light enough for an iPhone 14. */
 export const ANALYSIS_W = 640;
@@ -30,6 +31,11 @@ export class Pipeline {
   private offlineIdx = 0;
   /** Live camera: detection gets at most half the main thread. Off for uploads. */
   realtime = true;
+  /** Run the person detector on every Nth frame (set by the throttle). */
+  detectEvery = 2;
+  /** Far half of the court (video px) for the second, closer detector pass; null = no second pass. */
+  private farRoi: [number, number, number, number] | null;
+  private farCanvas: HTMLCanvasElement | null = null;
   /** Last simulator frame (ground truth for the test scenario). */
   lastSimFrame: SimFrame | null = null;
   readonly vw: number;
@@ -45,6 +51,12 @@ export class Pipeline {
     this.canvas.width = aw;
     this.canvas.height = ah;
     this.ctx = this.canvas.getContext("2d", { willReadFrequently: true })!;
+    this.farRoi = engine.farRoi();
+    if (this.farRoi) {
+      this.farCanvas = document.createElement("canvas");
+      this.farCanvas.width = 640;
+      this.farCanvas.height = 360;
+    }
   }
 
   /** Impact sounds from the live microphone (added as they are heard). */
@@ -58,8 +70,16 @@ export class Pipeline {
     this.offlineIdx = 0;
   }
 
+  /** Short names of the AI models running in this session (shown on the overlay). */
+  aiLayers(): string[] {
+    const out: string[] = [];
+    if (this.detector) out.push(this.farRoi ? "DETECT ×2" : "DETECT");
+    return out;
+  }
+
   /** Processes one frame from the source at time t (seconds). */
-  step(src: FrameSource, t: number) {
+  step(src: FrameSource, t: number): { ms: number; detected: boolean } {
+    const began0 = performance.now();
     const aw = this.canvas.width, ah = this.canvas.height;
     let persons: Detection[] | undefined;
     let onsets: Onset[] = [];
@@ -72,7 +92,7 @@ export class Pipeline {
       big.putImageData(img, 0, 0);
       this.ctx.drawImage(src.canvas, 0, 0, aw, ah);
       t = f.t;
-      if (this.frameNo % 2 === 0) persons = f.persons;
+      if (this.frameNo % this.detectEvery === 0) persons = f.persons;
       onsets = f.onsets;
     } else {
       this.ctx.drawImage(src.video, 0, 0, aw, ah);
@@ -82,9 +102,17 @@ export class Pipeline {
     const sx = aw / this.vw, sy = ah / this.vh;
     // Live: keep half the main thread free. Uploads: every other frame, always
     // (playback slows down instead, so results don't depend on the device).
-    if (src.kind === "video" && this.detector && this.frameNo % 2 === 0 && (!this.realtime || performance.now() >= this.busyUntil)) {
+    if (src.kind === "video" && this.detector && this.frameNo % this.detectEvery === 0 && (!this.realtime || performance.now() >= this.busyUntil)) {
       const began = performance.now();
       persons = detectPeople(this.detector, this.canvas).map((d) => ({ ...d, box: [d.box[0] / sx, d.box[1] / sy, d.box[2] / sx, d.box[3] / sy] as Detection["box"] }));
+      // Second, closer pass on the far half of the court, from the full-resolution frame.
+      if (this.farRoi && this.farCanvas) {
+        const [rx, ry, rw, rh] = this.farRoi;
+        const fc = this.farCanvas.getContext("2d")!;
+        fc.drawImage(src.video, rx, ry, rw, rh, 0, 0, this.farCanvas.width, this.farCanvas.height);
+        const far = fromCrop(detectPeople(this.detector, this.farCanvas), this.farRoi, this.farCanvas.width, this.farCanvas.height);
+        persons = mergeDetections(persons, far, this.farRoi);
+      }
       // Keep half the main thread free (taps and drawing stay smooth on slower phones).
       this.busyUntil = performance.now() + (performance.now() - began);
     }
@@ -98,6 +126,7 @@ export class Pipeline {
     }
     this.engine.process({ t, gray: this.gray, gw: aw, gh: ah, persons, onsets });
     this.frameNo++;
+    return { ms: performance.now() - began0, detected: !!persons };
   }
 }
 

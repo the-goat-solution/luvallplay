@@ -29,6 +29,8 @@ import { brightness, estimateShift, findBlobs, maskCount, motionMask, noiseSigma
 import { courtToImage, imageToCourt, metresPerPixel, type CourtCamera } from "./lens.ts";
 import type { Onset } from "./audio.ts";
 import { QualityMeter, courtFactor, resolutionFactor, type QualityFactors } from "./quality.ts";
+import { ShuttleChecker, patchFeatures, type CheckerWeights } from "./checker.ts";
+import { SHUTTLE_CHECKER } from "./models/shuttle-checker.ts";
 import { BackgroundActivity, ShuttleTracker, shuttleCandidates, type ShuttlePoint, type TrajCue } from "./shuttle.ts";
 import { HFOV_PRIOR, cameraFromHomography, fitFromPoint, project3, rayNearPlayer, type Camera3D } from "./flight.ts";
 import type { LensPreset } from "./lens.ts";
@@ -59,6 +61,10 @@ export type EngineOptions = {
   lens?: LensPreset;
   /** Horizontal field of view in degrees, when known exactly (overrides the lens prior). */
   hfov?: number;
+  /** AI shuttle checker weights (the shared model); undefined = the bundled ones, null = no checker. */
+  checker?: CheckerWeights | null;
+  /** Auto-training: adapt the checker to this session from the tracker's own labels. Default on. */
+  autoTrain?: boolean;
 };
 
 export type PlayerView = { pos: Pt | null; box: Box | null; conf: number; tracked: boolean; speed: number };
@@ -79,6 +85,7 @@ export type EngineView = {
 type SwingState = { hist: { t: number; e: number }[]; peak: { t: number; z: number } | null; lastT: number; events: { t: number; s: number }[] };
 
 const RALLY_GAP = 3.5;
+
 
 /**
  * Same picture as the previous frame: practically no sampled pixel changed by
@@ -118,6 +125,15 @@ export class MatchEngine {
   private breaks: number[] = [];
   private bodies: Box[] = [];
   private background: BackgroundActivity | null = null;
+  /** AI layer: probability that a motion blob is the shuttle. */
+  readonly checker: ShuttleChecker | null;
+  private readonly autoTrain: boolean;
+  private nextCid = 1;
+  private feats = new Map<number, { t: number; f: Float32Array }>();
+  /** Self-labelled samples seen this session (positives, negatives) and those trained on. */
+  readonly training = { pos: 0, neg: 0, trained: 0 };
+  /** Labelled feature vectors kept for offline training (harness), when enabled. */
+  collect: { f: number[]; y: 0 | 1 }[] | null = null;
   private backgroundW = 0;
   private bodiesT = -Infinity;
   private audioOn: boolean;
@@ -138,6 +154,9 @@ export class MatchEngine {
     this.identity = new IdentityTracker(this.slots);
     this.identity.centreX = (p) => courtToImage(this.cam, { x: COURT.width / 2, y: p.y }).x;
     this.shuttle = new ShuttleTracker({ width: this.W });
+    const w = opts.checker === undefined ? SHUTTLE_CHECKER : opts.checker;
+    this.checker = w ? new ShuttleChecker(w) : opts.autoTrain ? new ShuttleChecker(null) : null;
+    this.autoTrain = opts.autoTrain ?? true;
     this.swings = this.slots.map(() => ({ hist: [], peak: null, lastT: -Infinity, events: [] }));
     this.boxHist = this.slots.map(() => []);
     this.raw = this.slots.map(() => []);
@@ -217,7 +236,25 @@ export class MatchEngine {
         }
         const cands = shuttleCandidates(blobs, scale, allBodies, f.gw * f.gh, this.background);
         this.background.add(blobs, allBodies, scale);
-        for (const cue of this.shuttle.update(b.t, cands, boxes.filter((x): x is Box => !!x))) {
+        // AI layer: the checker scores each candidate; the tracker's outcome later labels it.
+        const trusted = this.checker && this.checker.n >= 500;
+        const kept: typeof cands = [];
+        for (const cd of cands) {
+          cd.id = this.nextCid++;
+          const fv = patchFeatures(a.g, b.g, c.g, f.gw, f.gh, cd.ax, cd.ay, cd, undefined, thr);
+          this.feats.set(cd.id, { t: b.t, f: fv });
+          // The checker's verdict travels with the candidate: the tracker uses it to decide
+          // whether a track is a real flight (it must not remove candidates: at a contact the
+          // shuttle overlaps the racket, and those points make the hit cue).
+          if (trusted) cd.p = this.checker!.predict(fv);
+          kept.push(cd);
+        }
+        cands.length = 0;
+        cands.push(...kept);
+        for (const [id, v] of this.feats) if (b.t - v.t > 4) this.feats.delete(id);
+        const cues = this.shuttle.update(b.t, cands, boxes.filter((x): x is Box => !!x));
+        this.learnFromTracker();
+        for (const cue of cues) {
           this.fusion.addCue({ t: cue.t, kind: "traj", strength: cue.strength, x: cue.x, y: cue.y, playerFit: this.contactFit(cue) });
         }
       }
@@ -296,6 +333,64 @@ export class MatchEngine {
       },
       swingNear: (p, t, w) => Math.max(0, ...this.swings[p].events.filter((e) => Math.abs(e.t - t) <= w).map((e) => e.s)),
     };
+  }
+
+  /**
+   * Auto-training: the tracker's verdicts become labels for the checker. Every
+   * positive is used; negatives (far more numerous) one in three, so the two
+   * classes stay balanced. Small steps: a session nudges, it does not rewrite.
+   */
+  private learnFromTracker() {
+    const labels = this.shuttle.labels;
+    if (!labels.length) return;
+    this.shuttle.labels = [];
+    for (const { id, y } of labels) {
+      const s = this.feats.get(id);
+      if (!s) continue;
+      this.feats.delete(id);
+      if (y) this.training.pos++;
+      else {
+        this.training.neg++;
+        if (this.training.neg % 3) continue;
+      }
+      this.collect?.push({ f: Array.from(s.f, (v) => Math.round(v * 1000) / 1000), y });
+      if (this.checker && this.autoTrain) {
+        // Anchored, small steps: self-labels are right ~60% (flights) and ~98% (fragments) of the time.
+        this.checker.train(s.f, y, 0.002, 0.02, y ? 0.6 : 1);
+        this.training.trained++;
+      }
+    }
+  }
+
+  /**
+   * Where to look closer for the far pair: the far half of the court (and a
+   * little around it) up to head height, in video pixels. Far players are only
+   * ~15 px tall in a 640-wide frame from behind a baseline, too small for the
+   * person detector; running it again on this crop makes them 2–3× bigger.
+   * Null when the crop would not be much smaller than the frame.
+   */
+  farRoi(): Box | null {
+    if (!this.cam3) return null;
+    const pts: Pt[] = [];
+    for (const x of [-1, COURT.width + 1])
+      for (const y of [COURT.net - 0.5, COURT.length + 1.5])
+        for (const z of [0, 2.4]) {
+          const q = project3(this.cam3, this.cam, [x, y, z]);
+          if (q) pts.push(q);
+        }
+    if (pts.length < 8) return null;
+    let x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x));
+    let y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
+    // Margin, then the detector's 16:9 shape, inside the frame.
+    const mx = (x1 - x0) * 0.08, my = (y1 - y0) * 0.15;
+    x0 = Math.max(0, x0 - mx); x1 = Math.min(this.W, x1 + mx); y0 = Math.max(0, y0 - my); y1 = Math.min(this.H, y1 + my);
+    let w = x1 - x0, h = y1 - y0;
+    if (w / h > 16 / 9) h = w * 9 / 16; else w = h * 16 / 9;
+    w = Math.min(w, this.W); h = Math.min(h, this.H);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const bx = Math.max(0, Math.min(this.W - w, cx - w / 2)), by = Math.max(0, Math.min(this.H - h, cy - h / 2));
+    if (w > this.W * 0.6) return null; // not worth a second pass
+    return [Math.round(bx), Math.round(by), Math.round(w), Math.round(h)];
   }
 
   /** Height (m) of a person standing at court point p whose box top is at the given image row, from the 3D camera. */
@@ -488,8 +583,15 @@ export class MatchEngine {
 
   /** Final numbers for the whole session (flushes pending candidates). */
   finish(): MatchSummary & { estimate: ReturnType<HitFusion["estimate"]>; breakdown: Record<Hit["status"], number>; quality: number } {
-    const ctx = this.context();
-    const hits = this.fusion.flush(ctx);
+    return this.totals(this.fusion.flush(this.context()));
+  }
+
+  /** The numbers so far, without finalising anything (for autosaves during the game). */
+  snapshot(): ReturnType<MatchEngine["finish"]> {
+    return this.totals(this.fusion.hits);
+  }
+
+  private totals(hits: Hit[]): MatchSummary & { estimate: ReturnType<HitFusion["estimate"]>; breakdown: Record<Hit["status"], number>; quality: number } {
     const rallies = groupRallies(hits, RALLY_GAP, this.breaks);
     const t0 = this.startT ?? 0;
     const motions = this.trackers.map((tr) => (tr.motion.t.length ? tr.motion : computeMotion([], [])));

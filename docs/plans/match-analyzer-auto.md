@@ -239,7 +239,24 @@ corner taps → players → tracking to the end), with the real MediaPipe
 detector and the sound decoded from the file. This also checks the second
 upload of a session shows a picture (it used to stay black).
 
-E2E_RESULTS
+Final engine, 30 s games (one seed each, so ±10 points of noise), headless
+Chromium on CPU (~7 min per 30 s video: no GPU; a phone is much faster):
+
+| video | true hits | found | precision | recall | right hitter | right side | picture shown |
+|---|---|---|---|---|---|---|---|
+| behind baseline, 1× | 22 | 27 | 59% | 73% | 31% | 81% | yes |
+| side-on, 1× (2nd upload) | 23 | 25 | 80% | 87% | 55% | 90% | yes |
+| corner, 1× | 18 | 21 | 71% | 83% | 33% | 93% | yes |
+| balcony, 0.5×, 6 points (2nd upload) | 19 | 23 | 61% | 74% | 71% | 86% | yes |
+
+The real detector finds the simulator's drawn people less reliably than the
+simulator's own boxes (1–3 of 4 per frame, scores 0.25–0.45), so precision and
+*which partner* are lower here than in the tables above; *which side*, recall
+and identity hold up. Two bugs this run found, now fixed: from a high camera
+a tap for the next point (a net post) landed within the drag radius of a
+placed corner and moved it; and a player the detector lost for seconds coasted
+off court and was never picked up again. Before the fixes the corner video
+read 43–53 % right side.
 
 ## Measured on the simulator (original, behind the baseline only)
 

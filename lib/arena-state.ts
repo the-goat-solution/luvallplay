@@ -46,6 +46,8 @@ export type ChallengeView = {
   crownMatch: boolean;
   /** Match Analyzer stats were saved for this game. */
   hasStats: boolean;
+  /** A phone is tracking this game with Wolf Vision right now (only games where one was set up). */
+  tracking: { rallies: number; hits: number; quality: number } | null;
 };
 export type FeedItem =
   | { kind: "result"; id: number; at: string; winners: PairView; losers: PairView; scoreW: number | null; scoreL: number | null; retired: boolean; stickers: string[]; hasStats: boolean }
@@ -143,6 +145,7 @@ export async function buildArenaState(viewer: { id: number } | null, opts: { max
       offer: canCompare ? { ...bonusesOnOffer(world, myPair!.players, c.postingPlayers), crown: c.postingPair === crownPairId } : null,
       crownMatch: crownPairId !== null && (c.postingPair === crownPairId || c.acceptingPair === crownPairId),
       hasStats: world.statsFor.has(c.id),
+      tracking: world.trackingFor.get(c.id) ?? null,
     };
   };
 

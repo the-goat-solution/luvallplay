@@ -138,10 +138,21 @@ function quantile(a: number[], q: number): number {
   return s.length ? s[Math.floor(s.length * q)] : 0;
 }
 
+/** Inside the court lines with a small margin: where players stand, not the spectators beside it. */
+function inPlay(p: Pt): boolean {
+  return p.x > -0.6 && p.x < COURT.width + 0.6 && p.y > -0.6 && p.y < COURT.length + 0.6;
+}
+
 export class IdentityTracker {
   readonly players: PlayerState[];
   private interactions: Interaction[] = [];
-  private autoStable: number[] = [0, 0];
+  /** Per slot: where a waiting player is being seen, and how many times in a row. */
+  private autoCand: ({ p: Pt; n: number; t: number } | null)[] = [];
+  /** Typical time between detection frames (seconds, smoothed). */
+  private detGap = 0.1;
+  private lastUpdateT: number | null = null;
+  /** Image x of the centre line at a court point's depth (to tell left from right as the camera sees it). */
+  centreX: ((p: Pt) => number) | null = null;
   /** The last frame's detections and which player took each (for taps). */
   lastObs: PersonObs[] = [];
   lastAssign: (number | null)[] = [];
@@ -196,6 +207,8 @@ export class IdentityTracker {
   update(t: number, obs: PersonObs[]): { assign: (number | null)[]; swaps: SwapEvent[] } {
     const swaps: SwapEvent[] = [];
     const P = this.players;
+    if (this.lastUpdateT !== null && t > this.lastUpdateT) this.detGap += (Math.min(3, t - this.lastUpdateT) - this.detGap) * 0.3;
+    this.lastUpdateT = t;
     // Predict everyone to now.
     for (const p of P) {
       if (p.kf) {
@@ -270,7 +283,16 @@ export class IdentityTracker {
     return { assign, swaps };
   }
 
-  /** Before the game: picks players up on their slots once each half shows the right number of people. */
+  /**
+   * Before the game (and after someone is lost for good): picks players up on
+   * their slots. With as many people as empty slots on a half, they are
+   * ordered left to right as the camera sees them; with fewer (someone hidden
+   * or out of shot), each goes to the side of the centre line they stand on.
+   * Detections flicker (a far player can drop under the score cut for a few
+   * frames), so evidence is kept per slot: the same spot (within 1.2 m) seen
+   * 4 times, with gaps under a second, acquires that slot. Only people inside
+   * the court lines (0.6 m margin) count, not spectators just off court.
+   */
   private autoAssign(t: number, obs: PersonObs[], assign: (number | null)[]) {
     for (const side of [0, 1] as const) {
       const waiting = this.players.map((p, i) => ({ p, i })).filter(({ p }) => p.slot.side === side && !p.kf);
@@ -278,24 +300,62 @@ export class IdentityTracker {
       const taken = new Set(assign.filter((j): j is number => j !== null));
       const free = obs
         .map((o, j) => ({ o, j }))
-        .filter(({ o, j }) => !taken.has(j) && o.score >= 0.4 && sideOf(o.p) === side && Math.abs(o.p.y - COURT.net) > NET_TOL);
-      if (free.length !== waiting.length) {
-        this.autoStable[side] = 0;
-        continue;
+        .filter(({ o, j }) => !taken.has(j) && o.score >= 0.3 && inPlay(o.p) && sideOf(o.p) === side && Math.abs(o.p.y - COURT.net) > NET_TOL)
+        .sort((a, b) => a.o.box[0] + a.o.box[2] / 2 - (b.o.box[0] + b.o.box[2] / 2));
+      if (!free.length) continue;
+      if (free.length > waiting.length) {
+        // More people than places: keep the most confident ones, still left to right.
+        const keep = new Set([...free].sort((a, b) => b.o.score - a.o.score).slice(0, waiting.length).map((f) => f.j));
+        for (let k = free.length - 1; k >= 0; k--) if (!keep.has(free[k].j)) free.splice(k, 1);
       }
-      if (++this.autoStable[side] < 4) continue;
-      // Left/right as the camera sees it: by image x of the feet.
-      free.sort((a, b) => a.o.box[0] + a.o.box[2] / 2 - (b.o.box[0] + b.o.box[2] / 2));
       waiting.sort((a, b) => a.p.slot.lr - b.p.slot.lr);
-      waiting.forEach(({ p, i }, k) => {
-        const { o, j } = free[k];
-        p.kf = kfInit(o.p);
+      let pairs: { slot: (typeof waiting)[number]; obs: (typeof free)[number] }[];
+      if (free.length === waiting.length) {
+        pairs = waiting.map((w, k) => ({ slot: w, obs: free[k] }));
+      } else {
+        // Fewer people than empty slots: left or right of the centre line.
+        pairs = [];
+        const used = new Set<number>();
+        for (const f of free) {
+          const fx = f.o.box[0] + f.o.box[2] / 2;
+          const lr = this.centreX ? (fx < this.centreX(f.o.p) ? 0 : 1) : f.o.p.x < COURT.width / 2 ? 0 : 1;
+          // Someone standing near the centre line keeps the slot they were already building evidence for.
+          let near: (typeof waiting)[number] | undefined;
+          let best = 1.5;
+          for (const x of waiting) {
+            const c = this.autoCand[x.i];
+            if (!c || used.has(x.i) || t - c.t > Math.max(1, 2.5 * this.detGap)) continue;
+            const d = Math.hypot(c.p.x - f.o.p.x, c.p.y - f.o.p.y);
+            if (d < best) [best, near] = [d, x];
+          }
+          const w = near ?? waiting.find((x) => x.p.slot.lr === lr && !used.has(x.i)) ?? waiting.find((x) => !used.has(x.i));
+          if (!w) continue;
+          used.add(w.i);
+          pairs.push({ slot: w, obs: f });
+        }
+      }
+      for (const { slot, obs: f } of pairs) {
+        const c = this.autoCand[slot.i];
+        // Slow detection (an older phone, or a desktop without a GPU) spaces the
+        // looks out: allow for the walking a player can do in between.
+        const gap = c ? t - c.t : 0;
+        if (c && gap < Math.max(1, 2.5 * this.detGap) && Math.hypot(c.p.x - f.o.p.x, c.p.y - f.o.p.y) < 1.2 + 1.5 * Math.max(0, gap - 0.3)) {
+          c.n++;
+          c.t = t;
+          c.p = f.o.p;
+        } else {
+          this.autoCand[slot.i] = { p: f.o.p, n: 1, t };
+        }
+        if (this.autoCand[slot.i]!.n < (this.detGap > 0.5 ? 3 : 4) || assign.includes(f.j)) continue;
+        const p = slot.p;
+        p.kf = kfInit(f.o.p);
         p.lastT = p.lastObsT = t;
-        p.look = o.look;
-        p.box = o.box;
+        p.look = f.o.look;
+        p.box = f.o.box;
         p.conf = 0.8;
-        assign[i] = j;
-      });
+        assign[slot.i] = f.j;
+        this.autoCand[slot.i] = null;
+      }
     }
   }
 

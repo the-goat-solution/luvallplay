@@ -48,8 +48,9 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            // camera=(self): "Take photo" on the Player tab opens the camera.
-            value: "camera=(self), microphone=(), geolocation=()",
+            // camera=(self): "Take photo" on the Player tab, and Wolf Vision (the Match
+            // Analyzer) filming a game. microphone=(self): Wolf Vision listens for racket impacts.
+            value: "camera=(self), microphone=(self), geolocation=()",
           },
           {
             key: "Strict-Transport-Security",

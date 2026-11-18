@@ -65,13 +65,14 @@ export type SimRunResult = {
  * Simulates `seconds` of a game and runs the engine on it (court set from 6
  * slightly imprecise taps, as an assistant would). Analysis at the render size.
  */
-export function runSim(opts: SimOptions, seconds: number, useTruthCamera = false): SimRunResult {
+export function runSim(opts: SimOptions & { audio?: boolean }, seconds: number, useTruthCamera = false): SimRunResult {
+  const audio = opts.audio ?? true;
   const sim = new MatchSim(opts);
   const w = opts.w, h = opts.h;
   const cam = useTruthCamera ? sim.cam : fitCamera(sim.taps(6), w, h, LENS_PRIOR[opts.lens ?? "wide"]);
   if (!cam) throw new Error("calibration failed");
   // The 3D camera uses the iPhone field-of-view prior, not the simulator's exact value (69° / 108°).
-  const engine = new MatchEngine({ cam, videoW: w, videoH: h, courtPoints: 6, lens: opts.lens ?? "wide" });
+  const engine = new MatchEngine({ cam, videoW: w, videoH: h, courtPoints: 6, lens: opts.lens ?? "wide", audioOn: audio });
   const gray = new Uint8Array(w * h);
   let idOk = 0, idAll = 0;
   const truthPath: { x: number; y: number }[][] = [[], [], [], []];
@@ -80,7 +81,7 @@ export function runSim(opts: SimOptions, seconds: number, useTruthCamera = false
     const f = sim.step();
     // Detector at half the frame rate, like a phone.
     const inp = engineInput(f, w, h, gray);
-    engine.process({ ...inp, persons: k % 2 === 0 ? inp.persons : undefined });
+    engine.process({ ...inp, persons: k % 2 === 0 ? inp.persons : undefined, onsets: audio ? inp.onsets : [] });
     f.truth.players.forEach((p, i) => truthPath[i].push(p));
     if (k % 2 === 0 && engine.identity.ready) {
       engine.view(f.t).players.forEach((pv, i) => {

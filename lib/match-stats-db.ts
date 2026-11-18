@@ -32,6 +32,25 @@ export const saveStatsSchema = z.object({
   avgRallyShots: z.number().min(0).max(1000),
   fastestShotKmh: z.number().min(0).max(500).nullable(),
   players: z.array(playerStats).length(4),
+  /** Automatic tracking details (Wolf Vision): quality and how hits were found. */
+  auto: z
+    .object({
+      quality: z.number().min(0).max(1),
+      accepted: z.number().int().min(0).max(5000),
+      inferred: z.number().int().min(0).max(5000),
+      predicted: z.number().int().min(0).max(5000),
+      estimated: z.number().int().min(0).max(10000),
+      plusMinus: z.number().int().min(0).max(10000),
+    })
+    .optional(),
+});
+
+export const heartbeatSchema = z.object({
+  challengeId: z.number().int().positive(),
+  kind: z.enum(["start", "beat", "end"]),
+  rallies: z.number().int().min(0).max(5000),
+  hits: z.number().int().min(0).max(20000),
+  quality: z.number().min(0).max(1),
 });
 export type SaveStatsInput = z.infer<typeof saveStatsSchema>;
 export type SavedMatchStats = SaveStatsInput & { recordedBy: { id: number; name: string }; recordedAt: string };
@@ -65,7 +84,7 @@ export async function loadMatchSetup(challengeId: number): Promise<{ setup: Matc
 
 export async function loadMatchStats(challengeId: number): Promise<SavedMatchStats | null> {
   await ensureArenaTables();
-  const { rows } = await sql.query(`SELECT stats FROM ${T.matchStats} WHERE challenge_id = $1;`, [challengeId]);
+  const { rows } = await sql.query(`SELECT stats FROM ${T.matchStats} WHERE challenge_id = $1 AND status = 'final';`, [challengeId]);
   return (rows[0]?.stats as SavedMatchStats | undefined) ?? null;
 }
 
@@ -85,9 +104,27 @@ export async function saveMatchStats(recorder: { id: number }, input: SaveStatsI
     recordedAt: new Date().toISOString(),
   };
   await sql.query(
-    `INSERT INTO ${T.matchStats} (challenge_id, recorded_by, stats) VALUES ($1, $2, $3)
-     ON CONFLICT (challenge_id) DO UPDATE SET recorded_by = EXCLUDED.recorded_by, stats = EXCLUDED.stats, updated_at = NOW();`,
+    `INSERT INTO ${T.matchStats} (challenge_id, recorded_by, stats, status) VALUES ($1, $2, $3, 'final')
+     ON CONFLICT (challenge_id) DO UPDATE SET recorded_by = EXCLUDED.recorded_by, stats = EXCLUDED.stats, status = 'final', updated_at = NOW();`,
     [input.challengeId, recorder.id, JSON.stringify(saved)],
   );
   return saved;
+}
+
+/**
+ * Wolf Vision heartbeat: a phone set up for this game is tracking it. Only
+ * games with a recent heartbeat show "Wolf Vision · live" on the Arena; games
+ * without a phone are untouched. Saved final stats are never overwritten here.
+ */
+export async function heartbeatTracking(recorder: { id: number }, input: z.infer<typeof heartbeatSchema>): Promise<void> {
+  const world = await loadWorld({ skipSync: true });
+  const c = world.challenges.find((x) => x.id === input.challengeId);
+  if (!c || !c.acceptingPlayers) throw new ArenaError("not_found");
+  if (!RECORDABLE.has(c.status)) throw new ArenaError("not_recordable");
+  const live = { rallies: input.rallies, hits: input.hits, quality: input.quality, ended: input.kind === "end" };
+  await sql.query(
+    `INSERT INTO ${T.matchStats} (challenge_id, recorded_by, stats, status, live, live_at) VALUES ($1, $2, '{}'::jsonb, 'tracking', $3, NOW())
+     ON CONFLICT (challenge_id) DO UPDATE SET live = EXCLUDED.live, live_at = NOW(), updated_at = NOW();`,
+    [input.challengeId, recorder.id, JSON.stringify(live)],
+  );
 }

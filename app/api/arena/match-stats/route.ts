@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { checkRateLimit } from "@/lib/security";
 import { ArenaError, invalidateWorld } from "@/lib/arena-db";
-import { loadMatchSetup, saveMatchStats, saveStatsSchema } from "@/lib/match-stats-db";
+import { heartbeatSchema, heartbeatTracking, loadMatchSetup, saveMatchStats, saveStatsSchema } from "@/lib/match-stats-db";
 
-// Match Analyzer ↔ Arena. GET ?challenge=ID: the four players (for tagging)
-// and any stats already saved. POST: save the totals for that challenge.
+// Match Analyzer (Wolf Vision) ↔ Arena. GET ?challenge=ID: the four players
+// and any stats already saved. POST: save the final totals. PUT: heartbeat
+// from the phone tracking the game (shows "Wolf Vision · live" on the board).
 // Both need a signed-in player; the court assistant does not have to be one
 // of the four.
 
@@ -41,6 +42,24 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof ArenaError) return NextResponse.json({ error: err.code }, { status: 409 });
     console.error("[match-stats] save failed:", err);
+    return NextResponse.json({ error: "server" }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  if (!process.env.POSTGRES_URL) return NextResponse.json({ error: "no_database" }, { status: 503 });
+  const player = await getPlayerFromRequest(request);
+  if (!player) return NextResponse.json({ error: "signed_out" }, { status: 401 });
+  if (!checkRateLimit(`match-live:${player.id}`, 30, 60_000)) return NextResponse.json({ error: "too_many" }, { status: 429 });
+  const parsed = heartbeatSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  try {
+    await heartbeatTracking({ id: player.id }, parsed.data);
+    invalidateWorld();
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    if (err instanceof ArenaError) return NextResponse.json({ error: err.code }, { status: 409 });
+    console.error("[match-stats] heartbeat failed:", err);
     return NextResponse.json({ error: "server" }, { status: 500 });
   }
 }

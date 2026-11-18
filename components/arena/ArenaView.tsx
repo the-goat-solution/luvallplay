@@ -1088,12 +1088,19 @@ function LiveCard({ c, signedIn }: { c: ChallengeView; signedIn: boolean }) {
           )}
         </div>
       </div>
-      {signedIn && (
+      {c.tracking ? (
+        <a className={`${s.statsLink} ${s.trackingLive}`} href={signedIn ? `/match-analyzer?challenge=${c.id}` : undefined}>
+          <span>
+            <i /> {t("wv_live")}
+          </span>
+          <small>{t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</small>
+        </a>
+      ) : signedIn ? (
         <a className={s.statsLink} href={`/match-analyzer?challenge=${c.id}`}>
           {t("rec_stats")}
           <small>{t("rec_stats_hint")}</small>
         </a>
-      )}
+      ) : null}
     </article>
   );
 }

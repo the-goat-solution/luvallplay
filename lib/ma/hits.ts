@@ -57,6 +57,8 @@ export const FUSION = {
   alternation: 1.1,
   /** Added when the microphone is on but no impact was heard. */
   silence: -2.2,
+  /** Added when there is no sound to go by (mic off or failed, silent file): visual cues must carry it alone. */
+  noAudio: 1.0,
 };
 
 /**
@@ -66,17 +68,26 @@ export const FUSION = {
  */
 export const RECALL_MODEL = { rMax: 0.79, gamma: 0.12 };
 export const PRECISION_MODEL = { a: 0.6, b: 0.35 };
+/**
+ * Without sound (mic off or failed, a file with no audio track) the picture
+ * alone is much less certain; fitted the same way:
+ *   R(Q) = 0.56·Q^0.12      P(Q) = 0.4 + 0.2·Q
+ */
+export const RECALL_MODEL_SILENT = { rMax: 0.56, gamma: 0.12 };
+export const PRECISION_MODEL_SILENT = { a: 0.4, b: 0.2 };
 
-export function expectedPrecision(q: number): number {
-  return Math.min(0.99, PRECISION_MODEL.a + PRECISION_MODEL.b * Math.max(0, Math.min(1, q)));
+export function expectedPrecision(q: number, audio = true): number {
+  const m = audio ? PRECISION_MODEL : PRECISION_MODEL_SILENT;
+  return Math.min(0.99, m.a + m.b * Math.max(0, Math.min(1, q)));
 }
 
 export function acceptThreshold(q: number): number {
   return 0.5 + 0.25 * (1 - Math.max(0, Math.min(1, q)));
 }
 
-export function expectedRecall(q: number): number {
-  return Math.max(0.05, RECALL_MODEL.rMax * Math.pow(Math.max(0.01, Math.min(1, q)), RECALL_MODEL.gamma));
+export function expectedRecall(q: number, audio = true): number {
+  const m = audio ? RECALL_MODEL : RECALL_MODEL_SILENT;
+  return Math.max(0.05, m.rMax * Math.pow(Math.max(0.01, Math.min(1, q)), m.gamma));
 }
 
 const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
@@ -116,6 +127,7 @@ export class HitFusion {
   readonly candidates: Candidate[] = [];
   private accepted: Hit[] = [];
   private lastQuality = 1;
+  private lastAudio = true;
   readonly latency = 0.35;
 
   private cues: Cue[] = [];
@@ -134,6 +146,7 @@ export class HitFusion {
    */
   update(now: number, ctx: FusionContext): Hit[] {
     this.lastQuality = ctx.quality;
+    this.lastAudio = ctx.audioOn;
     const cutoff = now - this.latency;
     const window = (c: Cue) => (c.kind === "swing" ? [-0.15, 0.3] : [-0.25, 0.25]);
     const groups: Pending[] = [];
@@ -216,7 +229,7 @@ export class HitFusion {
         ctx.swingNear(pl, pend.t, 0.2),
       );
       const alternation = dt < 3 ? (ctx.sideOf(last!.player) !== ctx.sideOf(pl) ? 1 : -1) : 0;
-      const silent = ctx.audioOn && !audioCue ? FUSION.silence : 0;
+      const silent = ctx.audioOn ? (audioCue ? 0 : FUSION.silence) : FUSION.noAudio;
       const own = FUSION.b0 + FUSION.traj * traj + FUSION.swing * swing + FUSION.audio * audio + FUSION.reach * reach + FUSION.rhythm * rhythm + silent;
       scores.push(own);
       const z = own + FUSION.alternation * alternation;
@@ -257,7 +270,7 @@ export class HitFusion {
         if (!h.scores) return pl === h.player ? 0 : -50; // manual or predicted: fixed
         return h.scores[pl] - Math.max(...h.scores);
       };
-      const missLog = Math.log(Math.max(0.03, 1 - expectedRecall(this.lastQuality)));
+      const missLog = Math.log(Math.max(0.03, 1 - expectedRecall(this.lastQuality, this.lastAudio)));
       let dp = Array.from({ length: n }, (_, pl) => emit(seg[0], pl));
       const back: number[][] = [];
       for (let k = 1; k < seg.length; k++) {
@@ -337,7 +350,7 @@ export class HitFusion {
               pl = o;
             }
           }
-          H.splice(i, 0, { t, player: pl, p: 1 - expectedRecall(ctx.quality), status: "predicted", cues: {} });
+          H.splice(i, 0, { t, player: pl, p: 1 - expectedRecall(ctx.quality, ctx.audioOn), status: "predicted", cues: {} });
         }
         changed = true;
         break;
@@ -349,8 +362,8 @@ export class HitFusion {
   estimate(): { seen: number; predicted: number; estimated: number; plusMinus: number; recall: number } {
     const seen = this.accepted.filter((h) => h.status !== "predicted").length;
     const predicted = this.accepted.length - seen;
-    const R = expectedRecall(this.lastQuality);
-    const nHat = (seen * expectedPrecision(this.lastQuality)) / R;
+    const R = expectedRecall(this.lastQuality, this.lastAudio);
+    const nHat = (seen * expectedPrecision(this.lastQuality, this.lastAudio)) / R;
     return {
       seen,
       predicted,

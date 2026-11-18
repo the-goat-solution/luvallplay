@@ -6,6 +6,7 @@
 // simulator (lib/ma/sim.ts).
 
 import {
+  COURT,
   MotionTracker,
   computeMotion,
   groupRallies,
@@ -68,7 +69,7 @@ export type EngineView = {
   shuttle: ShuttlePoint[];
   hits: Hit[];
   rally: RallyReadout | null;
-  quality: { q: number; factors: QualityFactors; threshold: number; recall: number };
+  quality: { q: number; factors: QualityFactors; threshold: number; recall: number; audio: boolean };
   estimate: ReturnType<HitFusion["estimate"]>;
   waiting: number;
   /** Seconds since tracking started. */
@@ -105,6 +106,11 @@ export class MatchEngine {
   private audioOn: boolean;
   private cam3: Camera3D | null;
 
+  /** Whether impact sounds are being heard (a "no sound" then counts against a hit). Off if the mic or the file's audio fails. */
+  setAudio(on: boolean) {
+    this.audioOn = on;
+  }
+
   constructor(opts: EngineOptions) {
     this.cam = { ...opts.cam, shift: { x: 0, y: 0 } };
     this.W = opts.videoW;
@@ -113,6 +119,7 @@ export class MatchEngine {
     this.audioOn = opts.audioOn ?? true;
     this.cam3 = cameraFromHomography(opts.cam.toImage, opts.videoW, opts.videoH, opts.hfov ?? HFOV_PRIOR[opts.lens ?? "wide"]);
     this.identity = new IdentityTracker(this.slots);
+    this.identity.centreX = (p) => courtToImage(this.cam, { x: COURT.width / 2, y: p.y }).x;
     this.shuttle = new ShuttleTracker({ width: this.W });
     this.swings = this.slots.map(() => ({ hist: [], peak: null, lastT: -Infinity, events: [] }));
     this.boxHist = this.slots.map(() => []);
@@ -409,7 +416,7 @@ export class MatchEngine {
       shuttle: this.shuttle.trail(t),
       hits,
       rally,
-      quality: { q, factors: this.quality.factors(), threshold: acceptThreshold(q), recall: expectedRecall(q) },
+      quality: { q, factors: this.quality.factors(), threshold: acceptThreshold(q), recall: expectedRecall(q, this.audioOn), audio: this.audioOn },
       estimate: this.fusion.estimate(),
       waiting: this.identity.players.filter((p) => !p.kf).length,
       elapsed: this.startT === null ? 0 : t - this.startT,

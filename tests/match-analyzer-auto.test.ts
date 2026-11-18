@@ -118,6 +118,8 @@ test("hits: sound + swing is accepted; a swing alone is not; the threshold rises
   assert.deepEqual(f.hits.map((h) => [h.t, h.player]), [[1, 2]]);
   assert.ok(acceptThreshold(0.3) > acceptThreshold(0.9));
   assert.ok(expectedRecall(0.3) < expectedRecall(0.9));
+  // Without sound the picture alone finds fewer hits: the miss estimate must expect that.
+  assert.ok(expectedRecall(0.8, false) < expectedRecall(0.8, true));
   assert.ok(rhythmScore(1) > rhythmScore(0.1));
 });
 

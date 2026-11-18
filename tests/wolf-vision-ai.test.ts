@@ -120,3 +120,12 @@ test("far-court crop: from behind a baseline it covers the far half and is much 
   assert.ok(w <= 640 * 0.6 && h > 0);
   assert.ok(Math.abs(w / h - 16 / 9) < 0.05);
 });
+
+test("free trial: free through 28 Feb 2027 in New Zealand, paid from 1 March", async () => {
+  const { isTrial, trialDaysLeft } = await import("../lib/wolf-vision-trial.ts");
+  assert.ok(isTrial(Date.parse("2026-11-19T10:00:00Z")));
+  assert.ok(isTrial(Date.parse("2027-02-28T23:59:00+13:00")), "last minute of 28 Feb in NZ is still free");
+  assert.ok(!isTrial(Date.parse("2027-03-01T00:00:00+13:00")), "paywall from midnight 1 March NZ");
+  assert.equal(trialDaysLeft(Date.parse("2027-02-28T12:00:00+13:00")), 1);
+  assert.equal(trialDaysLeft(Date.parse("2027-03-02T00:00:00+13:00")), 0);
+});

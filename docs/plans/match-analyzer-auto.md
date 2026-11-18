@@ -1,6 +1,6 @@
 # Wolf Vision: automatic hits and identity
 
-How `/match-analyzer` tracks a doubles game with no operator taps: the four
+How Wolf Vision (`/profile/wolf-vision`) tracks a doubles game with no operator taps: the four
 players' identities, every hit and who made it, plus an estimate of the hits
 it missed. Code: `lib/ma/`. Tests: `tests/match-analyzer-auto.test.ts`.
 

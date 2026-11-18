@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   const pass = await createPass(player.id, kind, { test: false, challengeId: body.data.challengeId });
   // Back to the analyzer (same challenge, if any) with the session to confirm.
   const rt = body.data.returnTo;
-  const back = rt && (rt.startsWith("/match-analyzer") || rt.startsWith("/profile/wolf-vision")) ? rt : "/match-analyzer";
+  const back = rt && rt.startsWith("/profile/wolf-vision") ? rt : "/profile/wolf-vision";
   const sep = back.includes("?") ? "&" : "?";
   const site = getSiteUrl();
   const cs = await getStripe().checkout.sessions.create({

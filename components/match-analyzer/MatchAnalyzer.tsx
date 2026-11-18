@@ -962,7 +962,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
               <p>{c.intro}</p>
               <p className={s.muted}>{c.aiLayers}</p>
               <p className={s.muted}>
-                <a href="/match-analyzer/label" style={{ color: "inherit" }}>
+                <a href="/profile/wolf-vision/label" style={{ color: "inherit" }}>
                   {c.labelLink}
                 </a>
               </p>
@@ -970,7 +970,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
               {setupError === "signed_out" ? (
                 <div className={s.notice}>
                   {c.signIn}{" "}
-                  <a href={`/login?next=${encodeURIComponent(`${embedded ? "/profile/wolf-vision" : "/match-analyzer"}?challenge=${challengeId}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
+                  <a href={`/login?next=${encodeURIComponent(`/profile/wolf-vision?challenge=${challengeId}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
                     {c.signInBtn}
                   </a>
                 </div>
@@ -1021,7 +1021,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
                 {payState === "signed_out" ? (
                   <div className={s.notice}>
                     {c.paySignIn}{" "}
-                    <a href={`/login?next=${encodeURIComponent(`${embedded ? "/profile/wolf-vision" : "/match-analyzer"}${challengeId ? `?challenge=${challengeId}` : ""}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
+                    <a href={`/login?next=${encodeURIComponent(`/profile/wolf-vision${challengeId ? `?challenge=${challengeId}` : ""}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
                       {c.signInBtn}
                     </a>
                   </div>

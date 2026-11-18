@@ -39,36 +39,123 @@ export type ShuttleOptions = {
 };
 
 /**
- * Which motion blobs could be the shuttle: small, compact, and not on a
- * player's legs or torso (the lower two thirds of the box). The racket zone
- * (head height and to the sides) stays allowed: that is where hits happen.
+ * Which motion blobs could be the shuttle: small, compact, away from other
+ * motion, and not on a person. Bodies are masked whole, feet included (a
+ * moving foot or shoe edge is the commonest false shuttle), except the racket
+ * zone: the upper half of the box out to its sides and everything above the
+ * head, where contacts happen. Crowded blobs (a body breaking into fragments
+ * in the difference image) score low; a shuttle in flight is isolated.
  */
-export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], frameArea: number): { x: number; y: number; score: number }[] {
+export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], frameArea: number, background?: BackgroundActivity): { x: number; y: number; score: number }[] {
   const maxArea = Math.max(6, frameArea * 0.00045);
+  // Analysis-frame pixel scale (sizes below were set on a 640-wide frame).
+  const k = Math.sqrt(frameArea / (640 * 360));
+  const maxSide = 16 * k;
+  const crowdR = 14 * k;
   const out: { x: number; y: number; score: number }[] = [];
   for (const b of blobs) {
     const bw = b.maxX - b.minX + 1;
     const bh = b.maxY - b.minY + 1;
-    if (b.area > maxArea || bw > 16 || bh > 16) continue;
+    if (b.area > maxArea || bw > maxSide || bh > maxSide) continue;
     if (Math.max(bw, bh) / Math.max(1, Math.min(bw, bh)) > 6) continue;
     const x = b.x / scale;
     const y = b.y / scale;
     let onBody = false;
     for (const p of players) {
-      // Head, torso and legs (not the space beside the shoulders, where the racket meets the shuttle).
-      if (x > p[0] + p[2] * 0.12 && x < p[0] + p[2] * 0.88 && y > p[1] - p[3] * 0.02 && y < p[1] + p[3]) {
-        onBody = true;
-        break;
-      }
+      const [px, py, pw, ph] = p;
+      if (x < px - 0.08 * pw || x > px + 1.08 * pw || y < py - 0.02 * ph || y > py + 1.06 * ph) continue;
+      const upper = y < py + 0.55 * ph;
+      const side = x < px + 0.25 * pw || x > px + 0.75 * pw;
+      if (upper && side) continue; // racket zone
+      onBody = true;
+      break;
     }
     if (onBody) continue;
+    // Other motion nearby (in analysis pixels): fragments of a moving body or a waving net.
+    let crowd = 0;
+    for (const o of blobs) {
+      if (o === b || o.area < 3) continue; // single-pixel specks are sensor noise, not a body
+      if (Math.abs(o.x - b.x) < crowdR && Math.abs(o.y - b.y) < crowdR) crowd += o.area;
+    }
+    const isolation = crowd <= 2 * b.area ? 1 : crowd <= 8 * b.area ? 0.6 : 0.25;
+    // Places that move all the time (crowd, LED boards, a fan, the next court) are background.
+    const bg = background ? background.weight(b.x, b.y) : 1;
     // Brighter and more compact blobs look more like a white shuttle.
-    const score = Math.min(1, 0.4 + b.bright / 400) * (b.area <= 2 ? 0.8 : 1);
+    const score = Math.min(1, 0.4 + b.bright / 400) * (b.area <= 2 ? 0.8 : 1) * isolation * bg;
+    if (score < 0.15) continue;
     out.push({ x, y, score });
   }
   // Too many candidates means noise or a moving background: keep the best.
   out.sort((a, b) => b.score - a.score);
   return out.slice(0, 30);
+}
+
+/** RMS residual (px) of a quadratic fit in time to x and y. */
+function smoothness(pts: ShuttlePoint[]): number {
+  const n = pts.length;
+  if (n < 4) return Infinity;
+  const t0 = pts[0].t;
+  let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0;
+  const ts = pts.map((p) => p.t - t0);
+  for (const t of ts) {
+    s0 += 1; s1 += t; s2 += t * t; s3 += t * t * t; s4 += t * t * t * t;
+  }
+  const fit = (v: number[]) => {
+    let b0 = 0, b1 = 0, b2 = 0;
+    ts.forEach((t, i) => { b0 += v[i]; b1 += v[i] * t; b2 += v[i] * t * t; });
+    // Solve the 3×3 normal equations (Cramer).
+    const M = [s0, s1, s2, s1, s2, s3, s2, s3, s4];
+    const det = (m: number[]) => m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6]);
+    const D = det(M);
+    if (Math.abs(D) < 1e-12) return Infinity;
+    const c0 = det([b0, M[1], M[2], b1, M[4], M[5], b2, M[7], M[8]]) / D;
+    const c1 = det([M[0], b0, M[2], M[3], b1, M[5], M[6], b2, M[8]]) / D;
+    const c2 = det([M[0], M[1], b0, M[3], M[4], b1, M[6], M[7], b2]) / D;
+    return ts.reduce((a, t, i) => a + (v[i] - (c0 + c1 * t + c2 * t * t)) ** 2, 0);
+  };
+  return Math.sqrt((fit(pts.map((p) => p.x)) + fit(pts.map((p) => p.y))) / n);
+}
+
+/**
+ * How much each part of the frame moves when no player is there, learned as
+ * the game goes on (a coarse grid, decaying over ~10 s). The shuttle crosses
+ * any one cell for a few frames; crowds, animated boards and fans keep moving.
+ */
+export class BackgroundActivity {
+  private readonly gw = 32;
+  private readonly gh = 18;
+  private readonly grid = new Float32Array(32 * 18);
+  private frames = 0;
+  private readonly w: number;
+  private readonly h: number;
+  constructor(w: number, h: number) {
+    this.w = w;
+    this.h = h;
+  }
+
+  /** Adds one frame's motion blobs (analysis pixels), leaving out those on or around a person. */
+  add(blobs: Blob[], bodies: Box[], scale: number) {
+    const decay = 0.99;
+    for (let i = 0; i < this.grid.length; i++) this.grid[i] *= decay;
+    const cellArea = (this.w / this.gw) * (this.h / this.gh);
+    for (const b of blobs) {
+      const x = b.x / scale, y = b.y / scale;
+      if (bodies.some((p) => x > p[0] - 0.5 * p[2] && x < p[0] + 1.5 * p[2] && y > p[1] - 0.5 * p[3] && y < p[1] + 1.1 * p[3])) continue;
+      const cx = Math.min(this.gw - 1, Math.floor((b.x / this.w) * this.gw));
+      const cy = Math.min(this.gh - 1, Math.floor((b.y / this.h) * this.gh));
+      this.grid[cy * this.gw + cx] += Math.min(1, b.area / cellArea) * (1 - decay) * 100;
+    }
+    this.frames++;
+  }
+
+  /** 1 for a quiet place, falling towards 0.1 where something moves most of the time. */
+  weight(x: number, y: number): number {
+    if (this.frames < 30) return 1;
+    const cx = Math.min(this.gw - 1, Math.max(0, Math.floor((x / this.w) * this.gw)));
+    const cy = Math.min(this.gh - 1, Math.max(0, Math.floor((y / this.h) * this.gh)));
+    const a = this.grid[cy * this.gw + cx];
+    return Math.max(0.1, Math.exp(-a / 1.5));
+  }
 }
 
 function angleBetween(ax: number, ay: number, bx: number, by: number): number {
@@ -102,8 +189,10 @@ export class ShuttleTracker {
     const cues: TrajCue[] = [];
     // Around each player (racket reach): rackets and arms move here all the time. A real
     // flight leaves these zones, so a track only counts once it has points outside them.
+    // Racket reach: beside the shoulders and above the head (not the whole box surroundings:
+    // seen from behind a baseline four players' boxes cover most of the court).
     const inZone = (x: number, y: number) =>
-      players.some((b) => x > b[0] - 0.6 * b[2] && x < b[0] + 1.6 * b[2] && y > b[1] - 0.5 * b[3] && y < b[1] + 0.65 * b[3]);
+      players.some((b) => x > b[0] - 0.35 * b[2] && x < b[0] + 1.35 * b[2] && y > b[1] - 0.4 * b[3] && y < b[1] + 0.55 * b[3]);
     const used = new Set<number>();
     const minSpeed = this.w * 0.06; // px/s: slower than this is not a shuttle in flight
     // Predict and associate, longest tracks first.
@@ -114,7 +203,9 @@ export class ShuttleTracker {
       const last = tr.pts[n - 1];
       const dt = Math.max(1e-3, t - last.t);
       const v = n >= 2 ? Math.hypot(last.x - tr.pts[n - 2].x, last.y - tr.pts[n - 2].y) / Math.max(1e-3, last.t - tr.pts[n - 2].t) : 0;
-      const gate = this.w * 0.03 + 0.5 * v * dt + (n < 2 ? this.w * 0.06 : 0);
+      // Prediction error grows with speed and time unseen, but a confirmed flight is
+      // predictable: a wide gate lets it jump onto a nearby racket or arm.
+      const gate = tr.confirmed ? this.w * 0.02 + 0.35 * v * dt : this.w * 0.03 + 0.5 * v * dt + (n < 2 ? this.w * 0.06 : 0);
       let best = -1;
       let bestD = Infinity;
       cands.forEach((c, j) => {
@@ -142,6 +233,13 @@ export class ShuttleTracker {
       } else {
         tr.miss++;
       }
+    }
+    // A confirmed track that has stopped travelling is no longer a flight (the shuttle
+    // landed, or the track slid onto a moving arm): end it.
+    for (const tr of this.tracks) {
+      if (!tr.confirmed || tr.miss > 0 || tr.pts.length < 5) continue;
+      const a = tr.pts[tr.pts.length - 5], b = tr.pts[tr.pts.length - 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) / Math.max(1e-3, b.t - a.t) < minSpeed * 0.5) tr.miss = this.maxMiss + 1;
     }
     // Ended tracks are remembered briefly, to spot a relaunch.
     for (const tr of this.tracks) {
@@ -182,7 +280,10 @@ export class ShuttleTracker {
       }
     }
     if (span < Math.max(this.w * 0.03, h * 0.8)) return false;
-    return span / Math.max(1e-3, b.t - a.t) > minSpeed;
+    if (span / Math.max(1e-3, b.t - a.t) <= minSpeed) return false;
+    // A flight is smooth: a parabola in each image axis fits within a few pixels. Body
+    // fragments and noise picked up one after another zig-zag.
+    return smoothness(tr.pts.slice(-8)) < this.w * 0.008;
   }
 
   private velocity(pts: ShuttlePoint[], i: number): Pt {

@@ -5,7 +5,7 @@ import type { ObjectDetector } from "@mediapipe/tasks-vision";
 import { useLanguage } from "@/context/LanguageContext";
 import { formatClock, landmarkId, type CourtTap, type Pt } from "@/lib/match-analyzer";
 import { MatchEngine } from "@/lib/ma/engine";
-import { LENS_PRIOR, fitCamera, type CourtCamera, type LensPreset } from "@/lib/ma/lens";
+import { LENS_PRIOR, fitCamera, suspectTap, type CourtCamera, type LensPreset } from "@/lib/ma/lens";
 import { MatchSim, type SimOptions } from "@/lib/ma/sim";
 import { scoreHits } from "@/lib/ma/simrun";
 import type { MatchSetup, SavedMatchStats } from "@/lib/match-stats-db";
@@ -142,6 +142,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
     () => (videoW ? fitCamera(taps, videoW, videoH, LENS_PRIOR[lens]) : null),
     [taps, lens, videoW, videoH],
   );
+  const suspect = useMemo(() => (cam ? suspectTap(cam, taps, videoW) : null), [cam, taps, videoW]);
 
   const ensureDetector = useCallback(async () => {
     if (detectorRef.current) return detectorRef.current;
@@ -890,7 +891,8 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
           {step === "calibrate" ? (
             showPicker ? (
               <div className={s.pickerOverlay}>
-                <button type="button" className={s.pickerHide} onClick={() => setShowPicker(false)} aria-label={c.hideDiagram}>
+                {/* Beside the diagram, never on it: a corner of the court sits in each corner of the drawing. */}
+                <button type="button" className={s.pickerHide} onClick={() => setShowPicker(false)} aria-label={c.hideDiagram} data-testid="picker-hide">
                   ×
                 </button>
                 <CourtPicker taps={taps} target={target} onPick={pickTarget} compact />
@@ -940,6 +942,11 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
                   </button>
                 ) : null}
                 {cam ? <span className={s.hint}>{c.calQuality((cam.rms * 1920) / Math.max(1, videoW), cam.lens.lambda)}</span> : null}
+                {suspect ? (
+                  <span className={s.warn} role="status" data-testid="cal-suspect">
+                    {c.calSuspect(suspect.index + 1, describePoint(taps[suspect.index].court, lang))}
+                  </span>
+                ) : null}
               </div>
               <button className={s.btn} type="button" disabled={!cam || detectorState === "loading"} onClick={startTracking}>
                 {detectorState === "loading" ? c.model : c.start}

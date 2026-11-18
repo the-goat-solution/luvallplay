@@ -507,13 +507,16 @@
   cursor: pointer;
 }
 .pickerHide {
+  /* Outside the panel, to its left (over the video), so it never covers a court point. */
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 0;
+  left: -38px;
   width: 30px;
   height: 30px;
   border-radius: 50%;
   font-size: 1.1rem;
+  line-height: 1;
+  border: 1px solid rgba(255, 213, 74, 0.35);
 }
 .pickerShow {
   position: absolute;
@@ -697,4 +700,20 @@
     border: none;
     border-radius: 0;
   }
+  /* Full-width strip here: the diagram is centred, so the panel's own corner is clear of it. */
+  .pickerHide {
+    left: 8px;
+    top: 6px;
+  }
+}
+
+.warn {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #ffd54a;
+  background: rgba(255, 213, 74, 0.1);
+  border: 1px solid rgba(255, 213, 74, 0.35);
+  border-radius: 8px;
+  padding: 6px 10px;
 }

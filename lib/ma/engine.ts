@@ -29,8 +29,8 @@ import { brightness, estimateShift, findBlobs, maskCount, motionMask, noiseSigma
 import { courtToImage, imageToCourt, metresPerPixel, type CourtCamera } from "./lens.ts";
 import type { Onset } from "./audio.ts";
 import { QualityMeter, courtFactor, resolutionFactor, type QualityFactors } from "./quality.ts";
-import { ShuttleTracker, shuttleCandidates, type ShuttlePoint, type TrajCue } from "./shuttle.ts";
-import { HFOV_PRIOR, cameraFromHomography, fitFromPoint, rayNearPlayer, type Camera3D } from "./flight.ts";
+import { BackgroundActivity, ShuttleTracker, shuttleCandidates, type ShuttlePoint, type TrajCue } from "./shuttle.ts";
+import { HFOV_PRIOR, cameraFromHomography, fitFromPoint, project3, rayNearPlayer, type Camera3D } from "./flight.ts";
 import type { LensPreset } from "./lens.ts";
 
 export type EngineFrame = {
@@ -80,6 +80,21 @@ type SwingState = { hist: { t: number; e: number }[]; peak: { t: number; z: numb
 
 const RALLY_GAP = 3.5;
 
+/**
+ * Same picture as the previous frame: practically no sampled pixel changed by
+ * more than 3 grey levels (a real new frame has sensor or compression noise
+ * everywhere, and something moving).
+ */
+function isRepeat(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let changed = 0, n = 0;
+  for (let i = 0; i < a.length; i += 7) {
+    if (Math.abs(a[i] - b[i]) > 3) changed++;
+    n++;
+  }
+  return changed < n * 0.0005;
+}
+
 export class MatchEngine {
   readonly identity: IdentityTracker;
   readonly fusion = new HitFusion();
@@ -102,6 +117,8 @@ export class MatchEngine {
   private lastT = 0;
   private breaks: number[] = [];
   private bodies: Box[] = [];
+  private background: BackgroundActivity | null = null;
+  private backgroundW = 0;
   private bodiesT = -Infinity;
   private audioOn: boolean;
   private cam3: Camera3D | null;
@@ -145,8 +162,17 @@ export class MatchEngine {
     if (this.startT === null) this.startT = f.t;
     this.lastT = f.t;
     const scale = f.gw / this.W;
-    const proj = projections(f.gray, f.gw, f.gh);
     const prev = this.frames[this.frames.length - 1];
+    // A repeated frame (frame-rate conversion, a screen recording, a stalled camera) says
+    // nothing about motion and would blank the three-frame difference around it: skip it
+    // for motion, keep it for people and sounds.
+    if (prev && isRepeat(prev.g, f.gray)) {
+      if (f.persons) this.updatePeople(f.t, f.persons);
+      for (const o of f.onsets ?? []) this.fusion.addCue({ t: o.t, kind: "audio", strength: o.strength });
+      this.fusion.update(f.t, this.context());
+      return;
+    }
+    const proj = projections(f.gray, f.gw, f.gh);
     let shift = { dx: 0, dy: 0 };
     if (prev) {
       const s = estimateShift(prev.proj, proj, 6);
@@ -184,7 +210,13 @@ export class MatchEngine {
       if (blobs) {
         // Every person's body is masked (bystanders too), the four players' reach zones are not.
         const bodies = f.t - this.bodiesT < 0.5 ? this.bodies : [];
-        const cands = shuttleCandidates(blobs, scale, [...boxes.filter((x): x is Box => !!x), ...bodies], f.gw * f.gh);
+        const allBodies = [...boxes.filter((x): x is Box => !!x), ...bodies];
+        if (!this.background || this.backgroundW !== f.gw) {
+          this.background = new BackgroundActivity(f.gw, f.gh);
+          this.backgroundW = f.gw;
+        }
+        const cands = shuttleCandidates(blobs, scale, allBodies, f.gw * f.gh, this.background);
+        this.background.add(blobs, allBodies, scale);
         for (const cue of this.shuttle.update(b.t, cands, boxes.filter((x): x is Box => !!x))) {
           this.fusion.addCue({ t: cue.t, kind: "traj", strength: cue.strength, x: cue.x, y: cue.y, playerFit: this.contactFit(cue) });
         }
@@ -266,6 +298,20 @@ export class MatchEngine {
     };
   }
 
+  /** Height (m) of a person standing at court point p whose box top is at the given image row, from the 3D camera. */
+  private standingHeight(p: Pt, box: Box): number | undefined {
+    if (!this.cam3) return undefined;
+    let lo = 0, hi = 4;
+    for (let i = 0; i < 24; i++) {
+      const m = (lo + hi) / 2;
+      const q = project3(this.cam3, this.cam, [p.x, p.y, m]);
+      if (!q || q.y < box[1]) hi = m;
+      else lo = m;
+    }
+    const h = (lo + hi) / 2;
+    return h > 0.05 && h < 3.9 ? h : undefined;
+  }
+
   private currentBoxes(): (Box | null)[] {
     return this.identity.players.map((p) => (p.box && this.lastT - p.lastObsT < 0.6 ? p.box : null));
   }
@@ -279,7 +325,14 @@ export class MatchEngine {
       const foot = { x: d.box[0] + d.box[2] / 2, y: d.box[1] + d.box[3] };
       const p = imageToCourt(this.cam, foot);
       if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !onCourt(p)) continue;
-      obs.push({ box: d.box, score: d.score, look: d.look, p, mpp: metresPerPixel(this.cam, foot) });
+      const mpp = metresPerPixel(this.cam, foot);
+      // Where a pixel covers several centimetres of floor (the far half seen from a low or
+      // side-on camera), people on the bench just behind the court project inside its
+      // margins: there, only confident detections within the lines count.
+      if (mpp * (this.W / 1920) > 0.03 && (d.score < 0.4 || p.x < -0.3 || p.x > COURT.width + 0.3 || p.y < -0.3 || p.y > COURT.length + 0.3)) continue;
+      // Cut off by the side of the frame: half a person (never picked up as a player).
+      const edge = d.box[0] <= this.W * 0.005 || d.box[0] + d.box[2] >= this.W * 0.995;
+      obs.push({ box: d.box, score: d.score, look: d.look, p, mpp, h3: this.standingHeight(p, d.box), edge });
     }
     const { assign, swaps } = this.identity.update(t, obs);
     for (const s of swaps) this.applySwap(s.a, s.b, s.from);

@@ -11,6 +11,19 @@ const MODEL_URL =
 
 let detectorPromise: Promise<ObjectDetector> | null = null;
 
+/** WebGL is backed by a software rasteriser (no real GPU for the model). */
+function softwareGpu(): boolean {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    if (!gl) return true;
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const r = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : "";
+    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(r);
+  } catch {
+    return false;
+  }
+}
+
 /** Loads the detector once per page (the model is ~7 MB). Tries the GPU, falls back to the CPU. */
 export function loadPersonDetector(): Promise<ObjectDetector> {
   if (!detectorPromise) {
@@ -24,8 +37,23 @@ export function loadPersonDetector(): Promise<ObjectDetector> {
         scoreThreshold: 0.25,
         maxResults: 16,
       });
+      // A "GPU" that is really software rendering (no graphics acceleration in the
+      // browser, a VM, some desktops) runs the model several times slower than the CPU
+      // path: measured 850 ms vs 120 ms a frame. Use the CPU there.
+      if (softwareGpu()) return await ObjectDetector.createFromOptions(fileset, options("CPU"));
       try {
-        return await ObjectDetector.createFromOptions(fileset, options("GPU"));
+        const gpu = await ObjectDetector.createFromOptions(fileset, options("GPU"));
+        // Check the real speed once: a slow GPU path still loses to the CPU.
+        const probe = document.createElement("canvas");
+        probe.width = 640;
+        probe.height = 360;
+        probe.getContext("2d")?.fillRect(0, 0, 640, 360);
+        gpu.detect(probe); // warm-up (shader compilation)
+        const t0 = performance.now();
+        gpu.detect(probe);
+        if (performance.now() - t0 < 250) return gpu;
+        gpu.close();
+        return await ObjectDetector.createFromOptions(fileset, options("CPU"));
       } catch {
         return await ObjectDetector.createFromOptions(fileset, options("CPU"));
       }

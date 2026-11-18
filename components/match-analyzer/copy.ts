@@ -48,6 +48,8 @@ export const COPY = {
     calHelp:
       "Mark at least 4 court points you can see (6+ with the 0.5× lens), not all on one line. Corners first; if one is out of shot, choose another point on the diagram (service line corners, the T, net post feet).",
     calQuality: (px: number, lambda: number) => `Fit error ${px.toFixed(1)} px · lens curve λ ${lambda.toFixed(2)}`,
+    calSuspect: (n: number, what: string) =>
+      `These points don't line up. Check each one sits exactly on its line crossing (the edge of the court mat is not a line); point ${n} (${what}) fits worst.`,
     undo: "Undo",
     reset: "Reset",
     lastCourt: "Use last court",
@@ -162,6 +164,8 @@ export const COPY = {
     calCheck: "Kiểm tra các đường vàng trùng vạch sân. Kéo điểm để chỉnh.",
     calHelp: "Đánh dấu ít nhất 4 điểm thấy rõ (6+ với ống 0.5×), không thẳng hàng. Góc trước; nếu góc nào khuất, chọn điểm khác trên sơ đồ.",
     calQuality: (px: number, lambda: number) => `Sai số ${px.toFixed(1)} px · độ cong λ ${lambda.toFixed(2)}`,
+    calSuspect: (n: number, what: string) =>
+      `Các điểm chưa khớp nhau. Kiểm tra từng điểm nằm đúng giao điểm của vạch (mép thảm sân không phải là vạch); điểm ${n} (${what}) lệch nhiều nhất.`,
     undo: "Hoàn tác",
     reset: "Làm lại",
     lastCourt: "Dùng sân lần trước",

@@ -8,7 +8,7 @@ applyDatabaseSwitch();
 // *.public.blob.vercel-storage.com, uploaded straight from the browser via
 // vercel.com/api/blob) and Google reCAPTCHA (required by Google before it
 // sends an SMS sign-in code; loaded only on pages that can send a text).
-// The Match Analyzer (/match-analyzer) plays a video picked from the device
+// Wolf Vision (/profile/wolf-vision) plays a video picked from the device
 // (a blob: URL) and downloads its person-detection model from Google's
 // MediaPipe model storage; the WebAssembly runtime is served from /mediapipe.
 const csp = [
@@ -37,6 +37,14 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "cdn.sanity.io" },
       { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
     ],
+  },
+  // Wolf Vision lives in the profile app now; the old standalone page sends people there
+  // (query kept, so old Arena links and payment returns still land on the right match).
+  async redirects() {
+    return [
+      { source: "/match-analyzer/label", destination: "/profile/wolf-vision/label", permanent: true },
+      { source: "/match-analyzer", destination: "/profile/wolf-vision", permanent: true },
+    ];
   },
   async headers() {
     return [

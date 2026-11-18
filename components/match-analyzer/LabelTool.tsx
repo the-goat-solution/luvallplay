@@ -107,7 +107,7 @@ export function LabelTool() {
         <h1>
           Wolf Vision<small>Labelling set</small>
         </h1>
-        <a href="/match-analyzer" className={s.langBtn}>
+        <a href="/profile/wolf-vision" className={s.langBtn}>
           Back
         </a>
       </header>

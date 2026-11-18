@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ArenaError, T, ensureArenaTables, loadWorld, type World } from "./arena-db";
 
 // Match Analyzer stats saved against an Arena challenge. A court assistant
-// (any signed-in player) films the doubles game with /match-analyzer, tags
+// (any signed-in player) films the doubles game with Wolf Vision (/profile/wolf-vision), tags
 // the four players and taps the hits; the totals land here. The video stays
 // on their phone: only these numbers are stored.
 

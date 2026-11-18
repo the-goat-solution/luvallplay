@@ -1,4 +1,4 @@
-// Match Analyzer: the maths behind /match-analyzer, kept free of browser APIs
+// Match Analyzer: the maths behind Wolf Vision (/profile/wolf-vision), kept free of browser APIs
 // so it can be tested with node --test.
 //
 // Court coordinates are metres on the floor: x runs across the court

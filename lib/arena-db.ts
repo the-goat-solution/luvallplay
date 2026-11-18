@@ -60,6 +60,7 @@ export const T = {
   challenges: `${PREFIX}arena_challenges`,
   after: `${PREFIX}arena_after_game`,
   ranks: `${PREFIX}arena_player_ranks`,
+  matchStats: `${PREFIX}arena_match_stats`,
 };
 export const ARENA_SANDBOX = PREFIX !== "";
 
@@ -153,6 +154,17 @@ export function ensureArenaTables(): Promise<void> {
           again BOOLEAN,
           answered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           PRIMARY KEY (challenge_id, player_id)
+        );`);
+      // Match Analyzer stats a court assistant recorded for a challenge
+      // (lib/match-stats-db.ts). One row per challenge; JSON shaped by
+      // SavedMatchStats.
+      await sql.query(`
+        CREATE TABLE IF NOT EXISTS ${T.matchStats} (
+          challenge_id INT PRIMARY KEY,
+          recorded_by INT NOT NULL,
+          stats JSONB NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );`);
       await sql.query(`
         CREATE TABLE IF NOT EXISTS ${T.ranks} (
@@ -315,6 +327,8 @@ export type World = {
   attendedDates: Map<number, string[]>;
   clubDays: string[];
   peaks: Map<number, { seen: number; peak: number; wasTarnished: boolean; polishedAt: string | null }>;
+  /** Challenges with Match Analyzer stats saved. */
+  statsFor: Set<number>;
 };
 
 const ACTIVE: ChallengeStatus[] = ["accepted", "live", "awaiting", "disputed"];
@@ -433,7 +447,7 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
   if (!opts.skipSync) syncPointsLater();
   await tick();
   const today = getClubToday().dateKey;
-  const [pl, att, rr, pairs, members, ch, peaks, club] = await Promise.all([
+  const [pl, att, rr, pairs, members, ch, peaks, club, stats] = await Promise.all([
     sql.query(
       `SELECT p.id, p.email, p.first_name, ${DISPLAY_NAME_SQL} AS name, p.leaderboard_visible, p.avatar_url
        FROM players p WHERE p.deleted_at IS NULL;`,
@@ -451,6 +465,7 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
     sql.query(`SELECT * FROM ${T.challenges} ORDER BY id;`),
     sql.query(`SELECT * FROM ${T.ranks};`),
     sql.query(`SELECT date::text AS d FROM sessions WHERE date <= $1 ORDER BY date;`, [today]),
+    sql.query(`SELECT challenge_id FROM ${T.matchStats};`),
   ]);
 
   const players = new Map<number, ArenaPlayer>();
@@ -598,6 +613,7 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
     attendedDates,
     clubDays: club.rows.map((r) => r.d as string),
     peaks: peakMap,
+    statsFor: new Set(stats.rows.map((r) => r.challenge_id as number)),
   };
 }
 

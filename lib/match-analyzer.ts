@@ -109,6 +109,99 @@ export function courtHomography(taps: Pt[], rotation = 0): { toCourt: Mat3; toIm
   return { toCourt, toImage };
 }
 
+/**
+ * Least-squares homography from four or more matching points (DLT with
+ * h8 = 1). With exactly four it is the exact solution; extra points average
+ * out tapping errors. Null when the points are degenerate.
+ */
+export function fitHomography(src: Pt[], dst: Pt[]): Mat3 | null {
+  const n = Math.min(src.length, dst.length);
+  if (n < 4) return null;
+  if (n === 4) return solveHomography(src, dst);
+  // Normalise both point sets for a well-conditioned solve.
+  const norm = (pts: Pt[]) => {
+    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+    const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+    const d = pts.reduce((a, p) => a + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length || 1;
+    const k = Math.SQRT2 / d;
+    return { T: [k, 0, -k * cx, 0, k, -k * cy, 0, 0, 1], pts: pts.map((p) => ({ x: (p.x - cx) * k, y: (p.y - cy) * k })) };
+  };
+  const a = norm(src.slice(0, n));
+  const b = norm(dst.slice(0, n));
+  const AtA = Array.from({ length: 8 }, () => new Array(8).fill(0));
+  const Atb = new Array(8).fill(0);
+  for (let i = 0; i < n; i++) {
+    const { x, y } = a.pts[i];
+    const { x: u, y: v } = b.pts[i];
+    for (const [row, rhs] of [
+      [[x, y, 1, 0, 0, 0, -u * x, -u * y], u],
+      [[0, 0, 0, x, y, 1, -v * x, -v * y], v],
+    ] as [number[], number][]) {
+      for (let r = 0; r < 8; r++) {
+        Atb[r] += row[r] * rhs;
+        for (let c = 0; c < 8; c++) AtA[r][c] += row[r] * row[c];
+      }
+    }
+  }
+  const h = solveLinear(AtA, Atb);
+  if (!h) return null;
+  const Hn = [...h, 1];
+  const TbInv = invertMat3(b.T);
+  if (!TbInv) return null;
+  return normaliseH(mul3(TbInv, mul3(Hn, a.T)));
+}
+
+function mul3(A: Mat3, B: Mat3): Mat3 {
+  const out = new Array(9).fill(0);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) for (let k = 0; k < 3; k++) out[r * 3 + c] += A[r * 3 + k] * B[k * 3 + c];
+  return out;
+}
+
+function normaliseH(H: Mat3): Mat3 {
+  return Math.abs(H[8]) > 1e-12 ? H.map((v) => v / H[8]) : H;
+}
+
+/** A court point the assistant can tap: a line crossing or a net post foot. */
+export type Landmark = { id: string; p: Pt };
+
+/**
+ * Every place two painted lines cross, plus the feet of the net posts (which
+ * stand on the doubles sidelines). Ids are "x,y" in metres.
+ */
+export function courtLandmarks(): Landmark[] {
+  const { width: W, length: L, net, singlesInset: si, shortService: ss, longServiceDoubles: ld } = COURT;
+  const xs = [0, si, W / 2, W - si, W];
+  const ys = [0, ld, net - ss, net + ss, L - ld, L];
+  const out: Landmark[] = [];
+  for (const y of ys) for (const x of xs) out.push({ id: landmarkId({ x, y }), p: { x, y } });
+  out.push({ id: landmarkId({ x: 0, y: net }), p: { x: 0, y: net } });
+  out.push({ id: landmarkId({ x: W, y: net }), p: { x: W, y: net } });
+  return out;
+}
+
+export function landmarkId(p: Pt): string {
+  return `${round(p.x, 2)},${round(p.y, 2)}`;
+}
+
+/** A calibration tap: where on the image, and which court point it is. */
+export type CourtTap = { image: Pt; court: Pt };
+
+/** Image ↔ court homographies from four or more taps. */
+export function courtHomographyFromTaps(taps: CourtTap[]): { toCourt: Mat3; toImage: Mat3 } | null {
+  if (taps.length < 4) return null;
+  const toCourt = fitHomography(taps.map((t) => t.image), taps.map((t) => t.court));
+  if (!toCourt || toCourt.some((v) => !Number.isFinite(v))) return null;
+  const toImage = invertMat3(toCourt);
+  if (!toImage) return null;
+  // Reject fits that fold the court over (taps given in an impossible order).
+  const err = taps.reduce((a, t) => {
+    const q = applyHomography(toCourt, t.image);
+    return Math.max(a, Math.hypot(q.x - t.court.x, q.y - t.court.y));
+  }, 0);
+  if (!Number.isFinite(err) || err > 1.5) return null;
+  return { toCourt, toImage };
+}
+
 export type Segment = { a: Pt; b: Pt; dashed?: boolean };
 
 /** Every painted line of a doubles court, plus the net, in court metres. */
@@ -140,12 +233,17 @@ export function floorCircle(toImage: Mat3, centre: Pt, radius: number, steps = 4
 
 /** Image-space box: [x, y, width, height] in video pixels. */
 export type Box = [number, number, number, number];
-export type Detection = { box: Box; score: number };
+/**
+ * A person the detector found. `look` is a small normalised colour histogram
+ * of their shirt, used to tell doubles partners apart when they cross.
+ */
+export type Detection = { box: Box; score: number; look?: number[] };
 /** One analysed frame: its time and the people the detector found. */
 export type Sample = { t: number; dets: Detection[] };
 export type TrackPoint = { p: Pt; box: Box };
 /** tracks[player][sampleIndex] — null where the player was not seen. */
 export type Tracks = (TrackPoint | null)[][];
+export type CourtDetection = Detection & { p: Pt };
 
 /** The floor point under a detected person: the bottom-centre of the box. */
 export function footPoint(box: Box): Pt {
@@ -153,7 +251,7 @@ export function footPoint(box: Box): Pt {
 }
 
 /** How far outside the lines a player can still be (lunges, deep clears). */
-const COURT_MARGIN = { side: 1.2, end: 2.0 };
+const COURT_MARGIN = { side: 1.0, end: 2.0 };
 
 export function onCourt(p: Pt): boolean {
   return (
@@ -164,89 +262,209 @@ export function onCourt(p: Pt): boolean {
   );
 }
 
-/** Detections whose feet land on (or just around) the court, with court positions. */
-export function courtDetections(dets: Detection[], toCourt: Mat3): (Detection & { p: Pt })[] {
+export type FrameSize = { w: number; h: number };
+
+/**
+ * Detections whose feet land on (or just around) the court, with court
+ * positions. With the frame size, people whose feet are cut off by the bottom
+ * edge (the camera operator, someone walking past the lens) are dropped:
+ * without their feet there is no telling where they stand.
+ */
+export function courtDetections(dets: Detection[], toCourt: Mat3, frame?: FrameSize): CourtDetection[] {
   return dets
+    .filter((d) => !frame || (d.box[1] + d.box[3] < frame.h * 0.985 && d.box[3] < frame.h * 0.9))
     .map((d) => ({ ...d, p: applyHomography(toCourt, footPoint(d.box)) }))
     .filter((d) => Number.isFinite(d.p.x) && Number.isFinite(d.p.y) && onCourt(d.p));
 }
 
+/** Detector confidence below which an untagged person is not offered for tagging (spectators, shadows). */
+export const TAG_MIN_SCORE = 0.4;
+
 const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
 
-/** First sample with at least `count` people on court; -1 if none. */
-export function findSeedIndex(samples: Sample[], toCourt: Mat3, count: number): number {
-  return samples.findIndex((s) => courtDetections(s.dets, toCourt).length >= count);
+/** The detection a tap lands on: inside its box, smallest box first (the nearer person when two overlap). */
+export function detectionAtPoint<D extends Detection>(dets: D[], at: Pt, slack = 0): D | null {
+  const hits = dets.filter(
+    (d) => at.x >= d.box[0] - slack && at.x <= d.box[0] + d.box[2] + slack && at.y >= d.box[1] - slack && at.y <= d.box[1] + d.box[3] + slack,
+  );
+  hits.sort((a, b) => a.box[2] * a.box[3] - b.box[2] * b.box[3]);
+  return hits[0] ?? null;
 }
 
-/** Seed positions: the `count` most confident on-court people, left side of the image first. */
-export function seedPlayers(sample: Sample, toCourt: Mat3, count: number): TrackPoint[] {
-  return courtDetections(sample.dets, toCourt)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, count)
-    .sort((a, b) => a.box[0] - b.box[0])
-    .map((d) => ({ p: d.p, box: d.box }));
+export function iou(a: Box, b: Box): number {
+  const x0 = Math.max(a[0], b[0]);
+  const y0 = Math.max(a[1], b[1]);
+  const x1 = Math.min(a[0] + a[2], b[0] + b[2]);
+  const y1 = Math.min(a[1] + a[3], b[1] + b[3]);
+  const inter = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+  const union = a[2] * a[3] + b[2] * b[3] - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+/** 0 when two colour histograms are identical, 1 when they share nothing (Hellinger distance). */
+export function lookDistance(a?: number[], b?: number[]): number {
+  if (!a || !b || a.length !== b.length) return 0;
+  let bc = 0;
+  for (let i = 0; i < a.length; i++) bc += Math.sqrt(a[i] * b[i]);
+  return Math.sqrt(Math.max(0, 1 - bc));
 }
 
 /** Fastest a player's feet can plausibly move, in m/s (sprint lunge). */
 const MAX_PLAYER_SPEED = 8;
 /** Base allowance for detector jitter on top of movement, in metres. */
 const GATE_BASE = 0.8;
+/** The search radius stops growing here: further than this is a different person. */
+const GATE_MAX = 4;
+/** How much a shirt-colour mismatch counts, in metres of extra distance. */
+const LOOK_WEIGHT = 1.5;
+/** Shirt colours this different are never the same player (unless they barely moved). */
+const LOOK_REJECT = 0.6;
+/** After losing a player for a moment, only take back someone who looks like them. */
+const LOOK_REACQUIRE = 0.45;
+/** Within this distance of the net a foot position could be either side. */
+const NET_TOLERANCE = 0.4;
+/** Running average rate for a player's shirt colour. */
+const LOOK_RATE = 0.1;
 
 /**
- * Follows `seeds` (one per player, found at `seedIndex`) forwards and
- * backwards through the samples. Each step assigns on-court detections to
- * players greedily, closest pair first, and only within the distance a player
- * could have covered since they were last seen.
+ * What the tracker remembers about one player: where and when they were last
+ * seen, their shirt colour and which half of the court they play on (players
+ * never cross the net during a game; when ends change, the assistant re-tags).
  */
-export function buildTracks(samples: Sample[], toCourt: Mat3, seedIndex: number, seeds: TrackPoint[]): Tracks {
-  const tracks: Tracks = seeds.map(() => samples.map(() => null));
-  if (seedIndex < 0 || seedIndex >= samples.length) return tracks;
-  seeds.forEach((s, i) => (tracks[i][seedIndex] = s));
+export type PlayerMemory = { p: Pt; t: number; look?: number[]; side?: 0 | 1 } | null;
 
-  const run = (order: number[]) => {
-    const last = seeds.map((s) => ({ p: s.p, t: samples[seedIndex].t }));
-    for (const idx of order) {
-      const s = samples[idx];
-      const dets = courtDetections(s.dets, toCourt);
-      const pairs: { i: number; j: number; d: number }[] = [];
-      last.forEach((l, i) => {
-        const gate = GATE_BASE + MAX_PLAYER_SPEED * Math.abs(s.t - l.t);
-        dets.forEach((det, j) => {
-          const d = dist(l.p, det.p);
-          if (d <= gate) pairs.push({ i, j, d });
-        });
-      });
-      pairs.sort((a, b) => a.d - b.d);
-      const usedI = new Set<number>();
-      const usedJ = new Set<number>();
-      for (const { i, j } of pairs) {
-        if (usedI.has(i) || usedJ.has(j)) continue;
-        usedI.add(i);
-        usedJ.add(j);
-        tracks[i][idx] = { p: dets[j].p, box: dets[j].box };
-        last[i] = { p: dets[j].p, t: s.t };
-      }
-    }
-  };
-  run(range(seedIndex + 1, samples.length));
-  run(range(seedIndex - 1, -1));
-  return tracks;
+function blendLook(old: number[] | undefined, next: number[] | undefined): number[] | undefined {
+  if (!next) return old;
+  if (!old || old.length !== next.length) return next;
+  return old.map((v, i) => v * (1 - LOOK_RATE) + next[i] * LOOK_RATE);
 }
 
-function range(from: number, to: number): number[] {
-  const out: number[] = [];
-  if (from <= to) for (let i = from; i < to; i++) out.push(i);
-  else for (let i = from; i > to; i--) out.push(i);
+/**
+ * One tracking step: matches this frame's on-court detections to the players
+ * the tracker already knows. Pairs are taken closest first (court distance
+ * plus a shirt-colour penalty), and only within the distance a player could
+ * have covered since last seen. `forced` pins a player to a detection (a tap
+ * from the court assistant) before anyone else is matched. `taken` marks
+ * detections already used (by the other pass of an upload analysis).
+ * Updates `memory` in place and returns the detection index per player.
+ */
+export function trackStep(
+  memory: PlayerMemory[],
+  dets: CourtDetection[],
+  t: number,
+  forced: Map<number, number> = new Map(),
+  taken: Set<number> = new Set(),
+  active: (i: number) => boolean = () => true,
+): (number | null)[] {
+  const out: (number | null)[] = memory.map(() => null);
+  const usedI = new Set<number>();
+  const usedJ = new Set<number>(taken);
+  for (const [i, j] of forced) {
+    if (j < 0 || j >= dets.length) continue;
+    out[i] = j;
+    usedI.add(i);
+    usedJ.add(j);
+    memory[i] = { p: dets[j].p, t, look: dets[j].look ?? memory[i]?.look, side: sideOf(dets[j].p) };
+  }
+  const pairs: { i: number; j: number; c: number }[] = [];
+  memory.forEach((m, i) => {
+    if (!m || usedI.has(i) || !active(i)) return;
+    const lost = Math.abs(t - m.t);
+    const gate = Math.min(GATE_MAX, GATE_BASE + MAX_PLAYER_SPEED * lost);
+    dets.forEach((det, j) => {
+      if (usedJ.has(j)) return;
+      const d = dist(m.p, det.p);
+      if (d > gate) return;
+      if (m.side !== undefined && Math.abs(det.p.y - COURT.net) > NET_TOLERANCE && sideOf(det.p) !== m.side) return;
+      const look = lookDistance(m.look, det.look);
+      if (look > LOOK_REJECT && d > 0.6) return;
+      if (lost > 0.5 && look > LOOK_REACQUIRE) return;
+      pairs.push({ i, j, c: d + LOOK_WEIGHT * look });
+    });
+  });
+  pairs.sort((a, b) => a.c - b.c);
+  for (const { i, j } of pairs) {
+    if (usedI.has(i) || usedJ.has(j)) continue;
+    usedI.add(i);
+    usedJ.add(j);
+    out[i] = j;
+    memory[i] = { p: dets[j].p, t, look: blendLook(memory[i]?.look, dets[j].look), side: memory[i]?.side ?? sideOf(dets[j].p) };
+  }
   return out;
 }
 
-/** Swaps two players' tracks from sample `fromIndex` onwards (fixes an identity switch). */
-export function swapTracks(tracks: Tracks, a: number, b: number, fromIndex: number): Tracks {
-  const next = tracks.map((t) => [...t]);
-  for (let k = Math.max(0, fromIndex); k < next[a].length; k++) {
-    [next[a][k], next[b][k]] = [next[b][k], next[a][k]];
+/** A court assistant's tap: "at this analysed frame, this box is that player". */
+export type Anchor = { sample: number; player: number; box: Box };
+
+/** The detection in a sample that best matches an anchored box (they are usually identical). */
+function anchorDetection(dets: CourtDetection[], box: Box): number {
+  let best = -1, bestIou = 0.3;
+  dets.forEach((d, j) => {
+    const v = iou(d.box, box);
+    if (v > bestIou) { bestIou = v; best = j; }
+  });
+  return best;
+}
+
+/**
+ * Tracks for an uploaded video. Each player is followed forwards from the
+ * first frame they were tagged, then backwards to the start. Later tags pin
+ * the player again from that frame on, which is how a swapped identity is
+ * fixed: tag the right person once and everything after follows.
+ */
+export function buildTracks(samples: Sample[], toCourt: Mat3, playerCount: number, anchors: Anchor[], frame?: FrameSize): Tracks {
+  const tracks: Tracks = Array.from({ length: playerCount }, () => samples.map(() => null));
+  const valid = anchors.filter((a) => a.player >= 0 && a.player < playerCount && a.sample >= 0 && a.sample < samples.length);
+  if (valid.length === 0) return tracks;
+  const bySample = new Map<number, Anchor[]>();
+  for (const a of valid) bySample.set(a.sample, [...(bySample.get(a.sample) ?? []), a]);
+  const firstTag = Array.from({ length: playerCount }, (_, i) => Math.min(...valid.filter((a) => a.player === i).map((a) => a.sample)));
+  const dets = samples.map((s) => courtDetections(s.dets, toCourt, frame));
+
+  const forcedAt = (k: number) => {
+    const forced = new Map<number, number>();
+    for (const a of bySample.get(k) ?? []) {
+      const j = anchorDetection(dets[k], a.box);
+      if (j >= 0) forced.set(a.player, j);
+    }
+    return forced;
+  };
+
+  // Forwards: a player joins at their first tag and is followed to the end.
+  const memory: PlayerMemory[] = tracks.map(() => null);
+  const start = Math.min(...firstTag.filter(Number.isFinite));
+  for (let k = start; k < samples.length; k++) {
+    const got = trackStep(memory, dets[k], samples[k].t, forcedAt(k));
+    got.forEach((j, i) => {
+      if (j !== null) tracks[i][k] = { p: dets[k][j].p, box: dets[k][j].box };
+    });
   }
-  return next;
+
+  // Backwards: from each player's first tag down to the start, using only
+  // detections the forward pass left free.
+  const back: PlayerMemory[] = tracks.map(() => null);
+  const lastFirst = Math.max(...firstTag.filter(Number.isFinite));
+  for (let k = lastFirst; k >= 0; k--) {
+    const forced = new Map<number, number>();
+    for (const [i, j] of forcedAt(k)) if (k === firstTag[i]) forced.set(i, j);
+    const taken = new Set<number>();
+    tracks.forEach((tr, i) => {
+      if (k >= firstTag[i] && tr[k]) {
+        const j = dets[k].findIndex((d) => d.box === tr[k]!.box);
+        if (j >= 0) taken.add(j);
+      }
+    });
+    const got = trackStep(back, dets[k], samples[k].t, forced, taken, (i) => k < firstTag[i]);
+    got.forEach((j, i) => {
+      if (j !== null && k < firstTag[i]) tracks[i][k] = { p: dets[k][j].p, box: dets[k][j].box };
+    });
+  }
+  return tracks;
+}
+
+/** Which team (0 or 1) a court position is on: the near half or the far half of the net. */
+export function sideOf(p: Pt): 0 | 1 {
+  return p.y < COURT.net ? 0 : 1;
 }
 
 // ── Movement ──────────────────────────────────────────────────────────────
@@ -364,6 +582,42 @@ export function movementBetween(m: Motion, t0: number, t1: number): { distance: 
   return { distance: m.cumDist[k1] - m.cumDist[k0], topSpeed: top };
 }
 
+/**
+ * computeMotion for a live feed: frames arrive one at a time and the result
+ * is kept up to date without redoing the whole match on every frame. Only a
+ * short tail (the part a late detection could still change) is recomputed,
+ * so it gives the same numbers as computeMotion over the full track.
+ */
+export class MotionTracker {
+  readonly motion: Motion = { t: [], p: [], box: [], cumDist: [], speed: [] };
+  private raw: (TrackPoint | null)[] = [];
+  /** Samples before this index can no longer change. */
+  private settled = 0;
+
+  push(t: number, tp: TrackPoint | null): void {
+    const m = this.motion;
+    m.t.push(t);
+    this.raw.push(tp);
+    const n = m.t.length;
+    // Recompute from a window that holds everything the unsettled samples depend on.
+    let ws = this.settled;
+    const from = this.settled > 0 ? m.t[this.settled] ?? t : t;
+    while (ws > 0 && m.t[ws - 1] >= from - (MAX_GAP + 0.2)) ws--;
+    ws = Math.max(0, ws - 4);
+    const part = computeMotion(m.t.slice(ws), this.raw.slice(ws));
+    const anchor = this.settled - 1;
+    const base = anchor >= ws ? m.cumDist[anchor] - part.cumDist[anchor - ws] : 0;
+    for (let k = Math.max(this.settled, ws); k < n; k++) {
+      m.p[k] = part.p[k - ws];
+      m.box[k] = part.box[k - ws];
+      m.speed[k] = part.speed[k - ws];
+      m.cumDist[k] = base + part.cumDist[k - ws];
+    }
+    // A sample is final once a later point can no longer bridge a gap next to it.
+    while (this.settled + 3 < n && m.t[this.settled + 3] < t - (MAX_GAP + 0.1)) this.settled++;
+  }
+}
+
 // ── Hits and rallies ──────────────────────────────────────────────────────
 
 export type Hit = { t: number; player: number };
@@ -372,18 +626,30 @@ export type Rally = { start: number; end: number; hits: Hit[] };
 /** How long after the last hit a rally is still counted (shuttle in the air). */
 export const RALLY_TAIL = 1.0;
 
-/** Splits hits into rallies wherever there is a pause longer than `gap` seconds. */
-export function groupRallies(hits: Hit[], gap = 4): Rally[] {
+/**
+ * Splits hits into rallies: a new rally starts after a pause longer than
+ * `gap` seconds, or after a "rally over" marker the court assistant pressed.
+ */
+export function groupRallies(hits: Hit[], gap = 4, breaks: number[] = []): Rally[] {
   const sorted = [...hits].sort((a, b) => a.t - b.t);
+  const marks = [...breaks].sort((a, b) => a - b);
   const rallies: Rally[] = [];
   for (const h of sorted) {
     const cur = rallies[rallies.length - 1];
-    if (cur && h.t - cur.hits[cur.hits.length - 1].t <= gap) {
+    const lastT = cur ? cur.hits[cur.hits.length - 1].t : -Infinity;
+    const brokenAt = marks.find((b) => b > lastT && b <= h.t);
+    if (cur && h.t - lastT <= gap && brokenAt === undefined) {
       cur.hits.push(h);
       cur.end = h.t + RALLY_TAIL;
     } else {
       rallies.push({ start: h.t, end: h.t + RALLY_TAIL, hits: [h] });
     }
+  }
+  // A marker shortly after the last hit ends that rally there.
+  for (const r of rallies) {
+    const last = r.hits[r.hits.length - 1].t;
+    const b = marks.find((m) => m >= last && m < r.end);
+    if (b !== undefined) r.end = b;
   }
   return rallies;
 }
@@ -421,4 +687,99 @@ export function formatClock(seconds: number): string {
   const m = Math.floor(s / 60);
   const rest = s - m * 60;
   return `${String(m).padStart(2, "0")}:${rest.toFixed(2).padStart(5, "0")}`;
+}
+
+/** Where each player stood at time t; null when not tracked. */
+export type PositionAt = (player: number, t: number) => Pt | null;
+
+/** Estimated speed of each shot in a rally (hit i to hit i+1), in km/h. */
+export function rallyShotSpeeds(rally: Rally, positionAt: PositionAt): (number | null)[] {
+  const out: (number | null)[] = [];
+  for (let i = 0; i + 1 < rally.hits.length; i++) {
+    const a = rally.hits[i];
+    const b = rally.hits[i + 1];
+    const pa = positionAt(a.player, a.t);
+    const pb = positionAt(b.player, b.t);
+    // Two taps on the same side are a correction, not a shot over the net.
+    out.push(pa && pb && sideOf(pa) !== sideOf(pb) ? shotSpeedKmh(pa, pb, b.t - a.t) : null);
+  }
+  return out;
+}
+
+/** The rally numbers the HUD shows at time t. */
+export type RallyReadout = {
+  index: number;
+  total: number;
+  /** Seconds since the serve (frozen once the rally is over). */
+  time: number;
+  /** Shots so far. */
+  count: number;
+  /** Speed of the latest finished shot, km/h. */
+  shotKmh: number | null;
+  live: boolean;
+  /** Hits per player within this rally so far. */
+  hitsBy: number[];
+  start: number;
+};
+
+export function rallyReadout(rallies: Rally[], t: number, playerCount: number, positionAt: PositionAt): RallyReadout | null {
+  const at = rallyAt(rallies, t);
+  if (!at) return null;
+  const { rally, index, live } = at;
+  const done = rally.hits.filter((h) => h.t <= t);
+  const speeds = rallyShotSpeeds(rally, positionAt);
+  let shotKmh: number | null = null;
+  for (let i = done.length - 2; i >= 0; i--) {
+    if (speeds[i] != null) { shotKmh = speeds[i]; break; }
+  }
+  const hitsBy = new Array(playerCount).fill(0);
+  for (const h of done) if (h.player < playerCount) hitsBy[h.player]++;
+  return {
+    index,
+    total: rallies.length,
+    time: Math.min(t, rally.end) - rally.start,
+    count: done.length,
+    shotKmh,
+    live,
+    hitsBy,
+    start: rally.start,
+  };
+}
+
+export type PlayerSummary = { hits: number; distance: number; topSpeed: number };
+export type MatchSummary = {
+  /** Seconds covered by the analysis. */
+  duration: number;
+  rallies: number;
+  longestRally: number;
+  avgRallyShots: number;
+  fastestShotKmh: number | null;
+  players: PlayerSummary[];
+};
+
+/** Whole-session totals: what is saved to a challenge and shown on the summary screen. */
+export function summarise(motions: Motion[], hits: Hit[], rallies: Rally[], t0: number, t1: number, positionAt: PositionAt): MatchSummary {
+  const players = motions.map((m, i) => {
+    const mv = movementBetween(m, t0, t1);
+    return {
+      hits: hits.filter((h) => h.player === i).length,
+      distance: round(mv.distance, 1),
+      topSpeed: round(mv.topSpeed, 1),
+    };
+  });
+  const lengths = rallies.map((r) => r.hits.length);
+  const speeds = rallies.flatMap((r) => rallyShotSpeeds(r, positionAt)).filter((v): v is number => v != null);
+  return {
+    duration: round(Math.max(0, t1 - t0), 1),
+    rallies: rallies.length,
+    longestRally: lengths.length ? Math.max(...lengths) : 0,
+    avgRallyShots: lengths.length ? round(lengths.reduce((a, b) => a + b, 0) / lengths.length, 1) : 0,
+    fastestShotKmh: speeds.length ? Math.round(Math.max(...speeds)) : null,
+    players,
+  };
+}
+
+function round(v: number, digits: number): number {
+  const f = 10 ** digits;
+  return Math.round(v * f) / f;
 }

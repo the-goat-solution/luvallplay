@@ -38,17 +38,72 @@ export function loadPersonDetector(): Promise<ObjectDetector> {
   return detectorPromise;
 }
 
-export function detectPeople(detector: ObjectDetector, source: HTMLVideoElement | HTMLCanvasElement): Detection[] {
-  const result = detector.detect(source);
+/** People in a canvas frame, in the canvas's own pixels, each with a shirt-colour histogram. */
+export function detectPeople(detector: ObjectDetector, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): Detection[] {
+  const result = detector.detect(canvas);
   return result.detections
     .filter((d) => d.boundingBox)
     .map((d) => {
       const b = d.boundingBox!;
-      return {
-        box: [b.originX, b.originY, b.width, b.height] as Detection["box"],
-        score: d.categories[0]?.score ?? 0,
-      };
+      const box = [b.originX, b.originY, b.width, b.height] as Detection["box"];
+      return { box, score: d.categories[0]?.score ?? 0, look: shirtLook(ctx, box) };
     });
+}
+
+const HUE_BINS = 8;
+/** Colour histogram of the torso (the middle of the upper half of the box). */
+export function shirtLook(ctx: CanvasRenderingContext2D, box: Detection["box"]): number[] | undefined {
+  const x = Math.round(box[0] + box[2] * 0.3);
+  const y = Math.round(box[1] + box[3] * 0.2);
+  const w = Math.round(box[2] * 0.4);
+  const h = Math.round(box[3] * 0.28);
+  if (w < 2 || h < 2 || x < 0 || y < 0 || x + w > ctx.canvas.width || y + h > ctx.canvas.height) return undefined;
+  const data = ctx.getImageData(x, y, w, h).data;
+  // 8 hue bins for coloured pixels + dark / mid / light bins for greys.
+  const bins = new Array(HUE_BINS + 3).fill(0);
+  let total = 0;
+  for (let i = 0; i < data.length; i += 8) {
+    const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const v = max;
+    const s = max === 0 ? 0 : (max - min) / max;
+    if (s < 0.25 || v < 0.15) {
+      bins[HUE_BINS + (v < 0.3 ? 0 : v < 0.7 ? 1 : 2)]++;
+    } else {
+      let hue = 0;
+      const d = max - min;
+      if (max === r) hue = ((g - b) / d + 6) % 6;
+      else if (max === g) hue = (b - r) / d + 2;
+      else hue = (r - g) / d + 4;
+      bins[Math.min(HUE_BINS - 1, Math.floor((hue / 6) * HUE_BINS))]++;
+    }
+    total++;
+  }
+  return total ? bins.map((c) => c / total) : undefined;
+}
+
+/** Long side of a live frame handed to the detector: smaller is faster on phones. */
+const LIVE_DETECT_SIZE = 640;
+
+/** A reusable scratch canvas for live detection. */
+export function makeFrameGrabber() {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  return {
+    /** Detects people in the current video frame; boxes come back in video pixels. */
+    detect(detector: ObjectDetector, video: HTMLVideoElement, size = LIVE_DETECT_SIZE): Detection[] {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!vw || !vh) return [];
+      const scale = Math.min(1, size / Math.max(vw, vh));
+      const w = Math.round(vw * scale), h = Math.round(vh * scale);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      ctx.drawImage(video, 0, 0, w, h);
+      return detectPeople(detector, canvas, ctx).map((d) => ({ ...d, box: d.box.map((v) => v / scale) as Detection["box"] }));
+    },
+  };
 }
 
 function seek(video: HTMLVideoElement, t: number): Promise<void> {
@@ -80,7 +135,7 @@ export type AnalyseProgress = { done: number; total: number };
 export async function analyseVideo(
   src: string,
   fps: number,
-  onProgress: (p: AnalyseProgress) => void,
+  onProgress: (p: AnalyseProgress, samples: Sample[]) => void,
   signal: AbortSignal,
 ): Promise<Sample[]> {
   const detector = await loadPersonDetector();
@@ -107,7 +162,7 @@ export async function analyseVideo(
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(vw * scale);
   canvas.height = Math.round(vh * scale);
-  const ctx = canvas.getContext("2d", { willReadFrequently: false })!;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
   const step = 1 / fps;
   const total = Math.max(1, Math.floor(video.duration / step) + 1);
@@ -117,12 +172,12 @@ export async function analyseVideo(
     const t = Math.min(k * step, Math.max(0, video.duration - 0.01));
     await seek(video, t);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dets = detectPeople(detector, canvas).map((d) => ({
+    const dets = detectPeople(detector, canvas, ctx).map((d) => ({
       ...d,
       box: d.box.map((v) => v / scale) as Detection["box"],
     }));
     samples.push({ t, dets });
-    onProgress({ done: k + 1, total });
+    onProgress({ done: k + 1, total }, samples);
     // Let the page repaint the progress bar.
     if (k % 3 === 0) await new Promise((r) => window.setTimeout(r, 0));
   }

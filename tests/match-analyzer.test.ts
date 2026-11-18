@@ -2,20 +2,26 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   COURT,
+  MotionTracker,
   applyHomography,
   buildTracks,
   computeMotion,
+  courtDetections,
   courtHomography,
+  detectionAtPoint,
   formatClock,
   groupRallies,
   motionAt,
   movementBetween,
   rallyAt,
-  seedPlayers,
+  rallyReadout,
   shotSpeedKmh,
   solveHomography,
-  swapTracks,
+  summarise,
+  trackStep,
+  type Anchor,
   type Box,
+  type PlayerMemory,
   type Pt,
   type Sample,
 } from "../lib/match-analyzer.ts";
@@ -67,52 +73,126 @@ function boxAt(toImage: number[], p: Pt): Box {
   return [f.x - 40, f.y - 300, 80, 300];
 }
 
-test("tracking keeps two players apart and ignores people off court", () => {
-  const h = courtHomography(TAPS)!;
-  const samples: Sample[] = [];
-  for (let k = 0; k <= 20; k++) {
+// Shirt colours as 4-bin histograms.
+const RED = [1, 0, 0, 0];
+const BLUE = [0, 1, 0, 0];
+const WHITE = [0, 0, 1, 0];
+const BLACK = [0, 0, 0, 1];
+
+type Walker = { at: (t: number) => Pt; look: number[] };
+function scene(h: { toImage: number[] }, walkers: Walker[], steps: number, extra: (t: number) => Pt[] = () => []): Sample[] {
+  const out: Sample[] = [];
+  for (let k = 0; k <= steps; k++) {
     const t = k / 10;
-    const a = { x: 1 + t, y: 3 }; // near player walks right
-    const b = { x: 5 - t, y: 10 }; // far player walks left
-    samples.push({
-      t,
-      dets: [
-        { box: boxAt(h.toImage, b), score: 0.9 },
-        { box: boxAt(h.toImage, a), score: 0.8 },
-        { box: boxAt(h.toImage, { x: -4, y: 6 }), score: 0.95 }, // umpire, well off court
-      ],
+    const dets = walkers.map((w) => ({ box: boxAt(h.toImage, w.at(t)), score: 0.9, look: w.look }));
+    for (const p of extra(t)) dets.push({ box: boxAt(h.toImage, p), score: 0.95, look: WHITE });
+    // Detector order is arbitrary: shuffle it deterministically.
+    out.push({ t, dets: k % 2 ? dets.reverse() : dets });
+  }
+  return out;
+}
+
+function tagAll(samples: Sample[], toImage: number[], walkers: Walker[], k: number): Anchor[] {
+  return walkers.map((w, player) => ({ sample: k, player, box: boxAt(toImage, w.at(samples[k].t)) }));
+}
+
+test("doubles: four tagged players are followed and the umpire is ignored", () => {
+  const h = courtHomography(TAPS)!;
+  const walkers: Walker[] = [
+    { at: (t) => ({ x: 1.5 + t, y: 2 }), look: RED },
+    { at: (t) => ({ x: 4.5 - t * 0.5, y: 4.5 }), look: RED },
+    { at: (t) => ({ x: 1.5, y: 9 + t }), look: BLUE },
+    { at: (t) => ({ x: 4.5, y: 11.5 - t }), look: BLUE },
+  ];
+  const samples = scene(h, walkers, 20, () => [{ x: -4, y: 6.7 }]);
+  const tracks = buildTracks(samples, h.toCourt, 4, tagAll(samples, h.toImage, walkers, 0));
+  for (let k = 0; k <= 20; k++) {
+    walkers.forEach((w, i) => {
+      const want = w.at(samples[k].t);
+      close(tracks[i][k]!.p.x, want.x, 1e-6);
+      close(tracks[i][k]!.p.y, want.y, 1e-6);
     });
   }
-  const seeds = seedPlayers(samples[0], h.toCourt, 2);
-  assert.equal(seeds.length, 2);
-  const tracks = buildTracks(samples, h.toCourt, 0, seeds);
-  const near = tracks.findIndex((t) => t[0]!.p.y < 6.7);
-  const far = 1 - near;
-  for (let k = 0; k <= 20; k++) {
-    close(tracks[near][k]!.p.x, 1 + k / 10, 1e-6);
-    close(tracks[far][k]!.p.x, 5 - k / 10, 1e-6);
-  }
 });
 
-test("tracking runs backwards from a seed in the middle", () => {
+test("doubles: partners crossing paths keep their names thanks to shirt colour", () => {
   const h = courtHomography(TAPS)!;
-  const samples: Sample[] = [];
-  for (let k = 0; k <= 10; k++) {
-    samples.push({ t: k / 10, dets: k === 0 ? [] : [{ box: boxAt(h.toImage, { x: 3, y: 2 + k / 10 }), score: 0.9 }] });
-  }
-  const tracks = buildTracks(samples, h.toCourt, 5, seedPlayers(samples[5], h.toCourt, 1));
-  assert.equal(tracks[0][0], null); // nobody detected there
-  close(tracks[0][1]!.p.y, 2.1, 1e-6);
-  close(tracks[0][10]!.p.y, 3, 1e-6);
+  // Two partners swap sides, passing within 30 cm of each other at t = 1 s.
+  const walkers: Walker[] = [
+    { at: (t) => ({ x: 1 + 2 * t, y: 3 + 0.15 * Math.sin(t * Math.PI) }), look: RED },
+    { at: (t) => ({ x: 5 - 2 * t, y: 3 - 0.15 * Math.sin(t * Math.PI) }), look: BLACK },
+  ];
+  const samples = scene(h, walkers, 20);
+  const tracks = buildTracks(samples, h.toCourt, 2, tagAll(samples, h.toImage, walkers, 0));
+  close(tracks[0][20]!.p.x, 5, 1e-6);
+  close(tracks[1][20]!.p.x, 1, 1e-6);
 });
 
-test("swapTracks swaps only from the given sample", () => {
-  const p = (x: number) => ({ p: { x, y: 0 }, box: [0, 0, 1, 1] as Box });
-  const tracks = [[p(1), p(1), p(1)], [p(2), p(2), p(2)]];
-  const out = swapTracks(tracks, 0, 1, 1);
-  assert.deepEqual(out[0].map((tp) => tp!.p.x), [1, 2, 2]);
-  assert.deepEqual(out[1].map((tp) => tp!.p.x), [2, 1, 1]);
-  assert.equal(tracks[0][1]!.p.x, 1); // original untouched
+test("doubles: a later tag fixes a swapped identity from that frame on", () => {
+  const h = courtHomography(TAPS)!;
+  // Same shirts, and they cross exactly: the tracker cannot know, so it bounces.
+  const walkers: Walker[] = [
+    { at: (t) => ({ x: 1 + 2 * t, y: 3 }), look: RED },
+    { at: (t) => ({ x: 5 - 2 * t, y: 3 }), look: RED },
+  ];
+  const samples = scene(h, walkers, 20);
+  const anchors = tagAll(samples, h.toImage, walkers, 0);
+  const before = buildTracks(samples, h.toCourt, 2, anchors);
+  const fixedAt = 15;
+  const fixed = buildTracks(samples, h.toCourt, 2, [...anchors, { sample: fixedAt, player: 0, box: boxAt(h.toImage, walkers[0].at(1.5)) }]);
+  close(fixed[0][20]!.p.x, 5, 1e-6);
+  close(fixed[1][20]!.p.x, 1, 1e-6);
+  // Before the fix tag nothing changes.
+  for (let k = 0; k < fixedAt; k++) assert.deepEqual(fixed[0][k], before[0][k]);
+});
+
+test("a player tagged late is also followed backwards to the start", () => {
+  const h = courtHomography(TAPS)!;
+  const walkers: Walker[] = [
+    { at: (t) => ({ x: 1, y: 2 + t }), look: RED },
+    { at: (t) => ({ x: 5, y: 10 - t }), look: BLUE },
+  ];
+  const samples = scene(h, walkers, 10);
+  const tracks = buildTracks(samples, h.toCourt, 2, [
+    { sample: 0, player: 0, box: boxAt(h.toImage, walkers[0].at(0)) },
+    { sample: 6, player: 1, box: boxAt(h.toImage, walkers[1].at(0.6)) },
+  ]);
+  for (let k = 0; k <= 10; k++) {
+    close(tracks[0][k]!.p.y, 2 + k / 10, 1e-6);
+    close(tracks[1][k]!.p.y, 10 - k / 10, 1e-6);
+  }
+});
+
+test("live tracking: a tap pins a player, then they are followed frame by frame", () => {
+  const h = courtHomography(TAPS)!;
+  const memory: PlayerMemory[] = [null, null, null, null];
+  const frame = (t: number) => courtDetections([
+    { box: boxAt(h.toImage, { x: 1 + t, y: 2 }), score: 0.9 },
+    { box: boxAt(h.toImage, { x: 3, y: 10 }), score: 0.9 },
+  ], h.toCourt);
+  // Before any tap nobody is tracked.
+  assert.deepEqual(trackStep(memory, frame(0), 0), [null, null, null, null]);
+  // The assistant taps the near player and names them player 2.
+  const dets0 = frame(0);
+  const tapped = detectionAtPoint(dets0, applyHomography(h.toImage, { x: 1, y: 2 }), 0)!;
+  const got0 = trackStep(memory, dets0, 0, new Map([[2, dets0.indexOf(tapped)]]));
+  assert.equal(got0[2], dets0.indexOf(tapped));
+  for (let k = 1; k <= 10; k++) {
+    const dets = frame(k / 10);
+    const got = trackStep(memory, dets, k / 10);
+    close(dets[got[2]!].p.x, 1 + k / 10, 1e-6);
+    assert.equal(got[0], null);
+  }
+});
+
+test("a tap on two overlapping people picks the smaller (nearer-looking) box", () => {
+  const dets = [
+    { box: [100, 100, 200, 400] as Box, score: 0.9 },
+    { box: [150, 200, 100, 200] as Box, score: 0.9 },
+  ];
+  assert.equal(detectionAtPoint(dets, { x: 200, y: 300 }), dets[1]);
+  assert.equal(detectionAtPoint(dets, { x: 120, y: 120 }), dets[0]);
+  assert.equal(detectionAtPoint(dets, { x: 10, y: 10 }), null);
 });
 
 test("motion: distance and top speed of a steady 2 m/s run, with short gaps bridged", () => {
@@ -161,4 +241,102 @@ test("shot speed and clock formatting", () => {
   assert.equal(shotSpeedKmh({ x: 0, y: 0 }, { x: 0, y: 10 }, 0), null);
   assert.equal(formatClock(10.03), "00:10.03");
   assert.equal(formatClock(75.5), "01:15.50");
+});
+
+test("MotionTracker (live) gives the same numbers as computeMotion (upload)", () => {
+  // A wandering path at ~15 fps with jitter, dropouts and a few glitches.
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const times: number[] = [];
+  const track: ({ p: Pt; box: Box } | null)[] = [];
+  let t = 0, x = 3, y = 3;
+  for (let k = 0; k < 600; k++) {
+    t += 0.05 + rand() * 0.04;
+    x += (rand() - 0.5) * 0.3;
+    y += (rand() - 0.5) * 0.3;
+    times.push(t);
+    const r = rand();
+    if (r < 0.1) track.push(null); // missed detection
+    else if (r < 0.12 && k > 40 && k < 60) track.push(null); // longer dropout
+    else if (r < 0.13) track.push({ p: { x: x + 20, y }, box: [0, 0, 1, 1] }); // glitch
+    else track.push({ p: { x: x + (rand() - 0.5) * 0.05, y }, box: [x, y, 1, 1] });
+  }
+  const full = computeMotion(times, track);
+  const live = new MotionTracker();
+  times.forEach((tt, k) => live.push(tt, track[k]));
+  for (let k = 0; k < times.length; k++) {
+    close(live.motion.cumDist[k], full.cumDist[k], 1e-9);
+    close(live.motion.speed[k], full.speed[k], 1e-9);
+    assert.deepEqual(live.motion.p[k], full.p[k]);
+  }
+});
+
+test("rally over marker splits rallies even without a pause", () => {
+  const hits = [{ t: 1, player: 0 }, { t: 2, player: 2 }, { t: 3, player: 0 }, { t: 4, player: 3 }];
+  const rallies = groupRallies(hits, 4, [3.5]);
+  assert.equal(rallies.length, 2);
+  assert.equal(rallies[0].hits.length, 3);
+  close(rallies[0].end, 3.5);
+  assert.equal(rallies[1].hits[0].t, 4);
+});
+
+test("rally readout and match summary", () => {
+  // Team A (players 0, 1) near half, team B (2, 3) far half; everyone stands still.
+  const spots: Pt[] = [{ x: 1.5, y: 2 }, { x: 4.5, y: 4 }, { x: 1.5, y: 9 }, { x: 4.5, y: 11 }];
+  const positionAt = (p: number) => spots[p];
+  const hits = [
+    { t: 1, player: 0 }, { t: 2, player: 2 }, { t: 3, player: 1 }, { t: 3.4, player: 1 }, // a double tap on one side
+    { t: 20, player: 3 }, { t: 21, player: 0 },
+  ];
+  const rallies = groupRallies(hits, 4);
+  const r = rallyReadout(rallies, 2.5, 4, positionAt)!;
+  assert.equal(r.index, 0);
+  assert.equal(r.total, 2);
+  assert.equal(r.count, 2);
+  close(r.time, 1.5);
+  assert.deepEqual(r.hitsBy, [1, 0, 1, 0]);
+  close(r.shotKmh!, shotSpeedKmh(spots[0], spots[2], 1)!, 1e-9);
+  // After the same-side double tap the last real shot speed is kept.
+  const later = rallyReadout(rallies, 3.6, 4, positionAt)!;
+  close(later.shotKmh!, shotSpeedKmh(spots[2], spots[1], 1)!, 1e-9);
+  // Frozen after the rally ends.
+  close(rallyReadout(rallies, 10, 4, positionAt)!.time, 3.4 + 1 - 1);
+
+  const times = [0, 10, 30];
+  const motions = spots.map((p) => computeMotion(times, times.map(() => ({ p, box: [0, 0, 1, 1] as Box }))));
+  const sum = summarise(motions, hits, rallies, 0, 30, positionAt);
+  assert.equal(sum.rallies, 2);
+  assert.equal(sum.longestRally, 4);
+  assert.equal(sum.avgRallyShots, 3);
+  assert.deepEqual(sum.players.map((p) => p.hits), [2, 2, 1, 1]);
+  assert.equal(sum.players[0].distance, 0);
+  assert.ok(sum.fastestShotKmh! > 0);
+});
+
+test("calibration from any four or more court points, not just the corners", async () => {
+  const { courtHomographyFromTaps, courtLandmarks, landmarkId } = await import("../lib/match-analyzer.ts");
+  const truth = courtHomography(TAPS)!;
+  // Net posts and the near short service line corners: the near baseline is out of shot.
+  const picks = [{ x: 0, y: 6.7 }, { x: 6.1, y: 6.7 }, { x: 0, y: 4.72 }, { x: 6.1, y: 4.72 }];
+  const ids = new Set(courtLandmarks().map((l) => l.id));
+  for (const p of picks) assert.ok(ids.has(landmarkId(p)), `landmark ${landmarkId(p)}`);
+  const taps = picks.map((court) => ({ court, image: applyHomography(truth.toImage, court) }));
+  const h = courtHomographyFromTaps(taps)!;
+  const far = applyHomography(h.toImage, { x: 6.1, y: 13.4 });
+  close(far.x, 1260, 1e-3);
+  close(far.y, 300, 1e-3);
+  // Six slightly-off taps (±3 px) still give a court within a few centimetres.
+  const more = [...picks, { x: 3.05, y: 13.4 }, { x: 0.46, y: 0.76 }];
+  let k = 0;
+  const noisy = more.map((court) => {
+    const q = applyHomography(truth.toImage, court);
+    k++;
+    return { court, image: { x: q.x + (k % 2 ? 3 : -3), y: q.y + (k % 3 ? -2 : 2) } };
+  });
+  const h2 = courtHomographyFromTaps(noisy)!;
+  const mid = applyHomography(h2.toCourt, applyHomography(truth.toImage, { x: 3, y: 9 }));
+  assert.ok(Math.hypot(mid.x - 3, mid.y - 9) < 0.1, `off by ${Math.hypot(mid.x - 3, mid.y - 9)}`);
+  // Three points in a line cannot define the court.
+  const line = [{ x: 0, y: 0 }, { x: 0, y: 4.72 }, { x: 0, y: 6.7 }, { x: 0, y: 13.4 }].map((court) => ({ court, image: applyHomography(truth.toImage, court) }));
+  assert.equal(courtHomographyFromTaps(line), null);
 });

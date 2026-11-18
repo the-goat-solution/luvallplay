@@ -42,7 +42,7 @@ export function describePoint(p: Pt, lang: "en" | "vi"): string {
  * placed, highlights the one the next video tap will set, and lets the
  * assistant choose any visible line crossing instead.
  */
-export function CourtPicker({ taps, target, onPick }: { taps: CourtTap[]; target: Pt | null; onPick: (p: Pt) => void }) {
+export function CourtPicker({ taps, target, onPick, compact = false }: { taps: CourtTap[]; target: Pt | null; onPick: (p: Pt) => void; compact?: boolean }) {
   const pad = 0.9;
   const W = COURT.width + pad * 2;
   const L = COURT.length + pad * 2;
@@ -52,7 +52,7 @@ export function CourtPicker({ taps, target, onPick }: { taps: CourtTap[]; target
   const placed = new Map(taps.map((t, i) => [landmarkId(t.court), i + 1]));
   const targetId = target ? landmarkId(target) : null;
   return (
-    <svg viewBox={`0 0 ${W} ${L + 0.8}`} style={{ height: 300, width: "auto", maxWidth: "100%", display: "block", margin: "0 auto" }} role="group" aria-label="Court points">
+    <svg viewBox={`0 0 ${W} ${L + 0.8}`} style={compact ? { height: "100%", width: "auto", display: "block" } : { height: 300, width: "auto", maxWidth: "100%", display: "block", margin: "0 auto" }} role="group" aria-label="Court points">
       <rect x={sx(0)} y={sy(COURT.length)} width={COURT.width} height={COURT.length} fill="#14532d" opacity={0.55} />
       {courtLines().map((seg, i) => (
         <line

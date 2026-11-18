@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ModalShell } from "@/components/modals/ModalShell";
 import { useArenaT } from "@/lib/arena-i18n";
 import type { MatchSetup, SavedMatchStats } from "@/lib/match-stats-db";
@@ -27,16 +28,16 @@ export function MatchStatsModal({ challengeId, onClose }: { challengeId: number;
 
   const stats = data?.stats;
   const names = data ? data.setup.teams.flatMap((tm) => tm.players.map((p) => p.name)) : [];
-  return (
+  // Rendered on <body>: inside the Arena the profile's bottom bar would sit on top of it.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <ModalShell id="match-stats" open onClose={onClose} title={t("stats_title")}>
-      {failed ? (
-        <p>{t("stats_failed")}</p>
-      ) : !data ? (
-        <p>{t("stats_loading")}</p>
-      ) : !stats ? (
-        <p>{t("stats_failed")}</p>
+      {!data && !failed ? (
+        <p style={{ color: "#0d1b26" }}>{t("stats_loading")}</p>
+      ) : failed || !stats ? (
+        <p style={{ color: "#0d1b26" }}>{t("stats_failed")}</p>
       ) : (
-        <div data-testid="match-stats">
+        <div data-testid="match-stats" style={{ color: "#0d1b26" }}>
           <div className={s.statsKpis}>
             <div>
               <b>{stats.rallies}</b>
@@ -81,6 +82,7 @@ export function MatchStatsModal({ challengeId, onClose }: { challengeId: number;
           </p>
         </div>
       )}
-    </ModalShell>
+    </ModalShell>,
+    document.body,
   );
 }

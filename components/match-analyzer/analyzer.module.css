@@ -504,3 +504,152 @@
   font-size: 0.9rem;
   line-height: 1.6;
 }
+.rec {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(8, 20, 29, 0.85);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.rec i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: recBlink 1s steps(2, start) infinite;
+}
+@keyframes recBlink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* Court diagram floating in the video while setting the court. */
+.pickerOverlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  height: min(46%, 300px);
+  min-height: 150px;
+  padding: 6px 6px 2px;
+  background: rgba(8, 20, 29, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+.pickerHide,
+.pickerShow {
+  border: none;
+  background: rgba(8, 20, 29, 0.85);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pickerHide {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+}
+.pickerShow {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+}
+
+/* Hit buttons inside the video: short landscape phones and full screen. */
+.stageStrip {
+  display: none;
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  gap: 6px;
+  justify-content: center;
+}
+.stripBtn {
+  flex: 1 1 0;
+  max-width: 130px;
+  min-height: 40px;
+  border: 2px solid var(--c, rgba(255, 255, 255, 0.4));
+  background: rgba(8, 20, 29, 0.6);
+  color: #fff;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.stripBtn small {
+  opacity: 0.8;
+  font-size: 0.7rem;
+}
+.stripBtn:active {
+  background: var(--c, #e6f0f6);
+  color: #062033;
+}
+.stage:fullscreen .stageStrip {
+  display: flex;
+}
+.stage:fullscreen .banner {
+  top: 10px;
+  bottom: auto;
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .top {
+    padding: 4px 12px;
+  }
+  .body {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .stage canvas {
+    max-height: calc(100dvh - 48px);
+  }
+  .stageStrip {
+    display: flex;
+  }
+  .banner {
+    top: 8px;
+    bottom: auto;
+    font-size: 0.75rem;
+    padding: 5px 10px;
+  }
+  .hitPad {
+    display: none;
+  }
+}
+/* Portrait phones have room below the video: the diagram sits there instead of covering it. */
+@media (orientation: portrait) and (max-width: 700px) {
+  .pickerOverlay {
+    position: relative;
+    top: auto;
+    right: auto;
+    height: 240px;
+    display: flex;
+    justify-content: center;
+    border: none;
+    border-radius: 0;
+  }
+}

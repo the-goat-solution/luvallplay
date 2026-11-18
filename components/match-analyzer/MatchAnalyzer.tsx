@@ -80,7 +80,9 @@ const COPY = {
     calTap: (n: number, what: string) => `Point ${n}: tap the ${what} on the video.`,
     calMore: "Pick a point on the court diagram below, then tap it on the video.",
     calCheck: "Check the yellow lines sit on the court lines. Drag a point to fine-tune, or add more points for accuracy.",
-    calHelp: "Mark at least 4 court points you can see clearly, not all on one line. The 4 outer corners are asked for first; if some are out of shot, pick other points instead (service line corners, the T, net post feet). The camera is at the bottom of the diagram.",
+    calHelp: "Mark at least 4 court points you can see clearly, not all on one line. The 4 outer corners are asked for first; if some are out of shot, pick other points on the diagram in the video instead (service line corners, the T, net post feet). The camera is at the bottom of the diagram.",
+    showDiagram: "Court diagram",
+    hideDiagram: "Hide court diagram",
     undo: "Undo",
     reset: "Reset",
     lastCourt: "Use last court setup",
@@ -105,6 +107,7 @@ const COPY = {
     exportVideo: "Export video with overlay",
     exporting: "Exporting… let the video play to the end.",
     hits: "Hits",
+    hitCount: (n: number) => (n === 1 ? "1 hit" : `${n} hits`),
     summaryTitle: "Match stats",
     duration: "Duration",
     rallies: "Rallies",
@@ -159,7 +162,9 @@ const COPY = {
     calTap: (n: number, what: string) => `Điểm ${n}: chạm vào ${what} trên video.`,
     calMore: "Chọn một điểm trên sơ đồ sân bên dưới, rồi chạm vào điểm đó trên video.",
     calCheck: "Kiểm tra các đường vàng trùng với vạch sân. Kéo điểm để chỉnh, hoặc thêm điểm để chính xác hơn.",
-    calHelp: "Đánh dấu ít nhất 4 điểm trên sân mà bạn thấy rõ, không nằm trên một đường thẳng. Bốn góc ngoài được hỏi trước; nếu góc nào bị khuất, hãy chọn điểm khác (góc vạch giao cầu, chữ T, chân cột lưới). Camera ở phía dưới sơ đồ.",
+    calHelp: "Đánh dấu ít nhất 4 điểm trên sân mà bạn thấy rõ, không nằm trên một đường thẳng. Bốn góc ngoài được hỏi trước; nếu góc nào bị khuất, hãy chọn điểm khác trên sơ đồ trong video (góc vạch giao cầu, chữ T, chân cột lưới). Camera ở phía dưới sơ đồ.",
+    showDiagram: "Sơ đồ sân",
+    hideDiagram: "Ẩn sơ đồ sân",
     undo: "Hoàn tác",
     reset: "Làm lại",
     lastCourt: "Dùng sân lần trước",
@@ -184,6 +189,7 @@ const COPY = {
     exportVideo: "Xuất video kèm lớp thông tin",
     exporting: "Đang xuất… để video chạy hết.",
     hits: "Cú đánh",
+    hitCount: (n: number) => `${n} cú`,
     summaryTitle: "Thống kê trận",
     duration: "Thời lượng",
     rallies: "Pha cầu",
@@ -304,6 +310,7 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const [saveState, setSaveState] = useState<{ kind: "idle" | "saving" | "saved" } | { kind: "error"; code: string }>({ kind: "idle" });
   const [hasLastCourt, setHasLastCourt] = useState(false);
+  const [showPicker, setShowPicker] = useState(true);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -445,7 +452,8 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
             }
           } else if (e.frame) {
             const j = e.frame.assign[i];
-            if (j !== null && now() - e.frame.t < 0.5) {
+            // Keep showing the last spot between detections (slower phones detect a few times a second).
+            if (j !== null && now() - e.frame.t < 1.5) {
               pos = e.frame.dets[j].p;
               box = e.frame.dets[j].box;
             }
@@ -485,7 +493,6 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
         untagged,
         calibration: e.step === "calibrate" ? { taps: e.taps.map((q) => q.image), selected: e.dragging ?? undefined } : undefined,
         flash: e.flash ? { player: e.flash.player, age: (performance.now() - e.flash.at) / 1000 } : null,
-        recording: e.recordingSince != null ? (performance.now() - e.recordingSince) / 1000 : null,
         show: { hud: working, cards: working, rings: working, tags: working, map: working && Boolean(e.H) },
       });
 
@@ -525,7 +532,7 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
     if (mode !== "live" || step !== "work") return;
     let alive = true;
     const grabber = makeFrameGrabber();
-    let last = 0;
+    let nextAt = 0;
     const tick = async () => {
       while (alive) {
         await new Promise((r) => requestAnimationFrame(r));
@@ -533,10 +540,13 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
         const det = detectorRef.current;
         const video = videoRef.current;
         if (!det || !video || !e.H || video.readyState < 2) continue;
-        if (performance.now() - last < 55) continue; // ~15 detections a second at most
-        last = performance.now();
+        // At most ~15 detections a second, and never more than half the
+        // main thread: a slow phone keeps responding to taps.
+        if (performance.now() < nextAt) continue;
         const t = now();
+        const began = performance.now();
         const dets = courtDetections(grabber.detect(det, video), e.H.toCourt, frameOf(video));
+        nextAt = performance.now() + Math.max(55, performance.now() - began);
         const assign = trackStep(e.memory, dets, t);
         for (let i = 0; i < PLAYERS; i++) {
           const j = assign[i];
@@ -854,6 +864,7 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
     const v = videoRef.current!;
     try {
       localStorage.setItem(COURT_KEY, JSON.stringify({ taps, w: v.videoWidth, h: v.videoHeight }));
+      setHasLastCourt(true);
     } catch {
       /* storage blocked */
     }
@@ -1198,6 +1209,42 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
           />
           <video ref={videoRef} className={s.hiddenVideo} playsInline muted preload="auto" />
           {banner ? <div className={s.banner}>{banner}</div> : null}
+          {step === "calibrate" ? (
+            showPicker ? (
+              <div className={s.pickerOverlay}>
+                <button type="button" className={s.pickerHide} onClick={() => setShowPicker(false)} aria-label={c.hideDiagram}>
+                  ×
+                </button>
+                <CourtPicker taps={taps} target={target} onPick={pickTarget} compact />
+              </div>
+            ) : (
+              <button type="button" className={s.pickerShow} onClick={() => setShowPicker(true)}>
+                {c.showDiagram}
+              </button>
+            )
+          ) : null}
+          {step === "work" ? (
+            // Shown inside the video on short (landscape phone) screens and in full screen.
+            <div className={s.stageStrip}>
+              {names.map((n, i) => (
+                <button key={i} type="button" className={s.stripBtn} style={{ ["--c" as string]: PLAYER_COLORS[i] }} onClick={() => recordHit(i)}>
+                  {n.split(" ")[0]}
+                  <small>{hits.filter((h) => h.player === i).length}</small>
+                </button>
+              ))}
+              <button type="button" className={s.stripBtn} onClick={rallyOver}>
+                {c.rallyOver}
+              </button>
+              <button type="button" className={s.stripBtn} onClick={undoHit} disabled={hits.length === 0} aria-label={c.undo}>
+                ↶
+              </button>
+            </div>
+          ) : null}
+          {recording ? (
+            <div className={s.rec} aria-live="polite">
+              <i /> REC
+            </div>
+          ) : null}
         </div>
 
         {step === "calibrate" ? (
@@ -1241,7 +1288,6 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
           <section className={s.card}>
             <h2>{c.calTitle}</h2>
             <p>{c.calHelp}</p>
-            <CourtPicker taps={taps} target={target} onPick={pickTarget} />
           </section>
         ) : null}
 
@@ -1357,7 +1403,7 @@ export function MatchAnalyzer({ challengeId }: { challengeId: number | null }) {
                 <button key={i} type="button" className={s.hitBtn} style={{ ["--c" as string]: PLAYER_COLORS[i] }} onClick={() => recordHit(i)} data-testid={`hit-${i}`}>
                   {n}
                   <small>
-                    {hits.filter((h) => h.player === i).length} {c.hits.toLowerCase()} · {i + 1}
+                    {c.hitCount(hits.filter((h) => h.player === i).length)} · {i + 1}
                   </small>
                 </button>
               ))}

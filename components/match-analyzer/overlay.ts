@@ -42,8 +42,6 @@ export type OverlayState = {
   calibration?: { taps: Pt[]; selected?: number };
   /** Player who was just credited with a hit, and how many seconds ago. */
   flash?: { player: number; age: number } | null;
-  /** Seconds recorded so far, when recording. */
-  recording?: number | null;
   show: { hud: boolean; cards: boolean; rings: boolean; tags: boolean; map: boolean };
 };
 
@@ -119,7 +117,6 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, vw: number, vh: numbe
     else drawCards(ctx, st.players, m, hudBottom + 16 * u, vw - 2 * m, u, true);
   }
   if (st.show.map) drawMap(ctx, st, vw - m - 420 * u, vh - m - 250 * u, 420 * u, 250 * u, u);
-  if (st.recording != null) drawRec(ctx, vw, st.recording, u, landscape ? m : vh - m - 50 * u);
   ctx.restore();
 }
 
@@ -274,16 +271,37 @@ function path(ctx: CanvasRenderingContext2D, pts: Pt[]) {
 }
 
 function drawTags(ctx: CanvasRenderingContext2D, st: OverlayState, u: number) {
-  st.players.forEach((p) => {
-    if (!p.box) return;
-    const label = upper(p.name);
-    ctx.font = font(700, 24 * u);
-    spaced(ctx, 1 * u);
-    const tw = ctx.measureText(label).width;
-    spaced(ctx, 0);
-    const w = tw + 30 * u, h = 40 * u;
-    const cx = p.box[0] + p.box[2] / 2;
-    const top = Math.max(4 * u, p.box[1] - h - 18 * u);
+  // Lay the tags out first so partners standing close together don't cover each other's names.
+  const placed: { x: number; top: number; w: number; h: number }[] = [];
+  const tags = st.players
+    .filter((p) => p.box)
+    .map((p) => {
+      const label = upper(p.name);
+      ctx.font = font(700, 24 * u);
+      spaced(ctx, 1 * u);
+      const w = ctx.measureText(label).width + 30 * u;
+      spaced(ctx, 0);
+      return { p, label, w, cx: p.box![0] + p.box![2] / 2, top: Math.max(4 * u, p.box![1] - 40 * u - 18 * u) };
+    })
+    .sort((a, b) => b.top - a.top);
+  for (const tag of tags) {
+    const h = 40 * u;
+    let top = tag.top;
+    const x = tag.cx - tag.w / 2;
+    for (let guard = 0; guard < 4; guard++) {
+      const hit = placed.find((r) => x < r.x + r.w + 6 * u && x + tag.w + 6 * u > r.x && top < r.top + r.h + 4 * u && top + h + 4 * u > r.top);
+      if (!hit) break;
+      top = hit.top - h - 8 * u;
+    }
+    top = Math.max(4 * u, top);
+    placed.push({ x, top, w: tag.w, h });
+    drawTag(ctx, tag.p, tag.label, tag.cx, top, tag.w, u);
+  }
+}
+
+function drawTag(ctx: CanvasRenderingContext2D, p: OverlayPlayer, label: string, cx: number, top: number, w: number, u: number) {
+  {
+    const h = 40 * u;
     const x = cx - w / 2;
     ctx.fillStyle = "rgba(14, 44, 63, 0.92)";
     rrect(ctx, x, top, w, h, 4 * u);
@@ -297,11 +315,12 @@ function drawTags(ctx: CanvasRenderingContext2D, st: OverlayState, u: number) {
     ctx.closePath();
     ctx.fillStyle = p.color;
     ctx.fill();
+    ctx.font = font(700, 24 * u);
     ctx.fillStyle = "#fff";
     spaced(ctx, 1 * u);
     ctx.fillText(label, x + 17 * u, top + 28 * u);
     spaced(ctx, 0);
-  });
+  }
 }
 
 function drawUntagged(ctx: CanvasRenderingContext2D, boxes: Box[], u: number) {
@@ -422,20 +441,4 @@ function drawMap(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, y: 
     ctx.strokeStyle = "#fff";
     ctx.stroke();
   });
-}
-
-function drawRec(ctx: CanvasRenderingContext2D, vw: number, seconds: number, u: number, y: number) {
-  const label = `REC ${formatClock(seconds).slice(0, 5)}`;
-  ctx.font = font(700, 22 * u);
-  const w = ctx.measureText(label).width + 52 * u;
-  const x = vw / 2 - w / 2;
-  ctx.fillStyle = "rgba(10,22,34,0.8)";
-  rrect(ctx, x, y, w, 44 * u, 22 * u);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(x + 22 * u, y + 22 * u, 8 * u, 0, Math.PI * 2);
-  ctx.fillStyle = Math.floor(seconds * 2) % 2 ? "#ef4444" : "#b91c1c";
-  ctx.fill();
-  ctx.fillStyle = "#fff";
-  ctx.fillText(label, x + 38 * u, y + 30 * u);
 }

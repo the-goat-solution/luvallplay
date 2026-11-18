@@ -285,6 +285,18 @@ Plan and decisions: `docs/plans/challenges.md`.
 - **No cron needed:** expiry, lapsing and auto-confirm run when the Arena is loaded.
 - **Preview deployments** share the production database, so on a preview (`VERCEL_ENV=preview`) every Arena table gets a `pv_` prefix (`pv_arena_*`): test pairs and games never mix with the real ones, while real play days and round robin results are read. (The play-day sync from sign-up lists does write `attendance` from previews too: it's the same deterministic rule, so it agrees with production.) Previews also let a score be entered 1 minute after check-in instead of 8. Drop the `pv_arena_*` tables any time to clear test data.
 
+### Match Analyzer (`/match-analyzer`): AI doubles stats
+
+A broadcast-style overlay for a doubles game: rally time and count, shot speed, each player's hits, top speed and distance moved, rings and name tags on the players, and a court map. The video never leaves the phone: player detection runs in the browser (MediaPipe object detector, `components/match-analyzer/detector.ts`), and only the final numbers are saved.
+
+- **From the Arena:** a live challenge shows **📊 Record match stats** (on the board for any signed-in player, and on the players' own card). It opens `/match-analyzer?challenge=ID` with the four players filled in. Saved stats show as **📊 Stats** on that result in the feed. Stats can be saved up to 36 hours after check-in; saving again replaces them. Table: `arena_match_stats` (`pv_` prefix on previews, like the other Arena tables).
+- **Two modes:** *Live camera* (phone on a tripod; analyses as you play, records the screen with the overlay) and *Upload a video* (analyses every frame first: 10 a second for clips up to 3 minutes, 5 a second for longer; hits can be checked frame by frame; exports the video with the overlay).
+- **Court set-up:** tap at least 4 court points you can see, chosen on a court diagram (outer corners first; service-line corners, the T or net-post feet when corners are out of shot). More points are fitted by least squares. The last set-up is remembered on the device for the next game on the same court.
+- **The court assistant:** tags each player once (tap them, pick the name), then taps whoever hits the shuttle (or the four name buttons; keys 1-4 on a laptop). Tagging someone again fixes a mix-up from that moment on. **Rally over** splits rallies; a pause of 4 s does too.
+- **How tracking works** (`lib/match-analyzer.ts`, tested in `tests/match-analyzer.test.ts`): feet positions are mapped to metres on the floor with a homography; tagged players are followed frame to frame by distance plus shirt colour; a player is never matched across the net or further than 4 m, and someone with a clearly different shirt is never taken over after a player is lost for a moment. Distance and speed come from the smoothed path (glitches over 9 m/s are ignored). Shot speed is the average from one hitter to the next, so it reads lower than a radar's peak.
+- **Not automatic yet:** shuttle tracking (hits are tapped), and line calls.
+- **Assets:** the MediaPipe WebAssembly runtime is copied to `public/mediapipe` before `dev`/`build` (`scripts/copy-mediapipe.mjs`, git-ignored); the ~7 MB model is downloaded once from Google's model storage (allowed in the CSP).
+
 ### Shop (`/admin/shop`)
 
 - **Products:** name and description (EN/VI), price, photos, men's/women's fits, sizes S–3XL. The Port Hills Dawn jersey ($30) is added automatically with zero stock.

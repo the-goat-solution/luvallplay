@@ -331,7 +331,7 @@ const LOOK_RATE = 0.1;
  * seen, their shirt colour and which half of the court they play on (players
  * never cross the net during a game; when ends change, the assistant re-tags).
  */
-export type PlayerMemory = { p: Pt; t: number; look?: number[]; side?: 0 | 1 } | null;
+export type PlayerMemory = { p: Pt; t: number; look?: number[]; tagLook?: number[]; side?: 0 | 1 } | null;
 
 function blendLook(old: number[] | undefined, next: number[] | undefined): number[] | undefined {
   if (!next) return old;
@@ -364,7 +364,8 @@ export function trackStep(
     out[i] = j;
     usedI.add(i);
     usedJ.add(j);
-    memory[i] = { p: dets[j].p, t, look: dets[j].look ?? memory[i]?.look, side: sideOf(dets[j].p) };
+    const look = dets[j].look ?? memory[i]?.look;
+    memory[i] = { p: dets[j].p, t, look, tagLook: look, side: sideOf(dets[j].p) };
   }
   const pairs: { i: number; j: number; c: number }[] = [];
   memory.forEach((m, i) => {
@@ -377,8 +378,11 @@ export function trackStep(
       if (d > gate) return;
       if (m.side !== undefined && Math.abs(det.p.y - COURT.net) > NET_TOLERANCE && sideOf(det.p) !== m.side) return;
       const look = lookDistance(m.look, det.look);
-      if (look > LOOK_REJECT && d > 0.6) return;
-      if (lost > 0.5 && look > LOOK_REACQUIRE) return;
+      // Gates compare with the shirt seen when the player was tagged, so a
+      // run of near-misses cannot slowly turn a player into a spectator.
+      const vsTag = m.tagLook ? lookDistance(m.tagLook, det.look) : look;
+      if (Math.max(look, vsTag) > LOOK_REJECT && d > 0.6) return;
+      if (lost > 0.5 && vsTag > LOOK_REACQUIRE) return;
       pairs.push({ i, j, c: d + LOOK_WEIGHT * look });
     });
   });
@@ -388,7 +392,13 @@ export function trackStep(
     usedI.add(i);
     usedJ.add(j);
     out[i] = j;
-    memory[i] = { p: dets[j].p, t, look: blendLook(memory[i]?.look, dets[j].look), side: memory[i]?.side ?? sideOf(dets[j].p) };
+    memory[i] = {
+      p: dets[j].p,
+      t,
+      look: blendLook(memory[i]?.look, dets[j].look),
+      tagLook: memory[i]?.tagLook,
+      side: memory[i]?.side ?? sideOf(dets[j].p),
+    };
   }
   return out;
 }

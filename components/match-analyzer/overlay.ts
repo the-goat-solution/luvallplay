@@ -122,7 +122,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, vw: number, vh: numbe
     else drawCards(ctx, st.players, m, hudBottom + 14 * u, vw - 2 * m, u, true);
   }
   if (st.show.map && st.cam) drawMap(ctx, st, vw - m - 400 * u, vh - m - 240 * u, 400 * u, 240 * u, u);
-  if (st.show.system && st.quality) drawSystem(ctx, st, m, vh - m - 258 * u, 360 * u, 258 * u, u);
+  if (st.show.system && st.quality) drawSystem(ctx, st, m, vh - m - 270 * u, 360 * u, 270 * u, u);
   if (st.waiting > 0 && st.show.players) drawAcquiring(ctx, vw, vh, st, u);
   ctx.restore();
 }
@@ -480,12 +480,12 @@ function drawSystem(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, 
   if (st.perf?.ai.length) {
     ctx.font = f(700, 10 * u);
     ctx.fillStyle = "rgba(47,212,181,0.9)";
-    ctx.textAlign = "right";
-    ctx.fillText(st.perf.ai.join(" · "), x + w - 16 * u, y + 28 * u);
-    ctx.textAlign = "left";
+    spaced(ctx, 1 * u);
+    ctx.fillText(st.perf.ai.join(" · "), x + 20 * u, y + 46 * u);
+    spaced(ctx, 0);
   }
   // Quality gauge.
-  const gx = x + 70 * u, gy = y + 110 * u, gr = 46 * u;
+  const gx = x + 70 * u, gy = y + 122 * u, gr = 46 * u;
   ctx.lineWidth = 10 * u;
   ctx.strokeStyle = "rgba(255,255,255,0.1)";
   ctx.beginPath();
@@ -517,7 +517,7 @@ function drawSystem(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, 
     ["RESOLUTION", q.factors.resolution],
   ];
   rows.forEach(([name, v], i) => {
-    const ry = y + 50 * u + i * 22 * u;
+    const ry = y + 66 * u + i * 22 * u;
     ctx.font = f(700, 11 * u);
     ctx.fillStyle = STEEL;
     spaced(ctx, 1.5 * u);

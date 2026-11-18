@@ -10,6 +10,7 @@ import { partLooks, toGray } from "@/lib/ma/imaging";
 import type { MatchSim, SimFrame } from "@/lib/ma/sim";
 import { detectPeople } from "./detector";
 import { fromCrop, mergeDetections } from "@/lib/ma/detections";
+import type { PoseRunner } from "./pose";
 
 /** Analysis frame width: enough for a shuttle at the far baseline, light enough for an iPhone 14. */
 export const ANALYSIS_W = 640;
@@ -36,6 +37,8 @@ export class Pipeline {
   /** Far half of the court (video px) for the second, closer detector pass; null = no second pass. */
   private farRoi: [number, number, number, number] | null;
   private farCanvas: HTMLCanvasElement | null = null;
+  /** AI pose layer (set once the model has loaded; the tracker runs without it until then). */
+  pose: PoseRunner | null = null;
   /** Last simulator frame (ground truth for the test scenario). */
   lastSimFrame: SimFrame | null = null;
   readonly vw: number;
@@ -74,6 +77,9 @@ export class Pipeline {
   aiLayers(): string[] {
     const out: string[] = [];
     if (this.detector) out.push(this.farRoi ? "DETECT ×2" : "DETECT");
+    if (this.pose && this.engine.poseCount > 0) out.push("POSE");
+    if (this.engine.checker) out.push("SHUTTLE AI");
+    if (this.engine.training.trained > 0) out.push(`SELF-TRAIN ${this.engine.training.trained}`);
     return out;
   }
 
@@ -112,6 +118,9 @@ export class Pipeline {
         fc.drawImage(src.video, rx, ry, rw, rh, 0, 0, this.farCanvas.width, this.farCanvas.height);
         const far = fromCrop(detectPeople(this.detector, this.farCanvas), this.farRoi, this.farCanvas.width, this.farCanvas.height);
         persons = mergeDetections(persons, far, this.farRoi);
+      }
+      if (this.pose) {
+        for (const r of this.pose.run(src.video, this.vw, this.vh, this.engine.playerBoxes(), 2)) this.engine.addPose(r.player, t, r.kp);
       }
       // Keep half the main thread free (taps and drawing stay smooth on slower phones).
       this.busyUntil = performance.now() + (performance.now() - began);

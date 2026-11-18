@@ -193,6 +193,38 @@ For a phone set-up, behind a baseline and at least 2 m high with the whole
 court in frame gives far better far-side positions than court level at the
 side: every metre of the far half then spans tens of pixels, not a few.
 
+## AI layers and auto-training (2026-11)
+
+- **Two-pass person detection**: the detector runs on the whole frame and on
+  a crop of the far half of the court up to head height (`farRoi`), mapped
+  back and merged (`lib/ma/detections.ts`). On the club open-play clips
+  (iPhone 0.5×, behind the baseline, purple court) far players went from
+  50–74 % / 7–74 % of frames tracked to 75–89 % / 74–82 %.
+- **Pose** (`components/match-analyzer/pose.ts`, MediaPipe Pose Landmarker
+  lite): two players per detector frame in turn. Wrist speed in torso lengths
+  per second gives swing cues (≥ 6 torso/s peak; walking stays under ~4), and
+  the distance from the shuttle to the wrist / racket head replaces the box
+  ellipse as "reach" when a pose is available.
+- **Shuttle checker** (`lib/ma/checker.ts`): 151 inputs (7×7 patches of the
+  two frame differences and the picture, normalised by the frame's motion
+  threshold, plus blob measures) → 16 → 1. Trained on 82 k candidates
+  (simulated games with exact labels, six real matches with self-labels at
+  half weight): AUC 0.96 on unseen simulated games. It does not remove
+  candidates (at a contact the shuttle overlaps the racket and those points
+  make the hit cue); a track's flight points must average ≥ 0.15, which is
+  neutral on the simulator and drops tracks that clearly are not a shuttle
+  on real footage. Its benefit on real hit counts is not yet measured: that
+  needs the labelling set.
+- **Self-labels** (tracker → checker): points on a confirmed flight outside
+  racket reach are positives, candidates of tracks that die unconfirmed are
+  negatives. On the simulator they are right 57 % (positives) and 98 %
+  (negatives) of the time, so online steps are small (lr 0.002), positives
+  weigh 0.6, and weights are pulled back towards the shared model (L2 0.02).
+- **Federated averaging** (`lib/wolf-vision-db.ts`): sessions with ≥ 200
+  trained samples send their weights; each counts for at most 3,000 samples;
+  updates more than 50 % (relative) away from the shared weights are not
+  merged; every 3 updates the shared model is re-averaged.
+
 ## Limits
 
 - Accuracy above is on simulated games. Real halls add things the simulator

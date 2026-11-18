@@ -12,7 +12,7 @@ const MODEL_URL =
 let detectorPromise: Promise<ObjectDetector> | null = null;
 
 /** WebGL is backed by a software rasteriser (no real GPU for the model). */
-function softwareGpu(): boolean {
+export function softwareGpu(): boolean {
   try {
     const gl = document.createElement("canvas").getContext("webgl");
     if (!gl) return true;

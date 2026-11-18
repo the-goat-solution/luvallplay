@@ -67,6 +67,15 @@ export type EngineOptions = {
   autoTrain?: boolean;
 };
 
+/** Body keypoints of one player from the AI pose layer (video px): shoulders, elbows, wrists, hips as [x, y, visibility]. */
+export type PoseKeypoints = {
+  shoulders: [number, number, number][];
+  elbows: [number, number, number][];
+  wrists: [number, number, number][];
+  hips: [number, number, number][];
+};
+type PoseSample = { t: number; kp: PoseKeypoints; torso: number; speed: number };
+
 export type PlayerView = { pos: Pt | null; box: Box | null; conf: number; tracked: boolean; speed: number };
 
 export type EngineView = {
@@ -132,6 +141,11 @@ export class MatchEngine {
   private feats = new Map<number, { t: number; f: Float32Array }>();
   /** Self-labelled samples seen this session (positives, negatives) and those trained on. */
   readonly training = { pos: 0, neg: 0, trained: 0 };
+  /** AI pose layer: recent keypoints per player, and swing events found from the racket arm. */
+  private poses: PoseSample[][] = [];
+  private poseSwing: { hist: number[]; lastT: number; peak: { t: number; s: number } | null }[] = [];
+  /** Pose samples received this session (shown as an active AI layer). */
+  poseCount = 0;
   /** Labelled feature vectors kept for offline training (harness), when enabled. */
   collect: { f: number[]; y: 0 | 1 }[] | null = null;
   private backgroundW = 0;
@@ -154,6 +168,8 @@ export class MatchEngine {
     this.identity = new IdentityTracker(this.slots);
     this.identity.centreX = (p) => courtToImage(this.cam, { x: COURT.width / 2, y: p.y }).x;
     this.shuttle = new ShuttleTracker({ width: this.W });
+    this.poses = this.slots.map(() => []);
+    this.poseSwing = this.slots.map(() => ({ hist: [], lastT: -Infinity, peak: null }));
     const w = opts.checker === undefined ? SHUTTLE_CHECKER : opts.checker;
     this.checker = w ? new ShuttleChecker(w) : opts.autoTrain ? new ShuttleChecker(null) : null;
     this.autoTrain = opts.autoTrain ?? true;
@@ -321,6 +337,19 @@ export class MatchEngine {
       players: this.slots.length,
       audioOn: this.audioOn,
       reach: (pl, x, y, t) => {
+        // With the pose layer: distance to the racket head (beyond the wrist, along the forearm), in torso lengths.
+        const ps = this.poseNear(pl, t, 0.2);
+        if (ps) {
+          let best = Infinity;
+          ps.kp.wrists.forEach((w, k) => {
+            if (w[2] < 0.3) return;
+            const e = ps.kp.elbows[k];
+            const head = e && e[2] >= 0.3 ? [w[0] + (w[0] - e[0]) * 1.3, w[1] + (w[1] - e[1]) * 1.3] : [w[0], w[1]];
+            best = Math.min(best, Math.hypot(x - head[0], y - head[1]), Math.hypot(x - w[0], y - w[1]));
+          });
+          // ~1.3 torso lengths from wrist/racket head counts as in reach (prox 1 at r ≤ 0.8).
+          if (Number.isFinite(best)) return best / (1.6 * ps.torso);
+        }
         const box = boxAt(this.boxHist[pl], t);
         if (!box) return null;
         // Reach zone: an ellipse around head height and the racket arm. Kept tight
@@ -333,6 +362,61 @@ export class MatchEngine {
       },
       swingNear: (p, t, w) => Math.max(0, ...this.swings[p].events.filter((e) => Math.abs(e.t - t) <= w).map((e) => e.s)),
     };
+  }
+
+  /** The pose sample of a player closest to time t (within w seconds). */
+  private poseNear(pl: number, t: number, w: number): PoseSample | null {
+    let best: PoseSample | null = null;
+    for (const s of this.poses[pl] ?? []) if (Math.abs(s.t - t) <= w && (!best || Math.abs(s.t - t) < Math.abs(best.t - t))) best = s;
+    return best;
+  }
+
+  /**
+   * AI pose layer input: one player's keypoints at time t. The racket arm's
+   * speed (fastest wrist, in torso lengths per second, so near and far players
+   * compare) is watched for peaks: a stroke whips the wrist to ~8–15 torso/s,
+   * a split step or walking stays under ~4. A peak becomes a swing cue for the
+   * hit fusion, like the motion-based swing detector's.
+   */
+  addPose(player: number, t: number, kp: PoseKeypoints) {
+    const list = this.poses[player];
+    if (!list) return;
+    const vis = (p: [number, number, number] | undefined) => !!p && p[2] >= 0.3;
+    const sh = kp.shoulders.filter(vis), hp = kp.hips.filter(vis);
+    if (!sh.length || !hp.length) return;
+    const mid = (a: [number, number, number][]) => [a.reduce((s, p) => s + p[0], 0) / a.length, a.reduce((s, p) => s + p[1], 0) / a.length];
+    const [sx, sy] = mid(sh), [hx, hy] = mid(hp);
+    const torso = Math.max(4, Math.hypot(sx - hx, sy - hy));
+    const prev = list[list.length - 1];
+    let speed = 0;
+    if (prev && t > prev.t && t - prev.t < 0.4) {
+      kp.wrists.forEach((w, k) => {
+        const q = prev.kp.wrists[k];
+        if (vis(w) && vis(q)) speed = Math.max(speed, Math.hypot(w[0] - q[0], w[1] - q[1]) / (t - prev.t) / torso);
+      });
+    }
+    list.push({ t, kp, torso, speed });
+    while (list.length && t - list[0].t > 3) list.shift();
+    this.poseCount++;
+    // Peak picking on the wrist speed.
+    const st = this.poseSwing[player];
+    if (st.peak && speed < st.peak.s * 0.7) {
+      const pk = st.peak;
+      st.peak = null;
+      if (pk.s >= 6 && pk.t - st.lastT > 0.35) {
+        st.lastT = pk.t;
+        const strength = Math.min(1, (pk.s - 4) / 8);
+        this.swings[player].events.push({ t: pk.t, s: strength });
+        this.fusion.addCue({ t: pk.t, kind: "swing", strength, player });
+      }
+    } else if (speed >= 6 && (!st.peak || speed > st.peak.s)) {
+      st.peak = { t, s: speed };
+    }
+  }
+
+  /** Current boxes of the four players (video px), for the pose layer's crops. */
+  playerBoxes(): (Box | null)[] {
+    return this.currentBoxes();
   }
 
   /**

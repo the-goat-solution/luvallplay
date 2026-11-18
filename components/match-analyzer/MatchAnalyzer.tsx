@@ -7,6 +7,7 @@ import { formatClock, landmarkId, type CourtTap, type Pt } from "@/lib/match-ana
 import { MatchEngine } from "@/lib/ma/engine";
 import { LENS_PRIOR, fitCamera, suspectTap, type CourtCamera, type LensPreset } from "@/lib/ma/lens";
 import type { CheckerWeights } from "@/lib/ma/checker";
+import { isTrial, trialDaysLeft } from "@/lib/wolf-vision-trial";
 import { MatchSim, type SimOptions } from "@/lib/ma/sim";
 import { scoreHits } from "@/lib/ma/simrun";
 import type { MatchSetup, SavedMatchStats } from "@/lib/match-stats-db";
@@ -50,7 +51,7 @@ function aiLayers(p: Pipeline | null): string[] {
   return p ? p.aiLayers() : [];
 }
 
-export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: number | null; sandbox: boolean; demo: boolean }) {
+export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: { challengeId: number | null; sandbox: boolean; demo: boolean; embedded?: boolean }) {
   const { lang, setLang } = useLanguage();
   const c = COPY[lang];
 
@@ -86,6 +87,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
 
   // ── Passes ────────────────────────────────────────────────────────────
   const loadPasses = useCallback(async () => {
+    if (isTrial()) return setPayState("trial");
     const url = new URL(window.location.href);
     const paidKind = url.searchParams.get("wv_paid");
     const sessionId = url.searchParams.get("session_id");
@@ -172,8 +174,8 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   // ── Paywall: $5 live match, $2 video analysis (the test scenario is free) ──
   type PassInfo = { id: number; kind: "live" | "upload"; test: boolean } | null;
   const [passes, setPasses] = useState<{ live: PassInfo; upload: PassInfo }>({ live: null, upload: null });
-  /** "free": no paywall here (local runs without a database). */
-  const [payState, setPayState] = useState<"loading" | "ready" | "signed_out" | "free">("loading");
+  /** "free": no paywall here (local runs without a database). "trial": free for everyone until the end of Feb 2027. */
+  const [payState, setPayState] = useState<"loading" | "ready" | "signed_out" | "free" | "trial">(() => (isTrial() ? "trial" : "loading"));
   const [testMode, setTestMode] = useState(false);
   const [paywallFor, setPaywallFor] = useState<"live" | "upload" | null>(null);
   const [buying, setBuying] = useState(false);
@@ -247,7 +249,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   // ── Starting ──────────────────────────────────────────────────────────
   /** Opens a mode if a pass covers it, otherwise shows the paywall for it. */
   const gate = (kind: "live" | "upload", go: () => void) => {
-    if (payState === "free" || passes[kind]) {
+    if (payState === "free" || payState === "trial" || passes[kind]) {
       passIdRef.current = passes[kind]?.id ?? null;
       go();
     } else setPaywallFor(kind);
@@ -475,7 +477,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
       /* storage blocked */
     }
     // Paywall: this session uses the pass (a resume within 6 hours reuses it).
-    if (payState !== "free" && mode !== "demo") {
+    if (payState !== "free" && payState !== "trial" && mode !== "demo") {
       const kind = mode === "camera" ? "live" : "upload";
       const id = passIdRef.current ?? passes[kind]?.id;
       const ok = id
@@ -921,7 +923,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
   const swap = (a: number, b: number) => setOrder((o) => o.map((v, i) => (i === a ? o[b] : i === b ? o[a] : v)));
 
   return (
-    <div className={s.page}>
+    <div className={`${s.page} ${embedded ? s.embedded : ""}`}>
       <header className={s.top}>
         <h1>
           {c.title}
@@ -942,6 +944,19 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
 
         {step === "start" ? (
           <>
+            {payState === "trial" ? (
+              <section className={s.trial} data-testid="trial-banner">
+                <div className={s.trialRibbon}>{c.freeNow}</div>
+                <div>
+                  <h2>{c.trialTitle}</h2>
+                  <p>{c.trialText}</p>
+                  <p className={s.trialAfter}>
+                    <b>{c.trialDays(trialDaysLeft())}</b> · {c.trialAfter}
+                  </p>
+                </div>
+              </section>
+            ) : null}
+
             <section className={`${s.card} ${s.hero}`}>
               <span className={s.aiBadge} data-testid="ai-badge">✦ {c.aiBadge}</span>
               <p>{c.intro}</p>
@@ -955,7 +970,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
               {setupError === "signed_out" ? (
                 <div className={s.notice}>
                   {c.signIn}{" "}
-                  <a href={`/login?next=${encodeURIComponent(`/match-analyzer?challenge=${challengeId}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
+                  <a href={`/login?next=${encodeURIComponent(`${embedded ? "/profile/wolf-vision" : "/match-analyzer"}?challenge=${challengeId}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
                     {c.signInBtn}
                   </a>
                 </div>
@@ -1006,7 +1021,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
                 {payState === "signed_out" ? (
                   <div className={s.notice}>
                     {c.paySignIn}{" "}
-                    <a href={`/login?next=${encodeURIComponent(`/match-analyzer${challengeId ? `?challenge=${challengeId}` : ""}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
+                    <a href={`/login?next=${encodeURIComponent(`${embedded ? "/profile/wolf-vision" : "/match-analyzer"}${challengeId ? `?challenge=${challengeId}` : ""}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
                       {c.signInBtn}
                     </a>
                   </div>
@@ -1028,12 +1043,26 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
               <button className={s.mode} type="button" onClick={() => gate("live", () => void chooseCamera())} disabled={blocked || !phone} data-testid="mode-camera">
                 <strong>📱 {c.cameraTitle}</strong>
                 <small>{phone ? c.cameraSub : c.cameraOnlyPhone}</small>
-                <span className={s.price}>{passes.live ? c.passReady("live") : c.priceLive}</span>
+                {payState === "trial" ? (
+                  <span className={s.freeChipRow}>
+                    <span className={s.freeChip}>{c.freeNow}</span>
+                    <span className={s.freeThen}>{c.trialThen(c.priceLive)}</span>
+                  </span>
+                ) : (
+                  <span className={s.price}>{passes.live ? c.passReady("live") : c.priceLive}</span>
+                )}
               </button>
               <button className={s.mode} type="button" onClick={() => gate("upload", () => fileRef.current?.click())} disabled={blocked} data-testid="mode-video">
                 <strong>🎞️ {c.videoTitle}</strong>
                 <small>{c.videoSub}</small>
-                <span className={s.price}>{passes.upload ? c.passReady("upload") : c.priceUpload}</span>
+                {payState === "trial" ? (
+                  <span className={s.freeChipRow}>
+                    <span className={s.freeChip}>{c.freeNow}</span>
+                    <span className={s.freeThen}>{c.trialThen(c.priceUpload)}</span>
+                  </span>
+                ) : (
+                  <span className={s.price}>{passes.upload ? c.passReady("upload") : c.priceUpload}</span>
+                )}
               </button>
               {sandbox ? (
                 <button className={`${s.mode} ${s.modeDemo}`} type="button" onClick={() => startDemo()} data-testid="demo">
@@ -1426,6 +1455,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo }: { challengeId: num
               {c.estimate(summary.estimate.estimated, summary.estimate.plusMinus, summary.quality)}
             </p>
             <p className={s.hint}>{c.formula}</p>
+            {payState === "trial" && mode !== "demo" ? <p className={s.trialNote}>✦ {c.trialSummary}</p> : null}
             {saveState.kind === "saved" ? <div className={s.ok}>{c.saved}</div> : null}
             {saveState.kind === "error" ? <div className={s.error}>{c.saveFailed(saveState.code)}</div> : null}
             {mode === "demo" ? <div className={s.notice}>{c.demoNotSaved}</div> : null}

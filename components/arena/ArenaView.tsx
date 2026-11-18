@@ -1,4 +1,5 @@
 "use client";
+import { isTrial } from "@/lib/wolf-vision-trial";
 
 import {
   useCallback,
@@ -1089,16 +1090,19 @@ function LiveCard({ c, signedIn }: { c: ChallengeView; signedIn: boolean }) {
         </div>
       </div>
       {c.tracking ? (
-        <a className={`${s.statsLink} ${s.trackingLive}`} href={signedIn ? `/match-analyzer?challenge=${c.id}` : undefined}>
+        <a className={`${s.statsLink} ${s.trackingLive}`} href={signedIn ? `/profile/wolf-vision?challenge=${c.id}` : undefined}>
           <span>
             <i /> {t("wv_live")}
           </span>
           <small>{t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</small>
         </a>
       ) : signedIn ? (
-        <a className={s.statsLink} href={`/match-analyzer?challenge=${c.id}`}>
-          {t("rec_stats")}
-          <small>{t("rec_stats_hint")}</small>
+        <a className={s.statsLink} href={`/profile/wolf-vision?challenge=${c.id}`}>
+          <span>
+            {t("rec_stats")}
+            {isTrial() ? <em className={s.freeBadge}>{t("rec_stats_free")}</em> : null}
+          </span>
+          <small>{t(isTrial() ? "rec_stats_hint_trial" : "rec_stats_hint")}</small>
         </a>
       ) : null}
     </article>
@@ -1314,8 +1318,9 @@ function MyChallenge({
               {t("score_wait", { n: minMinutes })}
             </span>
           )}
-          <a className={`${s.btn} ${s.btnGhost}`} href={`/match-analyzer?challenge=${c.id}`} style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+          <a className={`${s.btn} ${s.btnGhost}`} href={`/profile/wolf-vision?challenge=${c.id}`} style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
             {t("rec_stats")}
+            {isTrial() ? <em className={s.freeBadge}>{t("rec_stats_free")}</em> : null}
           </a>
         </div>
       </>

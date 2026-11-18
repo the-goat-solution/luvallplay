@@ -9,6 +9,14 @@ export const COPY = {
     labelLink: "Help train it: mark the hits on a match video (labelling set) →",
     priceLive: "$5 a match",
     priceUpload: "$2 a video",
+    freeNow: "FREE NOW",
+    trialTitle: "Wolf Vision is free until 28 February 2027",
+    trialText:
+      "Use the AI-enhanced tracker as much as you like: train with it, film your Arena matches, analyse your videos. No payment, no card, no catch.",
+    trialAfter: "From 1 March 2027: NZ$5 a live match, NZ$2 a video.",
+    trialDays: (n: number) => (n === 1 ? "Last day of the free trial" : `${n} days left of the free trial`),
+    trialThen: (price: string) => `then ${price} from 1 Mar 2027`,
+    trialSummary: "Free during the trial (until 28 February 2027).",
     payTitle: (kind: "live" | "upload") => (kind === "live" ? "Track a live match" : "Analyse a match video"),
     payText: (kind: "live" | "upload") =>
       kind === "live"
@@ -152,6 +160,13 @@ export const COPY = {
     labelLink: "Giúp huấn luyện: đánh dấu các cú đánh trên video trận đấu (bộ nhãn) →",
     priceLive: "$5 một trận",
     priceUpload: "$2 một video",
+    freeNow: "MIỄN PHÍ",
+    trialTitle: "Wolf Vision miễn phí đến hết 28 tháng 2 năm 2027",
+    trialText: "Dùng thoải mái trình theo dõi tăng cường AI: tập luyện, quay các trận Đấu trường, phân tích video. Không thanh toán, không cần thẻ.",
+    trialAfter: "Từ 1 tháng 3 năm 2027: NZ$5 một trận trực tiếp, NZ$2 một video.",
+    trialDays: (n: number) => (n === 1 ? "Ngày cuối của thời gian miễn phí" : `Còn ${n} ngày miễn phí`),
+    trialThen: (price: string) => `sau đó ${price} từ 1/3/2027`,
+    trialSummary: "Miễn phí trong thời gian dùng thử (đến hết 28/2/2027).",
     payTitle: (kind: "live" | "upload") => (kind === "live" ? "Theo dõi trận trực tiếp" : "Phân tích video trận đấu"),
     payText: (kind: "live" | "upload") =>
       kind === "live"

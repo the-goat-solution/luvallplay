@@ -45,6 +45,17 @@ const TABS: { href: string; key: ProfileKey; icon: ReactNode }[] = [
     ),
   },
   {
+    href: "/profile/wolf-vision",
+    key: "tab_wolfvision",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+        <circle cx="12" cy="12" r="3.2" />
+        <path d="M12 2v2M12 20v2" />
+      </svg>
+    ),
+  },
+  {
     href: "/profile/player",
     key: "tab_player",
     icon: (

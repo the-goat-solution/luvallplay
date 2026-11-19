@@ -8,7 +8,7 @@ import { ArenaError, T, ensureArenaTables, loadWorld, type World } from "./arena
 // on their phone: only these numbers are stored.
 
 /** A player in the analyzer's order: posting pair first, then the accepting pair. */
-export type MatchPlayer = { id: number; name: string };
+export type MatchPlayer = { id: number; name: string; avatarUrl?: string | null };
 export type MatchSetup = {
   challengeId: number;
   status: string;
@@ -62,7 +62,7 @@ const RECORDABLE = new Set(["live", "awaiting", "disputed", "completed"]);
 function setupFrom(world: World, challengeId: number): MatchSetup {
   const c = world.challenges.find((x) => x.id === challengeId);
   if (!c || !c.acceptingPlayers || !c.acceptingPair) throw new ArenaError("not_found");
-  const player = (id: number): MatchPlayer => ({ id, name: world.players.get(id)?.name ?? "Wolf" });
+  const player = (id: number): MatchPlayer => ({ id, name: world.players.get(id)?.name ?? "Wolf", avatarUrl: world.players.get(id)?.avatarUrl ?? null });
   const pairName = (pairId: number, ids: [number, number]) =>
     world.pairs.get(pairId)?.name || ids.map((id) => world.players.get(id)?.firstName ?? "Wolf").join(" & ");
   return {

@@ -136,6 +136,9 @@ export type CarriedTotals = {
   plusMinus: number;
 };
 
+/** A player on court: a registered wolf, someone added by email, or a placeholder ("Wolf 3"). */
+export type Wolf = { name: string; avatarUrl?: string | null; playerId?: number; email?: string; placeholder?: boolean };
+
 export type Autosave = {
   v: 1;
   savedAt: number;
@@ -150,6 +153,8 @@ export type Autosave = {
   /** Uploads: where playback had reached (seconds). */
   videoTime?: number;
   videoName?: string;
+  /** Who was on court (sessions that aren't an Arena challenge). */
+  people?: Wolf[];
 };
 
 export function saveAutosave(a: Autosave) {

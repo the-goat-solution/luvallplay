@@ -11,6 +11,7 @@ import {
 } from "./finance-db";
 import type { FinanceKind } from "./finance";
 import { upsertStripePayouts } from "./bank-db";
+import { offlineMethodFromSource } from "./offline-payment";
 
 // Imports the club's Stripe money movements into the finance ledger.
 //
@@ -25,8 +26,8 @@ import { upsertStripePayouts } from "./bank-db";
 //   payout / transfer …   → skipped: money moving between Stripe and the
 //                            club's own bank account isn't income or expense
 //
-// Cash the admin collects is recorded as a Stripe invoice "paid out of band"
-// (see the Add cash member / Add cash booking actions). Those never create a
+// Cash or a bank transfer the admin collects is recorded as a Stripe invoice
+// "paid out of band" (see lib/offline-payment-stripe.ts). Those never create a
 // balance transaction, so they're imported separately from the invoice list.
 //
 // Each line has a stable external_id derived from the Stripe object id, and
@@ -270,16 +271,21 @@ async function linesForBalanceTransaction(
   return lines;
 }
 
-function lineForCashInvoice(invoice: Stripe.Invoice): StripeLedgerLine | null {
-  if (invoice.status !== "paid" || invoice.metadata?.source !== "cash" || !invoice.id) return null;
+// An offline payment (cash or bank transfer) the admin recorded as an
+// invoice paid out of band. The method decides how bank reconciliation
+// treats it: a transfer is matched to its own bank line, cash to the
+// deposit that banked it.
+export function lineForOfflineInvoice(invoice: Stripe.Invoice): StripeLedgerLine | null {
+  const method = offlineMethodFromSource(invoice.metadata?.source);
+  if (invoice.status !== "paid" || !method || !invoice.id) return null;
   const described = describeFromMetadata(invoice.metadata);
   const paidAt = invoice.status_transitions?.paid_at ?? invoice.created;
   return {
     externalId: `stripe-invoice:${invoice.id}`,
     kind: "received",
-    name: `${described?.name ?? invoice.lines?.data[0]?.description ?? "Cash payment"}`,
+    name: `${described?.name ?? invoice.lines?.data[0]?.description ?? (method === "cash" ? "Cash payment" : "Bank transfer")}`,
     category: described?.category ?? "other_income",
-    method: "cash",
+    method,
     person: personFrom(invoice.metadata, invoice.customer_name || invoice.customer_email),
     entryDate: dateKeyFromUnix(paidAt),
     amountCents: invoice.total,
@@ -335,7 +341,7 @@ export async function syncStripeFinance({ full = false } = {}): Promise<StripeSy
       ...(created ? { created } : {}),
     })) {
       scanned++;
-      const line = lineForCashInvoice(invoice);
+      const line = lineForOfflineInvoice(invoice);
       if (line) lines.push(line);
     }
 

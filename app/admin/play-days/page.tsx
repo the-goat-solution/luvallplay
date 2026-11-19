@@ -8,6 +8,7 @@ import {
   getCourtsForDate,
   getRosterForDate,
   getWaitlistForDate,
+  isMiniGameDay,
   isRegistrationLocked,
   listAllSessionDates,
   listSessionsInRange,
@@ -16,6 +17,7 @@ import {
   reserveBookingSlot,
   saveSessionFillIn,
   setCourtsForDate,
+  setMiniGameDay,
   setRegistrationLocked,
   type FillInTarget,
 } from "@/lib/db";
@@ -35,8 +37,21 @@ import { FillInButton } from "@/components/admin/FillInButton";
 import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
-import { CASUAL_PRICE_CENTS, maxPlayersForCourts } from "@/lib/constants";
-import { getStripe } from "@/lib/stripe";
+import {
+  CASUAL_PRICE_CENTS,
+  MINI_GAME_MAX_PLAYERS,
+  maxPlayersForCourts,
+  sessionMaxPlayers,
+} from "@/lib/constants";
+import {
+  offlineInvoiceIdFromRef,
+  parseOfflineMethod,
+  PAYMENT_METHOD_LABEL,
+} from "@/lib/offline-payment";
+import { reconcileOfflinePayment, recordOfflinePayment } from "@/lib/offline-payment-stripe";
+import { getOfflinePaymentReconciliation, type OfflineReconciliation } from "@/lib/bank-db";
+import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMethodField";
+import { MiniGameToggle } from "@/components/admin/MiniGameToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -51,13 +66,19 @@ function parseDateKey(key: string): Date {
   return new Date(y, m - 1, d);
 }
 
-async function addCashPlayer(date: string, formData: FormData) {
+// Adds a player who paid outside the online checkout — cash at the
+// session or a bank transfer to the club account. The payment is recorded
+// in Stripe as a $10 invoice paid out of band, then added to the finance
+// ledger; a bank transfer is matched to its bank statement line straight
+// away if it's already in, otherwise automatically when it arrives.
+async function addOfflinePlayer(date: string, formData: FormData) {
   "use server";
 
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
+  const method = parseOfflineMethod(formData.get("method"));
 
   if (!firstName || !lastName || !email) {
     redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent("Name and email are required")}`);
@@ -72,32 +93,16 @@ async function addCashPlayer(date: string, formData: FormData) {
     redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent("Session is full")}`);
   }
 
-  let invoiceId: string;
+  let recorded: Awaited<ReturnType<typeof recordOfflinePayment>>;
   try {
-    const stripe = getStripe();
-
-    const customers = await stripe.customers.list({ email, limit: 1 });
-    const customer =
-      customers.data[0] ??
-      (await stripe.customers.create({
-        email,
-        name: `${firstName} ${lastName}`,
-        phone: phone || undefined,
-      }));
-
-    await stripe.invoiceItems.create({
-      customer: customer.id,
-      amount: CASUAL_PRICE_CENTS,
-      currency: "nzd",
-      description: `Casual session — cash — ${date}`,
-    });
-
-    const invoice = await stripe.invoices.create({
-      customer: customer.id,
-      collection_method: "send_invoice",
-      days_until_due: 1,
-      auto_advance: false,
-      pending_invoice_items_behavior: "include",
+    recorded = await recordOfflinePayment({
+      method,
+      email,
+      firstName,
+      lastName,
+      phone,
+      amountCents: CASUAL_PRICE_CENTS,
+      description: `Casual session — ${date}`,
       metadata: {
         type: "casual",
         sessionDate: date,
@@ -105,16 +110,10 @@ async function addCashPlayer(date: string, formData: FormData) {
         lastName,
         email,
         phone,
-        source: "cash",
       },
     });
-
-    if (!invoice.id) throw new Error("Failed to create invoice");
-    const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
-    await stripe.invoices.pay(finalized.id!, { paid_out_of_band: true });
-    invoiceId = finalized.id!;
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to record cash payment";
+    const message = e instanceof Error ? e.message : "Failed to record the payment";
     redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent(message)}`);
   }
 
@@ -123,20 +122,22 @@ async function addCashPlayer(date: string, formData: FormData) {
     lastName,
     email,
     phone: phone || undefined,
-    paymentIntentId: `cash-invoice-${invoiceId}`,
+    paymentIntentId: recorded.paymentRef,
   });
 
   if (!ok) {
     redirect(
       `/admin/play-days?date=${date}&cashError=${encodeURIComponent(
-        "Cash payment recorded in Stripe, but the session filled up before the slot could be reserved — check Stripe invoice " +
-          invoiceId,
+        "Payment recorded in Stripe, but the session filled up before the slot could be reserved — check Stripe invoice " +
+          recorded.invoiceId,
       )}`,
     );
   }
 
+  const reconciled = await reconcileOfflinePayment(recorded, method);
+
   revalidatePath("/admin/play-days");
-  redirect(`/admin/play-days?date=${date}&cashAdded=1`);
+  redirect(`/admin/play-days?date=${date}&cashAdded=${reconciled === "matched" ? "matched" : method}`);
 }
 
 async function removePlayer(date: string, bookingId: number) {
@@ -185,12 +186,34 @@ async function updateCourts(date: string, formData: FormData) {
 async function setRegistration(date: string, locked: boolean) {
   "use server";
   await ensureTables();
+  if (!locked && (await isMiniGameDay(date))) {
+    redirect(
+      `/admin/play-days?date=${date}&courtsError=${encodeURIComponent(
+        "This is a mini game day — turn mini game day off to reopen registration.",
+      )}`,
+    );
+  }
   await setRegistrationLocked(date, locked);
   // Reopening may free spots that were hidden by the lock — let the
   // waitlist know, the same as when courts are added.
   if (!locked) await notifyWaitlistIfSpotOpened(date);
   revalidatePath("/admin/play-days");
   redirect(`/admin/play-days?date=${date}&registration=${locked ? "locked" : "unlocked"}`);
+}
+
+// Mini game day: capacity becomes MINI_GAME_MAX_PLAYERS and registration
+// locks (admins still add players). Turning it off restores court-based
+// capacity and reopens registration.
+async function setMiniGame(date: string, on: boolean) {
+  "use server";
+  await ensureTables();
+  const result = await setMiniGameDay(date, on);
+  if (!result.ok) {
+    redirect(`/admin/play-days?date=${date}&courtsError=${encodeURIComponent(result.reason)}`);
+  }
+  if (!on) await notifyWaitlistIfSpotOpened(date);
+  revalidatePath("/admin/play-days");
+  redirect(`/admin/play-days?date=${date}&miniGame=${on ? "on" : "off"}`);
 }
 
 async function notifyWaitlistNow(date: string) {
@@ -293,6 +316,16 @@ async function removeWaitlistEntry(date: string, id: number) {
   redirect(`/admin/play-days?date=${date}&waitlistRemoved=1`);
 }
 
+function TransferStatus({ status }: { status: OfflineReconciliation | undefined }) {
+  return status?.reconciled ? (
+    <div style={{ fontSize: 12, color: "#1a7a3c" }}>
+      ✓ Matched to bank{status.bankDate ? ` (${status.bankDate})` : ""}
+    </div>
+  ) : (
+    <div style={{ fontSize: 12, color: "#8a4b00" }}>Awaiting bank transaction</div>
+  );
+}
+
 export default async function PlayDaysAdminPage({
   searchParams,
 }: {
@@ -309,6 +342,7 @@ export default async function PlayDaysAdminPage({
     fillInRemoved?: string;
     fillInError?: string;
     registration?: string;
+    miniGame?: string;
   }>;
 }) {
   const { date: dateParam } = await searchParams;
@@ -331,6 +365,8 @@ export default async function PlayDaysAdminPage({
   let casualSpotsRemaining: number | null = null;
   let courts = 2;
   let registrationLocked = false;
+  let miniGame = false;
+  let reconciliation = new Map<string, OfflineReconciliation>();
   if (process.env.POSTGRES_URL && selectedDate) {
     roster = await getRosterForDate(selectedDate);
     waitlist = await getWaitlistForDate(selectedDate);
@@ -338,8 +374,19 @@ export default async function PlayDaysAdminPage({
     casualSpotsRemaining = await getAvailableSpots(selectedDate, { ignoreLock: true });
     courts = await getCourtsForDate(selectedDate);
     registrationLocked = await isRegistrationLocked(selectedDate);
+    miniGame = await isMiniGameDay(selectedDate);
+    // Bank transfers show whether they've been matched to the statement.
+    const transferInvoices = roster
+      .filter((p) => p.method === "bank_transfer")
+      .map((p) => offlineInvoiceIdFromRef(p.paymentRef))
+      .filter((id): id is string => Boolean(id));
+    try {
+      reconciliation = await getOfflinePaymentReconciliation(transferInvoices);
+    } catch (err) {
+      console.error("Failed to load bank reconciliation for the roster", err);
+    }
   }
-  const maxPlayers = maxPlayersForCourts(courts);
+  const maxPlayers = sessionMaxPlayers(courts, miniGame);
 
   return (
     <div className={adminStyles.page}>
@@ -420,7 +467,9 @@ export default async function PlayDaysAdminPage({
               ))}
             </select>
             <span style={{ fontSize: 12, color: "#666" }}>
-              (max {maxPlayers} players at {courts} court{courts === 1 ? "" : "s"})
+              {miniGame
+                ? `(mini game day — max ${MINI_GAME_MAX_PLAYERS} players whatever the courts)`
+                : `(max ${maxPlayers} players at ${courts} court${courts === 1 ? "" : "s"})`}
             </span>
             <SubmitButton
               loadingText="Saving…"
@@ -436,6 +485,36 @@ export default async function PlayDaysAdminPage({
               Confirm
             </SubmitButton>
           </form>
+
+          <h2 style={{ fontSize: 16, marginBottom: 8 }}>Mini game day</h2>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              padding: "10px 12px",
+              marginBottom: 24,
+              borderRadius: 8,
+              border: `1px solid ${miniGame ? "#c9b8e8" : "#ddd"}`,
+              background: miniGame ? "#f5f0fd" : "#fafafa",
+            }}
+          >
+            <div style={{ fontSize: 13 }}>
+              <strong style={{ color: miniGame ? "#5a2ea6" : "#333" }}>
+                {miniGame ? "🏸 On" : "Off"}
+              </strong>
+              <span style={{ color: "#666" }}>
+                {miniGame
+                  ? ` — registration is locked and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. Add players below.`
+                  : ` — turn on to lock registration and cap this play day at ${MINI_GAME_MAX_PLAYERS} players.`}
+              </span>
+            </div>
+            <form action={setMiniGame.bind(null, selectedDate, !miniGame)}>
+              <MiniGameToggle on={miniGame} />
+            </form>
+          </div>
 
           <h2 style={{ fontSize: 16, marginBottom: 8 }}>Registration</h2>
           <div
@@ -458,10 +537,13 @@ export default async function PlayDaysAdminPage({
               </strong>
               <span style={{ color: "#666" }}>
                 {registrationLocked
-                  ? " — no new casual bookings or memberships can start on this play day, even with spots left. Existing players keep their places, and you can still add cash players below."
+                  ? miniGame
+                    ? " — locked for the mini game day. Turn mini game day off to reopen. You can still add offline payment players below."
+                    : " — no new casual bookings or memberships can start on this play day, even with spots left. Existing players keep their places, and you can still add offline payment players below."
                   : ` — players can sign up while spots remain (${casualSpotsRemaining ?? 0} left).`}
               </span>
             </div>
+            {!(miniGame && registrationLocked) && (
             <form action={setRegistration.bind(null, selectedDate, !registrationLocked)}>
               <SubmitButton
                 loadingText={registrationLocked ? "Unlocking…" : "Locking…"}
@@ -478,6 +560,7 @@ export default async function PlayDaysAdminPage({
                 {registrationLocked ? "Unlock registration" : "Lock registration"}
               </SubmitButton>
             </form>
+            )}
           </div>
 
           <p style={{ fontWeight: 600, marginBottom: 4 }}>
@@ -486,7 +569,7 @@ export default async function PlayDaysAdminPage({
           {casualSpotsRemaining !== null && (
             <p style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>
               {casualSpotsRemaining} casual spot{casualSpotsRemaining === 1 ? "" : "s"} remaining
-              (session capacity {maxPlayers} minus active members — see{" "}
+              (session capacity {maxPlayers}{miniGame ? " for the mini game day" : ""} minus active members — see{" "}
               <AdminLink href="/admin/members">Members</AdminLink>)
             </p>
           )}
@@ -543,7 +626,12 @@ export default async function PlayDaysAdminPage({
                           ) : null}
                         </td>
                         <td style={{ padding: "6px 8px", ...struck }}>
-                          {p.method === "cash" ? "Cash" : "Card"}
+                          {PAYMENT_METHOD_LABEL[p.method]}
+                          {p.method === "bank_transfer" ? (
+                            <TransferStatus
+                              status={reconciliation.get(offlineInvoiceIdFromRef(p.paymentRef) ?? "")}
+                            />
+                          ) : null}
                         </td>
                         <td style={{ padding: "6px 8px" }}>
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -683,13 +771,16 @@ export default async function PlayDaysAdminPage({
             </table>
           </div>
 
-          <h2 style={{ fontSize: 16, marginTop: 32, marginBottom: 8 }}>Add cash player</h2>
+          <h2 style={{ fontSize: 16, marginTop: 32, marginBottom: 8 }}>Add offline payment player</h2>
           <p style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>
-            Records a $10 invoice in Stripe marked as paid out-of-band (cash), then adds the player to
-            this play day&apos;s roster.
+            For a player who paid in cash or by bank transfer. Records a $10 invoice in Stripe marked
+            as paid out-of-band, then adds the player to this play day&apos;s roster. A bank transfer
+            is matched to its bank transaction automatically — straight away if it&apos;s already in
+            the bank feed, otherwise as soon as it arrives (see{" "}
+            <AdminLink href="/admin/financials/bank">Bank</AdminLink>).
           </p>
           <form
-            action={addCashPlayer.bind(null, selectedDate)}
+            action={addOfflinePlayer.bind(null, selectedDate)}
             style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-end" }}
           >
             <div>
@@ -724,6 +815,7 @@ export default async function PlayDaysAdminPage({
                 style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
               />
             </div>
+            <OfflinePaymentMethodField />
             <SubmitButton
               loadingText="Adding…"
               style={{
@@ -735,7 +827,7 @@ export default async function PlayDaysAdminPage({
                 fontSize: 13,
               }}
             >
-              Add cash player
+              Add player
             </SubmitButton>
           </form>
           <AttendanceSection date={selectedDate} roster={roster} />

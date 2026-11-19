@@ -18,7 +18,14 @@ import {
   type MembershipAuditResult,
 } from "@/lib/membership-status";
 import { getClubToday } from "@/lib/dates";
-import { getStripe } from "@/lib/stripe";
+import {
+  offlineInvoiceIdFromRef,
+  parseOfflineMethod,
+  PAYMENT_METHOD_LABEL,
+} from "@/lib/offline-payment";
+import { reconcileOfflinePayment, recordOfflinePayment } from "@/lib/offline-payment-stripe";
+import { getOfflinePaymentReconciliation, type OfflineReconciliation } from "@/lib/bank-db";
+import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMethodField";
 import { sendMembershipConfirmationEmail } from "@/lib/email";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { AdminNav } from "@/components/admin/AdminNav";
@@ -38,14 +45,16 @@ const MEMBERSHIP_PRICE_CENTS: Record<"monthly" | "quarterly", number> = {
   quarterly: QUARTERLY_PRICE_CENTS,
 };
 
-// Records a monthly/quarterly membership paid in cash: reserves the same
-// access-start slot the online signup flow would (so cash members count
-// against play-day capacity exactly like card members), records a Stripe
-// customer + invoice marked paid out-of-band (so Stripe stays the source of
-// truth for who's a paying member, without ever charging a card), then
-// activates the membership and sends the same confirmation email a card
-// payment would trigger.
-async function addCashMember(formData: FormData) {
+// Records a monthly/quarterly membership paid offline — cash, or a bank
+// transfer to the club account: reserves the same access-start slot the
+// online signup flow would (so these members count against play-day
+// capacity exactly like card members), records a Stripe customer + invoice
+// marked paid out-of-band (so Stripe stays the source of truth for who's a
+// paying member, without ever charging a card), then activates the
+// membership and sends the same confirmation email a card payment would
+// trigger. The payment also goes into the finance ledger, where a bank
+// transfer is matched to its bank transaction as soon as it's in the feed.
+async function addOfflineMember(formData: FormData) {
   "use server";
 
   const firstName = String(formData.get("firstName") ?? "").trim();
@@ -56,6 +65,7 @@ async function addCashMember(formData: FormData) {
   const day = formData.get("day") === "wednesday" ? "wednesday" : "friday";
   const dayLabel = day === "wednesday" ? "Wednesday" : "Friday";
   const startDate = String(formData.get("startDate") ?? "").trim();
+  const method = parseOfflineMethod(formData.get("method"));
 
   if (!firstName || !lastName || !email) {
     redirect(
@@ -88,33 +98,16 @@ async function addCashMember(formData: FormData) {
   }
 
   const amount = MEMBERSHIP_PRICE_CENTS[plan];
-  let invoiceId: string;
+  let recorded: Awaited<ReturnType<typeof recordOfflinePayment>>;
   try {
-    const stripe = getStripe();
-
-    const customers = await stripe.customers.list({ email, limit: 1 });
-    const customer =
-      customers.data[0] ??
-      (await stripe.customers.create({
-        email,
-        name: `${firstName} ${lastName}`,
-        phone: phone || undefined,
-        metadata: { plan, day },
-      }));
-
-    await stripe.invoiceItems.create({
-      customer: customer.id,
-      amount,
-      currency: "nzd",
-      description: `Three Wolves — ${plan === "monthly" ? "Monthly" : "Quarterly"} Membership (${dayLabel}) — cash`,
-    });
-
-    const invoice = await stripe.invoices.create({
-      customer: customer.id,
-      collection_method: "send_invoice",
-      days_until_due: 1,
-      auto_advance: false,
-      pending_invoice_items_behavior: "include",
+    recorded = await recordOfflinePayment({
+      method,
+      email,
+      firstName,
+      lastName,
+      phone,
+      amountCents: amount,
+      description: `Three Wolves — ${plan === "monthly" ? "Monthly" : "Quarterly"} Membership (${dayLabel})`,
       metadata: {
         type: "membership",
         plan,
@@ -123,25 +116,20 @@ async function addCashMember(formData: FormData) {
         lastName,
         email,
         phone,
-        source: "cash",
         membershipId: String(assignment.membershipId),
       },
+      customerMetadata: { plan, day },
     });
-
-    if (!invoice.id) throw new Error("Failed to create invoice");
-    const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
-    await stripe.invoices.pay(finalized.id!, { paid_out_of_band: true });
-    invoiceId = finalized.id!;
   } catch (e) {
     const message =
-      e instanceof Error ? e.message : "Failed to record cash payment";
+      e instanceof Error ? e.message : "Failed to record the payment";
     // The reserved membership row is left 'pending' — it stops counting
     // toward play-day capacity after PENDING_MEMBERSHIP_HOLD_MINUTES, the
     // same as an abandoned online checkout, so nothing else to clean up.
     redirect(`/admin/members?cashMemberError=${encodeURIComponent(message)}`);
   }
 
-  const paymentIntentId = `cash-invoice-${invoiceId}`;
+  const paymentIntentId = recorded.paymentRef;
   await attachStripeIdToMembership(assignment.membershipId, {
     stripePaymentIntentId: paymentIntentId,
   });
@@ -172,8 +160,10 @@ async function addCashMember(formData: FormData) {
     );
   }
 
+  const reconciled = await reconcileOfflinePayment(recorded, method);
+
   revalidatePath("/admin/members");
-  redirect("/admin/members?cashMemberAdded=1");
+  redirect(`/admin/members?cashMemberAdded=${reconciled === "matched" ? "matched" : method}`);
 }
 
 // Stripe subscription statuses that mean an invoice is sitting unpaid:
@@ -182,12 +172,24 @@ async function addCashMember(formData: FormData) {
 // completed. Each one has an outstanding invoice the admin can re-attempt.
 const OVERDUE_STATUSES = new Set(["past_due", "unpaid", "incomplete"]);
 
+function TransferStatus({ status }: { status: OfflineReconciliation | undefined }) {
+  return status?.reconciled ? (
+    <div style={{ fontSize: 12, color: "#1a7a3c" }}>
+      ✓ Matched to bank{status.bankDate ? ` (${status.bankDate})` : ""}
+    </div>
+  ) : (
+    <div style={{ fontSize: 12, color: "#8a4b00" }}>Awaiting bank transaction</div>
+  );
+}
+
 function MembersTable({
   title,
   members,
+  reconciliation,
 }: {
   title: string;
   members: MembershipRow[];
+  reconciliation: Map<string, OfflineReconciliation>;
 }) {
   const { dateKey: today } = getClubToday();
   return (
@@ -250,7 +252,14 @@ function MembersTable({
                     ) : null}
                   </td>
                   <td style={{ padding: "6px 8px" }}>
-                    {m.method === "cash" ? "Cash" : "Card"}
+                    {PAYMENT_METHOD_LABEL[m.method]}
+                    {m.method === "bank_transfer" ? (
+                      <TransferStatus
+                        status={reconciliation.get(
+                          offlineInvoiceIdFromRef(m.stripePaymentIntentId) ?? "",
+                        )}
+                      />
+                    ) : null}
                   </td>
                   <td style={{ padding: "6px 8px" }}>
                     {m.cancelAtPeriodEnd ? (
@@ -379,7 +388,7 @@ function RecentlyEndedTable({ members }: { members: MembershipRow[] }) {
 }
 
 export default async function MembersAdminPage() {
-  const { memberships, activeMemberCount, recentlyEnded, audit } = process.env.POSTGRES_URL
+  const { memberships, activeMemberCount, recentlyEnded, audit, reconciliation } = process.env.POSTGRES_URL
     ? await (async () => {
         await ensureTables();
         // Same upkeep the daily cron runs, so the list below never shows a
@@ -395,9 +404,28 @@ export default async function MembersAdminPage() {
           getTotalActiveMemberCount(),
           listRecentlyEndedMemberships(addDays(getClubToday().dateKey, -60)),
         ]);
-        return { memberships, activeMemberCount, recentlyEnded, audit };
+        // Bank-transfer members show whether the transfer has been matched
+        // to the bank statement yet.
+        let reconciliation = new Map<string, OfflineReconciliation>();
+        try {
+          reconciliation = await getOfflinePaymentReconciliation(
+            memberships
+              .filter((m) => m.method === "bank_transfer")
+              .map((m) => offlineInvoiceIdFromRef(m.stripePaymentIntentId))
+              .filter((id): id is string => Boolean(id)),
+          );
+        } catch (err) {
+          console.error("Failed to load bank reconciliation for members", err);
+        }
+        return { memberships, activeMemberCount, recentlyEnded, audit, reconciliation };
       })()
-    : { memberships: [], activeMemberCount: 0, recentlyEnded: [], audit: null };
+    : {
+        memberships: [],
+        activeMemberCount: 0,
+        recentlyEnded: [],
+        audit: null,
+        reconciliation: new Map<string, OfflineReconciliation>(),
+      };
 
   const monthly = memberships.filter((m) => m.plan === "monthly");
   const quarterly = memberships.filter((m) => m.plan === "quarterly");
@@ -459,20 +487,24 @@ export default async function MembersAdminPage() {
               automatically.
             </p>
           ) : null}
-          <MembersTable title="Monthly members" members={monthly} />
-          <MembersTable title="Quarterly members" members={quarterly} />
+          <MembersTable title="Monthly members" members={monthly} reconciliation={reconciliation} />
+          <MembersTable title="Quarterly members" members={quarterly} reconciliation={reconciliation} />
           <RecentlyEndedTable members={recentlyEnded} />
 
           <h2 style={{ fontSize: 16, marginTop: 32, marginBottom: 8 }}>
-            Add cash member
+            Add offline payment member
           </h2>
           <p style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>
-            Records a Stripe customer and invoice marked as paid out-of-band
-            (cash), assigns them the next session with room on the chosen day,
-            and sends the same welcome email a card signup would get.
+            For a member who paid in cash or by bank transfer. Records a Stripe
+            customer and invoice marked as paid out-of-band, assigns them the
+            next session with room on the chosen day, and sends the same
+            welcome email a card signup would get. A bank transfer is matched to
+            its bank transaction automatically — straight away if it&apos;s
+            already in the bank feed, otherwise as soon as it arrives (see{" "}
+            <AdminLink href="/admin/financials/bank">Bank</AdminLink>).
           </p>
           <form
-            action={addCashMember}
+            action={addOfflineMember}
             style={{
               display: "flex",
               flexWrap: "wrap",
@@ -558,6 +590,7 @@ export default async function MembersAdminPage() {
                 <option value="quarterly">Quarterly ($85)</option>
               </select>
             </div>
+            <OfflinePaymentMethodField />
             <CashMemberDayAndDateFields />
             <SubmitButton
               loadingText="Adding…"
@@ -571,7 +604,7 @@ export default async function MembersAdminPage() {
                 cursor: "pointer",
               }}
             >
-              Add cash member
+              Add member
             </SubmitButton>
           </form>
         </>

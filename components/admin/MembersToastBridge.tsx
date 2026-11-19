@@ -3,10 +3,11 @@
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/context/ToastContext";
+import { offlineAddedMessage } from "@/components/admin/PlayDaysToastBridge";
 
 const TOAST_PARAMS = ["cashMemberAdded", "cashMemberError"] as const;
 
-// The "Add cash member" server action redirects back with one of these query
+// The "Add offline payment member" server action redirects back with one of these query
 // params (server actions can't call client-side toast code directly). This
 // bridges that redirect into a toast, then strips the param so a refresh
 // doesn't re-fire it. Mirrors PlayDaysToastBridge.
@@ -20,7 +21,7 @@ export function MembersToastBridge() {
     const cashMemberError = searchParams.get("cashMemberError");
 
     if (cashMemberAdded) {
-      showToast("Cash member added and recorded in Stripe.", "success");
+      showToast(offlineAddedMessage(cashMemberAdded, "Member"), "success");
     }
     if (cashMemberError) showToast(cashMemberError, "error");
 

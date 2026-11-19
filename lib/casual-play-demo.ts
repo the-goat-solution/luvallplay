@@ -31,6 +31,7 @@ export function demoRoster(): RosterEntry[] {
     phone: null,
     type: i < 6 ? "casual" : "monthly",
     method: "card",
+    paymentRef: null,
     fillIn: null,
   }));
 }

@@ -24,7 +24,9 @@ import {
   totalsAsSummary,
   type Autosave,
   type CarriedTotals,
+  type Wolf,
 } from "./session";
+import { WolfAvatar, WolfPicker } from "./WolfPicker";
 import { isPhone, listCameras, openCamera, pickCamera, type CameraChoice } from "./camera";
 import { loadPersonDetector } from "./detector";
 import { PLAYER_COLORS, drawOverlay, type OverlayPlayer } from "./overlay";
@@ -52,7 +54,27 @@ function aiLayers(p: Pipeline | null): string[] {
   return p ? p.aiLayers() : [];
 }
 
-export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: { challengeId: number | null; sandbox: boolean; demo: boolean; embedded?: boolean }) {
+type Me = { id: number; name: string; avatarUrl: string | null };
+
+/** The four players: the signed-in player is Wolf 1 when it isn't a challenge. */
+function startingPeople(me: Me | null | undefined): Wolf[] {
+  return [0, 1, 2, 3].map((i) => (i === 0 && me ? { name: me.name, avatarUrl: me.avatarUrl, playerId: me.id } : { name: "", placeholder: true }));
+}
+
+export function MatchAnalyzer({
+  challengeId,
+  sandbox,
+  demo,
+  embedded = false,
+  me = null,
+}: {
+  challengeId: number | null;
+  sandbox: boolean;
+  demo: boolean;
+  embedded?: boolean;
+  /** The signed-in player (Wolf 1 in a session that isn't a challenge). */
+  me?: Me | null;
+}) {
   const { lang, setLang } = useLanguage();
   const c = COPY[lang];
 
@@ -60,7 +82,12 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
   const [setup, setSetup] = useState<MatchSetup | null>(null);
   const [existing, setExisting] = useState<SavedMatchStats | null>(null);
   const [setupError, setSetupError] = useState<"signed_out" | "not_found" | "failed" | null>(null);
-  const [names, setNames] = useState<string[]>(() => [1, 2, 3, 4].map((n) => COPY.en.player(n)));
+  const [people, setPeople] = useState<Wolf[]>(() => startingPeople(me));
+  const names = people.map((p, i) => (p.placeholder ? c.player(i + 1) : p.name));
+  /** Player index whose "who is this?" picker is open (set-up screen). */
+  const [choosing, setChoosing] = useState<number | null>(null);
+  const [emailState, setEmailState] = useState<{ kind: "idle" | "sending" } | { kind: "sent" | "error"; to: string[] }>({ kind: "idle" });
+  const emailedRef = useRef<string>("");
   const [teams, setTeams] = useState<[string, string]>([COPY.en.teamA, COPY.en.teamB]);
   useEffect(() => {
     if (!challengeId) return;
@@ -75,7 +102,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
         const data = (await res.json()) as { setup: MatchSetup; stats: SavedMatchStats | null };
         setSetup(data.setup);
         setExisting(data.stats);
-        setNames(data.setup.teams.flatMap((t) => t.players.map((p) => p.name)));
+        setPeople(data.setup.teams.flatMap((t) => t.players.map((p) => ({ name: p.name, avatarUrl: p.avatarUrl ?? null, playerId: p.id }))));
         setTeams([data.setup.teams[0].name, data.setup.teams[1].name]);
       } catch {
         if (alive) setSetupError("failed");
@@ -304,6 +331,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
     setOrder(a.order);
     setSound(a.sound);
     setTaps(a.taps);
+    if (a.people?.length === 4 && !challengeId) setPeople(a.people);
     pickTarget(null);
     setResumable(null);
     setNotice(c.resumedNote(Math.round(a.totals.duration / 60)));
@@ -540,6 +568,58 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
     heartbeat("start");
   };
 
+  // Not a challenge: after the match, the stats go by email to the players
+  // added by email (not registered). Once per result; "Try again" on failure.
+  const emailStatsRef = useRef<(final: Summary, again?: boolean) => void>(() => {});
+  emailStatsRef.current = (final: Summary, again = false) => {
+    if (!setup && mode !== "demo" && people.some((p) => p.email)) {
+      // Per player (Wolf 1–4), whichever slot they were tracked in.
+      const players = people.map((p, i) => {
+        const st = final.players[order.indexOf(i)];
+        return {
+          name: (p.placeholder ? COPY.en.player(i + 1) : p.name).slice(0, 60),
+          team: (i < 2 ? 0 : 1) as 0 | 1,
+          hits: st?.hits ?? 0,
+          distance: Math.round((st?.distance ?? 0) * 10) / 10,
+          topSpeed: Math.min(15, Math.round((st?.topSpeed ?? 0) * 10) / 10),
+          ...(p.email ? { email: p.email } : {}),
+        };
+      });
+      const key = JSON.stringify([Math.round(final.duration), players.map((p) => p.hits)]);
+      if (again || key !== emailedRef.current) {
+        emailedRef.current = key;
+        setEmailState({ kind: "sending" });
+        void fetch("/api/wolf-vision/share", {
+          method: "POST",
+          keepalive: true,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            // The two pairs by name ("Tim & Anna"), not "Pack A / B".
+            teams: [0, 1].map((t) => players.slice(t * 2, t * 2 + 2).map((p) => p.name.split(" ")[0]).join(" & ").slice(0, 60)),
+            duration: Math.round(final.duration),
+            rallies: final.rallies,
+            longestRally: final.longestRally,
+            avgRallyShots: final.avgRallyShots,
+            fastestShotKmh: final.fastestShotKmh,
+            players,
+          }),
+        })
+          .then(async (r) => {
+            const j = (await r.json().catch(() => ({}))) as { sent?: string[]; failed?: string[] };
+            if (r.ok && j.sent?.length) setEmailState({ kind: "sent", to: j.sent });
+            else {
+              emailedRef.current = "";
+              setEmailState({ kind: "error", to: people.filter((p) => p.email).map((p) => p.email!) });
+            }
+          })
+          .catch(() => {
+            emailedRef.current = "";
+            setEmailState({ kind: "error", to: people.filter((p) => p.email).map((p) => p.email!) });
+          });
+      }
+    }
+  };
+
   const finish = useCallback(() => {
     const e = pipeRef.current?.engine;
     if (!e) return;
@@ -560,7 +640,9 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
         }),
       }).catch(() => {});
     }
-    setSummary(carriedRef.current ? totalsAsSummary(addTotals(carriedRef.current, part), part) : part);
+    const final = carriedRef.current ? totalsAsSummary(addTotals(carriedRef.current, part), part) : part;
+    setSummary(final);
+    emailStatsRef.current(final);
     clearAutosave();
     setSaveState({ kind: "idle" });
     setStep("summary");
@@ -734,6 +816,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
           totals: addTotals(carriedRef.current, e.snapshot()),
           videoTime: mode === "video" ? videoRef.current?.currentTime : undefined,
           videoName: mode === "video" ? fileObj.current?.name : undefined,
+          people: setup ? undefined : people,
         });
       }
     };
@@ -743,7 +826,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
       if (hasVfc) vfv!.cancelVideoFrameCallback?.(vfHandle);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, mode, cam, taps, order, teams, names, finish]);
+  }, [step, mode, cam, taps, order, teams, people, lang, finish]);
 
   useEffect(() => {
     if (step !== "track" || !setup || mode === "demo") return;
@@ -864,6 +947,8 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
     setDownload(null);
     setFixOpen(false);
     setPaused(false);
+    setEmailState({ kind: "idle" });
+    emailedRef.current = "";
   };
 
   // ── Leaving a session ─────────────────────────────────────────────────
@@ -896,6 +981,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
             totals: addTotals(carriedRef.current, e.snapshot()),
             videoTime: mode === "video" ? videoRef.current?.currentTime : undefined,
             videoName: mode === "video" ? fileObj.current?.name : undefined,
+            people: setup ? undefined : people,
           }
         : null;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -996,6 +1082,37 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
         ? notice ?? (fixOpen ? c.fixHint : detectorState === "loading" ? c.model : null)
         : null;
   const blocked = Boolean(challengeId) && !setup;
+  /** A free session: Wolf 2–4 can be chosen (Wolf 1 is the signed-in player). */
+  const canChoose = (i: number) => !challengeId && !(i === 0 && me);
+  const PlayerChip = ({ slot }: { slot: number }) => {
+    const i = order[slot];
+    const p = people[i];
+    const inner = (
+      <>
+        <WolfAvatar wolf={{ name: names[i], avatarUrl: p.avatarUrl }} color={slotColors[slot]} size={36} />
+        <span className={s.posText}>
+          <small>
+            {slot === 0 || slot === 2 ? c.left : c.right}
+            {i === 0 && me && !challengeId ? ` · ${c.you}` : ""}
+          </small>
+          <b>{names[i]}</b>
+          {p.email ? <em>✉ {c.byEmail}</em> : null}
+        </span>
+      </>
+    );
+    return canChoose(i) ? (
+      <button type="button" className={`${s.posName} ${s.posPick}`} style={{ borderColor: slotColors[slot] }} onClick={() => setChoosing(i)} data-testid={`wolf-${i + 1}`}>
+        {inner}
+        <span className={s.posEdit} aria-hidden="true">
+          {p.placeholder ? "+" : "✎"}
+        </span>
+      </button>
+    ) : (
+      <span className={s.posName} style={{ borderColor: slotColors[slot] }} data-testid={`wolf-${i + 1}`}>
+        {inner}
+      </span>
+    );
+  };
   const swap = (a: number, b: number) => setOrder((o) => o.map((v, i) => (i === a ? o[b] : i === b ? o[a] : v)));
 
   return (
@@ -1220,26 +1337,20 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
                   <div className={s.posRow}>
                     <span className={s.posSide}>{c.far}</span>
                     {[2, 3].map((slot) => (
-                      <span key={slot} className={s.posName} style={{ borderColor: slotColors[slot] }}>
-                        <small>{slot === 2 ? c.left : c.right}</small>
-                        {slotNames[slot]}
-                      </span>
+                      <PlayerChip key={slot} slot={slot} />
                     ))}
-                    <button type="button" className={s.btnGhost} onClick={() => swap(2, 3)}>
-                      ⇄ {c.swapPartners}
+                    <button type="button" className={`${s.btnGhost} ${s.swapBtn}`} onClick={() => swap(2, 3)} aria-label={c.swapPartners}>
+                      ⇄ <span className={s.swapLabel}>{c.swapPartners}</span>
                     </button>
                   </div>
                   <div className={s.netLine} />
                   <div className={s.posRow}>
                     <span className={s.posSide}>{c.near}</span>
                     {[0, 1].map((slot) => (
-                      <span key={slot} className={s.posName} style={{ borderColor: slotColors[slot] }}>
-                        <small>{slot === 0 ? c.left : c.right}</small>
-                        {slotNames[slot]}
-                      </span>
+                      <PlayerChip key={slot} slot={slot} />
                     ))}
-                    <button type="button" className={s.btnGhost} onClick={() => swap(0, 1)}>
-                      ⇄ {c.swapPartners}
+                    <button type="button" className={`${s.btnGhost} ${s.swapBtn}`} onClick={() => swap(0, 1)} aria-label={c.swapPartners}>
+                      ⇄ <span className={s.swapLabel}>{c.swapPartners}</span>
                     </button>
                   </div>
                   <div className={s.posCam}>📷</div>
@@ -1247,6 +1358,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
                 <button type="button" className={s.btnGhost} onClick={() => setOrder((o) => [o[2], o[3], o[0], o[1]])}>
                   ⇅ {c.swapEnds}
                 </button>
+                <p className={s.hint}>{challengeId ? c.positionsChallenge : c.positionsFree}</p>
               </div>
             </div>
             <div className={s.row} style={{ justifyContent: "flex-end" }}>
@@ -1523,7 +1635,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
                   <tr key={i}>
                     <td>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                        <i className={s.dot} style={{ background: slotColors[i], color: slotColors[i] }} />
+                        <WolfAvatar wolf={{ name: slotNames[i], avatarUrl: people[order[i]]?.avatarUrl }} color={slotColors[i]} size={26} />
                         {slotNames[i]}
                       </span>
                     </td>
@@ -1541,6 +1653,20 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
             <p className={s.hint}>{c.formula}</p>
             {payState === "trial" && mode !== "demo" ? <p className={s.trialNote}>✦ {c.trialSummary}</p> : null}
             {saveState.kind === "saved" ? <div className={s.ok}>{c.saved}</div> : null}
+            {emailState.kind === "sending" ? <div className={s.notice}>{c.emailing}</div> : null}
+            {emailState.kind === "sent" ? (
+              <div className={s.ok} data-testid="stats-emailed">
+                ✉ {c.emailed(emailState.to.join(", "))}
+              </div>
+            ) : null}
+            {emailState.kind === "error" ? (
+              <div className={s.error}>
+                {c.emailFailed(emailState.to.join(", "))}{" "}
+                <button type="button" className={s.linkBtn} onClick={() => summary && emailStatsRef.current(summary, true)}>
+                  {c.tryAgain}
+                </button>
+              </div>
+            ) : null}
             {saveState.kind === "error" ? <div className={s.error}>{c.saveFailed(saveState.code)}</div> : null}
             {mode === "demo" ? <div className={s.notice}>{c.demoNotSaved}</div> : null}
             <div className={s.row} style={{ marginTop: 12 }}>
@@ -1580,6 +1706,21 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
           </section>
         ) : null}
       </main>
+
+      {choosing !== null ? (
+        <WolfPicker
+          index={choosing}
+          color={PLAYER_COLORS[choosing]}
+          people={people}
+          copy={c}
+          onClose={() => setChoosing(null)}
+          onPick={(w) => {
+            const i = choosing;
+            setPeople((ps) => ps.map((p, k) => (k === i ? (w ?? { name: "", placeholder: true }) : p)));
+            setChoosing(null);
+          }}
+        />
+      ) : null}
 
       {exitAsk ? (
         <div className={s.picker} onClick={() => setExitAsk(false)}>

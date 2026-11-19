@@ -93,7 +93,6 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
     ["session_fill_ins", "fill-ins"],
     ["waitlist", "waitlist entries"],
     ["donations", "donations"],
-    ["day_requests", "play day requests"],
     ["shop_orders", "shop orders"],
   ];
   for (const [table, label] of emailTables) {
@@ -101,13 +100,44 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
     const r = await q(`UPDATE ${table} SET email = $1 WHERE lower(trim(email)) = $2;`, [keepEmail, mergeEmail]);
     count(label, r.rowCount);
   }
+  if (await has("day_requests")) {
+    // One open request per person per day: the kept one stays if both asked for the same day.
+    await q(
+      `DELETE FROM day_requests d WHERE lower(trim(d.email)) = $2 AND d.notified_at IS NULL
+         AND EXISTS (SELECT 1 FROM day_requests k WHERE lower(k.email) = $1 AND k.day = d.day AND k.notified_at IS NULL);`,
+      [keepEmail, mergeEmail],
+    );
+    count("play day requests", (await q(`UPDATE day_requests SET email = $1 WHERE lower(trim(email)) = $2;`, [keepEmail, mergeEmail])).rowCount);
+  }
   if (await has("jersey_registrations")) {
-    const r = await q(`UPDATE jersey_registrations SET email = $1, email_normalized = $3 WHERE lower(trim(email)) = $2;`, [
-      keepEmail,
-      mergeEmail,
-      jerseyNormalizeEmail(keepEmail),
-    ]);
-    count("jersey registrations", r.rowCount);
+    // One open (pending or paid) jersey order per email. When both emails have
+    // one, neither is cancelled here: the duplicate's order gets the kept email
+    // for contact but keeps its own duplicate-check key, and the admin decides.
+    const keepNorm = jerseyNormalizeEmail(keepEmail);
+    const ACTIVE = `status IN ('pending', 'paid')`;
+    const keepHasOpen = `EXISTS (SELECT 1 FROM jersey_registrations k WHERE k.email_normalized = $3 AND k.${ACTIVE})`;
+    const { rows: both } = await q(
+      `SELECT coalesce(ref_code, '#' || id) AS ref, status FROM jersey_registrations
+       WHERE lower(trim(email)) = $2 AND ${ACTIVE} AND ${keepHasOpen.replace("$3", "$1")};`,
+      [keepNorm, mergeEmail],
+    );
+    const { rows: kept } = both.length
+      ? await q(`SELECT coalesce(ref_code, '#' || id) AS ref, status FROM jersey_registrations WHERE email_normalized = $1 AND ${ACTIVE};`, [keepNorm])
+      : { rows: [] };
+    const full = await q(
+      `UPDATE jersey_registrations SET email = $1, email_normalized = $3
+       WHERE lower(trim(email)) = $2 AND NOT (${ACTIVE} AND ${keepHasOpen});`,
+      [keepEmail, mergeEmail, keepNorm],
+    );
+    const contact = await q(`UPDATE jersey_registrations SET email = $1 WHERE lower(trim(email)) = $2;`, [keepEmail, mergeEmail]);
+    count("jersey registrations", (full.rowCount ?? 0) + (contact.rowCount ?? 0));
+    if (both.length) {
+      const list = (rows: Record<string, unknown>[]) => rows.map((r) => `${r.ref} (${r.status})`).join(", ");
+      notes.push(
+        `Both emails have an open jersey order: ${list(kept)} and ${list(both)}. Both are kept under ${keepEmail}; ` +
+          `if one is a double order, cancel it in Admin → Jersey.`,
+      );
+    }
   }
 
   // Play days: one row per date. A day counts if either row counted.

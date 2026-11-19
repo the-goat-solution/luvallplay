@@ -1152,15 +1152,19 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
                 )}
               </section>
             ) : null}
+            <section className={`${s.card} ${s.train}`} data-testid="wv-train">
+              <div>
+                <h2>✦ {c.trainTitle}</h2>
+                <p>{c.trainText}</p>
+              </div>
+              <a className={s.btn} href="/profile/wolf-vision/label" data-testid="wv-train-link">
+                {c.trainBtn} →
+              </a>
+            </section>
             <section className={`${s.card} ${s.hero}`} data-testid="wv-about">
               <span className={s.aiBadge} data-testid="ai-badge">✦ {c.aiBadge}</span>
               <p>{c.intro}</p>
               <p className={s.muted}>{c.aiLayers}</p>
-              <p className={s.muted}>
-                <a href="/profile/wolf-vision/label" style={{ color: "inherit" }}>
-                  {c.labelLink}
-                </a>
-              </p>
               <p className={s.muted}>{c.privacy}</p>
             </section>
           </>

@@ -941,3 +941,31 @@
     flex: 1;
   }
 }
+
+/* "Help train Wolf Vision": the way into the labelling tool. */
+.train {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-color: rgba(47, 212, 181, 0.35);
+  background: linear-gradient(120deg, rgba(47, 212, 181, 0.14), rgba(13, 32, 51, 0.7) 60%);
+}
+.train h2 {
+  color: var(--teal);
+}
+.train p {
+  margin: 0;
+}
+.train a.btn {
+  flex: none;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+@media (max-width: 640px) {
+  .train {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

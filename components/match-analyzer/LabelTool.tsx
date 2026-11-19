@@ -102,14 +102,14 @@ export function LabelTool() {
   const byRally = hits.reduce<Record<number, LabelHit[]>>((m, h) => ((m[h.rally] ??= []).push(h), m), {});
 
   return (
-    <div className={s.page}>
+    <div className={`${s.page} ${s.embedded}`}>
       <header className={s.top}>
+        <a href="/profile/wolf-vision" className={s.exitBtn} style={{ color: "inherit" }}>
+          ← Back
+        </a>
         <h1>
           Wolf Vision<small>Labelling set</small>
         </h1>
-        <a href="/profile/wolf-vision" className={s.langBtn}>
-          Back
-        </a>
       </header>
       <main className={s.body}>
         <section className={s.card}>

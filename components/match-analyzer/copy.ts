@@ -7,6 +7,10 @@ export const COPY = {
     aiBadge: "AI-enhanced tracker",
     aiLayers: "Person detection (two passes), pose tracking, an AI shuttle checker and self-training that adapts to your hall: all on your phone.",
     labelLink: "Help train it: mark the hits on a match video (labelling set) →",
+    trainTitle: "Help train Wolf Vision",
+    trainText:
+      "Have a match video? Play it slowly and tap who hit the shuttle at each hit. Your marks teach the AI and measure how accurate it is. Works best on a computer or tablet with a long video (up to 4 hours).",
+    trainBtn: "Open the labelling tool",
     priceLive: "$5 a match",
     priceUpload: "$2 a video",
     freeNow: "FREE NOW",
@@ -167,6 +171,10 @@ export const COPY = {
     aiBadge: "Theo dõi tăng cường AI",
     aiLayers: "Nhận diện người (hai lượt), theo dõi tư thế, AI kiểm tra cầu và tự học theo nhà thi đấu của bạn: tất cả chạy trên điện thoại.",
     labelLink: "Giúp huấn luyện: đánh dấu các cú đánh trên video trận đấu (bộ nhãn) →",
+    trainTitle: "Giúp huấn luyện Wolf Vision",
+    trainText:
+      "Có video trận đấu? Phát chậm và chạm vào người đánh mỗi khi có cú đánh. Dữ liệu bạn đánh dấu giúp AI học và đo độ chính xác. Tốt nhất là dùng máy tính hoặc máy tính bảng với video dài (tối đa 4 giờ).",
+    trainBtn: "Mở công cụ đánh dấu",
     priceLive: "$5 một trận",
     priceUpload: "$2 một video",
     freeNow: "MIỄN PHÍ",

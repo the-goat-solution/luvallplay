@@ -3,6 +3,7 @@ import { Hero } from "@/components/Hero";
 import { About } from "@/components/About";
 import { Schedule } from "@/components/Schedule";
 import { Gallery } from "@/components/Gallery";
+import { AppFeatures } from "@/components/AppFeatures";
 import { Membership } from "@/components/Membership";
 import { Reviews } from "@/components/Reviews";
 import { Donate } from "@/components/Donate";
@@ -66,6 +67,7 @@ export default async function HomePage() {
         calendarSubscribe={calendarSubscribe}
       />
       <Gallery images={galleryPool} />
+      <AppFeatures />
       <Membership pricingPlans={pricingPlans ?? undefined} />
       <Reviews googleReviewUrl={siteSettings?.googleReviewUrl} />
       <Donate />

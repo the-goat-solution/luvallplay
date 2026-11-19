@@ -302,6 +302,10 @@ A phone on a tripod tracks a doubles game by itself: it finds the four players, 
 - **Code:** engine in `lib/ma/` (`engine.ts` ties it together; `lens.ts`, `identity.ts`, `hungarian.ts`, `shuttle.ts`, `audio.ts`, `hits.ts`, `quality.ts`, `flight.ts`; simulator `sim.ts`, `simrun.ts`), browser glue and overlay in `components/match-analyzer/`. Tests: `tests/match-analyzer-auto.test.ts` (including a 40 s end-to-end simulated game) and `tests/match-analyzer.test.ts`.
 - **Assets:** the MediaPipe WebAssembly runtime is copied to `public/mediapipe` before `dev`/`build` (`scripts/copy-mediapipe.mjs`, git-ignored); the ~7 MB person-detection model is downloaded once from Google's model storage (allowed in the CSP).
 
+### Home page app showcase (`#app`)
+
+Between the gallery and membership, "The Wolf App" (`components/AppFeatures.tsx`, EN/VI) shows the leaderboard and ranks (live rank icons from `lib/rank-art.ts`, phone screenshots) and Wolf Vision (match screenshot, a "Free until 28 Feb 2027" badge that hides itself once `isTrial()` is false). Screenshots live in `public/features/`: the leaderboard and rank card are the real components rendered with sample players (labelled "Sample players"); the Wolf Vision one is a real match. To refresh them, render `LeaderboardView` / `RankCard` with sample props on a throwaway page and capture at 400 px wide, 2x.
+
 ### Shop (`/admin/shop`)
 
 - **Products:** name and description (EN/VI), price, photos, men's/women's fits, sizes S–3XL. The Port Hills Dawn jersey ($30) is added automatically with zero stock.

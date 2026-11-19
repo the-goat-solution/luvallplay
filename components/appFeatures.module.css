@@ -1,0 +1,213 @@
+/* Home page: members' app showcase (components/AppFeatures.tsx) */
+.section {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 0%, #17415f 0%, var(--navy-dark) 55%, #081c29 100%);
+  color: #fff;
+}
+.glow {
+  position: absolute;
+  inset: auto -20% -30% auto;
+  width: 70%;
+  aspect-ratio: 1;
+  background: radial-gradient(closest-side, rgba(52, 211, 153, 0.12), transparent 70%);
+  pointer-events: none;
+}
+.head { text-align: center; display: flex; flex-direction: column; align-items: center; }
+.head :global(.section-sub) { margin-left: auto; margin-right: auto; }
+
+.feature {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 64px;
+  align-items: center;
+  margin-top: 80px;
+}
+/* Wolf Vision: heading row, then the screen across the container */
+.wv { margin-top: 110px; }
+.wvHead {
+  display: grid;
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+  gap: 48px;
+  align-items: end;
+  margin-bottom: 44px;
+}
+
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--bronze-light);
+}
+.beta {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bronze);
+  color: var(--navy-dark);
+}
+.title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.8vw, 36px);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 12px 0 16px;
+}
+.body { color: rgba(255, 255, 255, 0.72); font-size: 17px; line-height: 1.65; max-width: 480px; }
+
+.stats { display: flex; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
+.stats > div {
+  flex: 1 1 0;
+  min-width: 92px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.stats b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.1;
+  color: var(--bronze-light);
+}
+.stats span { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
+
+/* Rank ladder: icons step up like a staircase */
+.ladder { display: flex; align-items: flex-end; gap: 2px; margin-top: 28px; flex-wrap: nowrap; }
+.rung {
+  display: inline-flex;
+  animation: rise 2.4s ease-in-out infinite;
+}
+.ladder .rung:nth-child(1) { margin-bottom: 0; }
+.ladder .rung:nth-child(2) { margin-bottom: 3px; }
+.ladder .rung:nth-child(3) { margin-bottom: 6px; }
+.ladder .rung:nth-child(4) { margin-bottom: 9px; }
+.ladder .rung:nth-child(5) { margin-bottom: 12px; }
+.ladder .rung:nth-child(6) { margin-bottom: 15px; }
+.ladder .rung:nth-child(7) { margin-bottom: 18px; }
+.ladder .rung:nth-child(8) { margin-bottom: 21px; }
+.ladder .rung:nth-child(9) { margin-bottom: 24px; }
+.ladder .rung:nth-child(10) { margin-bottom: 27px; }
+.alpha { margin-left: 8px; margin-bottom: 30px; filter: drop-shadow(0 0 10px rgba(226, 174, 96, 0.55)); }
+@keyframes rise {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -3px; }
+}
+
+.link {
+  display: inline-flex;
+  gap: 8px;
+  margin-top: 28px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bronze-light);
+  border-bottom: 1px solid rgba(226, 174, 96, 0.4);
+  padding-bottom: 4px;
+  transition: color var(--ease), border-color var(--ease);
+}
+.link:hover { color: #fff; border-color: #fff; }
+
+/* Leaderboard + rank card in two phones */
+.phones { position: relative; height: 520px; }
+.phone {
+  position: absolute;
+  margin: 0;
+  width: 270px;
+  padding: 10px;
+  border-radius: 38px;
+  background: #0a1620;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 0 0 2px rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+.phone img { width: 100%; border-radius: 28px; }
+.phoneFront { right: 8%; top: 0; z-index: 2; }
+.phoneBack { left: 4%; top: 70px; transform: rotate(-6deg); opacity: 0.95; }
+.sample {
+  position: absolute;
+  right: 8%;
+  bottom: -26px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Wolf Vision screen */
+.screen { position: relative; max-width: 1040px; margin: 0 auto; padding: 0 0 30px; }
+.frame {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.55), 0 0 0 6px rgba(52, 211, 153, 0.06), 0 0 60px rgba(52, 211, 153, 0.12);
+}
+.frame img { width: 100%; }
+.live {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(220, 38, 38, 0.92);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.live i { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.25; } }
+.free {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(52, 211, 153, 0.14);
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  color: #6ee7b7;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 80px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rung, .live i { animation: none; }
+}
+
+@media (max-width: 960px) {
+  .feature, .wvHead { grid-template-columns: 1fr; gap: 32px; margin-top: 64px; }
+  .wvHead { margin-top: 0; margin-bottom: 32px; }
+  .wv { margin-top: 80px; }
+  .body { max-width: none; }
+  .phones { height: 440px; max-width: 440px; width: 100%; margin: 0 auto; }
+  .phone { width: 230px; }
+  .phoneFront { right: 0; }
+  .phoneBack { left: 0; }
+  .sample { right: 0; }
+}
+@media (max-width: 480px) {
+  .phones { height: 380px; }
+  .phone { width: 196px; border-radius: 30px; padding: 8px; }
+  .phone img { border-radius: 22px; }
+  .phoneBack { top: 56px; }
+  .stats > div { min-width: 0; padding: 10px; }
+  .stats b { font-size: 22px; }
+  .stats span { font-size: 10px; }
+  .ladder :global(svg) { width: 26px; height: 26px; }
+  .alpha :global(svg) { width: 32px; height: 32px; }
+}

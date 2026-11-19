@@ -100,6 +100,10 @@ export function tokens(text: string | null | undefined): string[] {
   return text
     .toLowerCase()
     .normalize("NFKD")
+    // Drop accents rather than splitting words on them ("Hòa" → "hoa",
+    // "Đinh" → "dinh") — bank statements print names unaccented.
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
     .replace(/[^a-z0-9 ]+/g, " ")
     .split(/\s+/)
     // Drop numbers (card digits, dates, invoice numbers change each time)
@@ -141,6 +145,17 @@ function dateScore(gap: number): number {
 
 const lineWords = (l: MatchLine) => tokens(`${l.description} ${l.reference ?? ""}`);
 const entryWords = (e: MatchEntry) => tokens(`${e.name} ${e.person ?? ""} ${e.notes ?? ""}`);
+
+// True when the bank line names the entry's payer in full (every word of a
+// two-or-more-word name — one word alone is too common to trust). Bank
+// transfers usually carry the payer's name, so this is what tells apart
+// several same-amount payments on the same day (e.g. $10 casual sessions).
+export function namesPayer(line: MatchLine, entry: MatchEntry): boolean {
+  const person = tokens(entry.person);
+  if (person.length < 2) return false;
+  const words = new Set(lineWords(line));
+  return person.every((t) => words.has(t));
+}
 
 // ── Single-entry scoring ──────────────────────────────────────────────────
 
@@ -273,12 +288,18 @@ export function suggestForLine(
 
   if (singles.length > 0) {
     const [best, second] = singles;
-    const clearLead = !second || best.score - second.score >= AUTO_MARGIN;
+    // Also a clear lead: the line names this payer and no other candidate's.
+    const payer = namesPayer(line, best.e);
+    const clearLead =
+      !second ||
+      best.score - second.score >= AUTO_MARGIN ||
+      (payer && !singles.slice(1).some((c) => namesPayer(line, c.e)));
+    const reasons = payer ? [...best.reasons, "names the payer"] : best.reasons;
     return {
       kind: "entries",
       entryIds: [best.e.id],
       score: best.score,
-      reasons: second && !clearLead ? [...best.reasons, `${singles.length} similar entries`] : best.reasons,
+      reasons: second && !clearLead ? [...reasons, `${singles.length} similar entries`] : reasons,
       auto: best.gap <= AUTO_MATCH_DAYS && clearLead,
     };
   }

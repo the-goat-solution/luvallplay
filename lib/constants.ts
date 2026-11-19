@@ -41,6 +41,18 @@ export const CASUAL_ONLY_DEFAULT_COURTS = 1;
 export function maxPlayersForCourts(courts: number): number {
   return COURTS_TO_MAX_PLAYERS[courts] ?? SESSION_CAPACITY;
 }
+
+// A mini game day (admin toggle on the play-days page) runs the round
+// robin for a fixed field of players, whatever the courts: capacity is
+// exactly this many, and registration stays locked so the admin picks who
+// plays. Keep in sync with the mini_game branch of the capacity CASE in
+// lib/db.ts's reserveBookingSlot.
+export const MINI_GAME_MAX_PLAYERS = 16;
+
+// Capacity of one play day: the court-derived max, or the mini game field.
+export function sessionMaxPlayers(courts: number, miniGame = false): number {
+  return miniGame ? MINI_GAME_MAX_PLAYERS : maxPlayersForCourts(courts);
+}
 export const CASUAL_PRICE_CENTS = 1000;
 export const MONTHLY_PRICE_CENTS = 3300;
 export const QUARTERLY_PRICE_CENTS = 8500;

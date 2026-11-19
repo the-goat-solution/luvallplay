@@ -174,7 +174,7 @@ export function MembershipCard({
           </h2>
           <p className={styles.small} style={{ marginTop: 4 }}>
             {m.recurring ? tr("mem_auto_renews") : tr("mem_one_time")}
-            {m.method === "cash" ? ` · ${tr("mem_cash")}` : ""}
+            {m.method === "cash" ? ` · ${tr("mem_cash")}` : m.method === "bank_transfer" ? ` · ${tr("mem_bank_transfer")}` : ""}
           </p>
         </div>
         <span style={{ background: status.bg, color: status.color, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>

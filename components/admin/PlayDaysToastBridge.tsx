@@ -3,6 +3,20 @@
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/context/ToastContext";
+import { MINI_GAME_MAX_PLAYERS } from "@/lib/constants";
+
+// Toast for the "Add offline payment" actions (play-day player, member):
+// the redirect carries the method, or "matched" when a bank transfer was
+// reconciled against the bank feed on the spot.
+export function offlineAddedMessage(value: string, who: "Player" | "Member"): string {
+  if (value === "matched") {
+    return `${who} added — bank transfer recorded and matched to the bank transaction.`;
+  }
+  if (value === "bank_transfer") {
+    return `${who} added — bank transfer recorded. It'll be matched automatically when the transaction shows up in the bank feed.`;
+  }
+  return `${who} added — cash payment recorded in Stripe.`;
+}
 
 const TOAST_PARAMS = [
   "cashAdded",
@@ -16,6 +30,7 @@ const TOAST_PARAMS = [
   "fillInRemoved",
   "fillInError",
   "registration",
+  "miniGame",
 ] as const;
 
 // Every admin action on the play-days page redirects back with one of these
@@ -39,8 +54,9 @@ export function PlayDaysToastBridge() {
     const fillInRemoved = searchParams.get("fillInRemoved");
     const fillInError = searchParams.get("fillInError");
     const registration = searchParams.get("registration");
+    const miniGame = searchParams.get("miniGame");
 
-    if (cashAdded) showToast("Cash player added and recorded in Stripe.", "success");
+    if (cashAdded) showToast(offlineAddedMessage(cashAdded, "Player"), "success");
     if (cashError) showToast(cashError, "error");
     if (removed) showToast("Player removed from the roster.", "success");
     if (courtsUpdated) {
@@ -66,6 +82,15 @@ export function PlayDaysToastBridge() {
     if (registration === "unlocked") {
       showToast("Registration reopened for this play day.", "success");
     }
+    if (miniGame === "on") {
+      showToast(
+        `Mini game day on — registration locked and capped at ${MINI_GAME_MAX_PLAYERS} players.`,
+        "success",
+      );
+    }
+    if (miniGame === "off") {
+      showToast("Mini game day off — court-based capacity is back and registration reopened.", "success");
+    }
     if (fillInSaved) showToast("Fill-in saved and emailed the session details.", "success");
     if (fillInRemoved) showToast("Fill-in removed — the original player is back on the roster.", "success");
     if (fillInError) showToast(fillInError, "error");
@@ -80,7 +105,9 @@ export function PlayDaysToastBridge() {
       waitlistRemoved ||
       fillInSaved ||
       fillInRemoved ||
-      fillInError
+      fillInError ||
+      registration ||
+      miniGame
     ) {
       const params = new URLSearchParams(searchParams.toString());
       for (const key of TOAST_PARAMS) params.delete(key);

@@ -1,4 +1,5 @@
 import { getOrder, markOrderPaidByCard } from "@/lib/shop-db";
+import { offlineMethodFromSource, offlinePaymentRef } from "@/lib/offline-payment";
 import { notifyOrderPlaced, notifyOversold } from "@/lib/shop-notify";
 import { syncPlanFromSubscriptionMetadata } from "@/lib/membership-self-service";
 import { linkMemberAccount } from "@/lib/player-db";
@@ -284,8 +285,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // Backstop for a cash membership invoice (see the "Add cash member"
-    // action on the admin Members page): that action already activates the
+    // Backstop for an offline (cash / bank transfer) membership invoice (see
+    // the "Add offline payment member" action on the admin Members page):
+    // that action already activates the
     // membership and sends the confirmation email synchronously, but this
     // covers it if that request failed after Stripe's call succeeded.
     // activateMembershipByPaymentIntentId is guarded on status != 'active',
@@ -297,7 +299,7 @@ export async function POST(request: Request) {
       process.env.POSTGRES_URL
     ) {
       const activated = await activateMembershipByPaymentIntentId(
-        `cash-invoice-${invoice.id}`,
+        offlinePaymentRef(offlineMethodFromSource(invoice.metadata.source) ?? "cash", invoice.id),
       );
       if (activated) {
         await linkMemberAccount(activated.email, {
@@ -331,12 +333,16 @@ export async function POST(request: Request) {
     ) {
       await ensureTables();
       const sessionDate = invoice.metadata.sessionDate;
+      const offlineRef = offlinePaymentRef(
+        offlineMethodFromSource(invoice.metadata.source) ?? "cash",
+        invoice.id!,
+      );
       const ok = await reserveBookingSlot(sessionDate, {
         firstName: invoice.metadata.firstName ?? "",
         lastName: invoice.metadata.lastName ?? "",
         email: invoice.metadata.email ?? "",
         phone: invoice.metadata.phone || undefined,
-        paymentIntentId: `cash-invoice-${invoice.id}`,
+        paymentIntentId: offlineRef,
       });
       if (!ok) {
         // Same race as the card-payment path above, but this was paid
@@ -349,7 +355,7 @@ export async function POST(request: Request) {
         await sendAdminBookingRaceAlertEmail({
           sessionDate,
           customerEmail: invoice.metadata.email || "(unknown)",
-          paymentIntentId: `cash-invoice-${invoice.id}`,
+          paymentIntentId: offlineRef,
           refunded: false,
           cashInvoice: true,
         }).catch((err) => console.error("Failed to send admin race alert", err));

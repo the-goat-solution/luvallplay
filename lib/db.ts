@@ -16,8 +16,9 @@ import {
   MEMBERSHIP_DAY_TO_DOW,
   MEMBERSHIP_START_SEARCH_DAYS,
   PENDING_MEMBERSHIP_HOLD_MINUTES,
+  MINI_GAME_MAX_PLAYERS,
   SESSION_CAPACITY,
-  maxPlayersForCourts,
+  sessionMaxPlayers,
   type MembershipDay,
   type MembershipTier,
 } from "./constants";
@@ -27,6 +28,7 @@ import {
   getMembershipDayForDate,
 } from "./dates";
 import { onceThisDeploy } from "./schema-gate";
+import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
 
 // Every route touching the DB calls ensureTables() first, and it's ~24
 // sequential DDL statements — cheap individually but a heavy tax when paid
@@ -164,6 +166,9 @@ async function ensureTablesImpl() {
   // While set, the day offers no casual spots and new memberships won't
   // start on it; existing bookings and members keep their places.
   await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS registration_locked BOOLEAN NOT NULL DEFAULT FALSE;`;
+  // Mini game day: capacity is MINI_GAME_MAX_PLAYERS whatever the courts,
+  // and registration is locked while it's on (see setMiniGameDay).
+  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS mini_game BOOLEAN NOT NULL DEFAULT FALSE;`;
   // Set once a "spot opened" email has actually been sent for this waitlist
   // row, so notifyWaitlistIfSpotOpened (lib/waitlist-notify.ts) never
   // double-emails someone across repeated capacity-increase triggers.
@@ -362,14 +367,14 @@ export async function getAvailableSpots(
 ): Promise<number> {
   await ensureSession(date);
   const { rows } = await sql`
-    SELECT booked_spots, courts, registration_locked FROM sessions WHERE date = ${date};
+    SELECT booked_spots, courts, registration_locked, mini_game FROM sessions WHERE date = ${date};
   `;
   const row = rows[0] as
-    | { booked_spots: number; courts: number; registration_locked: boolean }
+    | { booked_spots: number; courts: number; registration_locked: boolean; mini_game: boolean }
     | undefined;
   if (row?.registration_locked && !ignoreLock) return 0;
   const booked = row?.booked_spots ?? 0;
-  const maxPlayers = maxPlayersForCourts(row?.courts ?? defaultCourtsForDate(date));
+  const maxPlayers = sessionMaxPlayers(row?.courts ?? defaultCourtsForDate(date), row?.mini_game);
   const activeMembers = await getActiveMemberCountForDate(date);
   return Math.max(0, maxPlayers - activeMembers - booked);
 }
@@ -407,7 +412,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
 
   const [{ rows }, { rows: memberRows }] = await Promise.all([
     sql.query(
-      `SELECT date::text AS date, booked_spots, courts, registration_locked FROM sessions WHERE date = ANY($1::date[]);`,
+      `SELECT date::text AS date, booked_spots, courts, registration_locked, mini_game FROM sessions WHERE date = ANY($1::date[]);`,
       [dates],
     ),
     // Each date gets its own correctly-scoped member count (a member only
@@ -434,16 +439,19 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   const bookedByDate = new Map<string, number>();
   const courtsByDate = new Map<string, number>();
   const lockedDates = new Set<string>();
+  const miniGameDates = new Set<string>();
   for (const row of rows) {
     const r = row as {
       date: string;
       booked_spots: number;
       courts: number;
       registration_locked: boolean;
+      mini_game: boolean;
     };
     bookedByDate.set(r.date, r.booked_spots);
     courtsByDate.set(r.date, r.courts);
     if (r.registration_locked) lockedDates.add(r.date);
+    if (r.mini_game) miniGameDates.add(r.date);
   }
   const membersByDate = new Map<string, number>();
   for (const row of memberRows) {
@@ -460,8 +468,9 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
     // dates) by the day-matched join above — see getActiveMemberCountForDate
     // for the equivalent single-date query.
     const activeMembers = membersByDate.get(date) ?? 0;
-    const maxPlayers = maxPlayersForCourts(
+    const maxPlayers = sessionMaxPlayers(
       courtsByDate.get(date) ?? defaultCourtsForDate(date),
+      miniGameDates.has(date),
     );
     locked[date] = lockedDates.has(date);
     spots[date] = locked[date] ? 0 : Math.max(0, maxPlayers - activeMembers - booked);
@@ -495,11 +504,12 @@ export async function reserveBookingSlot(
      SET booked_spots = booked_spots + 1
      WHERE date = $1
        AND booked_spots < (
-         CASE courts
-           WHEN 1 THEN 6
-           WHEN 2 THEN 12
-           WHEN 3 THEN 18
-           WHEN 4 THEN 22
+         CASE
+           WHEN mini_game THEN $3
+           WHEN courts = 1 THEN 6
+           WHEN courts = 2 THEN 12
+           WHEN courts = 3 THEN 18
+           WHEN courts = 4 THEN 22
            ELSE $2
          END
        ) - (
@@ -509,7 +519,7 @@ export async function reserveBookingSlot(
            AND ${membershipCoversDateSql("$1")}
            AND ${memberNotAbsentSql("$1::date")}
        );`,
-    [date, SESSION_CAPACITY],
+    [date, SESSION_CAPACITY, MINI_GAME_MAX_PLAYERS],
   );
   if (!rowCount) return false;
 
@@ -663,14 +673,15 @@ export async function assignAndReserveMembershipAccessStart(
       await client.query("BEGIN");
       try {
         const { rows: sessionRows } = await client.query(
-          `SELECT booked_spots, courts FROM sessions WHERE date = $1 FOR UPDATE;`,
+          `SELECT booked_spots, courts, mini_game FROM sessions WHERE date = $1 FOR UPDATE;`,
           [date],
         );
         const session = sessionRows[0] as
-          | { booked_spots: number; courts: number }
+          | { booked_spots: number; courts: number; mini_game: boolean }
           | undefined;
-        const maxPlayers = maxPlayersForCourts(
+        const maxPlayers = sessionMaxPlayers(
           session?.courts ?? defaultCourtsForDate(date),
+          session?.mini_game,
         );
         const booked = session?.booked_spots ?? 0;
 
@@ -797,7 +808,7 @@ export async function listSessionsInRange(
   }[]
 > {
   const { rows } = await sql`
-    SELECT date::text AS date, courts, booked_spots, event_start_time, event_end_time, event_location
+    SELECT date::text AS date, courts, mini_game, booked_spots, event_start_time, event_end_time, event_location
     FROM sessions
     WHERE date >= ${from} AND date <= ${to} AND google_event_id IS NOT NULL
     ORDER BY date;
@@ -806,6 +817,7 @@ export async function listSessionsInRange(
     const r = row as {
       date: string;
       courts: number;
+      mini_game: boolean;
       booked_spots: number;
       event_start_time: Date | null;
       event_end_time: Date | null;
@@ -813,7 +825,7 @@ export async function listSessionsInRange(
     };
     return {
       date: r.date,
-      maxSpots: maxPlayersForCourts(r.courts),
+      maxSpots: sessionMaxPlayers(r.courts, r.mini_game),
       bookedSpots: r.booked_spots,
       eventStartTime: r.event_start_time
         ? r.event_start_time.toISOString()
@@ -907,6 +919,38 @@ export async function setRegistrationLocked(date: string, locked: boolean): Prom
   `;
 }
 
+export async function isMiniGameDay(date: string): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT mini_game FROM sessions WHERE date = ${date};
+  `;
+  return Boolean((rows[0] as { mini_game: boolean } | undefined)?.mini_game);
+}
+
+// Turns a play day into a mini game day (or back). On: capacity becomes
+// MINI_GAME_MAX_PLAYERS whatever the courts, and registration is locked so
+// only admins add players. Refused when more players than that are already
+// signed up — same rule as shrinking the courts. Off: back to court-based
+// capacity, and registration reopens.
+export async function setMiniGameDay(
+  date: string,
+  on: boolean,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  await ensureSession(date);
+  if (on) {
+    const { total } = await getSessionHeadcount(date);
+    if (total > MINI_GAME_MAX_PLAYERS) {
+      return {
+        ok: false,
+        reason: `Can't make this a mini game day (max ${MINI_GAME_MAX_PLAYERS} players) — ${total} players are already signed up.`,
+      };
+    }
+  }
+  await sql`
+    UPDATE sessions SET mini_game = ${on}, registration_locked = ${on} WHERE date = ${date};
+  `;
+  return { ok: true };
+}
+
 export async function getCourtsForDate(date: string): Promise<number> {
   await ensureSession(date);
   const { rows } = await sql`
@@ -926,12 +970,13 @@ export async function setCourtsForDate(
   courts: number,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   await ensureSession(date);
-  const maxPlayers = maxPlayersForCourts(courts);
   const { rows } = await sql`
-    SELECT booked_spots FROM sessions WHERE date = ${date};
+    SELECT booked_spots, mini_game FROM sessions WHERE date = ${date};
   `;
-  const booked =
-    (rows[0] as { booked_spots: number } | undefined)?.booked_spots ?? 0;
+  const row = rows[0] as { booked_spots: number; mini_game: boolean } | undefined;
+  const booked = row?.booked_spots ?? 0;
+  // On a mini game day the field size, not the courts, sets capacity.
+  const maxPlayers = sessionMaxPlayers(courts, row?.mini_game);
   const activeMembers = await getActiveMemberCountForDate(date);
   const totalSignedUp = booked + activeMembers;
 
@@ -1056,7 +1101,9 @@ export type RosterEntry = {
   email: string;
   phone: string | null;
   type: "casual" | "monthly" | "quarterly";
-  method: "card" | "cash";
+  method: PaymentMethod;
+  /** Booking / membership payment reference (offline payments: see lib/offline-payment.ts). */
+  paymentRef: string | null;
   /** Members only: the membership window that puts them on this roster. */
   periodStart?: string | null;
   periodEnd?: string | null;
@@ -1127,9 +1174,8 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
     type: "casual",
-    method: (r.payment_intent_id as string | null)?.startsWith("cash-invoice-")
-      ? "cash"
-      : "card",
+    method: paymentMethodFromRef(r.payment_intent_id as string | null),
+    paymentRef: (r.payment_intent_id as string | null) ?? null,
     fillIn: fillInByBooking.get(r.id as number) ?? null,
   }));
 
@@ -1143,9 +1189,8 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
     email: r.email as string,
     phone: (r.phone as string | null) ?? null,
     type: r.plan === "quarterly" ? "quarterly" : "monthly",
-    method: (r.stripe_payment_intent_id as string | null)?.startsWith("cash-invoice-")
-      ? "cash"
-      : "card",
+    method: paymentMethodFromRef(r.stripe_payment_intent_id as string | null),
+    paymentRef: (r.stripe_payment_intent_id as string | null) ?? null,
     periodStart: (r.period_start as string | null) ?? null,
     periodEnd: (r.period_end as string | null) ?? null,
     autoRenews: Boolean(r.recurring) && !r.cancel_at_period_end,
@@ -1236,7 +1281,7 @@ export type MembershipRow = {
   cancelAtPeriodEnd: boolean;
   recurring: boolean;
   stripeSubscriptionId: string | null;
-  method: "card" | "cash";
+  method: PaymentMethod;
   /** When the one-time renewal reminder went out (only selected by listMemberships). */
   renewalReminderSentAt?: string | null;
   /** Free days given by an admin (only selected by listMemberships). */
@@ -1279,9 +1324,7 @@ function mapMembershipRow(r: {
     cancelAtPeriodEnd: r.cancel_at_period_end,
     recurring: r.recurring,
     stripeSubscriptionId: r.stripe_subscription_id,
-    method: r.stripe_payment_intent_id?.startsWith("cash-invoice-")
-      ? "cash"
-      : "card",
+    method: paymentMethodFromRef(r.stripe_payment_intent_id),
     renewalReminderSentAt: r.renewal_reminder_sent_at
       ? r.renewal_reminder_sent_at.toISOString()
       : null,

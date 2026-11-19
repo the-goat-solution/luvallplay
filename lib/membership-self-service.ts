@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
 import { sql } from "@vercel/postgres";
 import {
   addDays,
@@ -42,7 +43,7 @@ export type MemberView = {
   periodEnd: string | null;
   recurring: boolean;
   cancelAtPeriodEnd: boolean;
-  method: "card" | "cash";
+  method: PaymentMethod;
   stripeSubscriptionId: string | null;
   /** A paid follow-on membership (one-time renewal) that starts after this one. */
   continuation: { periodStart: string | null; periodEnd: string | null; plan: MembershipTier; recurring: boolean } | null;
@@ -72,7 +73,7 @@ function view(r: Row, continuation: MemberView["continuation"]): MemberView {
     periodEnd: r.period_end,
     recurring: r.recurring,
     cancelAtPeriodEnd: r.cancel_at_period_end,
-    method: r.stripe_payment_intent_id?.startsWith("cash-invoice-") ? "cash" : "card",
+    method: paymentMethodFromRef(r.stripe_payment_intent_id),
     stripeSubscriptionId: r.stripe_subscription_id,
     continuation,
   };

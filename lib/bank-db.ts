@@ -601,6 +601,32 @@ export async function autoMatchBankTransactions(): Promise<number> {
   return matched + (rowCount ?? 0);
 }
 
+// Whether each offline-payment invoice (cash or bank transfer recorded by
+// an admin) has been tied to a bank statement line yet. Keyed by Stripe
+// invoice id; an invoice not in the ledger yet is simply absent.
+export type OfflineReconciliation = { reconciled: boolean; bankDate: string | null };
+
+export async function getOfflinePaymentReconciliation(
+  invoiceIds: string[],
+): Promise<Map<string, OfflineReconciliation>> {
+  const out = new Map<string, OfflineReconciliation>();
+  if (invoiceIds.length === 0) return out;
+  await ensureFinanceTables();
+  const { rows } = await sql.query(
+    `SELECT e.external_id, b.txn_date::text AS bank_date
+     FROM finance_entries e
+     LEFT JOIN bank_matches m ON m.entry_id = e.id
+     LEFT JOIN bank_transactions b ON b.id = m.bank_txn_id
+     WHERE e.external_id = ANY($1::text[]);`,
+    [invoiceIds.map((id) => `stripe-invoice:${id}`)],
+  );
+  for (const r of rows) {
+    const id = String(r.external_id).slice("stripe-invoice:".length);
+    out.set(id, { reconciled: r.bank_date != null, bankDate: r.bank_date ?? null });
+  }
+  return out;
+}
+
 export async function getBankTransaction(id: number): Promise<BankTransaction | null> {
   const list = await listBankTransactions({ id });
   return list[0] ?? null;

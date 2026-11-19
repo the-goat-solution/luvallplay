@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { offlineInvoiceIdFromRef, paymentMethodFromRef } from "./offline-payment";
 import { linkMemberAccount } from "./player-db";
 import { MEMBERSHIP_DAYS, type MembershipDay, type MembershipTier } from "./constants";
 import {
@@ -198,13 +199,14 @@ export async function syncMembershipsWithStripe(): Promise<StripeSyncReport> {
       let paidAt: number | null = null;
       let plan: MembershipTier = m.plan;
       let day: MembershipDay = m.day;
-      if (ref.startsWith("cash-invoice-")) {
+      const offlineInvoiceId = offlineInvoiceIdFromRef(ref);
+      if (offlineInvoiceId) {
         if (m.status === "pending") continue;
         report.checked++;
-        const invoice = await stripe.invoices.retrieve(ref.slice("cash-invoice-".length));
+        const invoice = await stripe.invoices.retrieve(offlineInvoiceId);
         if (invoice.status !== "paid") {
           report.issues.push(
-            `${m.name} (${m.email}): cash membership #${m.id} is ${m.status} but its Stripe invoice is ${invoice.status}.`,
+            `${m.name} (${m.email}): ${paymentMethodFromRef(ref) === "cash" ? "cash" : "bank transfer"} membership #${m.id} is ${m.status} but its Stripe invoice is ${invoice.status}.`,
           );
           continue;
         }

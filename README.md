@@ -109,6 +109,8 @@ View the roster for any past or upcoming play day at `/admin/play-days` — pick
 
 ### Paused days & day requests
 
+**Mini game day:** on **Admin → Play days**, the *Mini game day* switch turns a play day into a mini game day: registration locks (no public bookings or new memberships start on it) and the day is capped at **16 players**, whatever the courts. Admins still add players with *Add offline payment player*. It can't be switched on once more than 16 are signed up; switching it off restores court-based capacity and reopens registration.
+
 An admin can pause public sign-ups for any weekday at `/admin/day-requests` (Wednesday starts out paused). While a day is paused, new memberships and casual bookings for it are blocked — on the site and in the API — and visitors see a "temporarily paused" note with a **Notify me** button. A **Request another day** button under the schedule lets anyone ask for any other weekday.
 
 Requests are listed per day on `/admin/day-requests`. **Reopen & email** un-pauses a day and emails everyone waiting on it; for a day the club doesn't run yet, **Email N waiting** sends the "it's open" email once sessions are on the calendar. Each person is emailed at most once per request.
@@ -145,7 +147,7 @@ Note: monthly/quarterly members are counted as attending every session for as lo
 
 A ledger of every dollar in and out of the club, with filters, totals, receipts and an Excel export.
 
-- **Money in is imported from Stripe automatically.** The import reads Stripe's balance transactions, so each card payment shows its **gross** amount as *Received*, and **Stripe's fee** and any **refund** show up as separate *Spent* lines. That way the net total matches what reaches the bank. Payouts to the club's bank account are not income or expenses, so they're skipped. Cash recorded with "Add cash member" or "Add cash booking" (Stripe invoices marked paid out of band) is imported with method *Cash*. Imported rows are read-only; each one links to the payment in Stripe.
+- **Money in is imported from Stripe automatically.** The import reads Stripe's balance transactions, so each card payment shows its **gross** amount as *Received*, and **Stripe's fee** and any **refund** show up as separate *Spent* lines. That way the net total matches what reaches the bank. Payouts to the club's bank account are not income or expenses, so they're skipped. Offline payments recorded with "Add offline payment member" or "Add offline payment player" (Stripe invoices marked paid out of band) are imported with method *Cash* or *Bank transfer*, whichever the admin picked. They go into the ledger the moment they're added, and a bank transfer is matched to its bank statement line automatically — right away if the line is already in the bank feed, otherwise when it arrives. The Members and Play days rosters show each transfer as *Matched to bank* or *Awaiting bank transaction*. Imported rows are read-only; each one links to the payment in Stripe.
 - **Syncing:** the import runs whenever the page is opened and the last sync is more than 10 minutes old, nightly via `/api/cron/sync-finance` (`vercel.json`), and on demand with **Sync now**. The first sync imports your whole Stripe history. **Re-import full history** rescans everything; it's safe to run because rows are matched by their Stripe ID.
 - **Expenses and other income** (court hire, shuttlecocks, sponsorship by bank transfer, …) are added with **+ Record expense or income**. These rows can be edited and deleted.
 - **Receipts:** a photo or PDF up to 4 MB can be attached to each entry. Phone photos are shrunk in the browser first. Files are stored in **Vercel Blob as private files** and can only be viewed by a logged-in admin. To set it up, create a Blob store (choose *Private*) under Vercel → Storage and connect it to the project, which sets `BLOB_READ_WRITE_TOKEN`.
@@ -242,7 +244,7 @@ Plan and decisions: `docs/plans/player-profiles.md`.
 2. **Recalculate everyone's points:** rebuilds play days from every sign-up list, re-reads round robin results from past mini game draws (match the 16 mini game names to players first), and resets stored peak ranks to what the points earn now.
 3. **Send welcome emails:** in batches of 40, to stay under Resend's 100 emails a day. Each one has a one-click "hide me from the leaderboard" link.
 
-New members are linked to an account automatically by every membership path: online sign-up (which now requires an account), Add cash member, the Stripe webhook and Stripe sync.
+New members are linked to an account automatically by every membership path: online sign-up (which now requires an account), Add offline payment member, the Stripe webhook and Stripe sync.
 
 ### Profile (`/profile`)
 

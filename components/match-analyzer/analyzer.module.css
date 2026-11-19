@@ -826,10 +826,118 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* Inside the profile app (Wolf Vision tab): no full-screen page of its own. */
+/* Inside the profile app (Wolf Vision tab, start screen): a dark panel that
+   sits in the page like the other tabs' cards, not a page of its own. */
 .embedded {
   min-height: auto;
-  border-radius: 18px;
+  border-radius: 20px;
   overflow: hidden;
-  margin-bottom: 12px;
+  box-shadow: 0 18px 40px rgba(8, 19, 31, 0.22);
+  max-width: 880px;
+  margin: 0 auto 12px;
+}
+.embedded .top {
+  padding: 16px 20px 14px;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.embedded .top h1 {
+  font-size: 1.3rem;
+}
+.embedded .body {
+  padding: 16px 20px 22px;
+}
+@media (max-width: 560px) {
+  /* Phones: edge to edge under the top bar, like a native screen. */
+  .embedded {
+    margin: -16px calc(-1 * max(16px, env(safe-area-inset-right))) -28px calc(-1 * max(16px, env(safe-area-inset-left)));
+    border-radius: 0;
+    box-shadow: none;
+    min-height: calc(100dvh - 64px - var(--tabbar-h, 64px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .embedded .top {
+    padding: 14px 16px 12px;
+  }
+  .embedded .top h1 small {
+    display: block;
+    margin: 2px 0 0;
+  }
+  .embedded .body {
+    padding: 14px 16px 20px;
+  }
+}
+
+/* A session in the profile app: the whole screen (top bar and tabs hidden). */
+.focus {
+  min-height: 100dvh;
+}
+.focus .top {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: calc(8px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+}
+.focus .body {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+@media (max-width: 700px) {
+  .focus .top h1 small {
+    display: none;
+  }
+}
+.exitBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--cream);
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.exitBtn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.betaBadge {
+  display: inline-block;
+  vertical-align: 0.25em;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--bronze-light), var(--bronze));
+  color: var(--night);
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.modalText {
+  margin: 0 0 10px;
+  color: var(--steel);
+  line-height: 1.5;
+  font-size: 0.92rem;
+}
+.modalActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.modalActions button {
+  min-width: 110px;
+}
+@media (max-width: 560px) {
+  .modalActions button {
+    flex: 1;
+  }
 }

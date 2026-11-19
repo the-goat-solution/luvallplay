@@ -30,6 +30,7 @@ import { loadPersonDetector } from "./detector";
 import { PLAYER_COLORS, drawOverlay, type OverlayPlayer } from "./overlay";
 import { MicListener, Pipeline, onsetsFromFile, type FrameSource } from "./pipeline";
 import { COPY } from "./copy";
+import { useProfileFocus } from "@/components/profile/focus";
 import s from "./analyzer.module.css";
 
 type Mode = "camera" | "video" | "demo";
@@ -761,15 +762,6 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
     };
   }, [mode, step]);
 
-  useEffect(() => {
-    if (step !== "track" || mode === "demo") return;
-    const onLeave = (ev: BeforeUnloadEvent) => {
-      ev.preventDefault();
-      ev.returnValue = "";
-    };
-    window.addEventListener("beforeunload", onLeave);
-    return () => window.removeEventListener("beforeunload", onLeave);
-  }, [step, mode]);
 
   useEffect(
     () => () => {
@@ -874,6 +866,90 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
     setPaused(false);
   };
 
+  // ── Leaving a session ─────────────────────────────────────────────────
+  // Past the start screen Wolf Vision takes the whole page (the profile app's
+  // top bar and tabs are hidden), so it has its own Exit. Leaving a session
+  // that is under way asks first; so do the phone's back gesture and, while
+  // it is running or paid for, reloading or closing the tab.
+  const inSession = step !== "start";
+  const paid = payState === "ready";
+  const unsavedChallenge = step === "summary" && Boolean(setup) && mode !== "demo" && saveState.kind !== "saved";
+  const running = mode !== "demo" && (step === "calibrate" || step === "track" || unsavedChallenge || (paid && inSession));
+  const [exitAsk, setExitAsk] = useState(false);
+  useProfileFocus(embedded && inSession);
+
+  const exitSession = () => {
+    setExitAsk(false);
+    // Leaving mid-match keeps the numbers so far, offered as "Resume match".
+    const e = pipeRef.current?.engine;
+    const keep: Autosave | null =
+      step === "track" && e && mode !== "demo"
+        ? {
+            v: 1,
+            savedAt: Date.now(),
+            challengeId,
+            mode: mode === "camera" ? "camera" : "video",
+            lens,
+            taps,
+            order,
+            sound,
+            totals: addTotals(carriedRef.current, e.snapshot()),
+            videoTime: mode === "video" ? videoRef.current?.currentTime : undefined,
+            videoName: mode === "video" ? fileObj.current?.name : undefined,
+          }
+        : null;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (step === "track") heartbeat("end");
+    newSession();
+    if (keep) {
+      saveAutosave(keep);
+      setResumable(keep);
+    }
+    window.scrollTo(0, 0);
+  };
+  const askExit = () => (running ? setExitAsk(true) : exitSession());
+  const exitRef = useRef({ running, exit: exitSession });
+  exitRef.current = { running, exit: exitSession };
+
+  // The back gesture / button: one history entry for the session, so going
+  // back returns to the start screen (asking first if the session is under way).
+  useEffect(() => {
+    if (!inSession) return;
+    window.scrollTo(0, 0);
+    window.history.pushState({ wvSession: true }, "");
+    const onPop = (ev: PopStateEvent) => {
+      if ((ev.state as { wvSession?: boolean } | null)?.wvSession) return; // still inside the session
+      if (exitRef.current.running) {
+        window.history.pushState({ wvSession: true }, "");
+        setExitAsk(true);
+      } else exitRef.current.exit();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // Left with Exit: drop the session's history entry again.
+      if ((window.history.state as { wvSession?: boolean } | null)?.wvSession) window.history.back();
+    };
+  }, [inSession]);
+
+  // Reload / close tab: the browser's own "Leave site?" dialog (the only one a page may show then).
+  useEffect(() => {
+    if (!running) return;
+    const onLeave = (ev: BeforeUnloadEvent) => {
+      ev.preventDefault();
+      ev.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [running]);
+
+  useEffect(() => {
+    if (!exitAsk) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setExitAsk(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [exitAsk]);
+
   const toggleFullscreen = () => {
     const el = stageRef.current;
     if (!el) return;
@@ -923,13 +999,22 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
   const swap = (a: number, b: number) => setOrder((o) => o.map((v, i) => (i === a ? o[b] : i === b ? o[a] : v)));
 
   return (
-    <div className={`${s.page} ${embedded ? s.embedded : ""}`}>
+    <div className={`${s.page} ${embedded ? (inSession ? s.focus : s.embedded) : ""}`}>
       <header className={s.top}>
+        {inSession ? (
+          <button type="button" className={s.exitBtn} onClick={askExit} data-testid="wv-exit">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+            {c.exit}
+          </button>
+        ) : null}
         <h1>
           {c.title}
+          {isTrial() ? <span className={s.betaBadge} data-testid="beta-badge">{c.beta}</span> : null}
           <small>{c.sub}</small>
         </h1>
-        {challengeId ? <a href="/profile/arena">{c.back}</a> : null}
+        {challengeId && !inSession ? <a href="/profile/arena">{c.back}</a> : null}
         <button className={s.langBtn} onClick={() => setLang(lang === "en" ? "vi" : "en")} type="button">
           {lang === "en" ? "VI" : "EN"}
         </button>
@@ -944,57 +1029,17 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
 
         {step === "start" ? (
           <>
-            {payState === "trial" ? (
-              <section className={s.trial} data-testid="trial-banner">
-                <div className={s.trialRibbon}>{c.freeNow}</div>
-                <div>
-                  <h2>{c.trialTitle}</h2>
-                  <p>{c.trialText}</p>
-                  <p className={s.trialAfter}>
-                    <b>{c.trialDays(trialDaysLeft())}</b> · {c.trialAfter}
-                  </p>
-                </div>
-              </section>
-            ) : null}
-
-            <section className={`${s.card} ${s.hero}`}>
-              <span className={s.aiBadge} data-testid="ai-badge">✦ {c.aiBadge}</span>
-              <p>{c.intro}</p>
-              <p className={s.muted}>{c.aiLayers}</p>
-              <p className={s.muted}>
-                <a href="/profile/wolf-vision/label" style={{ color: "inherit" }}>
-                  {c.labelLink}
+            {setupError === "signed_out" ? (
+              <div className={s.notice}>
+                {c.signIn}{" "}
+                <a href={`/login?next=${encodeURIComponent(`/profile/wolf-vision?challenge=${challengeId}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
+                  {c.signInBtn}
                 </a>
-              </p>
-              <p className={s.muted}>{c.privacy}</p>
-              {setupError === "signed_out" ? (
-                <div className={s.notice}>
-                  {c.signIn}{" "}
-                  <a href={`/login?next=${encodeURIComponent(`/profile/wolf-vision?challenge=${challengeId}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
-                    {c.signInBtn}
-                  </a>
-                </div>
-              ) : setupError ? (
-                <div className={s.error}>{setupError === "not_found" ? c.notFound : c.loadFailed}</div>
-              ) : null}
-              {existing ? <div className={s.notice}>{c.savedBefore(existing.recordedBy.name)}</div> : null}
-            </section>
-
-            {resumable ? (
-              <section className={s.card} data-testid="resume-card">
-                <h2>{c.resumeTitle}</h2>
-                <p>{c.resumeText(Math.max(1, Math.round(resumable.totals.duration / 60)), new Date(resumable.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</p>
-                <div className={s.row}>
-                  <button className={s.btn} type="button" onClick={resumeMatch} data-testid="resume">
-                    {c.resumeMatch}
-                  </button>
-                  <button className={s.btnGhost} type="button" onClick={discardResume}>
-                    {c.discard}
-                  </button>
-                </div>
-              </section>
+              </div>
+            ) : setupError ? (
+              <div className={s.error}>{setupError === "not_found" ? c.notFound : c.loadFailed}</div>
             ) : null}
-
+            {existing ? <div className={s.notice}>{c.savedBefore(existing.recordedBy.name)}</div> : null}
             {setup ? (
               <section className={s.matchup}>
                 {setup.teams.map((team, ti) => (
@@ -1011,34 +1056,32 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
                 <span className={s.vs}>{c.vs}</span>
               </section>
             ) : null}
-
-            {paywallFor ? (
-              <section className={`${s.card} ${s.paywall}`} data-testid="paywall">
-                <span className={s.aiBadge}>✦ {c.aiBadge}</span>
-                <h2>{c.payTitle(paywallFor)}</h2>
-                <p>{c.payText(paywallFor)}</p>
-                <p className={s.muted}>{c.aiLayers}</p>
-                {payState === "signed_out" ? (
-                  <div className={s.notice}>
-                    {c.paySignIn}{" "}
-                    <a href={`/login?next=${encodeURIComponent(`/profile/wolf-vision${challengeId ? `?challenge=${challengeId}` : ""}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
-                      {c.signInBtn}
-                    </a>
-                  </div>
-                ) : (
-                  <div className={s.row}>
-                    <button className={s.btn} type="button" disabled={buying || payState === "loading"} onClick={() => void buyPass(paywallFor)} data-testid="buy-pass">
-                      {buying ? c.payWorking : c.payBtn(paywallFor)}
-                    </button>
-                    <button className={s.btnGhost} type="button" onClick={() => setPaywallFor(null)}>
-                      {c.cancel}
-                    </button>
-                    {testMode ? <span className={s.hint}>{c.payTest}</span> : null}
-                  </div>
-                )}
+            {resumable ? (
+              <section className={s.card} data-testid="resume-card">
+                <h2>{c.resumeTitle}</h2>
+                <p>{c.resumeText(Math.max(1, Math.round(resumable.totals.duration / 60)), new Date(resumable.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</p>
+                <div className={s.row}>
+                  <button className={s.btn} type="button" onClick={resumeMatch} data-testid="resume">
+                    {c.resumeMatch}
+                  </button>
+                  <button className={s.btnGhost} type="button" onClick={discardResume}>
+                    {c.discard}
+                  </button>
+                </div>
               </section>
             ) : null}
-
+            {payState === "trial" ? (
+              <section className={s.trial} data-testid="trial-banner">
+                <div className={s.trialRibbon}>{c.freeNow}</div>
+                <div>
+                  <h2>{c.trialTitle}</h2>
+                  <p>{c.trialText}</p>
+                  <p className={s.trialAfter}>
+                    <b>{c.trialDays(trialDaysLeft())}</b> · {c.trialAfter}
+                  </p>
+                </div>
+              </section>
+            ) : null}
             <div className={s.modes}>
               <button className={s.mode} type="button" onClick={() => gate("live", () => void chooseCamera())} disabled={blocked || !phone} data-testid="mode-camera">
                 <strong>📱 {c.cameraTitle}</strong>
@@ -1083,6 +1126,43 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
                 }}
               />
             </div>
+            {paywallFor ? (
+              <section className={`${s.card} ${s.paywall}`} data-testid="paywall">
+                <span className={s.aiBadge}>✦ {c.aiBadge}</span>
+                <h2>{c.payTitle(paywallFor)}</h2>
+                <p>{c.payText(paywallFor)}</p>
+                <p className={s.muted}>{c.aiLayers}</p>
+                {payState === "signed_out" ? (
+                  <div className={s.notice}>
+                    {c.paySignIn}{" "}
+                    <a href={`/login?next=${encodeURIComponent(`/profile/wolf-vision${challengeId ? `?challenge=${challengeId}` : ""}`)}`} style={{ color: "inherit", fontWeight: 700 }}>
+                      {c.signInBtn}
+                    </a>
+                  </div>
+                ) : (
+                  <div className={s.row}>
+                    <button className={s.btn} type="button" disabled={buying || payState === "loading"} onClick={() => void buyPass(paywallFor)} data-testid="buy-pass">
+                      {buying ? c.payWorking : c.payBtn(paywallFor)}
+                    </button>
+                    <button className={s.btnGhost} type="button" onClick={() => setPaywallFor(null)}>
+                      {c.cancel}
+                    </button>
+                    {testMode ? <span className={s.hint}>{c.payTest}</span> : null}
+                  </div>
+                )}
+              </section>
+            ) : null}
+            <section className={`${s.card} ${s.hero}`} data-testid="wv-about">
+              <span className={s.aiBadge} data-testid="ai-badge">✦ {c.aiBadge}</span>
+              <p>{c.intro}</p>
+              <p className={s.muted}>{c.aiLayers}</p>
+              <p className={s.muted}>
+                <a href="/profile/wolf-vision/label" style={{ color: "inherit" }}>
+                  {c.labelLink}
+                </a>
+              </p>
+              <p className={s.muted}>{c.privacy}</p>
+            </section>
           </>
         ) : null}
 
@@ -1483,9 +1563,7 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
               <button
                 className={s.btnGhost}
                 type="button"
-                onClick={() => {
-                  if (mode === "demo" || saveState.kind === "saved" || window.confirm(c.leaveWarn)) newSession();
-                }}
+                onClick={() => (mode === "demo" || saveState.kind === "saved" ? newSession() : setExitAsk(true))}
               >
                 {c.newSession}
               </button>
@@ -1498,6 +1576,26 @@ export function MatchAnalyzer({ challengeId, sandbox, demo, embedded = false }: 
           </section>
         ) : null}
       </main>
+
+      {exitAsk ? (
+        <div className={s.picker} onClick={() => setExitAsk(false)}>
+          <div className={s.pickerSheet} onClick={(ev) => ev.stopPropagation()} role="alertdialog" aria-modal="true" aria-labelledby="wv-exit-title" data-testid="exit-modal">
+            <h3 id="wv-exit-title">{c.exitTitle}</h3>
+            <p className={s.modalText}>
+              {step === "track" ? c.exitTracking : unsavedChallenge ? c.exitUnsaved : step === "summary" ? c.leaveWarn : c.exitSetup}
+            </p>
+            {paid && mode !== "demo" ? <p className={s.modalText}>{c.exitPaid}</p> : null}
+            <div className={s.modalActions}>
+              <button className={s.btnGhost} type="button" onClick={() => setExitAsk(false)} autoFocus>
+                {c.exitStay}
+              </button>
+              <button className={s.btnDanger} type="button" onClick={exitSession} data-testid="exit-confirm">
+                {c.exitConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {picker ? (
         <div className={s.picker} onClick={() => setPicker(null)}>

@@ -22,6 +22,7 @@ import { getStripe } from "@/lib/stripe";
 import { confirmAttendance, getStatsBackfillPreview, listMinigameNameMatches, listUnverifiedAttendance, removeAttendance, setMinigameName } from "@/lib/stats-db";
 import { recalculateAllPoints } from "@/lib/arena-db";
 import { listRecentFeedback } from "@/lib/membership-self-service";
+import { MergeError, mergeMembers, type MergeResult } from "@/lib/player-merge";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +96,39 @@ async function backfillStats() {
   back("toast", `Points recalculated: ${r.attendance} play days added, ${r.roundRobin} round robin results re-read, ${r.players} rank${r.players === 1 ? "" : "s"} corrected.`);
 }
 
+async function previewMerge(formData: FormData) {
+  "use server";
+  const keep = String(formData.get("keep") ?? "").trim();
+  const merge = String(formData.get("merge") ?? "").trim();
+  redirect(`/admin/players?mergeKeep=${encodeURIComponent(keep)}&mergeDupe=${encodeURIComponent(merge)}#merge`);
+}
+
+async function applyMerge(keep: string, merge: string) {
+  "use server";
+  let result: MergeResult;
+  try {
+    result = await mergeMembers(keep, merge, true);
+  } catch (err) {
+    back("toastError", err instanceof MergeError ? err.message : `Merge failed, nothing was changed: ${(err as Error).message}`);
+  }
+  // Stripe receipts and renewals go to the customer's email: move those too.
+  let stripeNote = "";
+  try {
+    if (process.env.STRIPE_SECRET_KEY) {
+      const stripe = getStripe();
+      const found = await stripe.customers.list({ email: result.mergeEmail, limit: 10 });
+      for (const c of found.data) await stripe.customers.update(c.id, { email: result.keepEmail });
+      if (found.data.length) stripeNote = ` Stripe updated (${found.data.length} customer${found.data.length === 1 ? "" : "s"}).`;
+    }
+  } catch (err) {
+    console.error("[players] merge: Stripe email update failed:", err);
+    stripeNote = ` Stripe could not be updated (${(err as Error).message}); change the email there by hand.`;
+  }
+  await recalculateAllPoints().catch((err) => console.error("[players] merge: recalculation failed:", err));
+  revalidatePath("/admin/players");
+  back("toast", `Merged ${result.mergeEmail} into ${result.keepEmail}; points recalculated.${stripeNote}`);
+}
+
 async function saveMinigameName(formData: FormData) {
   "use server";
   const name = String(formData.get("name") ?? "");
@@ -116,8 +150,12 @@ async function confirmCheckIn(date: string, email: string, ok: boolean) {
   back("toast", ok ? `Confirmed ${email} on ${date}.` : `Removed ${email}'s check-in for ${date}.`);
 }
 
-export default async function PlayersPage({ searchParams }: { searchParams: Promise<{ q?: string; import?: string }> }) {
-  const { q, import: showImport } = await searchParams;
+export default async function PlayersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; import?: string; mergeKeep?: string; mergeDupe?: string }>;
+}) {
+  const { q, import: showImport, mergeKeep, mergeDupe } = await searchParams;
   const hasDb = Boolean(process.env.POSTGRES_URL);
   if (!hasDb) {
     return (
@@ -139,6 +177,15 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     listRecentFeedback(15),
   ]);
   const allPlayers = q ? await listPlayersForAdmin() : players;
+  // Merge preview: the same statements as the merge, rolled back.
+  let mergePreview: MergeResult | { error: string } | null = null;
+  if (mergeKeep && mergeDupe) {
+    try {
+      mergePreview = await mergeMembers(mergeKeep, mergeDupe, false);
+    } catch (err) {
+      mergePreview = { error: err instanceof MergeError ? err.message : `Preview failed: ${(err as Error).message}` };
+    }
+  }
   const installed = allPlayers.filter((p) => p.installedAt).length;
   const signedIn = allPlayers.filter((p) => p.claimedAt).length;
 
@@ -258,6 +305,59 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section style={card} id="merge">
+        <h2 style={{ fontSize: 16, marginTop: 0 }}>Merge a duplicate member</h2>
+        <p style={{ color: "#666", fontSize: 13 }}>
+          For a member with two emails (a typo, a second account). Everything under the duplicate moves to the email you keep: memberships, bookings,
+          sign-ups, play days, round robin results, Arena pairs and challenges, Wolf Vision, shop orders, photos and messages, and the Stripe customer email.
+          The duplicate account is retired and points are recalculated. Preview first: it shows exactly what will move and changes nothing.
+        </p>
+        <form action={previewMerge} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input name="merge" type="email" required placeholder="Duplicate email (goes away)" defaultValue={mergeDupe ?? ""} style={{ ...input, minWidth: 240 }} />
+          <span aria-hidden="true">→</span>
+          <input name="keep" type="email" required placeholder="Email to keep" defaultValue={mergeKeep ?? ""} style={{ ...input, minWidth: 240 }} />
+          <SubmitButton loadingText="Checking…" style={btnSecondary}>
+            Preview merge
+          </SubmitButton>
+        </form>
+        {mergePreview && "error" in mergePreview ? (
+          <p style={{ ...pill("#fdecec", "#a12a2a"), display: "block", marginTop: 12, padding: "8px 10px" }}>{mergePreview.error}</p>
+        ) : mergePreview ? (
+          <div style={{ marginTop: 12, fontSize: 13 }}>
+            <p style={{ margin: "0 0 6px" }}>
+              <strong>{mergePreview.mergeEmail}</strong>
+              {mergePreview.mergeName ? ` (${mergePreview.mergeName})` : " (no account)"} → <strong>{mergePreview.keepEmail}</strong>
+              {mergePreview.keepName ? ` (${mergePreview.keepName})` : " (no account)"}
+            </p>
+            {mergePreview.moved.length ? (
+              <ul style={{ margin: "0 0 6px", paddingLeft: 18 }}>
+                {mergePreview.moved.map((m) => (
+                  <li key={m.label}>
+                    {m.n} {m.label}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p style={{ margin: "0 0 6px", color: "#666" }}>No records to move (only the account itself).</p>
+            )}
+            {mergePreview.notes.map((n) => (
+              <p key={n} style={{ margin: "0 0 4px", color: "#555" }}>
+                {n}
+              </p>
+            ))}
+            <form action={applyMerge.bind(null, mergePreview.keepEmail, mergePreview.mergeEmail)} style={{ marginTop: 8 }}>
+              <SubmitButton
+                loadingText="Merging…"
+                style={btn}
+                confirmMessage={`Merge ${mergePreview.mergeEmail} into ${mergePreview.keepEmail}? This can't be undone.`}
+              >
+                Merge now
+              </SubmitButton>
+            </form>
+          </div>
+        ) : null}
       </section>
 
       <section style={card}>

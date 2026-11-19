@@ -8,9 +8,16 @@ import type { Lang } from "@/lib/i18n";
 import { LangSync } from "./LangToggle";
 import { InstallGuide } from "./InstallGuide";
 import { SignOutForm } from "./SignOutForm";
+import { ProfileFocusContext } from "./focus";
+import { isTrial } from "@/lib/wolf-vision-trial";
 import styles from "./profile.module.css";
 
-const TABS: { href: string; key: ProfileKey; icon: ReactNode }[] = [
+const TABS: {
+  href: string;
+  key: ProfileKey;
+  icon: ReactNode;
+  special?: boolean;
+}[] = [
   {
     href: "/profile/account",
     key: "tab_account",
@@ -47,6 +54,7 @@ const TABS: { href: string; key: ProfileKey; icon: ReactNode }[] = [
   {
     href: "/profile/wolf-vision",
     key: "tab_wolfvision",
+    special: true,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
@@ -68,7 +76,7 @@ const TABS: { href: string; key: ProfileKey; icon: ReactNode }[] = [
 ];
 
 /** Inside each tab link: dims and pulses while that tab is loading. */
-function TabContent({ icon, label, badge }: { icon: ReactNode; label: string; badge: number }) {
+function TabContent({ icon, label, badge, beta = false }: { icon: ReactNode; label: string; badge: number; beta?: boolean }) {
   const { pending } = useLinkStatus();
   return (
     <>
@@ -77,6 +85,7 @@ function TabContent({ icon, label, badge }: { icon: ReactNode; label: string; ba
         {icon}
         <span>{label}</span>
       </span>
+      {beta && <span className={styles.betaTag}>Beta</span>}
       {badge > 0 && (
         <span className={styles.badge} aria-label={`${badge} new`}>
           {badge > 9 ? "9+" : badge}
@@ -131,10 +140,7 @@ function initials(p: ShellPlayer): string {
 }
 
 function isStandalone(): boolean {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
+  return window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
 /** Pull-to-refresh for the installed app (home-screen web apps don't have one). */
@@ -199,8 +205,18 @@ export function ProfileShell({
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [online, setOnline] = useState(true);
+  /** A tool (Wolf Vision) has the whole screen: no top bar, no tabs. */
+  const [focus, setFocus] = useState(false);
+  // Shown until the free period ends (decided after mount, so the server and client render the same).
+  const [beta, setBeta] = useState(false);
+  useEffect(() => setBeta(isTrial()), []);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { pull, refreshing } = usePullToRefresh(() => router.refresh());
+  const focusRef = useRef(false);
+  focusRef.current = focus;
+  // Never while a tool has the screen (a refresh mid-match would be costly).
+  const { pull, refreshing } = usePullToRefresh(() => {
+    if (!focusRef.current) router.refresh();
+  });
 
   useEffect(() => {
     // Static files only: signed-in pages and data are never cached.
@@ -244,77 +260,93 @@ export function ProfileShell({
   };
 
   return (
-    <div className={styles.app}>
-      <LangSync lang={player.lang} />
-      <header className={styles.topbar}>
-        <Link href="/profile/membership" className={styles.brand} aria-label="Three Wolves">
-          <img src="/icons/wolf-mark-light.png" alt="" width={44} height={24} />
-          <span className={styles.brandTitle}>{tr("app_title")}</span>
-        </Link>
-        <div className={styles.topbarSpacer} />
-        <Link href="/" className={styles.siteBtn}>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          <span>{tr("back_to_site")}</span>
-        </Link>
-        <div ref={menuRef} style={{ position: "static" }}>
-          <button
-            type="button"
-            className={styles.avatarBtn}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-label={`${player.firstName} ${player.lastName}`.trim() || player.email}
-            onClick={() => setMenuOpen((o) => !o)}
-          >
-            {player.avatarUrl ? <img src={player.avatarUrl} alt="" className={styles.avatarImg} /> : initials(player)}
-          </button>
-          {menuOpen && (
-            <div className={styles.menu} role="menu">
-              <div className={styles.menuEmail}>{player.email}</div>
-              <Link href="/profile/account" role="menuitem" onClick={() => setMenuOpen(false)}>
-                {tr("tab_account")}
-              </Link>
-              <a href="/leaderboard" role="menuitem">
-                {tr("leaderboard")}
-              </a>
-              <Link href="/" role="menuitem">
-                {tr("view_site")}
-              </Link>
-              <SignOutForm action="/api/auth/logout" role="menuitem">
-                {tr("sign_out")}
-              </SignOutForm>
-            </div>
-          )}
-        </div>
-      </header>
-      {!online && <div className={styles.offline}>{tr("offline")}</div>}
-      {(pull > 20 || refreshing) && (
-        <div className={styles.ptr} style={{ opacity: refreshing ? 1 : Math.min(1, pull / 80) }}>
-          {refreshing ? tr("refreshing") : pull > 80 ? tr("release_to_refresh") : tr("pull_to_refresh")}
-        </div>
-      )}
-
-      <nav className={styles.tabs} aria-label="Profile">
-        {TABS.map((t) => {
-          const active = pathname?.startsWith(t.href);
-          const badge = badgeFor(t.href);
-          return (
-            <Link
-              key={t.href}
-              href={t.href}
-              className={`${styles.tab} ${active ? styles.tabActive : ""}`}
-              aria-current={active ? "page" : undefined}
-            >
-              <TabContent icon={t.icon} label={tr(t.key)} badge={badge} />
+    <ProfileFocusContext.Provider value={setFocus}>
+      <div className={`${styles.app} ${focus ? styles.appFocus : ""}`}>
+        <LangSync lang={player.lang} />
+        {!focus && (
+          <header className={styles.topbar}>
+            <Link href="/profile/membership" className={styles.brand} aria-label="Three Wolves">
+              <img src="/icons/wolf-mark-light.png" alt="" width={44} height={24} />
+              <span className={styles.brandTitle}>{tr("app_title")}</span>
             </Link>
-          );
-        })}
-      </nav>
+            <div className={styles.topbarSpacer} />
+            <Link href="/" className={styles.siteBtn}>
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+              <span>{tr("back_to_site")}</span>
+            </Link>
+            <div ref={menuRef} style={{ position: "static" }}>
+              <button
+                type="button"
+                className={styles.avatarBtn}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label={`${player.firstName} ${player.lastName}`.trim() || player.email}
+                onClick={() => setMenuOpen((o) => !o)}
+              >
+                {player.avatarUrl ? <img src={player.avatarUrl} alt="" className={styles.avatarImg} /> : initials(player)}
+              </button>
+              {menuOpen && (
+                <div className={styles.menu} role="menu">
+                  <div className={styles.menuEmail}>{player.email}</div>
+                  <Link href="/profile/account" role="menuitem" onClick={() => setMenuOpen(false)}>
+                    {tr("tab_account")}
+                  </Link>
+                  <a href="/leaderboard" role="menuitem">
+                    {tr("leaderboard")}
+                  </a>
+                  <Link href="/" role="menuitem">
+                    {tr("view_site")}
+                  </Link>
+                  <SignOutForm action="/api/auth/logout" role="menuitem">
+                    {tr("sign_out")}
+                  </SignOutForm>
+                </div>
+              )}
+            </div>
+          </header>
+        )}
+        {!online && <div className={styles.offline}>{tr("offline")}</div>}
+        {!focus && (pull > 20 || refreshing) && (
+          <div className={styles.ptr} style={{ opacity: refreshing ? 1 : Math.min(1, pull / 80) }}>
+            {refreshing ? tr("refreshing") : pull > 80 ? tr("release_to_refresh") : tr("pull_to_refresh")}
+          </div>
+        )}
 
-      <main className={styles.main}>{children}</main>
-      {!pathname?.startsWith("/profile/arena") && <MatchPill id={liveMatchId} />}
-      <InstallGuide autoShow={showInstallGuide} />
-    </div>
+        {!focus && (
+          <nav className={styles.tabs} aria-label="Profile">
+            {TABS.map((t) => {
+              const active = pathname?.startsWith(t.href);
+              const badge = badgeFor(t.href);
+              return (
+                <Link
+                  key={t.href}
+                  href={t.href}
+                  className={`${styles.tab} ${active ? styles.tabActive : ""} ${t.special ? styles.tabSpecial : ""}`}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <TabContent icon={t.icon} label={tr(t.key)} badge={badge} beta={Boolean(t.special) && beta} />
+                </Link>
+              );
+            })}
+          </nav>
+        )}
+
+        <main className={focus ? styles.mainFocus : styles.main}>{children}</main>
+        {!focus && !pathname?.startsWith("/profile/arena") && <MatchPill id={liveMatchId} />}
+        {!focus && <InstallGuide autoShow={showInstallGuide} />}
+      </div>
+    </ProfileFocusContext.Provider>
   );
 }

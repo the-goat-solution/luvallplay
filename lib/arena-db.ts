@@ -881,7 +881,7 @@ export async function acceptChallenge(playerId: number, id: number): Promise<voi
 export async function callOffChallenge(playerId: number, id: number): Promise<void> {
   const c = await getChallenge(id);
   if (!participantSide(c, playerId)) throw new ArenaError("not_yours");
-  await sql.query(`UPDATE ${T.challenges} SET status = 'cancelled', called_off_by = $2 WHERE id = $1 AND status = 'accepted';`, [id, playerId]);
+  await sql.query(`UPDATE ${T.challenges} SET status = 'cancelled', called_off_by = $2 WHERE id = $1 AND status IN ('accepted', 'live');`, [id, playerId]);
 }
 
 export async function checkinCode(playerId: number, id: number): Promise<{ code: string; expiresAt: string }> {

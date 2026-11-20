@@ -935,35 +935,6 @@ export async function callOffChallenge(playerId: number, id: number): Promise<vo
   await sql.query(`UPDATE ${T.challenges} SET status = 'cancelled', called_off_by = $2 WHERE id = $1 AND status IN ('accepted', 'live');`, [id, playerId]);
 }
 
-export async function checkinCode(playerId: number, id: number): Promise<{ code: string; expiresAt: string }> {
-  const c = await getChallenge(id);
-  if (participantSide(c, playerId) !== "accepting") throw new ArenaError("not_yours");
-  if (c.status !== "accepted") throw new ArenaError("not_accepted");
-  return issueCode("checkin", playerId, id);
-}
-
-export async function checkIn(playerId: number, id: number, raw: string): Promise<void> {
-  const c = await getChallenge(id);
-  if (participantSide(c, playerId) !== "posting") throw new ArenaError("not_yours");
-  if (c.status !== "accepted") throw new ArenaError("not_accepted");
-  await checkAttempts(playerId);
-  const code = cleanCode(raw);
-  const { rows } = await sql.query(
-    `UPDATE ${T.codes} SET status = 'used', consumed_by = $3, consumed_at = NOW()
-     WHERE purpose = 'checkin' AND challenge_id = $1 AND code_hash = $2 AND status = 'live' AND expires_at > NOW()
-     RETURNING id;`,
-    [id, codeHash("checkin", code), playerId],
-  );
-  if (!rows.length) {
-    await recordFailedAttempt(playerId);
-    throw new ArenaError("bad_code");
-  }
-  await sql.query(
-    `UPDATE ${T.challenges} SET status = 'live', checked_in_at = NOW(), played_on = $2 WHERE id = $1 AND status = 'accepted';`,
-    [id, getClubToday().dateKey],
-  );
-}
-
 export async function enterScore(
   playerId: number,
   id: number,

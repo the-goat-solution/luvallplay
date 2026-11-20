@@ -10,8 +10,6 @@ import {
   callOffChallenge,
   cancelChallenge,
   cancelPairRequest,
-  checkIn,
-  checkinCode,
   confirmScore,
   createPairCode,
   createPairInvite,
@@ -57,8 +55,6 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("cancel"), id }),
   z.object({ action: z.literal("accept"), id }),
   z.object({ action: z.literal("call_off"), id }),
-  z.object({ action: z.literal("checkin_code"), id }),
-  z.object({ action: z.literal("checkin"), id, code: z.string().max(12) }),
   z.object({ action: z.literal("score"), id, posting: z.number().int().min(0).max(30), accepting: z.number().int().min(0).max(30) }),
   z.object({ action: z.literal("retired"), id, retiredBy: z.enum(["posting", "accepting"]) }),
   z.object({ action: z.literal("confirm"), id }),
@@ -121,12 +117,6 @@ export async function POST(request: Request) {
         break;
       case "call_off":
         await callOffChallenge(player.id, body.id);
-        break;
-      case "checkin_code":
-        code = await checkinCode(player.id, body.id);
-        break;
-      case "checkin":
-        await checkIn(player.id, body.id, body.code);
         break;
       case "score":
         await enterScore(player.id, body.id, { posting: body.posting, accepting: body.accepting });

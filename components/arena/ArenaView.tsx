@@ -293,6 +293,23 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
     [errorText, showToast, t],
   );
 
+  // Opened from an invite link (?join=<code>): pair up straight away.
+  const joinRan = useRef(false);
+  useEffect(() => {
+    if (joinRan.current) return;
+    const url = new URL(window.location.href);
+    const joinCode = url.searchParams.get("join");
+    if (!joinCode) return;
+    joinRan.current = true;
+    url.searchParams.delete("join");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    if (!initial.me) return;
+    if (initial.me.pair && !confirm(t("replaces_pair"))) return;
+    void act({ action: "pair_join", code: joinCode }).then((r) => {
+      if (r.ok) showToast(t("joined"));
+    });
+  }, [act, initial.me, showToast, t]);
+
   const me = state.me;
   const mine = state.mine;
   const versusPending = mine.find(
@@ -656,6 +673,32 @@ function TeamUp({
   const left = useCountdown(code?.expiresAt ?? null);
   const me = state.me!;
 
+  const [invite, setInvite] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const makeInvite = async () => {
+    const r = await act({ action: "pair_invite" });
+    if (r.ok && r.code) {
+      const url = `${window.location.origin}/profile/arena?join=${r.code.code}`;
+      setInvite(url);
+      if (typeof navigator.share === "function") {
+        try {
+          await navigator.share({ text: t("invite_text"), url });
+        } catch {
+          // dismissed: the link stays on screen
+        }
+      }
+    }
+  };
+  const copyInvite = async () => {
+    if (!invite) return;
+    try {
+      await navigator.clipboard.writeText(invite);
+      setCopied(true);
+    } catch {
+      // ignore
+    }
+  };
+
   const show = async () => {
     setMode("show");
     const r = await act({ action: "pair_code" });
@@ -751,10 +794,49 @@ function TeamUp({
             {t("cancel")}
           </button>
         </form>
+      ) : invite ? (
+        <>
+          <p className={s.hint}>{t("invite_ready")}</p>
+          <input
+            className={s.field}
+            readOnly
+            value={invite}
+            onFocus={(e) => e.target.select()}
+            aria-label={t("invite_btn")}
+          />
+          <div
+            className={s.row}
+            style={{ justifyContent: "center", marginTop: 8 }}
+          >
+            <button
+              className={`${s.btn} ${s.btnYellow}`}
+              disabled={busy}
+              onClick={makeInvite}
+            >
+              {t("invite_share")}
+            </button>
+            <button
+              className={`${s.btn} ${s.btnGhost}`}
+              onClick={copyInvite}
+            >
+              {copied ? t("invite_copied") : t("invite_copy")}
+            </button>
+          </div>
+          <button className={s.link} onClick={() => setInvite(null)}>
+            {t("cancel")}
+          </button>
+        </>
       ) : (
         <div className={s.yn} style={{ display: "grid", marginTop: 14 }}>
           <button
             className={`${s.btn} ${s.btnYellow}`}
+            disabled={busy}
+            onClick={makeInvite}
+          >
+            {t("invite_btn")}
+          </button>
+          <button
+            className={`${s.btn} ${s.btnGhost}`}
             disabled={busy}
             onClick={show}
           >
@@ -889,7 +971,8 @@ function PairPanel({
         <>
           <button
             className={`${s.cta} ${s.ctaBounce}`}
-            onClick={() => setComposing(true)}
+            disabled={busy}
+            onClick={() => act({ action: "post", days: 3, note: "" })}
           >
             <span>
               <svg
@@ -910,6 +993,13 @@ function PairPanel({
             </span>
           </button>
           <p className={s.hint}>{t("throw_hint")}</p>
+          <button
+            type="button"
+            className={s.link}
+            onClick={() => setComposing(true)}
+          >
+            {t("post_options")}
+          </button>
         </>
       )}
 
@@ -1272,23 +1362,13 @@ function MyChallenge({
       <>
         {t("st_accepted")}
         <div className={s.row}>
-          {c.mySide === "accepting" ? (
-            <button
-              className={`${s.btn} ${s.btnYellow}`}
-              disabled={busy}
-              onClick={onCheckinShow}
-            >
-              {t("were_here")}
-            </button>
-          ) : (
-            <button
-              className={`${s.btn} ${s.btnYellow}`}
-              disabled={busy}
-              onClick={onCheckinEnter}
-            >
-              {t("were_here")}
-            </button>
-          )}
+          <button
+            className={`${s.btn} ${s.btnYellow}`}
+            disabled={busy}
+            onClick={() => act({ action: "checkin_now", id: c.id })}
+          >
+            {t("were_here")}
+          </button>
           <button
             className={`${s.btn} ${s.btnGhost}`}
             disabled={busy}

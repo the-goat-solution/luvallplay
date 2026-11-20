@@ -1264,10 +1264,6 @@ function MyChallenge({
     : c.scorePosting !== null && c.scoreAccepting !== null
       ? `${c.scorePosting}–${c.scoreAccepting}`
       : "";
-  const mins = c.checkedInAt
-    ? (Date.now() - Date.parse(c.checkedInAt)) / 60000
-    : 0;
-
   let body: ReactNode = null;
   if (c.status === "accepted") {
     body = (
@@ -1313,11 +1309,6 @@ function MyChallenge({
           >
             {t("score_title")}
           </button>
-          {mins < minMinutes && (
-            <span className={s.muted}>
-              {t("score_wait", { n: minMinutes })}
-            </span>
-          )}
           <a className={`${s.btn} ${s.btnGhost}`} href={`/profile/wolf-vision?challenge=${c.id}`} style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
             {t("rec_stats")}
             {isTrial() ? <em className={s.freeBadge}>{t("rec_stats_free")}</em> : null}
@@ -1645,10 +1636,6 @@ function ScoreEntry({
   const them = c.mySide === "posting" ? c.accepting! : c.posting;
   const clamp = (n: number) =>
     Math.max(0, Math.min(30, Number.isFinite(n) ? Math.round(n) : 0));
-  const elapsed = c.checkedInAt
-    ? (Date.now() - Date.parse(c.checkedInAt)) / 60000
-    : 0;
-  const tooSoon = elapsed < minMinutes;
   const Team = ({
     pair,
     tone,
@@ -1700,7 +1687,7 @@ function ScoreEntry({
       </button>
       <h2 className={s.screenTitle}>{t("score_title")}</h2>
       <p className={s.lead}>
-        {tooSoon ? t("score_wait", { n: minMinutes }) : t("st_live")}
+        {t("st_live")}
       </p>
       <div className={s.board}>
         <Team
@@ -1729,7 +1716,7 @@ function ScoreEntry({
       <div className={s.bottom}>
         <button
           className={s.cta}
-          disabled={busy || !valid || tooSoon}
+          disabled={busy || !valid}
           onClick={() =>
             onSubmit({ action: "score", posting: a, accepting: b })
           }
@@ -1740,7 +1727,7 @@ function ScoreEntry({
           <div className={s.yn} style={{ display: "grid", marginTop: 12 }}>
             <button
               className={`${s.btn} ${s.btnGhost}`}
-              disabled={busy || tooSoon}
+              disabled={busy}
               onClick={() =>
                 onSubmit({ action: "retired", retiredBy: c.mySide })
               }
@@ -1749,7 +1736,7 @@ function ScoreEntry({
             </button>
             <button
               className={`${s.btn} ${s.btnGhost}`}
-              disabled={busy || tooSoon}
+              disabled={busy}
               onClick={() =>
                 onSubmit({
                   action: "retired",

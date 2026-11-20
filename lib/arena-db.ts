@@ -915,7 +915,6 @@ export async function enterScore(
   const c = await getChallenge(id);
   if (!participantSide(c, playerId)) throw new ArenaError("not_yours");
   if (c.status !== "live") throw new ArenaError("not_live");
-  if (Date.now() - Date.parse(c.checkedInAt!) < MIN_GAME_MINUTES * 60_000) throw new ArenaError("too_soon");
   if ("retiredBy" in input) {
     await sql.query(
       `UPDATE ${T.challenges} SET status = 'awaiting', retired_by = $2, score_posting = NULL, score_accepting = NULL,

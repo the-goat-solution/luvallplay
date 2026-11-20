@@ -1,4 +1,5 @@
 "use client";
+import QRCode from "qrcode";
 import { isTrial } from "@/lib/wolf-vision-trial";
 
 import {
@@ -31,8 +32,6 @@ import s from "./arena.module.css";
 
 type Tone = "c" | "t" | "y";
 type Screen =
-  | { kind: "checkinShow"; id: number; code: string; expiresAt: string }
-  | { kind: "checkinEnter"; id: number }
   | { kind: "score"; id: number }
   | null;
 
@@ -335,42 +334,7 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
   };
 
   let overlay: ReactNode = null;
-  if (screen?.kind === "checkinShow") {
-    const c = mine.find((x) => x.id === screen.id);
-    if (c && c.status === "accepted")
-      overlay = (
-        <CheckinShow
-          c={c}
-          code={screen.code}
-          expiresAt={screen.expiresAt}
-          onNew={async () => {
-            const r = await act({ action: "checkin_code", id: c.id });
-            if (r.ok && r.code)
-              setScreen({
-                kind: "checkinShow",
-                id: c.id,
-                code: r.code.code,
-                expiresAt: r.code.expiresAt,
-              });
-          }}
-          onClose={() => setScreen(null)}
-        />
-      );
-  } else if (screen?.kind === "checkinEnter") {
-    const c = mine.find((x) => x.id === screen.id);
-    if (c && c.status === "accepted")
-      overlay = (
-        <CheckinEnter
-          c={c}
-          busy={busy}
-          onSubmit={async (code) => {
-            const r = await act({ action: "checkin", id: c.id, code });
-            if (r.ok) setScreen(null);
-          }}
-          onClose={() => setScreen(null)}
-        />
-      );
-  } else if (screen?.kind === "score") {
+  if (screen?.kind === "score") {
     const c = mine.find((x) => x.id === screen.id);
     if (c && c.status === "live")
       overlay = (
@@ -430,19 +394,6 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
                     busy={busy}
                     act={act}
                     minMinutes={state.minGameMinutes}
-                    onCheckinShow={async () => {
-                      const r = await act({ action: "checkin_code", id: c.id });
-                      if (r.ok && r.code)
-                        setScreen({
-                          kind: "checkinShow",
-                          id: c.id,
-                          code: r.code.code,
-                          expiresAt: r.code.expiresAt,
-                        });
-                    }}
-                    onCheckinEnter={() =>
-                      setScreen({ kind: "checkinEnter", id: c.id })
-                    }
                     onScore={() => setScreen({ kind: "score", id: c.id })}
                   />
                 ))}
@@ -674,28 +625,11 @@ function TeamUp({
   const me = state.me!;
 
   const [invite, setInvite] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const makeInvite = async () => {
     const r = await act({ action: "pair_invite" });
     if (r.ok && r.code) {
       const url = `${window.location.origin}/profile/arena?join=${r.code.code}`;
-      setInvite(url);
-      if (typeof navigator.share === "function") {
-        try {
-          await navigator.share({ text: t("invite_text"), url });
-        } catch {
-          // dismissed: the link stays on screen
-        }
-      }
-    }
-  };
-  const copyInvite = async () => {
-    if (!invite) return;
-    try {
-      await navigator.clipboard.writeText(invite);
-      setCopied(true);
-    } catch {
-      // ignore
+      setInvite(await QRCode.toDataURL(url, { margin: 1, width: 440, errorCorrectionLevel: "M" }));
     }
   };
 
@@ -797,34 +731,19 @@ function TeamUp({
       ) : invite ? (
         <>
           <p className={s.hint}>{t("invite_ready")}</p>
-          <input
-            className={s.field}
-            readOnly
-            value={invite}
-            onFocus={(e) => e.target.select()}
-            aria-label={t("invite_btn")}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={invite}
+            alt={t("invite_btn")}
+            width={220}
+            height={220}
+            style={{ display: "block", margin: "10px auto", borderRadius: 12, background: "#fff" }}
           />
-          <div
-            className={s.row}
-            style={{ justifyContent: "center", marginTop: 8 }}
-          >
-            <button
-              className={`${s.btn} ${s.btnYellow}`}
-              disabled={busy}
-              onClick={makeInvite}
-            >
-              {t("invite_share")}
-            </button>
-            <button
-              className={`${s.btn} ${s.btnGhost}`}
-              onClick={copyInvite}
-            >
-              {copied ? t("invite_copied") : t("invite_copy")}
+          <div className={s.row} style={{ justifyContent: "center" }}>
+            <button className={s.link} onClick={() => setInvite(null)}>
+              {t("cancel")}
             </button>
           </div>
-          <button className={s.link} onClick={() => setInvite(null)}>
-            {t("cancel")}
-          </button>
         </>
       ) : (
         <div className={s.yn} style={{ display: "grid", marginTop: 14 }}>
@@ -1332,16 +1251,12 @@ function MyChallenge({
   busy,
   act,
   minMinutes,
-  onCheckinShow,
-  onCheckinEnter,
   onScore,
 }: {
   c: ChallengeView;
   busy: boolean;
   act: Act;
   minMinutes: number;
-  onCheckinShow: () => void;
-  onCheckinEnter: () => void;
   onScore: () => void;
 }) {
   const { t } = useArenaT();
@@ -1593,114 +1508,6 @@ function Versus({ c, onGo, onMinimize }: { c: ChallengeView; onGo: () => void; o
         </button>
       </div>
     </div>
-  );
-}
-
-function CheckinShow({
-  c,
-  code,
-  expiresAt,
-  onNew,
-  onClose,
-}: {
-  c: ChallengeView;
-  code: string;
-  expiresAt: string;
-  onNew: () => void;
-  onClose: () => void;
-}) {
-  const { t } = useArenaT();
-  const left = useCountdown(expiresAt);
-  const them = c.posting;
-  useEffect(() => {
-    if (left === 0) onNew();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [left === 0]);
-  return (
-    <div className={s.screen}>
-      <button className={s.close} onClick={onClose} aria-label={t("cancel")}>
-        ×
-      </button>
-      <h2 className={s.screenTitle}>{t("checkin_title")}</h2>
-      <p className={s.lead}>
-        {t("checkin_read", { names: firstNames(them, "/") })}
-      </p>
-      <CodeTiles code={code} />
-      <Ring ms={left} total={120_000} />
-      <p className={s.hint}>{t("only_this")}</p>
-      <div className={s.bottom}>
-        <div className={s.mini} style={{ justifyContent: "center" }}>
-          <Duo pair={c.posting} tone="c" size="sm" />
-          <span className={s.muted}>vs</span>
-          {c.accepting && <Duo pair={c.accepting} tone="t" size="sm" />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CheckinEnter({
-  c,
-  busy,
-  onSubmit,
-  onClose,
-}: {
-  c: ChallengeView;
-  busy: boolean;
-  onSubmit: (code: string) => void;
-  onClose: () => void;
-}) {
-  const { t } = useArenaT();
-  const [code, setCode] = useState("");
-  const them = c.accepting!;
-  return (
-    <form
-      className={s.screen}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit(code);
-      }}
-    >
-      <button
-        type="button"
-        className={s.close}
-        onClick={onClose}
-        aria-label={t("cancel")}
-      >
-        ×
-      </button>
-      <h2 className={s.screenTitle}>{t("checkin_title")}</h2>
-      <p className={s.lead}>
-        {t("checkin_ask", { names: firstNames(them, "/") })}
-      </p>
-      <label
-        className={s.label}
-        htmlFor="checkin-code"
-        style={{ textAlign: "center", marginTop: 24 }}
-      >
-        {t("checkin_type")}
-      </label>
-      <input
-        id="checkin-code"
-        className={s.codeInput}
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        maxLength={5}
-        value={code}
-        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
-        autoFocus
-      />
-      <p className={s.hint}>{t("only_this")}</p>
-      <div className={s.bottom}>
-        <button
-          className={s.cta}
-          disabled={busy || code.length !== 5}
-          type="submit"
-        >
-          <span>{t("checkin_btn")}</span>
-        </button>
-      </div>
-    </form>
   );
 }
 

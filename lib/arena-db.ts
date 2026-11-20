@@ -775,7 +775,13 @@ export async function leavePair(playerId: number): Promise<void> {
   const world = await loadWorld();
   const pair = world.activePairOf.get(playerId);
   if (!pair) return;
-  if (busyChallengeFor(world, pair.id)) throw new ArenaError("pair_busy");
+  // Splitting is allowed any time: games not yet scored (accepted / live) are cancelled;
+  // ones already awaiting confirmation or disputed are left to resolve normally.
+  await sql.query(
+    `UPDATE ${T.challenges} SET status = 'cancelled', called_off_by = $2
+       WHERE (posting_pair = $1 OR accepting_pair = $1) AND status IN ('accepted', 'live');`,
+    [pair.id, playerId],
+  );
   await endPair(sql, pair.id, "unpaired");
 }
 

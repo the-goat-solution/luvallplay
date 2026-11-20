@@ -14,6 +14,9 @@ import {
   checkinCode,
   confirmScore,
   createPairCode,
+  createPairInvite,
+  joinPairInvite,
+  checkInNow,
   disputeScore,
   enterPairCode,
   enterScore,
@@ -43,6 +46,9 @@ const id = z.number().int().positive();
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("pair_code") }),
   z.object({ action: z.literal("pair_enter"), code: z.string().max(12) }),
+  z.object({ action: z.literal("pair_invite") }),
+  z.object({ action: z.literal("pair_join"), code: z.string().max(20) }),
+  z.object({ action: z.literal("checkin_now"), id }),
   z.object({ action: z.literal("pair_respond"), accept: z.boolean() }),
   z.object({ action: z.literal("pair_cancel") }),
   z.object({ action: z.literal("pair_leave") }),
@@ -82,6 +88,15 @@ export async function POST(request: Request) {
         break;
       case "pair_enter":
         await enterPairCode(player.id, body.code);
+        break;
+      case "pair_invite":
+        code = await createPairInvite(player.id);
+        break;
+      case "pair_join":
+        await joinPairInvite(player.id, body.code);
+        break;
+      case "checkin_now":
+        await checkInNow(player.id, body.id);
         break;
       case "pair_respond":
         await respondPairRequest(player.id, body.accept);

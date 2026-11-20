@@ -24,6 +24,7 @@
     "@vercel/postgres": "^0.10.0",
     "exceljs": "^4.4.0",
     "google-auth-library": "^11.0.2",
+    "jsqr": "^1.4.0",
     "next": "^15.3.3",
     "next-sanity": "^9.12.0",
     "qrcode": "^1.5.4",

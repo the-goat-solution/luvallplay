@@ -1315,6 +1315,13 @@ function MyChallenge({
             {t("rec_stats")}
             {isTrial() ? <em className={s.freeBadge}>{t("rec_stats_free")}</em> : null}
           </a>
+          <button
+            className={`${s.btn} ${s.btnGhost}`}
+            disabled={busy}
+            onClick={() => act({ action: "call_off", id: c.id })}
+          >
+            {t("call_off")}
+          </button>
         </div>
       </>
     );

@@ -913,7 +913,7 @@ function PairPanel({
         </>
       )}
 
-      {!busyGame && (
+      {(
         <div
           className={s.row}
           style={{ marginTop: 10, justifyContent: "center", gap: 18 }}
@@ -942,9 +942,11 @@ function PairPanel({
             </form>
           ) : (
             <>
-              <button className={s.link} onClick={() => setRenaming(true)}>
-                {t("name_pair")}
-              </button>
+              {!busyGame && (
+                <button className={s.link} onClick={() => setRenaming(true)}>
+                  {t("name_pair")}
+                </button>
+              )}
               <button
                 className={s.link}
                 onClick={() => {

@@ -301,16 +301,21 @@ export class MatchEngine {
       const boxes = this.currentBoxes();
       const blobs = findBlobs(this.mask, f.gw, f.gh, b.g);
       if (blobs) {
-        // Every person's body is masked; only our players' reach zones stay open. Bystanders
-        // (the next court, people walking past) are masked whole, and the motion around them
-        // counts as background (a place that keeps moving with none of our players there).
+        // Every person's body is masked with the racket zone open, except people standing beside
+        // our court (the next court): masked whole, their racket is not where our shuttle is hit.
         const bodies = f.t - this.bodiesT < 0.5 ? this.bodies : [];
         const players = boxes.filter((x): x is Box => !!x);
         // A bystander touches none of our players' boxes (a merged box of two partners, or a
         // player's own detection this frame, keeps the racket zone open).
         const touches = (b: Box) => players.some((p) => b[0] < p[0] + p[2] && p[0] < b[0] + b[2] && b[1] < p[1] + p[3] && p[1] < b[1] + b[3]);
-        const near = bodies.filter(touches);
-        const others = bodies.filter((b) => !touches(b));
+        // Masked whole: only people standing beside our court (on the next court), not the
+        // spectators behind a baseline (high shots fly across them in the picture).
+        const beside = (b: Box) => {
+          const q = imageToCourt(this.cam, { x: b[0] + b[2] / 2, y: b[1] + b[3] });
+          return Number.isFinite(q.x) && (q.x < -1 || q.x > COURT.width + 1) && q.y > -1 && q.y < COURT.length + 1;
+        };
+        const others = bodies.filter((b) => !touches(b) && beside(b));
+        const near = bodies.filter((b) => !others.includes(b));
         if (!this.background || this.backgroundW !== f.gw) {
           this.background = new BackgroundActivity(f.gw, f.gh);
           this.backgroundW = f.gw;

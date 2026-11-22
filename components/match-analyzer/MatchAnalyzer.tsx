@@ -1016,8 +1016,10 @@ export function MatchAnalyzer({
     setExitAsk(false);
     // Leaving mid-match keeps the numbers so far, offered as "Resume match".
     const e = pipeRef.current?.engine;
+    // Re-marking the court after the camera moved: the numbers so far are the carried ones.
+    const totals = mode === "demo" ? null : step === "track" && e ? addTotals(carriedRef.current, e.snapshot()) : retapping ? carriedRef.current : null;
     const keep: Autosave | null =
-      step === "track" && e && mode !== "demo"
+      totals
         ? {
             v: 1,
             savedAt: Date.now(),
@@ -1027,14 +1029,14 @@ export function MatchAnalyzer({
             taps,
             order,
             sound,
-            totals: addTotals(carriedRef.current, e.snapshot()),
+            totals,
             videoTime: mode === "video" ? videoRef.current?.currentTime : undefined,
             videoName: mode === "video" ? fileObj.current?.name : undefined,
             people: setup ? undefined : people,
           }
         : null;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    if (step === "track") heartbeat("end");
+    if (step === "track" || retapping) heartbeat("end");
     newSession();
     if (keep) {
       saveAutosave(keep);

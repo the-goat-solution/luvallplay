@@ -74,7 +74,7 @@ export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], 
       break;
     }
     if (onBody) continue;
-    // Anyone who is not one of our players (the next court, a passer-by) is masked whole:
+    // People on the next court (the engine passes them as `others`) are masked whole:
     // their arms and racket are not where our shuttle is hit.
     if (others.some(([px, py, pw, ph]) => x > px - 0.08 * pw && x < px + 1.08 * pw && y > py - 0.02 * ph && y < py + 1.06 * ph)) continue;
     // Other motion nearby (in analysis pixels): fragments of a moving body or a waving net.

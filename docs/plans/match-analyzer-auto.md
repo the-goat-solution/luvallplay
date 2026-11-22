@@ -76,9 +76,10 @@ Tests: `tests/match-analyzer-auto.test.ts`. Stress test:
 6. **Shuttle** (`shuttle.ts`): three-frame difference with an edge-gain
    threshold; small compact blobs, with bodies masked whole (feet included:
    a moving shoe is the commonest false shuttle) except the racket zone (upper
-   half out to the sides, above the head). Only our players (and detections
-   touching them) keep a racket zone: anyone else (the next court, a
-   passer-by) is masked whole. Blobs with other motion close by
+   half out to the sides, above the head). People standing beside our court
+   (on the next court) are masked whole, racket zone included: their racket
+   is not where our shuttle is hit. Spectators behind a baseline keep the
+   open zone (high shots fly across them in the picture). Blobs with other motion close by
    score lower (a body breaking into fragments), and so do places that keep
    moving with no player there (`BackgroundActivity`: crowd, LED boards; a
    32×18 grid decaying over ~10 s). Linked into flight tracks; a track is a
@@ -160,6 +161,9 @@ The summary reports detected, inferred and predicted hits and
     N̂ = N_seen · P(Q) / R(Q)      ± √(N̂·(1 − R)) / R
 
 ## Measured on the simulator
+
+(Measured before 2026-11-22; the current numbers, for doubles and singles and
+more conditions, are in *Stress test* below.)
 
 The simulator (`sim.ts`) renders a doubles game in pixels through a pinhole
 camera with the lens's distortion, drag physics for the shuttle (terminal
@@ -247,6 +251,103 @@ side: every metre of the far half then spans tens of pixels, not a few.
   updates more than 50 % (relative) away from the shared weights are not
   merged; every 3 updates the shared model is re-averaged.
 
+## Feet, distance, singles and stress testing (2026-11-22)
+
+Prompted by a write-up of how a court-overlay app works (tap court points →
+homography → pose model → the feet → court metres; camera on a tripod), the
+parts Wolf Vision did not do yet:
+
+- **Feet, not boxes** (step 3 above). The pose layer now also reads the heels,
+  toes and ankles. On the simulator (where the pose model is emulated with
+  ~1.5 % jitter, misses and crops that catch the partner) it cuts singles
+  position error from 0.12 to 0.09 m; in doubles it is level (partners'
+  crops overlap more often).
+- **Distance run** (`computeMotion`, `odometer`). Summing every small step of
+  the smoothed path also summed the detector's jitter: on the simulator a
+  doubles player's distance came out 54 % too high (range +23 … +108 %),
+  singles 13 %. Now a dead band sized from the jitter seen around each sample
+  (median distance of a raw point from the midpoint of its neighbours, × 0.8)
+  is pulled along the path like a taut string: standing still adds nothing,
+  a run counts in full less ~2 × the band at each turn. Doubles +6 %
+  (+2 … +14 %), singles −4 % (−7 … 0 %). The live tracker and an upload give
+  identical numbers (the odometer state is stored per sample).
+- **Shake** (step 2). The offset from the calibration frame is applied every
+  frame, not every half second: on a shaky tripod (2.5 px) position error
+  0.20 → 0.14 m and distance error 42 % → 9 %.
+- **Camera moved** (step 2): warning plus *Re-tap court*. On the simulator a
+  knock of 30 px is flagged 2.5 s later and stays flagged; an ordinary shaky
+  tripod never is. Without re-tapping, identity falls to under 50 %.
+- **The next court** (step 6): people beside our court are masked whole.
+  Over 30 simulated games (with and without a busy court 0.8 m away, dim
+  light, singles) precision 0.913 → 0.920 and recall 0.618 → 0.642; identity
+  was never affected (100 % with the next court 0.8 m away).
+- **Singles**: two slots, the simulator plays singles (one player covers the
+  half and returns to the middle after each shot, the shot lands within the
+  singles sidelines).
+- **Shuttle checker retrained** (`scripts/wolf-vision-train.ts`): 345 k
+  exact-label candidates from simulated doubles and singles games in dim
+  light, shake, the 0.5× lens, matching kit and beside a busy court,
+  fine-tuned from the bundled weights with a strong pull back to them (the
+  bundled weights also learned from six real matches, whose footage is not in
+  the repository); weights moved 15 %. Held-out AUC 0.953 → 0.963 (every
+  condition but dim light improved). On unseen games end to end: recall
+  0.529 → 0.543, precision 0.908 → 0.910, right hitter unchanged; in dim
+  light it trades recall for precision (doubles R 0.59 → 0.52, P 0.86 → 0.93).
+  An unanchored run reached AUC 0.974 but moved the weights 40 % for no gain
+  in hits, so it was not kept.
+
+Not taken over: the write-up's court drawing (Wolf Vision's court fit with
+the lens curve already does more), and a manual "red zone" for the next court
+(found automatically instead, from where people stand).
+
+### Stress test
+
+`node scripts/wolf-vision-stress.ts 40 3`: 3 seeds × 40 s per condition,
+640×360 analysis, pose layer off unless stated. Hits count within ±0.25 s;
+"pos err" is the mean distance between a correctly identified player's
+tracked and true position; "dist err" the mean relative error of the
+distance each player ran; "moved" how long the camera-moved warning was up.
+
+| condition | precision | recall | right hitter | right side | identity | pos err | dist err | moved | Q |
+|---|---|---|---|---|---|---|---|---|---|
+| doubles · baseline (1x, same shirts) | 94% | 73% | 86% | 88% | 100% | 0.12 m | 8% | 0.0 s | 0.83 |
+| doubles · 0.5x ultra-wide | 94% | 65% | 82% | 87% | 100% | 0.14 m | 9% | 0.0 s | 0.71 |
+| doubles · dim + noisy | 96% | 53% | 77% | 83% | 100% | 0.12 m | 12% | 0.0 s | 0.48 |
+| doubles · shaky (2.5 px) | 83% | 52% | 75% | 77% | 100% | 0.14 m | 9% | 0.0 s | 0.76 |
+| doubles · same shirts and shorts | 97% | 69% | 80% | 81% | 100% | 0.12 m | 8% | 0.0 s | 0.83 |
+| doubles · no sound | 72% | 46% | 51% | 63% | 100% | 0.12 m | 8% | 0.0 s | 0.83 |
+| doubles · detector misses 15% | 89% | 72% | 80% | 86% | 100% | 0.13 m | 14% | 0.0 s | 0.83 |
+| doubles · loud hall (2 false sounds/s) | 77% | 76% | 72% | 79% | 100% | 0.12 m | 8% | 0.0 s | 0.83 |
+| doubles · pose layer | 95% | 83% | 83% | 89% | 100% | 0.12 m | 6% | 0.0 s | 0.83 |
+| doubles · neighbouring court 1.2 m | 97% | 72% | 75% | 76% | 100% | 0.12 m | 8% | 0.0 s | 0.83 |
+| doubles · neighbouring court 0.8 m | 94% | 64% | 66% | 67% | 100% | 0.12 m | 8% | 0.0 s | 0.83 |
+| doubles · camera knocked at 15 s | 92% | 79% | 83% | 84% | 47% | 0.23 m | 4% | 22.5 s | 0.83 |
+| doubles · worst case | 70% | 39% | 64% | 77% | 100% | 0.13 m | 17% | 0.0 s | 0.55 |
+| singles · baseline (1x, same shirts) | 91% | 77% | 89% | 89% | 100% | 0.12 m | 5% | 0.0 s | 0.84 |
+| singles · 0.5x ultra-wide | 91% | 69% | 82% | 82% | 100% | 0.14 m | 4% | 0.0 s | 0.72 |
+| singles · dim + noisy | 98% | 47% | 89% | 89% | 100% | 0.13 m | 3% | 0.0 s | 0.48 |
+| singles · shaky (2.5 px) | 88% | 47% | 84% | 84% | 100% | 0.13 m | 5% | 0.0 s | 0.76 |
+| singles · same shirts and shorts | 93% | 77% | 94% | 94% | 100% | 0.12 m | 5% | 0.0 s | 0.84 |
+| singles · no sound | 53% | 50% | 70% | 70% | 100% | 0.12 m | 5% | 0.0 s | 0.84 |
+| singles · detector misses 15% | 86% | 70% | 88% | 88% | 100% | 0.13 m | 3% | 0.0 s | 0.84 |
+| singles · loud hall (2 false sounds/s) | 84% | 72% | 77% | 77% | 100% | 0.12 m | 4% | 0.0 s | 0.84 |
+| singles · pose layer | 89% | 90% | 86% | 86% | 100% | 0.09 m | 4% | 0.0 s | 0.84 |
+| singles · neighbouring court 1.2 m | 90% | 72% | 85% | 85% | 100% | 0.12 m | 5% | 0.0 s | 0.84 |
+| singles · neighbouring court 0.8 m | 89% | 72% | 86% | 86% | 100% | 0.12 m | 5% | 0.0 s | 0.84 |
+| singles · camera knocked at 15 s | 90% | 76% | 86% | 86% | 44% | 0.21 m | 11% | 22.5 s | 0.84 |
+| singles · worst case | 67% | 69% | 80% | 80% | 100% | 0.12 m | 4% | 0.0 s | 0.55 |
+
+What it says: identity holds everywhere except after a knocked camera (the
+warning is the remedy); the pose layer (on in real sessions) is worth ~10
+points of recall; no sound and a loud hall cost the most precision; dim light
+and shake cost the most recall; singles is easier than doubles on who hit
+it (the side of the net decides). Distance is within ~10 % in every
+condition but the worst case and missed detections.
+
+Read with care: 3 seeds × 40 s is ~200 hits a condition, so differences of a
+few points between conditions (or between runs of the same condition after
+a small change) are often noise; the A/B comparisons above used 6 seeds.
+
 ## Limits
 
 - Accuracy above is on simulated games. Real halls add things the simulator
@@ -261,7 +362,14 @@ side: every metre of the far half then spans tens of pixels, not a few.
   changes); real partners in identical kit crossing repeatedly remain the
   hardest case.
 - The phone should be on a tripod behind a baseline, high enough to see
-  the far baseline; the 0.5× lens needs 6+ court points.
+  the far baseline; the 0.5× lens needs 6+ court points. A camera that is
+  moved needs the court re-tapped (Wolf Vision says so).
+- The foot point, distance odometer, singles and next-court handling are
+  measured on the simulator only; the pose model's real foot accuracy (and
+  its real jitter, which sizes the odometer's dead band) still needs checking
+  on club footage with the labelling set.
+- Dim light: recall is the weakest number (about half the hits): light the
+  court and keep the mic on.
 
 ## References
 

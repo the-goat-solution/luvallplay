@@ -80,7 +80,7 @@ export class Pipeline {
   aiLayers(): string[] {
     const out: string[] = [];
     if (this.detector) out.push(this.farRoi ? "DETECT ×2" : "DETECT");
-    if (this.pose && this.engine.poseCount > 0) out.push("POSE");
+    if (this.engine.poseCount > 0) out.push("POSE");
     if (this.engine.checker) out.push("SHUTTLE AI");
     if (this.engine.training.trained > 0) out.push(`SELF-TRAIN ${this.engine.training.trained}`);
     return out;

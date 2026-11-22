@@ -183,6 +183,8 @@ export class MatchEngine {
   poseCount = 0;
   /** Labelled feature vectors kept for offline training (harness), when enabled. */
   collect: { f: number[]; y: 0 | 1 }[] | null = null;
+  /** Offline training with exact labels (simulator): every shuttle candidate, its time, place (video px) and features. */
+  onCandidates: ((t: number, list: { x: number; y: number; f: Float32Array }[]) => void) | null = null;
   private backgroundW = 0;
   private bodiesT = -Infinity;
   private audioOn: boolean;
@@ -330,6 +332,7 @@ export class MatchEngine {
         }
         cands.length = 0;
         cands.push(...kept);
+        this.onCandidates?.(b.t, cands.map((cd) => ({ x: cd.x, y: cd.y, f: this.feats.get(cd.id!)!.f })));
         for (const [id, v] of this.feats) if (b.t - v.t > 4) this.feats.delete(id);
         const cues = this.shuttle.update(b.t, cands, boxes.filter((x): x is Box => !!x));
         this.learnFromTracker();

@@ -1,8 +1,11 @@
 # Wolf Vision: automatic hits and identity
 
-How Wolf Vision (`/profile/wolf-vision`) tracks a doubles game with no operator taps: the four
-players' identities, every hit and who made it, plus an estimate of the hits
-it missed. Code: `lib/ma/`. Tests: `tests/match-analyzer-auto.test.ts`.
+How Wolf Vision (`/profile/wolf-vision`) tracks a doubles or singles game with no operator
+taps: the players' identities, every hit and who made it, where everyone stood
+and how far they ran, plus an estimate of the hits it missed. Code: `lib/ma/`.
+Tests: `tests/match-analyzer-auto.test.ts`. Stress test:
+`node scripts/wolf-vision-stress.ts`; checker training:
+`node scripts/wolf-vision-train.ts`.
 
 ## Pipeline (per frame)
 
@@ -15,7 +18,13 @@ it missed. Code: `lib/ma/`. Tests: `tests/match-analyzer-auto.test.ts`.
    of sampled pixels changing by more than 3 grey levels.
 2. **Camera shake**: integer shift between frames from row/column gradient
    projections (`imaging.ts`), compensated before frame differencing; its
-   size feeds the stability factor.
+   size feeds the stability factor. The offset from the calibration frame is
+   measured on every frame too and applied to the court mapping, so player
+   positions follow the court in each picture (a shaky tripod no longer
+   jitters every position). **Camera moved**: when for 3 s that offset either
+   cannot be found (match score under 0.5; a steady or shaky tripod scores
+   ~0.9) or is over 2 % of the frame width, the court marking no longer fits:
+   the assistant is told and offered *Re-tap court* (numbers so far kept).
 3. **People**: MediaPipe EfficientDet-Lite0 "person" boxes every other frame
    (live: never more than half the main thread; uploads: always, and playback
    slows down instead). Each box gets a 3-part colour fingerprint
@@ -23,6 +32,15 @@ it missed. Code: `lib/ma/`. Tests: `tests/match-analyzer-auto.test.ts`.
    in metres from the 3D camera (the height at which a point above the feet
    meets the box top). A browser whose WebGL is a software rasteriser runs the
    model on the CPU (measured 120 ms vs 850 ms a frame).
+   **Where a player stands**: the middle of the box's bottom edge, unless the
+   pose layer has their feet: then the middle of the visible heels and toes
+   (or the ankles), lowered to the sole (heel and toe points sit ~3 cm up,
+   which from a raised camera is 10–15 cm too far down the court for a far
+   player). The box's bottom edge is the lowest foot and its middle leans
+   towards the racket arm; the feet are where the player is. A pose from this
+   very frame is used as it is, an older one (≤ 0.3 s) by where the feet sat
+   in its box. Feet that are not below the hips, or outside the box's lowest
+   fifth, are ignored (the crop caught someone else).
 4. **Court and lens** (`lens.ts`): 4+ tapped court points → homography by
    normalised DLT. With 6+ points the radial distortion of the lens is fitted
    too (division model, λ by golden-section search; priors 0 for 1×,
@@ -52,11 +70,15 @@ it missed. Code: `lib/ma/`. Tests: `tests/match-analyzer-auto.test.ts`.
    picked up on their slots (left/right as the camera sees it, using the
    centre line when only one of a pair is visible), once the same spot has
    been seen 4 times (3 when detection is slow). People cut off by the side
-   of the frame are never picked up.
+   of the frame are never picked up. **Singles** uses two slots (near, far):
+   no partner crossings to resolve, and the side of the net decides the
+   hitter.
 6. **Shuttle** (`shuttle.ts`): three-frame difference with an edge-gain
    threshold; small compact blobs, with bodies masked whole (feet included:
    a moving shoe is the commonest false shuttle) except the racket zone (upper
-   half out to the sides, above the head). Blobs with other motion close by
+   half out to the sides, above the head). Only our players (and detections
+   touching them) keep a racket zone: anyone else (the next court, a
+   passer-by) is masked whole. Blobs with other motion close by
    score lower (a body breaking into fragments), and so do places that keep
    moving with no player there (`BackgroundActivity`: crowd, LED boards; a
    32×18 grid decaying over ~10 s). Linked into flight tracks; a track is a

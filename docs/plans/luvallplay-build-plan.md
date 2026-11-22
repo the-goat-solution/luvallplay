@@ -8,16 +8,28 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **C:** Wolf Vision passes are sold by **in-app purchase** (RevenueCat) in the store apps, and by Stripe on the web.
 - **D:** club website content lives in a **built-in editor** in Luvallplay Admin. Sanity is kept for Luvallplay's own marketing, blog and help content.
 
+**Decided (23 Nov):**
+- **E:** **free for every club for now**, with paid plans built in but switched off (§6.5).
+- **F:** the brand is **Luvallplay**. The domain to buy is **luvallplay.org** (not luvplayall.org), ideally with luvallplay.com and luvallplay.nz. The brand concept is in §7.1.
+- **G:** the marketplace has **both club/shop storefronts and player-to-player listings**, with the scope set in the research thread (§8).
+- **H:** **no under-16s.** The platform is 16+, with an age confirmation at sign-up.
+- **I:** **Timba and Kelcee are both Three Wolves owners and Luvallplay platform admins.** Owners can add and remove admins from the admin pages (§2.4).
+- **J:** English and Vietnamese only for now.
+- **K:** everything (developer accounts, D-U-N-S, the Stripe platform account) is registered under **The GOAT Solution**.
+
+**Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
+
 > **Luvallplay:** "Love all, play" is the umpire's call that starts every badminton match. It's a great name for a badminton platform, and the brand below leans into it.
 
 ---
 
 ## 0. Executive summary
 
-The work runs in **7 phases over roughly 22–28 weeks** of focused build time. Each phase ships something usable, so Three Wolves keeps running in production the whole way.
+The work runs in **8 phases (0–7) over roughly 23–29 weeks** of focused build time. Each phase ships something usable, so Three Wolves keeps running in production the whole way.
 
 | # | Phase | What you get | Est. |
 |---|---|---|---|
+| 0 | **Safety net** | Previews on their own database branches (today they share production), CI required on `main`, restore drill, data guard in CI ([test plan](./luvallplay-test-plan.md)) | 1 wk |
 | 1 | **Tidy the Three Wolves app** | Leaderboard inside Arena; Account and Membership merged into one **Me** page; admin access by player account (Timba and Kelcee), with a button from their profile; dead code removed | 2–3 wks |
 | 2 | **New foundations** | Monorepo, Next.js 16, Neon + Drizzle with real migrations, module system skeleton, design tokens | 2–3 wks |
 | 3 | **Multi-tenant core** | `tenants`, global user accounts, club roles, `tenant_id` + row-level security on every table, club settings replacing hard-coded constants. Three Wolves becomes club #1 | 4–5 wks |
@@ -103,7 +115,16 @@ A single page that answers *"What's my status, and what's next?"*, with settings
 ### 2.4 Admin through your normal account
 
 - New table `club_roles(player_id, role)` with roles `owner | admin | coach`. In Phase 3 it becomes `club_members.role` with a `tenant_id`.
-- **Timba and Kelcee → `owner`.** This is done by a one-off script (`scripts/grant-role.mjs --email … --role owner`) run against production, so nobody's email is committed to the repo. 🟡 *Please confirm the email each of them signs in with.*
+- **Timba and Kelcee → `owner` of Three Wolves, and platform admins** (`platform_admins` table from Phase 3). The first grant is made by a one-off script (`scripts/grant-role.mjs --email … --role owner`) run against production. Their emails are passed in when the script runs, never committed to the repo. The grant is rehearsed with the data guard first ([test plan §4.5](./luvallplay-test-plan.md)).
+- **Admin → People → Admins page:**
+  - Owners add an admin by email: an existing account gets the role straight away, and anyone else gets an invite that applies the role when they first sign in.
+  - Roles to choose from: `owner`, `admin`, `coach`. Owners can also remove admins or change their roles.
+  - Guardrails:
+    - The **last owner can't be removed or demoted**.
+    - Every change needs a fresh sign-in code (step-up).
+    - Every change is written to the audit log.
+    - The new admin and all existing owners get an email.
+  - Platform admins have the same page for any club, plus a **Platform → Admins** page for the platform-admin list.
 - `/admin/*` requires a signed-in player with an admin role. The middleware stops checking the password cookie, and `/admin/login` redirects to `/login?next=/admin`.
 - **Step-up check:** admin pages need a sign-in within the last 12 hours. Otherwise they ask for a fresh code. This is the usual practice for privileged areas, and it matters because player sessions last 90 days.
 - **"Club admin" button** in the Me header and in Settings, visible only to admins. On the web it links to `/admin`. In the native app it requests a single-use, 60-second **handoff link**, then opens admin in the in-app browser already signed in (the app's token never leaves the app).
@@ -217,7 +238,7 @@ luvallplay/
 | 1.2 User-generated content | Photos, messages and (later) social posts: report, block, keyword filter, published contact, moderation within 24h. Photo auto-moderation already exists |
 | 2.1 Completeness | A **review demo account** with a fixed sign-in code that only works for that address, seeded demo data, and review notes explaining code sign-in and the club model |
 | iPad | Must work in iPadOS 26 resizable windows, Stage Manager and all orientations (`UIRequiresFullScreen` is deprecated) |
-| Age rating | Answer the updated questionnaire honestly. Chat and photos with moderation → likely 13+ (🟡 Decision H on juniors) |
+| Age rating | **16+**, matching the platform rule (no under-16s): age confirmation at sign-up, in the terms, and in the store age rating. The questionnaire answers cover user content, the marketplace and social features |
 
 **Google Play**
 
@@ -314,6 +335,7 @@ admin_audit_log    tenant_id, actor_user_id, action, target, meta, at
 global tables      directory listings, global ratings, posts/follows, marketplace listings (§8)
 ```
 
+- **Clubs manage their own players** (from the research thread): club admins register, enable or disable a player for their club (`club_members.status = active | disabled`). A disabled player loses access to that club's spaces but keeps their account and data, and can be re-enabled. The host (Luvallplay / Three Wolves) doesn't police individual clubs' members. **Safeguarding rules apply platform-wide** (§8).
 - **One Luvallplay account across clubs.** A player can belong to several clubs and switch between them in the app's header. A club admin sees only their club's members and data.
 - **RLS done right:**
   - The app connects as a role that doesn't own the tables.
@@ -385,7 +407,16 @@ export default defineModule({
 
 - Each club is a **connected account** created with **Accounts v2** (Stripe's recommended path for new Connect integrations). Charges are **direct charges**, so the club is the merchant of record and pays its own Stripe fees and refunds. Luvallplay optionally takes an **application fee**.
 - **Three Wolves' existing Stripe account is connected rather than recreated**, so live subscriptions, customers and payouts stay where they are.
-- Luvallplay's own SaaS fee (if any) is billed to clubs with Stripe Billing on the platform account. It's paid on the web, never inside the iOS/Android app. 🟡 Decision E (business model).
+- **Business model: free for now, paid plans ready but hidden.**
+  - Tables `plans` and `club_plans`, plus an **entitlements** check that every module calls (`can(club, "module.feature")`).
+  - Every module's manifest declares the plan it belongs to. Today **every module is on the Free plan**, and `BILLING_ENABLED=false` hides prices, the upgrade screens and billing pages.
+  - Stripe Billing for club subscriptions is integrated and tested in test mode but dormant.
+  - The Connect application fee is configurable and set to **0%**.
+  - Turning on paid plans later is a settings change plus a pricing page, not a rebuild. Paid plans are only ever sold on the web, never inside the iOS/Android app.
+- **Operator:** the platform is run by **The GOAT Solution**, with Three Wolves using it under a contracted free-use agreement (from the research thread). Each club owns its data. Because Timba is both CEO of The GOAT Solution and Treasurer of Three Wolves:
+  - Put the agreement in writing.
+  - Declare the conflict of interest to the Three Wolves committee.
+  - Have Timba step out of committee decisions that involve The GOAT Solution.
 
 ### 6.6 Migration of the live Three Wolves data
 
@@ -405,7 +436,9 @@ Each step is rehearsed on a Neon branch of production, behind a feature flag, wi
 
 ## 7. Phase 6: brand, websites and the setup wizard
 
-### 7.1 Luvallplay brand (proposal) 🟡 Decision F
+### 7.1 Luvallplay brand
+
+Name: **Luvallplay**. Domain to buy: **luvallplay.org** (+ .com, .nz). The brand concept page (logo, symbol, app icon, colours, type) is linked here once published. The tokens below are the starting point.
 
 | Token | Colour | Use |
 |---|---|---|
@@ -466,16 +499,29 @@ Build them in this order, each one releasable on its own:
 3. **Social:**
    - Global player profile (opt-in), follow, an activity feed (automatic posts for matches, rank-ups and photos), kudos and comments.
    - Cross-club challenges.
-   - Full user-generated-content tooling: report, block, filters, a moderation queue. App Store rule 1.2 requires it.
-4. **Marketplace:**
-   - **v1 is club storefronts only:** merch, coaching sessions, events and tournament entries, sold through each club's Stripe connected account. These are physical or real-world goods, so in-app purchase doesn't apply.
-   - **v2 (later, separate decision) is player-to-player second-hand gear.** It needs escrow, disputes, shipping and tax handling, which is a project of its own. 🟡 Decision G.
+   - **Each club manages its own social space:** its admins moderate their members' posts and enable or disable players.
+   - **Safeguarding is platform-wide:**
+     - 16+ only.
+     - Report and block on every post and profile.
+     - Keyword and image filters (the photo moderation already built).
+     - A platform-level review queue for serious reports.
+     - Published community rules, and suspension across all clubs for serious breaches.
+     - App Store rule 1.2 requires this tooling.
+4. **Marketplace** (scope from the research thread, modelled on TradeMe / Facebook Marketplace):
+   - **No messaging on the platform.** Buyers ask questions **publicly on the listing**, and the seller answers publicly.
+   - When a buyer commits to buy and the seller confirms, a **"Contact seller" / "Contact buyer"** button appears **for those two people only**. It opens their own email app with the other person's address filled in. All further talk happens outside the platform, and the users are responsible for it.
+   - **Verified sellers:**
+     - Clubs from launch, and later shops, which can also post promoted items and adverts.
+     - They carry a verified badge and **can take payment through the platform** (Stripe Connect, with a platform fee that sits at 0% while everything is free).
+   - **Player-to-player listings are unverified:** no payment through the platform, and a clear "trade at your own risk" notice. The platform takes no responsibility, as on Facebook Marketplace.
+   - Listings can be reported. Banned-item rules, sold or expired listings auto-hide, and listing photos go through the same image moderation.
 
 ---
 
 ## 9. Sequencing and timeline
 
 ```
+Wk  0–1   Phase 0  Safety net: preview databases, CI gates, restore drill (test plan §2, §6)
 Wk  1–3   Phase 1  Tidy Three Wolves (ship)
 Wk  3–6   Phase 2  Monorepo, Next 16, Neon+Drizzle, module skeleton, design tokens
 Wk  6–11  Phase 3  Multi-tenant core + Three Wolves migration (ship, invisible to members)
@@ -491,14 +537,15 @@ Phases overlap where they don't depend on each other. Start the Apple and Google
 
 | Risk | Mitigation |
 |---|---|
-| Live data migration (Phase 3) | Neon-branch rehearsals, feature flags, row-count verification, rollback script, migration during a quiet day |
+| **Previews share the production database today** (a schema change in a pull request alters production as soon as its preview is opened) | Phase 0: a database branch per preview, and no runtime schema changes ([test plan §2](./luvallplay-test-plan.md)) |
+| Live data migration (Phase 3) | Data guard rehearsals on Neon branches (per-person access and data checks), expand/contract, restore points, two-person sign-off ([test plan §4](./luvallplay-test-plan.md)) |
 | App Store rejection | Bundled app, native features, demo account, careful review notes; ask App Review for a pre-submission consultation if needed |
 | Scope creep in global features | Each global module ships on its own after the platform is live with pilot clubs |
 | Tenant data leak | RLS + app-level filters + automated isolation tests on every repo function |
 
 ---
 
-## 10. Decisions needed from you
+## 10. Decisions (all answered; see the top of this document)
 
 | # | Question | My recommendation |
 |---|---|---|
@@ -506,10 +553,10 @@ Phases overlap where they don't depend on each other. Start the Apple and Google
 | **B** ✅ | Launch order: Three Wolves app in the stores ASAP (before multi-tenant), or after the multi-tenant core? | After Phase 3. The bundle ID and listing are permanent, and members already have the PWA meanwhile |
 | **C** ✅ | Wolf Vision passes on iOS/Android: in-app purchase (via RevenueCat), free inside the app, or not sold in the app (buy on the web only, no link)? | In-app purchase through RevenueCat for app users, Stripe on the web |
 | **D** ✅ | Club website content: built-in editor in Luvallplay Admin, or Sanity for every club? | Built-in editor; Sanity for Luvallplay's own marketing, blog and help |
-| **E** | Business model: club subscription (tiers or per module), % fee on payments, marketplace commission, or a mix? | Free starter tier + paid tiers by module, plus a small application fee on payments |
-| **F** | Brand palette and type in §7.1: approve, or adjust? Do you already own `luvallplay.com`? | Approve as the starting point; I can make a visual preview page |
-| **G** | Marketplace scope: club storefronts only, or player-to-player gear too? | Club storefronts first |
-| **H** | Do clubs have juniors (under 13 / under 16)? This affects age rating, social features and consent | Social features 16+ only; juniors managed through a parent's account |
-| **I** | Admin emails: which account email do Timba and Kelcee sign in with? Should both also be **Luvallplay platform admins**, or only club owners? | Both Three Wolves owners; platform admin for whoever runs Luvallplay |
-| **J** | Languages: keep en + vi, and add others? | Keep en + vi; the system lets clubs pick more later |
-| **K** | Company: is there a registered company (for D-U-N-S, Apple/Google organization accounts, Stripe platform)? | Register the accounts under that company in week 1 |
+| **E** ✅ | Business model: club subscription (tiers or per module), % fee on payments, marketplace commission, or a mix? | Free starter tier + paid tiers by module, plus a small application fee on payments |
+| **F** ✅ | Brand palette and type in §7.1: approve, or adjust? Do you already own `luvallplay.com`? | Approve as the starting point; I can make a visual preview page |
+| **G** ✅ | Marketplace scope: club storefronts only, or player-to-player gear too? | Club storefronts first |
+| **H** ✅ | Do clubs have juniors (under 13 / under 16)? This affects age rating, social features and consent | Social features 16+ only; juniors managed through a parent's account |
+| **I** ✅ | Admin emails: which account email do Timba and Kelcee sign in with? Should both also be **Luvallplay platform admins**, or only club owners? | Both Three Wolves owners; platform admin for whoever runs Luvallplay |
+| **J** ✅ | Languages: keep en + vi, and add others? | Keep en + vi; the system lets clubs pick more later |
+| **K** ✅ | Company: is there a registered company (for D-U-N-S, Apple/Google organization accounts, Stripe platform)? | Register the accounts under that company in week 1 |

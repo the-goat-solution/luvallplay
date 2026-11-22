@@ -11,6 +11,7 @@
     "lint": "next lint",
     "db:migrate": "node scripts/migrate.mjs",
     "stripe:setup": "node scripts/stripe-setup.mjs",
+    "data-guard": "node scripts/data-guard/cli.ts",
     "test": "node --test tests/*.test.ts"
   },
   "dependencies": {
@@ -37,10 +38,12 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@types/node": "^22.15.30",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "eslint": "^9.28.0",
     "eslint-config-next": "^15.3.3",
+    "pg": "^8.23.1",
     "typescript": "^5.8.3"
   }
 }

@@ -438,19 +438,22 @@ Each step is rehearsed on a Neon branch of production, behind a feature flag, wi
 
 ### 7.1 Luvallplay brand
 
-Name: **Luvallplay**. Domain to buy: **luvallplay.org** (+ .com, .nz). The brand concept page (logo, symbol, app icon, colours, type) is linked here once published. The tokens below are the starting point.
+Name: **Luvallplay**. Domain to buy: **luvallplay.org** (+ .com, .nz). The brand lives in the **Luvallplay brand** design system: https://claude.ai/artifact/7do36zHNvLp3pFdNUC7euj (logo files, app icon, colour and type tokens, voice and usage rules). It's private until you share it.
+
+- **Mark:** a shuttlecock that is also a heart. The cork is the heart's tip, and three feather spines plus the binding band fan into the lobes. "Luv" + badminton in one shape that still reads at 16px.
+- **Wordmark:** custom lowercase **luvallplay** in round-ended single strokes, matching the app's line icons.
+- **App icon:** a Smash Lime heart-shuttle on a full-bleed Court Green square.
 
 | Token | Colour | Use |
 |---|---|---|
-| **Court Green** | `#0E6B4F` | Primary: buttons, active tabs, headers (white text on it: 6.5:1 ✔) |
+| **Court Green** | `#0E6B4F` | Primary: buttons, active tabs, headers (white text on it: 6.2:1 ✔) |
 | **Net Navy** | `#0B1B2B` | Text, dark mode surfaces |
 | **Shuttle White** | `#FAFAF7` | Backgrounds |
-| **Smash Lime** | `#D4F23C` | Accent: highlights, rank-ups, live states. **Fill only, never text on light** (lime on navy: 13.6:1 ✔) |
+| **Smash Lime** | `#D4F23C` | Accent: highlights, rank-ups, live states. **Fill only, never text on light** (lime on navy: 13.7:1 ✔) |
 | **Rally Coral** | `#FF6B4A` | Social and notification accents, sparingly |
 | Line Grey | `#E3E7E4` | Dividers, court-line motif |
 
-- **Type:** Inter (UI, variable, strong Vietnamese support) + Barlow Condensed (scoreboard numbers and display).
-- **Logo idea:** a lowercase "luvallplay" wordmark whose "a" doubles as a shuttlecock seen from above, with an "LP" app icon.
+- **Type:** **Be Vietnam Pro** for text (full Vietnamese support, less generic than Inter) + **Barlow Condensed** for scores, ranks and headlines. Both are free Google Fonts.
 - **Dark mode** from day one.
 
 All palettes are validated for WCAG AA in light and dark. Club colours are auto-adjusted to meet contrast.

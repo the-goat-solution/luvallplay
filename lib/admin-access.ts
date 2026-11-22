@@ -13,6 +13,7 @@ import {
   type AuditEntry,
   type Db,
 } from "./admin-roles";
+import { configureLocalNeon } from "./local-neon";
 
 // Who is using admin right now (build plan §2.4).
 //
@@ -26,7 +27,16 @@ import {
 // /api/admin request, so server actions are covered too; pages and actions
 // that change who is an admin check again with requireAdminActor().
 
-export const db: Db = { query: (text, params) => sql.query(text, params as unknown[] | undefined) };
+// The middleware is its own bundle, so the local-test database hook
+// (lib/local-neon.ts, a no-op unless NEON_LOCAL_WS_PROXY is set) runs here too.
+const localReady = process.env.NEON_LOCAL_WS_PROXY ? configureLocalNeon() : Promise.resolve(false);
+
+export const db: Db = {
+  query: async (text, params) => {
+    await localReady;
+    return sql.query(text, params as unknown[] | undefined);
+  },
+};
 
 export type AdminPlayer = { id: number; email: string; firstName: string; lastName: string };
 
@@ -42,6 +52,7 @@ export type CookieReader = (name: string) => string | undefined;
 
 /** Signed-in player's context (no permission decision yet). */
 export async function adminContextFromCookies(read: CookieReader): Promise<AdminContext | null> {
+  await localReady;
   if (await verifyAdminToken(read(ADMIN_COOKIE))) return { kind: "break-glass" };
   const session = await sessionForToken(read(PLAYER_COOKIE));
   if (!session) return null;

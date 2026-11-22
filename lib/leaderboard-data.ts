@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { getPointsBoard, type PointsBoardRow, type PointsSource } from "./arena-db";
 import { getClubToday } from "./dates";
+import { firstNameOnly } from "./first-name";
 import { PERIODS, periodFromKey, periodRange, type Period, type PeriodRange } from "./stats-db";
 
 // The Wolf Points board, shared by the Arena's Leaderboard segment and the
@@ -55,9 +56,4 @@ export async function teaserBoard(): Promise<TeaserRow[]> {
   const range = periodRange("month", today);
   const rows = await cachedBoard("all", "month", range.key);
   return rows.slice(0, 5).map((r) => ({ rank: r.rank, firstName: firstNameOnly(r.name), points: r.value }));
-}
-
-/** "Mai T." / "Mai Tran" → "Mai". Never more than the first word. */
-export function firstNameOnly(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? "";
 }

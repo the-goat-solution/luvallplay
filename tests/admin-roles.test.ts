@@ -92,7 +92,9 @@ test("audit summary: keeps the target, drops secrets and Next internals", () => 
     actionId: "abc123",
     fields: [
       ["1_$ACTION_ID_abc", ""],
-      ["memberId", "42"],
+      ["_1_$ACTION_ID_def", ""],
+      ["0", '["$K1"]'],
+      ["_1_memberId", "42"],
       ["password", "hunter2"],
       ["note", "x".repeat(500)],
     ],
@@ -102,6 +104,7 @@ test("audit summary: keeps the target, drops secrets and Next internals", () => 
   const fields = s.meta.fields as Record<string, string>;
   assert.equal(fields.password, undefined);
   assert.equal(fields["1_$ACTION_ID_abc"], undefined);
+  assert.deepEqual(Object.keys(fields).sort(), ["memberId", "note"], "Next.js internals dropped, prefixes stripped");
   assert.equal(fields.note.length, 120);
   assert.equal(s.meta.serverAction, "abc123");
 });

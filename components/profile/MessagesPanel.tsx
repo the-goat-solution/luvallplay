@@ -153,7 +153,9 @@ export function MessagesPanel({
 
   return (
     <section className={`${bare ? "" : styles.card} ${split ? m.splitWrap : ""}`} aria-labelledby={bare ? undefined : "messages-title"} aria-label={bare ? tr("msg_title") : undefined}>
-      <h2 id="messages-title" className={styles.cardTitle} hidden={bare && (split || openId !== null || composing)}>
+      {/* In the inbox sheet the sheet has the title, and "+ New message" sits below. */}
+      {!(bare && split) && (
+      <h2 id="messages-title" className={styles.cardTitle}>
         {bare ? "" : tr("msg_title")}
         {openId === null && !composing && (
           <span>
@@ -163,6 +165,7 @@ export function MessagesPanel({
           </span>
         )}
       </h2>
+      )}
 
       {error && <div className={styles.error}>{error}</div>}
 

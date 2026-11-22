@@ -451,8 +451,11 @@ export function summarizeAdminRequest(input: {
   fields?: [string, string][];
 }): { action: string; target: string; meta: Record<string, unknown> } {
   const fields: Record<string, string> = {};
-  for (const [k, v] of input.fields ?? []) {
-    if (/^\$ACTION|^\d+_\$ACTION/.test(k)) continue; // Next.js internals
+  for (const [rawKey, v] of input.fields ?? []) {
+    // Next.js server actions prefix bound form fields ("_1_playerId") and add
+    // their own ("1_$ACTION_ID_…", and "0" for the argument list).
+    if (rawKey.includes("$ACTION") || /^\d+$/.test(rawKey)) continue;
+    const k = rawKey.replace(/^_?\d+_/, "");
     if (/pass|secret|token|code|card/i.test(k)) continue;
     if (Object.keys(fields).length >= 20) break;
     fields[k.slice(0, 60)] = v.slice(0, 120);

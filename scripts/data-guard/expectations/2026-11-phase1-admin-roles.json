@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase1-admin-roles",
+  "description": "Phase 1 admin by account (build plan §2.4). Adds five new tables (club_roles, platform_admins, admin_invites, admin_audit_log, admin_handoffs) and grants Timba and Kelcee the owner role and platform admin. Purely additive: no existing table, column, row, account, email, phone or session may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

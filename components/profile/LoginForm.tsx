@@ -52,7 +52,7 @@ export function LoginForm({
   recaptchaSiteKey: string | null;
   next: string;
   defaultEmail: string;
-  notice: "expired" | "signed_out" | null;
+  notice: "expired" | "signed_out" | "stepup" | null;
 }) {
   const { tr, lang } = useProfileT();
   const router = useRouter();
@@ -74,7 +74,7 @@ export function LoginForm({
   const busy = working || navigating;
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(
-    notice === "expired" ? tr("login_expired_link") : notice === "signed_out" ? tr("login_signed_out") : null,
+    notice === "expired" ? tr("login_expired_link") : notice === "signed_out" ? tr("login_signed_out") : notice === "stepup" ? tr("login_stepup") : null,
   );
   const codeRef = useRef<HTMLInputElement>(null);
   const { containerRef, getToken } = useRecaptcha(smsAvailable ? recaptchaSiteKey : null);

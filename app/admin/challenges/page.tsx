@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
-import { AdminToastBridge } from "@/components/admin/AdminToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import adminStyles from "@/components/admin/admin.module.css";
 import { btn, btnDanger, btnSecondary, card, formatNz, pill } from "@/components/admin/ui";
 import { ARENA_SANDBOX, adminResolve, loadWorld, type ChallengeRow, type World } from "@/lib/arena-db";
@@ -66,7 +66,7 @@ export default async function ChallengesAdminPage() {
         recalculate straight away.
       </p>
       <AdminNav active="challenges" />
-      <AdminToastBridge />
+      <FlashToast />
       {ARENA_SANDBOX && (
         <p style={{ ...card, background: "#fff8e1", borderColor: "#f0d48a" }}>
           <strong>Preview sandbox.</strong> On this deployment the Arena uses its own <code>pv_</code> tables: test pairs and games never reach the real

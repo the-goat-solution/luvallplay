@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { emailVerifySchema } from "@/lib/auth-schemas";
 import { checkRateLimit, getClientIp } from "@/lib/security";
-import { createPlayerSession, safeNextPath, verifyEmailCode } from "@/lib/player-auth";
+import { endSessionFromRequest, createPlayerSession, safeNextPath, verifyEmailCode } from "@/lib/player-auth";
 import { ensurePlayerForEmail, markPhoneVerified } from "@/lib/player-db";
 import { verifyPhoneProof } from "@/lib/phone-proof";
 import { setPlayerCookies } from "@/lib/player-cookies";
@@ -29,6 +29,8 @@ export async function POST(request: Request) {
     const phone = verifyPhoneProof(body.phoneProof);
     let phoneTaken = false;
     if (phone) phoneTaken = (await markPhoneVerified(player.id, phone)) === "taken";
+
+    await endSessionFromRequest(request);
 
     const token = await createPlayerSession(player.id, request.headers.get("user-agent"));
     const needsDetails = !player.firstName.trim();

@@ -5,7 +5,7 @@ import { AdminLink } from "@/components/admin/AdminLink";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { FinanceSubNav } from "@/components/admin/finance/FinanceSubNav";
-import { FinancialsToastBridge } from "@/components/admin/finance/FinancialsToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import styles from "@/components/admin/finance/financials.module.css";
 import { getClubToday } from "@/lib/dates";
 import {
@@ -357,7 +357,7 @@ export default async function BankPage() {
       </p>
       <AdminNav active="financials" />
       <FinanceSubNav active="bank" />
-      <FinancialsToastBridge />
+      <FlashToast rules="financials" />
     </>
   );
 

@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 // it useless exactly when it's needed.
 export async function POST(request: Request) {
   const response = NextResponse.redirect(
-    new URL("/admin/login?loggedOut=1", request.url),
+    new URL("/admin/login?breakglass=1&loggedOut=1", request.url),
     303,
   );
   response.cookies.set(ADMIN_COOKIE, "", {

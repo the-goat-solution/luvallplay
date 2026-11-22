@@ -1,5 +1,8 @@
 import { AdminLink } from "@/components/admin/AdminLink";
 import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
+import { CountBadge, kit } from "@/components/admin/kit";
+import { currentAdmin } from "@/lib/admin-access";
+import { adminPathAllowed } from "@/lib/admin-roles";
 import { countUnreadForAdmin } from "@/lib/messages-db";
 import { countPhotosNeedingReview } from "@/lib/photos-db";
 import { countDisputes } from "@/lib/arena-db";
@@ -16,6 +19,8 @@ const TABS = [
   { href: "/admin/day-requests", label: "Day requests" },
   { href: "/admin/jersey", label: "Jersey" },
   { href: "/admin/financials", label: "Financials" },
+  { href: "/admin/people/admins", label: "Admins" },
+  { href: "/admin/platform/admins", label: "Platform" },
 ] as const;
 
 export type AdminTab =
@@ -28,32 +33,28 @@ export type AdminTab =
   | "challenges"
   | "day-requests"
   | "jersey"
-  | "financials";
-
-const badgeStyle = {
-  display: "inline-block",
-  minWidth: 18,
-  marginLeft: 6,
-  padding: "0 6px",
-  borderRadius: 9,
-  background: "#d64545",
-  color: "#fff",
-  fontSize: 11,
-  lineHeight: "18px",
-  textAlign: "center",
-} as const;
+  | "financials"
+  | "people/admins"
+  | "platform/admins";
 
 export async function AdminNav({ active }: { active: AdminTab }) {
-  const [unread, photosToReview, disputes] = await Promise.all([
+  const [unread, photosToReview, disputes, ctx] = await Promise.all([
     countUnreadForAdmin().catch(() => 0),
     countPhotosNeedingReview().catch(() => 0),
     countDisputes().catch(() => 0),
+    currentAdmin().catch(() => null),
   ]);
   const badges: Partial<Record<string, number>> = { "/admin/inbox": unread, "/admin/photos": photosToReview, "/admin/challenges": disputes };
+  // Each person sees the tabs their role opens (coaches: play-day pages).
+  // Break-glass sees the club tabs, not the role pages.
+  const tabs = TABS.filter((tab) =>
+    ctx?.kind === "player" ? adminPathAllowed(ctx.access, tab.href) : !tab.href.startsWith("/admin/people") && !tab.href.startsWith("/admin/platform"),
+  );
+  const who = ctx?.kind === "player" ? `${ctx.player.firstName} ${ctx.player.lastName}`.trim() || ctx.player.email : null;
   return (
     <nav className={styles.nav}>
       <div className={styles.tabs}>
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = tab.href === `/admin/${active}`;
           return (
             <AdminLink
@@ -65,7 +66,7 @@ export async function AdminNav({ active }: { active: AdminTab }) {
               style={{ marginBottom: -1 }}
             >
               {tab.label}
-              {(badges[tab.href] ?? 0) > 0 && <span style={badgeStyle}>{badges[tab.href]}</span>}
+              <CountBadge n={badges[tab.href] ?? 0} />
             </AdminLink>
           );
         })}
@@ -74,25 +75,21 @@ export async function AdminNav({ active }: { active: AdminTab }) {
         <a href="/casual-play" target="_blank" rel="noopener" className={styles.extraLink}>
           Court board ↗
         </a>
-        {/* A plain form post, so logging out still works when the session is
-            already broken — no JavaScript and no valid cookie required. */}
-        <form method="POST" action="/api/admin-logout">
-          <PlainSubmitButton
-            loadingText="Logging out…"
-            style={{
-              padding: "5px 12px",
-              borderRadius: 6,
-              border: "1px solid #ccc",
-              background: "#fff",
-              color: "#555",
-              fontSize: 12,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}
-          >
-            Log out
-          </PlainSubmitButton>
-        </form>
+        {ctx?.kind === "player" ? (
+          // Signed in as yourself: admin is part of your account, so the way
+          // out is back to your profile (sign out lives in Settings).
+          <a href="/profile" className={styles.extraLink}>
+            {who} · My profile
+          </a>
+        ) : (
+          // Break-glass: a plain form post, so logging out still works when the
+          // session is already broken (no JavaScript, no valid cookie needed).
+          <form method="POST" action="/api/admin-logout">
+            <PlainSubmitButton loadingText="Logging out…" className={kit.btnSecondary}>
+              Log out
+            </PlainSubmitButton>
+          </form>
+        )}
       </div>
     </nav>
   );

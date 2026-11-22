@@ -34,7 +34,7 @@ import { CashMemberDayAndDateFields } from "@/components/admin/CashMemberDayAndD
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
 import { MemberRetryButton } from "@/components/admin/MemberRetryButton";
 import { MemberFreeMonthButton } from "@/components/admin/MemberFreeMonthButton";
-import { MembersToastBridge } from "@/components/admin/MembersToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import { StripeSyncButton } from "@/components/admin/StripeSyncButton";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 
@@ -437,7 +437,7 @@ export default async function MembersAdminPage() {
         Monthly and quarterly members with an active subscription.
       </p>
       <AdminNav active="members" />
-      <MembersToastBridge />
+      <FlashToast rules="members" />
 
       {!process.env.POSTGRES_URL ? (
         <p>Database is not configured.</p>

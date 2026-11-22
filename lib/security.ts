@@ -2,6 +2,7 @@ import { BOOKING_WINDOW_DAYS } from "./constants";
 import { ADMIN_COOKIE, verifyAdminToken } from "./admin-session";
 import { isBookable, startOfDay } from "./dates";
 import { sessionExists } from "./db";
+import { isAdminApiRequest } from "./admin-access";
 
 const rateLimitMap = new Map<string, { count: number; reset: number }>();
 
@@ -84,10 +85,11 @@ function getCookieFromRequest(request: Request, name: string): string | null {
   return null;
 }
 
-// Mirrors the admin_token check in middleware.ts, for use in API route
-// handlers (which get a plain Request, not the NextRequest the middleware
-// works with). Both call the same verifier in lib/admin-session.ts, so an
-// expired session is rejected identically on pages and on API routes.
+// Mirrors the admin check in middleware.ts, for use in API route handlers
+// (which get a plain Request). Both go through lib/admin-access.ts: a full
+// club admin signed in within 12 hours, or the break-glass password cookie
+// while it still exists.
 export async function isAdminRequest(request: Request): Promise<boolean> {
-  return verifyAdminToken(getCookieFromRequest(request, ADMIN_COOKIE));
+  if (await verifyAdminToken(getCookieFromRequest(request, ADMIN_COOKIE))) return true;
+  return isAdminApiRequest(request);
 }

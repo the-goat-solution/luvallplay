@@ -6,6 +6,8 @@ import { deletePublicBlobs } from "@/lib/public-blob";
 import { clearPlayerCookies } from "@/lib/player-cookies";
 import { sendAdminAlertEmail } from "@/lib/player-email";
 import { endPlayerArena } from "@/lib/arena-db";
+import { db } from "@/lib/admin-access";
+import { isLastOwner } from "@/lib/admin-roles";
 
 const bodySchema = z.object({ confirm: z.literal("DELETE") });
 
@@ -17,6 +19,8 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "confirm" }, { status: 400 });
   }
+  // The club must always have an owner: the last one hands over first.
+  if (await isLastOwner(db, player.id)) return NextResponse.json({ error: "last_owner" }, { status: 409 });
   await endPlayerArena(player.id).catch((err) => console.error("[profile] arena cleanup failed:", err));
   // The profile picture goes with the account.
   await deletePublicBlobs([await setPlayerAvatar(player.id, null).catch(() => null)]);

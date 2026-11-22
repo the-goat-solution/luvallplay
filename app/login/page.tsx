@@ -22,12 +22,17 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; email?: string; expired?: string; signed_out?: string }>;
+  searchParams: Promise<{ next?: string; email?: string; expired?: string; signed_out?: string; stepup?: string }>;
 }) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
   const dbReady = Boolean(process.env.POSTGRES_URL);
-  if (dbReady && (await getCurrentPlayer())) redirect(next);
+  // Step-up (admin): already signed in, but admin needs a sign-in within the
+  // last 12 hours. Show the form with their email filled in instead of
+  // bouncing straight back.
+  const stepUp = params.stepup === "1";
+  const current = dbReady ? await getCurrentPlayer() : null;
+  if (current && !stepUp) redirect(next);
 
   // Rendered with the right options already in place, so "Text me a code"
   // never flashes up and then disappears when the free texts are used up.
@@ -47,8 +52,8 @@ export default async function LoginPage({
           smsAvailable={smsAvailable}
           recaptchaSiteKey={siteKey}
           next={next}
-          defaultEmail={params.email ?? ""}
-          notice={params.expired ? "expired" : params.signed_out ? "signed_out" : null}
+          defaultEmail={params.email ?? (stepUp ? current?.email : "") ?? ""}
+          notice={stepUp ? "stepup" : params.expired ? "expired" : params.signed_out ? "signed_out" : null}
         />
       </div>
       <div className={styles.authFoot}>

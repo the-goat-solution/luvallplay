@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminLink } from "@/components/admin/AdminLink";
-import { AdminToastBridge } from "@/components/admin/AdminToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { btn, btnDanger, btnSecondary, card, formatNz, input, pill, td, th } from "@/components/admin/ui";
@@ -311,7 +311,7 @@ export default async function ShopAdminPage({ searchParams }: { searchParams: Pr
       <h1 className={adminStyles.title}>Shop</h1>
       <p className={adminStyles.subtitle}>Club jersey and merchandise in the profile&apos;s Membership tab. Players pay by card online or reserve and pay cash at a play day.</p>
       <AdminNav active="shop" />
-      <AdminToastBridge />
+      <FlashToast />
 
       <section style={card}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>

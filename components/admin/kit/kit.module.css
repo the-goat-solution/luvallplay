@@ -1,0 +1,243 @@
+/* Admin UI kit: the shared look of the admin pages (plain system font, navy
+   buttons), as CSS instead of inline style objects. */
+
+.header {
+  margin-bottom: 4px;
+}
+.title {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+.subtitle {
+  margin: 0 0 14px;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.section {
+  border: 1px solid #e3e3e3;
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  background: #fff;
+}
+.sectionTitle {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #333;
+}
+
+.input,
+.select {
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  background: #fff;
+  min-height: 34px;
+}
+
+.btn,
+.btnSecondary,
+.btnDanger {
+  padding: 7px 13px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 34px;
+  border: 1px solid #1a2a4a;
+  background: #1a2a4a;
+  color: #fff;
+}
+.btnSecondary {
+  border-color: #ccc;
+  background: #fff;
+  color: #333;
+}
+.btnDanger {
+  border-color: #e3b4b4;
+  background: #fff;
+  color: #a12a2a;
+}
+.btn:disabled,
+.btnSecondary:disabled,
+.btnDanger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.btn:focus-visible,
+.btnSecondary:focus-visible,
+.btnDanger:focus-visible,
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid #1a2a4a;
+  outline-offset: 2px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: #eef2f7;
+  color: #1a2a4a;
+}
+.badgeOwner {
+  background: #1a2a4a;
+  color: #fff;
+}
+.badgeGood {
+  background: #e3f4e8;
+  color: #1d6b35;
+}
+.badgeWarn {
+  background: #fdf3e3;
+  color: #7a4a00;
+}
+.badgeBad {
+  background: #fbe9e9;
+  color: #a12a2a;
+}
+.count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #d64545;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.notice,
+.errorNote {
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+  background: #fdf3e3;
+  color: #7a4a00;
+}
+.errorNote {
+  background: #fbe9e9;
+  color: #a12a2a;
+}
+
+.empty {
+  padding: 18px;
+  text-align: center;
+  color: #666;
+  font-size: 14px;
+  border: 1px dashed #ddd;
+  border-radius: 8px;
+}
+
+/* DataTable: a table on wide screens, one card per row on phones. */
+.tableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #555;
+  border-bottom: 1px solid #e3e3e3;
+  white-space: nowrap;
+}
+.table td {
+  padding: 8px;
+  vertical-align: top;
+  border-bottom: 1px solid #f0f0f0;
+}
+.muted {
+  color: #666;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .table thead {
+    display: none;
+  }
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+  .table tr {
+    border: 1px solid #e3e3e3;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+  .table td {
+    border: 0;
+    padding: 4px 0;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    align-items: flex-start;
+    overflow-wrap: anywhere;
+  }
+  .table td::before {
+    content: attr(data-label);
+    font-size: 12px;
+    color: #666;
+    flex: 0 0 auto;
+  }
+  .input,
+  .select {
+    font-size: 16px;
+  }
+}
+
+.login {
+  font-family: system-ui, sans-serif;
+  max-width: 340px;
+  margin: 120px auto;
+  padding: 0 20px;
+}
+.loginInput {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

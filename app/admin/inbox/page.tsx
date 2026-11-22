@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminLink } from "@/components/admin/AdminLink";
-import { AdminToastBridge } from "@/components/admin/AdminToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { btn, card, formatNz, input, pill } from "@/components/admin/ui";
@@ -37,7 +37,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
       <h1 className={adminStyles.title}>Inbox</h1>
       <p className={adminStyles.subtitle}>Messages from players, sent from the Account tab of their profile. Unread conversations are listed first.</p>
       <AdminNav active="inbox" />
-      <AdminToastBridge />
+      <FlashToast />
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {(["open", "closed", "all"] as const).map((f) => (

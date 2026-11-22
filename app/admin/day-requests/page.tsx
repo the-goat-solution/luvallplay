@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
 import adminStyles from "@/components/admin/admin.module.css";
-import { DayRequestsToastBridge } from "@/components/admin/DayRequestsToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { WEEKDAYS, WEEKDAY_LABEL, type Weekday } from "@/lib/constants";
 import {
@@ -298,7 +298,7 @@ export default async function DayRequestsAdminPage() {
         Paused play days, and people waiting to hear when a day opens.
       </p>
       <AdminNav active="day-requests" />
-      <DayRequestsToastBridge />
+      <FlashToast />
 
       {!hasDb ? (
         <p>Database is not configured.</p>

@@ -20,6 +20,8 @@ import {
   fetchPricingPlans,
 } from "@/lib/sanity-queries";
 import { buildGalleryPool } from "@/lib/gallery-pool";
+import { LeaderboardTeaser } from "@/components/leaderboard/LeaderboardTeaser";
+import { teaserBoard } from "@/lib/leaderboard-data";
 
 export const revalidate = 60;
 
@@ -40,6 +42,7 @@ export default async function HomePage() {
     scheduleSettings,
     pricingPlans,
     pausedDays,
+    teaser,
   ] = await Promise.all([
     fetchSiteSettings(),
     fetchHero(),
@@ -48,6 +51,8 @@ export default async function HomePage() {
     fetchScheduleSettings(),
     fetchPricingPlans(),
     getPausedDays(),
+    // Top five, first names only (the full board is in the app's Arena).
+    process.env.POSTGRES_URL ? teaserBoard().catch(() => []) : Promise.resolve([]),
   ]);
 
   const calendarSubscribe = getCalendarSubscribeLinks(process.env.GOOGLE_CALENDAR_ID);
@@ -68,6 +73,7 @@ export default async function HomePage() {
       />
       <Gallery images={galleryPool} />
       <AppFeatures />
+      <LeaderboardTeaser rows={teaser} />
       <Membership pricingPlans={pricingPlans ?? undefined} />
       <Reviews googleReviewUrl={siteSettings?.googleReviewUrl} />
       <Donate />

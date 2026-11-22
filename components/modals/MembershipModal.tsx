@@ -290,7 +290,7 @@ export function MembershipModal({
           const res = await fetch("/api/auth/email/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: email.trim(), lang, turnstileToken: turnstileToken || undefined, next: "/profile/membership" }),
+            body: JSON.stringify({ email: email.trim(), lang, turnstileToken: turnstileToken || undefined, next: "/profile" }),
           });
           if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error === "too_many" ? "Too many codes requested. Please wait a few minutes." : "Couldn't send the code. Please check your email address.");
           setCode("");
@@ -532,7 +532,7 @@ export function MembershipModal({
               ) : (
                 <p style={{ fontSize: 13, color: "var(--text-mid)", marginBottom: 12, lineHeight: 1.55 }}>
                   {tr("acct_why")}{" "}
-                  <a href="/login?next=/profile/membership" style={{ color: "var(--bronze-dark)", fontWeight: 600 }}>
+                  <a href="/login?next=/profile" style={{ color: "var(--bronze-dark)", fontWeight: 600 }}>
                     {tr("acct_login_prefill")}
                   </a>
                 </p>

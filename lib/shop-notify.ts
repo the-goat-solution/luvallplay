@@ -31,7 +31,7 @@ export async function notifyOrderPlaced(order: Order): Promise<void> {
       lines: vi
         ? [items, cash ? `Mang ${money(order.totalCents)} tiền mặt đến buổi chơi tiếp theo. Giữ đến ${nzDate(order.holdExpiresAt)}.` : "Nhận hàng tại buổi chơi tiếp theo của bạn."]
         : [items, cash ? `Bring ${money(order.totalCents)} cash to your next play day. Held until ${nzDate(order.holdExpiresAt)}.` : "Collect it at your next play day."],
-      cta: { label: vi ? "Xem đơn hàng" : "View my order", path: "/profile/membership#shop" },
+      cta: { label: vi ? "Xem đơn hàng" : "View my order", path: "/profile#shop" },
     }),
     sendAdminAlertEmail({
       subject: `Shop ${cash ? "reservation (cash)" : "order (paid)"}: ${order.name || order.email}`,
@@ -70,7 +70,7 @@ export async function runShopDailyUpkeep(): Promise<{ reminded: number; released
         lines: vi
           ? [`${o.items.map((i) => i.label).join(", ")} — ${money(o.totalCents)}.`, `Hàng được giữ đến ${nzDate(o.holdExpiresAt)}. Sau đó sẽ được trả lại cho người khác.`]
           : [`${o.items.map((i) => i.label).join(", ")} — ${money(o.totalCents)}.`, `It's held until ${nzDate(o.holdExpiresAt)}, then it goes back on the shelf for someone else.`],
-        cta: { label: vi ? "Xem đơn hàng" : "View my order", path: "/profile/membership#shop" },
+        cta: { label: vi ? "Xem đơn hàng" : "View my order", path: "/profile#shop" },
       });
       await markReminderSent(o.id);
       reminded++;
@@ -88,7 +88,7 @@ export async function runShopDailyUpkeep(): Promise<{ reminded: number; released
       lines: vi
         ? [`${o.items.map((i) => i.label).join(", ")} đã được trả lại kho. Bạn có thể đặt lại trong hồ sơ nếu vẫn còn hàng.`]
         : [`${o.items.map((i) => i.label).join(", ")} went back on the shelf. You can reserve it again from your profile while stock lasts.`],
-      cta: { label: vi ? "Mở cửa hàng" : "Open the shop", path: "/profile/membership#shop" },
+      cta: { label: vi ? "Mở cửa hàng" : "Open the shop", path: "/profile#shop" },
     }).catch(() => {});
   }
   return { reminded, released: released.length };

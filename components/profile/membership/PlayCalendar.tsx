@@ -191,7 +191,7 @@ export function PlayCalendar({
               {booking.startTime ? ` · ${timeRange(booking.startTime, booking.endTime, lang)}` : ""}
             </p>
             {clientSecret ? (
-              <StripeCardForm clientSecret={clientSecret} amountLabel={tr("mem_pay", { amount: casualPriceNzd })} onSuccess={onPaid} returnPath="/profile/membership" />
+              <StripeCardForm clientSecret={clientSecret} amountLabel={tr("mem_pay", { amount: casualPriceNzd })} onSuccess={onPaid} returnPath="/profile" />
             ) : (
               <div className={styles.loadingLine}>
                 <Spinner label={tr("loading")} /> {tr("loading")}

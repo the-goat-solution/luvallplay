@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { LinkPending } from "@/components/LinkPending";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
@@ -7,6 +8,7 @@ import type { Period, PeriodRange } from "@/lib/stats-db";
 import type { PointsBoardRow, PointsSource } from "@/lib/arena-db";
 import { LADDER, ITEMS, nextRank, rankName, type Seat } from "@/lib/ranks";
 import { RankIcon } from "@/components/arena/RankIcon";
+import { PlayerCardSheet } from "@/components/arena/PlayerCardSheet";
 import s from "./leaderboard.module.css";
 
 const SOURCE_LABEL: Record<PointsSource, ProfileKey> = {
@@ -54,6 +56,7 @@ export function LeaderboardView({
   signedIn,
   justHidden,
   myLadder,
+  basePath = "/profile/arena?tab=leaderboard",
 }: {
   source: PointsSource;
   period: Period;
@@ -68,10 +71,15 @@ export function LeaderboardView({
   signedIn: boolean;
   justHidden: boolean;
   myLadder: MyLadder | null;
+  /** Where the filter links point (the Arena's Leaderboard segment). */
+  basePath?: string;
 }) {
   const { tr, lang } = useProfileT();
+  const sep = basePath.includes("?") ? "&" : "?";
   const href = (src: PointsSource, p: Period, key?: string | null) =>
-    `/leaderboard?source=${src}&period=${p}${key ? `&key=${encodeURIComponent(key)}` : ""}`;
+    `${basePath}${sep}source=${src}&period=${p}${key ? `&key=${encodeURIComponent(key)}` : ""}`;
+  // Tapping a row opens that player's card (rank, form, "Challenge").
+  const [selected, setSelected] = useState<number | null>(null);
 
   const shown = rows.slice(0, 50);
   const me = meId ? rows.find((r) => r.playerId === meId) : undefined;
@@ -112,7 +120,20 @@ export function LeaderboardView({
     ) : null;
 
   const row = (r: PointsBoardRow, mine: boolean) => (
-    <li key={r.playerId} className={`${s.row} ${mine ? s.mine : ""} ${r.seat ? s.seated : ""}`}>
+    <li
+      key={r.playerId}
+      className={`${s.row} ${s.clickable} ${mine ? s.mine : ""} ${r.seat ? s.seated : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-haspopup="dialog"
+      onClick={() => setSelected(r.playerId)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setSelected(r.playerId);
+        }
+      }}
+    >
       <span className={`${s.rank} ${r.rank <= 3 ? s[`top${r.rank}`] : ""}`}>{r.rank}</span>
       <span className={s.who}>
         {r.avatarUrl ? <img src={r.avatarUrl} alt="" className={s.face} loading="lazy" /> : <span className={s.face}>{r.initials}</span>}
@@ -135,7 +156,7 @@ export function LeaderboardView({
   const next = myLadder ? nextRank(myLadder.index) : null;
 
   return (
-    <main className={s.page}>
+    <div className={`${s.page} ${s.embedded}`}>
       <header className={s.hero}>
         <div className={s.heroInner}>
           <div className={s.eyebrow}>Three Wolves</div>
@@ -214,11 +235,12 @@ export function LeaderboardView({
 
         {!signedIn && (
           <p className={s.cta}>
-            <a href="/login?next=/leaderboard">{tr("lb_join_cta")} →</a>
+            <a href={`/login?next=${encodeURIComponent(basePath)}`}>{tr("lb_join_cta")} →</a>
           </p>
         )}
         <p className={s.how}>{tr("lb_how")}</p>
       </div>
-    </main>
+      <PlayerCardSheet playerId={selected} onClose={() => setSelected(null)} />
+    </div>
   );
 }

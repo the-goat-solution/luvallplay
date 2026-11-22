@@ -22,15 +22,29 @@ function timeLabel(iso: string, lang: string): string {
  * scroll position and any half-typed message (it's all component state).
  * The open thread refreshes every 20 seconds while the page is visible.
  */
-export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummary[] }) {
+export function MessagesPanel({
+  initialThreads,
+  layout = "card",
+  initialOpenId = null,
+  bare = false,
+}: {
+  initialThreads: ThreadSummary[];
+  /** "split": list and thread side by side when there's room (inbox sheet, tablets). */
+  layout?: "card" | "split";
+  initialOpenId?: number | null;
+  /** Inside a sheet that already has a title and background. */
+  bare?: boolean;
+}) {
   const { tr, lang } = useProfileT();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [threads, setThreads] = useState(initialThreads);
   const [openId, setOpenId] = useState<number | null>(() => {
+    if (initialOpenId) return initialOpenId;
     const t = Number(searchParams.get("thread"));
     return Number.isInteger(t) && t > 0 ? t : null;
   });
+  const split = layout === "split";
   const [thread, setThread] = useState<ThreadDetail | null>(null);
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -138,9 +152,9 @@ export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummar
   };
 
   return (
-    <section className={styles.card} aria-labelledby="messages-title">
-      <h2 id="messages-title" className={styles.cardTitle}>
-        {tr("msg_title")}
+    <section className={`${bare ? "" : styles.card} ${split ? m.splitWrap : ""}`} aria-labelledby={bare ? undefined : "messages-title"} aria-label={bare ? tr("msg_title") : undefined}>
+      <h2 id="messages-title" className={styles.cardTitle} hidden={bare && (split || openId !== null || composing)}>
+        {bare ? "" : tr("msg_title")}
         {openId === null && !composing && (
           <span>
             <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => setComposing(true)}>
@@ -175,8 +189,17 @@ export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummar
         </form>
       )}
 
-      {!composing && openId === null && (
-        <>
+      {bare && split && !composing && (
+        <div className={styles.btnRow} style={{ marginBottom: 10 }}>
+          <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={() => setComposing(true)}>
+            + {tr("msg_new")}
+          </button>
+        </div>
+      )}
+
+      <div className={split ? m.panes : undefined} data-open={openId !== null}>
+      {!composing && (openId === null || split) && (
+        <div className={split ? m.listPane : undefined}>
           <p className={styles.small} style={{ marginBottom: 10 }}>
             {tr("msg_sub")}
           </p>
@@ -186,7 +209,12 @@ export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummar
             <ul className={m.list}>
               {threads.map((t) => (
                 <li key={t.id}>
-                  <button type="button" className={m.threadBtn} onClick={() => open(t.id)}>
+                  <button
+                    type="button"
+                    className={`${m.threadBtn} ${t.id === openId ? m.activeThread : ""}`}
+                    aria-current={t.id === openId || undefined}
+                    onClick={() => open(t.id)}
+                  >
                     <span className={m.threadTop}>
                       <strong className={t.unread ? m.unread : undefined}>{t.subject}</strong>
                       <time>{timeLabel(t.lastMessageAt, lang)}</time>
@@ -201,12 +229,14 @@ export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummar
               ))}
             </ul>
           )}
-        </>
+        </div>
       )}
+
+      {split && openId === null && !composing && <div className={m.emptyPane}>{tr("msg_sub")}</div>}
 
       {openId !== null && (
         <div className={m.thread}>
-          <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={backToList} style={{ marginLeft: -12 }}>
+          <button type="button" className={`${styles.btn} ${styles.ghost} ${m.backBtn}`} onClick={backToList} style={{ marginLeft: -12 }}>
             ‹ {tr("msg_back")}
           </button>
           {thread?.id === openId ? (
@@ -244,6 +274,7 @@ export function MessagesPanel({ initialThreads }: { initialThreads: ThreadSummar
           </form>
         </div>
       )}
+      </div>
     </section>
   );
 }

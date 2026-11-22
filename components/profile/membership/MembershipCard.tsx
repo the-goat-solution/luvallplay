@@ -391,7 +391,7 @@ export function MembershipCard({
             </button>
           </>
         ) : (
-          <StripeCardForm clientSecret={payment.clientSecret} amountLabel={payment.amountLabel} onSuccess={onPaid} mode={payment.mode} returnPath="/profile/membership" />
+          <StripeCardForm clientSecret={payment.clientSecret} amountLabel={payment.amountLabel} onSuccess={onPaid} mode={payment.mode} returnPath="/profile" />
         )}
       </Sheet>
 

@@ -115,7 +115,7 @@ async function saveStock(productId: number, formData: FormData) {
     }
   }
   revalidatePath("/admin/shop");
-  revalidatePath("/profile/membership");
+  revalidatePath("/profile");
   back("toast", changed ? `Stock updated (${changed} size${changed === 1 ? "" : "s"}).` : "No stock changes.");
 }
 
@@ -151,7 +151,7 @@ async function saveProductAction(productId: number | null, formData: FormData) {
     images,
   });
   revalidatePath("/admin/shop");
-  revalidatePath("/profile/membership");
+  revalidatePath("/profile");
   back("toast", productId ? "Product saved." : "Product added. Enter its stock below.", `#product-${id}`);
 }
 

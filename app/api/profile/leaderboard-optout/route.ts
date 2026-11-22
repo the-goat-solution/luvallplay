@@ -12,5 +12,5 @@ export async function GET(request: Request) {
     await sql`UPDATE players SET leaderboard_visible = FALSE WHERE leaderboard_optout_token = ${token};`;
     revalidateTag("leaderboard");
   }
-  return NextResponse.redirect(new URL("/leaderboard?hidden=1", url), 303);
+  return NextResponse.redirect(new URL("/?hidden=1#leaderboard", url), 303);
 }

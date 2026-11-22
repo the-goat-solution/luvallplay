@@ -265,6 +265,14 @@ const I18N = {
     wd_friday: "Friday",
     wd_saturday: "Saturday",
     wd_sunday: "Sunday",
+    // Leaderboard teaser on the home page (the full board is in the app).
+    lb_teaser_kicker: "This month",
+    lb_teaser_title: "Leaderboard",
+    lb_teaser_sub: "Top five on Wolf Points this month, from play days, round robin and challenges.",
+    lb_teaser_cta: "See the full board in the app",
+    lb_teaser_empty: "The board fills up after the first play day of the month.",
+    lb_teaser_hidden: "Done: you're hidden from the leaderboard. You can change this any time in the app's Settings.",
+    lb_teaser_wp: "{n} WP",
   },
   vi: {
     nav_about: "Giới Thiệu",
@@ -528,6 +536,14 @@ const I18N = {
     wd_friday: "Thứ Sáu",
     wd_saturday: "Thứ Bảy",
     wd_sunday: "Chủ Nhật",
+    // Leaderboard teaser on the home page (the full board is in the app).
+    lb_teaser_kicker: "Tháng này",
+    lb_teaser_title: "Bảng xếp hạng",
+    lb_teaser_sub: "Năm người dẫn đầu về Wolf Points tháng này, từ ngày chơi, round robin và thách đấu.",
+    lb_teaser_cta: "Xem toàn bộ bảng xếp hạng trong ứng dụng",
+    lb_teaser_empty: "Bảng xếp hạng sẽ có sau ngày chơi đầu tiên của tháng.",
+    lb_teaser_hidden: "Xong: bạn đã được ẩn khỏi bảng xếp hạng. Bạn có thể đổi lại bất cứ lúc nào trong phần Cài đặt của ứng dụng.",
+    lb_teaser_wp: "{n} WP",
   },
 } as const;
 

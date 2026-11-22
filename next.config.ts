@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { applyDatabaseSwitch, guardPreviewDatabase } from "./lib/db-switch";
+import { REDIRECTS } from "./lib/redirects";
 
 // Pages built at deploy time read the same database as the running site.
 applyDatabaseSwitch();
@@ -40,13 +41,10 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
     ],
   },
-  // Wolf Vision lives in the profile app now; the old standalone page sends people there
-  // (query kept, so old Arena links and payment returns still land on the right match).
+  // Every URL that moved (lib/redirects.ts): Wolf Vision, Account and
+  // Membership (now Me), and the public leaderboard (now in the Arena).
   async redirects() {
-    return [
-      { source: "/match-analyzer/label", destination: "/profile/wolf-vision/label", permanent: true },
-      { source: "/match-analyzer", destination: "/profile/wolf-vision", permanent: true },
-    ];
+    return REDIRECTS;
   },
   async headers() {
     return [

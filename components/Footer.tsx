@@ -77,7 +77,7 @@ export function Footer() {
               </li>
               <li>
                 {/* Members manage (and cancel) their membership from their profile. */}
-                <a href="/profile/membership">
+                <a href="/profile">
                   <Trans k="footer_cancel_membership" />
                 </a>
               </li>

@@ -841,6 +841,9 @@
   .sheetHandle {
     display: none;
   }
+  .sheetWide {
+    max-width: min(960px, 100%);
+  }
 }
 @keyframes fadeIn {
   from {

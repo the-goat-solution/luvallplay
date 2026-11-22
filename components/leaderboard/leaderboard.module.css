@@ -501,3 +501,28 @@ span.stepBtn {
 .list li .name small {
   white-space: normal;
 }
+
+/* Inside the Arena (profile app): no site header to clear, so a compact hero. */
+.embedded {
+  min-height: 0;
+  background: transparent;
+}
+.embedded .hero {
+  padding: 22px 16px 22px;
+  border-radius: 18px;
+}
+.clickable {
+  cursor: pointer;
+}
+.clickable:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: -2px;
+}
+@media (hover: hover) {
+  .clickable:hover {
+    background: #fbf8ee;
+  }
+}
+.embedded .body {
+  padding: 16px 0 24px;
+}

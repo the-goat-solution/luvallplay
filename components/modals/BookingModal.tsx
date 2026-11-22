@@ -201,7 +201,7 @@ export function BookingModal() {
             <p style={{ fontSize: 13, color: "var(--text-mid)", marginBottom: 12 }}>✓ {tr("acct_signed_in", { email })}</p>
           ) : (
             <p style={{ fontSize: 13, marginBottom: 12 }}>
-              <a href="/login?next=/profile/membership" style={{ color: "var(--bronze-dark)", fontWeight: 600 }}>
+              <a href="/login?next=/profile" style={{ color: "var(--bronze-dark)", fontWeight: 600 }}>
                 {tr("acct_login_prefill")}
               </a>
             </p>

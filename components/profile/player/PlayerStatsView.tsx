@@ -171,7 +171,7 @@ export function PlayerStatsView({ stats, leaderboardVisible }: { stats: PlayerSt
         <h2 className={styles.cardTitle}>
           {tr("pl_ranks_title")}
           <span>
-            <a href="/leaderboard" className={`${styles.btn} ${styles.ghost}`}>
+            <a href="/profile/arena?tab=leaderboard" className={`${styles.btn} ${styles.ghost}`}>
               {tr("pl_see_leaderboard")} →
             </a>
           </span>

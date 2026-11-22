@@ -406,7 +406,7 @@ export async function cancelAtPeriodEnd(player: Player, m: MemberView, reason: s
       lines: vi
         ? [`Thẻ thành viên ${PLAN_LABEL[m.plan]} (${DAY_LABEL[m.day]}) của bạn sẽ kết thúc vào ${end}. Bạn sẽ không bị trừ tiền nữa.`, "Đổi ý? Bạn có thể bật lại bất cứ lúc nào trước ngày đó trong hồ sơ."]
         : [`Your ${PLAN_LABEL[m.plan]} (${DAY_LABEL[m.day]}) membership will end on ${end}. You won't be charged again.`, "Changed your mind? You can resume it any time before then from your profile."],
-      cta: { label: vi ? "Mở thẻ thành viên" : "Open my membership", path: "/profile/membership" },
+      cta: { label: vi ? "Mở thẻ thành viên" : "Open my membership", path: "/profile" },
     }),
     sendAdminAlertEmail({
       subject: `Membership cancelling: ${player.firstName} ${player.lastName}`,

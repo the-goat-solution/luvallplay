@@ -12,7 +12,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "stripe:setup": "node scripts/stripe-setup.mjs",
     "data-guard": "node scripts/data-guard/cli.ts",
-    "test": "node --test tests/*.test.ts"
+    "test": "node --import ./tests/register.mjs --test tests/*.test.ts"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",

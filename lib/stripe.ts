@@ -7,6 +7,7 @@ import {
   type MembershipDay,
   type MembershipTier,
 } from "@/lib/constants";
+import { assertStripeKeyAllowed } from "@/lib/side-effects.ts";
 
 let stripe: Stripe | null = null;
 
@@ -15,6 +16,8 @@ export function getStripe(): Stripe {
   if (!secret) {
     throw new Error("STRIPE_SECRET_KEY is not configured");
   }
+  // A live key is refused outside production; test keys work anywhere.
+  assertStripeKeyAllowed(secret);
   if (!stripe) {
     stripe = new Stripe(secret);
   }

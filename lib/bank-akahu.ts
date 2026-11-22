@@ -7,6 +7,7 @@ import {
   type BankTransactionInput,
 } from "./bank-db";
 import { ensureFinanceTables, getSyncState, markSyncFailed, markSyncSucceeded } from "./finance-db";
+import { sideEffectAllowed } from "./side-effects.ts";
 
 // ANZ → the club, via Akahu (https://akahu.nz).
 //
@@ -35,6 +36,8 @@ const OVERLAP_DAYS = 14;
 const FIRST_SYNC_DAYS = 400;
 
 export function akahuConfigured(): boolean {
+  // The bank feed is only read from production (lib/side-effects.ts).
+  if (!sideEffectAllowed("akahu")) return false;
   return Boolean(process.env.AKAHU_APP_TOKEN && process.env.AKAHU_USER_TOKEN);
 }
 

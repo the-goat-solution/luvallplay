@@ -1,4 +1,5 @@
 import { sql } from "@vercel/postgres";
+import { guardPreviewDatabase } from "./db-switch.ts";
 
 // Start-up table checks, once per deployment instead of once per server.
 //
@@ -34,6 +35,12 @@ async function loadDone(): Promise<Set<string>> {
 
 /** Runs a module's table DDL unless this deployment already has. */
 export async function onceThisDeploy(name: string, ddl: () => Promise<void>): Promise<void> {
+  // Belt and braces for the preview guard in instrumentation.ts: a preview
+  // that can't prove it has its own database never runs DDL.
+  guardPreviewDatabase();
+  if (process.env.PREVIEW_DATABASE_BLOCKED) {
+    throw new Error(`Database switched off on this preview: ${process.env.PREVIEW_DATABASE_BLOCKED}`);
+  }
   if (!GATED) return ddl();
   if (!donePromise) {
     donePromise = loadDone().catch((err) => {

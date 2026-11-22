@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
-import { applyDatabaseSwitch } from "./lib/db-switch";
+import { applyDatabaseSwitch, guardPreviewDatabase } from "./lib/db-switch";
 
 // Pages built at deploy time read the same database as the running site.
 applyDatabaseSwitch();
+// Previews never touch the production database (lib/db-switch.ts).
+guardPreviewDatabase();
 
 // Player accounts add: Vercel Blob (player photos, shop images: shown from
 // *.public.blob.vercel-storage.com, uploaded straight from the browser via

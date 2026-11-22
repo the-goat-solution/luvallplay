@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { capturingResend, sideEffectAllowed } from "./side-effects.ts";
 import type { RosterEntry } from "./db";
 import type { MembershipDay, MembershipTier } from "./constants";
 import { BANK_ACCOUNT_NAME, BANK_ACCOUNT_NUMBER } from "./jersey";
@@ -21,6 +22,8 @@ export function getResend(): Resend {
   if (!process.env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY is not configured");
   }
+  // Outside production every email is captured, never sent (lib/side-effects.ts).
+  if (!sideEffectAllowed("email")) return capturingResend() as unknown as Resend;
   if (!resend) {
     resend = new Resend(process.env.RESEND_API_KEY);
   }

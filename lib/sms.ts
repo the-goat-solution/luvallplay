@@ -2,6 +2,7 @@ import { db, sql } from "@vercel/postgres";
 import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";
 import { sha256 } from "./player-auth";
 import { sendAdminAlertEmail } from "./player-email";
+import { sideEffectAllowed } from "./side-effects.ts";
 
 // SMS sign-in codes through Google Identity Platform (Firebase phone auth),
 // capped at Google's free allowance so texts never cost the club money.
@@ -23,6 +24,8 @@ const CAP_ALERT_KEY = "sms_cap_alert_at";
 export type SmsPurpose = "login" | "phone_confirm";
 
 function apiKey(): string | null {
+  // SMS is off outside production: previews and local sign in by email code.
+  if (!sideEffectAllowed("sms")) return null;
   return process.env.FIREBASE_API_KEY?.trim() || null;
 }
 

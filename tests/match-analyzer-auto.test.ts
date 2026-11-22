@@ -248,3 +248,85 @@ test("shuttle candidates: feet are masked, an isolated blob in flight is kept, t
   assert.ok(at(400, 60), "an isolated blob away from players is a candidate");
   assert.ok(at(205, 120), "beside the shoulders (racket zone) stays a candidate");
 });
+
+test("pose feet: the floor point is between the heels and toes, nudged down to the sole; crops that caught something else are ignored", async () => {
+  const { poseFootPoint } = await import("../lib/ma/engine.ts");
+  const v = (x: number, y: number, vis = 0.9): [number, number, number] => [x, y, vis];
+  const kp = {
+    shoulders: [v(90, 100), v(130, 100)],
+    elbows: [v(80, 140), v(140, 140)],
+    wrists: [v(75, 170), v(150, 90)],
+    hips: [v(95, 200), v(125, 200)],
+    ankles: [v(92, 290), v(128, 292)],
+    heels: [v(90, 296), v(126, 298)],
+    toes: [v(98, 300), v(134, 302)],
+  };
+  const torso = 100;
+  const f = poseFootPoint(kp, torso)!;
+  close(f.x, (90 + 126 + 98 + 134) / 4, 1e-9);
+  close(f.y, (296 + 298 + 300 + 302) / 4 + 0.06 * torso, 1e-9);
+  // Heels and toes hidden: the ankles, lowered to the floor.
+  const g = poseFootPoint({ ...kp, heels: [v(0, 0, 0.1), v(0, 0, 0.1)], toes: [v(0, 0, 0.1), v(0, 0, 0.1)] }, torso)!;
+  close(g.y, 291 + 0.15 * torso, 1e-9);
+  // "Feet" at hip height: not a standing body.
+  assert.equal(poseFootPoint({ ...kp, heels: [v(90, 205), v(126, 205)], toes: [v(98, 206), v(134, 206)] }, torso), null);
+});
+
+test("distance: detector jitter on a player standing still is not counted; a jittery run keeps its length", async () => {
+  const { computeMotion, MotionTracker } = await import("../lib/match-analyzer.ts");
+  let seed = 5;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const g = () => (rnd() + rnd() + rnd() - 1.5) * 0.2; // ~0.1 m jitter
+  const times = Array.from({ length: 300 }, (_, k) => k / 15);
+  const box: [number, number, number, number] = [0, 0, 1, 1];
+  const still = computeMotion(times, times.map(() => ({ p: { x: 2 + g(), y: 3 + g() }, box })));
+  assert.ok(still.cumDist[299] < 1, `standing still for 20 s counted ${still.cumDist[299].toFixed(1)} m`);
+  // Runs of 4 m out and back at 2 m/s (40 m in 20 s): as long as without the jitter, give or take a few %.
+  const pos = (t: number) => 1 + Math.abs(((t % 4) - 2) * 2);
+  const clean = computeMotion(times, times.map((t) => ({ p: { x: 3, y: pos(t) }, box })));
+  const run = computeMotion(times, times.map((t) => ({ p: { x: 3 + g(), y: pos(t) + g() }, box })));
+  assert.ok(Math.abs(run.cumDist[299] / clean.cumDist[299] - 1) < 0.08, `run ${run.cumDist[299].toFixed(1)} m vs ${clean.cumDist[299].toFixed(1)} m`);
+  // The live tracker gives the same numbers.
+  const live = new MotionTracker();
+  times.forEach((t, k) => live.push(t, { p: run.p[k] ? { x: 3, y: pos(t) } : null, box } as never));
+  const runLive = computeMotion(times, times.map((t) => ({ p: { x: 3, y: pos(t) }, box })));
+  close(live.motion.cumDist[299], runLive.cumDist[299], 1e-9);
+});
+
+test("camera knocked out of place: flagged after the knock, never for an ordinary shaky tripod", async () => {
+  const { MatchEngine } = await import("../lib/ma/engine.ts");
+  const { engineInput } = await import("../lib/ma/simrun.ts");
+  for (const [opts, expectMoved] of [[{ shake: 2.5 }, false], [{ bumpAt: 4, bump: { x: 30, y: 12 } }, true]] as const) {
+    const sim = new MatchSim({ w: 480, h: 270, seed: 9, ...opts });
+    const cam = fitCamera(sim.taps(6), 480, 270, 0)!;
+    const e = new MatchEngine({ cam, videoW: 480, videoH: 270, courtPoints: 6 });
+    const g = new Uint8Array(480 * 270);
+    let before = false, after = false;
+    for (let k = 0; k < 300; k++) {
+      const f = sim.step();
+      const inp = engineInput(f, 480, 270, g);
+      e.process({ ...inp, persons: k % 2 === 0 ? inp.persons : undefined });
+      if (f.t < 4) before ||= e.cameraMoved;
+      else if (f.t > 8) after ||= e.cameraMoved;
+    }
+    assert.equal(before, false);
+    assert.equal(after, expectMoved, JSON.stringify(opts));
+  }
+});
+
+test("end to end on the simulator: a 30 s singles game with the pose layer and a busy court next door", () => {
+  const r = runSim({ w: 640, h: 360, seed: 22, singles: true, pose: true, neighbourGap: 1.2 }, 30);
+  assert.ok(r.hits.precision >= 0.8, `precision ${r.hits.precision}`);
+  assert.ok(r.hits.recall >= 0.7, `recall ${r.hits.recall}`);
+  assert.ok(r.hits.attribution >= 0.85, `hitter ${r.hits.attribution}`);
+  assert.ok(r.identity >= 0.97, `identity ${r.identity}`);
+  assert.ok(r.distanceError < 0.12, `distance error ${r.distanceError}`);
+  assert.ok(r.positionError < 0.15, `position error ${r.positionError}`);
+});
+
+test("scoring: singles sides are player 0 near, 1 far", async () => {
+  const { scoreHits, sideOfIndex } = await import("../lib/ma/simrun.ts");
+  const s = scoreHits([{ t: 1, player: 0 }, { t: 2, player: 1 }], [{ t: 1.05, player: 0, p: 1, status: "accepted", cues: {} }, { t: 2.02, player: 0, p: 1, status: "accepted", cues: {} }], 0.25, sideOfIndex(2));
+  assert.equal(s.matched, 2);
+  assert.equal(s.rightSide, 1);
+});

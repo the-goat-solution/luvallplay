@@ -33,7 +33,9 @@ const bodySchema = z.object({
         email: z.string().trim().toLowerCase().email().max(200).optional(),
       }),
     )
-    .length(4),
+    // Doubles (four players) or singles (two).
+    .refine((ps) => ps.length === 4 || ps.length === 2, "two or four players")
+    .refine((ps) => [0, 1].every((t) => ps.filter((p) => p.team === t).length === ps.length / 2), "players split evenly into two sides"),
 });
 
 function playedAt(): string {

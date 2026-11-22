@@ -11,6 +11,7 @@ import type { MatchSim, SimFrame } from "@/lib/ma/sim";
 import { detectPeople } from "./detector";
 import { fromCrop, mergeDetections } from "@/lib/ma/detections";
 import type { PoseRunner } from "./pose";
+import { SimPoseFeed } from "@/lib/ma/simrun";
 
 /** Analysis frame width: enough for a shuttle at the far baseline, light enough for an iPhone 14. */
 export const ANALYSIS_W = 640;
@@ -39,6 +40,8 @@ export class Pipeline {
   private farCanvas: HTMLCanvasElement | null = null;
   /** AI pose layer (set once the model has loaded; the tracker runs without it until then). */
   pose: PoseRunner | null = null;
+  /** Test scenario: the simulator's emulated pose model, fed like the real one. */
+  private simPose = new SimPoseFeed();
   /** Last simulator frame (ground truth for the test scenario). */
   lastSimFrame: SimFrame | null = null;
   readonly vw: number;
@@ -98,7 +101,10 @@ export class Pipeline {
       big.putImageData(img, 0, 0);
       this.ctx.drawImage(src.canvas, 0, 0, aw, ah);
       t = f.t;
-      if (this.frameNo % this.detectEvery === 0) persons = f.persons;
+      if (this.frameNo % this.detectEvery === 0) {
+        persons = f.persons;
+        this.simPose.feed(this.engine, f);
+      }
       onsets = f.onsets;
     } else {
       this.ctx.drawImage(src.video, 0, 0, aw, ah);

@@ -42,3 +42,10 @@ test("stats email: no free-period line after the trial, no fastest shot", () => 
   assert.ok(!e.html.includes("free to try"));
   assert.ok(e.html.includes(">–<"));
 });
+
+test("stats email: a singles game says so", () => {
+  const e = renderStatsEmail({ ...base, recipientIndex: 1, teams: ["Tim", "Anna"], players: [base.players[0], base.players[2]] });
+  assert.match(e.html, /singles game/);
+  assert.match(e.html, /both players/);
+  assert.match(e.text, /singles game/);
+});

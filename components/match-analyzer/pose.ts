@@ -1,7 +1,9 @@
 // AI pose layer for Wolf Vision: MediaPipe Pose Landmarker (lite, ~5.8 MB,
 // Apache-2.0) run on each player's crop, on the device. It gives the racket
 // arm (shoulder, elbow, wrist) so the engine can tell a real stroke from
-// footwork and say whose racket was nearest the shuttle at a contact.
+// footwork and say whose racket was nearest the shuttle at a contact, and the
+// feet (heels, toes, ankles), so a player is placed where they stand on the
+// court rather than at the bottom edge of their box.
 // Two players per detector frame, in turn: each player gets a pose several
 // times a second without doubling the phone's load.
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
@@ -35,7 +37,7 @@ export function loadPose(useGpu: boolean): Promise<PoseLandmarker> {
   return posePromise;
 }
 
-const IDX = { shoulders: [11, 12], elbows: [13, 14], wrists: [15, 16], hips: [23, 24] } as const;
+const IDX = { shoulders: [11, 12], elbows: [13, 14], wrists: [15, 16], hips: [23, 24], ankles: [27, 28], heels: [29, 30], toes: [31, 32] } as const;
 
 /** Runs the pose model on crops of the players' boxes and returns keypoints in video pixels. */
 export class PoseRunner {
@@ -75,7 +77,10 @@ export class PoseRunner {
         const lm = res.landmarks[0];
         if (!lm) continue;
         const pick = (ids: readonly number[]) => ids.map((j) => [x0 + lm[j].x * w, y0 + lm[j].y * h, lm[j].visibility ?? 1] as [number, number, number]);
-        out.push({ player: i, kp: { shoulders: pick(IDX.shoulders), elbows: pick(IDX.elbows), wrists: pick(IDX.wrists), hips: pick(IDX.hips) } });
+        out.push({
+          player: i,
+          kp: { shoulders: pick(IDX.shoulders), elbows: pick(IDX.elbows), wrists: pick(IDX.wrists), hips: pick(IDX.hips), ankles: pick(IDX.ankles), heels: pick(IDX.heels), toes: pick(IDX.toes) },
+        });
       } catch {
         /* a frame the model could not read: skip */
       }

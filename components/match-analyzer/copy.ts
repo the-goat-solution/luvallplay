@@ -24,8 +24,8 @@ export const COPY = {
     payTitle: (kind: "live" | "upload") => (kind === "live" ? "Track a live match" : "Analyse a match video"),
     payText: (kind: "live" | "upload") =>
       kind === "live"
-        ? "One live doubles match tracked by the AI-enhanced tracker: hits, rallies, speed and distance for all four players. NZ$5."
-        : "One uploaded match video analysed by the AI-enhanced tracker: hits, rallies, speed and distance for all four players. NZ$2.",
+        ? "One live match, singles or doubles, tracked by the AI-enhanced tracker: hits, rallies, speed and distance for every player. NZ$5."
+        : "One uploaded match video, singles or doubles, analysed by the AI-enhanced tracker: hits, rallies, speed and distance for every player. NZ$2.",
     payBtn: (kind: "live" | "upload") => (kind === "live" ? "Pay NZ$5 and start" : "Pay NZ$2 and choose the video"),
     payTest: "Preview: test pass, no charge.",
     paySignIn: "Sign in to buy a pass (it is kept on your account).",
@@ -36,7 +36,7 @@ export const COPY = {
     shareTraining: "Help train Wolf Vision (shares the AI's learned numbers only, never video)",
     back: "Back to the Arena",
     intro:
-      "Set a phone on a tripod behind a baseline and Wolf Vision does the rest: it finds the four players, follows them even in matching shirts, hears and sees every hit, and works out who hit it and how far and fast everyone moved.",
+      "Set a phone on a tripod behind a baseline and Wolf Vision does the rest: it finds the players (singles or doubles), follows them even in matching shirts, places each one by their feet on the court, hears and sees every hit, and works out who hit it and how far and fast everyone moved.",
     privacy: "Video stays on the phone. Only the final numbers are saved, and only for challenges where a phone was set up.",
     vs: "vs",
     cameraTitle: "Phone camera",
@@ -45,7 +45,7 @@ export const COPY = {
     videoTitle: "Analyse a video",
     videoSub: "Run the same automatic tracking on a recording.",
     demoTitle: "Test scenario",
-    demoSub: "Preview only: a simulated doubles game with known hits, to see how the system copes with light, shake and matching shirts.",
+    demoSub: "Preview only: a simulated singles or doubles game with known hits, to see how the system copes with light, shake, matching shirts and a busy neighbouring court.",
     signIn: "Sign in to set up tracking for this challenge.",
     signInBtn: "Sign in",
     notFound: "This challenge could not be found.",
@@ -58,6 +58,14 @@ export const COPY = {
     lensHint: "0.5× fits the whole court from closer; mark 6 or more court points so its curve is measured.",
     cameraPick: "Camera to use",
     positions: "Where everyone starts (as the camera sees it)",
+    format: "Game",
+    singles: "Singles",
+    doubles: "Doubles",
+    formatHint: "Singles: one player each side. Arena challenges are doubles.",
+    neighbours: "Busy court next door",
+    moved: "The camera seems to have moved: the court lines may be off. Re-tap the court to keep the numbers right.",
+    retap: "Re-tap court",
+    retapNote: "Numbers so far are kept. Drag the points back onto the court lines, then Start tracking.",
     near: "Near side",
     far: "Far side",
     left: "Left",
@@ -207,8 +215,8 @@ export const COPY = {
     payTitle: (kind: "live" | "upload") => (kind === "live" ? "Theo dõi trận trực tiếp" : "Phân tích video trận đấu"),
     payText: (kind: "live" | "upload") =>
       kind === "live"
-        ? "Một trận đôi trực tiếp được theo dõi bằng AI: cú đánh, pha cầu, tốc độ và quãng đường của cả bốn người. NZ$5."
-        : "Một video trận đấu được phân tích bằng AI: cú đánh, pha cầu, tốc độ và quãng đường của cả bốn người. NZ$2.",
+        ? "Một trận trực tiếp, đánh đơn hoặc đánh đôi, được theo dõi bằng AI: cú đánh, pha cầu, tốc độ và quãng đường của từng người. NZ$5."
+        : "Một video trận đấu, đánh đơn hoặc đánh đôi, được phân tích bằng AI: cú đánh, pha cầu, tốc độ và quãng đường của từng người. NZ$2.",
     payBtn: (kind: "live" | "upload") => (kind === "live" ? "Trả NZ$5 và bắt đầu" : "Trả NZ$2 và chọn video"),
     payTest: "Bản xem trước: vé thử, không thu tiền.",
     paySignIn: "Đăng nhập để mua vé (vé được lưu trong tài khoản).",
@@ -219,7 +227,7 @@ export const COPY = {
     shareTraining: "Giúp huấn luyện Wolf Vision (chỉ chia sẻ các thông số AI đã học, không bao giờ gửi video)",
     back: "Quay lại Đấu Trường",
     intro:
-      "Đặt điện thoại trên chân máy sau đường biên cuối, Wolf Vision lo phần còn lại: tìm bốn người chơi, theo dõi họ kể cả khi mặc áo giống nhau, nghe và thấy từng cú đánh, xác định ai đánh, mỗi người di chuyển bao xa và nhanh thế nào.",
+      "Đặt điện thoại trên chân máy sau đường biên cuối, Wolf Vision lo phần còn lại: tìm người chơi (đánh đơn hoặc đánh đôi), theo dõi họ kể cả khi mặc áo giống nhau, xác định vị trí từng người theo bàn chân trên sân, nghe và thấy từng cú đánh, xác định ai đánh, mỗi người di chuyển bao xa và nhanh thế nào.",
     privacy: "Video được giữ trên điện thoại. Chỉ con số cuối cùng được lưu, và chỉ cho thách đấu có đặt điện thoại.",
     vs: "vs",
     cameraTitle: "Camera điện thoại",
@@ -228,7 +236,7 @@ export const COPY = {
     videoTitle: "Phân tích video",
     videoSub: "Chạy cùng hệ thống tự động trên một bản quay.",
     demoTitle: "Kịch bản thử",
-    demoSub: "Chỉ trên bản xem trước: trận đánh đôi mô phỏng với các cú đánh đã biết, để xem hệ thống xử lý ánh sáng, rung và áo giống nhau thế nào.",
+    demoSub: "Chỉ trên bản xem trước: trận đánh đơn hoặc đánh đôi mô phỏng với các cú đánh đã biết, để xem hệ thống xử lý ánh sáng, rung, áo giống nhau và sân bên cạnh đông người thế nào.",
     signIn: "Đăng nhập để thiết lập theo dõi cho thách đấu này.",
     signInBtn: "Đăng nhập",
     notFound: "Không tìm thấy thách đấu này.",
@@ -241,6 +249,14 @@ export const COPY = {
     lensHint: "0.5× thấy cả sân từ gần hơn; hãy đánh dấu 6 điểm trở lên để đo độ cong.",
     cameraPick: "Camera sử dụng",
     positions: "Vị trí ban đầu (như camera thấy)",
+    format: "Thể thức",
+    singles: "Đánh đơn",
+    doubles: "Đánh đôi",
+    formatHint: "Đánh đơn: mỗi bên một người. Thách đấu Đấu Trường là đánh đôi.",
+    neighbours: "Sân bên cạnh đông người",
+    moved: "Máy quay có vẻ đã bị xê dịch: đường sân có thể bị lệch. Bấm điểm sân lại để số liệu chính xác.",
+    retap: "Bấm điểm lại",
+    retapNote: "Số liệu đến giờ vẫn được giữ. Kéo các điểm về đúng vạch sân rồi bấm Bắt đầu theo dõi.",
     near: "Phía gần",
     far: "Phía xa",
     left: "Trái",

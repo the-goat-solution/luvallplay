@@ -59,6 +59,7 @@ export type PickerCopy = {
 
 export function WolfPicker({
   index,
+  no = index + 1,
   color,
   people,
   copy,
@@ -67,6 +68,8 @@ export function WolfPicker({
 }: {
   /** Player index 0–3 (Wolf 1–4). */
   index: number;
+  /** The number shown ("Wolf 2"); default index + 1. */
+  no?: number;
   color: string;
   people: Wolf[];
   copy: PickerCopy;
@@ -109,10 +112,10 @@ export function WolfPicker({
 
   return (
     <div className={s.picker} onClick={onClose}>
-      <div className={`${s.pickerSheet} ${s.wolfSheet}`} onClick={(ev) => ev.stopPropagation()} role="dialog" aria-modal="true" aria-label={copy.pickTitle(index + 1)} data-testid="wolf-picker">
+      <div className={`${s.pickerSheet} ${s.wolfSheet}`} onClick={(ev) => ev.stopPropagation()} role="dialog" aria-modal="true" aria-label={copy.pickTitle(no)} data-testid="wolf-picker">
         <h3 style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <i className={s.dot} style={{ background: color, color }} />
-          {copy.pickTitle(index + 1)}
+          {copy.pickTitle(no)}
         </h3>
         <div className={s.seg} role="group" style={{ marginBottom: 12 }}>
           <button type="button" aria-pressed={tab === "list"} onClick={() => setTab("list")} data-testid="pick-tab-list">
@@ -195,7 +198,7 @@ export function WolfPicker({
         <div className={s.modalActions}>
           {current && !current.placeholder ? (
             <button className={s.btnGhost} type="button" onClick={() => onPick(null)}>
-              {copy.pickReset(index + 1)}
+              {copy.pickReset(no)}
             </button>
           ) : null}
           <button className={s.btnGhost} type="button" onClick={onClose}>

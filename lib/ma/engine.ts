@@ -8,6 +8,7 @@
 import {
   COURT,
   MotionTracker,
+  iou,
   computeMotion,
   groupRallies,
   motionAt,
@@ -67,14 +68,44 @@ export type EngineOptions = {
   autoTrain?: boolean;
 };
 
-/** Body keypoints of one player from the AI pose layer (video px): shoulders, elbows, wrists, hips as [x, y, visibility]. */
+/** Body keypoints of one player from the AI pose layer (video px): shoulders, elbows, wrists, hips (and the feet) as [x, y, visibility]. */
 export type PoseKeypoints = {
   shoulders: [number, number, number][];
   elbows: [number, number, number][];
   wrists: [number, number, number][];
   hips: [number, number, number][];
+  ankles?: [number, number, number][];
+  heels?: [number, number, number][];
+  toes?: [number, number, number][];
 };
+
+/**
+ * Where a player touches the floor, from the pose's feet (video px): the
+ * middle of the visible heels and toes, or of the ankles nudged down to the
+ * floor. Null without enough visible foot points, or when the feet are not
+ * below the hips (a crop that caught something else).
+ */
+export function poseFootPoint(kp: PoseKeypoints, torso: number): Pt | null {
+  const vis = (p: [number, number, number] | undefined): p is [number, number, number] => !!p && p[2] >= 0.5 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+  const hipY = kp.hips.filter(vis).reduce((m, p) => Math.max(m, p[1]), -Infinity);
+  let pts = [...(kp.heels ?? []), ...(kp.toes ?? [])].filter(vis);
+  // Heel and toe points sit a few centimetres above the floor (~0.06 torso): seen from a
+  // raised camera that is 10–15 cm too far down the court for a far player, so go down to the sole.
+  let dy = 0.06 * torso;
+  if (pts.length < 2) {
+    pts = (kp.ankles ?? []).filter(vis);
+    // Ankles are ~8 cm above the floor; a torso is ~50 cm.
+    dy = 0.15 * torso;
+  }
+  if (pts.length < 2) return null;
+  const x = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+  const y = pts.reduce((a, p) => a + p[1], 0) / pts.length + dy;
+  if (Number.isFinite(hipY) && y < hipY + 0.5 * torso) return null;
+  return { x, y };
+}
 type PoseSample = { t: number; kp: PoseKeypoints; torso: number; speed: number };
+/** A foot point from the pose layer: absolute (video px) and relative to the box the crop came from. */
+type PoseFoot = { t: number; box: Box; abs: Pt; rel: Pt };
 
 export type PlayerView = { pos: Pt | null; box: Box | null; conf: number; tracked: boolean; speed: number };
 
@@ -143,6 +174,10 @@ export class MatchEngine {
   readonly training = { pos: 0, neg: 0, trained: 0 };
   /** AI pose layer: recent keypoints per player, and swing events found from the racket arm. */
   private poses: PoseSample[][] = [];
+  /** AI pose layer: each player's latest foot point (where they touch the floor). */
+  private feet: (PoseFoot | null)[] = [];
+  /** Player positions placed by the pose's feet rather than the box's bottom edge (this session). */
+  footFixes = 0;
   private poseSwing: { hist: number[]; lastT: number; peak: { t: number; s: number } | null }[] = [];
   /** Pose samples received this session (shown as an active AI layer). */
   poseCount = 0;
@@ -152,6 +187,21 @@ export class MatchEngine {
   private bodiesT = -Infinity;
   private audioOn: boolean;
   private cam3: Camera3D | null;
+  /** Drift checks against the calibration frame (analysis px). */
+  driftLog: { t: number; score: number; dx: number; dy: number; w: number }[] = [];
+  /**
+   * The camera has moved since the court was tapped (a knocked tripod, a phone
+   * picked up): for the last 3 s of checks the picture either no longer lines
+   * up with the calibration frame at all (match score under 0.5; a steady
+   * camera scores ~0.9, shake included) or lines up only after a shift of over
+   * 2 % of the frame width (the correction follows a slide, not the tilt that
+   * comes with it). The court lines are then off: the court should be re-tapped.
+   */
+  get cameraMoved(): boolean {
+    const L = this.driftLog;
+    if (L.length < 6) return false;
+    return L.slice(-6).every((d) => d.score < 0.5 || Math.hypot(d.dx, d.dy) > 0.02 * d.w);
+  }
 
   /** Whether impact sounds are being heard (a "no sound" then counts against a hit). Off if the mic or the file's audio fails. */
   setAudio(on: boolean) {
@@ -169,6 +219,7 @@ export class MatchEngine {
     this.identity.centreX = (p) => courtToImage(this.cam, { x: COURT.width / 2, y: p.y }).x;
     this.shuttle = new ShuttleTracker({ width: this.W });
     this.poses = this.slots.map(() => []);
+    this.feet = this.slots.map(() => null);
     this.poseSwing = this.slots.map(() => ({ hist: [], lastT: -Infinity, peak: null }));
     const w = opts.checker === undefined ? SHUTTLE_CHECKER : opts.checker;
     this.checker = w ? new ShuttleChecker(w) : opts.autoTrain ? new ShuttleChecker(null) : null;
@@ -218,11 +269,16 @@ export class MatchEngine {
     const g = recycled && recycled.length === f.gray.length ? recycled : new Uint8Array(f.gray.length);
     g.set(f.gray);
     this.frames.push({ t: f.t, g, proj, shift });
-    // Drift against the calibration frame (a bumped tripod): re-measured every half second.
+    // Offset from the calibration frame, every frame: a slow drift (a bumped tripod) and the
+    // shake itself, so player positions are measured against the court as it is in this
+    // picture (on a shaky camera the shake otherwise jitters every position and inflates
+    // the distance run). Two 1-D projections: cheap.
     if (!this.ref) this.ref = proj;
+    const d = estimateShift(this.ref, proj, 20);
+    if (d.score > 0.6) this.cam = { ...this.cam, shift: { x: d.dx / scale, y: d.dy / scale } };
     if (this.frameNo++ % 15 === 0) {
-      const d = estimateShift(this.ref, proj, 20);
-      if (d.score > 0.6) this.cam = { ...this.cam, shift: { x: d.dx / scale, y: d.dy / scale } };
+      this.driftLog.push({ t: f.t, score: d.score, dx: d.dx, dy: d.dy, w: f.gw });
+      if (this.driftLog.length > 400) this.driftLog.shift();
     }
 
     // Light and shake.
@@ -243,15 +299,22 @@ export class MatchEngine {
       const boxes = this.currentBoxes();
       const blobs = findBlobs(this.mask, f.gw, f.gh, b.g);
       if (blobs) {
-        // Every person's body is masked (bystanders too), the four players' reach zones are not.
+        // Every person's body is masked; only our players' reach zones stay open. Bystanders
+        // (the next court, people walking past) are masked whole, and the motion around them
+        // counts as background (a place that keeps moving with none of our players there).
         const bodies = f.t - this.bodiesT < 0.5 ? this.bodies : [];
-        const allBodies = [...boxes.filter((x): x is Box => !!x), ...bodies];
+        const players = boxes.filter((x): x is Box => !!x);
+        // A bystander touches none of our players' boxes (a merged box of two partners, or a
+        // player's own detection this frame, keeps the racket zone open).
+        const touches = (b: Box) => players.some((p) => b[0] < p[0] + p[2] && p[0] < b[0] + b[2] && b[1] < p[1] + p[3] && p[1] < b[1] + b[3]);
+        const near = bodies.filter(touches);
+        const others = bodies.filter((b) => !touches(b));
         if (!this.background || this.backgroundW !== f.gw) {
           this.background = new BackgroundActivity(f.gw, f.gh);
           this.backgroundW = f.gw;
         }
-        const cands = shuttleCandidates(blobs, scale, allBodies, f.gw * f.gh, this.background);
-        this.background.add(blobs, allBodies, scale);
+        const cands = shuttleCandidates(blobs, scale, [...players, ...near], f.gw * f.gh, this.background, others);
+        this.background.add(blobs, [...players, ...bodies], scale);
         // AI layer: the checker scores each candidate; the tracker's outcome later labels it.
         const trusted = this.checker && this.checker.n >= 500;
         const kept: typeof cands = [];
@@ -396,6 +459,15 @@ export class MatchEngine {
       });
     }
     list.push({ t, kp, torso, speed });
+    // Feet: the floor point for this player's position (the box's bottom edge is the lowest
+    // foot, and its middle shifts toward the racket arm; the feet are where they stand).
+    const box = this.identity.players[player]?.box;
+    const foot = box ? poseFootPoint(kp, torso) : null;
+    if (box && foot) {
+      const rel = { x: (foot.x - box[0]) / Math.max(1, box[2]), y: (foot.y - box[1]) / Math.max(1, box[3]) };
+      // Plausible only inside the box's width and in its lowest fifth.
+      this.feet[player] = rel.x > -0.1 && rel.x < 1.1 && rel.y > 0.8 && rel.y < 1.08 ? { t, box, abs: foot, rel } : null;
+    }
     while (list.length && t - list[0].t > 3) list.shift();
     this.poseCount++;
     // Peak picking on the wrist speed.
@@ -501,7 +573,7 @@ export class MatchEngine {
     const obs: PersonObs[] = [];
     for (const d of persons) {
       if (d.box[1] + d.box[3] >= this.H * 0.985 || d.box[3] >= this.H * 0.9) continue;
-      const foot = { x: d.box[0] + d.box[2] / 2, y: d.box[1] + d.box[3] };
+      const foot = this.footOf(d.box, t);
       const p = imageToCourt(this.cam, foot);
       if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !onCourt(p)) continue;
       const mpp = metresPerPixel(this.cam, foot);
@@ -525,6 +597,28 @@ export class MatchEngine {
         while (this.boxHist[i].length && t - this.boxHist[i][0].t > 4) this.boxHist[i].shift();
       }
     });
+  }
+
+  /**
+   * The floor point of a detected person (video px). Default: the middle of the
+   * box's bottom edge. With a recent pose of the player in this box: their feet
+   * (the pose of this very frame as it is; an older one, up to 0.3 s, by where
+   * the feet sat in its box).
+   */
+  private footOf(box: Box, t: number): Pt {
+    let best: PoseFoot | null = null;
+    let bestIou = 0.5;
+    for (const f of this.feet) {
+      if (!f || t - f.t > 0.3 || t < f.t) continue;
+      const o = iou(f.box, box);
+      if (o > bestIou) [best, bestIou] = [f, o];
+    }
+    if (best) {
+      const abs = t - best.t < 1e-3 && best.abs.x >= box[0] && best.abs.x <= box[0] + box[2] && best.abs.y >= box[1] + 0.75 * box[3] && best.abs.y <= box[1] + 1.08 * box[3];
+      this.footFixes++;
+      return abs ? best.abs : { x: box[0] + best.rel.x * box[2], y: box[1] + best.rel.y * box[3] };
+    }
+    return { x: box[0] + box[2] / 2, y: box[1] + box[3] };
   }
 
   /** An identity correction: positions, boxes, swings and hits of a and b since `from` change hands. */

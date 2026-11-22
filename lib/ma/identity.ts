@@ -28,6 +28,11 @@ export const DOUBLES_SLOTS: Slot[] = [
   { side: 1, lr: 0 },
   { side: 1, lr: 1 },
 ];
+/** Singles: one player a side. */
+export const SINGLES_SLOTS: Slot[] = [
+  { side: 0, lr: 0 },
+  { side: 1, lr: 0 },
+];
 
 /** A detected person on court: box (video px), court position, metres per pixel at their feet. */
 export type PersonObs = { box: Box; score: number; look?: number[]; p: Pt; mpp: number; h3?: number; edge?: boolean };

@@ -1,5 +1,5 @@
-// A doubles game simulator: the ground truth for testing the automatic
-// Match Analyzer, and the preview "test scenario".
+// A badminton game simulator (doubles or singles): the ground truth for
+// testing the automatic Match Analyzer, and the preview "test scenario".
 //
 // It renders real pixels through a phone-camera model (pinhole + the same
 // division lens model as lib/ma/lens.ts, so the 0.5× ultra-wide bends lines),
@@ -8,11 +8,17 @@
 // the shuttle has gravity and quadratic air drag (terminal speed 6.8 m/s);
 // players accelerate to intercept it and swing their rackets through it.
 // What it cannot simulate is the neural person detector: person boxes are
-// produced from the true bodies with jitter, dropouts and merges instead.
+// produced from the true bodies with jitter, dropouts and merges instead, and
+// so are the pose model's keypoints (noise, misses, a crop that locks onto the
+// partner). Stress options: a neighbouring court with its own players, and a
+// camera knocked out of place mid-game. Every opt-in feature draws from its
+// own random stream, so the game itself (rallies, hits, movement) is the same
+// with and without it: conditions can be compared on identical play.
 
 import { COURT, courtLandmarks, solveHomography, invertMat3, type Box, type CourtTap, type Detection, type Pt } from "../match-analyzer.ts";
 import { distort, makeLens, type CourtCamera, type LensPreset } from "./lens.ts";
 import type { Onset } from "./audio.ts";
+import type { PoseKeypoints } from "./engine.ts";
 
 export type SimOptions = {
   seed?: number;
@@ -33,10 +39,22 @@ export type SimOptions = {
   detectorMiss?: number;
   /** False impact sounds per second (neighbouring courts). */
   crowdNoise?: number;
+  /** Singles: one player a side (default: doubles). */
+  singles?: boolean;
+  /** A neighbouring court this many metres beside ours (to the camera's right), four players on it. 0 = none. */
+  neighbourGap?: number;
+  /** Body keypoints as the AI pose model would give them (noise, misses, a crop locking onto the partner). */
+  pose?: boolean;
+  /** The camera is knocked out of place at this time (s)... */
+  bumpAt?: number;
+  /** ...by this many pixels (at this render size). */
+  bump?: Pt;
 };
 
 export type SimTruth = { players: Pt[]; shuttle: [number, number, number] | null; rallyLive: boolean };
-export type SimFrame = { t: number; rgba: Uint8ClampedArray; persons: Detection[]; onsets: Onset[]; truth: SimTruth };
+/** One player's keypoints as the pose model would report them on a crop around `box` (video px). */
+export type SimPose = { player: number; box: Box; kp: PoseKeypoints };
+export type SimFrame = { t: number; rgba: Uint8ClampedArray; persons: Detection[]; onsets: Onset[]; truth: SimTruth; poses?: SimPose[] };
 
 type V3 = [number, number, number];
 type Rgb = [number, number, number];
@@ -125,6 +143,8 @@ export class MatchSim {
   readonly H: number;
   readonly fps: number;
   readonly opts: Required<Omit<SimOptions, "seed" | "w" | "h" | "fps" | "lens">> & { lens: LensPreset };
+  /** Players on the neighbouring court (not part of our game). */
+  readonly neighbours: SimPlayer[] = [];
   /** The true court camera (for tests that skip tapping). */
   readonly cam: CourtCamera;
   readonly players: SimPlayer[];
@@ -132,6 +152,10 @@ export class MatchSim {
   readonly hits: { t: number; player: number }[] = [];
   t = 0;
   private rand: () => number;
+  /** Second random stream for the opt-in stress features (pose noise, neighbours), so they never change the game. */
+  private rand2: () => number;
+  private wobX = 0;
+  private wobY = 0;
   private C: V3;
   private R: V3;
   private U: V3;
@@ -167,8 +191,14 @@ export class MatchSim {
       sameShorts: o.sameShorts ?? false,
       detectorMiss: o.detectorMiss ?? 0.04,
       crowdNoise: o.crowdNoise ?? 0.3,
+      singles: o.singles ?? false,
+      neighbourGap: o.neighbourGap ?? 0,
+      pose: o.pose ?? false,
+      bumpAt: o.bumpAt ?? Infinity,
+      bump: o.bump ?? { x: 0, y: 0 },
     };
     this.rand = mulberry32(o.seed ?? 7);
+    this.rand2 = mulberry32((o.seed ?? 7) * 7919 + 13);
     // Camera: behind the near baseline, raised, like a phone on a tripod or fence.
     const ultra = this.opts.lens === "ultrawide";
     this.C = ultra ? [3.05, -2.6, 2.6] : [3.05, -5.6, 3.0];
@@ -189,8 +219,10 @@ export class MatchSim {
     const shirtA: Rgb = [235, 90, 70];
     const shirtB: Rgb = [40, 40, 48];
     const pick = (k: number): Rgb => [[40, 70, 160], [230, 230, 235], [30, 30, 30], [150, 30, 40]][k] as Rgb;
+    const singles = this.opts.singles;
     const mk = (team: 0 | 1, k: 0 | 1): SimPlayer => {
-      const base = { x: k === 0 ? 1.6 : 4.5, y: team === 0 ? 3.0 : 10.4 };
+      // Singles: one player covers the whole half from the middle.
+      const base = singles ? { x: COURT.width / 2, y: team === 0 ? 3.6 : 9.8 } : { x: k === 0 ? 1.6 : 4.5, y: team === 0 ? 3.0 : 10.4 };
       const sameShirt = this.opts.sameShirts;
       const shirt = team === 0 ? (sameShirt || k === 0 ? shirtA : ([250, 200, 60] as Rgb)) : sameShirt || k === 0 ? shirtB : ([60, 160, 220] as Rgb);
       const shorts = this.opts.sameShorts ? pick(2) : pick(team * 2 + k);
@@ -209,7 +241,30 @@ export class MatchSim {
         swing: null,
       };
     };
-    this.players = [mk(0, 0), mk(0, 1), mk(1, 0), mk(1, 1)];
+    this.players = singles ? [mk(0, 0), mk(1, 0)] : [mk(0, 0), mk(0, 1), mk(1, 0), mk(1, 1)];
+    if (this.opts.neighbourGap > 0) {
+      const r2 = this.rand2;
+      const ox = COURT.width + this.opts.neighbourGap;
+      const kit: Rgb[] = [[250, 250, 250], [200, 40, 40], [40, 160, 70], [240, 140, 30]];
+      for (let k = 0; k < 4; k++) {
+        const team = (k < 2 ? 0 : 1) as 0 | 1;
+        const base = { x: ox + (k % 2 ? 4.5 : 1.6), y: team === 0 ? 3.0 : 10.4 };
+        this.neighbours.push({
+          team,
+          pos: { ...base },
+          vel: { x: 0, y: 0 },
+          height: 1.65 + r2() * 0.2,
+          shirt: kit[k],
+          shorts: [30, 30, 30],
+          skin: [190, 150, 120],
+          hair: [25, 20, 18],
+          shoes: [230, 230, 230],
+          base,
+          target: { ...base },
+          swing: null,
+        });
+      }
+    }
     for (let i = 0; i < 9; i++) {
       this.spectators.push({ pos: { x: -2 + i * 1.2, y: 15.6 + (i % 2) * 0.4 }, color: [80 + r() * 150, 80 + r() * 150, 80 + r() * 150], seated: true });
     }
@@ -361,6 +416,21 @@ export class MatchSim {
         this.seg3(b, [a.x + (c.x - a.x) * f0, a.y + (c.y - a.y) * f0, 0], [a.x + (c.x - a.x) * f1, a.y + (c.y - a.y) * f1, 0], 0.045, [235, 240, 238], 1, false);
       }
     }
+    if (this.opts.neighbourGap > 0) {
+      // The neighbouring court: its outer lines, centre lines and net.
+      const ox = W + this.opts.neighbourGap;
+      const nb: [Pt, Pt][] = [h(0, ox, ox + W), h(L, ox, ox + W), v(ox), v(ox + W), v(ox + si), v(ox + W - si), h(net - ss, ox, ox + W), h(net + ss, ox, ox + W)];
+      for (const [a, c] of nb) {
+        const n = 24;
+        for (let i = 0; i < n; i++) {
+          const f0 = i / n, f1 = (i + 1) / n;
+          this.seg3(b, [a.x + (c.x - a.x) * f0, a.y + (c.y - a.y) * f0, 0], [a.x + (c.x - a.x) * f1, a.y + (c.y - a.y) * f1, 0], 0.045, [235, 240, 238], 1, false);
+        }
+      }
+      this.seg3(b, [ox, net, 0], [ox, net, 1.55], 0.05, [30, 30, 30], 1, false);
+      this.seg3(b, [ox + W, net, 0], [ox + W, net, 1.55], 0.05, [30, 30, 30], 1, false);
+      this.seg3(b, [ox, net, 1.53], [ox + W, net, 1.53], 0.05, [245, 245, 245], 1, false);
+    }
     // Net: posts, mesh and tape.
     this.seg3(b, [0, net, 0], [0, net, 1.55], 0.05, [30, 30, 30], 1, false);
     this.seg3(b, [W, net, 0], [W, net, 1.55], 0.05, [30, 30, 30], 1, false);
@@ -408,7 +478,8 @@ export class MatchSim {
     const otherFar = team === 0;
     const kind = hitHeight > 2.1 ? (r() < 0.45 ? "smash" : r() < 0.6 ? "clear" : "drop") : hitHeight > 1.2 ? (r() < 0.5 ? "drive" : "clear") : r() < 0.5 ? "lift" : "net";
     const depth = kind === "net" || kind === "drop" ? 1.2 + r() * 1.3 : kind === "smash" || kind === "drive" ? 3 + r() * 2.5 : 4.8 + r() * 1.6;
-    const target = { x: 0.6 + r() * 4.9, y: otherFar ? COURT.net + depth : COURT.net - depth };
+    const tx = r();
+    const target = { x: this.opts.singles ? COURT.singlesInset + 0.25 + tx * (COURT.width - 2 * COURT.singlesInset - 0.5) : 0.6 + tx * 4.9, y: otherFar ? COURT.net + depth : COURT.net - depth };
     const angle = { smash: -12, drive: 4, clear: 38, drop: 18, lift: 48, net: 30 }[kind];
     let v = aim(from, target, angle);
     // Make sure it clears the net (1.55 m) with a margin.
@@ -463,8 +534,11 @@ export class MatchSim {
   /** After a rally: the next server walks to the service line. */
   private chooseServer() {
     const team = this.serveTeam;
-    const server = this.players.filter((p) => p.team === team)[this.rand() < 0.5 ? 0 : 1];
-    server.target = { x: server.base.x < 3.05 ? 2.5 : 3.6, y: team === 0 ? 4.4 : 9.0 };
+    const mine = this.players.filter((p) => p.team === team);
+    const server = mine[Math.min(mine.length - 1, Math.floor(this.rand() * 2))];
+    // Singles: either service court (the score decides; here at random).
+    const right = this.opts.singles ? this.rand2() < 0.5 : server.base.x >= 3.05;
+    server.target = { x: right ? 3.6 : 2.5, y: team === 0 ? 4.4 : 9.0 };
     this.nextServer = server;
   }
 
@@ -473,7 +547,8 @@ export class MatchSim {
     const r = this.rand;
     const team = this.serveTeam;
     this.serveTeam = team === 0 ? 1 : 0;
-    const server = this.nextServer ?? this.players.filter((p) => p.team === team)[r() < 0.5 ? 0 : 1];
+    const mine = this.players.filter((p) => p.team === team);
+    const server = this.nextServer ?? mine[Math.min(mine.length - 1, Math.floor(r() * 2))];
     this.nextServer = null;
     const sIdx = this.players.indexOf(server);
     server.target = { ...server.pos };
@@ -491,6 +566,8 @@ export class MatchSim {
     this.serveAt = null;
     this.recordHit(s.player, s.from);
     this.startShot(s.from, this.players[s.player].team, 1.0);
+    // Singles: after a shot, back to the middle of the half.
+    if (this.opts.singles) this.players[s.player].target = { ...this.players[s.player].base };
   }
 
   private recordHit(player: number, at: V3) {
@@ -521,6 +598,7 @@ export class MatchSim {
           this.recordHit(h.player, this.shuttle.p);
           const hitter = this.players[h.player];
           this.startShot(this.shuttle.p, hitter.team, this.shuttle.p[2]);
+          if (this.opts.singles) hitter.target = { ...hitter.base };
           continue;
         }
         [this.shuttle.p, this.shuttle.v] = shuttleStep(this.shuttle.p, this.shuttle.v, dt / n);
@@ -558,6 +636,21 @@ export class MatchSim {
       else p.pos.y = Math.max(COURT.net + 0.25, p.pos.y);
       if (!this.rallyLive && d < 0.3 && r() < 0.01) p.target = { x: p.base.x + (r() - 0.5) * 1.2, y: p.base.y + (r() - 0.5) * 1.2 };
     }
+    // Neighbouring court: its own game (they chase around their halves).
+    for (const p of this.neighbours) {
+      const r2 = this.rand2;
+      if (r2() < dt / 1.2) {
+        const ox = COURT.width + this.opts.neighbourGap;
+        p.target = { x: ox + 0.3 + r2() * (COURT.width - 0.6), y: p.team === 0 ? 0.6 + r2() * (COURT.net - 1.2) : COURT.net + 0.6 + r2() * (COURT.net - 1.2) };
+      }
+      const dx = p.target.x - p.pos.x, dy = p.target.y - p.pos.y;
+      const d = Math.hypot(dx, dy);
+      const want = d > 0.05 ? Math.min(4.5, d * 3) : 0;
+      p.vel.x += Math.max(-9, Math.min(9, ((d > 0 ? (dx / d) * want : 0) - p.vel.x) / 0.15)) * dt;
+      p.vel.y += Math.max(-9, Math.min(9, ((d > 0 ? (dy / d) * want : 0) - p.vel.y) / 0.15)) * dt;
+      p.pos.x += p.vel.x * dt;
+      p.pos.y += p.vel.y * dt;
+    }
     for (const s of this.spectators) {
       if (!s.walk) continue;
       const dirY = Math.sign(s.walk.to.y - s.pos.y) || 1;
@@ -566,11 +659,16 @@ export class MatchSim {
     }
     // Camera shake: a smooth random wobble.
     const sh = this.opts.shake;
-    this.shakeX = this.shakeX * 0.85 + (r() - 0.5) * sh * 1.1;
-    this.shakeY = this.shakeY * 0.85 + (r() - 0.5) * sh * 1.1;
+    this.wobX = this.wobX * 0.85 + (r() - 0.5) * sh * 1.1;
+    this.wobY = this.wobY * 0.85 + (r() - 0.5) * sh * 1.1;
+    // A knocked tripod: the whole view moves and stays moved.
+    const knocked = this.t >= this.opts.bumpAt;
+    this.shakeX = this.wobX + (knocked ? this.opts.bump.x : 0);
+    this.shakeY = this.wobY + (knocked ? this.opts.bump.y : 0);
 
     const rgba = this.render();
     const persons = this.detections();
+    const poses = this.opts.pose ? this.poses() : undefined;
     const onsets = this.onsetQueue.filter((o) => o.t <= this.t);
     this.onsetQueue = this.onsetQueue.filter((o) => o.t > this.t);
     if (r() < this.opts.crowdNoise * dt) onsets.push({ t: this.t - r() * dt, strength: 0.2 + r() * 0.6 });
@@ -580,6 +678,7 @@ export class MatchSim {
       persons,
       onsets,
       truth: { players: this.players.map((p) => ({ ...p.pos })), shuttle: this.shuttle ? [...this.shuttle.p] : null, rallyLive: this.rallyLive },
+      poses,
     };
   }
 
@@ -622,6 +721,7 @@ export class MatchSim {
       }
     }
     for (const s of this.spectators.filter((x) => !x.seated)) this.drawPerson(b, s.pos, 1.7, s.color, [40, 40, 40], [200, 160, 130], [20, 20, 20], [50, 50, 50], null);
+    for (const p of [...this.neighbours].sort((a, c) => c.pos.y - a.pos.y)) this.drawPerson(b, p.pos, p.height, p.shirt, p.shorts, p.skin, p.hair, p.shoes, this.racketFor(p));
     // Players far to near (painter's order).
     const order = this.players.map((p, i) => ({ p, i })).sort((a, c) => c.p.pos.y - a.p.pos.y);
     const drawShuttle = () => {
@@ -659,23 +759,78 @@ export class MatchSim {
     return b;
   }
 
+  /** The box a person detector draws round a player: feet to head, the arms and the racket hand. */
+  private bodyBox(p: SimPlayer): Box {
+    const pts: Pt[] = [];
+    for (const P of [[p.pos.x - 0.25, p.pos.y, 0], [p.pos.x + 0.25, p.pos.y, 0], [p.pos.x, p.pos.y, p.height + 0.03], [p.pos.x - 0.3, p.pos.y, p.height * 0.8], [p.pos.x + 0.3, p.pos.y, p.height * 0.8]] as V3[]) {
+      const q = this.project(P);
+      if (q) pts.push(q);
+    }
+    const qh = this.project(this.racketFor(p).hand);
+    if (qh) pts.push(qh);
+    const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
+  }
+
+  /** The pose model's keypoints for one player's body (video px, before noise). */
+  private keypoints(p: SimPlayer): PoseKeypoints {
+    const { x, y } = p.pos;
+    const H = p.height;
+    const hand = this.racketFor(p).hand;
+    const sh: V3 = [x + 0.23, y, H * 0.8];
+    const pr = (P: V3): [number, number, number] => {
+      const q = this.project(P) ?? { x: NaN, y: NaN };
+      return [q.x, q.y, 0.95];
+    };
+    return {
+      shoulders: [pr([x - 0.23, y, H * 0.8]), pr(sh)],
+      elbows: [pr([x - 0.27, y - 0.03, H * 0.67]), pr([(sh[0] + hand[0]) / 2, (sh[1] + hand[1]) / 2, (sh[2] + hand[2]) / 2])],
+      wrists: [pr([x - 0.3, y - 0.05, H * 0.55]), pr(hand)],
+      hips: [pr([x - 0.12, y, H * 0.5]), pr([x + 0.12, y, H * 0.5])],
+      ankles: [pr([x - 0.13, y, 0.08]), pr([x + 0.13, y, 0.08])],
+      heels: [pr([x - 0.16, y, 0.03]), pr([x + 0.1, y, 0.03])],
+      toes: [pr([x - 0.08, y - 0.04, 0.03]), pr([x + 0.18, y - 0.04, 0.03])],
+    };
+  }
+
+  /**
+   * Keypoints as the pose model reports them on each player's crop: jitter of
+   * ~1.5 % of the body height, single points missed (low visibility), now and
+   * then no pose at all, and where a partner overlaps the crop, sometimes the
+   * partner's body instead.
+   */
+  private poses(): SimPose[] {
+    const r = this.rand2;
+    const boxes = this.players.map((p) => this.bodyBox(p));
+    const out: SimPose[] = [];
+    this.players.forEach((p, i) => {
+      if (r() < 0.05) return;
+      const box = boxes[i];
+      let src = p;
+      for (let j = 0; j < this.players.length; j++) {
+        if (j === i) continue;
+        const c = boxes[j];
+        const ix = Math.max(0, Math.min(box[0] + box[2], c[0] + c[2]) - Math.max(box[0], c[0]));
+        const iy = Math.max(0, Math.min(box[1] + box[3], c[1] + c[3]) - Math.max(box[1], c[1]));
+        if ((ix * iy) / Math.min(box[2] * box[3], c[2] * c[3]) > 0.5 && r() < 0.3) src = this.players[j];
+      }
+      const kp = this.keypoints(src);
+      const s = 0.015 * box[3];
+      const jit = (a: [number, number, number][]) => a.map(([px, py]) => [px + (r() - 0.5) * 2 * s, py + (r() - 0.5) * 2 * s, r() < 0.05 ? 0.1 : 0.9] as [number, number, number]);
+      out.push({
+        player: i,
+        box,
+        kp: { shoulders: jit(kp.shoulders), elbows: jit(kp.elbows), wrists: jit(kp.wrists), hips: jit(kp.hips), ankles: jit(kp.ankles!), heels: jit(kp.heels!), toes: jit(kp.toes!) },
+      });
+    });
+    return out;
+  }
+
   /** Person boxes as a detector would report them (jitter, misses, merged partners). */
   private detections(): Detection[] {
     const r = this.rand;
     const out: Detection[] = [];
-    const boxes = this.players.map((p) => {
-      const pts: Pt[] = [];
-      for (const P of [[p.pos.x - 0.25, p.pos.y, 0], [p.pos.x + 0.25, p.pos.y, 0], [p.pos.x, p.pos.y, p.height + 0.03], [p.pos.x - 0.3, p.pos.y, p.height * 0.8], [p.pos.x + 0.3, p.pos.y, p.height * 0.8]] as V3[]) {
-        const q = this.project(P);
-        if (q) pts.push(q);
-      }
-      const rk = this.racketFor(p).hand;
-      const qh = this.project(rk);
-      if (qh) pts.push(qh);
-      const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
-      const box: Box = [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
-      return box;
-    });
+    const boxes = this.players.map((p) => this.bodyBox(p));
     const used = new Set<number>();
     boxes.forEach((box, i) => {
       if (used.has(i)) return;
@@ -707,6 +862,15 @@ export class MatchSim {
         score: Math.max(0.3, (0.97 - dist * 0.012) * (0.75 + 0.25 * this.opts.light) - r() * 0.08),
       });
     });
+    // The neighbouring court's players: detected like ours (the engine must keep them out of our game).
+    for (const p of this.neighbours) {
+      const r2 = this.rand2;
+      if (r2() < this.opts.detectorMiss + 0.05) continue;
+      const box = this.bodyBox(p);
+      const j = (s: number) => (r2() - 0.5) * 2 * s;
+      const dist = Math.hypot(p.pos.x - this.C[0], p.pos.y - this.C[1]);
+      out.push({ box: [box[0] + j(box[3] * 0.02), box[1] + j(box[3] * 0.025), box[2] * (1 + j(0.05)), box[3] * (1 + j(0.03))], score: Math.max(0.3, 0.95 - dist * 0.012 - r2() * 0.1) });
+    }
     // Spectators get detected too (off court: the engine has to ignore them).
     for (const s of this.spectators) {
       if (r() < 0.3) continue;

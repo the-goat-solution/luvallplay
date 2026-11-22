@@ -113,7 +113,7 @@ export function renderStatsEmail(input: StatsEmailInput): { subject: string; htm
         <div style="font-family:${SANS};font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:${TEAL}">✦ AI match stats</div>
         <h1 style="margin:8px 0 14px;font-family:${SANS};font-size:26px;line-height:1.2;font-weight:900;font-style:italic;text-transform:uppercase;color:${CREAM}">Your match, by the numbers</h1>
         <p style="margin:0 0 10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${STEEL}">${greeting}</p>
-        <p style="margin:0 0 6px;font-family:${SANS};font-size:15px;line-height:1.6;color:${STEEL}"><b style="color:${CREAM}">${esc(input.recordedBy)}</b> filmed your doubles game with Wolf Vision, the Three Wolves AI tracker. It followed all four players and counted every hit. Here's how it went.</p>
+        <p style="margin:0 0 6px;font-family:${SANS};font-size:15px;line-height:1.6;color:${STEEL}"><b style="color:${CREAM}">${esc(input.recordedBy)}</b> filmed your ${input.players.length === 2 ? "singles" : "doubles"} game with Wolf Vision, the Three Wolves AI tracker. It followed ${input.players.length === 2 ? "both" : "all four"} players and counted every hit. Here's how it went.</p>
         <p style="margin:0;font-family:${SANS};font-size:13px;color:${STEEL};opacity:0.85">${esc(input.playedAt)}</p>
       </td></tr>
       <tr><td style="padding:18px 20px 6px">
@@ -161,7 +161,7 @@ export function renderStatsEmail(input: StatsEmailInput): { subject: string; htm
   const text = [
     `${first ? `Kia ora ${first},` : "Kia ora,"}`,
     "",
-    `${input.recordedBy} filmed your doubles game with Wolf Vision (${input.playedAt}).`,
+    `${input.recordedBy} filmed your ${input.players.length === 2 ? "singles" : "doubles"} game with Wolf Vision (${input.playedAt}).`,
     `${input.teams[0]} vs ${input.teams[1]}`,
     "",
     `Duration ${clock(input.duration)} · ${input.rallies} rallies · longest rally ${input.longestRally} · ${input.avgRallyShots} shots a rally · fastest shot ${fastest}`,

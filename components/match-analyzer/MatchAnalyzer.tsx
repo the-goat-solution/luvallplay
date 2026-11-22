@@ -5,11 +5,12 @@ import type { ObjectDetector } from "@mediapipe/tasks-vision";
 import { useLanguage } from "@/context/LanguageContext";
 import { formatClock, landmarkId, type CourtTap, type Pt } from "@/lib/match-analyzer";
 import { MatchEngine } from "@/lib/ma/engine";
+import { DOUBLES_SLOTS, SINGLES_SLOTS } from "@/lib/ma/identity";
 import { LENS_PRIOR, fitCamera, suspectTap, type CourtCamera, type LensPreset } from "@/lib/ma/lens";
 import type { CheckerWeights } from "@/lib/ma/checker";
 import { isTrial, trialDaysLeft } from "@/lib/wolf-vision-trial";
 import { MatchSim, type SimOptions } from "@/lib/ma/sim";
-import { scoreHits } from "@/lib/ma/simrun";
+import { scoreHits, sideOfIndex } from "@/lib/ma/simrun";
 import type { MatchSetup, SavedMatchStats } from "@/lib/match-stats-db";
 import { CourtPicker, DEFAULT_CORNERS, describePoint } from "./CourtPicker";
 import {
@@ -38,7 +39,10 @@ import s from "./analyzer.module.css";
 type Mode = "camera" | "video" | "demo";
 type Step = "start" | "setup" | "calibrate" | "track" | "summary";
 type Summary = ReturnType<MatchEngine["finish"]>;
-type DemoOpts = Required<Pick<SimOptions, "light" | "noise" | "shake" | "sameShirts" | "sameShorts" | "crowdNoise">> & { lens: LensPreset };
+type DemoOpts = Required<Pick<SimOptions, "light" | "noise" | "shake" | "sameShirts" | "sameShorts" | "crowdNoise" | "singles">> & { lens: LensPreset; neighbours: boolean };
+type Format = "doubles" | "singles";
+/** Engine slots → people: doubles near-left, near-right, far-left, far-right; singles near, far (Wolf 1 and the first of the other pair, so teams stay 0–1 vs 2–3). */
+const ORDER: Record<Format, number[]> = { doubles: [0, 1, 2, 3], singles: [0, 2] };
 
 const MAX_CANVAS = 1920;
 const COURT_KEY = "tw-match-analyzer-court-v3";
@@ -83,7 +87,13 @@ export function MatchAnalyzer({
   const [existing, setExisting] = useState<SavedMatchStats | null>(null);
   const [setupError, setSetupError] = useState<"signed_out" | "not_found" | "failed" | null>(null);
   const [people, setPeople] = useState<Wolf[]>(() => startingPeople(me));
-  const names = people.map((p, i) => (p.placeholder ? c.player(i + 1) : p.name));
+  /** Singles or doubles (Arena challenges are always doubles). */
+  const [formatChoice, setFormatChoice] = useState<Format>("doubles");
+  const format: Format = challengeId ? "doubles" : formatChoice;
+  const singles = format === "singles";
+  /** The number a player goes by ("Wolf 2" is the opponent in singles). */
+  const playerNo = (i: number) => (singles && i === 2 ? 2 : i + 1);
+  const names = people.map((p, i) => (p.placeholder ? c.player(playerNo(i)) : p.name));
   /** Player index whose "who is this?" picker is open (set-up screen). */
   const [choosing, setChoosing] = useState<number | null>(null);
   const [emailState, setEmailState] = useState<{ kind: "idle" | "sending" } | { kind: "sent" | "error"; to: string[] }>({ kind: "idle" });
@@ -175,7 +185,9 @@ export function MatchAnalyzer({
   const [summary, setSummary] = useState<Summary | null>(null);
   const [saveState, setSaveState] = useState<{ kind: "idle" | "saving" | "saved" } | { kind: "error"; code: string }>({ kind: "idle" });
   const [tick, setTick] = useState(0);
-  const [demoOpts, setDemoOpts] = useState<DemoOpts>({ light: 1, noise: 2, shake: 0, sameShirts: true, sameShorts: false, crowdNoise: 0.3, lens: "wide" });
+  /** Re-marking the court mid-match (the camera moved). */
+  const [retapping, setRetapping] = useState(false);
+  const [demoOpts, setDemoOpts] = useState<DemoOpts>({ light: 1, noise: 2, shake: 0, sameShirts: true, sameShorts: false, crowdNoise: 0.3, lens: "wide", singles: false, neighbours: false });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -328,6 +340,7 @@ export function MatchAnalyzer({
     carriedRef.current = a.totals;
     resumeAtRef.current = a.mode === "video" ? (a.videoTime ?? 0) : 0;
     setLens(a.lens);
+    if (!challengeId) setFormatChoice(a.order.length === 2 ? "singles" : "doubles");
     setOrder(a.order);
     setSound(a.sound);
     setTaps(a.taps);
@@ -368,7 +381,9 @@ export function MatchAnalyzer({
     stopEverything();
     setError(null);
     setMode("demo");
-    const sim = new MatchSim({ w: 960, h: 540, seed: Math.floor(Math.random() * 1e6), ...opts });
+    const { neighbours, ...simOpts } = opts;
+    // The pose layer is emulated too (keypoints with noise, as the model would give them).
+    const sim = new MatchSim({ w: 960, h: 540, seed: Math.floor(Math.random() * 1e6), ...simOpts, pose: true, neighbourGap: neighbours ? 1.2 : 0 });
     simRef.current = sim;
     const cv = document.createElement("canvas");
     cv.width = sim.W;
@@ -379,10 +394,11 @@ export function MatchAnalyzer({
     setTaps(t6);
     setLens(opts.lens);
     const camFit = fitCamera(t6, sim.W, sim.H, LENS_PRIOR[opts.lens])!;
-    const engine = new MatchEngine({ cam: camFit, videoW: sim.W, videoH: sim.H, courtPoints: 6, lens: opts.lens, audioOn: true });
+    const engine = new MatchEngine({ cam: camFit, videoW: sim.W, videoH: sim.H, courtPoints: 6, lens: opts.lens, audioOn: true, slots: opts.singles ? SINGLES_SLOTS : DOUBLES_SLOTS });
     pipeRef.current = new Pipeline(engine, sim.W, sim.H, null);
     srcRef.current = { kind: "sim", sim, canvas: cv };
-    setOrder([0, 1, 2, 3]);
+    if (!challengeId) setFormatChoice(opts.singles ? "singles" : "doubles");
+    setOrder(ORDER[opts.singles ? "singles" : "doubles"]);
     setSummary(null);
     setStep("track");
   };
@@ -526,7 +542,7 @@ export function MatchAnalyzer({
         .catch(() => undefined),
       new Promise<undefined>((r) => setTimeout(() => r(undefined), 2500)),
     ]);
-    const engine = new MatchEngine({ cam, videoW: d.w, videoH: d.h, courtPoints: taps.length, lens, audioOn: sound, checker: shared, autoTrain: true });
+    const engine = new MatchEngine({ cam, videoW: d.w, videoH: d.h, courtPoints: taps.length, lens, audioOn: sound, checker: shared, autoTrain: true, slots: singles ? SINGLES_SLOTS : DOUBLES_SLOTS });
     const pipe = new Pipeline(engine, d.w, d.h, det);
     pipe.realtime = mode === "camera";
     pipeRef.current = pipe;
@@ -564,6 +580,7 @@ export function MatchAnalyzer({
       v.playbackRate = 1;
       await v.play().catch(() => {});
     }
+    setRetapping(false);
     setStep("track");
     heartbeat("start");
   };
@@ -572,12 +589,13 @@ export function MatchAnalyzer({
   // added by email (not registered). Once per result; "Try again" on failure.
   const emailStatsRef = useRef<(final: Summary, again?: boolean) => void>(() => {});
   emailStatsRef.current = (final: Summary, again = false) => {
-    if (!setup && mode !== "demo" && people.some((p) => p.email)) {
-      // Per player (Wolf 1–4), whichever slot they were tracked in.
-      const players = people.map((p, i) => {
+    if (!setup && mode !== "demo" && people.some((p, i) => p.email && order.includes(i))) {
+      // Per player (Wolf 1–4, or the two in singles), whichever slot they were tracked in.
+      const inGame = people.map((p, i) => ({ p, i })).filter(({ i }) => order.includes(i));
+      const players = inGame.map(({ p, i }) => {
         const st = final.players[order.indexOf(i)];
         return {
-          name: (p.placeholder ? COPY.en.player(i + 1) : p.name).slice(0, 60),
+          name: (p.placeholder ? COPY.en.player(playerNo(i)) : p.name).slice(0, 60),
           team: (i < 2 ? 0 : 1) as 0 | 1,
           hits: st?.hits ?? 0,
           distance: Math.round((st?.distance ?? 0) * 10) / 10,
@@ -594,8 +612,8 @@ export function MatchAnalyzer({
           keepalive: true,
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            // The two pairs by name ("Tim & Anna"), not "Pack A / B".
-            teams: [0, 1].map((t) => players.slice(t * 2, t * 2 + 2).map((p) => p.name.split(" ")[0]).join(" & ").slice(0, 60)),
+            // The two sides by name ("Tim & Anna", or just "Tim" in singles), not "Pack A / B".
+            teams: [0, 1].map((t) => players.filter((p) => p.team === t).map((p) => p.name.split(" ")[0]).join(" & ").slice(0, 60)),
             duration: Math.round(final.duration),
             rallies: final.rallies,
             longestRally: final.longestRally,
@@ -609,12 +627,12 @@ export function MatchAnalyzer({
             if (r.ok && j.sent?.length) setEmailState({ kind: "sent", to: j.sent });
             else {
               emailedRef.current = "";
-              setEmailState({ kind: "error", to: people.filter((p) => p.email).map((p) => p.email!) });
+              setEmailState({ kind: "error", to: inGame.filter(({ p }) => p.email).map(({ p }) => p.email!) });
             }
           })
           .catch(() => {
             emailedRef.current = "";
-            setEmailState({ kind: "error", to: people.filter((p) => p.email).map((p) => p.email!) });
+            setEmailState({ kind: "error", to: inGame.filter(({ p }) => p.email).map(({ p }) => p.email!) });
           });
       }
     }
@@ -856,6 +874,36 @@ export function MatchAnalyzer({
     [],
   );
 
+  /**
+   * The camera moved (a knocked tripod): back to marking the court with the
+   * same points to drag into place. The numbers so far are carried over, as
+   * after a resume; the court then starts a new part of the match.
+   */
+  const retapCourt = () => {
+    const e = pipeRef.current?.engine;
+    if (!e || mode === "demo") return;
+    carriedRef.current = addTotals(carriedRef.current, e.snapshot());
+    micRef.current?.stop();
+    micRef.current = null;
+    const v = videoRef.current;
+    if (mode === "video" && v) {
+      v.pause();
+      resumeAtRef.current = v.currentTime;
+    }
+    pipeRef.current = null;
+    srcRef.current = null;
+    setPaused(false);
+    setFixOpen(false);
+    pickTarget(null);
+    setRetapping(true);
+    setStep("calibrate");
+  };
+
+  const chooseFormat = (f: Format) => {
+    setFormatChoice(f);
+    setOrder(ORDER[f]);
+  };
+
   const togglePause = () => {
     const v = videoRef.current;
     if (mode === "video" && v) {
@@ -949,6 +997,7 @@ export function MatchAnalyzer({
     setPaused(false);
     setEmailState({ kind: "idle" });
     emailedRef.current = "";
+    setRetapping(false);
   };
 
   // ── Leaving a session ─────────────────────────────────────────────────
@@ -1055,7 +1104,7 @@ export function MatchAnalyzer({
     const sim = simRef.current;
     const e = pipeRef.current.engine;
     const cut = sim.t - 0.6;
-    const sc = scoreHits(sim.hits.filter((h) => h.t < cut), e.fusion.hits.filter((h) => h.t < cut));
+    const sc = scoreHits(sim.hits.filter((h) => h.t < cut), e.fusion.hits.filter((h) => h.t < cut), 0.25, sideOfIndex(e.players));
     const f = pipeRef.current.lastSimFrame;
     let idOk = 0, idN = 0;
     if (f) {
@@ -1074,13 +1123,16 @@ export function MatchAnalyzer({
   const banner =
     step === "calibrate"
       ? cam
-        ? c.calCheck
+        ? retapping
+          ? c.retapNote
+          : c.calCheck
         : target
           ? c.calTap(taps.length + 1, describePoint(target, lang))
           : c.calMore
       : step === "track"
         ? notice ?? (fixOpen ? c.fixHint : detectorState === "loading" ? c.model : null)
         : null;
+  const cameraMoved = step === "track" && mode !== "demo" && Boolean(pipeRef.current?.engine.cameraMoved);
   const blocked = Boolean(challengeId) && !setup;
   /** A free session: Wolf 2–4 can be chosen (Wolf 1 is the signed-in player). */
   const canChoose = (i: number) => !challengeId && !(i === 0 && me);
@@ -1092,7 +1144,7 @@ export function MatchAnalyzer({
         <WolfAvatar wolf={{ name: names[i], avatarUrl: p.avatarUrl }} color={slotColors[slot]} size={36} />
         <span className={s.posText}>
           <small>
-            {slot === 0 || slot === 2 ? c.left : c.right}
+            {singles ? (slot === 0 ? c.near : c.far) : slot === 0 || slot === 2 ? c.left : c.right}
             {i === 0 && me && !challengeId ? ` · ${c.you}` : ""}
           </small>
           <b>{names[i]}</b>
@@ -1332,30 +1384,47 @@ export function MatchAnalyzer({
                 </label>
               </div>
               <div>
+                {!challengeId ? (
+                  <>
+                    <div className={s.label}>{c.format}</div>
+                    <div className={s.seg} role="group" data-testid="format">
+                      {(["doubles", "singles"] as const).map((f) => (
+                        <button key={f} type="button" aria-pressed={format === f} onClick={() => chooseFormat(f)} data-testid={`format-${f}`}>
+                          {f === "doubles" ? c.doubles : c.singles}
+                        </button>
+                      ))}
+                    </div>
+                    <p className={s.hint}>{c.formatHint}</p>
+                  </>
+                ) : null}
                 <div className={s.label}>{c.positions}</div>
                 <div className={s.positions}>
                   <div className={s.posRow}>
                     <span className={s.posSide}>{c.far}</span>
-                    {[2, 3].map((slot) => (
+                    {(singles ? [1] : [2, 3]).map((slot) => (
                       <PlayerChip key={slot} slot={slot} />
                     ))}
-                    <button type="button" className={`${s.btnGhost} ${s.swapBtn}`} onClick={() => swap(2, 3)} aria-label={c.swapPartners}>
-                      ⇄ <span className={s.swapLabel}>{c.swapPartners}</span>
-                    </button>
+                    {singles ? null : (
+                      <button type="button" className={`${s.btnGhost} ${s.swapBtn}`} onClick={() => swap(2, 3)} aria-label={c.swapPartners}>
+                        ⇄ <span className={s.swapLabel}>{c.swapPartners}</span>
+                      </button>
+                    )}
                   </div>
                   <div className={s.netLine} />
                   <div className={s.posRow}>
                     <span className={s.posSide}>{c.near}</span>
-                    {[0, 1].map((slot) => (
+                    {(singles ? [0] : [0, 1]).map((slot) => (
                       <PlayerChip key={slot} slot={slot} />
                     ))}
-                    <button type="button" className={`${s.btnGhost} ${s.swapBtn}`} onClick={() => swap(0, 1)} aria-label={c.swapPartners}>
-                      ⇄ <span className={s.swapLabel}>{c.swapPartners}</span>
-                    </button>
+                    {singles ? null : (
+                      <button type="button" className={`${s.btnGhost} ${s.swapBtn}`} onClick={() => swap(0, 1)} aria-label={c.swapPartners}>
+                        ⇄ <span className={s.swapLabel}>{c.swapPartners}</span>
+                      </button>
+                    )}
                   </div>
                   <div className={s.posCam}>📷</div>
                 </div>
-                <button type="button" className={s.btnGhost} onClick={() => setOrder((o) => [o[2], o[3], o[0], o[1]])}>
+                <button type="button" className={s.btnGhost} onClick={() => setOrder((o) => (o.length === 2 ? [o[1], o[0]] : [o[2], o[3], o[0], o[1]]))}>
                   ⇅ {c.swapEnds}
                 </button>
                 <p className={s.hint}>{challengeId ? c.positionsChallenge : c.positionsFree}</p>
@@ -1479,6 +1548,14 @@ export function MatchAnalyzer({
                 </button>
               </div>
             </div>
+            {cameraMoved ? (
+              <div className={s.notice} role="alert" data-testid="camera-moved">
+                {c.moved}{" "}
+                <button type="button" className={s.linkBtn} onClick={retapCourt} data-testid="retap">
+                  {c.retap}
+                </button>
+              </div>
+            ) : null}
             {fixOpen ? (
               <section className={s.card}>
                 <div className={s.row}>
@@ -1545,6 +1622,17 @@ export function MatchAnalyzer({
                     <label className={s.check}>
                       <input type="checkbox" checked={demoOpts.sameShorts} onChange={(ev) => setDemoOpts((o) => ({ ...o, sameShorts: ev.target.checked }))} />
                       {c.sameShorts}
+                    </label>
+                    <div className={s.seg} role="group">
+                      {([false, true] as const).map((sg) => (
+                        <button key={String(sg)} type="button" aria-pressed={demoOpts.singles === sg} onClick={() => setDemoOpts((o) => ({ ...o, singles: sg }))} data-testid={`demo-${sg ? "singles" : "doubles"}`}>
+                          {sg ? c.singles : c.doubles}
+                        </button>
+                      ))}
+                    </div>
+                    <label className={s.check}>
+                      <input type="checkbox" checked={demoOpts.neighbours} onChange={(ev) => setDemoOpts((o) => ({ ...o, neighbours: ev.target.checked }))} />
+                      {c.neighbours}
                     </label>
                     <button className={s.btn} type="button" onClick={() => startDemo(demoOpts)} data-testid="demo-restart">
                       ↻ {c.restart}
@@ -1710,6 +1798,7 @@ export function MatchAnalyzer({
       {choosing !== null ? (
         <WolfPicker
           index={choosing}
+          no={playerNo(choosing)}
           color={PLAYER_COLORS[choosing]}
           people={people}
           copy={c}

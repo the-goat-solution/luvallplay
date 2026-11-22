@@ -493,7 +493,60 @@ export type Motion = {
   cumDist: number[];
   /** m/s at each sample (0 where unknown). */
   speed: number[];
+  /** How far each raw point lies from the midpoint of its neighbours (m): the detector's jitter there (a steady run or a turn hardly adds to it). */
+  res: (number | null)[];
+  /** Distance odometer state after each sample (see odometer). */
+  odo: ({ a: Pt; t: number } | null)[];
 };
+
+/** Samples of jitter (raw vs smoothed) the odometer's dead band is sized from. */
+const ODO_WINDOW = 8;
+
+/**
+ * Distance along the smoothed path, measured like a taut string pulled
+ * through it: the odometer's anchor only moves once the path is more than R
+ * away, R being 0.8 × the jitter seen over the last few samples (median
+ * distance of a raw point from the midpoint of its neighbours, ~1.4 σ).
+ * Standing still with a jittery detector adds nothing; a run adds its length
+ * less ~2R at each turn. Summing every small step instead counted the jitter
+ * too: on the simulator that put doubles players' distance 54 % too high
+ * (singles 13 %); with the dead band +6 % and −4 %. Steps faster than a human
+ * are glitches and skipped. Recomputes from sample k0 on, continuing the state
+ * stored at k0 − 1.
+ */
+function odometer(m: Motion, k0: number): void {
+  const n = m.t.length;
+  for (let k = k0; k < n; k++) {
+    const prev = k > 0 ? m.odo[k - 1] : null;
+    const cum = k > 0 ? m.cumDist[k - 1] : 0;
+    const b = m.p[k];
+    m.cumDist[k] = cum;
+    if (!b) {
+      m.odo[k] = null;
+      continue;
+    }
+    if (!prev) {
+      m.odo[k] = { a: b, t: m.t[k] };
+      continue;
+    }
+    const rs: number[] = [];
+    for (let j = Math.max(0, k - ODO_WINDOW); j <= k; j++) if (m.res[j] !== null) rs.push(m.res[j]!);
+    rs.sort((x, y) => x - y);
+    const R = Math.min(0.3, rs.length ? 0.8 * rs[rs.length >> 1] : 0);
+    const d = dist(prev.a, b);
+    if (d <= R) {
+      m.odo[k] = { a: prev.a, t: m.t[k] };
+      continue;
+    }
+    if ((d - R) / Math.max(1e-6, m.t[k] - prev.t) > SPEED_CAP) {
+      m.odo[k] = prev; // a glitch: not a step
+      continue;
+    }
+    const f = (d - R) / d;
+    m.odo[k] = { a: { x: prev.a.x + (b.x - prev.a.x) * f, y: prev.a.y + (b.y - prev.a.y) * f }, t: m.t[k] };
+    m.cumDist[k] = cum + (d - R);
+  }
+}
 
 export function computeMotion(times: number[], track: (TrackPoint | null)[]): Motion {
   const n = times.length;
@@ -531,16 +584,10 @@ export function computeMotion(times: number[], track: (TrackPoint | null)[]): Mo
 
   const cumDist: number[] = new Array(n).fill(0);
   const speed: number[] = new Array(n).fill(0);
-  for (let k = 1; k < n; k++) {
-    cumDist[k] = cumDist[k - 1];
-    const a = smooth[k - 1];
-    const b = smooth[k];
-    const dt = times[k] - times[k - 1];
-    if (!a || !b || dt <= 0) continue;
-    const d = dist(a, b);
-    // Ignore sub-centimetre drift and anything faster than a human.
-    if (d >= 0.02 && d / dt <= SPEED_CAP) cumDist[k] += d;
-  }
+  const res = p.map((q, k) => {
+    const a = p[k - 1], b = p[k + 1];
+    return q && a && b ? dist(q, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }) : null;
+  });
   for (let k = 0; k < n; k++) {
     const a = smooth[k - 1];
     const b = smooth[k + 1];
@@ -549,7 +596,9 @@ export function computeMotion(times: number[], track: (TrackPoint | null)[]): Mo
     const v = dt > 0 ? dist(a, b) / dt : 0;
     speed[k] = v <= SPEED_CAP ? v : 0;
   }
-  return { t: times, p: smooth, box, cumDist, speed };
+  const m: Motion = { t: times, p: smooth, box, cumDist, speed, res, odo: new Array(n).fill(null) };
+  odometer(m, 0);
+  return m;
 }
 
 const lerp = (a: number, b: number, f: number) => a + (b - a) * f;
@@ -599,7 +648,7 @@ export function movementBetween(m: Motion, t0: number, t1: number): { distance: 
  * so it gives the same numbers as computeMotion over the full track.
  */
 export class MotionTracker {
-  readonly motion: Motion = { t: [], p: [], box: [], cumDist: [], speed: [] };
+  readonly motion: Motion = { t: [], p: [], box: [], cumDist: [], speed: [], res: [], odo: [] };
   private raw: (TrackPoint | null)[] = [];
   /** Samples before this index can no longer change. */
   private settled = 0;
@@ -615,14 +664,15 @@ export class MotionTracker {
     while (ws > 0 && m.t[ws - 1] >= from - (MAX_GAP + 0.2)) ws--;
     ws = Math.max(0, ws - 4);
     const part = computeMotion(m.t.slice(ws), this.raw.slice(ws));
-    const anchor = this.settled - 1;
-    const base = anchor >= ws ? m.cumDist[anchor] - part.cumDist[anchor - ws] : 0;
-    for (let k = Math.max(this.settled, ws); k < n; k++) {
+    const k0 = Math.max(this.settled, ws);
+    for (let k = k0; k < n; k++) {
       m.p[k] = part.p[k - ws];
       m.box[k] = part.box[k - ws];
       m.speed[k] = part.speed[k - ws];
-      m.cumDist[k] = base + part.cumDist[k - ws];
+      m.res[k] = part.res[k - ws];
     }
+    // The odometer carries on from the last settled sample's state.
+    odometer(m, k0);
     // A sample is final once a later point can no longer bridge a gap next to it.
     while (this.settled + 3 < n && m.t[this.settled + 3] < t - (MAX_GAP + 0.1)) this.settled++;
   }

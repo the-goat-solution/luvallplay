@@ -49,7 +49,7 @@ export type ShuttleOptions = {
  * head, where contacts happen. Crowded blobs (a body breaking into fragments
  * in the difference image) score low; a shuttle in flight is isolated.
  */
-export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], frameArea: number, background?: BackgroundActivity): Candidate[] {
+export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], frameArea: number, background?: BackgroundActivity, others: Box[] = []): Candidate[] {
   const maxArea = Math.max(6, frameArea * 0.00045);
   // Analysis-frame pixel scale (sizes below were set on a 640-wide frame).
   const k = Math.sqrt(frameArea / (640 * 360));
@@ -74,6 +74,9 @@ export function shuttleCandidates(blobs: Blob[], scale: number, players: Box[], 
       break;
     }
     if (onBody) continue;
+    // Anyone who is not one of our players (the next court, a passer-by) is masked whole:
+    // their arms and racket are not where our shuttle is hit.
+    if (others.some(([px, py, pw, ph]) => x > px - 0.08 * pw && x < px + 1.08 * pw && y > py - 0.02 * ph && y < py + 1.06 * ph)) continue;
     // Other motion nearby (in analysis pixels): fragments of a moving body or a waving net.
     let crowd = 0;
     for (const o of blobs) {

@@ -1,4 +1,6 @@
 "use client";
+import QRCode from "qrcode";
+import jsQR from "jsqr";
 import { isTrial } from "@/lib/wolf-vision-trial";
 
 import {
@@ -31,8 +33,6 @@ import s from "./arena.module.css";
 
 type Tone = "c" | "t" | "y";
 type Screen =
-  | { kind: "checkinShow"; id: number; code: string; expiresAt: string }
-  | { kind: "checkinEnter"; id: number }
   | { kind: "score"; id: number }
   | null;
 
@@ -293,6 +293,23 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
     [errorText, showToast, t],
   );
 
+  // Opened from an invite link (?join=<code>): pair up straight away.
+  const joinRan = useRef(false);
+  useEffect(() => {
+    if (joinRan.current) return;
+    const url = new URL(window.location.href);
+    const joinCode = url.searchParams.get("join");
+    if (!joinCode) return;
+    joinRan.current = true;
+    url.searchParams.delete("join");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    if (!initial.me) return;
+    if (initial.me.pair && !confirm(t("replaces_pair"))) return;
+    void act({ action: "pair_join", code: joinCode }).then((r) => {
+      if (r.ok) showToast(t("joined"));
+    });
+  }, [act, initial.me, showToast, t]);
+
   const me = state.me;
   const mine = state.mine;
   const versusPending = mine.find(
@@ -318,42 +335,7 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
   };
 
   let overlay: ReactNode = null;
-  if (screen?.kind === "checkinShow") {
-    const c = mine.find((x) => x.id === screen.id);
-    if (c && c.status === "accepted")
-      overlay = (
-        <CheckinShow
-          c={c}
-          code={screen.code}
-          expiresAt={screen.expiresAt}
-          onNew={async () => {
-            const r = await act({ action: "checkin_code", id: c.id });
-            if (r.ok && r.code)
-              setScreen({
-                kind: "checkinShow",
-                id: c.id,
-                code: r.code.code,
-                expiresAt: r.code.expiresAt,
-              });
-          }}
-          onClose={() => setScreen(null)}
-        />
-      );
-  } else if (screen?.kind === "checkinEnter") {
-    const c = mine.find((x) => x.id === screen.id);
-    if (c && c.status === "accepted")
-      overlay = (
-        <CheckinEnter
-          c={c}
-          busy={busy}
-          onSubmit={async (code) => {
-            const r = await act({ action: "checkin", id: c.id, code });
-            if (r.ok) setScreen(null);
-          }}
-          onClose={() => setScreen(null)}
-        />
-      );
-  } else if (screen?.kind === "score") {
+  if (screen?.kind === "score") {
     const c = mine.find((x) => x.id === screen.id);
     if (c && c.status === "live")
       overlay = (
@@ -413,19 +395,6 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
                     busy={busy}
                     act={act}
                     minMinutes={state.minGameMinutes}
-                    onCheckinShow={async () => {
-                      const r = await act({ action: "checkin_code", id: c.id });
-                      if (r.ok && r.code)
-                        setScreen({
-                          kind: "checkinShow",
-                          id: c.id,
-                          code: r.code.code,
-                          expiresAt: r.code.expiresAt,
-                        });
-                    }}
-                    onCheckinEnter={() =>
-                      setScreen({ kind: "checkinEnter", id: c.id })
-                    }
                     onScore={() => setScreen({ kind: "score", id: c.id })}
                   />
                 ))}
@@ -638,6 +607,99 @@ function MePanel({
   return <PairPanel state={state} busy={busy} act={act} />;
 }
 
+function QrScanner({
+  onCode,
+  onClose,
+}: {
+  onCode: (code: string) => void;
+  onClose: () => void;
+}) {
+  const { t } = useArenaT();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    let raf = 0;
+    let done = false;
+    const canvas = document.createElement("canvas");
+    const tick = () => {
+      const v = videoRef.current;
+      if (done || !v) return;
+      if (v.readyState >= 2 && v.videoWidth) {
+        const w = Math.min(640, v.videoWidth);
+        const h = Math.round((v.videoHeight * w) / v.videoWidth);
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, w, h);
+          const hit = jsQR(ctx.getImageData(0, 0, w, h).data, w, h);
+          const m = hit?.data.match(/[?&]join=(\d{12})\b/);
+          if (m) {
+            done = true;
+            onCode(m[1]);
+            return;
+          }
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode: "environment" } })
+      .then((st) => {
+        if (done) {
+          st.getTracks().forEach((x) => x.stop());
+          return;
+        }
+        stream = st;
+        const v = videoRef.current;
+        if (v) {
+          v.srcObject = st;
+          void v.play();
+        }
+        raf = requestAnimationFrame(tick);
+      })
+      .catch(() => setErr(true));
+    if (!navigator.mediaDevices) setErr(true);
+    return () => {
+      done = true;
+      cancelAnimationFrame(raf);
+      stream?.getTracks().forEach((x) => x.stop());
+    };
+  }, [onCode]);
+  return (
+    <div>
+      {err ? (
+        <p className={s.hint}>{t("scan_denied")}</p>
+      ) : (
+        <>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            style={{
+              width: "100%",
+              maxWidth: 320,
+              aspectRatio: "1 / 1",
+              objectFit: "cover",
+              display: "block",
+              margin: "10px auto",
+              borderRadius: 12,
+              background: "#000",
+            }}
+          />
+          <p className={s.hint}>{t("scan_hint")}</p>
+        </>
+      )}
+      <div className={s.row} style={{ justifyContent: "center" }}>
+        <button className={s.link} onClick={onClose}>
+          {t("cancel")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TeamUp({
   state,
   busy,
@@ -648,13 +710,58 @@ function TeamUp({
   act: Act;
 }) {
   const { t } = useArenaT();
-  const [mode, setMode] = useState<"show" | "enter" | null>(null);
+  const [mode, setMode] = useState<
+    "qr" | "scan" | "show" | "enter" | "more" | null
+  >(null);
   const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(
     null,
   );
   const [typed, setTyped] = useState("");
+  const [qr, setQr] = useState<{ img: string; url: string } | null>(null);
+  const [showLink, setShowLink] = useState(false);
+  const [copied, setCopied] = useState(false);
   const left = useCountdown(code?.expiresAt ?? null);
   const me = state.me!;
+
+  const makeQr = async () => {
+    const r = await act({ action: "pair_invite" });
+    if (r.ok && r.code) {
+      const url = `${window.location.origin}/profile/arena?join=${r.code.code}`;
+      const img = await QRCode.toDataURL(url, {
+        margin: 1,
+        width: 440,
+        errorCorrectionLevel: "M",
+      });
+      setQr({ img, url });
+      setShowLink(false);
+      setCopied(false);
+      setMode("qr");
+    }
+  };
+  const shareLink = async () => {
+    if (!qr) return;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ text: t("invite_text"), url: qr.url });
+        return;
+      } catch {
+        // dismissed: fall through to copy
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(qr.url);
+      setCopied(true);
+    } catch {
+      // the link stays visible to copy by hand
+    }
+  };
+  const scanned = useCallback(
+    async (joinCode: string) => {
+      const r = await act({ action: "pair_join", code: joinCode });
+      setMode(r.ok ? null : "more");
+    },
+    [act],
+  );
 
   const show = async () => {
     setMode("show");
@@ -688,7 +795,59 @@ function TeamUp({
       <p className={s.muted} style={{ marginTop: 4 }}>
         {t("team_body")}
       </p>
-      {mode === "show" && code ? (
+      {mode === "qr" && qr ? (
+        <>
+          <p className={s.hint}>{t("invite_ready")}</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={qr.img}
+            alt={t("invite_btn")}
+            width={220}
+            height={220}
+            style={{
+              display: "block",
+              margin: "10px auto",
+              borderRadius: 12,
+              background: "#fff",
+            }}
+          />
+          {showLink ? (
+            <>
+              <input
+                className={s.field}
+                readOnly
+                value={qr.url}
+                onFocus={(e) => e.target.select()}
+                aria-label={t("invite_link")}
+              />
+              <div
+                className={s.row}
+                style={{ justifyContent: "center", marginTop: 8 }}
+              >
+                <button
+                  className={`${s.btn} ${s.btnGhost}`}
+                  onClick={shareLink}
+                >
+                  {copied ? t("invite_copied") : t("invite_share")}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className={s.row} style={{ justifyContent: "center" }}>
+              <button className={s.link} onClick={() => setShowLink(true)}>
+                {t("invite_link_instead")}
+              </button>
+            </div>
+          )}
+          <div className={s.row} style={{ justifyContent: "center" }}>
+            <button className={s.link} onClick={() => setMode(null)}>
+              {t("cancel")}
+            </button>
+          </div>
+        </>
+      ) : mode === "scan" ? (
+        <QrScanner onCode={scanned} onClose={() => setMode(null)} />
+      ) : mode === "show" && code ? (
         <>
           <CodeTiles code={code.code} />
           {left > 0 ? (
@@ -752,22 +911,48 @@ function TeamUp({
           </button>
         </form>
       ) : (
-        <div className={s.yn} style={{ display: "grid", marginTop: 14 }}>
-          <button
-            className={`${s.btn} ${s.btnYellow}`}
-            disabled={busy}
-            onClick={show}
-          >
-            {t("show_code")}
-          </button>
-          <button
-            className={`${s.btn} ${s.btnTeal}`}
-            disabled={busy}
-            onClick={() => setMode("enter")}
-          >
-            {t("enter_code")}
-          </button>
-        </div>
+        <>
+          <div className={s.yn} style={{ display: "grid", marginTop: 14 }}>
+            <button
+              className={`${s.btn} ${s.btnYellow}`}
+              disabled={busy}
+              onClick={makeQr}
+            >
+              {t("invite_btn")}
+            </button>
+            <button
+              className={`${s.btn} ${s.btnTeal}`}
+              disabled={busy}
+              onClick={() => setMode("scan")}
+            >
+              {t("scan_btn")}
+            </button>
+          </div>
+          {mode === "more" ? (
+            <div className={s.yn} style={{ display: "grid", marginTop: 10 }}>
+              <button
+                className={`${s.btn} ${s.btnGhost}`}
+                disabled={busy}
+                onClick={show}
+              >
+                {t("show_code")}
+              </button>
+              <button
+                className={`${s.btn} ${s.btnGhost}`}
+                disabled={busy}
+                onClick={() => setMode("enter")}
+              >
+                {t("enter_code")}
+              </button>
+            </div>
+          ) : (
+            <div className={s.row} style={{ justifyContent: "center" }}>
+              <button className={s.link} onClick={() => setMode("more")}>
+                {t("other_ways")}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -889,7 +1074,8 @@ function PairPanel({
         <>
           <button
             className={`${s.cta} ${s.ctaBounce}`}
-            onClick={() => setComposing(true)}
+            disabled={busy}
+            onClick={() => act({ action: "post", days: 3, note: "" })}
           >
             <span>
               <svg
@@ -910,10 +1096,17 @@ function PairPanel({
             </span>
           </button>
           <p className={s.hint}>{t("throw_hint")}</p>
+          <button
+            type="button"
+            className={s.link}
+            onClick={() => setComposing(true)}
+          >
+            {t("post_options")}
+          </button>
         </>
       )}
 
-      {!busyGame && (
+      {(
         <div
           className={s.row}
           style={{ marginTop: 10, justifyContent: "center", gap: 18 }}
@@ -942,9 +1135,11 @@ function PairPanel({
             </form>
           ) : (
             <>
-              <button className={s.link} onClick={() => setRenaming(true)}>
-                {t("name_pair")}
-              </button>
+              {!busyGame && (
+                <button className={s.link} onClick={() => setRenaming(true)}>
+                  {t("name_pair")}
+                </button>
+              )}
               <button
                 className={s.link}
                 onClick={() => {
@@ -1240,16 +1435,12 @@ function MyChallenge({
   busy,
   act,
   minMinutes,
-  onCheckinShow,
-  onCheckinEnter,
   onScore,
 }: {
   c: ChallengeView;
   busy: boolean;
   act: Act;
   minMinutes: number;
-  onCheckinShow: () => void;
-  onCheckinEnter: () => void;
   onScore: () => void;
 }) {
   const { t } = useArenaT();
@@ -1264,33 +1455,19 @@ function MyChallenge({
     : c.scorePosting !== null && c.scoreAccepting !== null
       ? `${c.scorePosting}–${c.scoreAccepting}`
       : "";
-  const mins = c.checkedInAt
-    ? (Date.now() - Date.parse(c.checkedInAt)) / 60000
-    : 0;
-
   let body: ReactNode = null;
   if (c.status === "accepted") {
     body = (
       <>
         {t("st_accepted")}
         <div className={s.row}>
-          {c.mySide === "accepting" ? (
-            <button
-              className={`${s.btn} ${s.btnYellow}`}
-              disabled={busy}
-              onClick={onCheckinShow}
-            >
-              {t("were_here")}
-            </button>
-          ) : (
-            <button
-              className={`${s.btn} ${s.btnYellow}`}
-              disabled={busy}
-              onClick={onCheckinEnter}
-            >
-              {t("were_here")}
-            </button>
-          )}
+          <button
+            className={`${s.btn} ${s.btnYellow}`}
+            disabled={busy}
+            onClick={() => act({ action: "checkin_now", id: c.id })}
+          >
+            {t("were_here")}
+          </button>
           <button
             className={`${s.btn} ${s.btnGhost}`}
             disabled={busy}
@@ -1313,15 +1490,17 @@ function MyChallenge({
           >
             {t("score_title")}
           </button>
-          {mins < minMinutes && (
-            <span className={s.muted}>
-              {t("score_wait", { n: minMinutes })}
-            </span>
-          )}
           <a className={`${s.btn} ${s.btnGhost}`} href={`/profile/wolf-vision?challenge=${c.id}`} style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
             {t("rec_stats")}
             {isTrial() ? <em className={s.freeBadge}>{t("rec_stats_free")}</em> : null}
           </a>
+          <button
+            className={`${s.btn} ${s.btnGhost}`}
+            disabled={busy}
+            onClick={() => act({ action: "call_off", id: c.id })}
+          >
+            {t("call_off")}
+          </button>
         </div>
       </>
     );
@@ -1516,114 +1695,6 @@ function Versus({ c, onGo, onMinimize }: { c: ChallengeView; onGo: () => void; o
   );
 }
 
-function CheckinShow({
-  c,
-  code,
-  expiresAt,
-  onNew,
-  onClose,
-}: {
-  c: ChallengeView;
-  code: string;
-  expiresAt: string;
-  onNew: () => void;
-  onClose: () => void;
-}) {
-  const { t } = useArenaT();
-  const left = useCountdown(expiresAt);
-  const them = c.posting;
-  useEffect(() => {
-    if (left === 0) onNew();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [left === 0]);
-  return (
-    <div className={s.screen}>
-      <button className={s.close} onClick={onClose} aria-label={t("cancel")}>
-        ×
-      </button>
-      <h2 className={s.screenTitle}>{t("checkin_title")}</h2>
-      <p className={s.lead}>
-        {t("checkin_read", { names: firstNames(them, "/") })}
-      </p>
-      <CodeTiles code={code} />
-      <Ring ms={left} total={120_000} />
-      <p className={s.hint}>{t("only_this")}</p>
-      <div className={s.bottom}>
-        <div className={s.mini} style={{ justifyContent: "center" }}>
-          <Duo pair={c.posting} tone="c" size="sm" />
-          <span className={s.muted}>vs</span>
-          {c.accepting && <Duo pair={c.accepting} tone="t" size="sm" />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CheckinEnter({
-  c,
-  busy,
-  onSubmit,
-  onClose,
-}: {
-  c: ChallengeView;
-  busy: boolean;
-  onSubmit: (code: string) => void;
-  onClose: () => void;
-}) {
-  const { t } = useArenaT();
-  const [code, setCode] = useState("");
-  const them = c.accepting!;
-  return (
-    <form
-      className={s.screen}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit(code);
-      }}
-    >
-      <button
-        type="button"
-        className={s.close}
-        onClick={onClose}
-        aria-label={t("cancel")}
-      >
-        ×
-      </button>
-      <h2 className={s.screenTitle}>{t("checkin_title")}</h2>
-      <p className={s.lead}>
-        {t("checkin_ask", { names: firstNames(them, "/") })}
-      </p>
-      <label
-        className={s.label}
-        htmlFor="checkin-code"
-        style={{ textAlign: "center", marginTop: 24 }}
-      >
-        {t("checkin_type")}
-      </label>
-      <input
-        id="checkin-code"
-        className={s.codeInput}
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        maxLength={5}
-        value={code}
-        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
-        autoFocus
-      />
-      <p className={s.hint}>{t("only_this")}</p>
-      <div className={s.bottom}>
-        <button
-          className={s.cta}
-          disabled={busy || code.length !== 5}
-          type="submit"
-        >
-          <span>{t("checkin_btn")}</span>
-        </button>
-      </div>
-    </form>
-  );
-}
-
 function ScoreEntry({
   c,
   busy,
@@ -1645,10 +1716,6 @@ function ScoreEntry({
   const them = c.mySide === "posting" ? c.accepting! : c.posting;
   const clamp = (n: number) =>
     Math.max(0, Math.min(30, Number.isFinite(n) ? Math.round(n) : 0));
-  const elapsed = c.checkedInAt
-    ? (Date.now() - Date.parse(c.checkedInAt)) / 60000
-    : 0;
-  const tooSoon = elapsed < minMinutes;
   const Team = ({
     pair,
     tone,
@@ -1700,7 +1767,7 @@ function ScoreEntry({
       </button>
       <h2 className={s.screenTitle}>{t("score_title")}</h2>
       <p className={s.lead}>
-        {tooSoon ? t("score_wait", { n: minMinutes }) : t("st_live")}
+        {t("st_live")}
       </p>
       <div className={s.board}>
         <Team
@@ -1729,7 +1796,7 @@ function ScoreEntry({
       <div className={s.bottom}>
         <button
           className={s.cta}
-          disabled={busy || !valid || tooSoon}
+          disabled={busy || !valid}
           onClick={() =>
             onSubmit({ action: "score", posting: a, accepting: b })
           }
@@ -1740,7 +1807,7 @@ function ScoreEntry({
           <div className={s.yn} style={{ display: "grid", marginTop: 12 }}>
             <button
               className={`${s.btn} ${s.btnGhost}`}
-              disabled={busy || tooSoon}
+              disabled={busy}
               onClick={() =>
                 onSubmit({ action: "retired", retiredBy: c.mySide })
               }
@@ -1749,7 +1816,7 @@ function ScoreEntry({
             </button>
             <button
               className={`${s.btn} ${s.btnGhost}`}
-              disabled={busy || tooSoon}
+              disabled={busy}
               onClick={() =>
                 onSubmit({
                   action: "retired",

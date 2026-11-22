@@ -651,13 +651,20 @@ async function recordFailedAttempt(playerId: number): Promise<void> {
   await sql.query(`DELETE FROM ${T.attempts} WHERE at < NOW() - INTERVAL '1 day';`);
 }
 
-async function issueCode(purpose: "pair" | "checkin", ownerId: number, challengeId: number | null): Promise<{ code: string; expiresAt: string }> {
+async function issueCode(
+  purpose: "pair" | "checkin",
+  ownerId: number,
+  challengeId: number | null,
+  opts: { digits?: number; ttlSeconds?: number } = {},
+): Promise<{ code: string; expiresAt: string }> {
+  const digits = opts.digits ?? 5;
+  const ttl = opts.ttlSeconds ?? CODE_TTL_SECONDS;
   await sql.query(
     `UPDATE ${T.codes} SET status = 'replaced' WHERE owner_id = $1 AND purpose = $2 AND status = 'live' AND coalesce(challenge_id, 0) = $3;`,
     [ownerId, purpose, challengeId ?? 0],
   );
   for (let i = 0; i < 8; i++) {
-    const code = String(crypto.randomInt(10000, 100000));
+    const code = String(crypto.randomInt(10 ** (digits - 1), 10 ** digits));
     const hash = codeHash(purpose, code);
     const clash = await sql.query(
       `SELECT 1 FROM ${T.codes} WHERE purpose = $1 AND code_hash = $2 AND status IN ('live', 'requested') AND expires_at > NOW();`,
@@ -667,7 +674,7 @@ async function issueCode(purpose: "pair" | "checkin", ownerId: number, challenge
     const { rows } = await sql.query(
       `INSERT INTO ${T.codes} (purpose, code_hash, owner_id, challenge_id, expires_at)
        VALUES ($1, $2, $3, $4, NOW() + ($5 * INTERVAL '1 second')) RETURNING expires_at;`,
-      [purpose, hash, ownerId, challengeId, CODE_TTL_SECONDS],
+      [purpose, hash, ownerId, challengeId, ttl],
     );
     return { code, expiresAt: new Date(rows[0].expires_at).toISOString() };
   }
@@ -742,6 +749,11 @@ export async function respondPairRequest(ownerId: number, accept: boolean): Prom
     await sql.query(`UPDATE ${T.codes} SET status = 'declined' WHERE id = $1;`, [rows[0].id]);
     return;
   }
+  await makePair(ownerId, requesterId, rows[0].id);
+}
+
+/** Creates the pair (ending any current pair of either player) and marks the code used. */
+async function makePair(ownerId: number, requesterId: number, codeId: number): Promise<void> {
   const world = await loadWorld();
   for (const p of [ownerId, requesterId]) {
     const pair = world.activePairOf.get(p);
@@ -760,7 +772,7 @@ export async function respondPairRequest(ownerId: number, accept: boolean): Prom
       [lo, hi],
     );
     await client.query(`INSERT INTO ${T.members} (pair_id, player_id) VALUES ($1, $2), ($1, $3);`, [made[0].id, lo, hi]);
-    await client.query(`UPDATE ${T.codes} SET status = 'accepted' WHERE id = $1;`, [rows[0].id]);
+    await client.query(`UPDATE ${T.codes} SET status = 'accepted' WHERE id = $1;`, [codeId]);
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
@@ -771,11 +783,56 @@ export async function respondPairRequest(ownerId: number, accept: boolean): Prom
   }
 }
 
+const INVITE_DIGITS = 12;
+const INVITE_TTL_SECONDS = 24 * 3600;
+
+/** A shareable link code: whoever opens it while signed in is paired with the sender straight away. */
+export async function createPairInvite(playerId: number): Promise<{ code: string; expiresAt: string }> {
+  await ensureArenaTables();
+  return issueCode("pair", playerId, null, { digits: INVITE_DIGITS, ttlSeconds: INVITE_TTL_SECONDS });
+}
+
+export async function joinPairInvite(playerId: number, raw: string): Promise<void> {
+  await ensureArenaTables();
+  await checkAttempts(playerId);
+  const code = cleanCode(raw);
+  if (code.length !== INVITE_DIGITS) throw new ArenaError("bad_code");
+  const { rows } = await sql.query(
+    `SELECT id, owner_id FROM ${T.codes} WHERE purpose = 'pair' AND code_hash = $1 AND status = 'live' AND expires_at > NOW() ORDER BY id DESC LIMIT 1;`,
+    [codeHash("pair", code)],
+  );
+  if (!rows.length) {
+    await recordFailedAttempt(playerId);
+    throw new ArenaError("bad_code");
+  }
+  if (rows[0].owner_id === playerId) throw new ArenaError("own_code");
+  const world = await loadWorld();
+  const mine = world.activePairOf.get(playerId);
+  if (mine && mine.players.includes(rows[0].owner_id as number)) return; // already partners
+  await makePair(rows[0].owner_id as number, playerId, rows[0].id as number);
+}
+
+export async function checkInNow(playerId: number, id: number): Promise<void> {
+  const c = await getChallenge(id);
+  if (!participantSide(c, playerId)) throw new ArenaError("not_yours");
+  if (c.status !== "accepted") throw new ArenaError("not_accepted");
+  await sql.query(
+    `UPDATE ${T.challenges} SET status = 'live', checked_in_at = NOW(), played_on = $2 WHERE id = $1 AND status = 'accepted';`,
+    [id, getClubToday().dateKey],
+  );
+}
+
 export async function leavePair(playerId: number): Promise<void> {
   const world = await loadWorld();
   const pair = world.activePairOf.get(playerId);
   if (!pair) return;
-  if (busyChallengeFor(world, pair.id)) throw new ArenaError("pair_busy");
+  // Splitting is allowed any time: games not yet scored (accepted / live) are cancelled;
+  // ones already awaiting confirmation or disputed are left to resolve normally.
+  await sql.query(
+    `UPDATE ${T.challenges} SET status = 'cancelled', called_off_by = $2
+       WHERE (posting_pair = $1 OR accepting_pair = $1) AND status IN ('accepted', 'live');`,
+    [pair.id, playerId],
+  );
   await endPair(sql, pair.id, "unpaired");
 }
 
@@ -875,36 +932,7 @@ export async function acceptChallenge(playerId: number, id: number): Promise<voi
 export async function callOffChallenge(playerId: number, id: number): Promise<void> {
   const c = await getChallenge(id);
   if (!participantSide(c, playerId)) throw new ArenaError("not_yours");
-  await sql.query(`UPDATE ${T.challenges} SET status = 'cancelled', called_off_by = $2 WHERE id = $1 AND status = 'accepted';`, [id, playerId]);
-}
-
-export async function checkinCode(playerId: number, id: number): Promise<{ code: string; expiresAt: string }> {
-  const c = await getChallenge(id);
-  if (participantSide(c, playerId) !== "accepting") throw new ArenaError("not_yours");
-  if (c.status !== "accepted") throw new ArenaError("not_accepted");
-  return issueCode("checkin", playerId, id);
-}
-
-export async function checkIn(playerId: number, id: number, raw: string): Promise<void> {
-  const c = await getChallenge(id);
-  if (participantSide(c, playerId) !== "posting") throw new ArenaError("not_yours");
-  if (c.status !== "accepted") throw new ArenaError("not_accepted");
-  await checkAttempts(playerId);
-  const code = cleanCode(raw);
-  const { rows } = await sql.query(
-    `UPDATE ${T.codes} SET status = 'used', consumed_by = $3, consumed_at = NOW()
-     WHERE purpose = 'checkin' AND challenge_id = $1 AND code_hash = $2 AND status = 'live' AND expires_at > NOW()
-     RETURNING id;`,
-    [id, codeHash("checkin", code), playerId],
-  );
-  if (!rows.length) {
-    await recordFailedAttempt(playerId);
-    throw new ArenaError("bad_code");
-  }
-  await sql.query(
-    `UPDATE ${T.challenges} SET status = 'live', checked_in_at = NOW(), played_on = $2 WHERE id = $1 AND status = 'accepted';`,
-    [id, getClubToday().dateKey],
-  );
+  await sql.query(`UPDATE ${T.challenges} SET status = 'cancelled', called_off_by = $2 WHERE id = $1 AND status IN ('accepted', 'live');`, [id, playerId]);
 }
 
 export async function enterScore(
@@ -915,7 +943,6 @@ export async function enterScore(
   const c = await getChallenge(id);
   if (!participantSide(c, playerId)) throw new ArenaError("not_yours");
   if (c.status !== "live") throw new ArenaError("not_live");
-  if (Date.now() - Date.parse(c.checkedInAt!) < MIN_GAME_MINUTES * 60_000) throw new ArenaError("too_soon");
   if ("retiredBy" in input) {
     await sql.query(
       `UPDATE ${T.challenges} SET status = 'awaiting', retired_by = $2, score_posting = NULL, score_accepting = NULL,

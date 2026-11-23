@@ -3,6 +3,9 @@ import { AdminShell } from "@/components/admin/shell/AdminShell";
 import { NAV_GROUPS, type BadgeKey, type NavGroup } from "@/components/admin/nav-config";
 import { canOpenAdminPage, currentAdmin } from "@/lib/admin-access";
 import { attentionCount } from "@/lib/admin-attention";
+import { enabledModules } from "@/lib/club-modules";
+import { sql } from "@/lib/database";
+import { blockedByModule } from "@luvallplay/modules";
 
 // Every admin page (except the app handoff) sits
 // in this frame: the grouped sidebar, badges for what needs attention, and
@@ -10,7 +13,9 @@ import { attentionCount } from "@/lib/admin-attention";
 export default async function AdminConsoleLayout({ children }: { children: ReactNode }) {
   const ctx = await currentAdmin().catch(() => null);
   // Each person sees the pages their role opens (coaches: play pages).
-  const allowed = (href: string) => canOpenAdminPage(ctx, href);
+  // …and only pages whose module is switched on for the club.
+  const modulesOn = await enabledModules(sql);
+  const allowed = (href: string) => canOpenAdminPage(ctx, href) && !blockedByModule(href, modulesOn);
   const groups: NavGroup[] = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => allowed(i.href)) })).filter(
     (g) => g.items.length > 0,
   );

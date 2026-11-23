@@ -207,8 +207,8 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 | 7 | The booking clock (time zone, booking window, cut-off hour): the date helpers take it; the booking rule and the Me page pass the club's | Built |
 | 8 | Membership cycle lengths in the renewal SQL, the Stripe sync and the free month | Built |
 | 9 | Client components read the club's public settings from a provider (capacity, mini-game cap, the booking clock) | Live (#107) |
-| 10 | The club's clock passed at every async call site of the date helpers (about 40); 11 plain helpers stay on the built-in clock, pinned by a test | Built |
-| 11 | The club's own terms leave the shared dictionaries: "Wolf Points", "Wolf Vision" and the Vietnamese "Điểm Sói" are placeholders, filled per language from the club's settings. Migration `0008_terms_localized` adds the Vietnamese name to Three Wolves' row (one production data run) | Built and rehearsed |
+| 10 | The club's clock passed at every async call site of the date helpers (about 40); 11 plain helpers stay on the built-in clock, pinned by a test | Merged (#112) |
+| 11 | The club's own terms leave the shared dictionaries: "Wolf Points", "Wolf Vision" and the Vietnamese "Điểm Sói" are placeholders, filled per language from the club's settings. Migration `0008_terms_localized` adds the Vietnamese name to Three Wolves' row | **Done.** Production data run passed (23 Nov, 20:23 UTC): 17 accounts, 0 problems, no drift. The restore point was `rehearsal-phase-3`, reset to a fresh copy of production just before, because the Neon branch limit left no room for a new one. Merged (#112) |
 
 **Still to build in step 4:** the time zone, booking window and cut-off read from the settings at run time (server and client); membership days and cycle lengths; the "Wolf" terms in the translated strings; capacity in the admin pages and client components; and the crons, emails, webhooks and API becoming club-scoped.
 

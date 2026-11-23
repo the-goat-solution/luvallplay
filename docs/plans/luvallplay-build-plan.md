@@ -23,12 +23,12 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **N: bring your own brand.** Clubs can import their own logo, font and colour palette, or pull them from their existing website (§6.3.2).
 - **O: online payments only for incorporated clubs with their own Stripe account.** Setup asks both questions; every other paying club is set up for cash and bank transfer only, with an admin area built for that (§6.2.2). Three Wolves never collects or passes on money for other clubs (Stripe forbids it, and it would make the collector a regulated money-transfer business under NZ's AML/CFT Act).
 - **P: a small core admin; everything else is a module.** The core is only what a free, no-money club needs to run play days. Every other admin area is a module that can be turned on or off during setup, by the club's owners, or by Luvallplay's platform admins (§6.2.3).
-- **Q: Luvallplay is a multi-sport platform, with badminton first.** Product and marketing words stay sport-neutral where they can ("session", "game", "court or field"). Badminton-specific features (Arena terms, Vision) are modules that other sports can adapt later.
+- **Q: Luvallplay is about sport in general, not just badminton.** Badminton is the first sport, not the limit. Product and marketing words are sport-neutral ("session", "game", "court or field"). Every club lists its sports. Vocabulary, scoring and leaderboards come per sport, and badminton-only features (Vision) are modules other sports can gain later (§6.7). The brand book is updated to match.
 - **R: a Luvallplay introduction website** in English and Vietnamese, multi-sport, following the brand system (§7.4). It can be built now, in parallel with the app work.
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
 
-> **Luvallplay:** "Love all, play" is the umpire's call that starts every badminton match. It's a great name for a badminton platform, and the brand below leans into it.
+> **Luvallplay:** "Love all, play" is the call that starts a game in badminton, tennis, squash and table tennis, and it reads as an invitation to everyone: love all, come and play. Luvallplay is a platform for **sports clubs of every kind**. It starts with badminton (Three Wolves is club #1) and is built so any club that runs regular sessions can use it (§6.7).
 
 ---
 
@@ -643,6 +643,28 @@ The data moves in seven steps:
 
 Each step is rehearsed on a Neon branch of production, behind a feature flag, with a tested rollback.
 
+
+### 6.7 Multi-sport from the start
+
+Luvallplay serves clubs of any sport that run regular sessions. Badminton goes first, and nothing in the core assumes it:
+
+- **Each club lists its sports** (`tenants.sports[]`, e.g. badminton, pickleball, futsal). A play day can name its sport, so multi-sport clubs work.
+- **Sport packs** hold everything sport-specific as data, not code:
+  - vocabulary ("court" / "pitch" / "table", "game" / "match" / "set", "doubles" / "team of 5");
+  - scoring format (rally points to 21, sets, goals, timed halves);
+  - team sizes;
+  - capacity units (players per court, per pitch);
+  - line-icon artwork.
+
+  Badminton is the first pack. Adding a sport means adding a pack, with English and Vietnamese wording.
+- **Modules declare the sports they support.**
+  - Sport-neutral (work for every sport): Play days, People, Messages, Court board (renamed in the UI from each pack's vocabulary), Round robin, Memberships, Shop and the rest.
+  - **Arena:** challenge flow is generic; its scoring comes from the sport pack.
+  - **Vision:** badminton only for now. It's only offered to clubs that play badminton.
+- **Global features are per sport:** Find a club filters by sport, global leaderboards and ratings are kept separately for each sport, and the marketplace has sport categories.
+- **Setup** asks "Which sports does your club play?" in step ② and shows modules that fit.
+- **Copy rule:** neutral words in shared UI and on the Luvallplay site. Sport words only appear where the club's sport is known.
+
 ---
 
 ## 7. Phase 6: brand, websites and the setup wizard
@@ -679,7 +701,7 @@ All palettes are validated for WCAG AA in light and dark. Clubs choose from 12 t
 
 | Step | Content | Best practice applied |
 |---|---|---|
-| ② Your club | Name, URL slug (live availability check), city/venue (map pin, used by Find a club), languages | Autosave every field; live preview of the club page on the right (desktop) or a "Preview" toggle (mobile) |
+| ② Your club | Name, URL slug (live availability check), **sports played** (§6.7), city/venue (map pin, used by Find a club), languages | Autosave every field; live preview of the club page on the right (desktop) or a "Preview" toggle (mobile) |
 | ③ Look & feel | Pick one of the **12 colour schemes** (§6.3.1), shown live on the club's own name, a play-day card and a button in light and dark. Or **Use our own branding**: upload logo, font and colours, or import them from the club's website (§6.3.2) | One tap picks a scheme; the custom path has its own short sub-steps with previews; automatic contrast fixes explained in plain words |
 | ④ How you charge | Up to three questions (§6.2.2): *Do you charge players?* → *Is your club incorporated?* → *Does it have its own Stripe account?* The answers set the mode: **Free play**, **Cash and bank transfer only**, or **Online payments** (connect the club's Stripe account right there). Cash and bank transfer clubs then enter bank details and choose cash-at-the-hall, confirm-before-paid and Akahu matching | One question per screen, plain words with an "Not sure?" explainer. Free play is a full, first-class choice. Cards are only offered to incorporated clubs with Stripe; everyone else gets a working cash and bank-transfer setup plus the "Getting incorporated" guide. Admin is configured from the answers |
 | ⑤ Pick modules | Starter **presets** (§6.2.3): *Free social club* (core only), *Social club*, *Competitive club*, *Coaching academy*. Then grouped cards (Run your club · Money · Engage players) with on/off toggles. The core is shown as "Always included"; Money cards are hidden for Free play | Dependencies selected automatically with a note ("Memberships needs Play days"); 3–4 sensible defaults pre-selected; never more than one decision per card |
@@ -751,9 +773,44 @@ A public website that introduces Luvallplay to clubs, organisers and players. It
 - Structured data for Organization, SoftwareApplication and FAQPage, plus Open Graph images per language.
 - Targets: Lighthouse ≥ 95 on all four scores, WCAG AA in both themes and both languages.
 
+#### 7.4.1 Design direction: fun, playful, healthy and clean
+
+The research behind this (2026 trend roundups from Figma, Envato, Elementor, GoDaddy, Liquid Web and DesignRush, plus fitness and community-sport site reviews; sources in the planning thread) points one way: **clean structure with real personality**. Sites should feel *experienced, not just viewed*, with motion that has a purpose, bold but controlled colour, real people instead of stock, and accessibility and speed treated as core, not extras.
+
+| Trend | How the Luvallplay site uses it | Guardrail |
+|---|---|---|
+| **Bento grids:** modular, scannable cards with soft corners | "Everything your club needs" is a bento grid. Mixed card sizes in `radius-lg`, each card one feature with a tiny live animation: a sign-up counter ticking up, a waitlist name sliding into a spot, attendance ticks appearing, a score going 20–19 → 21–19 | Cards are flat `surface-raised` with a `line` border; no glass, no heavy shadows. Max 7 cards |
+| **Kinetic, expressive type** | The hero sets "Love all, play." in Barlow Condensed `display-xl`, and the letters land one after another with a small bounce, like a ball. Under it, a rotating sport word cycles through badminton → pickleball → futsal → netball → volleyball | Plays once, then stays still. Reduced motion shows the final text. The rotating word pauses on hover and focus, and screen readers get the plain sentence |
+| **Snappy, purposeful motion** (easing that matches a playful brand) | Springy 150–250ms ease-out with a slight overshoot on buttons (a tiny squash on press), chips and cards. The logo's petals turn a quarter and the heart beats once on load and on hover | Only `transform` and `opacity` are animated. Nothing loops forever, and nothing moves while someone is reading |
+| **Scroll-driven animation:** now native in Chrome, Safari and Firefox (Baseline since Firefox 159) | The **lines-of-play** motif draws itself as you scroll: a court outline becomes a pitch, then a table. Sections fade and rise in gently | Pure CSS `animation-timeline` behind `@supports` and `prefers-reduced-motion`. Without support, everything shows complete and static |
+| **View transitions** | Switching language, sport chip or colour scheme cross-fades smoothly instead of jumping | Progressive enhancement only |
+| **Bold, "dopamine" colour, controlled** | Big colour blocks in Court Green, Smash Lime and Rally Coral on warm Shuttle White, echoing the cover. The scheme picker shows off the 12 club schemes | One accent colour per *section* (the brand's one-per-screen rule, adapted for long pages); text always on `surface` or a token pair that passes AA |
+| **Organic, friendly shapes** | The logo's rounded **petals** become a shape family: soft petal and pill shapes behind photos and stats, and a petal-shaped mask on community photos | Max 2 decorative shapes per section; never behind body text |
+| **Tactile "sticker" accents** (light skeuomorphism) | A few rounded badge stickers, slightly tilted: "Free for clubs", "16+ and safe", "EN · VI", in lime or coral with a soft edge | Max 3 on the page; real text, not images |
+| **Real people, real places** (the top fitness-site lesson) | Photos of real NZ community sport: halls, courts, parks, mixed ages, abilities and backgrounds, laughing between games. Simple line illustrations of different sports in the brand icon style (1.9px stroke, round caps) fill gaps | No stock "athletes", no AI-generated people, no posed gym shots |
+| **Interactive previews** ("show the experience") | Three small demos: the **scheme picker**, a **"build your club"** toggle where switching modules on lights up bento cards, and a **sport switch** that re-words the page | Each works with keyboard and touch, and has a static fallback |
+| **Accessibility and honesty as design** | Large readable type (18px body on the site), generous spacing, clear focus rings, plain-language copy | No pop-ups, countdowns or pre-ticked boxes, no dark patterns, no cookie wall (no tracking cookies at all) |
+| **Fast and light ("healthy" for the planet too)** | Static pages, modern image formats with responsive sizes, fonts subset to Latin + Vietnamese, CSS-first animation, no autoplay video | Budgets: LCP < 2.0s on 4G mid-range Android, JS < 80 KB on the home page, total page < 1 MB |
+
+**What "healthy" and "clean" mean here:**
+- Warm off-white `surface` (never stark white or grey), lots of white space, greens leading the palette, and daylight and outdoor photos.
+- Two typefaces only and one clear hierarchy per section.
+- Calm pacing: one idea per section, one main button per section.
+
+**Trends deliberately not used:** heavy glassmorphism (hurts readability), anti-grid brutalism and neo-brutalism (not friendly), Y2K chrome, WebGL/3D scenes and autoplay video (slow on phones), AI-generated imagery, mascots, and confetti.
+
+**Design deliverables before build:**
+1. A moodboard and a single long-page mock in both languages and both themes.
+2. The motion spec (timings, easing, what moves and when, reduced-motion versions).
+3. The illustration and shape set (sport line icons, petal shapes, stickers).
+4. A short photo brief for the shoot.
+
+Each is reviewed with you before build.
+
 **Imagery:** real, diverse community sport in NZ halls and parks across several sports, licensed or commissioned (a small photo shoot with Three Wolves and one or two partner clubs is ideal). No stock "business people with rackets". Product screenshots come from the real app with demo data.
 
 **Done when:**
+- The design direction in §7.4.1 is approved and implemented, including reduced-motion and no-support fallbacks.
 - Both languages are complete.
 - The waitlist works end to end.
 - It passes the test plan gate for the intro site.
@@ -767,7 +824,7 @@ Build them in this order, each one releasable on its own:
 
 1. **Find a club nearby:**
    - PostGIS radius search, a map (MapLibre with an open tile provider), and a city/postcode fallback when location isn't shared.
-   - Filters: day, level, price, casual-friendly.
+   - Filters: **sport**, day, level, price, casual-friendly.
    - Club card → "Book a casual session" / "Request to join".
    - Cheapest to build, and it brings players to clubs, which is the reason for clubs to sign up.
 2. **Global leaderboards:**

@@ -108,7 +108,8 @@ describe("email links → user_id", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA
   });
 
   test("the backfill links what the email joins find: live accounts, whatever the capitals; nobody for guests", async () => {
-    assert.deepEqual(await uid("attendance", "true ORDER BY session_date, email"), [1, null, 1]);
+    // COLLATE "C": the same order on every server, whatever its locale.
+    assert.deepEqual(await uid("attendance", `true ORDER BY session_date, email COLLATE "C"`), [1, null, 1]);
     assert.deepEqual(await uid("bookings", "true ORDER BY id"), [null, 1]);
     assert.deepEqual(await uid("memberships", "true ORDER BY id"), [1, null, null]);
     assert.deepEqual(await uid("player_absences", "true"), [1]);
@@ -116,7 +117,7 @@ describe("email links → user_id", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA
     assert.deepEqual(await uid("day_requests", "true"), [2]);
     assert.deepEqual(await disagreements(), {});
     // Emails are exactly as they were: the contact field isn't tidied.
-    assert.deepEqual((await c.query(`SELECT email FROM attendance ORDER BY session_date, email`)).rows.map((r) => r.email), [" Mia@X.test ", "guest@x.test", "mia@x.test"]);
+    assert.deepEqual((await c.query(`SELECT email FROM attendance ORDER BY session_date, email COLLATE "C"`)).rows.map((r) => r.email), [" Mia@X.test ", "guest@x.test", "mia@x.test"]);
   });
 
   test("every new link has a foreign key (RESTRICT) and an index", async () => {

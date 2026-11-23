@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { ModalShell } from "@/components/modals/ModalShell";
 import type { Lang } from "@/lib/i18n";
@@ -329,6 +329,12 @@ function writePassword(value: string | null) {
   }
 }
 
+const noSubscribe = () => () => {};
+/** False for the server render and hydration, true on the client after that. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(noSubscribe, () => true, () => false);
+}
+
 function formatPlayDay(date: string, lang: Lang) {
   const [y, m, d] = date.split("-").map(Number);
   return new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : "en-NZ", {
@@ -367,10 +373,15 @@ export function CasualPlay() {
 
   const [viewer, setViewer] = useState(false);
 
-  useEffect(() => {
+  // The saved mode loads once on the client, after hydration so the server
+  // HTML matches; after that the state is the source of truth.
+  const hydrated = useHydrated();
+  const [storageRead, setStorageRead] = useState(false);
+  if (hydrated && !storageRead) {
+    setStorageRead(true);
     setPassword(readPassword());
     setViewer(readViewer());
-  }, []);
+  }
 
   const headers = useCallback(
     (pw: string | null = password, asPlayer: boolean = viewer): HeadersInit => ({
@@ -415,6 +426,7 @@ export function CasualPlay() {
 
   // A stale saved password (changed on the server) quietly drops back to viewer mode.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- false positive: load() is async and only sets state after awaiting fetch
     load().then((status) => {
       if (status === 401) {
         writePassword(null);
@@ -978,12 +990,15 @@ function CourtNumberField({
 }) {
   const [draft, setDraft] = useState(value);
   const editing = useRef(false);
+  // The same flag for rendering (the ref is read by the effect).
+  const [editingNow, setEditingNow] = useState(false);
   useEffect(() => {
     if (!editing.current) setDraft(value);
   }, [value]);
 
   const save = async () => {
     editing.current = false;
+    setEditingNow(false);
     const number = draft.trim();
     if (number === value) return setDraft(value);
     if (!(await onSave(number))) setDraft(value);
@@ -998,8 +1013,11 @@ function CourtNumberField({
         value={draft}
         maxLength={MAX_COURT_NUMBER}
         placeholder={c.courtNumberPlaceholder(court)}
-        disabled={busy && !editing.current}
-        onFocus={() => (editing.current = true)}
+        disabled={busy && !editingNow}
+        onFocus={() => {
+          editing.current = true;
+          setEditingNow(true);
+        }}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => {
@@ -1129,7 +1147,9 @@ function TierBoard({
   // A drop runs the newest onMove, not the one from when the press began
   // (the board may have refreshed in between).
   const onMoveRef = useRef(onMove);
-  onMoveRef.current = onMove;
+  useLayoutEffect(() => {
+    onMoveRef.current = onMove;
+  });
 
   useEffect(() => () => cleanupRef.current?.(), []);
 
@@ -1818,12 +1838,15 @@ function UnlockModal({
   const [value, setValue] = useState("");
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
+  // Opening the dialog starts it empty.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setValue("");
       setError(false);
     }
-  }, [open]);
+  }
   const submit = async () => {
     if (!value || busy) return;
     setBusy(true);

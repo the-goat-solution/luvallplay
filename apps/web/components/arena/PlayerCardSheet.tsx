@@ -26,12 +26,20 @@ export function PlayerCardSheet({ playerId, onClose }: { playerId: number | null
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Opening a (different) player starts from a clean loading state.
+  const [prevPlayerId, setPrevPlayerId] = useState(playerId);
+  if (playerId !== prevPlayerId) {
+    setPrevPlayerId(playerId);
+    if (playerId !== null) {
+      setState("loading");
+      setCard(null);
+      setError(null);
+    }
+  }
+
   useEffect(() => {
     if (playerId === null) return;
     let cancelled = false;
-    setState("loading");
-    setCard(null);
-    setError(null);
     fetch(`/api/arena/player/${playerId}`, { cache: "no-store" })
       .then(async (res) => {
         if (cancelled) return;

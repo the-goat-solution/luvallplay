@@ -48,13 +48,18 @@ export function WaitlistModal() {
   // Mirrors the other modals (see BookingModal/MembershipModal/DonateModal):
   // lock the page behind the overlay, and reset whichever screen the modal was
   // left on so it always reopens on the form.
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
-      document.body.style.overflow = "hidden";
       setDone(false);
       setErrors({});
       setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = "hidden";
   }, [open]);
 
   const submit = async () => {

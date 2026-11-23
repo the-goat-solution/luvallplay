@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { RankIcon } from "@/components/arena/RankIcon";
 import { isTrial } from "@/lib/wolf-vision-trial";
@@ -79,12 +79,15 @@ const COPY = {
   },
 } as const;
 
+const noopSubscribe = () => () => {};
+const serverFalse = () => false;
+
 export function AppFeatures() {
   const { lang } = useLanguage();
   const t = COPY[lang === "vi" ? "vi" : "en"];
-  // Decided after mount so the cached page never shows the badge after the trial.
-  const [free, setFree] = useState(false);
-  useEffect(() => setFree(isTrial()), []);
+  // Decided on the client (server snapshot is false) so the cached page never
+  // shows the badge after the trial.
+  const free = useSyncExternalStore(noopSubscribe, isTrial, serverFalse);
 
   return (
     <section className={`section ${s.section}`} id="app" data-screen-label="App">

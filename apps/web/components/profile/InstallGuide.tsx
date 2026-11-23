@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
 import { isMobileDevice } from "@/lib/device";
 import { Sheet } from "./Sheet";
@@ -47,6 +47,9 @@ function detectPlatform(): Platform {
   return "desktop";
 }
 
+const noopSubscribe = () => () => {};
+const serverPlatform = (): Platform => "desktop";
+
 async function sendEvent(event: string, detail?: string) {
   try {
     await fetch("/api/profile/event", {
@@ -63,7 +66,8 @@ async function sendEvent(event: string, detail?: string) {
 export function InstallGuide({ autoShow }: { autoShow: boolean }) {
   const { tr } = useProfileT();
   const [open, setOpen] = useState(false);
-  const [platform, setPlatform] = useState<Platform>("desktop");
+  // Known on the client only; the server snapshot is "desktop".
+  const platform = useSyncExternalStore(noopSubscribe, detectPlatform, serverPlatform);
   const [elapsed, setElapsed] = useState(0);
   const [holding, setHolding] = useState(false);
   const [installed, setInstalled] = useState(false);
@@ -77,7 +81,6 @@ export function InstallGuide({ autoShow }: { autoShow: boolean }) {
   }, []);
 
   useEffect(() => {
-    setPlatform(detectPlatform());
     const onBip = (e: Event) => {
       e.preventDefault();
       promptRef.current = e as BeforeInstallPromptEvent;

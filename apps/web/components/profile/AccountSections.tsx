@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useProfileT } from "@/lib/profile-i18n";
 import type { Lang } from "@/lib/i18n";
@@ -385,12 +385,15 @@ export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolea
   );
 }
 
+const noopSubscribe = () => () => {};
+const serverFalse = () => false;
+const readIsMobile = () => isMobileDevice();
+
 export function AppCard() {
   const { tr } = useProfileT();
   // "Add to Home Screen" is for phones and tablets only. Known after mount
   // (the server can't tell), so it never flashes on desktop.
-  const [mobile, setMobile] = useState(false);
-  useEffect(() => setMobile(isMobileDevice()), []);
+  const mobile = useSyncExternalStore(noopSubscribe, readIsMobile, serverFalse);
   return (
     <section className={styles.card}>
       {mobile && (

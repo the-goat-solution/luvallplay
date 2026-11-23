@@ -52,14 +52,24 @@ export function DayRequestModal() {
     document.body.style.overflow = "";
   };
 
-  useEffect(() => {
+  // Opening (or switching the requested day while open) resets the form.
+  // Starts as "closed" so a modal that mounts already open is reset too.
+  const [prev, setPrev] = useState<{ open: boolean; day: Weekday | null }>({
+    open: false,
+    day: dayRequestDay,
+  });
+  if (prev.open !== open || prev.day !== dayRequestDay) {
+    setPrev({ open, day: dayRequestDay });
     if (open) {
-      document.body.style.overflow = "hidden";
       setDay(dayRequestDay ?? "");
       setDone(false);
       setErrors({});
       setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = "hidden";
   }, [open, dayRequestDay]);
 
   // Opened from a paused day's "notify me" button: the day is fixed and the

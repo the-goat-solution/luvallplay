@@ -46,12 +46,18 @@ export function BookingModal() {
     document.body.style.overflow = "";
   };
 
-  useEffect(() => {
+  // Each time the modal opens it starts again at step 1 with no errors.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
-      document.body.style.overflow = "hidden";
       setStep(1);
       setErrors({});
     }
+  }
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = "hidden";
   }, [open]);
 
   useEffect(() => {

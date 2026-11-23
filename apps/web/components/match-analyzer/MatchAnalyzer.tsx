@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ObjectDetector } from "@mediapipe/tasks-vision";
 import { useLanguage } from "@/context/LanguageContext";
 import { formatClock, landmarkId, type CourtTap, type Pt } from "@/lib/match-analyzer";
@@ -54,7 +54,46 @@ function aiLayers(p: Pipeline | null): string[] {
   return p ? p.aiLayers() : [];
 }
 
+type DemoScore = ReturnType<typeof scoreHits> & { identity: number | null };
+type Live = { elapsed: number; demoScore: DemoScore | null };
+
+/** The engine numbers the UI shows; in the test scenario also the accuracy against the simulator's ground truth. */
+function liveNumbers(pipe: Pipeline | null, sim: MatchSim | null, demo: boolean): Live {
+  const demoScore = ((): DemoScore | null => {
+    if (!demo || !sim || !pipe) return null;
+    const e = pipe.engine;
+    const cut = sim.t - 0.6;
+    const sc = scoreHits(sim.hits.filter((h) => h.t < cut), e.fusion.hits.filter((h) => h.t < cut));
+    const f = pipe.lastSimFrame;
+    let idOk = 0, idN = 0;
+    if (f) {
+      e.view(f.t).players.forEach((p, i) => {
+        if (!p.pos) return;
+        idN++;
+        const d = f.truth.players.map((q) => Math.hypot(q.x - p.pos!.x, q.y - p.pos!.y));
+        if (d.indexOf(Math.min(...d)) === i) idOk++;
+      });
+    }
+    return { ...sc, identity: idN ? idOk / idN : null };
+  })();
+  return { elapsed: pipe?.engine.view().elapsed ?? 0, demoScore };
+}
+
 type Me = { id: number; name: string; avatarUrl: string | null };
+type PassInfo = { id: number; kind: "live" | "upload"; test: boolean } | null;
+type Size = { w: number; h: number };
+
+const sameSize = (a: Size | null, b: Size | null) => a?.w === b?.w && a?.h === b?.h;
+
+/** Browser-only values read with useSyncExternalStore (server render: the fallback). */
+const noSubscribe = () => () => {};
+function hasStoredCourt(): boolean {
+  try {
+    return Boolean(localStorage.getItem(COURT_KEY));
+  } catch {
+    return false; // storage blocked
+  }
+}
 
 /** The four players: the signed-in player is Wolf 1 when it isn't a challenge. */
 function startingPeople(me: Me | null | undefined): Wolf[] {
@@ -113,45 +152,51 @@ export function MatchAnalyzer({
     };
   }, [challengeId]);
 
+  // ── Paywall: $5 live match, $2 video analysis (the test scenario is free) ──
+  const [passes, setPasses] = useState<{ live: PassInfo; upload: PassInfo }>({ live: null, upload: null });
+  /** "free": no paywall here (local runs without a database). "trial": free for everyone until the end of Feb 2027. */
+  const [payState, setPayState] = useState<"loading" | "ready" | "signed_out" | "free" | "trial">(() => (isTrial() ? "trial" : "loading"));
+  const [testMode, setTestMode] = useState(false);
+
   // ── Passes ────────────────────────────────────────────────────────────
-  const loadPasses = useCallback(async () => {
-    if (isTrial()) return setPayState("trial");
-    const url = new URL(window.location.href);
-    const paidKind = url.searchParams.get("wv_paid");
-    const sessionId = url.searchParams.get("session_id");
-    const one = async (kind: "live" | "upload") => {
-      const q = new URLSearchParams({ kind });
-      if (sessionId && paidKind === kind) q.set("session_id", sessionId);
-      const res = await fetch(`/api/wolf-vision/pass?${q}`, { cache: "no-store" });
-      if (res.status === 401) return "signed_out" as const;
-      if (res.status === 503) return "free" as const;
-      if (!res.ok) throw new Error("pass");
-      return (await res.json()) as { pass: PassInfo; testMode: boolean };
-    };
-    try {
-      const [live, upload] = await Promise.all([one("live"), one("upload")]);
-      if (live === "free" || upload === "free") return setPayState("free");
-      if (live === "signed_out" || upload === "signed_out") return setPayState("signed_out");
-      setPasses({ live: live.pass, upload: upload.pass });
-      setTestMode(live.testMode);
-      setPayState("ready");
-      if (paidKind) {
-        // Back from Stripe Checkout: tidy the address bar.
-        url.searchParams.delete("wv_paid");
-        url.searchParams.delete("session_id");
-        window.history.replaceState(null, "", url.toString());
-      }
-    } catch {
-      setPayState("ready");
-    }
-  }, []);
   useEffect(() => {
+    const loadPasses = async () => {
+      // payState already started as "trial" (isTrial() only ever turns from true to false).
+      if (isTrial()) return;
+      const url = new URL(window.location.href);
+      const paidKind = url.searchParams.get("wv_paid");
+      const sessionId = url.searchParams.get("session_id");
+      const one = async (kind: "live" | "upload") => {
+        const q = new URLSearchParams({ kind });
+        if (sessionId && paidKind === kind) q.set("session_id", sessionId);
+        const res = await fetch(`/api/wolf-vision/pass?${q}`, { cache: "no-store" });
+        if (res.status === 401) return "signed_out" as const;
+        if (res.status === 503) return "free" as const;
+        if (!res.ok) throw new Error("pass");
+        return (await res.json()) as { pass: PassInfo; testMode: boolean };
+      };
+      try {
+        const [live, upload] = await Promise.all([one("live"), one("upload")]);
+        if (live === "free" || upload === "free") return setPayState("free");
+        if (live === "signed_out" || upload === "signed_out") return setPayState("signed_out");
+        setPasses({ live: live.pass, upload: upload.pass });
+        setTestMode(live.testMode);
+        setPayState("ready");
+        if (paidKind) {
+          // Back from Stripe Checkout: tidy the address bar.
+          url.searchParams.delete("wv_paid");
+          url.searchParams.delete("session_id");
+          window.history.replaceState(null, "", url.toString());
+        }
+      } catch {
+        setPayState("ready");
+      }
+    };
     void loadPasses();
-  }, [loadPasses]);
+  }, []);
 
   // ── Session state ─────────────────────────────────────────────────────
-  const [phone, setPhone] = useState(false);
-  useEffect(() => setPhone(isPhone()), []);
+  const phone = useSyncExternalStore(noSubscribe, isPhone, () => false);
   const [mode, setMode] = useState<Mode | null>(null);
   const [step, setStep] = useState<Step>("start");
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +210,8 @@ export function MatchAnalyzer({
   const [taps, setTaps] = useState<CourtTap[]>([]);
   const [target, setTarget] = useState<Pt | null>(DEFAULT_CORNERS[0]);
   const [showPicker, setShowPicker] = useState(true);
-  const [hasLastCourt, setHasLastCourt] = useState(false);
+  /** A court saved by an earlier session (re-read on every render, so it is true once startTracking saves one). */
+  const hasLastCourt = useSyncExternalStore(noSubscribe, hasStoredCourt, () => false);
   const [detectorState, setDetectorState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [paused, setPaused] = useState(false);
   const [fixOpen, setFixOpen] = useState(false);
@@ -174,7 +220,10 @@ export function MatchAnalyzer({
   const [download, setDownload] = useState<{ url: string; name: string } | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [saveState, setSaveState] = useState<{ kind: "idle" | "saving" | "saved" } | { kind: "error"; code: string }>({ kind: "idle" });
-  const [tick, setTick] = useState(0);
+  /** Size of the analysed picture (video or simulator), kept in step with the refs by the drawing loop. */
+  const [videoSize, setVideoSize] = useState<Size | null>(null);
+  /** Engine numbers shown in the UI, refreshed by the drawing loop about 4× a second. */
+  const [live, setLive] = useState<Live>({ elapsed: 0, demoScore: null });
   const [demoOpts, setDemoOpts] = useState<DemoOpts>({ light: 1, noise: 2, shake: 0, sameShirts: true, sameShorts: false, crowdNoise: 0.3, lens: "wide" });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -199,12 +248,6 @@ export function MatchAnalyzer({
   const resumeAtRef = useRef(0);
   const lastAutosave = useRef(0);
   const [resumable, setResumable] = useState<Autosave | null>(null);
-  // ── Paywall: $5 live match, $2 video analysis (the test scenario is free) ──
-  type PassInfo = { id: number; kind: "live" | "upload"; test: boolean } | null;
-  const [passes, setPasses] = useState<{ live: PassInfo; upload: PassInfo }>({ live: null, upload: null });
-  /** "free": no paywall here (local runs without a database). "trial": free for everyone until the end of Feb 2027. */
-  const [payState, setPayState] = useState<"loading" | "ready" | "signed_out" | "free" | "trial">(() => (isTrial() ? "trial" : "loading"));
-  const [testMode, setTestMode] = useState(false);
   const [paywallFor, setPaywallFor] = useState<"live" | "upload" | null>(null);
   const [buying, setBuying] = useState(false);
   const [shareTraining, setShareTraining] = useState(true);
@@ -215,19 +258,17 @@ export function MatchAnalyzer({
   const dragging = useRef<number | null>(null);
   const calTarget = useRef<Pt | null>(DEFAULT_CORNERS[0]);
   const pausedRef = useRef(false);
-  pausedRef.current = paused;
+  useLayoutEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   useEffect(() => {
     const img = new Image();
     img.src = "/uploads/three-wolves-logo-white-mini.png";
     img.onload = () => (logoRef.current = img);
-    try {
-      setHasLastCourt(Boolean(localStorage.getItem(COURT_KEY)));
-    } catch {
-      /* storage blocked */
-    }
     const saved = loadAutosave();
     // Only offer a match that belongs here (same challenge, or a free session).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the autosave in localStorage after mount; reading it during render would break SSR hydration
     if (saved && saved.challengeId === challengeId) setResumable(saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -243,8 +284,9 @@ export function MatchAnalyzer({
     return v?.videoWidth ? { w: v.videoWidth, h: v.videoHeight } : null;
   }, [mode]);
 
-  const videoW = dims()?.w ?? 0;
-  const videoH = dims()?.h ?? 0;
+  const syncSize = (d: Size | null) => setVideoSize((prev) => (sameSize(prev, d) ? prev : d));
+  const videoW = videoSize?.w ?? 0;
+  const videoH = videoSize?.h ?? 0;
   const cam: CourtCamera | null = useMemo(
     () => (videoW ? fitCamera(taps, videoW, videoH, LENS_PRIOR[lens]) : null),
     [taps, lens, videoW, videoH],
@@ -360,7 +402,7 @@ export function MatchAnalyzer({
     v.onloadedmetadata = () => {
       v.currentTime = Math.min(1, v.duration / 2);
       setStep("setup");
-      setTick((x) => x + 1);
+      syncSize(v.videoWidth ? { w: v.videoWidth, h: v.videoHeight } : null);
     };
   };
 
@@ -374,20 +416,24 @@ export function MatchAnalyzer({
     cv.width = sim.W;
     cv.height = sim.H;
     simCanvas.current = cv;
+    syncSize({ w: sim.W, h: sim.H });
     // Calibrated the way an assistant would: six taps, each a little off.
     const t6 = sim.taps(6);
     setTaps(t6);
     setLens(opts.lens);
     const camFit = fitCamera(t6, sim.W, sim.H, LENS_PRIOR[opts.lens])!;
     const engine = new MatchEngine({ cam: camFit, videoW: sim.W, videoH: sim.H, courtPoints: 6, lens: opts.lens, audioOn: true });
-    pipeRef.current = new Pipeline(engine, sim.W, sim.H, null);
+    const pipe = new Pipeline(engine, sim.W, sim.H, null);
+    pipeRef.current = pipe;
     srcRef.current = { kind: "sim", sim, canvas: cv };
+    setLive(liveNumbers(pipe, sim, true));
     setOrder([0, 1, 2, 3]);
     setSummary(null);
     setStep("track");
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- auto-starts the test scenario on mount (?demo=1): startDemo builds a canvas and a random simulator, which only exist in the browser
     if (demo && sandbox && !challengeId) startDemo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demo, sandbox]);
@@ -409,7 +455,7 @@ export function MatchAnalyzer({
     }
     ensureDetector();
     setStep("calibrate");
-    window.setTimeout(() => setTick((x) => x + 1), 300);
+    window.setTimeout(() => syncSize(dims()), 300);
   };
 
   // ── Court ─────────────────────────────────────────────────────────────
@@ -564,6 +610,7 @@ export function MatchAnalyzer({
       v.playbackRate = 1;
       await v.play().catch(() => {});
     }
+    setLive(liveNumbers(pipe, simRef.current, mode === "demo"));
     setStep("track");
     heartbeat("start");
   };
@@ -571,7 +618,7 @@ export function MatchAnalyzer({
   // Not a challenge: after the match, the stats go by email to the players
   // added by email (not registered). Once per result; "Try again" on failure.
   const emailStatsRef = useRef<(final: Summary, again?: boolean) => void>(() => {});
-  emailStatsRef.current = (final: Summary, again = false) => {
+  const emailStats = (final: Summary, again = false) => {
     if (!setup && mode !== "demo" && people.some((p) => p.email)) {
       // Per player (Wolf 1–4), whichever slot they were tracked in.
       const players = people.map((p, i) => {
@@ -619,6 +666,9 @@ export function MatchAnalyzer({
       }
     }
   };
+  useLayoutEffect(() => {
+    emailStatsRef.current = emailStats;
+  });
 
   const finish = useCallback(() => {
     const e = pipeRef.current?.engine;
@@ -680,10 +730,16 @@ export function MatchAnalyzer({
     };
     const hasVfc = !!vfv?.requestVideoFrameCallback;
     if (hasVfc) vfHandle = vfv!.requestVideoFrameCallback!(onFrame);
+    let seenSize: Size | null | undefined;
     const loop = () => {
       raf = requestAnimationFrame(loop);
       const canvas = canvasRef.current;
       const d = dims();
+      // The picture's size feeds the court fit (cam) rendered by the component.
+      if (seenSize === undefined || !sameSize(seenSize, d)) {
+        seenSize = d;
+        syncSize(d);
+      }
       if (!canvas || !d) return;
       const scale = Math.min(1, MAX_CANVAS / Math.max(d.w, d.h));
       const cw = Math.round(d.w * scale), ch = Math.round(d.h * scale);
@@ -799,7 +855,7 @@ export function MatchAnalyzer({
       });
       if (now - lastUi > 250) {
         lastUi = now;
-        setTick((x) => x + 1);
+        setLive(liveNumbers(pipe, simRef.current, mode === "demo"));
       }
       // Autosave the running totals (resume after a crash, a locked phone or a closed tab).
       if (step === "track" && e && mode !== "demo" && now - lastAutosave.current > AUTOSAVE_EVERY_MS) {
@@ -936,6 +992,8 @@ export function MatchAnalyzer({
     pipeRef.current = null;
     srcRef.current = null;
     simRef.current = null;
+    setLive(liveNumbers(null, null, false));
+    syncSize(null);
     setMode(null);
     setStep("start");
     carriedRef.current = null;
@@ -995,7 +1053,9 @@ export function MatchAnalyzer({
   };
   const askExit = () => (running ? setExitAsk(true) : exitSession());
   const exitRef = useRef({ running, exit: exitSession });
-  exitRef.current = { running, exit: exitSession };
+  useLayoutEffect(() => {
+    exitRef.current = { running, exit: exitSession };
+  });
 
   // The back gesture / button: one history entry for the session, so going
   // back returns to the start screen (asking first if the session is under way).
@@ -1048,29 +1108,10 @@ export function MatchAnalyzer({
     window.setTimeout(() => setNotice(null), 2200);
   };
 
-  // ── Test scenario: accuracy against the simulator's ground truth ──────
-  const demoScore = (() => {
-    void tick;
-    if (mode !== "demo" || !simRef.current || !pipeRef.current) return null;
-    const sim = simRef.current;
-    const e = pipeRef.current.engine;
-    const cut = sim.t - 0.6;
-    const sc = scoreHits(sim.hits.filter((h) => h.t < cut), e.fusion.hits.filter((h) => h.t < cut));
-    const f = pipeRef.current.lastSimFrame;
-    let idOk = 0, idN = 0;
-    if (f) {
-      e.view(f.t).players.forEach((p, i) => {
-        if (!p.pos) return;
-        idN++;
-        const d = f.truth.players.map((q) => Math.hypot(q.x - p.pos!.x, q.y - p.pos!.y));
-        if (d.indexOf(Math.min(...d)) === i) idOk++;
-      });
-    }
-    return { ...sc, identity: idN ? idOk / idN : null };
-  })();
+  // ── Test scenario: accuracy against the simulator's ground truth (computed by the drawing loop) ──
+  const demoScore = mode === "demo" ? live.demoScore : null;
 
-  const view = pipeRef.current?.engine.view();
-  const elapsed = view?.elapsed ?? 0;
+  const elapsed = live.elapsed;
   const banner =
     step === "calibrate"
       ? cam

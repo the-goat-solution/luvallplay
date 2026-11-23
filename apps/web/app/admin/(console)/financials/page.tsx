@@ -358,6 +358,7 @@ export default async function FinancialsPage({
   let syncError: string | null = null;
   if (
     syncState &&
+    // eslint-disable-next-line react-hooks/purity -- async Server Component: runs once per request, never re-renders on the client
     (!syncState.lastFinishedAt || Date.now() - syncState.lastFinishedAt.getTime() > AUTO_SYNC_AFTER_MS)
   ) {
     try {

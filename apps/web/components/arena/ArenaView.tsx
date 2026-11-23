@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { useArenaT, type ArenaKey } from "@/lib/arena-i18n";
@@ -55,6 +56,12 @@ function writeIds(key: string, ids: number[]): void {
   } catch {
     // private mode
   }
+}
+
+const noSubscribe = () => () => {};
+/** False for the server render and hydration, true on the client after that. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(noSubscribe, () => true, () => false);
 }
 
 // ── Small pieces ──────────────────────────────────────────────────────
@@ -147,20 +154,6 @@ function CodeTiles({ code }: { code: string }) {
   );
 }
 
-function Ring({ ms, total }: { ms: number; total: number }) {
-  const pct = Math.max(0, Math.min(100, (ms / total) * 100));
-  return (
-    <div
-      className={s.ring}
-      style={{
-        background: `conic-gradient(#2fd4b5 0 ${pct}%, rgba(255,255,255,.1) ${pct}% 100%)`,
-      }}
-    >
-      <div>{mmss(ms)}</div>
-    </div>
-  );
-}
-
 function Confetti() {
   const bits = useMemo(
     () =>
@@ -202,9 +195,16 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
   const [rankDismissed, setRankDismissed] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
+  // The stored ids load once on the client, after hydration so the server
+  // HTML matches; after that the state is the source of truth.
+  const hydrated = useHydrated();
+  const [vsLoaded, setVsLoaded] = useState(false);
+  if (hydrated && !vsLoaded) {
+    setVsLoaded(true);
     setVsSeen(readIds(VS_SEEN_KEY));
     setVsMin(readIds(VS_MIN_KEY));
+  }
+  useEffect(() => {
     const sync = () => setVsMin(readIds(VS_MIN_KEY));
     window.addEventListener("tw-arena-vs", sync);
     window.addEventListener("storage", sync);
@@ -305,6 +305,7 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
     window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     if (!initial.me) return;
     if (initial.me.pair && !confirm(t("replaces_pair"))) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot invite link handled on mount: act() marks the request busy, as a button click does
     void act({ action: "pair_join", code: joinCode }).then((r) => {
       if (r.ok) showToast(t("joined"));
     });
@@ -324,6 +325,7 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
     const theirs = initial.open.find((c) => c.posting.players.some((p) => p.id === vs));
     const target = document.getElementById(theirs ? `challenge-${theirs.id}` : "arena-me");
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot ?vs= link handled on mount (reads the URL, scrolls); the hint toast belongs to it
     if (!theirs) showToast(t("vs_hint"));
   }, [initial.open, showToast, t]);
 
@@ -359,7 +361,6 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
         <ScoreEntry
           c={c}
           busy={busy}
-          minMinutes={state.minGameMinutes}
           onSubmit={async (body) => {
             const r = await act({ id: c.id, ...body });
             if (r.ok) setScreen(null);
@@ -411,7 +412,6 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
                     c={c}
                     busy={busy}
                     act={act}
-                    minMinutes={state.minGameMinutes}
                     onScore={() => setScreen({ kind: "score", id: c.id })}
                   />
                 ))}
@@ -425,7 +425,7 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
               {state.live.length === 0 ? (
                 <p className={s.empty}>{t("live_empty")}</p>
               ) : (
-                state.live.map((c) => <LiveCard key={c.id} c={c} signedIn={state.signedIn} />)
+                state.live.map((c) => <LiveCard key={c.id} c={c} now={state.now} signedIn={state.signedIn} />)
               )}
             </section>
             <section className={s.aOpen}>
@@ -633,7 +633,10 @@ function QrScanner({
 }) {
   const { t } = useArenaT();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [err, setErr] = useState(false);
+  // Only mounted after a tap (never server-rendered), so navigator is there.
+  const [err, setErr] = useState(
+    () => typeof navigator !== "undefined" && !navigator.mediaDevices,
+  );
   useEffect(() => {
     let stream: MediaStream | null = null;
     let raf = 0;
@@ -677,7 +680,6 @@ function QrScanner({
         raf = requestAnimationFrame(tick);
       })
       .catch(() => setErr(true));
-    if (!navigator.mediaDevices) setErr(true);
     return () => {
       done = true;
       cancelAnimationFrame(raf);
@@ -1181,7 +1183,7 @@ function CrownCard({ state }: { state: ArenaState }) {
     ? Math.max(
         0,
         Math.round(
-          (Date.now() - Date.parse(`${c.since}T00:00:00Z`)) / 86_400_000,
+          (Date.parse(state.now) - Date.parse(`${c.since}T00:00:00Z`)) / 86_400_000,
         ),
       )
     : 0;
@@ -1246,10 +1248,10 @@ function CrownCard({ state }: { state: ArenaState }) {
   );
 }
 
-function LiveCard({ c, signedIn }: { c: ChallengeView; signedIn: boolean }) {
+function LiveCard({ c, now, signedIn }: { c: ChallengeView; now: string; signedIn: boolean }) {
   const { t } = useArenaT();
   const mins = c.checkedInAt
-    ? Math.max(0, Math.round((Date.now() - Date.parse(c.checkedInAt)) / 60000))
+    ? Math.max(0, Math.round((Date.parse(now) - Date.parse(c.checkedInAt)) / 60000))
     : 0;
   return (
     <article className={s.live}>
@@ -1451,13 +1453,11 @@ function MyChallenge({
   c,
   busy,
   act,
-  minMinutes,
   onScore,
 }: {
   c: ChallengeView;
   busy: boolean;
   act: Act;
-  minMinutes: number;
   onScore: () => void;
 }) {
   const { t } = useArenaT();
@@ -1712,40 +1712,24 @@ function Versus({ c, onGo, onMinimize }: { c: ChallengeView; onGo: () => void; o
   );
 }
 
-function ScoreEntry({
-  c,
-  busy,
-  minMinutes,
-  onSubmit,
-  onClose,
+const clampScore = (n: number) =>
+  Math.max(0, Math.min(30, Number.isFinite(n) ? Math.round(n) : 0));
+
+function ScoreTeam({
+  pair,
+  tone,
+  v,
+  set,
+  winner,
 }: {
-  c: ChallengeView;
-  busy: boolean;
-  minMinutes: number;
-  onSubmit: (body: Record<string, unknown>) => void;
-  onClose: () => void;
+  pair: PairView;
+  tone: "c" | "t";
+  v: number;
+  set: (n: number) => void;
+  winner: boolean;
 }) {
   const { t } = useArenaT();
-  const [a, setA] = useState<number>(c.mySide === "posting" ? 21 : 0);
-  const [b, setB] = useState<number>(c.mySide === "posting" ? 0 : 21);
-  const [retire, setRetire] = useState(false);
-  const valid = isValidGameScore(a, b);
-  const them = c.mySide === "posting" ? c.accepting! : c.posting;
-  const clamp = (n: number) =>
-    Math.max(0, Math.min(30, Number.isFinite(n) ? Math.round(n) : 0));
-  const Team = ({
-    pair,
-    tone,
-    v,
-    set,
-    winner,
-  }: {
-    pair: PairView;
-    tone: "c" | "t";
-    v: number;
-    set: (n: number) => void;
-    winner: boolean;
-  }) => (
+  return (
     <div className={`${s.team} ${tone === "c" ? s.teamC : s.teamT}`}>
       <div className={s.teamName}>{pairTitle(pair)}</div>
       <div className={s.flip}>
@@ -1756,21 +1740,40 @@ function ScoreEntry({
           max={30}
           value={v}
           aria-label={pairTitle(pair)}
-          onChange={(e) => set(clamp(Number(e.target.value)))}
+          onChange={(e) => set(clampScore(Number(e.target.value)))}
           onFocus={(e) => e.target.select()}
         />
       </div>
       <div className={s.pm}>
-        <button type="button" aria-label="−1" onClick={() => set(clamp(v - 1))}>
+        <button type="button" aria-label="−1" onClick={() => set(clampScore(v - 1))}>
           −
         </button>
-        <button type="button" aria-label="+1" onClick={() => set(clamp(v + 1))}>
+        <button type="button" aria-label="+1" onClick={() => set(clampScore(v + 1))}>
           +
         </button>
       </div>
       {winner && <span className={s.winnerTag}>{t("winners")}</span>}
     </div>
   );
+}
+
+function ScoreEntry({
+  c,
+  busy,
+  onSubmit,
+  onClose,
+}: {
+  c: ChallengeView;
+  busy: boolean;
+  onSubmit: (body: Record<string, unknown>) => void;
+  onClose: () => void;
+}) {
+  const { t } = useArenaT();
+  const [a, setA] = useState<number>(c.mySide === "posting" ? 21 : 0);
+  const [b, setB] = useState<number>(c.mySide === "posting" ? 0 : 21);
+  const [retire, setRetire] = useState(false);
+  const valid = isValidGameScore(a, b);
+  const them = c.mySide === "posting" ? c.accepting! : c.posting;
   return (
     <div
       className={s.screen}
@@ -1787,7 +1790,7 @@ function ScoreEntry({
         {t("st_live")}
       </p>
       <div className={s.board}>
-        <Team
+        <ScoreTeam
           pair={c.posting}
           tone="c"
           v={a}
@@ -1795,7 +1798,7 @@ function ScoreEntry({
           winner={valid && a > b}
         />
         {c.accepting && (
-          <Team
+          <ScoreTeam
             pair={c.accepting}
             tone="t"
             v={b}

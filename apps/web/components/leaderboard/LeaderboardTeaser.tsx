@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { t } from "@/lib/i18n";
 import type { TeaserRow } from "@/lib/leaderboard-data";
@@ -12,11 +12,15 @@ import s from "./teaser.module.css";
  * opted out never appear (the board leaves them out). The old /leaderboard
  * URL lands here (#leaderboard) for people who aren't signed in.
  */
+const noopSubscribe = () => () => {};
+const serverFalse = () => false;
+const readJustHidden = () => new URLSearchParams(window.location.search).get("hidden") === "1";
+
 export function LeaderboardTeaser({ rows }: { rows: TeaserRow[] }) {
   const { lang } = useLanguage();
   // ?hidden=1: back from the one-click opt-out link in the welcome email.
-  const [justHidden, setJustHidden] = useState(false);
-  useEffect(() => setJustHidden(new URLSearchParams(window.location.search).get("hidden") === "1"), []);
+  // Read on the client only (server snapshot is false) to avoid a hydration mismatch.
+  const justHidden = useSyncExternalStore(noopSubscribe, readJustHidden, serverFalse);
 
   return (
     <section id="leaderboard" className={s.section} aria-labelledby="lb-teaser-title">

@@ -27,6 +27,30 @@ const DAY_NAME: Record<"en" | "vi", Record<string, string>> = {
   vi: { friday: "Thứ Sáu", wednesday: "Thứ Tư" },
 };
 
+// A paused day's plans aren't selectable — offer "notify me" instead.
+function PausedGroup({
+  dayName,
+  label,
+  onNotify,
+}: {
+  dayName: string;
+  label: string;
+  onNotify: () => void;
+}) {
+  return (
+    <div className="info-box" style={{ marginBottom: 0 }}>
+      <div style={{ flex: 1 }}>
+        <Trans k="mem_day_paused" vars={{ day: dayName }} />
+        <div style={{ marginTop: 10 }}>
+          <button type="button" className="btn btn-bronze-outline" onClick={onNotify}>
+            {label}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MembershipModal({
   pricingPlans,
 }: {
@@ -100,9 +124,11 @@ export function MembershipModal({
     };
   }, [open]);
 
-  useEffect(() => {
+  // Each time the modal opens it starts again from a clean first step.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
-      document.body.style.overflow = "hidden";
       setCodeStep(false);
       setCode("");
       setCodeError(false);
@@ -113,6 +139,10 @@ export function MembershipModal({
       setBlockedReason(null);
       setBlockedDay(null);
     }
+  }
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = "hidden";
   }, [open]);
 
   const planDisplays = useMemo(
@@ -160,26 +190,10 @@ export function MembershipModal({
     </div>
   );
 
-  // A paused day's plans aren't selectable — offer "notify me" instead.
-  const renderPausedGroup = (day: "friday" | "wednesday") => (
-    <div className="info-box" style={{ marginBottom: 0 }}>
-      <div style={{ flex: 1 }}>
-        <Trans k="mem_day_paused" vars={{ day: DAY_NAME[lang][day] }} />
-        <div style={{ marginTop: 10 }}>
-          <button
-            type="button"
-            className="btn btn-bronze-outline"
-            onClick={() => {
-              close();
-              openDayRequestModal(day);
-            }}
-          >
-            {tr("day_request_submit")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const notifyWhenOpen = (day: "friday" | "wednesday") => {
+    close();
+    openDayRequestModal(day);
+  };
 
   const createSubscription = async () => {
     const split = splitPlanId(selectedPlan);
@@ -423,7 +437,7 @@ export function MembershipModal({
                     <Trans k="mem_group_friday" />
                   </h4>
                   {fridayPaused ? (
-                    renderPausedGroup("friday")
+                    <PausedGroup dayName={DAY_NAME[lang].friday} label={tr("day_request_submit")} onNotify={() => notifyWhenOpen("friday")} />
                   ) : (
                     <div className="plan-pick">
                       {fridayPlans.map(renderPlanOption)}
@@ -437,7 +451,7 @@ export function MembershipModal({
                     <Trans k="mem_group_wednesday" />
                   </h4>
                   {wednesdayPaused ? (
-                    renderPausedGroup("wednesday")
+                    <PausedGroup dayName={DAY_NAME[lang].wednesday} label={tr("day_request_submit")} onNotify={() => notifyWhenOpen("wednesday")} />
                   ) : (
                     <div className="plan-pick">
                       {wednesdayPlans.map(renderPlanOption)}

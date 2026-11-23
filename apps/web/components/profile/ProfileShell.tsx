@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
@@ -182,6 +182,9 @@ function usePullToRefresh(onRefresh: () => void) {
   return { pull, refreshing };
 }
 
+const noopSubscribe = () => () => {};
+const serverFalse = () => false;
+
 export function ProfileShell({
   player,
   showInstallGuide,
@@ -203,12 +206,14 @@ export function ProfileShell({
   const [online, setOnline] = useState(true);
   /** A tool (Wolf Vision) has the whole screen: no top bar, no tabs. */
   const [focus, setFocus] = useState(false);
-  // Shown until the free period ends (decided after mount, so the server and client render the same).
-  const [beta, setBeta] = useState(false);
-  useEffect(() => setBeta(isTrial()), []);
+  // Shown until the free period ends (decided on the client with a server
+  // snapshot of false, so the server and client render the same).
+  const beta = useSyncExternalStore(noopSubscribe, isTrial, serverFalse);
   const menuRef = useRef<HTMLDivElement>(null);
   const focusRef = useRef(false);
-  focusRef.current = focus;
+  useEffect(() => {
+    focusRef.current = focus;
+  }, [focus]);
   // Never while a tool has the screen (a refresh mid-match would be costly).
   const { pull, refreshing } = usePullToRefresh(() => {
     if (!focusRef.current) router.refresh();

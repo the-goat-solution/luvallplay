@@ -24,6 +24,8 @@ const MONTH_NAMES = [
   "December",
 ];
 const DOW_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const NO_SPOTS: Record<string, number> = {};
+const NO_MINI_GAMES: Record<string, boolean> = {};
 
 // Admin-side calendar for picking a cash membership's exact start date —
 // modeled on components/modals/SessionCalendarPicker.tsx (reuses its
@@ -43,21 +45,41 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
   const [selected, setSelected] = useState<string | null>(null);
-  // null while this month's play days are still loading — distinct from {}
-  // ("loaded, none this month"), so the calendar never briefly claims a
-  // month has no available dates just because the request hasn't returned.
-  const [sessionDates, setSessionDates] = useState<Record<string, true> | null>(null);
-  const [spotsByDate, setSpotsByDate] = useState<Record<string, number>>({});
-  // Mini game days report 0 casual spots, but members are always included.
-  const [miniGameByDate, setMiniGameByDate] = useState<Record<string, boolean>>({});
-  const [spotsLoading, setSpotsLoading] = useState(false);
+  // The play days fetched for one (calDate, day) request. Results for any
+  // other month/day are ignored, so sessionDates is null while this month's
+  // play days are still loading — distinct from {} ("loaded, none this
+  // month"), so the calendar never briefly claims a month has no available
+  // dates just because the request hasn't returned.
+  const [sessionResult, setSessionResult] = useState<{
+    calDate: Date;
+    day: MembershipDay;
+    dates: Record<string, true>;
+  } | null>(null);
+  const sessionDates =
+    sessionResult && sessionResult.calDate === calDate && sessionResult.day === day
+      ? sessionResult.dates
+      : null;
+  // Open spots fetched for one sessionDates object. Mini game days report 0
+  // casual spots, but members are always included.
+  const [spotsResult, setSpotsResult] = useState<{
+    dates: Record<string, true>;
+    spots: Record<string, number>;
+    miniGame: Record<string, boolean>;
+  } | null>(null);
+  const spotsReady = spotsResult !== null && spotsResult.dates === sessionDates;
+  const spotsByDate = spotsReady ? spotsResult.spots : NO_SPOTS;
+  const miniGameByDate = spotsReady ? spotsResult.miniGame : NO_MINI_GAMES;
+  const spotsLoading =
+    sessionDates !== null && Object.keys(sessionDates).length > 0 && !spotsReady;
 
   // A date picked while on "friday" is never valid once switched to
   // "wednesday" (or vice versa) — drop it so a stale selection can't be
   // silently submitted.
-  useEffect(() => {
+  const [prevDay, setPrevDay] = useState(day);
+  if (day !== prevDay) {
+    setPrevDay(day);
     setSelected(null);
-  }, [day]);
+  }
 
   useEffect(() => {
     const y = calDate.getFullYear();
@@ -67,7 +89,6 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
     const to = toDateKey(new Date(y, m, daysInMonth));
     const dow = MEMBERSHIP_DAY_TO_DOW[day];
     let cancelled = false;
-    setSessionDates(null);
 
     fetch(`/api/sessions?from=${from}&to=${to}`)
       .then((r) => r.json())
@@ -78,10 +99,10 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
           const [yy, mm, dd] = s.date.split("-").map(Number);
           if (new Date(yy, mm - 1, dd).getDay() === dow) map[s.date] = true;
         }
-        setSessionDates(map);
+        setSessionResult({ calDate, day, dates: map });
       })
       .catch(() => {
-        if (!cancelled) setSessionDates({});
+        if (!cancelled) setSessionResult({ calDate, day, dates: {} });
       });
 
     return () => {
@@ -92,27 +113,18 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
   useEffect(() => {
     if (sessionDates === null) return;
     const keys = Object.keys(sessionDates);
-    if (keys.length === 0) {
-      setSpotsByDate({});
-      setSpotsLoading(false);
-      return;
-    }
+    // No play days this month: nothing to load (spotsLoading is false).
+    if (keys.length === 0) return;
     let cancelled = false;
-    setSpotsLoading(true);
     fetch(`/api/spots?dates=${keys.join(",")}`)
       .then((r) => r.json())
       .then((data: { spots?: Record<string, number>; miniGame?: Record<string, boolean> }) => {
         if (cancelled) return;
-        setSpotsByDate(data.spots ?? {});
-        setMiniGameByDate(data.miniGame ?? {});
+        setSpotsResult({ dates: sessionDates, spots: data.spots ?? {}, miniGame: data.miniGame ?? {} });
       })
       .catch(() => {
         if (cancelled) return;
-        setSpotsByDate({});
-        setMiniGameByDate({});
-      })
-      .finally(() => {
-        if (!cancelled) setSpotsLoading(false);
+        setSpotsResult({ dates: sessionDates, spots: {}, miniGame: {} });
       });
     return () => {
       cancelled = true;

@@ -58,23 +58,33 @@ export function MessagesPanel({
     if (res.ok) setThreads(((await res.json()) as { threads: ThreadSummary[] }).threads);
   }, []);
 
-  const loadThread = useCallback(async (id: number) => {
-    const res = await fetch(`/api/profile/messages/${id}`, { cache: "no-store" });
-    if (!res.ok) return;
-    const data = (await res.json()) as { thread: ThreadDetail };
-    setThread((prev) => {
-      // Keep messages that are still sending (optimistic) at the end.
-      const pending = prev?.id === id ? prev.messages.filter((x) => x.id < 0) : [];
-      return { ...data.thread, messages: [...data.thread.messages, ...pending] };
-    });
-    setThreads((ts) => ts.map((t) => (t.id === id ? { ...t, unread: false } : t)));
-  }, []);
+  // State is only set once the response is in (inside .then), never
+  // synchronously, so the polling effect below can call it directly.
+  const loadThread = useCallback(
+    (id: number): Promise<void> =>
+      fetch(`/api/profile/messages/${id}`, { cache: "no-store" })
+        .then((res) => (res.ok ? (res.json() as Promise<{ thread: ThreadDetail }>) : null))
+        .then((data) => {
+          if (!data) return;
+          setThread((prev) => {
+            // Keep messages that are still sending (optimistic) at the end.
+            const pending = prev?.id === id ? prev.messages.filter((x) => x.id < 0) : [];
+            return { ...data.thread, messages: [...data.thread.messages, ...pending] };
+          });
+          setThreads((ts) => ts.map((t) => (t.id === id ? { ...t, unread: false } : t)));
+        }),
+    [],
+  );
+
+  // Back to the list: drop the thread that was open.
+  const [prevOpenId, setPrevOpenId] = useState(openId);
+  if (openId !== prevOpenId) {
+    setPrevOpenId(openId);
+    if (openId === null) setThread(null);
+  }
 
   useEffect(() => {
-    if (openId === null) {
-      setThread(null);
-      return;
-    }
+    if (openId === null) return;
     void loadThread(openId);
     const id = window.setInterval(() => {
       if (!document.hidden) void loadThread(openId);

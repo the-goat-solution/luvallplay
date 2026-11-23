@@ -144,7 +144,7 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
       </div>
 
       <label className={styles.field}>
-        <span className={styles.label}>Source</span>
+        <span className={styles.label}>Category</span>
         <select
           className={styles.select}
           value={filters.category ?? ""}

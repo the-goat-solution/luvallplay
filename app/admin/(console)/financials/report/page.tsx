@@ -1,5 +1,6 @@
 import { ExportButton } from "@/components/admin/finance/ExportButton";
-import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
+import { AutoSubmitSelect } from "@/components/admin/AutoSubmitSelect";
+import { PageHeader } from "@/components/admin/kit";
 import { PrintButton } from "@/components/admin/finance/PrintButton";
 import styles from "@/components/admin/finance/financials.module.css";
 import { getClubToday } from "@/lib/dates";
@@ -73,8 +74,7 @@ export default async function AnnualReportPage({
   if (!process.env.POSTGRES_URL) {
     return (
       <div className={styles.page}>
-        <h1 className={styles.title}>Annual report</h1>
-        <p className={styles.subtitle}>The year&apos;s accounts, laid out for the AGM. Print it or save it as a PDF.</p>
+        <PageHeader title="Annual report" subtitle="The year's accounts, laid out for the AGM. Print it or save it as a PDF." />
         <p>Database is not configured.</p>
       </div>
     );
@@ -136,26 +136,32 @@ export default async function AnnualReportPage({
   return (
     <div className={styles.page}>
       <div className={styles.noPrint}>
-        <h1 className={styles.title}>Annual report</h1>
-        <p className={styles.subtitle}>The year&apos;s accounts, laid out for the AGM. Print it or save it as a PDF.</p>
+        <PageHeader
+          title="Annual report"
+          subtitle="The year's accounts, laid out for the AGM. Print it or save it as a PDF."
+          actions={
+            <>
+              <ExportButton href={`/api/admin/finance/export?${exportQs}`}>⤓ Excel (all transactions)</ExportButton>
+              <PrintButton />
+            </>
+          }
+        />
         <form method="get" className={styles.toolbar} style={{ marginTop: 0 }}>
           <label className={styles.field}>
             <span className={styles.label}>Financial year</span>
-            <select name="fy" defaultValue={String(fy)} className={styles.select}>
+            <AutoSubmitSelect name="fy" defaultValue={String(fy)} className={styles.select}>
               {fyOptions.map((o) => (
                 <option key={o} value={o}>
                   FY {financialYearLabel(o)} (1 Apr {o} – 31 Mar {o + 1}){o === currentFy ? " — in progress" : ""}
                 </option>
               ))}
-            </select>
+            </AutoSubmitSelect>
           </label>
-          <PlainSubmitButton loadingText="Loading…" className={styles.button} style={{ alignSelf: "flex-end" }}>
-            Show
-          </PlainSubmitButton>
-          <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignSelf: "flex-end" }}>
-            <ExportButton href={`/api/admin/finance/export?${exportQs}`}>⤓ Excel (all transactions)</ExportButton>
-            <PrintButton />
-          </span>
+          <noscript>
+            <button type="submit" className={styles.button} style={{ alignSelf: "flex-end" }}>
+              Show
+            </button>
+          </noscript>
         </form>
       </div>
 

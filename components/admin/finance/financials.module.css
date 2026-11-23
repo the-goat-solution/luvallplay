@@ -12,7 +12,7 @@
   --green-bg: #ecfdf3;
   --red: #b42318;
   --red-bg: #fef3f2;
-  --navy: #184467;
+  --navy: #1a2a4a; /* the admin kit navy: one navy across admin */
 
   color: var(--ink);
   font-size: 14px;
@@ -805,50 +805,6 @@
   padding: 6px 0;
 }
 
-/* ── Section nav (Ledger / Bank / Annual report) ───────── */
-
-.subNav {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  margin: -8px 0 18px;
-  background: var(--soft);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  flex-wrap: wrap;
-}
-
-.subNavLink {
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.subNavLink:hover {
-  color: var(--ink);
-}
-
-.subNavActive {
-  background: #fff;
-  color: var(--ink);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
-}
-
-@media (max-width: 560px) {
-  .subNav {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .subNavLink {
-    white-space: nowrap;
-  }
-}
-
 /* ── Bank & reconciliation ─────────────────────────────── */
 
 .fundsGrid {
@@ -1347,4 +1303,18 @@
 .ruleAuto {
   background: var(--green-bg);
   color: var(--green);
+}
+
+/* "Advanced" disclosure in the Stripe sync bar (rarely needed actions). */
+.advanced {
+  display: inline-block;
+  font-size: 13px;
+}
+.advanced summary {
+  cursor: pointer;
+  color: var(--muted, #6b7383);
+}
+.advanced[open] form {
+  display: inline-block;
+  margin-left: 8px;
 }

@@ -833,6 +833,13 @@ Findings and changes recorded as the work goes:
   - **Tooling:** the schema dump and the drift check now cover functions and triggers. A Drizzle schema can't describe them, so the "built from `schema.ts`" comparison covers tables, indexes and sequences, and the migrations comparison covers everything.
   - **The characterisation check caught a second thing:** one member's data export listed two same-day bookings in a different order after the backfill, because the export sorted by date only and the backfill changes the order rows are stored in. Every list in the export now has a full sort order. The rehearsal was repeated from a fresh copy and is identical.
   - Rehearsed on a fresh Neon branch of production: 17 accounts, 0 problems; no disagreement between `user_id` and email on 453 rows; characterisation identical; no drift (`docs/rehearsals/2026-11-phase3-user-id-links.md`).
+  - **Production run, 23 Nov 2026, 09:09 UTC:** restore point `pre-phase-3-user-id-links`; the migration took 4.4 s; the data guard diff passed with 17 accounts and 0 problems; no drift; no disagreement between `user_id` and the email on 453 rows. Merged at 09:11 UTC.
+- **Step 4, settings replace constants (no migration):**
+  - Part 1: `@luvallplay/core/club-config` (pure) turns a club's `tenants` row and `tenant_modules.settings` into one typed `ClubConfig`, and compares two configs setting by setting. `lib/club-config.ts` loads it, cached for a minute.
+  - **The feature flag is `CLUB_SETTINGS_SOURCE`:** `constants` (default), `shadow` (built-in values answer, stored ones are compared and differences logged) or `database`. This is the shadow read for settings.
+  - A missing or malformed stored value falls back to the built-in value for that field only, and is reported. A database error never breaks a page.
+  - A test proves the settings migration 0003 stored for Three Wolves equal today's constants exactly, so the shadow comparison starts empty. Admin → Setup check shows it live.
+  - The loader is tested with a second, synthetic club (Vietnam, VND, its own days and limits) to show nothing is borrowed from Three Wolves' values.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

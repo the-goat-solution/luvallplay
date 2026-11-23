@@ -672,6 +672,14 @@ export async function getTotalActiveMemberCount(): Promise<number> {
   return (rows[0] as { count: number })?.count ?? 0;
 }
 
+/** Memberships whose last payment failed (admin menu badge, Today page). */
+export async function countFailedMemberPayments(): Promise<number> {
+  const { rows } = await sql`
+    SELECT COUNT(*)::int AS count FROM memberships WHERE status IN ('past_due', 'unpaid');
+  `;
+  return (rows[0] as { count: number })?.count ?? 0;
+}
+
 export async function getSessionHeadcount(
   date: string,
 ): Promise<{ casual: number; members: number; total: number }> {

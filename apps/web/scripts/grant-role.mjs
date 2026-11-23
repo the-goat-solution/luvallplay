@@ -13,6 +13,7 @@
 //   on a Neon branch of production (test plan §4.5).
 import { dbClient } from "./db-client.mjs";
 import { setPlatformAdmin, setRoleByEmail, normalizeEmail } from "../lib/admin-roles.ts";
+import { mirrorClubMember } from "../lib/tenant-members.ts";
 
 function parseArgs(argv) {
   const out = { emails: [], role: null, platform: false, dryRun: false };
@@ -70,6 +71,9 @@ try {
     console.log("Dry run: rolled back.");
   } else {
     await client.query("COMMIT");
+    // Phase 3: club_members mirrors club_roles. After the commit, so a
+    // database without the tenants tables yet can't undo the grant.
+    await mirrorClubMember(db, null);
   }
 } catch (err) {
   await client.query("ROLLBACK").catch(() => {});

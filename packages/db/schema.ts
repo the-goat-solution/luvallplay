@@ -1102,3 +1102,148 @@ export const club_settings = pgTable("club_settings", {
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updated_by: integer(),
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3: multi-tenant core (build plan §6.1). Additive: nothing above
+// changes in this step.
+// ---------------------------------------------------------------------------
+
+// A club. Three Wolves is club #1 (migration 0003). Every club lives in
+// exactly one region (§6.9); money is minor units in `currency`.
+export const tenants = pgTable("tenants", {
+	id: serial().primaryKey().notNull(),
+	slug: text().notNull(),
+	name: text().notNull(),
+	status: text().default('active').notNull(),
+	country: text().notNull(),
+	region: text().notNull(),
+	timezone: text().notNull(),
+	currency: text().notNull(),
+	languages: text().array().default(["en"]).notNull(),
+	sports: text().array().default([]).notNull(),
+	payment_mode: text().default('free').notNull(),
+	incorporated: text().default('unsure').notNull(),
+	stripe_status: text().default('none').notNull(),
+	bank_details: jsonb(),
+	theme: jsonb().default({}).notNull(),
+	terms: jsonb().default({}).notNull(),
+	custom_domain: text(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	unique("tenants_slug_key").on(table.slug),
+	unique("tenants_custom_domain_key").on(table.custom_domain),
+	check("tenants_slug_check", sql`slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text`),
+	check("tenants_status_check", sql`status = ANY (ARRAY['setup'::text, 'active'::text, 'suspended'::text, 'closed'::text])`),
+	check("tenants_country_check", sql`country ~ '^[A-Z]{2}$'::text`),
+	check("tenants_region_check", sql`region ~ '^[a-z][a-z0-9-]*$'::text`),
+	check("tenants_currency_check", sql`currency ~ '^[A-Z]{3}$'::text`),
+	check("tenants_payment_mode_check", sql`payment_mode = ANY (ARRAY['free'::text, 'offline'::text, 'online'::text])`),
+	check("tenants_incorporated_check", sql`incorporated = ANY (ARRAY['yes'::text, 'no'::text, 'unsure'::text])`),
+	check("tenants_stripe_status_check", sql`stripe_status = ANY (ARRAY['none'::text, 'connecting'::text, 'connected'::text])`),
+	check("tenants_custom_domain_check", sql`custom_domain = lower(custom_domain)`),
+]);
+
+// Which modules a club has on (§6.2.3), with each module's settings. Core
+// modules have a row too, for their settings; they can't be switched off.
+// `locked` is a platform admin's lock: the club's owners can't change it and
+// see `lock_reason`.
+export const tenant_modules = pgTable("tenant_modules", {
+	tenant_id: integer().notNull(),
+	module_id: text().notNull(),
+	enabled: boolean().default(true).notNull(),
+	settings: jsonb().default({}).notNull(),
+	enabled_at: timestamp({ withTimezone: true, mode: 'string' }),
+	locked: text(),
+	lock_reason: text(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updated_by: integer(),
+}, (table) => [
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "tenant_modules_tenant_id_fkey"
+		}).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.module_id], name: "tenant_modules_pkey"}),
+	check("tenant_modules_locked_check", sql`locked = ANY (ARRAY['on'::text, 'off'::text])`),
+]);
+
+// A person's place in a club: one row per club and account. The account
+// (players, the global identity) is never deleted, only soft-deleted, so the
+// link is ON DELETE RESTRICT. `status` is the club's own decision: a disabled
+// member loses that club's spaces and keeps the account and data.
+// Until reads switch (Phase 3 step 11), club_roles stays the source for
+// owner/admin/coach and this table mirrors it.
+export const club_members = pgTable("club_members", {
+	tenant_id: integer().notNull(),
+	user_id: integer().notNull(),
+	role: text().default('member').notNull(),
+	status: text().default('active').notNull(),
+	joined_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	leaderboard_visible: boolean().default(true).notNull(),
+	global_profile_visible: boolean().default(false).notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("club_members_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "club_members_tenant_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "club_members_user_id_fkey"
+		}).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.user_id], name: "club_members_pkey"}),
+	check("club_members_role_check", sql`role = ANY (ARRAY['owner'::text, 'admin'::text, 'coach'::text, 'member'::text, 'guest'::text])`),
+	check("club_members_status_check", sql`status = ANY (ARRAY['active'::text, 'disabled'::text])`),
+]);
+
+// Junior accounts (§6.8): a child's profile has no login, email or phone. A
+// guardian (a normal account) manages it. Created empty in Phase 3 so
+// nothing is reshaped later; the features are Phase 3b.
+export const junior_profiles = pgTable("junior_profiles", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	guardian_user_id: integer().notNull(),
+	name: text().notNull(),
+	birth_year: smallint(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	deleted_at: timestamp({ withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("junior_profiles_tenant_id_idx").using("btree", table.tenant_id.asc().nullsLast(), table.id.asc().nullsLast()),
+	index("junior_profiles_guardian_user_id_idx").using("btree", table.guardian_user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "junior_profiles_tenant_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.guardian_user_id],
+			foreignColumns: [players.id],
+			name: "junior_profiles_guardian_user_id_fkey"
+		}).onDelete("restrict"),
+]);
+
+// One child can have two guardians, one guardian several children.
+export const guardianships = pgTable("guardianships", {
+	guardian_user_id: integer().notNull(),
+	junior_profile_id: integer().notNull(),
+	consent_at: timestamp({ withTimezone: true, mode: 'string' }),
+	consent_scope: jsonb().default({}).notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("guardianships_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.guardian_user_id],
+			foreignColumns: [players.id],
+			name: "guardianships_guardian_user_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.junior_profile_id],
+			foreignColumns: [junior_profiles.id],
+			name: "guardianships_junior_profile_id_fkey"
+		}).onDelete("restrict"),
+	primaryKey({ columns: [table.guardian_user_id, table.junior_profile_id], name: "guardianships_pkey"}),
+]);

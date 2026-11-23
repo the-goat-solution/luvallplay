@@ -793,6 +793,32 @@ Decision V: no longer 16+ only. **Juniors (under 16) never get their own login.*
 - **names and search:** Vietnamese names put the family name first, so profiles use a single full-name field plus a display name, and **search ignores accents** (typing "nguyen" finds "Nguyễn");
 - languages and sport vocabulary (§6.7).
 
+### 6.10 Phase 3 delivery log and plan changes
+
+Phase 3 ships as twelve small steps, each deployable and revertable on its own: (1) tenants schema and Three Wolves as club #1 → (2) nullable `tenant_id` columns, backfilled → (3) email links → `user_id` → (4) settings replace constants → (5) module enforcement → (6) second driver and region routing → (7) money audit → (8) payments interface → (9) entitlements and metering → (10) `NOT NULL`, foreign keys and row-level security → (11) reads switched, after 7 clean days of shadow reads → (12) old email joins dropped. The steps that need a decision or a sign-off are in [`phase-3-runbook.md`](./phase-3-runbook.md).
+
+Findings and changes recorded as the work goes:
+
+- **Step 1, tenants schema (migration `0003_tenants`):**
+  - Five new tables: `tenants`, `tenant_modules`, `club_members`, and the junior-account tables `junior_profiles` and `guardianships` (§6.8, empty). Additive only.
+  - Three Wolves' row is copied from today's constants, and a test compares the migration with them: `Pacific/Auckland`, NZD, English and Vietnamese, badminton, online payments, incorporated (its bank account name ends in "INC"), its bank details, its colours and fonts (from `packages/ui`), and the terms "Wolf Points" and "Wolf Vision".
+  - `tenant_modules` has one row per module in the registry, the core included, because the core has settings too. The settings that are constants today are stored there: courts → players, session capacity, booking window and cut-off (Play days); the mini-game field (Round robin); membership days, default courts, cycle lengths, start search and pending hold (Memberships); donation limits in minor units (Donations). Nothing reads them yet (step 4).
+  - **Plan change: `club_members` is a new table beside `club_roles`, not `club_roles` reshaped.** `club_roles` and `platform_admins` are untouched and stay the source of admin access, so the previous app version keeps working and nobody's access can change in this step. `club_members` mirrors the role and the leaderboard flag after each change, and an idempotent reconcile (the same statement as the backfill) repairs anything missed. Reads move to `club_members` in step 11, and `club_roles` is dropped in step 12.
+  - The mirror runs outside transactions only. A failed statement inside an open transaction would abort it, which the grant script's tests caught.
+  - **Plan change: `tenant_modules` has the platform lock from the start** (`locked` on/off, `lock_reason`, §6.2.3), which saves a later migration.
+  - **Plan change: `tenants.location` (a PostGIS point) is left for Phase 7** (Find a club). Production has no PostGIS, and nothing needs the column before then.
+  - Clubs have integer ids, like every other table. The slug is the public name; code looks a club up by slug or host and never assumes id 1.
+  - The accounts table keeps the name `players`. New tables call the link `user_id`, the name the plan uses for the global identity.
+  - The migration also creates Three Wolves in every new database (CI, previews, local). A second region's database needs its own first club, which is decided with the Hanoi work.
+  - Rehearsed on a fresh Neon branch of production: 17 live accounts, 0 problems, no schema drift, 2 owners and 2 platform admins unchanged (`docs/rehearsals/2026-11-phase3-tenants.md`).
+  - **Production run, 23 Nov 2026, 07:36 UTC:** restore point `pre-phase-3-tenants`; the migration took 5.5 s; the data guard diff passed with 17 accounts and 0 problems; no drift; 19 accounts and 19 club members, mirror drift 0.
+  - Finding for step 6 (host routing): the site is served from `www.threewolvesbadminton.org` (the bare domain redirects there), and `tenants.custom_domain` holds the bare domain. The host lookup has to treat both as Three Wolves.
+  - Finding for step 10: many tables have keys that only work for one club (`sessions` by date, `attendance` by date and email, `club_settings` by key, `pricing_plans` by plan id, and others). Their primary keys and unique indexes have to gain `tenant_id` before a second club can exist.
+- **Findings about the environment:**
+  - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
+  - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.
+  - Local development has Postgres 16. The schema drift check needs 18 and runs in CI and against the Neon rehearsal branch.
+
 ---
 
 ## 7. Phase 6: brand, websites and the setup wizard

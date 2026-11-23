@@ -1,4 +1,5 @@
 import { db } from "./database";
+import { mirrorClubMember } from "./tenant-members";
 import { T } from "./arena-db";
 import { WV } from "./wolf-vision-db";
 import { normalizeEmail as jerseyNormalizeEmail } from "./jersey";
@@ -363,6 +364,9 @@ export async function mergeMembers(keepRaw: string, mergeRaw: string, apply: boo
     const q: Q = (text, params) => client.query(text, params as unknown[]);
     const result = await runMerge(q, keepEmail, mergeEmail);
     await client.query(apply ? "COMMIT" : "ROLLBACK");
+    // Phase 3: after the commit (a failed mirror must not undo a merge), the
+    // retired account's club_members row follows its leaderboard flag.
+    if (apply) await mirrorClubMember(db, null);
     return { ...result, applied: apply };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

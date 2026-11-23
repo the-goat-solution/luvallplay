@@ -394,6 +394,31 @@ CREATE TABLE casual_play_sessions (
   CONSTRAINT casual_play_sessions_pkey PRIMARY KEY (date)
 );
 
+CREATE TABLE club_members (
+  tenant_id integer NOT NULL,
+  user_id integer NOT NULL,
+  role text DEFAULT 'member'::text NOT NULL,
+  status text DEFAULT 'active'::text NOT NULL,
+  joined_at timestamp with time zone DEFAULT now() NOT NULL,
+  leaderboard_visible boolean DEFAULT true NOT NULL,
+  global_profile_visible boolean DEFAULT false NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT club_members_role_check CHECK ((role = ANY (ARRAY['owner'::text, 'admin'::text, 'coach'::text, 'member'::text, 'guest'::text]))),
+  CONSTRAINT club_members_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text]))),
+  CONSTRAINT club_members_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT club_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT club_members_global_profile_visible_not_null NOT NULL global_profile_visible,
+  CONSTRAINT club_members_joined_at_not_null NOT NULL joined_at,
+  CONSTRAINT club_members_leaderboard_visible_not_null NOT NULL leaderboard_visible,
+  CONSTRAINT club_members_role_not_null NOT NULL role,
+  CONSTRAINT club_members_status_not_null NOT NULL status,
+  CONSTRAINT club_members_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT club_members_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT club_members_user_id_not_null NOT NULL user_id,
+  CONSTRAINT club_members_pkey PRIMARY KEY (tenant_id, user_id)
+);
+CREATE INDEX club_members_user_id_idx ON public.club_members USING btree (user_id);
+
 CREATE TABLE club_roles (
   player_id integer NOT NULL,
   role text NOT NULL,
@@ -523,6 +548,22 @@ CREATE TABLE finance_sync_state (
   CONSTRAINT finance_sync_state_pkey PRIMARY KEY (key)
 );
 
+CREATE TABLE guardianships (
+  guardian_user_id integer NOT NULL,
+  junior_profile_id integer NOT NULL,
+  consent_at timestamp with time zone,
+  consent_scope jsonb DEFAULT '{}'::jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT guardianships_guardian_user_id_fkey FOREIGN KEY (guardian_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT guardianships_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
+  CONSTRAINT guardianships_consent_scope_not_null NOT NULL consent_scope,
+  CONSTRAINT guardianships_created_at_not_null NOT NULL created_at,
+  CONSTRAINT guardianships_guardian_user_id_not_null NOT NULL guardian_user_id,
+  CONSTRAINT guardianships_junior_profile_id_not_null NOT NULL junior_profile_id,
+  CONSTRAINT guardianships_pkey PRIMARY KEY (guardian_user_id, junior_profile_id)
+);
+CREATE INDEX guardianships_junior_profile_id_idx ON public.guardianships USING btree (junior_profile_id);
+
 CREATE TABLE jersey_registrations (
   id integer DEFAULT nextval('jersey_registrations_id_seq'::regclass) NOT NULL,
   ref_code text,
@@ -571,6 +612,26 @@ CREATE TABLE jersey_registrations (
   CONSTRAINT jersey_registrations_ref_code_key UNIQUE (ref_code)
 );
 CREATE UNIQUE INDEX jersey_one_per_email ON public.jersey_registrations USING btree (email_normalized) WHERE (status = ANY (ARRAY['pending'::text, 'paid'::text]));
+
+CREATE TABLE junior_profiles (
+  id integer DEFAULT nextval('junior_profiles_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  guardian_user_id integer NOT NULL,
+  name text NOT NULL,
+  birth_year smallint,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  deleted_at timestamp with time zone,
+  CONSTRAINT junior_profiles_guardian_user_id_fkey FOREIGN KEY (guardian_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_profiles_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_profiles_created_at_not_null NOT NULL created_at,
+  CONSTRAINT junior_profiles_guardian_user_id_not_null NOT NULL guardian_user_id,
+  CONSTRAINT junior_profiles_id_not_null NOT NULL id,
+  CONSTRAINT junior_profiles_name_not_null NOT NULL name,
+  CONSTRAINT junior_profiles_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_profiles_pkey PRIMARY KEY (id)
+);
+CREATE INDEX junior_profiles_guardian_user_id_idx ON public.junior_profiles USING btree (guardian_user_id);
+CREATE INDEX junior_profiles_tenant_id_idx ON public.junior_profiles USING btree (tenant_id, id);
 
 CREATE TABLE membership_reminders_sent (
   membership_id integer NOT NULL,
@@ -1293,6 +1354,77 @@ CREATE TABLE stripe_payouts (
   CONSTRAINT stripe_payouts_pkey PRIMARY KEY (id)
 );
 
+CREATE TABLE tenant_modules (
+  tenant_id integer NOT NULL,
+  module_id text NOT NULL,
+  enabled boolean DEFAULT true NOT NULL,
+  settings jsonb DEFAULT '{}'::jsonb NOT NULL,
+  enabled_at timestamp with time zone,
+  locked text,
+  lock_reason text,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_by integer,
+  CONSTRAINT tenant_modules_locked_check CHECK ((locked = ANY (ARRAY['on'::text, 'off'::text]))),
+  CONSTRAINT tenant_modules_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT tenant_modules_enabled_not_null NOT NULL enabled,
+  CONSTRAINT tenant_modules_module_id_not_null NOT NULL module_id,
+  CONSTRAINT tenant_modules_settings_not_null NOT NULL settings,
+  CONSTRAINT tenant_modules_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT tenant_modules_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT tenant_modules_pkey PRIMARY KEY (tenant_id, module_id)
+);
+
+CREATE TABLE tenants (
+  id integer DEFAULT nextval('tenants_id_seq'::regclass) NOT NULL,
+  slug text NOT NULL,
+  name text NOT NULL,
+  status text DEFAULT 'active'::text NOT NULL,
+  country text NOT NULL,
+  region text NOT NULL,
+  timezone text NOT NULL,
+  currency text NOT NULL,
+  languages text[] DEFAULT '{en}'::text[] NOT NULL,
+  sports text[] DEFAULT '{}'::text[] NOT NULL,
+  payment_mode text DEFAULT 'free'::text NOT NULL,
+  incorporated text DEFAULT 'unsure'::text NOT NULL,
+  stripe_status text DEFAULT 'none'::text NOT NULL,
+  bank_details jsonb,
+  theme jsonb DEFAULT '{}'::jsonb NOT NULL,
+  terms jsonb DEFAULT '{}'::jsonb NOT NULL,
+  custom_domain text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT tenants_country_check CHECK ((country ~ '^[A-Z]{2}$'::text)),
+  CONSTRAINT tenants_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
+  CONSTRAINT tenants_custom_domain_check CHECK ((custom_domain = lower(custom_domain))),
+  CONSTRAINT tenants_incorporated_check CHECK ((incorporated = ANY (ARRAY['yes'::text, 'no'::text, 'unsure'::text]))),
+  CONSTRAINT tenants_payment_mode_check CHECK ((payment_mode = ANY (ARRAY['free'::text, 'offline'::text, 'online'::text]))),
+  CONSTRAINT tenants_region_check CHECK ((region ~ '^[a-z][a-z0-9-]*$'::text)),
+  CONSTRAINT tenants_slug_check CHECK ((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text)),
+  CONSTRAINT tenants_status_check CHECK ((status = ANY (ARRAY['setup'::text, 'active'::text, 'suspended'::text, 'closed'::text]))),
+  CONSTRAINT tenants_stripe_status_check CHECK ((stripe_status = ANY (ARRAY['none'::text, 'connecting'::text, 'connected'::text]))),
+  CONSTRAINT tenants_country_not_null NOT NULL country,
+  CONSTRAINT tenants_created_at_not_null NOT NULL created_at,
+  CONSTRAINT tenants_currency_not_null NOT NULL currency,
+  CONSTRAINT tenants_id_not_null NOT NULL id,
+  CONSTRAINT tenants_incorporated_not_null NOT NULL incorporated,
+  CONSTRAINT tenants_languages_not_null NOT NULL languages,
+  CONSTRAINT tenants_name_not_null NOT NULL name,
+  CONSTRAINT tenants_payment_mode_not_null NOT NULL payment_mode,
+  CONSTRAINT tenants_region_not_null NOT NULL region,
+  CONSTRAINT tenants_slug_not_null NOT NULL slug,
+  CONSTRAINT tenants_sports_not_null NOT NULL sports,
+  CONSTRAINT tenants_status_not_null NOT NULL status,
+  CONSTRAINT tenants_stripe_status_not_null NOT NULL stripe_status,
+  CONSTRAINT tenants_terms_not_null NOT NULL terms,
+  CONSTRAINT tenants_theme_not_null NOT NULL theme,
+  CONSTRAINT tenants_timezone_not_null NOT NULL timezone,
+  CONSTRAINT tenants_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT tenants_pkey PRIMARY KEY (id),
+  CONSTRAINT tenants_custom_domain_key UNIQUE (custom_domain),
+  CONSTRAINT tenants_slug_key UNIQUE (slug)
+);
+
 CREATE TABLE waitlist (
   id integer DEFAULT nextval('waitlist_id_seq'::regclass) NOT NULL,
   session_date date,
@@ -1441,6 +1573,7 @@ CREATE SEQUENCE day_requests_id_seq AS integer OWNED BY day_requests.id;
 CREATE SEQUENCE donations_id_seq AS integer OWNED BY donations.id;
 CREATE SEQUENCE finance_entries_id_seq AS integer OWNED BY finance_entries.id;
 CREATE SEQUENCE jersey_registrations_id_seq AS integer OWNED BY jersey_registrations.id;
+CREATE SEQUENCE junior_profiles_id_seq AS integer OWNED BY junior_profiles.id;
 CREATE SEQUENCE memberships_id_seq AS integer OWNED BY memberships.id;
 CREATE SEQUENCE message_threads_id_seq AS integer OWNED BY message_threads.id;
 CREATE SEQUENCE messages_id_seq AS integer OWNED BY messages.id;
@@ -1463,6 +1596,7 @@ CREATE SEQUENCE shop_products_id_seq AS integer OWNED BY shop_products.id;
 CREATE SEQUENCE shop_stock_log_id_seq AS integer OWNED BY shop_stock_log.id;
 CREATE SEQUENCE shop_variants_id_seq AS integer OWNED BY shop_variants.id;
 CREATE SEQUENCE sms_sends_id_seq AS integer OWNED BY sms_sends.id;
+CREATE SEQUENCE tenants_id_seq AS integer OWNED BY tenants.id;
 CREATE SEQUENCE waitlist_id_seq AS integer OWNED BY waitlist.id;
 CREATE SEQUENCE webhook_deliveries_id_seq AS integer OWNED BY webhook_deliveries.id;
 CREATE SEQUENCE webhook_endpoints_id_seq AS integer OWNED BY webhook_endpoints.id;

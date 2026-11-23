@@ -1,0 +1,73 @@
+// Phase 3 step 1: checks the tenants tables after migration 0003 (read-only
+// unless --reconcile is given).
+//
+//   node scripts/tenants/verify.mjs               report; exit 1 on any problem
+//   node scripts/tenants/verify.mjs --reconcile   first bring club_members in
+//                                                 line with club_roles and the
+//                                                 leaderboard flag (idempotent)
+//
+// Checks: exactly one club (no other club may exist in production while the
+// readiness gates are open, build plan §11.3); one module row per module in
+// the registry; one club_members row per account; every club_roles role
+// mirrored; at least one live owner. Prints counts only, never an email.
+//
+// POSTGRES_URL chooses the database. DB_DRIVER=neon-ws works as in the other
+// operator scripts.
+import { dbClient } from "../db-client.mjs";
+import { MODULES } from "@luvallplay/modules";
+import { clubMemberDrift, defaultTenantSlug, reconcileClubMembers } from "../../lib/tenant-members.ts";
+
+const url = process.env.POSTGRES_URL;
+if (!url) {
+  console.error("POSTGRES_URL is not set.");
+  process.exit(2);
+}
+const reconcile = process.argv.includes("--reconcile");
+const slug = defaultTenantSlug();
+const client = await dbClient(url, "tenants-verify");
+await client.connect();
+const db = { query: (text, params) => client.query(text, params) };
+const problems = [];
+try {
+  if (reconcile) console.log(`Reconciled: ${await reconcileClubMembers(db, slug)} row(s) written.`);
+
+  const clubs = (await db.query(`SELECT id, slug, status, country, region, timezone, currency, payment_mode FROM tenants ORDER BY id`)).rows;
+  console.log(`Clubs: ${clubs.map((t) => `${t.slug} (id ${t.id}, ${t.status}, ${t.country}/${t.region}, ${t.timezone}, ${t.currency}, ${t.payment_mode})`).join("; ") || "none"}`);
+  if (clubs.length !== 1 || clubs[0].slug !== slug) problems.push(`expected exactly one club, "${slug}"`);
+
+  const modules = (await db.query(`SELECT m.module_id, m.enabled FROM tenant_modules m JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1`, [slug])).rows;
+  const ids = new Set(modules.map((m) => m.module_id));
+  const missing = MODULES.map((m) => m.id).filter((id) => !ids.has(id));
+  const unknown = [...ids].filter((id) => !MODULES.some((m) => m.id === id));
+  console.log(`Modules: ${modules.length} rows, ${modules.filter((m) => m.enabled).length} on (registry has ${MODULES.length}).`);
+  if (missing.length) problems.push(`modules without a row: ${missing.join(", ")}`);
+  if (unknown.length) problems.push(`module rows not in the registry: ${unknown.join(", ")}`);
+
+  const counts = (
+    await db.query(
+      `SELECT (SELECT count(*)::int FROM players) AS accounts,
+              (SELECT count(*)::int FROM club_members m JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1) AS members,
+              (SELECT count(*)::int FROM club_roles) AS roles,
+              (SELECT count(*)::int FROM platform_admins) AS platform_admins,
+              (SELECT count(*)::int FROM club_members m JOIN tenants t ON t.id = m.tenant_id JOIN players p ON p.id = m.user_id
+                 WHERE t.slug = $1 AND m.role = 'owner' AND m.status = 'active' AND p.deleted_at IS NULL) AS live_owners`,
+      [slug],
+    )
+  ).rows[0];
+  const byRole = (await db.query(`SELECT m.role, count(*)::int AS n FROM club_members m JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1 GROUP BY 1 ORDER BY 1`, [slug])).rows;
+  console.log(`Accounts: ${counts.accounts}. Club members: ${counts.members} (${byRole.map((r) => `${r.role} ${r.n}`).join(", ")}).`);
+  console.log(`club_roles rows: ${counts.roles}. Platform admins: ${counts.platform_admins}. Live owners in club_members: ${counts.live_owners}.`);
+  if (counts.accounts !== counts.members) problems.push(`${counts.accounts} accounts but ${counts.members} club members`);
+  if (counts.live_owners < 1) problems.push("no live owner in club_members");
+
+  const drift = await clubMemberDrift(db, slug);
+  console.log(`Mirror drift: ${drift.length} row(s).`);
+  for (const d of drift) problems.push(`account ${d.userId}: ${d.problem}`);
+} finally {
+  await client.end();
+}
+if (problems.length) {
+  console.error(`\nPROBLEMS (${problems.length}):\n${problems.map((p) => `- ${p}`).join("\n")}`);
+  process.exit(1);
+}
+console.log("\nRESULT: tenants tables are consistent.");

@@ -5,7 +5,9 @@
 // Keep `href: "/admin/..."` written out literally: tests/phase1-rules.test.ts
 // reads this file and checks every href against the permission matrix.
 
-export type BadgeKey = "inbox" | "photos" | "disputes" | "bank" | "shop" | "members";
+import type { AttentionKey } from "@/lib/admin-attention";
+
+export type BadgeKey = AttentionKey;
 
 export type NavItem = {
   href: string;
@@ -13,16 +15,20 @@ export type NavItem = {
   badge?: BadgeKey;
   /** Extra paths that count as this page (sub-pages, old URLs). */
   match?: string[];
+  /** Only this exact path counts (the admin home, which every page is under). */
+  exact?: boolean;
 };
 
+/** A group with an empty label shows its items without a heading. */
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
+  { label: "", items: [{ href: "/admin", label: "Today", exact: true }] },
   {
     label: "Play",
     items: [
       { href: "/admin/play-days", label: "Play days" },
-      { href: "/admin/day-requests", label: "Schedule" },
+      { href: "/admin/day-requests", label: "Schedule", badge: "dayRequests" },
       { href: "/admin/challenges", label: "Arena", badge: "disputes" },
     ],
   },
@@ -30,7 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "People",
     items: [
       { href: "/admin/members", label: "Members", badge: "members" },
-      { href: "/admin/players", label: "Players" },
+      { href: "/admin/players", label: "Players", badge: "checkins" },
       { href: "/admin/inbox", label: "Inbox", badge: "inbox" },
     ],
   },
@@ -60,7 +66,8 @@ export function activeHref(pathname: string, groups: NavGroup[] = NAV_GROUPS): s
   let best: { href: string; len: number } | null = null;
   for (const item of groups.flatMap((g) => g.items)) {
     for (const p of [item.href, ...(item.match ?? [])]) {
-      if ((pathname === p || pathname.startsWith(`${p}/`)) && (!best || p.length > best.len)) {
+      const hit = pathname === p || (!item.exact && pathname.startsWith(`${p}/`));
+      if (hit && (!best || p.length > best.len)) {
         best = { href: item.href, len: p.length };
       }
     }

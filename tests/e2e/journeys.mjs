@@ -198,7 +198,9 @@ describe("A · accounts and admin", () => {
     const page = await owner.context.newPage();
     await page.goto("/profile");
     await page.getByRole("link", { name: /club admin/i }).first().click();
-    await page.waitForURL(/\/admin\/play-days/);
+    // Admin opens on Today (the admin home).
+    await page.waitForURL(/\/admin$/);
+    await page.getByRole("heading", { name: "Today", level: 1 }).waitFor();
     await page.getByRole("link", { name: "Admins" }).waitFor();
     // Non-admin: no button, and admin answers 403.
     const pete = await signedIn(PEOPLE.player.email);
@@ -309,7 +311,7 @@ describe("A · accounts and admin", () => {
     const fresh = await browser.newContext({ viewport: PHONE });
     const page = await fresh.newPage();
     await page.goto(url);
-    await page.waitForURL(/\/admin\/play-days/);
+    await page.waitForURL(/\/admin$/);
     const replay = await browser.newContext({ viewport: PHONE });
     const p2 = await replay.newPage();
     await p2.goto(url);

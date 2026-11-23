@@ -1,5 +1,6 @@
 "use client";
 
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { useMemo, useState } from "react";
 import { useProfileT } from "@/lib/profile-i18n";
 import { StripeCardForm } from "../LazyStripeCardForm";
@@ -25,7 +26,7 @@ export type CalDay = {
 
 function timeRange(start: string | null, end: string | null, lang: string): string {
   if (!start) return "";
-  const opts: Intl.DateTimeFormatOptions = { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" };
+  const opts: Intl.DateTimeFormatOptions = { timeZone: CLUB_TIME_ZONE, hour: "numeric", minute: "2-digit" };
   const loc = lang === "vi" ? "vi-VN" : "en-NZ";
   const s = new Date(start).toLocaleTimeString(loc, opts);
   return end ? `${s} – ${new Date(end).toLocaleTimeString(loc, opts)}` : s;

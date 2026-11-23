@@ -1,3 +1,5 @@
+import { clubClock } from "./club";
+import { CLUB_TIME_ZONE } from "./constants";
 import crypto from "crypto";
 import { sql, db } from "./database";
 import { revalidateTag } from "next/cache";
@@ -89,7 +91,7 @@ function refresh(): void {
 function nzOffsetMinutes(at: Date): number {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
-      timeZone: "Pacific/Auckland",
+      timeZone: CLUB_TIME_ZONE,
       hourCycle: "h23",
       year: "numeric",
       month: "2-digit",
@@ -332,7 +334,7 @@ export async function recalculateAllPoints(): Promise<{ attendance: number; roun
 export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<World> {
   if (!opts.skipSync) syncPointsLater();
   await tick();
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const [pl, att, rr, pairs, members, ch, peaks, club, stats] = await Promise.all([
     // Every list is ordered so the world (and any tie-break in it) is the same
     // on every load; without ORDER BY, Postgres returns rows in storage order,
@@ -413,7 +415,7 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
   }));
   const baseBefore = (id: number, date: string) => (baseEvents.get(id) ?? []).reduce((s, e) => (e.date <= date ? s + e.points : s), 0);
   const ended = new Map<number, string>();
-  for (const p of pairMap.values()) if (p.endedAt) ended.set(p.id, clubDateKeyForInstant(new Date(p.endedAt)));
+  for (const p of pairMap.values()) if (p.endedAt) ended.set(p.id, clubDateKeyForInstant(new Date(p.endedAt), (await clubClock()).timezone));
   const replay = replayChallenges(replayInput, baseBefore, ended);
 
   // Rank before/after each result, for the feed.
@@ -695,7 +697,7 @@ export async function checkInNow(playerId: number, id: number): Promise<void> {
   if (c.status !== "accepted") throw new ArenaError("not_accepted");
   await sql.query(
     `UPDATE ${T.challenges} SET status = 'live', checked_in_at = NOW(), played_on = $2 WHERE id = $1 AND status = 'accepted';`,
-    [id, getClubToday().dateKey],
+    [id, getClubToday(new Date(), await clubClock()).dateKey],
   );
 }
 
@@ -1139,7 +1141,7 @@ export async function adminResolve(id: number, outcome: "posting" | "accepting" 
   } else {
     // An admin decides the winner without a score: recorded as the other pair retiring.
     const loser = outcome === "posting" ? "accepting" : "posting";
-    if (!c.playedOn) await sql.query(`UPDATE ${T.challenges} SET played_on = $2 WHERE id = $1;`, [id, getClubToday().dateKey]);
+    if (!c.playedOn) await sql.query(`UPDATE ${T.challenges} SET played_on = $2 WHERE id = $1;`, [id, getClubToday(new Date(), await clubClock()).dateKey]);
     await sql.query(
       `UPDATE ${T.challenges} SET status = 'completed', resolved_by_admin = TRUE, retired_by = $2, score_posting = NULL, score_accepting = NULL,
          completed_at = coalesce(completed_at, NOW()) WHERE id = $1;`,
@@ -1170,7 +1172,13 @@ export async function endPlayerArena(playerId: number): Promise<void> {
 
 export async function arenaExport(playerId: number): Promise<Record<string, unknown>> {
   const [pairs, challenges] = await Promise.all([
-    sql.query(`SELECT p.* FROM ${T.pairs} p WHERE player_low = $1 OR player_high = $1 ORDER BY id;`, [playerId]),
+    // Named columns, so "Download my data" doesn't change shape when the
+    // table gains an internal column (Phase 3: tenant_id).
+    sql.query(
+      `SELECT id, player_low, player_high, name, formed_at, ended_at, ended_reason
+       FROM ${T.pairs} WHERE player_low = $1 OR player_high = $1 ORDER BY id;`,
+      [playerId],
+    ),
     sql.query(
       `SELECT id, status, posted_at, accepted_at, checked_in_at, played_on, score_posting, score_accepting, retired_by, completed_at
        FROM ${T.challenges} WHERE p1 = $1 OR p2 = $1 OR a1 = $1 OR a2 = $1 ORDER BY id;`,

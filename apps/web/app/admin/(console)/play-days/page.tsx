@@ -1,3 +1,7 @@
+import { clubClock } from "@/lib/club";
+import { sessionCapacityFor } from "@luvallplay/core/club-config";
+import { clubConfig } from "@/lib/club";
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
@@ -13,9 +17,6 @@ import { FillInButton } from "@/components/admin/FillInButton";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import {
   CASUAL_PRICE_CENTS,
-  MINI_GAME_MAX_PLAYERS,
-  maxPlayersForCourts,
-  sessionMaxPlayers,
 } from "@/lib/constants";
 import {
   offlineInvoiceIdFromRef,
@@ -25,6 +26,7 @@ import {
 import { reconcileOfflinePayment, recordOfflinePayment } from "@/lib/offline-payment-stripe";
 import { getOfflinePaymentReconciliation, type OfflineReconciliation } from "@/lib/bank-db";
 import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMethodField";
+import { clubMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -138,7 +140,8 @@ async function updateCourts(date: string, formData: FormData) {
 
   // Only a capacity increase can free up a spot — no point checking on a
   // decrease (setCourtsForDate already refuses to shrink below signups).
-  if (maxPlayersForCourts(courts) > maxPlayersForCourts(before)) {
+  const cfg = await clubConfig();
+  if (sessionCapacityFor(cfg, courts) > sessionCapacityFor(cfg, before)) {
     await notifyWaitlistIfSpotOpened(date);
   }
 
@@ -289,11 +292,12 @@ function TransferStatus({ status }: { status: OfflineReconciliation | undefined 
   );
 }
 
-const MODE_HELP: Record<SignupMode, string> = {
+// The mini-game cap is the club's setting, so the text is built per request.
+const modeHelp = (miniGameMax: number): Record<SignupMode, string> => ({
   open: "Anyone can sign up while there are spots. Members are always in.",
   closed: "No new casual sign-ups or memberships start on this day, even with spots left. Everyone already in keeps their place, and you can still add players.",
-  mini: `Mini game: members are in automatically (they tap "Can't make it" if they can't come). Casual sign-ups are closed and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. You can still add players.`,
-};
+  mini: `Mini game: members are in automatically (they tap "Can't make it" if they can't come). Casual sign-ups are closed and the day is capped at ${miniGameMax} players. You can still add players.`,
+});
 
 export default async function PlayDaysAdminPage({
   searchParams,
@@ -305,7 +309,7 @@ export default async function PlayDaysAdminPage({
   const hasDb = Boolean(process.env.POSTGRES_URL);
   const sessionKeys = hasDb ? await listAllSessionDates() : [];
 
-  const { dateKey: todayKey } = getClubToday();
+  const { dateKey: todayKey } = getClubToday(new Date(), await clubClock());
   const defaultDate = sessionKeys.find((key) => key >= todayKey) ?? sessionKeys[sessionKeys.length - 1];
   const selectedDate = dateParam && sessionKeys.includes(dateParam) ? dateParam : defaultDate;
 
@@ -360,7 +364,9 @@ export default async function PlayDaysAdminPage({
     console.error("Failed to load bank reconciliation for the roster", err);
   }
 
-  const maxPlayers = sessionMaxPlayers(courts, miniGame);
+  const cfg = await clubConfig();
+  const miniGameMax = cfg.roundRobin.miniGameMaxPlayers;
+  const maxPlayers = sessionCapacityFor(cfg, courts, miniGame);
   const mode: SignupMode = miniGame ? "mini" : registrationLocked ? "closed" : "open";
   const waiting = waitlist.filter((w) => !w.notifiedAt).length;
   const canNotify = mode === "open" && casualSpotsRemaining > 0 && waitlist.length > 0;
@@ -374,7 +380,7 @@ export default async function PlayDaysAdminPage({
     {
       mode: "mini",
       label: "Mini game",
-      confirm: `Make this a mini game day? Casual sign-ups close and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. Members stay included.`,
+      confirm: `Make this a mini game day? Casual sign-ups close and the day is capped at ${miniGameMax} players. Members stay included.`,
     },
   ];
 
@@ -388,7 +394,7 @@ export default async function PlayDaysAdminPage({
           <StatTile label="Signed up" value={roster.length} hint={`of ${maxPlayers} places`} />
           <StatTile label="Casual spots left" value={casualSpotsRemaining} tone={casualSpotsRemaining <= 0 ? "warn" : undefined} hint={mode === "open" ? "open to sign-ups" : "not open to the public"} />
           <StatTile label="Waitlist" value={waitlist.length} tone={canNotify ? "warn" : undefined} hint={canNotify ? "spots are free" : waiting ? `${waiting} not emailed yet` : "people waiting"} />
-          <StatTile label="Courts" value={courts} hint={miniGame ? `mini game: ${MINI_GAME_MAX_PLAYERS} max` : `up to ${maxPlayers} players`} />
+          <StatTile label="Courts" value={courts} hint={miniGame ? `mini game: ${miniGameMax} max` : `up to ${maxPlayers} players`} />
         </StatGrid>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "14px 28px", alignItems: "flex-start" }}>
@@ -410,7 +416,7 @@ export default async function PlayDaysAdminPage({
               )}
             </div>
             <p className={kit.muted} style={{ fontSize: 13, margin: "8px 0 0", maxWidth: 560 }}>
-              {MODE_HELP[mode]}
+              {modeHelp(miniGameMax)[mode]}
             </p>
           </div>
           <form action={updateCourts.bind(null, selectedDate)} style={{ flex: "0 0 auto" }}>
@@ -421,7 +427,7 @@ export default async function PlayDaysAdminPage({
               <select id="courts" name="courts" defaultValue={courts} className={kit.select}>
                 {[1, 2, 3, 4].map((n) => (
                   <option key={n} value={n}>
-                    {n} court{n === 1 ? "" : "s"} · up to {maxPlayersForCourts(n)}
+                    {n} court{n === 1 ? "" : "s"} · up to {sessionCapacityFor(cfg, n)}
                   </option>
                 ))}
               </select>
@@ -435,7 +441,7 @@ export default async function PlayDaysAdminPage({
 
       <InfoDisclosure summary="How spots are counted">
         <p>
-          Places = the courts&apos; capacity ({maxPlayersForCourts(courts)} at {courts} court{courts === 1 ? "" : "s"}), or {MINI_GAME_MAX_PLAYERS} on a mini game day.
+          Places = the courts&apos; capacity ({sessionCapacityFor(cfg, courts)} at {courts} court{courts === 1 ? "" : "s"}), or {miniGameMax} on a mini game day.
           Members whose membership covers this day take their places first; casual sign-ups get what&apos;s left.
         </p>
         <p>Auto-renewing members count for play days after their current billing period too: their membership renews before the play day.</p>
@@ -456,7 +462,7 @@ export default async function PlayDaysAdminPage({
         <>
           <FormPanel summary="＋ Add a player" title="Add a player who paid cash or by bank transfer" id="add">
             <p className={kit.muted} style={{ fontSize: 13, margin: 0 }}>
-              Records the ${CASUAL_PRICE_CENTS / 100} payment and adds them to this play day, even when sign-ups are closed. A bank transfer is matched on the{" "}
+              Records the {clubMoney(CASUAL_PRICE_CENTS)} payment and adds them to this play day, even when sign-ups are closed. A bank transfer is matched on the{" "}
               <AdminLink href="/admin/financials/bank">Bank</AdminLink> page as soon as it shows up.
             </p>
             <form action={addOfflinePlayer.bind(null, selectedDate)} className={kit.formGrid}>
@@ -608,7 +614,7 @@ export default async function PlayDaysAdminPage({
                           <span className={kit.sub}>{w.email}</span>
                         </div>
                       </td>
-                      <td data-label="Joined">{dayLabel(new Date(w.createdAt).toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" }))}</td>
+                      <td data-label="Joined">{dayLabel(new Date(w.createdAt).toLocaleDateString("en-CA", { timeZone: CLUB_TIME_ZONE }))}</td>
                       <td data-label="Status">{w.notifiedAt ? <Badge tone="good">Emailed</Badge> : <Badge>Waiting</Badge>}</td>
                       <td data-label="">
                         <form action={removeWaitlistEntry.bind(null, selectedDate, w.id)}>

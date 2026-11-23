@@ -1,0 +1,14 @@
+{
+  "change": "2026-11-phase3-terms-localized",
+  "description": "Phase 3 step 4 (build plan §6.3): Three Wolves' row in tenants gets one more key in terms: localized.vi.points_name = \"Điểm Sói\", the Vietnamese name the app already shows. One row of one platform table changes; nothing is removed. No account, email, phone, session, role, membership or club-owned row may change. Rehearsal on a Neon branch of production, so nothing is volatile.",
+  "allowChangedColumns": [
+    {
+      "target": "tenants.terms",
+      "reason": "The one intended change: Three Wolves' row gains localized.vi.points_name. tenants has one row."
+    },
+    {
+      "target": "tenants.updated_at",
+      "reason": "Set to now() by the same UPDATE."
+    }
+  ]
+}

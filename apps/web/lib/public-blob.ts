@@ -1,4 +1,8 @@
-import { del, put } from "@vercel/blob";
+import { publicStorage, vercelPublicAuth } from "./storage.ts";
+import { countUpload } from "./usage-hooks.ts";
+
+// Storing and deleting goes through the storage interface (lib/storage.ts);
+// what stays here is the Vercel-specific setup the browser upload needs.
 
 // Public images (shop photos, size charts, player photos) live in their own
 // PUBLIC Vercel Blob store: receipts use a private one, and a store is either
@@ -14,11 +18,7 @@ import { del, put } from "@vercel/blob";
 export type PublicBlobAuth = { token: string } | { storeId: string };
 
 export function publicBlobAuth(): PublicBlobAuth | null {
-  const token = process.env.PHOTO_BLOB_READ_WRITE_TOKEN?.trim();
-  if (token) return { token };
-  const storeId = process.env.PHOTO_STORE_ID?.trim();
-  if (storeId) return { storeId };
-  return null;
+  return vercelPublicAuth();
 }
 
 export function publicBlobConfigured(): boolean {
@@ -43,26 +43,22 @@ function safeName(name: string): string {
 
 /** Server-side upload of an admin-chosen image (form file). */
 export async function uploadPublicImage(file: File, prefix: string): Promise<string> {
-  const auth = publicBlobAuth();
-  if (!auth) throw new Error("Image storage isn't set up yet (no public Blob store connected).");
+  const storage = publicStorage();
+  if (!storage.configured()) throw new Error("Image storage isn't set up yet (no public Blob store connected).");
   if (file.size > ADMIN_IMAGE_MAX_BYTES) throw new Error("Image is too large: please keep it under 8 MB.");
   if (!IMAGE_TYPES.includes(file.type)) throw new Error("Please choose a JPG, PNG, WebP or HEIC image.");
-  const blob = await put(`${prefix}/${safeName(file.name)}`, Buffer.from(await file.arrayBuffer()), {
-    access: "public",
-    addRandomSuffix: true,
-    contentType: file.type,
-    ...auth,
-  });
-  return blob.url;
+  const stored = await storage.put(`${prefix}/${safeName(file.name)}`, Buffer.from(await file.arrayBuffer()), { contentType: file.type });
+  await countUpload(file.size);
+  return stored.url;
 }
 
-/** Deletes public blobs we own (ignores anything that isn't a Blob URL). */
+/** Deletes public files we own (ignores anything our storage didn't issue). Never throws. */
 export async function deletePublicBlobs(urls: (string | null | undefined)[]): Promise<void> {
-  const auth = publicBlobAuth();
-  const ours = urls.filter((u): u is string => Boolean(u && /\.blob\.vercel-storage\.com\//.test(u)));
-  if (!auth || ours.length === 0) return;
   try {
-    await del(ours, auth);
+    const storage = publicStorage();
+    const ours = urls.filter((u): u is string => Boolean(u && storage.owns(u)));
+    if (!storage.configured() || ours.length === 0) return;
+    await storage.delete(ours);
   } catch (err) {
     console.error("[blob] delete failed:", err);
   }

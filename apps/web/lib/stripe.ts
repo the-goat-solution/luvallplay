@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { clubCurrencyLower } from "./money";
 import { getPricingPlans } from "@/lib/business-config";
 import { combinePlanId } from "@/lib/pricing-plans";
 import {
@@ -248,7 +249,7 @@ export async function createOneTimeMembershipPaymentIntent(input: {
   return stripe.paymentIntents.create(
     {
       amount: oneTimeMembershipPriceCents(input.plan),
-      currency: "nzd",
+      currency: clubCurrencyLower(),
       customer: customer.id,
       automatic_payment_methods: { enabled: true },
       receipt_email: input.email,

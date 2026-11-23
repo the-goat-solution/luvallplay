@@ -1,9 +1,12 @@
+import { clubClock } from "@/lib/club";
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { getClubToday } from "@/lib/dates";
 import { FLAG_LABEL, JERSEY_SIZES } from "@/lib/jersey";
 import { listJerseyRegistrations } from "@/lib/jersey-db";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
+import { clubMajor } from "@/lib/money";
 
 export const runtime = "nodejs";
 
@@ -40,7 +43,7 @@ export async function GET(request: Request) {
   );
   const nz = (iso: string | null) =>
     iso
-      ? new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "medium", timeStyle: "short" }).format(new Date(iso))
+      ? new Intl.DateTimeFormat("en-NZ", { timeZone: CLUB_TIME_ZONE, dateStyle: "medium", timeStyle: "short" }).format(new Date(iso))
       : "";
 
   const wb = new ExcelJS.Workbook();
@@ -82,10 +85,10 @@ export async function GET(request: Request) {
       pname: r.printName ?? "",
       pnum: r.printNumber ?? "",
       pcountry: r.printCountry ?? "",
-      price: r.priceCents / 100,
+      price: clubMajor(r.priceCents),
       early: r.earlyBird ? "Yes" : "No",
       status: r.status,
-      paid: r.paidCents === null ? null : r.paidCents / 100,
+      paid: r.paidCents === null ? null : clubMajor(r.paidCents),
       paidAt: nz(r.paidAt),
       paidBy: r.paidBy ?? "",
       flags: r.flags.map((f) => FLAG_LABEL[f] ?? f).join("; "),
@@ -121,7 +124,7 @@ export async function GET(request: Request) {
   const sm = wb.addWorksheet("Summary");
   sm.columns = [{ width: 34 }, { width: 14 }, { width: 14 }, { width: 14 }];
   const n = Math.max(shown.length, 1) + 1;
-  sm.addRow([`Three Wolves jersey registrations — ${getClubToday().dateKey}`]).font = { bold: true, size: 14 };
+  sm.addRow([`Three Wolves jersey registrations — ${getClubToday(new Date(), await clubClock()).dateKey}`]).font = { bold: true, size: 14 };
   sm.addRow([]);
   styleHeader(sm.addRow(["Totals (Registrations sheet)", "Count", "$ amount"]));
   const R = (col: string) => `Registrations!$${col}$2:$${col}$${n}`;
@@ -142,7 +145,7 @@ export async function GET(request: Request) {
   return new NextResponse(buf as ArrayBuffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="three-wolves-jersey-${getClubToday().dateKey}.xlsx"`,
+      "Content-Disposition": `attachment; filename="three-wolves-jersey-${getClubToday(new Date(), await clubClock()).dateKey}.xlsx"`,
       "Cache-Control": "no-store",
     },
   });

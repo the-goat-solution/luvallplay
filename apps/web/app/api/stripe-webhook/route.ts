@@ -1,4 +1,6 @@
+import { clubClock } from "@/lib/club";
 import { getOrder, markOrderPaidByCard } from "@/lib/shop-db";
+import { payments } from "@/lib/payments";
 import { offlineMethodFromSource, offlinePaymentRef } from "@/lib/offline-payment";
 import { notifyOrderPlaced, notifyOversold } from "@/lib/shop-notify";
 import { syncPlanFromSubscriptionMetadata } from "@/lib/membership-self-service";
@@ -18,6 +20,7 @@ import {
   sendMembershipConfirmationEmail,
 } from "@/lib/email";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
+import { clubMajor } from "@/lib/money";
 
 const MEMBERSHIP_PRICE_CENTS: Record<"monthly" | "quarterly", number> = {
   monthly: MONTHLY_PRICE_CENTS,
@@ -42,9 +45,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
+  // The signature is checked by the provider behind the Payments interface
+  // (lib/payments); the handlers below still read Stripe's own event.
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    event = (await payments().verifyWebhook({ body, headers: { "stripe-signature": signature } })).raw as Stripe.Event;
   } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
@@ -103,7 +108,7 @@ export async function POST(request: Request) {
             await sendCasualBookingFullRefundEmail(customerEmail, {
               firstName: pi.metadata.firstName ?? "",
               sessionDate,
-              amountNzd: pi.amount / 100,
+              amountNzd: clubMajor(pi.amount),
             }).catch((err) => console.error("Failed to send refund email", err));
           }
 
@@ -129,12 +134,12 @@ export async function POST(request: Request) {
         });
       }
       if (activated?.periodStart && activated.periodEnd) {
-        const { dateKey: clubToday } = getClubToday();
+        const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,
           day: activated.day,
-          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          priceNzd: clubMajor(MEMBERSHIP_PRICE_CENTS[activated.plan]),
           recurring: activated.recurring,
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
@@ -237,12 +242,12 @@ export async function POST(request: Request) {
         );
         await applyMembershipRenewal(subId, invoice.id);
       } else if (activated?.periodStart && activated.periodEnd && activated.periodEnd >= activated.periodStart) {
-        const { dateKey: clubToday } = getClubToday();
+        const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,
           day: activated.day,
-          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          priceNzd: clubMajor(MEMBERSHIP_PRICE_CENTS[activated.plan]),
           recurring: activated.recurring,
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
@@ -282,12 +287,12 @@ export async function POST(request: Request) {
         }, "admin");
       }
       if (activated?.periodStart && activated.periodEnd) {
-        const { dateKey: clubToday } = getClubToday();
+        const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,
           day: activated.day,
-          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          priceNzd: clubMajor(MEMBERSHIP_PRICE_CENTS[activated.plan]),
           recurring: false,
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,

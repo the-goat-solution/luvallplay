@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { DONATION_MIN_CENTS, DONATION_MAX_CENTS } from "@/lib/constants";
-import { getStripe } from "@/lib/stripe";
+import { clubConfig } from "@/lib/club";
+import { payments } from "@/lib/payments";
 import { checkRateLimit, getClientIp } from "@/lib/security";
+import { formatMoney, roundToMinor } from "@/lib/money";
 
 const bodySchema = z.object({
   amount: z.number().positive(),
@@ -20,42 +21,39 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await request.json());
-    const amountCents = Math.round(body.amount * 100);
-    if (amountCents < DONATION_MIN_CENTS || amountCents > DONATION_MAX_CENTS) {
+    const club = await clubConfig();
+    const amountCents = roundToMinor(body.amount, club.currency);
+    // The club's donation limits (Phase 3 step 4: settings, not constants).
+    const { minAmount, maxAmount } = club.donations;
+    if (amountCents < minAmount || amountCents > maxAmount) {
       return NextResponse.json(
         {
-          error: `Amount must be between $${DONATION_MIN_CENTS / 100} and $${DONATION_MAX_CENTS / 100} NZD`,
+          error: `Amount must be between ${formatMoney(minAmount, club.currency, { trimZeros: true })} and ${formatMoney(maxAmount, club.currency, { trimZeros: true, code: true })}`,
         },
         { status: 400 },
       );
     }
 
-    const stripe = getStripe();
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: amountCents,
-        currency: "nzd",
-        automatic_payment_methods: { enabled: true },
-        metadata: {
-          type: "donation",
-          firstName: body.firstName,
-          lastName: body.lastName,
-          email: body.email,
-          phone: body.phone ?? "",
-        },
-        receipt_email: body.email,
-        description: "Donation — Three Wolves Badminton Club",
+    const payment = await payments().createPayment({
+      amount: amountCents,
+      currency: club.currency,
+      metadata: {
+        type: "donation",
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        phone: body.phone ?? "",
       },
-      {
-        idempotencyKey: `donation-${body.email}-${amountCents}-${Date.now()}`,
-      },
-    );
+      receiptEmail: body.email,
+      description: "Donation — Three Wolves Badminton Club",
+      idempotencyKey: `donation-${body.email}-${amountCents}-${Date.now()}`,
+    });
 
-    if (!paymentIntent.client_secret) {
+    if (!payment.clientSecret) {
       return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
     }
 
-    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
+    return NextResponse.json({ clientSecret: payment.clientSecret });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";
     const status = message.includes("STRIPE") ? 503 : 400;

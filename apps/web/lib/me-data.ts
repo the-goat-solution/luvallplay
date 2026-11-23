@@ -1,6 +1,7 @@
 import { sql } from "./database";
 import { addDays, getSpotsAndHeadcountForDates, listSessionsInRange } from "./db";
 import { getClubToday, isBookable, isDatePaused, getMembershipDayForDate } from "./dates";
+import { clubClock } from "./club";
 import type { Weekday } from "./constants";
 import type { MemberView } from "./membership-self-service";
 import { listAbsences } from "./stats-db";
@@ -19,7 +20,7 @@ function covers(m: MemberView | null, date: string): boolean {
 
 /** The next five weeks of play days, as this player sees them. */
 export async function calendarFor(email: string, m: MemberView | null, pausedDays: Weekday[]): Promise<CalDay[]> {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const sessions = await listSessionsInRange(today, addDays(today, CALENDAR_DAYS));
   if (sessions.length === 0) return [];
   const dates = sessions.map((s) => s.date);
@@ -34,6 +35,7 @@ export async function calendarFor(email: string, m: MemberView | null, pausedDay
   const booked = new Set(bookings.map((b) => b.d as string));
   const absent = new Set(absences);
   const now = new Date();
+  const clock = await clubClock();
   return sessions.map((s) => {
     const [y, mo, d] = s.date.split("-").map(Number);
     return {
@@ -44,7 +46,7 @@ export async function calendarFor(email: string, m: MemberView | null, pausedDay
       spots: spots[s.date] ?? 0,
       closed: Boolean(locked[s.date]),
       paused: isDatePaused(s.date, pausedDays),
-      bookable: isBookable(new Date(y, mo - 1, d), now),
+      bookable: isBookable(new Date(y, mo - 1, d), now, clock),
       included: covers(m, s.date),
       absent: absent.has(s.date),
       booked: booked.has(s.date),

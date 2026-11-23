@@ -1,14 +1,11 @@
+import { clubClock } from "./club";
 import { db, sql } from "./database";
+import { getClubConfig } from "./club-config";
+import { sessionCapacityFor } from "@luvallplay/core/club-config";
 // DATE columns come back as plain 'YYYY-MM-DD' strings (lib/database.ts).
 import {
   MEMBERSHIP_CYCLE_DAYS,
-  MEMBERSHIP_DAYS,
   MEMBERSHIP_DAY_TO_DOW,
-  MEMBERSHIP_START_SEARCH_DAYS,
-  PENDING_MEMBERSHIP_HOLD_MINUTES,
-  MINI_GAME_MAX_PLAYERS,
-  SESSION_CAPACITY,
-  sessionMaxPlayers,
   type MembershipDay,
   type MembershipTier,
 } from "./constants";
@@ -65,15 +62,20 @@ export function membershipCoversDateSql(dateExpr: string, alias = ""): string {
 // period_end rolled forward by whole billing cycles until it covers that day.
 // For a member whose stored window already covers the date this is a no-op,
 // so it's safe to apply unconditionally.
-export function projectedPeriodEndSql(dateExpr: string): string {
+// `cycle` is the club's cycle lengths (settings → memberships.cycleDays);
+// they go into the SQL as whole numbers, never as text.
+export function projectedPeriodEndSql(dateExpr: string, cycle: Record<MembershipTier, number> = MEMBERSHIP_CYCLE_DAYS): string {
+  const monthly = Math.trunc(Number(cycle.monthly));
+  const quarterly = Math.trunc(Number(cycle.quarterly));
+  if (!(monthly > 0) || !(quarterly > 0)) throw new Error("membership cycle lengths must be positive whole days");
   return `(
     period_end + (
-      CASE plan WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE ${MEMBERSHIP_CYCLE_DAYS.monthly} END
+      CASE plan WHEN 'quarterly' THEN ${quarterly} ELSE ${monthly} END
       * GREATEST(
           0,
           CEIL(
             (${dateExpr}::date - period_end)::numeric
-            / CASE plan WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE ${MEMBERSHIP_CYCLE_DAYS.monthly} END
+            / CASE plan WHEN 'quarterly' THEN ${quarterly} ELSE ${monthly} END
           )::int
         )
     )
@@ -90,9 +92,10 @@ export function addDays(dateStr: string, days: number): string {
 }
 
 export async function ensureSession(date: string) {
+  const cfg = await getClubConfig(sql);
   await sql`
     INSERT INTO sessions (date, max_spots, booked_spots, courts)
-    VALUES (${date}, ${SESSION_CAPACITY}, 0, ${defaultCourtsForDate(date)})
+    VALUES (${date}, ${cfg.playDays.sessionCapacity}, 0, ${defaultCourtsForDate(date)})
     ON CONFLICT (date) DO NOTHING;
   `;
 }
@@ -113,6 +116,7 @@ export async function getAvailableSpots(
   date: string,
   { ignoreLock = false }: { ignoreLock?: boolean } = {},
 ): Promise<number> {
+  const cfg = await getClubConfig(sql);
   await ensureSession(date);
   const { rows } = await sql`
     SELECT booked_spots, courts, registration_locked, mini_game FROM sessions WHERE date = ${date};
@@ -122,7 +126,7 @@ export async function getAvailableSpots(
     | undefined;
   if (row?.registration_locked && !ignoreLock) return 0;
   const booked = row?.booked_spots ?? 0;
-  const maxPlayers = sessionMaxPlayers(row?.courts ?? defaultCourtsForDate(date), row?.mini_game);
+  const maxPlayers = sessionCapacityFor(cfg, row?.courts ?? defaultCourtsForDate(date), row?.mini_game);
   const activeMembers = await getActiveMemberCountForDate(date);
   return Math.max(0, maxPlayers - activeMembers - booked);
 }
@@ -137,6 +141,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   // Mini game days: locked to casual sign-ups, but members are always in.
   miniGame: Record<string, boolean>;
 }> {
+  const cfg = await getClubConfig(sql);
   if (dates.length === 0) return { spots: {}, signedUp: {}, locked: {}, miniGame: {} };
 
   // Each date may default to a different court count (membership day vs.
@@ -157,7 +162,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
      SELECT t.d, $2, 0, t.c
      FROM unnest($1::date[], $3::int[]) AS t(d, c)
      ON CONFLICT (date) DO NOTHING;`,
-    [dates, SESSION_CAPACITY, courtsDefaults],
+    [dates, cfg.playDays.sessionCapacity, courtsDefaults],
   );
 
   const [{ rows }, { rows: memberRows }] = await Promise.all([
@@ -219,7 +224,8 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
     // dates) by the day-matched join above — see getActiveMemberCountForDate
     // for the equivalent single-date query.
     const activeMembers = membersByDate.get(date) ?? 0;
-    const maxPlayers = sessionMaxPlayers(
+    const maxPlayers = sessionCapacityFor(
+        cfg,
       courtsByDate.get(date) ?? defaultCourtsForDate(date),
       miniGameDates.has(date),
     );
@@ -241,12 +247,15 @@ export async function reserveBookingSlot(
     paymentIntentId: string;
   },
 ): Promise<boolean> {
+  const cfg = await getClubConfig(sql);
   await ensureSession(date);
   // Casual capacity is that play day's court-derived max minus current
   // active members whose period covers this date AND whose day matches this
   // date's membership day, so the atomic guard must account for both to
-  // avoid overselling the court. The CASE mirrors COURTS_TO_MAX_PLAYERS in
-  // lib/constants.ts — keep the two in sync. See getAvailableSpots for why
+  // avoid overselling the court. The courts → players table is the club's
+  // setting, passed in as JSON ($4), so the query and sessionCapacityFor
+  // can't disagree (it used to be a second copy typed into the SQL). See
+  // getAvailableSpots for why
   // this reads sessions.courts rather than the stale sessions.max_spots
   // column. The day CASE mirrors MEMBERSHIP_DAY_TO_DOW; a NULL result (a
   // casual-only day) never matches memberships.day, so the subquery counts
@@ -258,11 +267,7 @@ export async function reserveBookingSlot(
        AND booked_spots < (
          CASE
            WHEN mini_game THEN $3
-           WHEN courts = 1 THEN 6
-           WHEN courts = 2 THEN 12
-           WHEN courts = 3 THEN 18
-           WHEN courts = 4 THEN 22
-           ELSE $2
+           ELSE COALESCE(($4::jsonb ->> courts::text)::int, $2)
          END
        ) - (
          SELECT COUNT(*)::int FROM memberships
@@ -271,7 +276,7 @@ export async function reserveBookingSlot(
            AND ${membershipCoversDateSql("$1")}
            AND ${memberNotAbsentSql("$1::date")}
        );`,
-    [date, SESSION_CAPACITY, MINI_GAME_MAX_PLAYERS],
+    [date, cfg.playDays.sessionCapacity, cfg.roundRobin.miniGameMaxPlayers, JSON.stringify(cfg.playDays.courtsToMaxPlayers)],
   );
   if (!rowCount) return false;
 
@@ -349,7 +354,12 @@ export async function assignAndReserveMembershipAccessStart(
   // it ends (or the usual nearest day, if it has already ended).
   renewalOf?: { membershipId: number; periodEnd: string },
 ): Promise<MembershipAssignment> {
-  const { dateKey: clubToday, cutoffPassed } = getClubToday();
+  // The club's settings (Phase 3 step 4): how far ahead to look for a start
+  // day, and how long an unpaid checkout holds a spot. Read before the lock
+  // is taken, so the locked section makes no extra round trip.
+  const cfg = await getClubConfig(sql);
+  const { startSearchDays, pendingHoldMinutes } = cfg.memberships;
+  const { dateKey: clubToday, cutoffPassed } = getClubToday(new Date(), await clubClock());
   const earliestStart = (() => {
     const fromToday = addDays(clubToday, cutoffPassed ? 1 : 0);
     if (!renewalOf) return fromToday;
@@ -387,7 +397,7 @@ export async function assignAndReserveMembershipAccessStart(
         member.email,
         day,
         clubToday,
-        PENDING_MEMBERSHIP_HOLD_MINUTES,
+        pendingHoldMinutes,
         renewalOf?.membershipId ?? 0,
       ],
     );
@@ -414,7 +424,7 @@ export async function assignAndReserveMembershipAccessStart(
              AND date >= $1::date
              AND date <= ($1::date + $3::int)
            ORDER BY date;`,
-          [earliestStart, dow, MEMBERSHIP_START_SEARCH_DAYS],
+          [earliestStart, dow, startSearchDays],
         );
 
     if (preferredDate && candidates.length === 0) {
@@ -433,7 +443,8 @@ export async function assignAndReserveMembershipAccessStart(
         const session = sessionRows[0] as
           | { booked_spots: number; courts: number; mini_game: boolean }
           | undefined;
-        const maxPlayers = sessionMaxPlayers(
+        const maxPlayers = sessionCapacityFor(
+        cfg,
           session?.courts ?? defaultCourtsForDate(date),
           session?.mini_game,
         );
@@ -446,7 +457,7 @@ export async function assignAndReserveMembershipAccessStart(
                status = 'active'
                OR (status = 'pending' AND created_at > NOW() - ($2 * INTERVAL '1 minute'))
              );`,
-          [date, PENDING_MEMBERSHIP_HOLD_MINUTES, day],
+          [date, pendingHoldMinutes, day],
         );
         const activeMembers = (memberCountRows[0] as { count: number }).count;
 
@@ -458,7 +469,8 @@ export async function assignAndReserveMembershipAccessStart(
             booked,
           })
         ) {
-          const periodEnd = addDays(date, MEMBERSHIP_DAYS[plan]);
+          // End-inclusive: one less than the club's cycle length.
+          const periodEnd = addDays(date, cfg.memberships.cycleDays[plan] - 1);
           const { rows: inserted } = await client.query(
             `INSERT INTO memberships
                (email, plan, day, first_name, last_name, phone, period_start, period_end, recurring, status, renewal_of)
@@ -532,12 +544,13 @@ export async function upsertSessionFromCalendar(
     location?: string;
   },
 ): Promise<void> {
+  const cfg = await getClubConfig(sql);
   // courts is set only on insert (never in the DO UPDATE SET below) so a
   // recurring calendar resync never clobbers an admin's manual court
   // override for a date that's already been synced once.
   await sql`
     INSERT INTO sessions (date, max_spots, booked_spots, courts, google_event_id, calendar_summary, event_start_time, event_end_time, event_location, synced_at)
-    VALUES (${date}, ${SESSION_CAPACITY}, 0, ${defaultCourtsForDate(date)}, ${event.id}, ${event.summary ?? null}, ${event.start}, ${event.end ?? null}, ${event.location ?? null}, NOW())
+    VALUES (${date}, ${cfg.playDays.sessionCapacity}, 0, ${defaultCourtsForDate(date)}, ${event.id}, ${event.summary ?? null}, ${event.start}, ${event.end ?? null}, ${event.location ?? null}, NOW())
     ON CONFLICT (date) DO UPDATE SET
       google_event_id = EXCLUDED.google_event_id,
       calendar_summary = EXCLUDED.calendar_summary,
@@ -568,6 +581,7 @@ export async function listSessionsInRange(
     eventLocation: string | null;
   }[]
 > {
+  const cfg = await getClubConfig(sql);
   const { rows } = await sql`
     SELECT date::text AS date, courts, mini_game, booked_spots, event_start_time, event_end_time, event_location
     FROM sessions
@@ -586,7 +600,7 @@ export async function listSessionsInRange(
     };
     return {
       date: r.date,
-      maxSpots: sessionMaxPlayers(r.courts, r.mini_game),
+      maxSpots: sessionCapacityFor(cfg, r.courts, r.mini_game),
       bookedSpots: r.booked_spots,
       eventStartTime: r.event_start_time
         ? r.event_start_time.toISOString()
@@ -624,7 +638,7 @@ export async function listMemberMiniGameDates(
 export async function getUpcomingSessionDates(
   withinDays: number,
 ): Promise<string[]> {
-  const { dateKey: clubToday } = getClubToday();
+  const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
   const { rows } = await sql`
     SELECT date::text AS date FROM sessions
     WHERE date >= ${clubToday}::date AND date <= ${clubToday}::date + ${withinDays}::int
@@ -714,7 +728,7 @@ export async function isMiniGameDay(date: string): Promise<boolean> {
 }
 
 // Turns a play day into a mini game day (or back). On: capacity becomes
-// MINI_GAME_MAX_PLAYERS whatever the courts, and registration is locked so
+// the mini-game field (a club setting) whatever the courts, and registration is locked so
 // only admins add players. Refused when more players than that are already
 // signed up — same rule as shrinking the courts. Off: back to court-based
 // capacity, and registration reopens.
@@ -722,13 +736,14 @@ export async function setMiniGameDay(
   date: string,
   on: boolean,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const cfg = await getClubConfig(sql);
   await ensureSession(date);
   if (on) {
     const { total } = await getSessionHeadcount(date);
-    if (total > MINI_GAME_MAX_PLAYERS) {
+    if (total > cfg.roundRobin.miniGameMaxPlayers) {
       return {
         ok: false,
-        reason: `Can't make this a mini game day (max ${MINI_GAME_MAX_PLAYERS} players) — ${total} players are already signed up.`,
+        reason: `Can't make this a mini game day (max ${cfg.roundRobin.miniGameMaxPlayers} players) — ${total} players are already signed up.`,
       };
     }
   }
@@ -756,6 +771,7 @@ export async function setCourtsForDate(
   date: string,
   courts: number,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const cfg = await getClubConfig(sql);
   await ensureSession(date);
   const { rows } = await sql`
     SELECT booked_spots, mini_game FROM sessions WHERE date = ${date};
@@ -763,7 +779,7 @@ export async function setCourtsForDate(
   const row = rows[0] as { booked_spots: number; mini_game: boolean } | undefined;
   const booked = row?.booked_spots ?? 0;
   // On a mini game day the field size, not the courts, sets capacity.
-  const maxPlayers = sessionMaxPlayers(courts, row?.mini_game);
+  const maxPlayers = sessionCapacityFor(cfg, courts, row?.mini_game);
   const activeMembers = await getActiveMemberCountForDate(date);
   const totalSignedUp = booked + activeMembers;
 
@@ -1197,11 +1213,12 @@ export async function applyMembershipRenewal(
   subscriptionId: string,
   invoiceId: string,
 ): Promise<void> {
+  const { cycleDays } = (await getClubConfig(sql)).memberships;
   await sql`
     UPDATE memberships
     SET
       period_end = period_end + (
-        CASE plan WHEN 'monthly' THEN ${MEMBERSHIP_CYCLE_DAYS.monthly} WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE 0 END
+        CASE plan WHEN 'monthly' THEN ${cycleDays.monthly} WHEN 'quarterly' THEN ${cycleDays.quarterly} ELSE 0 END
       ),
       last_renewal_invoice_id = ${invoiceId}
     WHERE stripe_subscription_id = ${subscriptionId}
@@ -1264,12 +1281,13 @@ export async function getMembersWithPlayDayTomorrow(
 ): Promise<MembershipReminderTarget[]> {
   const membershipDay = getMembershipDayForDate(date);
   if (!membershipDay) return [];
+  const cfg = await getClubConfig(sql);
   // period_end is reported as the projected one so the reminder email's
   // "remaining sessions in your membership" list still spans a real cycle for
   // a member whose renewal hasn't billed yet.
   const { rows } = await sql.query(
     `SELECT id, email, first_name, plan, day,
-            ${projectedPeriodEndSql("$1")}::text AS period_end
+            ${projectedPeriodEndSql("$1", cfg.memberships.cycleDays)}::text AS period_end
      FROM memberships
      WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
        AND ${memberNotAbsentSql("$1::date")};`,
@@ -1550,12 +1568,13 @@ export async function syncRecurringMembership(
   cancelAtPeriodEnd: boolean,
   today: string,
 ): Promise<void> {
+  const cfg = await getClubConfig(sql);
   await sql.query(
     `UPDATE memberships
      SET status = $2,
          cancel_at_period_end = $3,
          period_end = CASE
-           WHEN $2 = 'active' AND NOT $3 THEN ${projectedPeriodEndSql("$4")}
+           WHEN $2 = 'active' AND NOT $3 THEN ${projectedPeriodEndSql("$4", cfg.memberships.cycleDays)}
            ELSE period_end
          END
      WHERE id = $1;`,

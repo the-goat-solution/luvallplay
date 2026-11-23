@@ -1,6 +1,8 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /leaderboard too */
 "use client";
 
+import { useClub } from "@/context/ClubContext";
+import { moduleOn } from "@/lib/club-public";
 import { useLanguage } from "@/context/LanguageContext";
 import { Trans } from "@/components/Trans";
 import type { Lang } from "@/lib/i18n";
@@ -9,6 +11,8 @@ const FB_URL = "https://www.facebook.com/profile.php?id=61575583556969";
 
 export function Footer() {
   const { lang, setLang } = useLanguage();
+  // Links to sections whose module is off aren't offered.
+  const club = useClub();
 
   const setLanguage = (l: Lang) => {
     setLang(l);
@@ -57,16 +61,20 @@ export function Footer() {
                   <Trans k="nav_schedule" />
                 </a>
               </li>
-              <li>
-                <a href="/#gallery">
+              {moduleOn(club, "gallery") && (
+                <li>
+                  <a href="/#gallery">
                   <Trans k="nav_gallery" />
                 </a>
-              </li>
-              <li>
-                <a href="/#membership">
+                </li>
+              )}
+              {moduleOn(club, "memberships") && (
+                <li>
+                  <a href="/#membership">
                   <Trans k="nav_membership" />
                 </a>
-              </li>
+                </li>
+              )}
               <li>
                 <a href="/#reviews">Reviews</a>
               </li>

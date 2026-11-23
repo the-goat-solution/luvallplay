@@ -6,6 +6,7 @@ import {
   oneTimeMembershipPriceCents,
 } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
+import { clubMajor } from "@/lib/money";
 
 const bodySchema = z.object({
   token: z.string().min(10).max(200),
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
       clientSecret: paymentIntent.client_secret,
       periodStart: assignment.periodStart,
       periodEnd: assignment.periodEnd,
-      priceNzd: oneTimeMembershipPriceCents(body.plan) / 100,
+      priceNzd: clubMajor(oneTimeMembershipPriceCents(body.plan)),
     });
   } catch (e) {
     if (e instanceof z.ZodError) {

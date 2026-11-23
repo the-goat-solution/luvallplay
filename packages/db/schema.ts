@@ -24,6 +24,8 @@ export const admin_audit_log = pgTable("admin_audit_log", {
 	action: text().notNull(),
 	target: text(),
 	meta: jsonb().default({}).notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("admin_audit_log_at").using("btree", table.at.desc().nullsFirst()),
 	check("admin_audit_log_actor_kind_check", sql`actor_kind = ANY (ARRAY['player'::text, 'break-glass'::text, 'script'::text, 'system'::text])`),
@@ -54,6 +56,8 @@ export const admin_invites = pgTable("admin_invites", {
 	accepted_at: timestamp({ withTimezone: true, mode: 'string' }),
 	accepted_player_id: integer(),
 	revoked_at: timestamp({ withTimezone: true, mode: 'string' }),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	uniqueIndex("admin_invites_one_pending").using("btree", table.email.asc().nullsLast()).where(sql`((accepted_at IS NULL) AND (revoked_at IS NULL))`),
 	check("admin_invites_role_check", sql`role = ANY (ARRAY['owner'::text, 'admin'::text, 'coach'::text])`),
@@ -69,6 +73,8 @@ export const api_tokens = pgTable("api_tokens", {
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	last_used_at: timestamp({ withTimezone: true, mode: 'string' }),
 	revoked_at: timestamp({ withTimezone: true, mode: 'string' }),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.player_id],
@@ -109,6 +115,8 @@ export const arena_challenges = pgTable("arena_challenges", {
 	resolved_by_admin: boolean().default(false).notNull(),
 	completed_at: timestamp({ withTimezone: true, mode: 'string' }),
 	void_reason: text(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	uniqueIndex("arena_challenges_one_open").using("btree", table.posting_pair.asc().nullsLast()).where(sql`(status = 'open'::text)`),
 	index("arena_challenges_status").using("btree", table.status.asc().nullsLast()),
@@ -117,6 +125,8 @@ export const arena_challenges = pgTable("arena_challenges", {
 export const arena_code_attempts = pgTable("arena_code_attempts", {
 	player_id: integer().notNull(),
 	at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const arena_codes = pgTable("arena_codes", {
@@ -130,6 +140,8 @@ export const arena_codes = pgTable("arena_codes", {
 	consumed_by: integer(),
 	consumed_at: timestamp({ withTimezone: true, mode: 'string' }),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("arena_codes_hash").using("btree", table.purpose.asc().nullsLast(), table.code_hash.asc().nullsLast()).where(sql`(status = 'live'::text)`),
 ]);
@@ -143,6 +155,8 @@ export const arena_match_stats = pgTable("arena_match_stats", {
 	status: text().default('final').notNull(),
 	live: jsonb(),
 	live_at: timestamp({ withTimezone: true, mode: 'string' }),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const arena_pairs = pgTable("arena_pairs", {
@@ -153,6 +167,8 @@ export const arena_pairs = pgTable("arena_pairs", {
 	formed_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	ended_at: timestamp({ withTimezone: true, mode: 'string' }),
 	ended_reason: text(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const arena_player_ranks = pgTable("arena_player_ranks", {
@@ -162,6 +178,8 @@ export const arena_player_ranks = pgTable("arena_player_ranks", {
 	was_tarnished: boolean().default(false).notNull(),
 	polished_at: timestamp({ withTimezone: true, mode: 'string' }),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const auth_codes = pgTable("auth_codes", {
@@ -193,6 +211,8 @@ export const bank_rules = pgTable("bank_rules", {
 	hits: integer().default(0).notNull(),
 	last_used_at: timestamp({ withTimezone: true, mode: 'string' }),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	unique("bank_rules_pattern_direction_key").on(table.pattern, table.direction),
 	check("bank_rules_action_check", sql`action = ANY (ARRAY['create'::text, 'classify'::text])`),
@@ -210,7 +230,18 @@ export const bookings = pgTable("bookings", {
 	status: text().default('pending').notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	reminder_sent_at: timestamp({ withTimezone: true, mode: 'string' }),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
 }, (table) => [
+	index("bookings_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "bookings_user_id_fkey"
+		}).onDelete("restrict"),
 	foreignKey({
 			columns: [table.session_date],
 			foreignColumns: [sessions.date],
@@ -227,6 +258,8 @@ export const cancellation_feedback = pgTable("cancellation_feedback", {
 	reason: text().notNull(),
 	comment: text(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.player_id],
@@ -241,6 +274,8 @@ export const club_roles = pgTable("club_roles", {
 	granted_by: integer(),
 	granted_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.player_id],
@@ -255,13 +290,27 @@ export const casual_play_profiles = pgTable("casual_play_profiles", {
 	tier: smallint(),
 	nickname: text(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-});
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
+}, (table) => [
+	index("casual_play_profiles_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "casual_play_profiles_user_id_fkey"
+		}).onDelete("restrict"),
+]);
 
 export const casual_play_sessions = pgTable("casual_play_sessions", {
 	date: date().primaryKey().notNull(),
 	state: jsonb().notNull(),
 	version: integer().default(1).notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const day_requests = pgTable("day_requests", {
@@ -271,7 +320,18 @@ export const day_requests = pgTable("day_requests", {
 	email: text().notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	notified_at: timestamp({ withTimezone: true, mode: 'string' }),
-}, () => [
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
+}, (table) => [
+	index("day_requests_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "day_requests_user_id_fkey"
+		}).onDelete("restrict"),
 	uniqueIndex("day_requests_pending_idx").using("btree", sql`day`, sql`lower(email)`).where(sql`(notified_at IS NULL)`),
 ]);
 
@@ -279,6 +339,8 @@ export const day_signup_settings = pgTable("day_signup_settings", {
 	day: text().primaryKey().notNull(),
 	paused: boolean().default(false).notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const donations = pgTable("donations", {
@@ -292,7 +354,18 @@ export const donations = pgTable("donations", {
 	stripe_subscription_id: text(),
 	status: text().default('pending').notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
 }, (table) => [
+	index("donations_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "donations_user_id_fkey"
+		}).onDelete("restrict"),
 	unique("donations_stripe_payment_intent_id_key").on(table.stripe_payment_intent_id),
 	unique("donations_stripe_subscription_id_key").on(table.stripe_subscription_id),
 ]);
@@ -315,6 +388,8 @@ export const bank_transactions = pgTable("bank_transactions", {
 	auto_matched: boolean().default(false).notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	match_reason: text(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("bank_transactions_date_idx").using("btree", table.txn_date.asc().nullsLast()),
 	foreignKey({
@@ -333,6 +408,8 @@ export const messages = pgTable("messages", {
 	sender: text().notNull(),
 	body: text().notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("messages_thread_idx").using("btree", table.thread_id.asc().nullsLast(), table.created_at.asc().nullsLast()),
 	foreignKey({
@@ -353,6 +430,8 @@ export const message_threads = pgTable("message_threads", {
 	unread_for_admin: boolean().default(false).notNull(),
 	unread_for_player: boolean().default(false).notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("message_threads_player_idx").using("btree", table.player_id.asc().nullsLast(), table.last_message_at.desc().nullsFirst()),
 	foreignKey({
@@ -367,6 +446,8 @@ export const finance_settings = pgTable("finance_settings", {
 	key: text().primaryKey().notNull(),
 	value: jsonb().notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const finance_sync_state = pgTable("finance_sync_state", {
@@ -374,6 +455,8 @@ export const finance_sync_state = pgTable("finance_sync_state", {
 	last_started_at: timestamp({ withTimezone: true, mode: 'string' }),
 	last_finished_at: timestamp({ withTimezone: true, mode: 'string' }),
 	last_error: text(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const jersey_registrations = pgTable("jersey_registrations", {
@@ -404,7 +487,18 @@ export const jersey_registrations = pgTable("jersey_registrations", {
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	lang: text().default('en').notNull(),
 	print_country: text(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
 }, (table) => [
+	index("jersey_registrations_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "jersey_registrations_user_id_fkey"
+		}).onDelete("restrict"),
 	uniqueIndex("jersey_one_per_email").using("btree", table.email_normalized.asc().nullsLast()).where(sql`(status = ANY (ARRAY['pending'::text, 'paid'::text]))`),
 	unique("jersey_registrations_ref_code_key").on(table.ref_code),
 	check("jersey_registrations_status_check", sql`status = ANY (ARRAY['pending'::text, 'paid'::text, 'released'::text, 'cancelled'::text])`),
@@ -431,7 +525,18 @@ export const memberships = pgTable("memberships", {
 	renewal_reminder_sent_at: timestamp({ withTimezone: true, mode: 'string' }),
 	renewal_of: integer(),
 	free_days_granted: integer().default(0).notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
 }, (table) => [
+	index("memberships_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "memberships_user_id_fkey"
+		}).onDelete("restrict"),
 	unique("memberships_renewal_token_key").on(table.renewal_token),
 	unique("memberships_stripe_payment_intent_id_key").on(table.stripe_payment_intent_id),
 	unique("memberships_stripe_subscription_id_key").on(table.stripe_subscription_id),
@@ -444,6 +549,8 @@ export const mini_game_draws = pgTable("mini_game_draws", {
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	locked_until: timestamp({ withTimezone: true, mode: 'string' }).notNull(),
 	archived_at: timestamp({ withTimezone: true, mode: 'string' }),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, () => [
 	uniqueIndex("mini_game_draws_one_active").using("btree", sql`(true)`).where(sql`(archived_at IS NULL)`),
 ]);
@@ -467,6 +574,8 @@ export const finance_entries = pgTable("finance_entries", {
 	receipt_content_type: text(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("finance_entries_date_idx").using("btree", table.entry_date.asc().nullsLast()),
 	unique("finance_entries_external_id_key").on(table.external_id),
@@ -494,6 +603,8 @@ export const player_photos = pgTable("player_photos", {
 	reviewed_by: text(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	deleted_at: timestamp({ withTimezone: true, mode: 'string' }),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("player_photos_player_idx").using("btree", table.player_id.asc().nullsLast(), table.created_at.desc().nullsFirst()),
 	index("player_photos_status_idx").using("btree", table.status.asc().nullsLast(), table.created_at.desc().nullsFirst()),
@@ -715,7 +826,18 @@ export const session_fill_ins = pgTable("session_fill_ins", {
 	email: text().notNull(),
 	phone: text(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
 }, (table) => [
+	index("session_fill_ins_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "session_fill_ins_user_id_fkey"
+		}).onDelete("restrict"),
 	uniqueIndex("session_fill_ins_booking_idx").using("btree", table.session_date.asc().nullsLast(), table.booking_id.asc().nullsLast()).where(sql`(booking_id IS NOT NULL)`),
 	uniqueIndex("session_fill_ins_membership_idx").using("btree", table.session_date.asc().nullsLast(), table.membership_id.asc().nullsLast()).where(sql`(membership_id IS NOT NULL)`),
 	check("session_fill_ins_one_target", sql`(membership_id IS NULL) <> (booking_id IS NULL)`),
@@ -726,6 +848,8 @@ export const session_alert_state = pgTable("session_alert_state", {
 	state: text().default('ok').notNull(),
 	headcount: integer().default(0).notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.session_date],
@@ -747,6 +871,8 @@ export const sessions = pgTable("sessions", {
 	courts: integer().default(2).notNull(),
 	registration_locked: boolean().default(false).notNull(),
 	mini_game: boolean().default(false).notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const waitlist = pgTable("waitlist", {
@@ -756,7 +882,19 @@ export const waitlist = pgTable("waitlist", {
 	email: text().notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	notified_at: timestamp({ withTimezone: true, mode: 'string' }),
-});
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
+}, (table) => [
+	index("waitlist_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "waitlist_user_id_fkey"
+		}).onDelete("restrict"),
+]);
 
 export const shop_products = pgTable("shop_products", {
 	id: serial().primaryKey().notNull(),
@@ -775,6 +913,8 @@ export const shop_products = pgTable("shop_products", {
 	active: boolean().default(true).notNull(),
 	sort: integer().default(0).notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	unique("shop_products_slug_key").on(table.slug),
 ]);
@@ -788,6 +928,8 @@ export const webhook_endpoints = pgTable("webhook_endpoints", {
 	active: boolean().default(true).notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	last_status: text(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.player_id],
@@ -803,6 +945,8 @@ export const shop_stock_log = pgTable("shop_stock_log", {
 	stock_after: integer().notNull(),
 	by_whom: text().default('admin').notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const webhook_deliveries = pgTable("webhook_deliveries", {
@@ -816,6 +960,8 @@ export const webhook_deliveries = pgTable("webhook_deliveries", {
 	next_attempt_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	delivered_at: timestamp({ withTimezone: true, mode: 'string' }),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("webhook_deliveries_due_idx").using("btree", table.status.asc().nullsLast(), table.next_attempt_at.asc().nullsLast()),
 	foreignKey({
@@ -843,6 +989,8 @@ export const stripe_payouts = pgTable("stripe_payouts", {
 	created_date: date().notNull(),
 	arrival_date: date().notNull(),
 	status: text(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const shop_orders = pgTable("shop_orders", {
@@ -861,6 +1009,8 @@ export const shop_orders = pgTable("shop_orders", {
 	collected_at: timestamp({ withTimezone: true, mode: 'string' }),
 	cancelled_at: timestamp({ withTimezone: true, mode: 'string' }),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.player_id],
@@ -880,6 +1030,8 @@ export const shop_variants = pgTable("shop_variants", {
 	stock: integer().default(0).notNull(),
 	reserved: integer().default(0).notNull(),
 	sold: integer().default(0).notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.product_id],
@@ -898,6 +1050,8 @@ export const wv_labels = pgTable("wv_labels", {
 	duration: real(),
 	hits: jsonb().notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const wv_models = pgTable("wv_models", {
@@ -907,6 +1061,8 @@ export const wv_models = pgTable("wv_models", {
 	n: integer().notNull(),
 	sessions: integer().default(0).notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const wv_passes = pgTable("wv_passes", {
@@ -921,6 +1077,8 @@ export const wv_passes = pgTable("wv_passes", {
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	paid_at: timestamp({ withTimezone: true, mode: 'string' }),
 	used_at: timestamp({ withTimezone: true, mode: 'string' }),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("wv_passes_player").using("btree", table.player_id.asc().nullsLast(), table.status.asc().nullsLast()),
 	unique("wv_passes_stripe_session_key").on(table.stripe_session),
@@ -935,6 +1093,8 @@ export const wv_updates = pgTable("wv_updates", {
 	meta: jsonb(),
 	merged: boolean().default(false).notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
 
 export const shop_order_items = pgTable("shop_order_items", {
@@ -945,6 +1105,8 @@ export const shop_order_items = pgTable("shop_order_items", {
 	qty: integer().notNull(),
 	unit_price_cents: integer().notNull(),
 	label: text().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.order_id],
@@ -957,6 +1119,8 @@ export const arena_pair_members = pgTable("arena_pair_members", {
 	pair_id: integer().notNull(),
 	player_id: integer().notNull(),
 	active: boolean().default(true).notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	uniqueIndex("arena_pair_members_one_active").using("btree", table.player_id.asc().nullsLast()).where(sql`active`),
 	primaryKey({ columns: [table.pair_id, table.player_id], name: "arena_pair_members_pkey"}),
@@ -966,6 +1130,8 @@ export const membership_reminders_sent = pgTable("membership_reminders_sent", {
 	membership_id: integer().notNull(),
 	session_date: date().notNull(),
 	sent_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	primaryKey({ columns: [table.membership_id, table.session_date], name: "membership_reminders_sent_pkey"}),
 ]);
@@ -974,7 +1140,18 @@ export const player_absences = pgTable("player_absences", {
 	session_date: date().notNull(),
 	email: text().notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
 }, (table) => [
+	index("player_absences_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "player_absences_user_id_fkey"
+		}).onDelete("restrict"),
 	primaryKey({ columns: [table.session_date, table.email], name: "player_absences_pkey"}),
 ]);
 
@@ -999,6 +1176,8 @@ export const bank_matches = pgTable("bank_matches", {
 	bank_txn_id: integer().notNull(),
 	entry_id: integer().notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.bank_txn_id],
@@ -1020,6 +1199,8 @@ export const arena_after_game = pgTable("arena_after_game", {
 	keep_pair: boolean(),
 	again: boolean(),
 	answered_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	primaryKey({ columns: [table.challenge_id, table.player_id], name: "arena_after_game_pkey"}),
 ]);
@@ -1030,6 +1211,8 @@ export const mini_game_scores = pgTable("mini_game_scores", {
 	score_a: integer().notNull(),
 	score_b: integer().notNull(),
 	locked_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	foreignKey({
 			columns: [table.draw_id],
@@ -1056,7 +1239,18 @@ export const attendance = pgTable("attendance", {
 	verified: boolean().default(true).notNull(),
 	removed: boolean().default(false).notNull(),
 	recorded_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// Phase 3 step 3: the account this row belongs to, when there is one. The
+	// email stays as the contact field; people without an account have no link.
+	user_id: integer(),
 }, (table) => [
+	index("attendance_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "attendance_user_id_fkey"
+		}).onDelete("restrict"),
 	index("attendance_email_idx").using("btree", table.email.asc().nullsLast(), table.session_date.asc().nullsLast()),
 	primaryKey({ columns: [table.session_date, table.email], name: "attendance_pkey"}),
 ]);
@@ -1073,6 +1267,8 @@ export const rr_results = pgTable("rr_results", {
 	rr_points: integer().notNull(),
 	finish_place: integer().notNull(),
 	teams_count: integer().notNull(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
 	index("rr_results_name_idx").using("btree", sql`lower(mg_name)`, sql`session_date`),
 	primaryKey({ columns: [table.draw_id, table.mg_name], name: "rr_results_pkey"}),
@@ -1092,6 +1288,8 @@ export const pricing_plans = pgTable("pricing_plans", {
 	sort: integer().notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updated_by: integer(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, () => [
 	check("pricing_plans_plan_id_check", sql`plan_id = ANY (ARRAY['casual'::text, 'fridayMonthly'::text, 'fridayQuarterly'::text, 'wednesdayMonthly'::text, 'wednesdayQuarterly'::text])`),
 ]);
@@ -1101,4 +1299,221 @@ export const club_settings = pgTable("club_settings", {
 	value: jsonb(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updated_by: integer(),
+	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
+	tenant_id: integer().default(1).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3: multi-tenant core (build plan §6.1). Additive: nothing above
+// changes in this step.
+// ---------------------------------------------------------------------------
+
+// A club. Three Wolves is club #1 (migration 0003). Every club lives in
+// exactly one region (§6.9); money is minor units in `currency`.
+export const tenants = pgTable("tenants", {
+	id: serial().primaryKey().notNull(),
+	slug: text().notNull(),
+	name: text().notNull(),
+	status: text().default('active').notNull(),
+	country: text().notNull(),
+	region: text().notNull(),
+	timezone: text().notNull(),
+	currency: text().notNull(),
+	languages: text().array().default(["en"]).notNull(),
+	sports: text().array().default([]).notNull(),
+	payment_mode: text().default('free').notNull(),
+	incorporated: text().default('unsure').notNull(),
+	stripe_status: text().default('none').notNull(),
+	bank_details: jsonb(),
+	theme: jsonb().default({}).notNull(),
+	terms: jsonb().default({}).notNull(),
+	custom_domain: text(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	unique("tenants_slug_key").on(table.slug),
+	unique("tenants_custom_domain_key").on(table.custom_domain),
+	check("tenants_slug_check", sql`slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text`),
+	check("tenants_status_check", sql`status = ANY (ARRAY['setup'::text, 'active'::text, 'suspended'::text, 'closed'::text])`),
+	check("tenants_country_check", sql`country ~ '^[A-Z]{2}$'::text`),
+	check("tenants_region_check", sql`region ~ '^[a-z][a-z0-9-]*$'::text`),
+	check("tenants_currency_check", sql`currency ~ '^[A-Z]{3}$'::text`),
+	check("tenants_payment_mode_check", sql`payment_mode = ANY (ARRAY['free'::text, 'offline'::text, 'online'::text])`),
+	check("tenants_incorporated_check", sql`incorporated = ANY (ARRAY['yes'::text, 'no'::text, 'unsure'::text])`),
+	check("tenants_stripe_status_check", sql`stripe_status = ANY (ARRAY['none'::text, 'connecting'::text, 'connected'::text])`),
+	check("tenants_custom_domain_check", sql`custom_domain = lower(custom_domain)`),
+]);
+
+// Which modules a club has on (§6.2.3), with each module's settings. Core
+// modules have a row too, for their settings; they can't be switched off.
+// `locked` is a platform admin's lock: the club's owners can't change it and
+// see `lock_reason`.
+export const tenant_modules = pgTable("tenant_modules", {
+	tenant_id: integer().notNull(),
+	module_id: text().notNull(),
+	enabled: boolean().default(true).notNull(),
+	settings: jsonb().default({}).notNull(),
+	enabled_at: timestamp({ withTimezone: true, mode: 'string' }),
+	locked: text(),
+	lock_reason: text(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updated_by: integer(),
+}, (table) => [
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "tenant_modules_tenant_id_fkey"
+		}).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.module_id], name: "tenant_modules_pkey"}),
+	check("tenant_modules_locked_check", sql`locked = ANY (ARRAY['on'::text, 'off'::text])`),
+]);
+
+// A person's place in a club: one row per club and account. The account
+// (players, the global identity) is never deleted, only soft-deleted, so the
+// link is ON DELETE RESTRICT. `status` is the club's own decision: a disabled
+// member loses that club's spaces and keeps the account and data.
+// Until reads switch (Phase 3 step 11), club_roles stays the source for
+// owner/admin/coach and this table mirrors it.
+export const club_members = pgTable("club_members", {
+	tenant_id: integer().notNull(),
+	user_id: integer().notNull(),
+	role: text().default('member').notNull(),
+	status: text().default('active').notNull(),
+	joined_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	leaderboard_visible: boolean().default(true).notNull(),
+	global_profile_visible: boolean().default(false).notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("club_members_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "club_members_tenant_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.user_id],
+			foreignColumns: [players.id],
+			name: "club_members_user_id_fkey"
+		}).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.user_id], name: "club_members_pkey"}),
+	check("club_members_role_check", sql`role = ANY (ARRAY['owner'::text, 'admin'::text, 'coach'::text, 'member'::text, 'guest'::text])`),
+	check("club_members_status_check", sql`status = ANY (ARRAY['active'::text, 'disabled'::text])`),
+]);
+
+// Junior accounts (§6.8): a child's profile has no login, email or phone. A
+// guardian (a normal account) manages it. Created empty in Phase 3 so
+// nothing is reshaped later; the features are Phase 3b.
+export const junior_profiles = pgTable("junior_profiles", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	guardian_user_id: integer().notNull(),
+	name: text().notNull(),
+	birth_year: smallint(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	deleted_at: timestamp({ withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("junior_profiles_tenant_id_idx").using("btree", table.tenant_id.asc().nullsLast(), table.id.asc().nullsLast()),
+	index("junior_profiles_guardian_user_id_idx").using("btree", table.guardian_user_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "junior_profiles_tenant_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.guardian_user_id],
+			foreignColumns: [players.id],
+			name: "junior_profiles_guardian_user_id_fkey"
+		}).onDelete("restrict"),
+]);
+
+// One child can have two guardians, one guardian several children.
+export const guardianships = pgTable("guardianships", {
+	guardian_user_id: integer().notNull(),
+	junior_profile_id: integer().notNull(),
+	consent_at: timestamp({ withTimezone: true, mode: 'string' }),
+	consent_scope: jsonb().default({}).notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("guardianships_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
+	foreignKey({
+			columns: [table.guardian_user_id],
+			foreignColumns: [players.id],
+			name: "guardianships_guardian_user_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.junior_profile_id],
+			foreignColumns: [junior_profiles.id],
+			name: "guardianships_junior_profile_id_fkey"
+		}).onDelete("restrict"),
+	primaryKey({ columns: [table.guardian_user_id, table.junior_profile_id], name: "guardianships_pkey"}),
+]);
+
+// Phase 3 step 9: plans, what each club is on, and usage per club (build
+// plan §6.5, §11.2). Platform-wide: what a plan includes, for which country
+// and sport, and what it costs (minor units + currency).
+export const plans = pgTable("plans", {
+	id: text().primaryKey().notNull(),
+	name: text().notNull(),
+	country: text(),
+	sport: text(),
+	tiers: text().array().default(sql`ARRAY['free']::text[]`).notNull(),
+	price_minor: integer().default(0).notNull(),
+	currency: text().notNull(),
+	billing_interval: text(),
+	limits: jsonb().default({}).notNull(),
+	active: boolean().default(true).notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	check("plans_id_check", sql`id ~ '^[a-z][a-z0-9-]*$'::text`),
+	check("plans_country_check", sql`country ~ '^[A-Z]{2}$'::text`),
+	check("plans_currency_check", sql`currency ~ '^[A-Z]{3}$'::text`),
+	check("plans_price_minor_check", sql`price_minor >= 0`),
+	check("plans_billing_interval_check", sql`billing_interval = ANY (ARRAY['month'::text, 'year'::text])`),
+]);
+
+// Which plan a club is on, and since when. One current row per club (ends_at
+// IS NULL); a change of plan closes the row and opens another.
+export const club_plans = pgTable("club_plans", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	plan_id: text().notNull(),
+	status: text().default('active').notNull(),
+	starts_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	ends_at: timestamp({ withTimezone: true, mode: 'string' }),
+	note: text(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("club_plans_current_idx").using("btree", table.tenant_id.asc().nullsLast().op("int4_ops")).where(sql`(ends_at IS NULL)`),
+	index("club_plans_plan_id_idx").using("btree", table.plan_id.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "club_plans_tenant_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.plan_id],
+			foreignColumns: [plans.id],
+			name: "club_plans_plan_id_fkey"
+		}).onDelete("restrict"),
+	check("club_plans_status_check", sql`status = ANY (ARRAY['active'::text, 'trial'::text, 'past_due'::text, 'canceled'::text])`),
+	check("club_plans_period_check", sql`ends_at IS NULL OR ends_at > starts_at`),
+]);
+
+// One number per club, metric and calendar month (period = the 1st).
+export const usage_counters = pgTable("usage_counters", {
+	tenant_id: integer().notNull(),
+	metric: text().notNull(),
+	period: date().notNull(),
+	quantity: bigint({ mode: "number" }).default(0).notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "usage_counters_tenant_id_fkey"
+		}).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.metric, table.period], name: "usage_counters_pkey"}),
+	check("usage_counters_metric_check", sql`metric ~ '^[a-z][a-z0-9_.]*$'::text`),
+	check("usage_counters_period_check", sql`EXTRACT(day FROM period) = 1`),
+	check("usage_counters_quantity_check", sql`quantity >= 0`),
+]);

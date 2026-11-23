@@ -22,6 +22,48 @@
       "when": 1795402485144,
       "tag": "0002_business_config",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795418125251,
+      "tag": "0003_tenants",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795420323805,
+      "tag": "0004_tenant_id_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795422481525,
+      "tag": "0005_user_id_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795453000000,
+      "tag": "0006_entitlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795455000000,
+      "tag": "0007_tenant_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795463000000,
+      "tag": "0008_terms_localized",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3-tenant-id",
+  "description": "Phase 3 step 2 (build plan §6.1, §6.6 steps 2 and 3): a new nullable tenant_id column on the 54 club-owned tables, with a constant default of Three Wolves' id, so every existing row reads as Three Wolves' without being rewritten. Additive only: no existing column, value, row, account, email, phone, session or role may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

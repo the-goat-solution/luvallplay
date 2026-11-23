@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3-tenants",
+  "description": "Phase 3 step 1 (build plan §6.1, §6.6 step 1, §6.8): five new tables. tenants gets one row (Three Wolves, club #1), tenant_modules one row per module the club runs today, and club_members one row per account, with the role copied from club_roles (owner, admin, coach) or 'member'. junior_profiles and guardianships are created empty. Additive only: no existing table, column, row, account, email, phone, session or role may change, and club_roles and platform_admins stay exactly as they are. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

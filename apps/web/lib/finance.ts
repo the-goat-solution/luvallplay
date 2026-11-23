@@ -1,3 +1,5 @@
+import { clubMajor, minorToDecimal, toMinor } from "./money";
+import { CLUB_CURRENCY } from "./constants";
 // Shared (server + client) building blocks for the admin Financials tab:
 // the category/method vocabularies, the date-range presets, money parsing
 // and formatting, and the filter shape the page, the Excel export and the
@@ -88,12 +90,9 @@ export const MAX_ENTRY_CENTS = 100_000_000; // $1,000,000.00
 // can't have, and Number("19.99") * 100 is 1998.9999999999998.
 export function parseAmountToCents(input: string): number | null {
   const cleaned = input.trim().replace(/^\$/, "").replace(/,/g, "").trim();
-  const match = /^(\d+)(?:\.(\d{0,2}))?$/.exec(cleaned);
-  if (!match) return null;
-  const dollars = Number(match[1]);
-  const cents = Number((match[2] ?? "").padEnd(2, "0"));
-  const total = dollars * 100 + cents;
-  if (!Number.isSafeInteger(total) || total <= 0 || total > MAX_ENTRY_CENTS) {
+  // "12." is accepted as 12, as before.
+  const total = toMinor(cleaned.replace(/\.$/, ""), CLUB_CURRENCY);
+  if (total === null || !Number.isSafeInteger(total) || total <= 0 || total > MAX_ENTRY_CENTS) {
     return null;
   }
   return total;
@@ -101,7 +100,7 @@ export function parseAmountToCents(input: string): number | null {
 
 const nzd = new Intl.NumberFormat("en-NZ", {
   style: "currency",
-  currency: "NZD",
+  currency: CLUB_CURRENCY,
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
@@ -109,14 +108,14 @@ const nzd = new Intl.NumberFormat("en-NZ", {
 // Formats cents as "$1,234.56". With `signed`, positive values get a "+"
 // and negative ones a true minus sign, so a column of mixed amounts lines up.
 export function formatCents(cents: number, { signed = false } = {}): string {
-  const formatted = nzd.format(Math.abs(cents) / 100);
+  const formatted = nzd.format(clubMajor(Math.abs(cents)));
   if (cents < 0) return `−${formatted}`;
   if (signed && cents > 0) return `+${formatted}`;
   return formatted;
 }
 
 export function centsToInputValue(cents: number): string {
-  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+  return minorToDecimal(cents, CLUB_CURRENCY);
 }
 
 // ── Dates ─────────────────────────────────────────────────────────────────

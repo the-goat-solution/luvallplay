@@ -1,5 +1,6 @@
 "use client";
 
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { ModalShell } from "@/components/modals/ModalShell";
@@ -970,7 +971,7 @@ function formatClock(ms: number, lang: Lang) {
   return new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : "en-NZ", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "Pacific/Auckland",
+    timeZone: CLUB_TIME_ZONE,
   }).format(new Date(ms));
 }
 

@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3-entitlements",
+  "description": "Phase 3 step 9 (build plan §6.5 business model, §11.2): three new tables. plans gets one row (nz-badminton-free: New Zealand badminton, free for good), club_plans one row (Three Wolves on that plan), usage_counters is created empty. Additive only: no existing table, column, row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

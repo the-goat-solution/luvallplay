@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import { NextResponse } from "next/server";
 import { sql } from "./database";
 import { addDays, getSpotsAndHeadcountForDates, listSessionsInRange } from "./db";
@@ -108,7 +109,7 @@ export function parsePeriod(raw: string | null | undefined): Period {
 export async function leaderboardData(metricRaw: string | null | undefined, periodRaw: string | null | undefined, key?: string | null) {
   const metric: Metric = metricRaw === "rr" ? "rr" : "attendance";
   const period = parsePeriod(periodRaw);
-  const range = periodFromKey(period, key ?? undefined) ?? periodRange(period, getClubToday().dateKey);
+  const range = periodFromKey(period, key ?? undefined) ?? periodRange(period, getClubToday(new Date(), await clubClock()).dateKey);
   const rows = await getLeaderboard(metric, range);
   return {
     metric,
@@ -121,7 +122,7 @@ export async function leaderboardData(metricRaw: string | null | undefined, peri
 }
 
 export async function upcomingSessionsData(days = 30) {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const sessions = await listSessionsInRange(today, addDays(today, Math.min(60, Math.max(1, days))));
   const { spots } = await getSpotsAndHeadcountForDates(sessions.map((s) => s.date));
   return sessions.map((s) => ({
@@ -138,7 +139,7 @@ export async function upcomingSessionsData(days = 30) {
 export async function logActivity(c: ApiCaller, date: string): Promise<{ recorded: boolean; confirmed: false }> {
   const d = validDate(date);
   if (!d) throw new Error("invalid_date");
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   if (d > today || d < addDays(today, -60)) throw new Error("date_out_of_range");
   const { rows } = await sql`SELECT 1 FROM sessions WHERE date = ${d} AND google_event_id IS NOT NULL;`;
   if (rows.length === 0) throw new Error("not_a_play_day");
@@ -152,7 +153,7 @@ export async function myUpcomingPlayDays(c: ApiCaller) {
   if (!player) return [];
   const m = await getCurrentMembership(player.email);
   const sessions = await upcomingSessionsData(60);
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const [{ rows: bookings }, { rows: absences }] = await Promise.all([
     sql`SELECT session_date::text AS d FROM bookings WHERE lower(trim(email)) = ${player.email} AND status = 'confirmed' AND session_date >= ${today};`,
     sql`SELECT session_date::text AS d FROM player_absences WHERE email = ${player.email} AND session_date >= ${today};`,

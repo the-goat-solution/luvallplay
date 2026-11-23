@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import crypto from "crypto";
 import { sql } from "./database";
 import { MEMBERSHIP_DAY_TO_DOW } from "./constants";
@@ -248,7 +249,7 @@ const ROSTER_MEMBERSHIP_STATUSES = ["active", "trialing", "past_due", "expired",
  */
 export async function recordRosterAttendance(): Promise<number> {
   if (!process.env.POSTGRES_URL) return 0;
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   // Weekday of each membership pool, e.g. friday → 5 (Postgres DOW: Sunday = 0).
   const dowCase = Object.entries(MEMBERSHIP_DAY_TO_DOW)
     .map(([day, dow]) => `WHEN ${Number(dow)} THEN '${day.replace(/[^a-z]/g, "")}'`)
@@ -346,7 +347,7 @@ export async function syncRosterAttendance(force = false): Promise<void> {
 
 export async function getStatsBackfillPreview(): Promise<{ boardDays: number; draws: number; bookingDays: number }> {
   if (!process.env.POSTGRES_URL) return { boardDays: 0, draws: 0, bookingDays: 0 };
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const count = async (q: string, params: unknown[] = []) => {
     try {
       const { rows } = await sql.query(q, params);
@@ -388,7 +389,7 @@ async function knownEmailsByBoardId(): Promise<Map<string, string>> {
 }
 
 export async function runStatsBackfill(): Promise<{ attendance: number; roundRobin: number }> {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   let attendance = 0;
   let roundRobin = 0;
 
@@ -514,7 +515,7 @@ export type PlayerStats = {
 };
 
 export async function getPlayerStats(player: { id: number; email: string; minigameName: string | null }): Promise<PlayerStats> {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const empty: PlayerStats = {
     attended: { month: 0, quarter: 0, year: 0, lifetime: 0 },
     ranks: {
@@ -617,7 +618,7 @@ export async function listAbsences(email: string, fromDate: string): Promise<str
 export async function getQuickStats(player: { id: number; email: string }): Promise<{ streak: number; monthRank: number | null }> {
   if (!process.env.POSTGRES_URL) return { streak: 0, monthRank: null };
   syncRosterAttendanceLater();
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const [{ rows: att }, { rows: club }, { rows: abs }, board] = await Promise.all([
     sql`SELECT session_date::text AS d FROM attendance WHERE email = ${player.email} AND verified AND NOT removed;`,
     sql`SELECT date::text AS d FROM sessions WHERE date <= ${today};`,

@@ -793,6 +793,117 @@ Decision V: no longer 16+ only. **Juniors (under 16) never get their own login.*
 - **names and search:** Vietnamese names put the family name first, so profiles use a single full-name field plus a display name, and **search ignores accents** (typing "nguyen" finds "Nguyễn");
 - languages and sport vocabulary (§6.7).
 
+### 6.10 Phase 3 delivery log and plan changes
+
+Phase 3 ships as twelve small steps, each deployable and revertable on its own: (1) tenants schema and Three Wolves as club #1 → (2) nullable `tenant_id` columns, backfilled → (3) email links → `user_id` → (4) settings replace constants → (5) module enforcement → (6) second driver and region routing → (7) money audit → (8) payments interface → (9) entitlements and metering → (10) `NOT NULL`, foreign keys and row-level security → (11) reads switched, after 7 clean days of shadow reads → (12) old email joins dropped. The steps that need a decision or a sign-off are in [`phase-3-runbook.md`](./phase-3-runbook.md).
+
+Findings and changes recorded as the work goes:
+
+- **Step 1, tenants schema (migration `0003_tenants`):**
+  - Five new tables: `tenants`, `tenant_modules`, `club_members`, and the junior-account tables `junior_profiles` and `guardianships` (§6.8, empty). Additive only.
+  - Three Wolves' row is copied from today's constants, and a test compares the migration with them: `Pacific/Auckland`, NZD, English and Vietnamese, badminton, online payments, incorporated (its bank account name ends in "INC"), its bank details, its colours and fonts (from `packages/ui`), and the terms "Wolf Points" and "Wolf Vision".
+  - `tenant_modules` has one row per module in the registry, the core included, because the core has settings too. The settings that are constants today are stored there: courts → players, session capacity, booking window and cut-off (Play days); the mini-game field (Round robin); membership days, default courts, cycle lengths, start search and pending hold (Memberships); donation limits in minor units (Donations). Nothing reads them yet (step 4).
+  - **Plan change: `club_members` is a new table beside `club_roles`, not `club_roles` reshaped.** `club_roles` and `platform_admins` are untouched and stay the source of admin access, so the previous app version keeps working and nobody's access can change in this step. `club_members` mirrors the role and the leaderboard flag after each change, and an idempotent reconcile (the same statement as the backfill) repairs anything missed. Reads move to `club_members` in step 11, and `club_roles` is dropped in step 12.
+  - The mirror runs outside transactions only. A failed statement inside an open transaction would abort it, which the grant script's tests caught.
+  - **Plan change: `tenant_modules` has the platform lock from the start** (`locked` on/off, `lock_reason`, §6.2.3), which saves a later migration.
+  - **Plan change: `tenants.location` (a PostGIS point) is left for Phase 7** (Find a club). Production has no PostGIS, and nothing needs the column before then.
+  - Clubs have integer ids, like every other table. The slug is the public name; code looks a club up by slug or host and never assumes id 1.
+  - The accounts table keeps the name `players`. New tables call the link `user_id`, the name the plan uses for the global identity.
+  - The migration also creates Three Wolves in every new database (CI, previews, local). A second region's database needs its own first club, which is decided with the Hanoi work.
+  - Rehearsed on a fresh Neon branch of production: 17 live accounts, 0 problems, no schema drift, 2 owners and 2 platform admins unchanged (`docs/rehearsals/2026-11-phase3-tenants.md`).
+  - **Production run, 23 Nov 2026, 07:36 UTC:** restore point `pre-phase-3-tenants`; the migration took 5.5 s; the data guard diff passed with 17 accounts and 0 problems; no drift; 19 accounts and 19 club members, mirror drift 0.
+  - Finding for step 6 (host routing): the site is served from `www.threewolvesbadminton.org` (the bare domain redirects there), and `tenants.custom_domain` holds the bare domain. The host lookup has to treat both as Three Wolves.
+  - Finding for step 10: many tables have keys that only work for one club (`sessions` by date, `attendance` by date and email, `club_settings` by key, `pricing_plans` by plan id, and others). Their primary keys and unique indexes have to gain `tenant_id` before a second club can exist.
+- **Step 2, `tenant_id` columns (migration `0004_tenant_id_columns`):**
+  - A nullable `tenant_id` on the 54 club-owned tables. `packages/db/tenancy.ts` lists every table as club-owned or platform-wide, and a test fails on a table in neither list. Platform-wide: accounts and sign-in (`players`, `player_sessions`, `auth_codes`, `sms_sends`, `admin_handoffs`, `player_events`, `player_settings`), `tenants`, `platform_admins`, `guardianships`, and the unused `schema_runs` and `pv_*` tables.
+  - **Plan change: no batched backfill.** The column has a constant default (Three Wolves' id), which Postgres keeps in the catalog. No row is rewritten, every existing row reads as Three Wolves' in the same atomic change, and rows written by the previous app version get it too, which a batched backfill can't do. The default is dropped in step 10, before a second club can exist; the migration and `verify.mjs` both refuse a second club while it's in place.
+  - The 54 `ALTER`s run as one statement, so each table's exclusive lock is held for milliseconds, not for 54 round trips.
+  - **Vision tables (`wv_*`) are club-owned for now.** Decision AF makes Vision a platform product; who owns its passes, labels and models is settled with the Vision cutover (§11.2).
+  - **New tool: `scripts/characterise.ts`** (test plan §4.4, T−4). It hashes each account's views (account, membership, play days left, calendar, quick stats, stats, orders, threads, points board, access, data export) and the club boards before and after a change. No tool for this existed before.
+  - **It caught a real difference on its first use:** "Download my data" selected every column of `arena_pairs`, so 4 members' exports gained a `tenant_id` field. The query now names its columns. The data guard can't see this kind of change, because no stored value changed.
+  - **Correction: step 2 was planned to deploy before it migrated, and that was wrong.** The production build of the merged change failed, because Drizzle's typed queries name every column in `schema.ts`, so a version that adds a column can't build (the home page is prerendered from the database) or run until the column exists. The failed build never went live. The migration ran, then `main` was redeployed. **Rule: migrate first, then merge.** The previous version always works with a new column in place; the new version never works without it.
+  - Finding: the Neon driver sends its HTTP queries to the region's `api.` host, not the database's own host. Operator scripts that run the app's client now point them at the database host, so the session's network allowlist needs one host per branch, not two.
+  - Rehearsed on a fresh Neon branch of production: 17 accounts, 0 problems; 1,441 rows in 57 tables all with the club's id; characterisation identical; no drift (`docs/rehearsals/2026-11-phase3-tenant-id.md`).
+  - **Production run, 23 Nov 2026, 08:25 UTC:** restore point `pre-phase-3-tenant-id`; the migration took 1.4 s; the data guard diff passed with 17 accounts and 0 problems; no drift; 1,441 rows in 57 tables all with the club's id. Live at 08:28 UTC.
+- **Step 3, email links → `user_id` (migration `0005_user_id_links`):**
+  - Ten tables gain a nullable `user_id` with a foreign key to the account (`ON DELETE RESTRICT`) and an index: `attendance`, `bookings`, `casual_play_profiles`, `day_requests`, `donations`, `jersey_registrations`, `memberships`, `player_absences`, `session_fill_ins`, `waitlist`. `shop_orders` already had `player_id`. The email stays as the contact field.
+  - On production's data: 453 rows, 287 linked to an account, 166 for people without one (guests, and members who never signed in). All 10 active memberships were already linked, so there was no `ACTIVE_MEMBERSHIP_WITHOUT_ACCOUNT` to resolve first.
+  - **Plan change: database triggers keep the link in step, not app code.** The previous app version doesn't know the column, and rows are written from many places (checkout, Stripe webhooks, crons, admin). Two functions: a row points at the live account with its email when it's inserted or its email changes; an account picks up the rows under its email when it's created, and lets go of them when it's soft-deleted. That is the rule the email joins follow today, so a person's rows by `user_id` are the rows they see now. The triggers come out when the app writes `user_id` itself (step 11 or 12).
+  - A deleted account's rows have no `user_id`. They stay, with their email, "no longer linked to a sign-in" as today, and a new sign-up with the same email picks them up again, as today.
+  - **Tooling:** the schema dump and the drift check now cover functions and triggers. A Drizzle schema can't describe them, so the "built from `schema.ts`" comparison covers tables, indexes and sequences, and the migrations comparison covers everything.
+  - **The characterisation check caught a second thing:** one member's data export listed two same-day bookings in a different order after the backfill, because the export sorted by date only and the backfill changes the order rows are stored in. Every list in the export now has a full sort order. The rehearsal was repeated from a fresh copy and is identical.
+  - Rehearsed on a fresh Neon branch of production: 17 accounts, 0 problems; no disagreement between `user_id` and email on 453 rows; characterisation identical; no drift (`docs/rehearsals/2026-11-phase3-user-id-links.md`).
+  - **Production run, 23 Nov 2026, 09:09 UTC:** restore point `pre-phase-3-user-id-links`; the migration took 4.4 s; the data guard diff passed with 17 accounts and 0 problems; no drift; no disagreement between `user_id` and the email on 453 rows. Merged at 09:11 UTC.
+- **Step 4, settings replace constants (no migration):**
+  - Part 1: `@luvallplay/core/club-config` (pure) turns a club's `tenants` row and `tenant_modules.settings` into one typed `ClubConfig`, and compares two configs setting by setting. `lib/club-config.ts` loads it, cached for a minute.
+  - **The feature flag is `CLUB_SETTINGS_SOURCE`:** `constants` (default), `shadow` (built-in values answer, stored ones are compared and differences logged) or `database`. This is the shadow read for settings.
+  - A missing or malformed stored value falls back to the built-in value for that field only, and is reported. A database error never breaks a page.
+  - A test proves the settings migration 0003 stored for Three Wolves equal today's constants exactly, so the shadow comparison starts empty. Admin → Setup check shows it live.
+  - The loader is tested with a second, synthetic club (Vietnam, VND, its own days and limits) to show nothing is borrowed from Three Wolves' values.
+  - Part 2: the donation routes and the membership start search read the loader. Shadow reads for settings started on production on 23 Nov 2026, 09:50 UTC.
+  - Part 3: `"Pacific/Auckland"` was typed into 16 files. They share one constant now, which is also the built-in value of the `timezone` setting, and a scan fails on new copies.
+  - Part 4: play-day capacity reads the settings. **Finding:** the booking guard's SQL had its own typed copy of the courts → players table ("keep the two in sync" in a comment). It now takes the table as a parameter, so the query and the code can't disagree.
+  - Part 5: the remaining server-side capacity uses read the settings.
+- **Step 5, module enforcement (no migration):**
+  - **Plan change: route ownership is one table (`packages/modules/src/routes.ts`), not spread over the manifests.** Each prefix has an owner: a module, `core`, `account` (sign-in and the player's own account) or `platform`. The longest prefix wins. A test generated from the app's route list fails on a route without an owner, which is the "new endpoint without coverage fails CI" rule applied to modules.
+  - Enforcement is in the request proxy: a path whose module is off answers 404, for pages, API routes and crons alike. The proxy now sees every `/api` request; the check is an in-memory lookup, with the club's switches read at most once a minute.
+  - **Decision: enforcement fails open.** If the switches can't be read, every module counts as on. Modules are a product switch, not a security boundary, and a database hiccup must not turn a club's features off. Tenant lookup (step 6) fails closed, as the plan says.
+  - A module without a row is off; the core is on whatever the table says.
+  - The minimal switch is Admin → Settings → Modules, for owners and platform admins, using the registry's `canTurnOn` / `canTurnOff`.
+  - Finding: `payments-to-check` owns no route of its own (its screens are inside Members and Shop), so it is switched inside those pages, in the next part.
+  - Part 2 (after #106): what's left of step 5 is module parts inside other modules' pages, per-module emails and the platform console's lock.
+- **Step 4, continued:**
+  - **Finding: the hosting plan keeps server logs for one hour**, so logs can't show "shadow reads clean for 7 days". **Plan change:** each shadow result is a row in `admin_audit_log` (`shadow.<what>`: `clean`, `differ` or `unavailable`). A difference is written when a request sees it; the roster cron writes one result a day. `scripts/shadow-report.mjs` prints the record and is the evidence for the step 11 gate.
+  - The booking clock (time zone, booking window, cut-off hour) is a parameter of the date helpers. The booking rule, the Me page and the calendar components pass the club's. About 50 other callers still use the default (the built-in values, equal to Three Wolves' settings); they move as their modules are touched.
+  - Membership cycle lengths in the renewal SQL, the Stripe sync and the free month come from the settings. They go into SQL as whole numbers only.
+  - Client components read the club's public settings from a provider (`useClub()`), filled by the root layout.
+- **Step 6, second driver and region routing (no migration):**
+  - `DATABASE_DRIVER` chooses the Neon driver (default) or standard Postgres (`lib/database-pg.ts`). The golden master compares three clients: the old one, the Neon driver and standard Postgres. An unknown driver name stops the app.
+  - Host → club → region is pure logic in `@luvallplay/core/host-routing`, with every host type of §6.4 told apart. `TENANT_ROUTING` is `off` (default), `shadow` or `enforce`; an unknown value enforces. Refusals: 404 unknown host, 421 another region's club, 503 when the lookup can't answer.
+  - **Decision: Edge Config is a copy, the `tenants` table is the truth.** A host missing from the copy is looked up in the database, so a new club's domain works before the copy is refreshed, and a broken copy doesn't take clubs offline. If both fail, nothing is served.
+  - **Decision: one club per deployment until step 11.** A host that resolves to a different club in the same region is refused, because reads aren't tenant-aware yet.
+  - **Decision: the deployment's own host names** (the hosting provider's URLs, used by its scheduler and previews) serve the deployment's club. This rule goes away when a deployment holds more than one club.
+  - Storage (`lib/storage.ts`) and scheduled jobs (`lib/cron.ts`) are interfaces with Vercel as the first provider; a contract test is ready for the S3-compatible provider, and `scripts/cron/k8s.mjs` prints Kubernetes CronJobs from the same list as `vercel.json`.
+  - **Finding:** two scheduled jobs didn't require the scheduler's secret when it was unset. All five now share one check that refuses in production without a secret.
+  - **Not done in Phase 3:** the S3-compatible storage provider, the platform's own hosts (marketing, app, admin, api) and cross-region forwarding. They belong to the Vietnam launch and Phase 6.
+- **Step 7, money audit (no migration):**
+  - `@luvallplay/core/money` holds the currency table (exponents), exact conversion both ways, and formatting. 41 hand-written conversions and 12 typed currency codes now use it.
+  - VND cases are in the tests: whole dong, no division, fractions refused, Vietnamese grouping.
+  - Two CI scans: arithmetic by 100 outside the helpers, and typed currency codes.
+  - **Decision: column names stay (`*_cents`), and a row's currency is its club's.** Both are written in the runbook (§7).
+  - **Finding:** a negative amount used to print as `$-10.50`; it now prints as `-$10.50`.
+- **Step 8, payments interface (no migration):**
+  - The interface and its rules are pure (`@luvallplay/core/payments`); Stripe is the first provider. One contract suite runs on every provider, including replay twice and out of order.
+  - One-off payments (casual play, donations, shop) and the webhook signature check use it. **Plan change: subscriptions stay on Stripe's own API for now**, behind a pinned list of files; the interface's subscription operations are designed with the first provider that can't charge again by itself, so they aren't shaped by Stripe alone.
+- **Step 9, entitlements and metering (migration `0006_entitlements`, additive):**
+  - `plans` (platform), `club_plans` and `usage_counters`. Three Wolves is on `nz-badminton-free`. Prices are minor units plus a currency; a test adds a Vietnamese plan priced in whole dong.
+  - `can()` is built and tested with billing on and off. **Decision: the free tier survives everything** (no plan, an ended plan, a plan that can't be read), so a billing problem never takes away what a free club runs its sessions with. A late payment switches nothing off.
+  - Usage is counted for emails, sign-in texts, uploads and payments started. **Decision: limits report, they never block**, and the limits are empty until the cost model sets them.
+  - Rehearsed on a fresh copy of production: 17 accounts, 0 problems.
+  - **Production run, 23 Nov 2026, 17:09 UTC:** restore point `pre-phase-3-entitlements`; 3.5 s; data guard 17 accounts, 0 problems; no drift.
+- **Step 10, required club id and row-level security (migration `0007_tenant_rls`, no row changes):**
+  - `tenant_id` is `NOT NULL` with a foreign key on all 59 club-owned tables. Row-level security is enabled and forced on each, with one policy keyed on the transaction setting `app.tenant_id`. The app's role `luvallplay_app` has no login and can't bypass it. With no club named, nothing is visible.
+  - **Finding: the database owner on Neon has `BYPASSRLS`.** So the policies can go in without touching the live app, and the app moves onto the role by a setting (`TENANT_SCOPE`), not by a deploy of new queries.
+  - **Decision: the role and the club are set per transaction** (`SET LOCAL ROLE`, `set_config(…, true)`), never per session, because the pooled endpoint hands a server connection to another request after each transaction.
+  - **Plan change: shadow reads are done at the database client.** In `shadow` mode a sample of real reads is run a second time as the app's role, in a read-only transaction, and compared as a set of rows. This tests the app's actual queries, not a list someone wrote.
+  - **Plan change: natural keys are widened in step 11, not step 10** (runbook §10).
+  - The golden master has a fourth copy that runs through row-level security; it found three orderings without a tie-breaker, now fixed.
+  - **Decision: the account-linking trigger runs as its owner**, because accounts are global and must link rows in every club.
+  - **Not done yet:** the route-level isolation suite (it needs requests for two clubs, which arrives with step 11) and a login for the app's role.
+- **Tests added after step 10:**
+  - **Permission matrix (test plan §3.6), from the database:** eight roles against six actions, each person's access resolved as the app's role for the club. It adds the rows Phase 3 brings: another club's admin (an admin there, nobody here), switching modules (owners and platform admins), and the platform's lock (holds for owners).
+  - **Finding from journey S2:** the request proxy and the pages keep separate copies of the module switches, each remembered for a minute. So a switch takes effect at once on the instance that made it and within a minute everywhere else. `MODULES_CACHE_MS` sets the time (tests use 0).
+  - **Journey S2:** an owner switches a module off; its pages and API answer 404, its data is kept, the rest of the club carries on; back on, everything returns; an admin who isn't an owner has no switch.
+- **Steps 4 and 5, second round:**
+  - The club's clock is passed at about 40 async call sites; 11 plain helpers are pinned in a test until their callers can pass it. **Finding:** `endOfClubDay` in the shop tries the two New Zealand UTC offsets by hand; it needs a time-zone-aware rewrite before a club outside New Zealand uses the shop.
+  - **Plan change: a club's terms are per language.** Vietnamese has its own wording for the points ("Điểm Sói"), so `tenants.terms` gains `localized.<lang>`; a language with no name of its own uses the club's single name and never borrows Three Wolves'. Migration `0008_terms_localized` stores Three Wolves' Vietnamese name.
+  - **Decision: the club's terms are set once per server process** (and per browser), because a deployment holds one club until step 11.
+  - Sections, navigation, tabs and Me-page cards follow the module switches. Luvallplay staff can lock a module on or off with a reason.
+- **Findings about the environment:**
+  - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
+  - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.
+  - Local development has Postgres 16. The schema drift check needs 18 and runs in CI and against the Neon rehearsal branch.
+
 ---
 
 ## 7. Phase 6: brand, websites and the setup wizard

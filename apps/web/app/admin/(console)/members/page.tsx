@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { linkMemberAccount } from "@/lib/player-db";
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
@@ -28,6 +29,7 @@ import { MemberRetryButton } from "@/components/admin/MemberRetryButton";
 import { MemberFreeMonthButton } from "@/components/admin/MemberFreeMonthButton";
 import { StripeSyncButton } from "@/components/admin/StripeSyncButton";
 import { SubmitButton } from "@/components/admin/SubmitButton";
+import { clubMajor, clubMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -134,12 +136,12 @@ async function addOfflineMember(formData: FormData) {
     }, "admin");
   }
   if (activated?.periodStart && activated.periodEnd) {
-    const { dateKey: clubToday } = getClubToday();
+    const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
     await sendMembershipConfirmationEmail(activated.email, {
       firstName: activated.name,
       plan: activated.plan,
       day: activated.day,
-      priceNzd: amount / 100,
+      priceNzd: clubMajor(amount),
       recurring: false,
       periodStart: activated.periodStart,
       periodEnd: activated.periodEnd,
@@ -300,7 +302,7 @@ export default async function MembersAdminPage({ searchParams }: { searchParams:
   const [memberships, activeMemberCount, recentlyEnded, feedback] = await Promise.all([
     listMemberships(),
     getTotalActiveMemberCount(),
-    listRecentlyEndedMemberships(addDays(getClubToday().dateKey, -60)),
+    listRecentlyEndedMemberships(addDays(getClubToday(new Date(), await clubClock()).dateKey, -60)),
     listRecentFeedback(30).catch(() => []),
   ]);
   // Bank-transfer members show whether the transfer has been matched yet.
@@ -382,8 +384,8 @@ export default async function MembersAdminPage({ searchParams }: { searchParams:
                 <label className={kit.field}>
                   Plan
                   <select name="plan" defaultValue="monthly" className={kit.select}>
-                    <option value="monthly">Monthly (${MONTHLY_PRICE_CENTS / 100})</option>
-                    <option value="quarterly">Quarterly (${QUARTERLY_PRICE_CENTS / 100})</option>
+                    <option value="monthly">Monthly ({clubMoney(MONTHLY_PRICE_CENTS)})</option>
+                    <option value="quarterly">Quarterly ({clubMoney(QUARTERLY_PRICE_CENTS)})</option>
                   </select>
                 </label>
                 <OfflinePaymentMethodField />

@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -6,6 +7,7 @@ import {
   recordFreeDays,
 } from "@/lib/db";
 import { getClubToday } from "@/lib/dates";
+import { clubConfig } from "@/lib/club";
 import { addFreeDaysBeforeNextCharge, giveFreeNextPeriod } from "@/lib/stripe";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
 
@@ -15,8 +17,8 @@ const bodySchema = z.object({
   membershipId: z.number().int().positive(),
 });
 
-// 4 weeks — the club's "month" (see MEMBERSHIP_CYCLE_DAYS).
-const FREE_MONTH_DAYS = 28;
+// A free "month" is one monthly cycle of the club's (settings →
+// memberships.cycleDays.monthly; 4 weeks for a club that bills 4-weekly).
 
 // Gives any active member a free month (competition prizes, goodwill):
 // - one-time (card or cash): 4 more weeks added to the end date;
@@ -24,6 +26,7 @@ const FREE_MONTH_DAYS = 28;
 // - recurring quarterly: 4 free weeks after the current quarter, then
 //   quarterly billing carries on.
 export async function POST(request: Request) {
+  const FREE_MONTH_DAYS = (await clubConfig()).memberships.cycleDays.monthly;
   if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -64,7 +67,7 @@ export async function POST(request: Request) {
   try {
     // One-time (including cash) memberships: 4 more weeks on the end date.
     if (!membership.recurring) {
-      const today = getClubToday().dateKey;
+      const today = getClubToday(new Date(), await clubClock()).dateKey;
       if (!membership.periodEnd || membership.periodEnd < today) {
         return NextResponse.json(
           { error: `${membership.name}'s membership has already ended.` },

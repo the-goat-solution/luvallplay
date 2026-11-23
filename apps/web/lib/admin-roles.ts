@@ -33,6 +33,7 @@ import {
   NO_ACCESS,
   normalizeEmail,
 } from "@luvallplay/auth";
+import { mirrorClubMember } from "./tenant-members.ts";
 export {
   CLUB_ROLES,
   type ClubRole,
@@ -73,7 +74,8 @@ function isMissingTable(err: unknown): boolean {
  */
 export async function getAccess(db: Db, playerId: number, email?: string | null): Promise<Access> {
   try {
-    if (email) await acceptPendingInvite(db, playerId, email);
+    // Phase 3: club_roles stays the source; club_members mirrors it.
+    if (email && (await acceptPendingInvite(db, playerId, email))) await mirrorClubMember(db, playerId);
     const { rows } = await db.query(
       `SELECT
          (SELECT r.role FROM club_roles r WHERE r.player_id = p.id) AS role,
@@ -90,7 +92,8 @@ export async function getAccess(db: Db, playerId: number, email?: string | null)
   }
 }
 
-async function acceptPendingInvite(db: Db, playerId: number, rawEmail: string): Promise<void> {
+/** True when an invite was applied (the caller mirrors the new role). */
+async function acceptPendingInvite(db: Db, playerId: number, rawEmail: string): Promise<boolean> {
   const email = normalizeEmail(rawEmail);
   const { rows } = await db.query(
     `WITH inv AS (
@@ -107,7 +110,7 @@ async function acceptPendingInvite(db: Db, playerId: number, rawEmail: string): 
     [playerId, email],
   );
   const inv = rows[0];
-  if (!inv) return;
+  if (!inv) return false;
   await writeAudit(db, {
     actorPlayerId: playerId,
     actorKind: "system",
@@ -115,6 +118,7 @@ async function acceptPendingInvite(db: Db, playerId: number, rawEmail: string): 
     target: `player:${playerId}`,
     meta: { inviteId: inv.id, role: inv.role, invitedBy: inv.invited_by, applied: inv.granted === 1 },
   });
+  return true;
 }
 
 export type AdminRow = {

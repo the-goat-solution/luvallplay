@@ -1,5 +1,6 @@
 "use client";
 
+import { useClub } from "@/context/ClubContext";
 import { useEffect, useMemo, useState } from "react";
 import {
   MEMBERSHIP_DAY_TO_DOW,
@@ -34,7 +35,8 @@ const NO_MINI_GAMES: Record<string, boolean> = {};
 // membership isn't a customer booking a casual session.
 export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
   const now = useMemo(() => new Date(), []);
-  const today = useMemo(() => getClubTodayDate(now), [now]);
+  const club = useClub();
+  const today = useMemo(() => getClubTodayDate(now, club.clock), [now, club.clock]);
   const maxMonth = useMemo(() => {
     const max = new Date(today);
     max.setDate(max.getDate() + MEMBERSHIP_START_SEARCH_DAYS);

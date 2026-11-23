@@ -1,7 +1,9 @@
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { isAdminRequest } from "@/lib/security";
 import { listOrdersForAdmin, listProductsForAdmin } from "@/lib/shop-db";
+import { clubMajor } from "@/lib/money";
 
 export const runtime = "nodejs";
 
@@ -33,14 +35,14 @@ export async function GET(request: Request) {
     { header: "Collected", key: "collected", width: 18 },
   ];
   const nz = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleString("en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "medium", timeStyle: "short" }) : "";
+    iso ? new Date(iso).toLocaleString("en-NZ", { timeZone: CLUB_TIME_ZONE, dateStyle: "medium", timeStyle: "short" }) : "";
   for (const o of orders) {
     sheet.addRow({
       id: o.id,
       name: o.name,
       email: o.email,
       items: o.items.map((i) => i.label).join(", "),
-      amount: o.totalCents / 100,
+      amount: clubMajor(o.totalCents),
       method: o.method,
       status: o.status.replace("_", " "),
       created: nz(o.createdAt),

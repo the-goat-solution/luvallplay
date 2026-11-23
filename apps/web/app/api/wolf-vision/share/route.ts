@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getPlayerFromRequest } from "@/lib/player-auth";
@@ -38,7 +39,7 @@ const bodySchema = z.object({
 
 function playedAt(): string {
   return new Intl.DateTimeFormat("en-NZ", {
-    timeZone: "Pacific/Auckland",
+    timeZone: CLUB_TIME_ZONE,
     weekday: "short",
     day: "numeric",
     month: "short",

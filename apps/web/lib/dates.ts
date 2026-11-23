@@ -1,4 +1,5 @@
 import {
+  CLUB_TIME_ZONE,
   BOOKING_CUTOFF_HOUR,
   BOOKING_WINDOW_DAYS,
   CASUAL_ONLY_DEFAULT_COURTS,
@@ -17,7 +18,6 @@ for (const [day, dow] of Object.entries(MEMBERSHIP_DAY_TO_DOW) as [
   DOW_TO_MEMBERSHIP_DAY[dow] = day;
 }
 
-const CLUB_TIME_ZONE = "Pacific/Auckland";
 
 export function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -40,9 +40,21 @@ function dateKeyToUTCms(key: string): number {
 // Reads the current date/time as observed in the club's time zone, since
 // bookings close at a wall-clock time (5PM) at the venue regardless of
 // where the browser or server happens to be running.
-function getClubNow(now: Date): { dateKey: string; hour: number } {
+/**
+ * What the date functions need to know about a club. The default is the
+ * built-in values; code that has the club's settings (lib/club.ts →
+ * clubClock(), or useClub() in the browser) passes them.
+ */
+export type ClubClock = { timezone: string; bookingWindowDays: number; bookingCutoffHour: number };
+export const DEFAULT_CLUB_CLOCK: ClubClock = {
+  timezone: CLUB_TIME_ZONE,
+  bookingWindowDays: BOOKING_WINDOW_DAYS,
+  bookingCutoffHour: BOOKING_CUTOFF_HOUR,
+};
+
+function getClubNow(now: Date, timezone: string = CLUB_TIME_ZONE): { dateKey: string; hour: number } {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: CLUB_TIME_ZONE,
+    timeZone: timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -60,8 +72,8 @@ function getClubNow(now: Date): { dateKey: string; hour: number } {
 // The club-local calendar date (YYYY-MM-DD) an instant falls on — e.g. a
 // Stripe payment's unix timestamp. A payment at 9am NZ time on the 1st is
 // still the previous day in UTC; the club's books should say the 1st.
-export function clubDateKeyForInstant(instant: Date): string {
-  return getClubNow(instant).dateKey;
+export function clubDateKeyForInstant(instant: Date, timezone: string = CLUB_TIME_ZONE): string {
+  return getClubNow(instant, timezone).dateKey;
 }
 
 // Club-local "today" as a YYYY-MM-DD key, and whether the same-day booking
@@ -70,14 +82,14 @@ export function clubDateKeyForInstant(instant: Date): string {
 // day for a new membership) uses the exact same notion of "today" — Postgres
 // CURRENT_DATE is UTC-based and can disagree with this for roughly half of
 // every NZ calendar day.
-export function getClubToday(now: Date = new Date()): {
+export function getClubToday(now: Date = new Date(), clock: ClubClock = DEFAULT_CLUB_CLOCK): {
   dateKey: string;
   cutoffPassed: boolean;
 } {
-  const club = getClubNow(now);
+  const club = getClubNow(now, clock.timezone);
   return {
     dateKey: club.dateKey,
-    cutoffPassed: club.hour >= BOOKING_CUTOFF_HOUR,
+    cutoffPassed: club.hour >= clock.bookingCutoffHour,
   };
 }
 
@@ -86,8 +98,8 @@ export function getClubToday(now: Date = new Date()): {
 // highlighting, month navigation). Never pass this into isBookable /
 // isWithinBookingLock as `now` — it discards the time-of-day the cutoff
 // check needs. Pass the real current Date for that instead.
-export function getClubTodayDate(now: Date = new Date()): Date {
-  const { dateKey } = getClubToday(now);
+export function getClubTodayDate(now: Date = new Date(), clock: ClubClock = DEFAULT_CLUB_CLOCK): Date {
+  const { dateKey } = getClubToday(now, clock);
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
@@ -103,9 +115,9 @@ export function calendarEventDateKey(start: string): string {
   return getClubToday(new Date(start)).dateKey;
 }
 
-function bookingWindowDiffDays(sessionDate: Date, now: Date): number {
+function bookingWindowDiffDays(sessionDate: Date, now: Date, timezone: string = CLUB_TIME_ZONE): number {
   const sessionKey = toDateKey(sessionDate);
-  const club = getClubNow(now);
+  const club = getClubNow(now, timezone);
   return (dateKeyToUTCms(sessionKey) - dateKeyToUTCms(club.dateKey)) / 86400000;
 }
 
@@ -114,11 +126,12 @@ function bookingWindowDiffDays(sessionDate: Date, now: Date): number {
 export function isBookable(
   sessionDate: Date,
   today: Date = new Date(),
+  clock: ClubClock = DEFAULT_CLUB_CLOCK,
 ): boolean {
-  const diffDays = bookingWindowDiffDays(sessionDate, today);
-  if (diffDays < 0 || diffDays > BOOKING_WINDOW_DAYS) return false;
+  const diffDays = bookingWindowDiffDays(sessionDate, today, clock.timezone);
+  if (diffDays < 0 || diffDays > clock.bookingWindowDays) return false;
   if (diffDays === 0) {
-    return getClubNow(today).hour < BOOKING_CUTOFF_HOUR;
+    return getClubNow(today, clock.timezone).hour < clock.bookingCutoffHour;
   }
   return true;
 }
@@ -128,10 +141,11 @@ export function isBookable(
 export function isWithinBookingLock(
   sessionDate: Date,
   today: Date = new Date(),
+  clock: ClubClock = DEFAULT_CLUB_CLOCK,
 ): boolean {
-  const diffDays = bookingWindowDiffDays(sessionDate, today);
+  const diffDays = bookingWindowDiffDays(sessionDate, today, clock.timezone);
   if (diffDays < 0) return false;
-  return !isBookable(sessionDate, today);
+  return !isBookable(sessionDate, today, clock);
 }
 
 export function formatDateLong(d: Date, lang: "en" | "vi"): string {
@@ -171,12 +185,13 @@ export function formatDateLong(d: Date, lang: "en" | "vi"): string {
 export function formatEventTimeRange(
   start: string,
   end: string | null,
+  timezone: string = CLUB_TIME_ZONE,
 ): string {
   const opts: Intl.DateTimeFormatOptions = {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: CLUB_TIME_ZONE,
+    timeZone: timezone,
   };
   const startLabel = new Intl.DateTimeFormat("en-NZ", opts).format(
     new Date(start),

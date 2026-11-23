@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import { unstable_cache } from "next/cache";
 import { getPointsBoard, type PointsBoardRow, type PointsSource } from "./arena-db";
 import { getClubToday } from "./dates";
@@ -15,7 +16,7 @@ const FROM_METRIC: Record<string, PointsSource> = { wp: "all", challenges: "chal
 
 export const cachedBoard = unstable_cache(
   async (source: PointsSource, period: Period, key: string): Promise<PointsBoardRow[]> => {
-    const range = periodFromKey(period, key) ?? periodRange(period, getClubToday().dateKey);
+    const range = periodFromKey(period, key) ?? periodRange(period, getClubToday(new Date(), await clubClock()).dateKey);
     return getPointsBoard(source, range);
   },
   [`points-board-v2-${process.env.VERCEL_ENV ?? "local"}`],
@@ -52,7 +53,7 @@ export type TeaserRow = { rank: number; firstName: string; points: number };
  * are already left out of the board (getPointsBoard), so they never appear.
  */
 export async function teaserBoard(): Promise<TeaserRow[]> {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const range = periodRange("month", today);
   const rows = await cachedBoard("all", "month", range.key);
   return rows.slice(0, 5).map((r) => ({ rank: r.rank, firstName: firstNameOnly(r.name), points: r.value }));

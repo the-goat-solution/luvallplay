@@ -1,3 +1,4 @@
+import "./club-terms.ts";
 import { useCallback } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { translate, type JerseyKey, type Lang, type Vars } from "@luvallplay/i18n";

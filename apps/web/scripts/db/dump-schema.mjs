@@ -1,6 +1,6 @@
 // Schema-only description of the public schema, built from the Postgres
 // catalog in a stable order: tables (columns in their real order, defaults,
-// constraints), indexes, then sequences. No data.
+// constraints), indexes, then sequences, functions and triggers. No data.
 //
 // Used by scripts/schema-dump.mjs (the committed production dump) and by the
 // schema drift check (tests/schema-drift.test.ts, test plan §3.3), so both
@@ -69,7 +69,55 @@ export async function dumpSchema(c) {
     out.push(`CREATE SEQUENCE ${s.relname} AS ${s.type}${extra.length ? ` ${extra.join(" ")}` : ""}${owned};`);
   }
   out.push("");
+  // Functions and triggers (Phase 3 step 3 added the first ones). The
+  // sections only appear when there is something in them, so dumps taken
+  // before then are unchanged.
+  const fns = (
+    await c.query(`SELECT p.proname, pg_get_functiondef(p.oid) AS def FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.prokind = 'f'
+        AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+      ORDER BY p.proname, p.oid`)
+  ).rows;
+  if (fns.length) {
+    out.push("-- Functions");
+    for (const f of fns) out.push(`${f.def.trimEnd()};`);
+    out.push("");
+  }
+  const trgs = (
+    await c.query(`SELECT pg_get_triggerdef(t.oid) AS def FROM pg_trigger t JOIN pg_class r ON r.oid = t.tgrelid JOIN pg_namespace n ON n.oid = r.relnamespace
+      WHERE n.nspname = 'public' AND NOT t.tgisinternal ORDER BY r.relname, t.tgname`)
+  ).rows;
+  if (trgs.length) {
+    out.push("-- Triggers");
+    for (const t of trgs) out.push(`${t.def};`);
+    out.push("");
+  }
+  // Row-level security (Phase 3 step 10): which tables have it, whether it
+  // is forced on the owner too, and every policy. Only when there is some.
+  const rls = (
+    await c.query(`SELECT r.relname, r.relforcerowsecurity AS forced FROM pg_class r JOIN pg_namespace n ON n.oid = r.relnamespace
+      WHERE n.nspname = 'public' AND r.relkind = 'r' AND r.relrowsecurity ORDER BY r.relname`)
+  ).rows;
+  const policies = (
+    await c.query(`SELECT tablename, policyname, permissive, roles::text AS roles, cmd, qual, with_check FROM pg_policies WHERE schemaname = 'public' ORDER BY tablename, policyname`)
+  ).rows;
+  if (rls.length || policies.length) {
+    out.push("-- Row-level security");
+    for (const r of rls) out.push(`ALTER TABLE ${r.relname} ENABLE${r.forced ? " AND FORCE" : ""} ROW LEVEL SECURITY;`);
+    for (const p of policies) {
+      out.push(`POLICY ${p.policyname} ON ${p.tablename} (${p.permissive}) FOR ${p.cmd} TO ${p.roles} USING (${p.qual ?? ""}) WITH CHECK (${p.with_check ?? ""});`);
+    }
+    out.push("");
+  }
   return out.join("\n");
+}
+
+/** A dump without its functions and triggers: what a Drizzle schema can describe. */
+export function tablesOnly(dump) {
+  const i = dump.indexOf("\n-- Functions\n");
+  const j = dump.indexOf("\n-- Triggers\n");
+  const cut = [i, j].filter((x) => x >= 0);
+  return cut.length ? `${dump.slice(0, Math.min(...cut)).trimEnd()}\n` : dump;
 }
 
 /** Line diff of two dumps (empty array = no drift). */

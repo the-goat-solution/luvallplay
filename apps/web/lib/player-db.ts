@@ -1,7 +1,9 @@
+import { clubClock } from "./club";
 import { sql } from "./database";
 import { getClubToday } from "./dates";
 import type { Lang } from "./i18n";
 import { toE164 } from "./phone";
+import { mirrorClubMember } from "./tenant-members";
 
 // Player accounts. Everything a player has done is already stored under
 // their email (memberships, bookings, jersey registrations, court board
@@ -210,6 +212,8 @@ export async function ensurePlayerForEmail(
     [email, firstName, lastName, phone, toE164(phone), options.details?.stripeCustomerId ?? null, options.via],
   );
   const id = rows[0]?.id as number | undefined;
+  // Phase 3: a new account is a member of the club (club_members mirror).
+  if (id) await mirrorClubMember(sql, id);
   const player = id ? await getPlayerById(id) : await getPlayerByEmail(email);
   if (!player) throw new Error("Could not create player account");
   return { player, created: Boolean(id) };
@@ -249,6 +253,7 @@ export async function updatePlayerProfile(
 
 export async function setLeaderboardVisible(id: number, visible: boolean): Promise<void> {
   await sql`UPDATE players SET leaderboard_visible = ${visible} WHERE id = ${id};`;
+  await mirrorClubMember(sql, id);
 }
 
 export async function markPhoneVerified(id: number, phoneE164: string): Promise<"ok" | "taken"> {
@@ -298,6 +303,7 @@ export async function deletePlayerAccount(id: number): Promise<void> {
       first_name = '', last_name = '', leaderboard_visible = FALSE
     WHERE id = ${id};
   `;
+  await mirrorClubMember(sql, id);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +323,7 @@ export type ImportCandidate = {
 
 /** Lower-cased emails with a membership that grants access today or later. */
 export async function listActiveMemberEmails(): Promise<string[]> {
-  const { dateKey } = getClubToday();
+  const { dateKey } = getClubToday(new Date(), await clubClock());
   const { rows } = await sql.query(
     `SELECT DISTINCT lower(trim(email)) AS email FROM memberships
      WHERE status IN ('active', 'trialing', 'past_due')
@@ -340,7 +346,7 @@ function inboxKey(email: string): string {
 }
 
 export async function previewMemberImport(): Promise<ImportCandidate[]> {
-  const { dateKey } = getClubToday();
+  const { dateKey } = getClubToday(new Date(), await clubClock());
   const { rows } = await sql.query(
     `SELECT DISTINCT ON (lower(trim(m.email)))
         lower(trim(m.email)) AS email, m.first_name, m.last_name, m.phone,
@@ -392,7 +398,7 @@ export type AdminPlayerRow = Player & {
 };
 
 export async function listPlayersForAdmin(search?: string): Promise<AdminPlayerRow[]> {
-  const { dateKey } = getClubToday();
+  const { dateKey } = getClubToday(new Date(), await clubClock());
   const q = search?.trim() ? `%${search.trim().toLowerCase()}%` : null;
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS},

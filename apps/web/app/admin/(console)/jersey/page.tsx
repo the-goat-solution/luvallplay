@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminLink } from "@/components/admin/AdminLink";
@@ -64,11 +65,11 @@ async function setStatus(id: number, status: "cancelled" | "released") {
 }
 
 const nzFull = (d: Date) =>
-  new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "full", timeStyle: "short" }).format(d);
+  new Intl.DateTimeFormat("en-NZ", { timeZone: CLUB_TIME_ZONE, dateStyle: "full", timeStyle: "short" }).format(d);
 
 const nz = (iso: string | null) =>
   iso
-    ? new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(iso))
+    ? new Intl.DateTimeFormat("en-NZ", { timeZone: CLUB_TIME_ZONE, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(iso))
     : "";
 
 const btn = { padding: "3px 8px", borderRadius: 6, border: "1px solid #ccc", background: "#fff", color: "#333", fontSize: 12 } as const;

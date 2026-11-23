@@ -3,8 +3,8 @@ import { z } from "zod";
 import { getAvailableSpots, isRegistrationLocked } from "@/lib/db";
 import { isSessionDatePaused } from "@/lib/day-requests";
 import { getWeekdayForDate } from "@/lib/dates";
-import { CASUAL_PRICE_CENTS, WEEKDAY_LABEL } from "@/lib/constants";
-import { getStripe } from "@/lib/stripe";
+import { CASUAL_PRICE_CENTS, CLUB_CURRENCY, WEEKDAY_LABEL } from "@/lib/constants";
+import { payments } from "@/lib/payments";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import {
   assertSessionBookable,
@@ -65,31 +65,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const stripe = getStripe();
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: CASUAL_PRICE_CENTS,
-        currency: "nzd",
-        automatic_payment_methods: { enabled: true },
-        metadata: {
-          type: "casual",
-          sessionDate: body.sessionDate,
-          firstName: body.firstName,
-          lastName: body.lastName,
-          email: body.email,
-          phone: body.phone ?? "",
-        },
-        receipt_email: body.email,
-        description: `Casual session — ${body.sessionDate}`,
+    // Through the Payments interface (lib/payments): the provider is the club's.
+    const payment = await payments().createPayment({
+      amount: CASUAL_PRICE_CENTS,
+      currency: CLUB_CURRENCY,
+      metadata: {
+        type: "casual",
+        sessionDate: body.sessionDate,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        phone: body.phone ?? "",
       },
-      { idempotencyKey: `casual-${body.sessionDate}-${body.email}-${Date.now()}` },
-    );
+      receiptEmail: body.email,
+      description: `Casual session — ${body.sessionDate}`,
+      idempotencyKey: `casual-${body.sessionDate}-${body.email}-${Date.now()}`,
+    });
 
-    if (!paymentIntent.client_secret) {
+    if (!payment.clientSecret) {
       return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
     }
 
-    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
+    return NextResponse.json({ clientSecret: payment.clientSecret });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";
     const status = message.includes("STRIPE") ? 503 : 400;

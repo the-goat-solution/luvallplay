@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { clubCurrencyLower } from "./money";
 import { getStripe } from "./stripe";
 import { upsertStripeLines } from "./finance-db";
 import { lineForOfflineInvoice } from "./finance-stripe";
@@ -50,7 +51,7 @@ export async function recordOfflinePayment(input: OfflinePaymentInput): Promise<
   await stripe.invoiceItems.create({
     customer: customer.id,
     amount: input.amountCents,
-    currency: "nzd",
+    currency: clubCurrencyLower(),
     description: `${input.description} — ${method === "cash" ? "cash" : "bank transfer"}`,
   });
 

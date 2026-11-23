@@ -1,7 +1,9 @@
+import { clubClock } from "./club";
 import Stripe from "stripe";
 import { offlineInvoiceIdFromRef, paymentMethodFromRef } from "./offline-payment";
 import { linkMemberAccount } from "./player-db";
-import { MEMBERSHIP_DAYS, type MembershipDay, type MembershipTier } from "./constants";
+import { type MembershipDay, type MembershipTier } from "./constants";
+import { clubConfig } from "./club";
 import {
   addDays,
   attachStripeIdToMembership,
@@ -77,8 +79,11 @@ async function listAll<T>(
 }
 
 export async function syncMembershipsWithStripe(): Promise<StripeSyncReport> {
+  // End-inclusive span of a membership window: one less than the club's cycle length.
+  const { cycleDays } = (await clubConfig()).memberships;
+  const spanDays: Record<MembershipTier, number> = { monthly: cycleDays.monthly - 1, quarterly: cycleDays.quarterly - 1 };
   const stripe = getStripe();
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const report: StripeSyncReport = { checked: 0, changed: [], issues: [], errors: 0 };
 
   const [rows, paidIntents, subscriptions] = await Promise.all([
@@ -244,7 +249,7 @@ export async function syncMembershipsWithStripe(): Promise<StripeSyncReport> {
         patch.periodStart = start;
         changes.push(`start date ${m.periodStart ?? "none"} → ${start}`);
       }
-      const end = addDays(start, MEMBERSHIP_DAYS[plan] + (m.freeDaysGranted ?? 0));
+      const end = addDays(start, spanDays[plan] + (m.freeDaysGranted ?? 0));
       if (end !== m.periodEnd) {
         patch.periodEnd = end;
         changes.push(`end date ${m.periodEnd ?? "none"} → ${end}`);
@@ -277,7 +282,7 @@ export async function syncMembershipsWithStripe(): Promise<StripeSyncReport> {
       const plan = planFromPayment(pi.metadata, pi.amount);
       const day = dayFrom(pi.metadata) ?? "friday";
       const start = await earliestStart(pi.created, day);
-      const end = addDays(start, MEMBERSHIP_DAYS[plan]);
+      const end = addDays(start, spanDays[plan]);
       const email = pi.metadata.email || pi.receipt_email || "";
       if (end < today || !email) continue; // long over — nothing to restore
       // An older row may cover this payment without having stored its id —
@@ -338,7 +343,7 @@ export async function syncMembershipsWithStripe(): Promise<StripeSyncReport> {
         sub.status === "trialing" && sub.trial_end
           ? sub.trial_end
           : sub.items.data[0]?.current_period_end;
-      const end = stripeEnd ? clubDate(stripeEnd).dateKey : addDays(start, MEMBERSHIP_DAYS[plan]);
+      const end = stripeEnd ? clubDate(stripeEnd).dateKey : addDays(start, spanDays[plan]);
       const customer =
         typeof sub.customer === "string" ? await stripe.customers.retrieve(sub.customer) : sub.customer;
       const email =

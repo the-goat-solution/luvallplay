@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3-user-id-links",
+  "description": "Phase 3 step 3 (build plan §6.1, §6.6 steps 2 and 3; test plan §4.5 'Email → user id links'): ten tables that find their person by email (attendance, bookings, casual_play_profiles, day_requests, donations, jersey_registrations, memberships, player_absences, session_fill_ins, waitlist) gain a nullable user_id with a foreign key to the account and an index, filled with the live account whose email matches. Rows for people without an account keep user_id NULL. Two trigger functions keep the link in step. No existing column, value, row, account, email, phone, session or role may change: every person keeps exactly the rows they had, now also reachable by user_id. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

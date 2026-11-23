@@ -1,3 +1,5 @@
+import { enabledModules } from "@/lib/club-modules";
+import { sql } from "@/lib/database";
 import { getCurrentPlayer } from "@/lib/player-auth";
 import { getPausedDays } from "@/lib/day-requests";
 import { CASUAL_PRICE_CENTS, MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
@@ -17,6 +19,7 @@ import { MeHeader, type MembershipPill } from "@/components/profile/me/MeHeader"
 import { NextUpCard } from "@/components/profile/me/NextUpCard";
 import { InboxPreview } from "@/components/profile/me/InboxPreview";
 import m from "@/components/profile/me/me.module.css";
+import { clubMajor } from "@/lib/money";
 
 // Me (home tab): "What's my status, and what's next?" Account and Membership
 // in one page (build plan §2.2). Settings are one tap away (⚙), the inbox is
@@ -47,9 +50,12 @@ export default async function MePage() {
     listShopProductsForPlayer(),
     listOrdersForPlayer(player.id),
   ]);
-  const prices = { monthly: MONTHLY_PRICE_CENTS / 100, quarterly: QUARTERLY_PRICE_CENTS / 100 };
+  const prices = { monthly: clubMajor(MONTHLY_PRICE_CENTS), quarterly: clubMajor(QUARTERLY_PRICE_CENTS) };
   const contact = { firstName: player.firstName, lastName: player.lastName, email: player.email, phone: player.phone ?? "" };
   const initials = `${player.firstName.trim()[0] ?? player.email[0] ?? "?"}${player.lastName.trim()[0] ?? ""}`.toUpperCase();
+
+  // A module that is off takes its card off the Me page (its data is kept).
+  const on = await enabledModules(sql);
 
   return (
     <>
@@ -64,7 +70,7 @@ export default async function MePage() {
       <div className={m.grid}>
         <div className={m.col}>
           <NextUpCard day={nextUp(calendar)} />
-          {membership ? (
+          {!on.has("memberships") ? null : membership ? (
             <MembershipCard
               membership={membership}
               daysLeft={daysLeft}
@@ -76,10 +82,10 @@ export default async function MePage() {
           ) : (
             <JoinPanel prices={prices} pausedDays={pausedDays} player={contact} />
           )}
-          <PlayCalendar days={calendar} player={contact} casualPriceNzd={CASUAL_PRICE_CENTS / 100} />
+          <PlayCalendar days={calendar} player={contact} casualPriceNzd={clubMajor(CASUAL_PRICE_CENTS)} />
         </div>
         <div className={m.col}>
-          <ShopSection products={products} orders={orders} />
+          {on.has("shop") && <ShopSection products={products} orders={orders} />}
           <InboxPreview threads={threads} />
           {!player.welcomeCardDismissed && <WelcomeCard firstName={player.firstName} />}
         </div>

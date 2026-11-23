@@ -138,6 +138,9 @@ export default async function SettingsPage() {
   return (
     <div className={adminStyles.page}>
       <PageHeader title="Pricing & settings" subtitle="Pricing plans and session settings. These used to be edited in Sanity; they now live here." />
+      <p>
+        <a href="/admin/settings/modules">Modules →</a> what the club has switched on.
+      </p>
       {!plans && <Notice>The settings tables haven&apos;t been created on this database yet (migration 0002). Until then the site keeps reading these values from Sanity.</Notice>}
       {plans && (
         <>

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useClub } from "@/context/ClubContext";
+import { linkShown } from "@/lib/club-public";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useProfileT, type ProfileKey } from "@/lib/profile-i18n";
@@ -202,6 +204,9 @@ export function ProfileShell({
   const { tr } = useProfileT();
   const pathname = usePathname();
   const router = useRouter();
+  // A tab whose module is switched off for the club isn't offered (build plan §6.2.3).
+  const club = useClub();
+  const tabs = useMemo(() => TABS.filter((t) => linkShown(club, t.href)), [club]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [online, setOnline] = useState(true);
   /** A tool (Wolf Vision) has the whole screen: no top bar, no tabs. */
@@ -230,14 +235,14 @@ export function ProfileShell({
     window.addEventListener("offline", update);
     // Other tabs load in the background, so switching tabs is instant.
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
-    const prefetch = () => TABS.forEach((t) => router.prefetch(t.href));
+    const prefetch = () => tabs.forEach((t) => router.prefetch(t.href));
     if (idle) idle(prefetch);
     else window.setTimeout(prefetch, 1500);
     return () => {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
     };
-  }, [router]);
+  }, [router, tabs]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -308,9 +313,11 @@ export function ProfileShell({
                   <Link href="/profile/settings" role="menuitem" onClick={() => setMenuOpen(false)}>
                     {tr("me_settings")}
                   </Link>
-                  <Link href="/profile/arena?tab=leaderboard" role="menuitem" onClick={() => setMenuOpen(false)}>
-                    {tr("leaderboard")}
-                  </Link>
+                  {linkShown(club, "/profile/arena") && (
+                    <Link href="/profile/arena?tab=leaderboard" role="menuitem" onClick={() => setMenuOpen(false)}>
+                      {tr("leaderboard")}
+                    </Link>
+                  )}
                   <Link href="/" role="menuitem">
                     {tr("view_site")}
                   </Link>
@@ -331,7 +338,7 @@ export function ProfileShell({
 
         {!focus && (
           <nav className={styles.tabs} aria-label="Profile">
-            {TABS.map((t) => {
+            {tabs.map((t) => {
               const active = isActive(t);
               const badge = badgeFor(t.href);
               return (

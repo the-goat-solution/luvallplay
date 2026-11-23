@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import crypto from "crypto";
 import {
   addDays,
@@ -32,7 +33,7 @@ export async function sendRenewalReminders(): Promise<{
   due: number;
   sent: number;
 }> {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const due = await getOneTimeMembershipsDueForRenewalReminder(
     today,
     addDays(today, RENEWAL_REMINDER_DAYS_BEFORE),

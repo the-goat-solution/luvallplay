@@ -1,3 +1,5 @@
+import { clubClock } from "@/lib/club";
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { getClubToday } from "@/lib/dates";
@@ -15,6 +17,7 @@ import {
 } from "@/lib/finance";
 import { loadFinanceReport } from "@/lib/finance-report";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
+import { clubMajor } from "@/lib/money";
 
 export const runtime = "nodejs";
 
@@ -26,7 +29,7 @@ const TOTAL_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: {
 // Excel stores money as floating point dollars; cents → dollars here is
 // exact for every 2-decimal amount, and the cell's number format does the
 // rest. All arithmetic before this point is integer cents.
-const dollars = (cents: number) => cents / 100;
+const dollars = (cents: number) => clubMajor(cents);
 
 // A 'YYYY-MM-DD' key as a real Excel date. exceljs converts Dates using UTC,
 // so UTC midnight lands on exactly that calendar day in every timezone.
@@ -52,7 +55,7 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const { dateKey: today } = getClubToday();
+  const { dateKey: today } = getClubToday(new Date(), await clubClock());
   const filters = parseFinanceFilters(Object.fromEntries(url.searchParams), today);
   const report = await loadFinanceReport(filters, today);
 
@@ -61,7 +64,7 @@ export async function GET(request: Request) {
   }`;
   const filterText = describeNonDateFilters(filters).join(" · ") || "None";
   const generatedText = new Intl.DateTimeFormat("en-NZ", {
-    timeZone: "Pacific/Auckland",
+    timeZone: CLUB_TIME_ZONE,
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date());

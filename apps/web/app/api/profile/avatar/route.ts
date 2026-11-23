@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { setPlayerAvatar } from "@/lib/player-db";
-import { deletePublicBlobs, publicBlobAuth } from "@/lib/public-blob";
+import { deletePublicBlobs } from "@/lib/public-blob";
+import { publicStorage } from "@/lib/storage";
+import { countUpload } from "@/lib/usage-hooks";
 import { checkRateLimit } from "@/lib/security";
 import { revalidateTag } from "next/cache";
 
@@ -16,8 +17,7 @@ const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/webp": "webp
 export async function POST(request: Request) {
   const player = await getPlayerFromRequest(request);
   if (!player) return NextResponse.json({ error: "signed_out" }, { status: 401 });
-  const auth = publicBlobAuth();
-  if (!auth) return NextResponse.json({ error: "not_configured" }, { status: 503 });
+  if (!publicStorage().configured()) return NextResponse.json({ error: "not_configured" }, { status: 503 });
   if (!checkRateLimit(`avatar:${player.id}`, 10, 60 * 60_000)) return NextResponse.json({ error: "too_many" }, { status: 429 });
 
   const form = await request.formData().catch(() => null);
@@ -27,12 +27,8 @@ export async function POST(request: Request) {
   if (!ext) return NextResponse.json({ error: "bad_type" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "too_large" }, { status: 400 });
 
-  const blob = await put(`avatars/${player.id}/avatar.${ext}`, Buffer.from(await file.arrayBuffer()), {
-    access: "public",
-    addRandomSuffix: true,
-    contentType: file.type,
-    ...auth,
-  });
+  const blob = await publicStorage().put(`avatars/${player.id}/avatar.${ext}`, Buffer.from(await file.arrayBuffer()), { contentType: file.type });
+  await countUpload(file.size);
   const old = await setPlayerAvatar(player.id, blob.url);
   await deletePublicBlobs([old]);
   refresh();

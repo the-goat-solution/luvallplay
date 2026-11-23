@@ -3,13 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Pure club logic (no I/O): play periods, ranks and points, phone numbers, safe redirects, names.",
+  "description": "Pure club logic (no I/O): play periods, ranks and points, phone numbers, safe redirects, names, club settings, host routing.",
   "exports": {
     "./stats-periods": "./src/stats-periods.ts",
     "./ranks": "./src/ranks.ts",
     "./phone": "./src/phone.ts",
     "./safe-next": "./src/safe-next.ts",
-    "./first-name": "./src/first-name.ts"
+    "./first-name": "./src/first-name.ts",
+    "./club-config": "./src/club-config.ts",
+    "./host-routing": "./src/host-routing.ts",
+    "./money": "./src/money.ts",
+    "./payments": "./src/payments.ts",
+    "./entitlements": "./src/entitlements.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

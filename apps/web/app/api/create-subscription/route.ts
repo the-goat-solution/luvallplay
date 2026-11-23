@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
       assignment = result;
     }
     const periodStart =
-      assignment?.periodStart ?? getClubToday().dateKey;
+      assignment?.periodStart ?? getClubToday(new Date(), await clubClock()).dateKey;
 
     if (!body.recurring) {
       const paymentIntent = await createOneTimeMembershipPaymentIntent({

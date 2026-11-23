@@ -11,7 +11,7 @@ import { jersey, type JerseyKey } from "./jersey.ts";
 import { profile, type ProfileKey } from "./profile.ts";
 import { site, type SiteKey } from "./site.ts";
 
-export { LANGS, format, type Lang, type Messages, type Vars } from "./format.ts";
+export { LANGS, NEUTRAL_TERMS, currentTerms, format, setTerms, type Lang, type Messages, type Terms, type Vars } from "./format.ts";
 export type { ArenaKey, JerseyKey, ProfileKey, SiteKey };
 
 export const messages = { site, profile, arena, jersey };
@@ -23,5 +23,5 @@ export const NAMESPACES = Object.keys(messages) as Namespace[];
 /** A message in `lang`, falling back to English, then to the key itself. */
 export function translate<N extends Namespace>(ns: N, lang: Lang, key: MessageKey<N>, vars?: Vars): string {
   const dict = messages[ns] as unknown as Record<Lang, Record<string, string>>;
-  return format(dict[lang]?.[key] ?? dict.en[key] ?? key, vars);
+  return format(dict[lang]?.[key] ?? dict.en[key] ?? key, vars, lang);
 }

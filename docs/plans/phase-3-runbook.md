@@ -10,8 +10,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 |---|---|---|
 | 0 | Plan documents to `main` (#100, docs only) | Done: merged 23 Nov |
 | 1 | Tenants schema, Three Wolves as club #1 (#101) | **Done.** Production data run passed (23 Nov, 07:36 UTC); merged and live (07:48 UTC) |
-| 2 | `tenant_id` on every club-owned table (#102) | Built. Rehearsal passed (0 problems, characterisation identical). **Needs you: the OK to merge, then the OK for the production run** (§2) |
-| 3 | Email links → `user_id` | Not started. Precondition met today: no `ACTIVE_MEMBERSHIP_WITHOUT_ACCOUNT` on the 23 Nov branch |
+| 2 | `tenant_id` on every club-owned table (#102) | **Done.** Production data run passed (23 Nov, 08:25 UTC); live (08:28 UTC) |
+| 3 | Email links → `user_id` (#103) | Built. Rehearsal passed (0 problems, characterisation identical). Production run approved in advance (§3) |
 | 4 | Settings replace constants (behind flags) | Not started |
 | 5 | Module enforcement | Not started |
 | 6 | Second database driver, region routing | Not started |
@@ -83,7 +83,18 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 **What runs:** migration `0004_tenant_id_columns`. Additive: a nullable `tenant_id` on the 54 club-owned tables, with a constant default of Three Wolves' id. Postgres keeps the default in the catalog, so no row is rewritten, every existing row reads as Three Wolves' at once, and rows written by either app version get it. The site doesn't read the column yet.
 
-**Order matters this time: merge and deploy #102 first, then run the migration.** The rehearsal's characterisation check found that "Download my data" would show a new `tenant_id` field for members who have played in a pair. #102 fixes that query. Deployed first, nobody sees the field.
+**Done (23 Nov 2026, 08:25 UTC), run by the build session at the owner's request:**
+- **The order below turned out to be wrong, and was reversed.** #102 was merged first, and its production build failed: the app's typed queries name every column in the schema, so the new version asks for `tenant_id` and can't build until the column exists. The failed build never went live; the site kept serving the previous version. The migration then ran, and `main` was redeployed.
+- Restore point: `pre-phase-3-tenant-id` (`br-muddy-hall-a7w9kpe3`, 08:24 UTC).
+- `0004_tenant_id_columns` applied in 1.4 s.
+- Diff against `2026-11-phase3-tenant-id.production.json`: **passed**. 17 accounts checked, 0 problems.
+- Drift: none. `verify.mjs`: 57 club-owned tables, 1,441 rows, every row with the club's `tenant_id`.
+- Redeploy Ready at 08:28 UTC; `/` and `/login` answer.
+- **Rule from now on: migrate first, then merge.** A version that adds a column to the schema can't deploy before the column exists. The previous version always works with the new column in place.
+
+What follows is the record of how the run was prepared (its "merge first" order is the part that was wrong).
+
+**Order as first planned: merge and deploy #102 first, then run the migration.** The rehearsal's characterisation check found that "Download my data" would show a new `tenant_id` field for members who have played in a pair. #102 fixes that query. Deployed first, nobody sees the field.
 
 **Already done (23 Nov), on a fresh Neon branch of production (`rehearsal-phase-3-tenant-id`):**
 - Data guard rehearsal: **17 accounts checked, 0 problems**. The migration took 1.5 s.
@@ -118,10 +129,49 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 **Rollback of the app:** Vercel Instant Rollback. The previous version ignores the column, and its writes still get the club from the default. One visible effect: the data export shows the `tenant_id` field again for members with a pair, until the fix is redeployed.
 
-## 3. Housekeeping that needs you
+## 3. Step 3: email links → `user_id` (#103), one production data run
+
+**What runs:** migration `0005_user_id_links`. Ten email-keyed tables gain a nullable `user_id` (foreign key to the account, `ON DELETE RESTRICT`, indexed), filled with the live account whose email matches. Two trigger functions keep the link in step for every writer. The email stays as the contact field, and the site doesn't read `user_id` yet.
+
+**Order: migrate first, then merge #103** (the rule from step 2).
+
+**Already done (23 Nov), on a fresh Neon branch of production (`rehearsal-phase-3-user-id-links`):**
+- Data guard rehearsal: **17 accounts checked, 0 problems**. The migration took 4.9 s.
+- 453 rows in the ten tables: 287 linked to an account, 166 for people without one. No row where `user_id` and the email disagree.
+- Characterisation: **identical** for 17 accounts and 6 club views.
+- Schema drift: none (functions and triggers included).
+- The first rehearsal found one member's data export listing two same-day bookings in a different order. The export now has a full sort order, and the rehearsal was repeated from a fresh copy. Report: `docs/rehearsals/2026-11-phase3-user-id-links.md`.
+
+**Production run (T0):** approved in advance by the owner ("run step 3 on production once it's rehearsed"), on condition of green CI and a clean rehearsal.
+
+```bash
+# 1. Restore point: Neon → three-wolves-sydney → Branches → New branch from main, now.
+#    Name: pre-phase-3-user-id-links
+
+cd apps/web
+export POSTGRES_URL='<production direct connection string>'
+export PRODUCTION_DATABASE_HOSTS='ep-shiny-rain-a76n3kg6.ap-southeast-2.aws.neon.tech'
+
+pnpm data-guard snapshot --out .data-guard/prod-before.json
+pnpm db:migrate --production                                      # 0005 (lock_timeout 3s)
+pnpm data-guard snapshot --out .data-guard/prod-after.json
+pnpm data-guard diff .data-guard/prod-before.json .data-guard/prod-after.json \
+  --expect scripts/data-guard/expectations/2026-11-phase3-user-id-links.production.json
+pnpm db:drift                                                     # must say: No schema drift
+node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: tenants tables are consistent
+# 2. Merge #103. Wait for the production deployment to be Ready.
+```
+
+**Done when:** the diff passes with 0 errors, drift is empty, `verify.mjs` reports no disagreement between `user_id` and the email, and the deploy is Ready. Smoke test: sign in → Me (membership and calendar), Stats, book and cancel a play day on a test account, then `verify.mjs` again (the new booking is linked).
+
+**If the migration fails:** it changes nothing (one transaction).
+
+**Rollback of the app:** Vercel Instant Rollback. The previous version ignores the column, and the triggers keep linking its writes.
+
+## 4. Housekeeping that needs you
 
 - **Rehearsal branches.** `rehearsal-phase-2` and `rehearsal-phase-3-tenants` were deleted on 23 Nov, at the owner's request. From now on the session deletes each rehearsal branch once its step has run on production.
-- **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 6 (main, `pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants` and `rehearsal-phase-3-tenant-id`). Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.
+- **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7 (main, `pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id` and the current rehearsal branch). Step 3 adds an eighth. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.
 - **Point-in-time restore covers 6 hours, not 7 days.** The project's history retention is 21,600 seconds (the free plan's limit). Test plan §4.4 asks for a window that covers the next 7 days. Until the plan changes, the named `pre-<step>` branch is the restore point for each step, and it's kept until the step's watch period ends.
 - **Each new Neon branch has a new host**, and the build session's network only allows named hosts. Expect one approval card per rehearsal (two hosts: direct and pooled).
 - **One branch, one step at a time.** The build session pushes only to `claude/luvallplay-phase-3`, so each step's pull request opens after the previous one is merged.

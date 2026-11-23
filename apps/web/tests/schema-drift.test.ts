@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import pg from "pg";
-import { dumpSchema, schemaDiff } from "../scripts/db/dump-schema.mjs";
+import { dumpSchema, schemaDiff, tablesOnly } from "../scripts/db/dump-schema.mjs";
 import { loadMigrations, migrate, markBaseline, plan, BASELINE_DUMP, EXPECTED_DUMP, MIGRATIONS_DIR } from "../scripts/db/migrate.mjs";
 
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;
@@ -115,7 +115,10 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
       });
       // Migrations after the baseline change the schema; only compare to the
       // latest dump.
-      assertNoDrift(EXPECTED_DUMP, await dumpOf(url), "a database built from db/schema.ts");
+      // Tables, indexes and sequences: a Drizzle schema can't describe the
+      // functions and triggers, which the migrations test above covers.
+      const drift = schemaDiff(tablesOnly(readFileSync(EXPECTED_DUMP, "utf8")), await dumpOf(url));
+      assert.deepEqual(drift, [], `a database built from db/schema.ts differs from ${EXPECTED_DUMP} (- expected, + actual):\n${drift.join("\n")}`);
 
       // Against the committed migrations: nothing new.
       const copy = mkdtempSync(join(tmpdir(), "drizzle-migs-"));

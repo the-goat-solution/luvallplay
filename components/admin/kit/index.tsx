@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AdminLink } from "@/components/admin/AdminLink";
 import k from "./kit.module.css";
 
 // Admin UI kit (build plan §2.5): the building blocks of the admin pages, so
@@ -8,10 +9,24 @@ import k from "./kit.module.css";
 export { ConfirmButton } from "./ConfirmButton";
 export const kit = k;
 
-export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children?: ReactNode }) {
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+  children,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  /** The page's main controls, top right (wraps under the title on phones). */
+  actions?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
     <header className={k.header}>
-      <h1 className={k.title}>{title}</h1>
+      <div className={k.headerRow}>
+        <h1 className={k.title}>{title}</h1>
+        {actions && <div className={k.headerActions}>{actions}</div>}
+      </div>
       {subtitle && <p className={k.subtitle}>{subtitle}</p>}
       {children}
     </header>
@@ -125,4 +140,43 @@ export function StatTile({ label, value, hint, tone }: { label: string; value: R
 /** A row of StatTiles that wraps to two columns on phones. */
 export function StatGrid({ children }: { children: ReactNode }) {
   return <div className={k.statGrid}>{children}</div>;
+}
+
+export type TabItem = { key: string; label: string; href: string; count?: number };
+
+/** Page tabs that are links (?tab=…), so every tab has its own URL. */
+export function Tabs({ items, current, label }: { items: TabItem[]; current: string; label: string }) {
+  return (
+    <nav className={k.tabs} aria-label={label}>
+      {items.map((t) => (
+        <AdminLink key={t.key} href={t.href} current={t.key === current} scroll={false} className={`${k.tab} ${t.key === current ? k.tabActive : ""}`}>
+          {t.label}
+          {t.count !== undefined && <span className={k.tabCount}>{t.count}</span>}
+        </AdminLink>
+      ))}
+    </nav>
+  );
+}
+
+/** A collapsed "ⓘ" explanation, for rules most people only need once. */
+export function InfoDisclosure({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className={k.info}>
+      <summary>{summary}</summary>
+      <div className={k.infoBody}>{children}</div>
+    </details>
+  );
+}
+
+/** A form that opens in place from a button (no JavaScript needed). */
+export function FormPanel({ summary, title, children, id }: { summary: string; title: string; children: ReactNode; id?: string }) {
+  return (
+    <details className={k.panel} id={id}>
+      <summary className={k.btn}>{summary}</summary>
+      <div className={k.panelBody}>
+        <h3 className={k.panelTitle}>{title}</h3>
+        {children}
+      </div>
+    </details>
+  );
 }

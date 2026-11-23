@@ -6,7 +6,7 @@ import { recordAttendance, removeAttendance } from "@/lib/stats-db";
 
 function back(date: string, message: string): never {
   revalidatePath("/admin/play-days");
-  redirect(`/admin/play-days?date=${date}&toast=${encodeURIComponent(message)}#attendance`);
+  redirect(`/admin/play-days?date=${date}&tab=attendance&toast=${encodeURIComponent(message)}`);
 }
 
 export async function markAttended(date: string, email: string) {

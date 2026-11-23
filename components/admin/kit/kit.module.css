@@ -294,3 +294,203 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e3e6eb;
+  margin: 18px 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7383;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.tab:hover {
+  color: #1a2a4a;
+}
+.tabActive {
+  color: #1a2a4a;
+  border-bottom-color: #1a2a4a;
+}
+.tabCount {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: #eef2f7;
+  color: #1a2a4a;
+  line-height: 18px;
+}
+
+/* InfoDisclosure */
+.info {
+  font-size: 13px;
+  color: #555;
+  margin: 0 0 14px;
+}
+.info summary {
+  cursor: pointer;
+  color: #1a2a4a;
+  font-weight: 600;
+  list-style: none;
+}
+.info summary::-webkit-details-marker {
+  display: none;
+}
+.info summary::before {
+  content: "ⓘ ";
+}
+.infoBody {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f6f7f9;
+  line-height: 1.55;
+}
+.infoBody p {
+  margin: 0 0 6px;
+}
+.infoBody p:last-child {
+  margin-bottom: 0;
+}
+
+/* FormPanel */
+.panel {
+  margin-bottom: 14px;
+}
+.panel > summary {
+  display: inline-flex;
+  align-items: center;
+  list-style: none;
+  cursor: pointer;
+}
+.panel > summary::-webkit-details-marker {
+  display: none;
+}
+.panel[open] > summary {
+  background: #fff;
+  color: #333;
+  border-color: #ccc;
+}
+.panelBody {
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid #e3e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+.panelTitle {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+/* Form grid: labelled fields that wrap, one column on phones. */
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  align-items: end;
+  margin-top: 10px;
+}
+.formGrid .input,
+.formGrid .select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Segmented control (one choice of a few, each a submit button). */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid #d5dae2;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+  background: #f3f5f8;
+}
+.segmented form {
+  display: contents;
+}
+.segment {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #3a4354;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.segment:hover {
+  background: #e7ebf1;
+}
+span.segment {
+  display: inline-flex;
+  align-items: center;
+}
+.segmentOn,
+.segmentOn:hover {
+  background: #1a2a4a;
+  color: #fff;
+  cursor: default;
+}
+.strike {
+  text-decoration: line-through;
+  color: #999;
+}
+.sub {
+  display: block;
+  font-size: 12px;
+  color: #6b7383;
+}
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Kit buttons used on links (AdminLink / <a>). */
+a.btn,
+a.btnSecondary,
+a.btnDanger,
+span.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+/* PageHeader with actions on the right. */
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.headerActions {
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}

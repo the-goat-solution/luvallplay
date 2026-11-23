@@ -4,7 +4,6 @@ import { z } from "zod";
 import { Notice, PageHeader, Section, kit } from "@/components/admin/kit";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
-import { input } from "@/components/admin/ui";
 import { audit, requireAdminActor } from "@/lib/admin-access";
 import {
   PLAN_IDS,
@@ -108,24 +107,23 @@ async function saveSettings(formData: FormData) {
 const loc = (v: { en?: string; vi?: string } | undefined, k: "en" | "vi") => v?.[k] ?? "";
 
 function PlanForm({ plan }: { plan: CmsPricingPlan & { sort: number } }) {
-  const field = { ...input, width: "100%" } as const;
   return (
     <form action={savePlan} style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
       <input type="hidden" name="planId" value={plan.planId} />
       <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>{PLAN_LABEL[plan.planId]}</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
-        <label>Name (English)<input name="nameEn" defaultValue={loc(plan.name, "en")} style={field} /></label>
-        <label>Name (Vietnamese)<input name="nameVi" defaultValue={loc(plan.name, "vi")} style={field} /></label>
-        <label>Description (English)<input name="descEn" defaultValue={loc(plan.description, "en")} style={field} /></label>
-        <label>Description (Vietnamese)<input name="descVi" defaultValue={loc(plan.description, "vi")} style={field} /></label>
-        <label>Period label (English)<input name="periodEn" defaultValue={loc(plan.periodLabel, "en")} style={field} /></label>
-        <label>Period label (Vietnamese)<input name="periodVi" defaultValue={loc(plan.periodLabel, "vi")} style={field} /></label>
-        <label>Price (NZD)<input name="price" inputMode="decimal" defaultValue={plan.priceNzd ?? ""} placeholder={String(PRICES[plan.planId])} style={field} /></label>
-        <label>Stripe price id<input name="stripePriceId" defaultValue={plan.stripePriceId ?? ""} placeholder="price_…" style={field} /></label>
-        <label>Order<input name="sort" inputMode="numeric" defaultValue={plan.sort} style={field} /></label>
+        <label className={kit.field}>Name (English)<input name="nameEn" defaultValue={loc(plan.name, "en")} className={kit.input} /></label>
+        <label className={kit.field}>Name (Vietnamese)<input name="nameVi" defaultValue={loc(plan.name, "vi")} className={kit.input} /></label>
+        <label className={kit.field}>Description (English)<input name="descEn" defaultValue={loc(plan.description, "en")} className={kit.input} /></label>
+        <label className={kit.field}>Description (Vietnamese)<input name="descVi" defaultValue={loc(plan.description, "vi")} className={kit.input} /></label>
+        <label className={kit.field}>Period label (English)<input name="periodEn" defaultValue={loc(plan.periodLabel, "en")} className={kit.input} /></label>
+        <label className={kit.field}>Period label (Vietnamese)<input name="periodVi" defaultValue={loc(plan.periodLabel, "vi")} className={kit.input} /></label>
+        <label className={kit.field}>Price (NZD)<input name="price" inputMode="decimal" defaultValue={plan.priceNzd ?? ""} placeholder={String(PRICES[plan.planId])} className={kit.input} /></label>
+        <label className={kit.field}>Stripe price id<input name="stripePriceId" defaultValue={plan.stripePriceId ?? ""} placeholder="price_…" className={kit.input} /></label>
+        <label className={kit.field}>Order<input name="sort" inputMode="numeric" defaultValue={plan.sort} className={kit.input} /></label>
         <label style={{ alignSelf: "end" }}><input type="checkbox" name="featured" defaultChecked={Boolean(plan.featured)} /> Featured</label>
-        <label>Features, one per line (English)<textarea name="featuresEn" rows={5} defaultValue={(plan.features ?? []).map((f) => f.en ?? "").join("\n")} style={field} /></label>
-        <label>Features, one per line (Vietnamese)<textarea name="featuresVi" rows={5} defaultValue={(plan.features ?? []).map((f) => f.vi ?? "").join("\n")} style={field} /></label>
+        <label className={kit.field}>Features, one per line (English)<textarea name="featuresEn" rows={5} defaultValue={(plan.features ?? []).map((f) => f.en ?? "").join("\n")} className={kit.input} /></label>
+        <label className={kit.field}>Features, one per line (Vietnamese)<textarea name="featuresVi" rows={5} defaultValue={(plan.features ?? []).map((f) => f.vi ?? "").join("\n")} className={kit.input} /></label>
       </div>
       <p style={{ color: "#666", fontSize: 12, margin: "6px 0" }}>Empty fields use the site&apos;s built-in text. The Stripe price id is used only when the matching STRIPE_PRICE_* setting isn&apos;t set in Vercel.</p>
       <SubmitButton className={kit.btn}>Save {PLAN_LABEL[plan.planId]}</SubmitButton>
@@ -145,8 +143,8 @@ export default async function SettingsPage() {
         <>
           <Section title="Session settings">
             <form action={saveSettings} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
-              <label>Players per session (casual spots = this minus members)<input name="maxCasualSpots" inputMode="numeric" defaultValue={spots.value ?? ""} placeholder={String(SESSION_CAPACITY)} style={input} /></label>
-              <label>Booking lock (days)<input name="bookingLockDays" inputMode="numeric" defaultValue={lock.value ?? ""} style={input} /></label>
+              <label className={kit.field}>Players per session (casual spots = this minus members)<input name="maxCasualSpots" inputMode="numeric" defaultValue={spots.value ?? ""} placeholder={String(SESSION_CAPACITY)} className={kit.input} /></label>
+              <label className={kit.field}>Booking lock (days)<input name="bookingLockDays" inputMode="numeric" defaultValue={lock.value ?? ""} className={kit.input} /></label>
               <SubmitButton className={kit.btn}>Save settings</SubmitButton>
             </form>
           </Section>

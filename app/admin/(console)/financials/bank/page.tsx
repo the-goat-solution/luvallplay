@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import styles from "@/components/admin/finance/financials.module.css";
+import { InfoDisclosure, Notice, PageHeader, Tabs } from "@/components/admin/kit";
 import { getClubToday } from "@/lib/dates";
 import {
   categoryLabel,
@@ -49,8 +50,12 @@ export const dynamic = "force-dynamic";
 
 const PAGE = "/admin/financials/bank";
 
-function back(params: Record<string, string>): never {
-  redirect(`${PAGE}?${new URLSearchParams(params).toString()}`);
+type BankTab = "reconcile" | "missing" | "history" | "rules" | "setup";
+
+// Each action comes back to the tab it was started from.
+function back(params: Record<string, string>, tab: BankTab = "reconcile"): never {
+  const qs = new URLSearchParams(tab === "reconcile" ? params : { tab, ...params });
+  redirect(`${PAGE}?${qs.toString()}`);
 }
 
 async function saveOpening(formData: FormData) {
@@ -58,19 +63,19 @@ async function saveOpening(formData: FormData) {
   const date = String(formData.get("date") ?? "");
   const bank = parseMoneyToCents(String(formData.get("bank") ?? ""));
   const cash = parseMoneyToCents(String(formData.get("cash") ?? "0") || "0");
-  if (!isDateKey(date)) back({ financeError: "Please enter the opening date." });
-  if (bank === null) back({ financeError: "Please enter the bank balance, like 1520.35." });
-  if (cash === null || cash < 0) back({ financeError: "Cash on hand must be $0 or more." });
+  if (!isDateKey(date)) back({ financeError: "Please enter the opening date." }, "setup");
+  if (bank === null) back({ financeError: "Please enter the bank balance, like 1520.35." }, "setup");
+  if (cash === null || cash < 0) back({ financeError: "Cash on hand must be $0 or more." }, "setup");
   await setOpeningBalances({ date, bankCents: bank, cashCents: cash });
   revalidatePath(PAGE);
-  back({ notice: "Opening balances saved." });
+  back({ notice: "Opening balances saved." }, "setup");
 }
 
 async function importCsv(formData: FormData) {
   "use server";
   const file = formData.get("statement");
-  if (!(file instanceof File) || file.size === 0) back({ financeError: "Choose a CSV file to import." });
-  if (file.size > 3 * 1024 * 1024) back({ financeError: "That file is too big for a statement (max 3 MB)." });
+  if (!(file instanceof File) || file.size === 0) back({ financeError: "Choose a CSV file to import." }, "setup");
+  if (file.size > 3 * 1024 * 1024) back({ financeError: "That file is too big for a statement (max 3 MB)." }, "setup");
   let message: string;
   try {
     const rows = parseBankCsv(await file.text(), "ANZ (CSV import)");
@@ -82,10 +87,10 @@ async function importCsv(formData: FormData) {
   } catch (err) {
     const msg =
       err instanceof CsvImportError ? err.message : err instanceof Error ? err.message : "Import failed";
-    back({ financeError: `CSV import failed: ${msg}` });
+    back({ financeError: `CSV import failed: ${msg}` }, "setup");
   }
   revalidatePath(PAGE);
-  back({ notice: message });
+  back({ notice: message }, "setup");
 }
 
 async function syncBank() {
@@ -95,10 +100,10 @@ async function syncBank() {
     const r = await syncAkahu();
     message = `Bank synced — ${r.inserted} new line${r.inserted === 1 ? "" : "s"}, ${r.matched} reconciled automatically.`;
   } catch (err) {
-    back({ financeError: `Bank sync failed: ${err instanceof Error ? err.message : "unknown error"}` });
+    back({ financeError: `Bank sync failed: ${err instanceof Error ? err.message : "unknown error"}` }, "setup");
   }
   revalidatePath(PAGE);
-  back({ notice: message });
+  back({ notice: message }, "setup");
 }
 
 async function runAutoMatch() {
@@ -182,7 +187,7 @@ async function matchMany(formData: FormData) {
   const category = String(formData.get("adjustCategory") ?? "");
   const name = String(formData.get("adjustName") ?? "").trim().slice(0, 200);
   if (adjust && (!isFinanceCategory(category) || !name)) {
-    back({ financeError: "Choose a source and a name for the difference." });
+    back({ financeError: "Choose a category and a name for the difference." });
   }
   let error: string | null = null;
   try {
@@ -215,7 +220,7 @@ async function updateRule(formData: FormData) {
         : op === "auto-on"
           ? "Rule will now be applied automatically."
           : "Rule switched to suggestion only.",
-  });
+  }, "rules");
 }
 
 async function unreconcile(formData: FormData) {
@@ -223,7 +228,7 @@ async function unreconcile(formData: FormData) {
   const id = Number(formData.get("id"));
   if (Number.isSafeInteger(id) && id > 0) await setBankTransactionStatus(id, "unmatched");
   revalidatePath(PAGE);
-  back({ notice: "Moved back to “not reconciled”." });
+  back({ notice: "Moved back to “To reconcile”." }, "history");
 }
 
 function timeAgo(date: Date): string {
@@ -344,14 +349,11 @@ function SuggestionBox({
 const CLASSIFY_FOR_CREDIT: ClassifyStatus[] = ["stripe_payout", "cash_deposit", "internal", "ignored"];
 const CLASSIFY_FOR_DEBIT: ClassifyStatus[] = ["cash_withdrawal", "internal", "ignored"];
 
-export default async function BankPage() {
+export default async function BankPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab: tabParam } = await searchParams;
+  const tab: BankTab = (["missing", "history", "rules", "setup"] as const).find((t) => t === tabParam) ?? "reconcile";
   const header = (
-    <>
-      <h1 className={styles.title}>Bank</h1>
-      <p className={styles.subtitle}>
-        Opening balances, the ANZ bank feed, and reconciling every bank line against the ledger.
-      </p>
-    </>
+    <PageHeader title="Bank" subtitle="What the club holds, and every bank line checked against the ledger (reconciling)." />
   );
 
   if (!process.env.POSTGRES_URL) {
@@ -399,7 +401,7 @@ export default async function BankPage() {
       ? `Statement balance on ${formatDateKey(funds.latestStatementBalance.date)}`
       : funds.opening
         ? "Opening balance + imported lines"
-        : "Set an opening balance below";
+        : "Set the opening balance on the Setup tab";
   const reportedForCheck = funds.bankReported?.cents ?? funds.latestStatementBalance?.cents ?? null;
   const difference =
     reportedForCheck !== null && funds.bankComputedCents !== null
@@ -426,7 +428,7 @@ export default async function BankPage() {
         <FundCard
           label="Cash on hand"
           cents={funds.cashOnHandCents}
-          note={funds.opening ? "Opening cash + cash in − cash out − banked" : "Set opening cash below"}
+          note={funds.opening ? "Opening cash + cash in − cash out − banked" : "Set opening cash on the Setup tab"}
         />
         <FundCard label="Total club funds" cents={total} note={`As of ${formatDateKey(today)}`} total />
       </div>
@@ -455,6 +457,26 @@ export default async function BankPage() {
         </div>
       ) : null}
 
+      {!funds.opening && tab !== "setup" ? (
+        <Notice>
+          Start on the <a href={`${PAGE}?tab=setup`}>Setup</a> tab: enter the opening balances so the totals and reconciling have a starting point.
+        </Notice>
+      ) : null}
+
+      <Tabs
+        label="Bank"
+        current={tab}
+        items={[
+          { key: "reconcile", label: "To reconcile", href: PAGE, count: unmatched.length },
+          { key: "missing", label: "In the ledger, not in the bank", href: `${PAGE}?tab=missing`, count: missing.length },
+          { key: "history", label: "History", href: `${PAGE}?tab=history` },
+          { key: "rules", label: "Rules", href: `${PAGE}?tab=rules`, count: rules.length },
+          { key: "setup", label: "Setup", href: `${PAGE}?tab=setup` },
+        ]}
+      />
+
+      {tab === "setup" && (
+      <>
       <h2 className={styles.sectionTitle}>
         Opening balances
         <span className={styles.sectionCount}>
@@ -529,10 +551,15 @@ export default async function BankPage() {
               </form>
             </>
           ) : (
-            <span className={styles.hint}>
-              Free for your own accounts: sign up at akahu.nz, connect the club&apos;s ANZ login, create a Personal App,
-              then add <code>AKAHU_APP_TOKEN</code> and <code>AKAHU_USER_TOKEN</code> in Vercel. See README.
-            </span>
+            <>
+              <span className={styles.hint}>Brings ANZ bank lines in automatically every night. Free for the club&apos;s own accounts.</span>
+              <InfoDisclosure summary="Technical details">
+                <p>
+                  Sign up at akahu.nz, connect the club&apos;s ANZ login and create a Personal App, then add <code>AKAHU_APP_TOKEN</code> and{" "}
+                  <code>AKAHU_USER_TOKEN</code> in Vercel. See the README.
+                </p>
+              </InfoDisclosure>
+            </>
           )}
         </section>
 
@@ -563,13 +590,20 @@ export default async function BankPage() {
           </span>
           <div className={styles.code}>POST {webhookUrl}</div>
           {!process.env.BANK_WEBHOOK_SECRET ? (
-            <span className={styles.hint}>
-              Set <code>BANK_WEBHOOK_SECRET</code> (a long random string) in Vercel to enable it.
-            </span>
+            <InfoDisclosure summary="Technical details">
+              <p>
+                Set <code>BANK_WEBHOOK_SECRET</code> (a long random string) in Vercel to switch it on.
+              </p>
+            </InfoDisclosure>
           ) : null}
         </section>
       </div>
 
+      </>
+      )}
+
+      {tab === "reconcile" && (
+      <>
       <h2 className={styles.sectionTitle}>
         To reconcile
         <span className={styles.sectionCount}>
@@ -597,7 +631,7 @@ export default async function BankPage() {
               <tr>
                 <td colSpan={4} className={styles.empty}>
                   {funds.bankLines === 0
-                    ? "No bank lines yet — connect Akahu or import a statement CSV above."
+                    ? "No bank lines yet. Connect the bank feed or import a statement on the Setup tab."
                     : "Nothing to reconcile. 🎉"}
                 </td>
               </tr>
@@ -634,15 +668,14 @@ export default async function BankPage() {
                           defaultValue="new"
                         >
                           <option value="new">
-                            ＋ Record as new {t.amountCents > 0 ? "income" : "expense"}…
+                            Record as new {t.amountCents > 0 ? "income" : "expense"} in the ledger…
                           </option>
                           {singles.length ? (
-                            <optgroup label="Match to one ledger entry">
+                            <optgroup label="Match to a ledger entry">
                               {singles.slice(0, 10).map((o) => (
                                 <option key={o.id} value={`entry:${o.id}`} disabled={!o.exact}>
-                                  {o.exact ? "" : "≠ "}
                                   {formatDateKey(o.entryDate)} · {o.name} · {formatCents(o.amountCents)}
-                                  {o.exact ? "" : " (amount differs — use Match several…)"}
+                                  {o.exact ? "" : " (different amount: use Match several)"}
                                 </option>
                               ))}
                             </optgroup>
@@ -655,8 +688,8 @@ export default async function BankPage() {
                             ))}
                           </optgroup>
                         </select>
-                        <SubmitButton loadingText="Applying…" className={styles.button}>
-                          Apply
+                        <SubmitButton loadingText="Saving…" className={styles.button}>
+                          Save
                         </SubmitButton>
                       </form>
                       <div style={{ textAlign: "right" }}>
@@ -692,10 +725,15 @@ export default async function BankPage() {
         Reconciling links a bank line to entries already in the ledger — it doesn&apos;t add to the ledger by itself. To
         put a bank payment into the ledger, choose “Record as new”, or accept a bank-rule suggestion. Use “Match
         several…” when one payment covers several entries (with any difference, like a bank fee, recorded for you).
-        Stripe payouts and cash deposits aren&apos;t income: the payments behind them are already in the ledger. “≠”
-        entries have a different amount — fix the entry first, or use “Match several…” to record the difference.
+        Stripe payouts and cash deposits aren&apos;t income: the payments behind them are already in the ledger. Entries
+        marked “different amount” need fixing first, or use “Match several…” to record the difference.
       </p>
 
+      </>
+      )}
+
+      {tab === "missing" && (
+      <>
       <h2 className={styles.sectionTitle}>
         In the ledger, not yet seen in the bank
         <span className={styles.sectionCount}>
@@ -708,7 +746,7 @@ export default async function BankPage() {
             <tr>
               <th>Date</th>
               <th>Name</th>
-              <th>Source</th>
+              <th>Category</th>
               <th className={styles.right}>Amount</th>
               <th />
             </tr>
@@ -747,6 +785,11 @@ export default async function BankPage() {
         Normal for a payment made in the last day or two. Older ones usually have a wrong amount, date or payment method.
       </p>
 
+      </>
+      )}
+
+      {tab === "history" && (
+      <>
       <h2 className={styles.sectionTitle}>
         Recently reconciled <span className={styles.sectionCount}>latest {recent.length}</span>
       </h2>
@@ -798,7 +841,7 @@ export default async function BankPage() {
                   <td className={styles.right}>
                     <form action={unreconcile}>
                       <input type="hidden" name="id" value={t.id} />
-                      <SubmitButton loadingText="Undoing…" className={styles.actionLink}>
+                      <SubmitButton loadingText="Undoing…" className={styles.actionLink} confirmMessage="Move this line back to To reconcile? Any ledger entries stay as they are.">
                         Undo
                       </SubmitButton>
                     </form>
@@ -810,6 +853,11 @@ export default async function BankPage() {
         </table>
       </div>
 
+      </>
+      )}
+
+      {tab === "rules" && (
+      <>
       <h2 className={styles.sectionTitle}>
         Bank rules
         <span className={styles.sectionCount}>learned from how you reconcile — {rules.length}</span>
@@ -868,7 +916,7 @@ export default async function BankPage() {
                       <form action={updateRule}>
                         <input type="hidden" name="ruleId" value={r.id} />
                         <input type="hidden" name="op" value="delete" />
-                        <SubmitButton loadingText="Deleting…" className={`${styles.actionLink} ${styles.actionDanger}`}>
+                        <SubmitButton loadingText="Deleting…" className={`${styles.actionLink} ${styles.actionDanger}`} confirmMessage={`Delete the rule for “${r.pattern}”? It will no longer be suggested or applied.`}>
                           Delete
                         </SubmitButton>
                       </form>
@@ -884,6 +932,8 @@ export default async function BankPage() {
         Automatic rules run on every bank sync and nightly — but never over a ledger entry that already matches the
         line, so nothing gets recorded twice. Suggest-only rules just pre-fill the suggestion for you to accept.
       </p>
+      </>
+      )}
     </div>
   );
 }

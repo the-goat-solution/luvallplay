@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { auditLabel } from "@/lib/admin-audit-labels";
 import { Badge, ConfirmButton, DataTable, EmptyState, Notice, PageHeader, Section, Toolbar, kit } from "@/components/admin/kit";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
@@ -35,7 +36,7 @@ const PATH = "/admin/people/admins";
 const ROLE_HELP: Record<ClubRole, string> = {
   owner: "Everything, including adding and removing admins.",
   admin: "Everything except managing admins.",
-  coach: "Play days, challenges and day requests.",
+  coach: "Play days, Schedule and Arena only.",
 };
 
 function back(kind: "toast" | "toastError", message: string): never {
@@ -56,7 +57,7 @@ function roleErrorMessage(err: unknown): string {
 }
 
 function actorName(ctx: Awaited<ReturnType<typeof requireAdminActor>>["ctx"]): string {
-  return ctx.kind === "player" ? `${ctx.player.firstName} ${ctx.player.lastName}`.trim() || ctx.player.email : "The club (break-glass login)";
+  return ctx.kind === "player" ? `${ctx.player.firstName} ${ctx.player.lastName}`.trim() || ctx.player.email : "Someone with the admin password";
 }
 
 async function addAdmin(formData: FormData) {
@@ -187,7 +188,7 @@ export default async function AdminsPage() {
                 <select className={kit.select} name="role" defaultValue="admin">
                   {CLUB_ROLES.map((r) => (
                     <option key={r} value={r}>
-                      {r}
+                      {r[0].toUpperCase() + r.slice(1)}: {ROLE_HELP[r].replace(/\.$/, "").toLowerCase()}
                     </option>
                   ))}
                 </select>
@@ -197,7 +198,7 @@ export default async function AdminsPage() {
               </SubmitButton>
             </Toolbar>
             <p className={kit.muted} style={{ margin: 0 }}>
-              {CLUB_ROLES.map((r) => `${r}: ${ROLE_HELP[r]}`).join(" · ")} Someone without an account gets an invite that applies when they first sign in.
+              Someone without an account yet gets an invite that applies when they first sign in.
             </p>
           </form>
         </Section>
@@ -207,7 +208,7 @@ export default async function AdminsPage() {
         <DataTable
           rows={admins}
           rowKey={(a) => a.playerId}
-          empty="No one has a club role yet. The grant script (scripts/grant-role.mjs) sets the first owners."
+          empty="No one has a club role yet. Ask the website's developer to set up the first owner."
           columns={[
             { key: "name", label: "Name", render: (a) => <strong>{a.name || "—"}</strong> },
             { key: "email", label: "Email", render: (a) => a.email },
@@ -283,7 +284,7 @@ export default async function AdminsPage() {
             columns={[
               { key: "at", label: "When", render: (r) => formatNz(r.at, true) },
               { key: "who", label: "Who", render: (r) => r.actorName ?? (r.actorKind === "player" ? `player ${r.actorPlayerId}` : r.actorKind) },
-              { key: "what", label: "What", render: (r) => <code style={{ fontSize: 12 }}>{r.action}</code> },
+              { key: "what", label: "What", render: (r) => <span title={r.action}>{auditLabel(r.action)}</span> },
               { key: "target", label: "Target", render: (r) => r.target ?? "" },
               { key: "detail", label: "Detail", render: (r) => <span className={kit.muted}>{describe(r)}</span> },
             ]}

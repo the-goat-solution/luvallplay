@@ -13,6 +13,7 @@ import {
 import { FinanceFilters } from "@/components/admin/finance/FinanceFilters";
 import { MonthlyChart } from "@/components/admin/finance/MonthlyChart";
 import styles from "@/components/admin/finance/financials.module.css";
+import { PageHeader } from "@/components/admin/kit";
 import { getClubToday } from "@/lib/dates";
 import {
   categoryLabel,
@@ -334,13 +335,10 @@ export default async function FinancialsPage({
   const fromBankId = fromBankParam && /^\d+$/.test(fromBankParam) ? Number(fromBankParam) : null;
 
   const header = (
-    <>
-      <h1 className={styles.title}>Ledger</h1>
-      <p className={styles.subtitle}>
-        Every dollar in and out of the club. Stripe payments (card and recorded cash) are imported
-        automatically; record expenses and any other income here.
-      </p>
-    </>
+    <PageHeader
+      title="Ledger"
+      subtitle="Every dollar in and out of the club. Stripe payments (card and recorded cash) come in automatically; record expenses and any other income here."
+    />
   );
 
   if (!process.env.POSTGRES_URL) {
@@ -431,13 +429,20 @@ export default async function FinancialsPage({
               Sync now
             </SubmitButton>
           </form>
-          <form action={syncNow} style={{ display: "inline" }}>
-            <input type="hidden" name="returnTo" value={returnTo} />
-            <input type="hidden" name="full" value="1" />
-            <SubmitButton loadingText="Re-importing…" className={styles.buttonGhost}>
-              Re-import full history
-            </SubmitButton>
-          </form>
+          <details className={styles.advanced}>
+            <summary>Advanced</summary>
+            <form action={syncNow}>
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <input type="hidden" name="full" value="1" />
+              <SubmitButton
+                loadingText="Re-importing…"
+                className={styles.buttonGhost}
+                confirmMessage="Re-import the whole Stripe history? It takes a while; entries already here aren't duplicated."
+              >
+                Re-import full Stripe history
+              </SubmitButton>
+            </form>
+          </details>
         </div>
       ) : null}
 
@@ -448,7 +453,7 @@ export default async function FinancialsPage({
       ) : syncError || syncState?.lastError ? (
         <p className={styles.banner}>
           Couldn&apos;t sync with Stripe ({syncError ?? syncState?.lastError}). Figures below may
-          be missing the latest payments — try &ldquo;Sync now&rdquo;.
+          be missing the latest payments: try &ldquo;Sync now&rdquo;.
         </p>
       ) : null}
 
@@ -489,12 +494,12 @@ export default async function FinancialsPage({
 
       {breakdown.length > 0 ? (
         <details className={styles.breakdown} open={breakdown.length > 1}>
-          <summary>Breakdown by source</summary>
+          <summary>Breakdown by category</summary>
           <div className={styles.breakdownScroll}>
           <table className={styles.breakdownTable}>
             <thead>
               <tr>
-                <th>Source</th>
+                <th>Category</th>
                 <th>Received</th>
                 <th>Spent</th>
                 <th>Net</th>
@@ -557,8 +562,8 @@ export default async function FinancialsPage({
               <SortHeader label="Date" field="date" filters={filters} />
               <th>Name</th>
               <th>Type</th>
-              <th>Source</th>
-              <th>Associated person</th>
+              <th>Category</th>
+              <th>Person</th>
               <SortHeader label="Amount" field="amount" filters={filters} alignRight />
               <th>Invoice</th>
               <th aria-label="Actions" />
@@ -653,8 +658,8 @@ export default async function FinancialsPage({
                         </div>
                       ) : (
                         <div className={styles.actions}>
-                          <span className={styles.badge} title="Imported from Stripe — edit it in Stripe">
-                            Auto
+                          <span className={styles.badge} title="Imported from Stripe: change it in Stripe">
+                            From Stripe
                           </span>
                         </div>
                       )}

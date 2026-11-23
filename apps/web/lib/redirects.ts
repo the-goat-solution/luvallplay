@@ -17,6 +17,10 @@ export type Redirect = {
 const SIGNED_IN = [{ type: "cookie" as const, key: "tw_player" }];
 
 export const REDIRECTS: Redirect[] = [
+  // The Sanity Studio is its own app since Phase 2 (apps/studio), hosted by
+  // Sanity. Bookmarks to the old in-site Studio land there.
+  { source: "/studio", destination: "https://threewolves.sanity.studio", permanent: true },
+  { source: "/studio/:path*", destination: "https://threewolves.sanity.studio", permanent: true },
   // Wolf Vision lives in the profile app now (query kept, so old Arena links
   // and payment returns still land on the right match).
   { source: "/match-analyzer/label", destination: "/profile/wolf-vision/label", permanent: true },

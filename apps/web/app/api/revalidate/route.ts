@@ -1,6 +1,6 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
-import { parseBody } from "next-sanity/webhook";
+import { SIGNATURE_HEADER_NAME, isValidSignature } from "@sanity/webhook";
 import { SANITY_CACHE_TAG } from "@/lib/sanity";
 
 function purgeHome() {
@@ -25,10 +25,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { isValidSignature, body } = await parseBody(req, secret);
-    if (!isValidSignature) {
+    // Sanity signs the raw body (header "sanity-webhook-signature").
+    const raw = await req.text();
+    const signature = req.headers.get(SIGNATURE_HEADER_NAME) ?? "";
+    if (!signature || !(await isValidSignature(raw, signature, secret))) {
       return NextResponse.json({ message: "Invalid signature" }, { status: 401 });
     }
+    const body = (raw ? JSON.parse(raw) : null) as { _type?: string } | null;
 
     purgeHome();
     return NextResponse.json({

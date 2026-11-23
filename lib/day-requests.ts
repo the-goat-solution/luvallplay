@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { DEFAULT_PAUSED_DAYS, WEEKDAYS, type Weekday } from "./constants";
 import { ensureTables } from "./db";
 import { isDatePaused } from "./dates";

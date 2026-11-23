@@ -1,4 +1,4 @@
-import { db, sql } from "@vercel/postgres";
+import { db, sql } from "./database";
 import { ensureTables, addDays } from "./db";
 import { ensurePlayerTables } from "./player-db";
 import { getClubToday } from "./dates";
@@ -302,8 +302,10 @@ export async function getOrder(id: number): Promise<Order | null> {
 }
 
 export class ShopError extends Error {
-  constructor(public code: "sold_out" | "not_found" | "invalid" | "inactive") {
+  code: "sold_out" | "not_found" | "invalid" | "inactive";
+  constructor(code: "sold_out" | "not_found" | "invalid" | "inactive") {
     super(code);
+    this.code = code;
   }
 }
 

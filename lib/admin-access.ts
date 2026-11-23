@@ -1,6 +1,6 @@
 // Same database as the rest of the site, whichever bundle loads this (lib/db-env.ts).
 import "./db-env";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { cookies } from "next/headers";
 import { ADMIN_COOKIE, verifyAdminToken } from "./admin-session";
 import { PLAYER_COOKIE, sessionForToken } from "./player-auth";

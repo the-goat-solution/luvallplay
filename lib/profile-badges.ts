@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { countArenaActions } from "./arena-db";
 
 // Little red counters on the profile tabs. Each source is optional: a

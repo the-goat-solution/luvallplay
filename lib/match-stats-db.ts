@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { z } from "zod";
 import { ArenaError, T, ensureArenaTables, loadWorld, type World } from "./arena-db";
 

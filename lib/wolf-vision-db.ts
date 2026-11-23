@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { z } from "zod";
 import { averageWeights, N_FEATURES, type CheckerWeights } from "./ma/checker";
 

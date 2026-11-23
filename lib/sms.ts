@@ -1,4 +1,4 @@
-import { db, sql } from "@vercel/postgres";
+import { db, sql } from "./database";
 import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";
 import { sha256 } from "./player-auth";
 import { sendAdminAlertEmail } from "./player-email";

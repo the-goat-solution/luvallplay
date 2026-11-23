@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import {
   addDays,
   assignAndReserveMembershipAccessStart,
@@ -237,8 +237,10 @@ export async function cardUpdatePortalUrl(player: Player, returnUrl: string): Pr
 // ---------------------------------------------------------------------------
 
 export class SelfServiceError extends Error {
-  constructor(public code: string) {
+  code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
   }
 }
 

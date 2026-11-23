@@ -32,7 +32,7 @@ export function applyDatabaseSwitch(): void {
 // - Set, and the preview's host is one of them → database switched off.
 // - Set, and the host is different (a Neon branch) → database kept.
 //
-// "Switched off" removes the connection variables, so @vercel/postgres has
+// "Switched off" removes the connection variables, so lib/database.ts has
 // nothing to connect to: no DDL, no writes, no reads of members' data. Pages
 // already degrade without POSTGRES_URL (the `hasDb` checks). Production,
 // local and CI are untouched.

@@ -18,7 +18,7 @@
 // account" does it (lib/player-db.ts deletePlayerAccount): soft delete, sign-ins
 // removed, email freed. Afterwards press "Recalculate points" on /admin/players.
 
-import { createPool } from "@vercel/postgres";
+import pg from "pg";
 
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
@@ -37,7 +37,8 @@ if (!keepEmail || !mergeEmail || keepEmail === mergeEmail) {
   process.exit(1);
 }
 
-const pool = createPool({ connectionString: process.env.POSTGRES_URL });
+// node-postgres, like the other operator scripts (Neon over TCP).
+const pool = new pg.Pool({ connectionString: process.env.POSTGRES_URL, application_name: "merge-player-points" });
 
 async function playerByEmail(q, email) {
   const { rows } = await q(

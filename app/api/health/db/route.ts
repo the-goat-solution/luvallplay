@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@vercel/postgres";
+import { ping } from "@/lib/repos/health";
 import { isAdminRequest } from "@/lib/security";
 import { ensureArenaTables, loadWorld } from "@/lib/arena-db";
 import { buildArenaState } from "@/lib/arena-state";
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
   const pings: number[] = [];
   for (let i = 0; i < 5; i++) {
     t = performance.now();
-    await sql`SELECT 1;`;
+    await ping();
     pings.push(ms(t));
   }
   out.roundTripMs = pings;

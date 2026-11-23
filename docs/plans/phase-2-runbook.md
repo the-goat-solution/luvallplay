@@ -26,3 +26,9 @@ B. Only do step A.3 (delete the 9 stale branches). Previews build again, but eac
 PR 1 changes no runtime behaviour: the app still uses `@vercel/postgres` and `ensureTables()`. Merge when CI is green.
 
 Once, before the first real migration runs on production (PR 4), production is marked as "already at the baseline". That's an additive change: it creates a `drizzle` schema with one table and one row, and nothing in `public` changes. It's folded into PR 4's production run (§4 below), so there's no separate step.
+
+## 3. Phase 2 PR 2 (driver swap): nothing to do
+
+The app now talks to Neon through `@neondatabase/serverless` (`lib/database.ts`) instead of `@vercel/postgres`. It uses the same environment variables (`POSTGRES_URL`, chosen by `DATABASE_URL_VAR`), and there are no schema or data changes. After the deploy, check that `/api/health/db` answers (round trips in milliseconds) and that sign-in, Me and Arena load.
+
+Rollback: Vercel → Deployments → previous production deployment → **Instant Rollback**. Nothing in the database changed.

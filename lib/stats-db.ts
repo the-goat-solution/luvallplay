@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { ensureTables } from "./db";
 import { MEMBERSHIP_DAY_TO_DOW } from "./constants";
 import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";

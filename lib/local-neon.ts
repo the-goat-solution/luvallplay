@@ -1,4 +1,5 @@
-// Local and CI only: lets @vercel/postgres (Neon's WebSocket driver) talk to
+// Local and CI only: lets the database client (lib/database.ts, Neon's
+// serverless driver) talk to
 // a plain local Postgres through scripts/e2e/ws-proxy.mjs, so end-to-end
 // tests run against a real database without touching Neon.
 //

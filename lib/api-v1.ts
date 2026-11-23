@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { addDays, ensureTables, getSpotsAndHeadcountForDates, listSessionsInRange } from "./db";
 import { getClubToday, getMembershipDayForDate } from "./dates";
 import { getPlayerById } from "./player-db";

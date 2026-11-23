@@ -73,7 +73,7 @@ A change can go to production only when **all** of these are green:
 ### 3.2 Unit tests (`node:test`, fast, no network)
 Pure logic, aiming for full coverage of the risky parts:
 - **Dates and time zones:** NZ daylight-saving changeovers, play-day mapping, booking cut-offs at 17:00, membership cycles of 28/84 days, end dates including free weeks. Every club time zone gets property-based tests once clubs can pick one.
-- **Money:** cents only, rounding, GST, refunds, offline payments. No floating point anywhere.
+- **Money:** integer **minor units plus a currency**, never floating point. Each currency has its own exponent (NZD and AUD 2, **VND 0**), so tests run the same cases in NZD and VND (formatting, rounding, GST and VAT, refunds, offline payments). A scan fails CI on any new hard-coded `/ 100` or `* 100` on a money value.
 - **Ranks, points, streaks, the leaderboard:** golden tests on recorded real-world sequences.
 - **Capacity:** courts → players, mini-game cap, waitlist promotion.
 - **i18n:** every English key has a Vietnamese key, and vice versa.
@@ -153,6 +153,9 @@ Each journey has an ID, runs in CI on phone and desktop sizes, and is also on th
 | S4 | **Look & feel:** pick each of the 12 schemes and confirm the club site, Me page and an email render in it, light and dark. Then import a brand: SVG logo, uploaded font, palette from the logo and from a test website. Confirm the automatic contrast fix, the generated favicon/avatar, and a revert to a preset |
 | S2 | Disable a module → its screens, admin pages, API and crons disappear; data is kept and comes back on re-enable. Runs for **every** module. Also covers dependency and payment-mode blocks, the "live activity" confirmation, a platform admin locking a module (the owner can't change it and sees the reason), and a module set to *hidden* platform-wide |
 | S6 | **Core-only club:** a free club with no modules runs a full month: schedule play days, members join (with approval), sign up, waitlist, a day is cancelled (members notified), attendance ticked, an announcement and an inbox reply, a second admin added. Admin shows exactly **Home · Play days · People · Messages · Website · Settings**, and no module's screen, API route, cron or email exists for this club |
+| J1 | **Junior and guardian** (Phase 3b): a guardian adds two children, joins them to a club, signs a waiver, pays, and the children appear on the junior roster. A coach without a recorded safety check can't be assigned to juniors. A junior has no login, can't be messaged directly, doesn't appear on any public board, and has no social or marketplace access. The guardian exports and deletes a child's data. At 16 the profile moves to the young person's own account |
+| V1 | **Vietnam club end to end** (Vietnam launch pack): a club in the Vietnam region is set up in Vietnamese; members sign up with +84 numbers and names typed with and without accents (search finds "Nguyễn" from "nguyen"); a membership in **VND** shows a VietQR code with amount and reference; a test bank-feed event matches it and marks it paid; a test gateway payment settles with a payout delay handled; no Stripe call is made; every screen and email reads correctly in Vietnamese |
+| R1 | **Region routing:** a club's host name resolves to its region, requests are served only by that region's deployment, and a request for a club in another region is refused. A player in one region can't see another region's clubs or data |
 | X1 | Marketplace (Phase 7): list an item, public question and answer, buyer commits, seller confirms, contact details released by email only to the two parties |
 
 ### 3.9 Visual, accessibility and performance
@@ -211,6 +214,28 @@ Watch database CPU, connection count and p95 latency.
 - **User acceptance sign-off** (a checklist) by Timba and Kelcee before production.
 
 ---
+
+### 3.16 Regions and country packs
+- **Region isolation:** the tenant suite (§3.5) runs **per region**, and a separate suite proves a club in region A can't be read, written or even looked up from region B's deployment.
+- **Routing:** the host → tenant → region lookup is tested for every host type (platform, app, admin, club subdomain, custom domain) and fails closed if the region is unknown.
+- **Per-region operations:** migrations, the data guard, backups and the restore drill each run for every region before a release, with the report per region.
+- **Country packs:** every pack passes the same checklist (currency exponent, tax, phone format, time zone, search collation, legal documents present, payment provider capabilities). A pack without the full checklist can't be selected in the wizard.
+- **Payments interface:** every provider passes one shared contract suite (create, refund, webhook verification, **replay twice and out of order**, reconcile, capability flags). VietQR reference generation and matching, wallet payout delays and recurring-billing absence have their own cases.
+- **Vietnamese quality:** an automated check finds no missing or machine-flagged Vietnamese strings, diacritics render in every font, and a Vietnamese speaker reviews the key journeys before launch.
+
+### 3.17 Juniors and safeguarding
+- **Permission matrix rows** for guardian, junior profile, junior-programme coach (with and without a recorded safety check), other clubs' admins and platform admins. Every junior-data endpoint is covered by the tenant suite.
+- **Hard rules, tested:** juniors have no login, no direct messages, no social or marketplace access, no public photos or boards unless a guardian opted in (and then first name and initial only), and no Vision footage without consent.
+- **Sensitive data:** medical and emergency notes are encrypted, visible only to named roles, excluded from exports to other roles, and appear in the audit log when read.
+- **Data rights:** a guardian's export and deletion for a child work and leave other children and the guardian intact (the data guard checks per account).
+- **Store policy review:** a written check against the Apple and Google policies on apps used by or about children before each store submission.
+
+### 3.18 Readiness gates (release checklist)
+The four hard gates and the Vietnam gate in build plan §11.3 are items on the release checklist, each with named evidence. **No outside club can be added in production while any gate item is open**, and the platform console refuses to create a non-Three-Wolves club until a platform admin has ticked each gate with a link to the evidence. Also checked automatically:
+- **Metering:** every billable resource (email, SMS, storage, API calls, active players) is counted per club, and the counts reconcile with the provider invoices within a tolerance.
+- **Free-tier limits:** reaching a limit shows a warning and never blocks sessions, sign-ups or admin work (tests for every limit).
+- **Licences:** the CI licence report fails on any dependency outside the approved list.
+- **Accounts:** an automated check lists the owners of every production account from the ownership table and fails if any has fewer than two.
 
 ## 4. Data change protocol (the heart of this plan)
 
@@ -383,12 +408,15 @@ On every pull request, and required before merging to `main`:
 | 0 Environments + CI | Previews on their own branches (proved by a test that a preview write never reaches production). CI required on `main`. Restore drill done once |
 | 1 Tidy Three Wolves | Journeys A1–A6, M1–M5, G1–G2. Redirect tests. Roles rehearsal report clean. Bug bash |
 | 2 Foundations | Golden master tests. Schema drift empty. All Phase 1 journeys still green |
-| 3 Multi-tenant | Isolation suite, permission matrix, shadow reads clean for 7 days, data guard clean, Stripe reconciliation, characterisation check |
+| 3 Multi-tenant | Isolation suite, permission matrix, shadow reads clean for 7 days, data guard clean, Stripe reconciliation, characterisation check, **region routing R1 (one region live)**, minor-unit money audit with VND tests, guardianship tables in place |
 | 4 API-driven app | Contract tests, old-client tests, offline tests |
 | 5 Store apps | Device matrix, upgrade test, in-app purchase sandbox, store checklist, beta feedback |
 | R Intro website | Every page complete in English and Vietnamese (an automated check finds no missing translation, alt text or meta tag), `hreflang` correct, language switch remembered. Visual snapshots of both languages at every width in light and dark. Lighthouse ≥ 95, axe clean. Waitlist: Turnstile, double opt-in, consent stored, duplicates handled, nothing sent from previews. No tracking cookies. Motion checks:<ul><li>With `prefers-reduced-motion` the page has no movement.</li><li>With scroll-driven animations and view transitions turned off, everything still shows complete.</li><li>Nothing loops.</li><li>The rotating sport word pauses on hover and focus and is read as plain text.</li></ul>Performance budgets: LCP < 2.0s on throttled 4G mid-range Android, home-page JS < 80 KB, page < 1 MB. Interactive demos (scheme picker, build your club, sport switch) work by keyboard and touch |
 | 6 Brand, sites, wizard | S1–S6, the payment-mode × admin-area table in build plan §6.2.2 as an automated test, every colour scheme passes contrast and visual checks, brand upload security tests, Lighthouse ≥ 95, accessibility clean, custom-domain tests |
-| 7 Global modules | Opt-in/out tests, moderation and safeguarding flows (16+ only), marketplace X1, abuse reports |
+| 3b Junior accounts | J1, the junior permission matrix (§3.17), the data guard per account for guardian export and deletion, store-policy review, a safeguarding review with someone experienced in junior sport |
+| B Business foundations | All four hard gates ticked with evidence (§3.18). Gate checks pass |
+| V Vietnam launch | V1, R1, the Vietnam region isolation and restore drill, payments contract suite for the Vietnamese providers, Vietnamese quality review, **Vietnamese counsel sign-off**, Vietnam trademark filed |
+| 7 Global modules | Opt-in/out tests, **the §8 gate evidence** (thresholds, moderation owner, the country's legal checks), moderation and safeguarding flows (adults only), marketplace X1, abuse reports |
 
 ---
 

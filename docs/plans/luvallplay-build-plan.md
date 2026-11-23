@@ -9,13 +9,13 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **D:** club website content lives in a **built-in editor** in Luvallplay Admin. Sanity is kept for Luvallplay's own marketing, blog and help content.
 
 **Decided (23 Nov):**
-- **E:** **free for every club for now**, with paid plans built in but switched off (§6.5).
+- **E:** **free for every club for now**, with paid plans built in but switched off (§6.5). *Refined by U (§11.2): free for NZ badminton for good, paid elsewhere.*
 - **F:** the brand is **Luvallplay**. The domain to buy is **luvallplay.org** (not luvplayall.org), ideally with luvallplay.com and luvallplay.nz. The brand concept is in §7.1.
 - **G:** the marketplace has **both club/shop storefronts and player-to-player listings**, with the scope set in the research thread (§8).
-- **H:** **no under-16s.** The platform is 16+, with an age confirmation at sign-up.
+- **H:** ~~no under-16s~~. **Superseded by V:** junior accounts are built early, managed by a guardian (§6.8).
 - **I:** **Timba and Kelcee are both Three Wolves owners and Luvallplay platform admins.** Owners can add and remove admins from the admin pages (§2.4).
 - **J:** English and Vietnamese only for now.
-- **K:** everything (developer accounts, D-U-N-S, the Stripe platform account) is registered under **The GOAT Solution**.
+- **K:** developer accounts and D-U-N-S are registered under **The GOAT Solution (TGS, Vietnam)**. *The Stripe platform account moves to the NZ company (S).*
 
 **Added (23 Nov):**
 - **L: free-play clubs.** Some clubs charge nothing at all. Every club picks a **payment mode**: *Free play* (no payments anywhere, no Stripe), *Cash or bank transfer*, or *Online payments*. A free-play club gets the full product without a single price on screen (§6.2.1).
@@ -25,6 +25,17 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **P: a small core admin; everything else is a module.** The core is only what a free, no-money club needs to run play days. Every other admin area is a module that can be turned on or off during setup, by the club's owners, or by Luvallplay's platform admins (§6.2.3).
 - **Q: Luvallplay is about sport in general, not just badminton.** Badminton is the first sport, not the limit. Product and marketing words are sport-neutral ("session", "game", "court or field"). Every club lists its sports. Vocabulary, scoring and leaderboards come per sport, and badminton-only features (Vision) are modules other sports can gain later (§6.7). The brand book is updated to match.
 - **R: a Luvallplay introduction website** in English and Vietnamese, multi-sport, following the brand system (§7.4). It can be built now, in parallel with the app work.
+
+**Decided (23 Nov, plan review).** Reasoning and open points are in [`luvallplay-plan-review.md`](./luvallplay-plan-review.md); the detail is in §11.
+- **S: who operates what.** TGS is registered in **Vietnam**. A **NZ company owned by TGS** runs the platform for NZ and Australia: it contracts with clubs, holds the Stripe Connect platform account and is accountable under NZ privacy law (it needs a NZ-resident director). TGS owns the IP and brand, licenses it to the NZ company, and runs the **Vietnam** business (§11.1).
+- **T: "white-label" means a shared Luvallplay app with club branding** (decision A stands). Own-branded apps and reselling aren't planned, but nothing in the design should block them later.
+- **U: commercial model.** **NZ badminton clubs are free for good.** Other sports and other markets pay. The **first paid market is Vietnam**, then other sports in NZ through the NZ company. Paid plans therefore become real, not just hidden, before the first paid club (§11.2).
+- **V: junior accounts are built early.** Guardian-managed profiles, right after Phase 3 and before the first paid market (§6.8).
+- **W: four hard gates before the first outside club:** a lawyer-reviewed legal pack, accounts/domains/trademark in company ownership, an IP and licence audit, and a cost model with usage metering and free-tier limits (§11.3).
+- **X: Vietnam launch scope.** Club tools with VietQR bank transfer, local online payments, and Zalo support. **Social and marketplace are in Vietnam's roadmap, but gated by Z.** A discovery round with 5 to 10 Vietnamese clubs starts now, with no engineering needed (§11.4).
+- **Y: region-aware from the start.** Every club has a region and the platform can run separate regional deployments. Sydney is live first; where Vietnam's data lives is decided with Vietnamese counsel (§6.9).
+- **Z: social and marketplace are gated** by real thresholds and each country's legal checks. **Find a club** and per-sport ratings come first (§8).
+- **First outside feedback:** the current order stays (outside clubs join after the setup wizard). Recruiting and interviews, which need no engineering, still start now.
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
 
@@ -45,7 +56,10 @@ The work runs in **8 phases (0–7) over roughly 23–29 weeks** of focused buil
 | 4 | **Player app as an API-driven app** | The profile app rebuilt as a client-side app (same screens and code where possible) talking to a typed API with token auth. Runs on the web (PWA) and inside Capacitor | 3–4 wks |
 | 5 | **Capacitor + store readiness** | iOS and Android apps tuned for phones, foldables and tablets, with push, deep links, secure sign-in, a privacy manifest, store listings, TestFlight and Play testing | 3–4 wks |
 | 6 | **Luvallplay brand, websites and setup wizard** | Platform site (luvallplay.com), club landing pages driven by templates, custom domains, a modular setup wizard, and Admin → Modules | 3–4 wks |
-| 7 | **Global modules** | Find a club nearby, then global leaderboards, social, then marketplace. Each module is opt-in per club | 3–5 wks each |
+| 3b | **Junior accounts** | Guardian-managed junior profiles, safeguarding rules and forms (§6.8) | 2–3 wks |
+| 7 | **Global modules** | Find a club nearby, then per-sport leaderboards. Social and marketplace only when the gate passes (§8, §11.6). Each module is opt-in per club | 3–5 wks each |
+| B | **Business foundations (track)** | NZ company, legal pack, company-owned accounts, trademark, IP audit, cost model and metering: the hard gates in §11.3. Runs from week 0 beside Phase 2 | weeks 0–8 |
+| V | **Vietnam launch pack (track)** | Discovery now; then VietQR and local payments, Zalo, Vietnamese localisation, region (§11.4). Social and marketplace stay gated | 4–6 wks build |
 
 **My biggest recommendations (detail in each section):**
 
@@ -316,7 +330,7 @@ Findings and changes recorded as the work goes:
 | 1.2 User-generated content | Photos, messages and (later) social posts: report, block, keyword filter, published contact, moderation within 24h. Photo auto-moderation already exists |
 | 2.1 Completeness | A **review demo account** with a fixed sign-in code that only works for that address, seeded demo data, and review notes explaining code sign-in and the club model |
 | iPad | Must work in iPadOS 26 resizable windows, Stage Manager and all orientations (`UIRequiresFullScreen` is deprecated) |
-| Age rating | **16+**, matching the platform rule (no under-16s): age confirmation at sign-up, in the terms, and in the store age rating. The questionnaire answers cover user content, the marketplace and social features |
+| Age rating | Juniors never use the app on their own: a **guardian account** manages every junior profile (§6.8), so the app isn't directed at children. **Check** Apple's Kids category and Google's Families policy, set the age rating to match, and keep social and marketplace features adult-only |
 
 **Google Play**
 
@@ -401,7 +415,7 @@ Playwright visual snapshots run at each window class on every pull request. Real
 **Approach: one shared database, a `tenant_id` column on every club-owned table, and Postgres row-level security (RLS) as a safety net.** This is the standard model for SaaS at this scale. It's cheap, runs one migration for everyone, and makes cross-club ("global") features easy. A database per club would make global leaderboards and the marketplace painful.
 
 ```
-tenants            id, slug, name, status, country, timezone, currency, languages[], location (PostGIS point),
+tenants            id, slug, name, status, country, region, timezone, currency, languages[], sports[], location (PostGIS point),
                    payment_mode (free | offline | online), incorporated (yes | no | unsure),
                    stripe_status (none | connecting | connected), bank_details jsonb, theme jsonb (preset id or imported brand),
                    terms jsonb (e.g. points_name: "Wolf Points"), custom_domain, created_at
@@ -410,6 +424,8 @@ tenant_modules     tenant_id, module_id, enabled, settings jsonb, enabled_at    
 users              id, email, phone, first/last/display name, avatar, lang, ...      ← global identity (today's players)
 club_members       tenant_id, user_id, role (owner|admin|coach|member|guest), status, joined_at,
                    leaderboard_visible, global_profile_visible
+junior_profiles   id, tenant_id, guardian_user_id, name, birth_year, no login of its own     ← §6.8
+guardianships      guardian_user_id, junior_profile_id, consent_at, consent_scope jsonb
 platform_admins    user_id                                                            ← Luvallplay staff
 admin_audit_log    tenant_id, actor_user_id, action, target, meta, at
 ...every club table  + tenant_id NOT NULL, FK, composite indexes (tenant_id, …), RLS policy
@@ -476,6 +492,8 @@ Some clubs offer free play to everyone, so **payments are never required**. Ever
 - Module manifests declare `payments: "none" | "optional" | "required"`. The wizard and Admin hide anything that needs payments when the club is on Free play, and the API refuses payment calls for a free club (tested, test plan §3.8 journey S3).
 
 #### 6.2.2 Deciding the payment mode at setup
+
+*This is the **NZ and Australia** flow. Vietnam's flow asks different questions (business registration, club bank account, wallet) and is designed after the Vietnamese discovery round (§11.4). Setup asks for the club's **country** in step ② and shows that country's flow.*
 
 Many NZ clubs aren't incorporated, so they can't open a Stripe account in the club's name. Setup therefore asks three plain questions and sets the mode itself (wizard step ④):
 
@@ -641,30 +659,35 @@ Clubs that already have a look can import it instead of picking a scheme (wizard
 
 | Host | Serves |
 |---|---|
-| `luvallplay.com` | Platform marketing, **Find a club**, "Start your club" wizard, help, legal |
+| `luvallplay.com` (primary), plus `luvallplay.org`, `.nz` and `.vn` | Platform marketing, **Find a club**, "Start your club" wizard, help, legal. `.com` is the brand's main address (`.org` reads as non-profit); `.vn` is the Vietnamese-language home; the others redirect |
 | `app.luvallplay.com` | Player app (PWA). Same bundle as the store apps |
 | `admin.luvallplay.com/{club}` | Club admin (one cookie domain, so the account sign-in just works) |
 | `api.luvallplay.com` | API for app, integrations and MCP |
 | `{club}.luvallplay.com` or **custom domain** (e.g. `threewolvesbadminton.org`) | Club landing page |
 
-- `proxy.ts` resolves the club from the host name, using a cached lookup in Edge Config, and rewrites to `/_sites/[club]/…`.
+- `proxy.ts` resolves the club from the host name, using a cached lookup in Edge Config, and rewrites to `/_sites/[club]/…`. The lookup also returns the club's **region** (§6.9), and the request is served by that region's deployment.
 - Custom domains are added through the Vercel Domains API, with automatic SSL.
 - Club pages are statically generated and revalidated with a `tenant:{id}` tag.
 
-### 6.5 Payments: Stripe Connect
+### 6.5 Payments: providers by country
 
-- Each club is a **connected account** created with **Accounts v2** (Stripe's recommended path for new Connect integrations). Charges are **direct charges**, so the club is the merchant of record and pays its own Stripe fees and refunds. Luvallplay optionally takes an **application fee**. Stripe Connect is only for clubs on the *Online payments* mode (§6.2.1); free-play and cash clubs never see it.
+The three payment modes (§6.2.1: free, cash or bank transfer, online) stay the same everywhere. What changes by country is **which provider sits behind "online"**, and the rules for setup:
+
+| Country | Online payments | Bank transfer | Bank-feed matching |
+|---|---|---|---|
+| **NZ, Australia** | **Stripe Connect**, with the **NZ company** as the platform account (Accounts v2, direct charges, application fee 0%) | NZ bank account details and a unique reference | Akahu (NZ). Australia needs another provider |
+| **Vietnam** | A Vietnamese gateway (VNPay, MoMo, ZaloPay, PayOS or similar, **chosen after discovery**, §11.4). Wallet payouts can take 1 to 7 working days. **Stripe isn't a realistic option there** | **VietQR** code with amount and reference, from the club's own bank account | A Vietnamese bank-feed matching provider (to choose) |
+
+- **One Payments interface, several providers.** Every provider implements the same operations (create payment, refund, recurring billing, verify webhook, reconcile, payout status) and declares its **capabilities**, so screens adapt: for example, auto-renewing subscriptions only appear where the provider supports recurring charges, otherwise members get renewal reminders with a QR code. Stripe is the first provider; adding a provider is a module, not a rewrite.
+- **Money is stored as integer minor units plus a currency**, and each currency has its own exponent (NZD and AUD have 2, **VND has 0**: amounts are whole dong). Today's `*_cents` columns and every divide-by-100 in the code must be audited in Phase 3, with tests that use VND amounts.
+- Each club uses **its own merchant account in its own country**. **Luvallplay never holds club money** and never collects on behalf of another club. Stripe Connect is only for clubs on *Online payments* in NZ or Australia (§6.2.1); free-play and cash clubs never see it.
 - **Three Wolves' existing Stripe account is connected rather than recreated**, so live subscriptions, customers and payouts stay where they are.
-- **Business model: free for now, paid plans ready but hidden.**
-  - Tables `plans` and `club_plans`, plus an **entitlements** check that every module calls (`can(club, "module.feature")`).
-  - Every module's manifest declares the plan it belongs to. Today **every module is on the Free plan**, and `BILLING_ENABLED=false` hides prices, the upgrade screens and billing pages.
-  - Stripe Billing for club subscriptions is integrated and tested in test mode but dormant.
+- **Business model:** NZ badminton free for good, everyone else pays (§11.2).
+  - Tables `plans` and `club_plans`, plus an **entitlements** check that every module calls (`can(club, "module.feature")`). Plans depend on **country and sport**.
+  - Every module's manifest declares the plan it belongs to. Billing is switched off (`BILLING_ENABLED=false`) until the first paid club, but it's built and tested, because Vietnam is the first paid market.
+  - **Paying TGS** follows the same country rule: Stripe Billing in NZ and Australia, bank transfer (VietQR) invoices or a local gateway in Vietnam. Paid plans are only ever sold on the web, never inside the iOS/Android app.
   - The Connect application fee is configurable and set to **0%**.
-  - Turning on paid plans later is a settings change plus a pricing page, not a rebuild. Paid plans are only ever sold on the web, never inside the iOS/Android app.
-- **Operator:** the platform is run by **The GOAT Solution**, with Three Wolves using it under a contracted free-use agreement (from the research thread). Each club owns its data. Because Timba is both CEO of The GOAT Solution and Treasurer of Three Wolves:
-  - Put the agreement in writing.
-  - Declare the conflict of interest to the Three Wolves committee.
-  - Have Timba step out of committee decisions that involve The GOAT Solution.
+- **Operator and contracts:** see §11.1. The NZ company contracts with NZ and Australian clubs and holds the Stripe platform account. TGS contracts with Vietnamese clubs.
 
 ### 6.6 Migration of the live Three Wolves data
 
@@ -702,6 +725,41 @@ Luvallplay serves clubs of any sport that run regular sessions. Badminton goes f
 - **Setup** asks "Which sports does your club play?" in step ② and shows modules that fit.
 - **Copy rule:** neutral words in shared UI and on the Luvallplay site. Sport words only appear where the club's sport is known.
 
+
+### 6.8 Junior accounts (guardian-managed)
+
+Decision V: no longer 16+ only. **Juniors (under 16) never get their own login.** A **guardian** (an adult with a normal account) adds and manages each child's profile, so the app is never used directly by children and the existing sign-in, privacy and moderation rules stay simple.
+
+- **Data model:** `junior_profiles` (name, birth year, club, no email or phone) and `guardianships` (guardian, child, when and what the guardian consented to). One guardian can manage several children and one child can have two guardians. Phase 3 includes these tables so nothing has to be reshaped later.
+- **What a guardian can do:** join the child to a club, sign them up for sessions, pay, sign waivers and consent forms, record emergency contacts and medical notes, see attendance, and withdraw or delete the child's data.
+- **What juniors can't have:** direct messages, social posts or follows, marketplace access, public photos, public leaderboard entries (unless the guardian opts in, and then first name and initial only), or Vision footage (unless the guardian consents).
+- **Club-side safeguards (a module that clubs switch on: "Juniors"):**
+  - a junior roster with guardian and emergency contacts, visible only to those who need it (medical notes are encrypted and limited to named roles);
+  - **junior-programme coaches and volunteers must have a recorded safety check** before they're assigned to juniors (**Check:** the NZ Children's Act 2014 safety-checking rules for people who work with children; Vietnam has its own rules);
+  - the club acknowledges a junior-safeguarding policy when switching the module on;
+  - messages to a junior always go to the guardian, and coaches can't message children directly.
+- **Optional module: Forms and waivers** (consent forms, liability waivers, emergency contacts) for any club, with versioned text and signature records.
+- **Growing up:** at 16 a guardian can invite the young person to take over their own account with their consent; history and ratings move with them.
+- **Law (Check each, with counsel):** NZ Privacy Act 2020 for children's information; Vietnam's personal data law treats children's data specially and needs a guardian's consent; app-store policies on apps used by or about children.
+- **Testing:** journey J1 and permission-matrix rows for guardian, junior, junior-programme coach and other clubs' admins (test plan §3.17).
+- **When:** Phase 3b, after the multi-tenant core and before the first paid market. The guardianship tables are part of Phase 3 itself.
+
+### 6.9 Regions and country packs
+
+**Regions (decision Y).** A region is a complete deployment: its own database, storage and compute. Every club lives in exactly one region (`tenants.region`).
+- **Sydney** is the first region and serves NZ and Australia. A **Vietnam region** is added when the Vietnam launch needs it. Where it's hosted (for example Singapore or inside Vietnam) is decided with Vietnamese counsel, because Vietnam's personal data law (in force since 1 Jan 2026) has rules, assessments and penalties for moving data collected in Vietnam abroad (**Check**, including how it applies to NZ and Australian players' data held by a Vietnamese company).
+- Host routing looks up the club's region and sends the request there (§6.4). A player's account lives in the region where they joined. **Cross-region identity isn't promised.** Global features (Find a club, ratings, later social and marketplace) work **within a region** at first.
+- Migrations, the data guard, backups and restore drills run **per region**. The platform console shows all regions.
+- Only Sydney runs in Phase 3, but the schema, routing and tooling are region-aware from the start. That's cheap now and very expensive to retrofit.
+
+**Country packs.** Everything that differs by country lives in data and small adapters, not in the core:
+- country, **currency and its exponent** (NZD 2, VND 0), tax rules (GST in NZ and Australia; VAT in Vietnam, **Check**), invoice rules (**Vietnam's e-invoice rules, Check**), time zone, public holidays;
+- the payment providers, the bank-feed provider and the setup questions (§6.2.2, §6.5);
+- phone number formats (+64, +61, +84) and the SMS or messaging provider;
+- the legal documents, privacy and age rules, and complaint processes (NZ's 48-hour process in §8; Vietnam's licences);
+- **names and search:** Vietnamese names put the family name first, so profiles use a single full-name field plus a display name, and **search ignores accents** (typing "nguyen" finds "Nguyễn");
+- languages and sport vocabulary (§6.7).
+
 ---
 
 ## 7. Phase 6: brand, websites and the setup wizard
@@ -738,7 +796,7 @@ All palettes are validated for WCAG AA in light and dark. Clubs choose from 12 t
 
 | Step | Content | Best practice applied |
 |---|---|---|
-| ② Your club | Name, URL slug (live availability check), **sports played** (§6.7), city/venue (map pin, used by Find a club), languages | Autosave every field; live preview of the club page on the right (desktop) or a "Preview" toggle (mobile) |
+| ② Your club | Name, URL slug (live availability check), **country** (sets region, currency, payment flow and legal documents, §6.9), **sports played** (§6.7), city/venue (map pin, used by Find a club), languages | Autosave every field; live preview of the club page on the right (desktop) or a "Preview" toggle (mobile) |
 | ③ Look & feel | Pick one of the **12 colour schemes** (§6.3.1), shown live on the club's own name, a play-day card and a button in light and dark. Or **Use our own branding**: upload logo, font and colours, or import them from the club's website (§6.3.2) | One tap picks a scheme; the custom path has its own short sub-steps with previews; automatic contrast fixes explained in plain words |
 | ④ How you charge | Up to three questions (§6.2.2): *Do you charge players?* → *Is your club incorporated?* → *Does it have its own Stripe account?* The answers set the mode: **Free play**, **Cash and bank transfer only**, or **Online payments** (connect the club's Stripe account right there). Cash and bank transfer clubs then enter bank details and choose cash-at-the-hall, confirm-before-paid and Akahu matching | One question per screen, plain words with an "Not sure?" explainer. Free play is a full, first-class choice. Cards are only offered to incorporated clubs with Stripe; everyone else gets a working cash and bank-transfer setup plus the "Getting incorporated" guide. Admin is configured from the answers |
 | ⑤ Pick modules | Starter **presets** (§6.2.3): *Free social club* (core only), *Social club*, *Competitive club*, *Coaching academy*. Then grouped cards (Run your club · Money · Engage players) with on/off toggles. The core is shown as "Always included"; Money cards are hidden for Free play | Dependencies selected automatically with a note ("Memberships needs Play days"); 3–4 sensible defaults pre-selected; never more than one decision per card |
@@ -791,7 +849,7 @@ A public website that introduces Luvallplay to clubs, organisers and players. It
 | **Free, the way clubs need it** | Free play, cash and bank transfer, or online payments for incorporated clubs. No platform fees today | Three cards that mirror the setup choices |
 | **Make it yours** | 12 colour schemes or your own logo, fonts and colours | An interactive scheme picker that re-colours a sample club card live |
 | **For players** | One account for every club, your stats and streaks, find a club nearby; the marketplace and social "coming soon" | A device mock with the Me page |
-| **Safe and fair** | Clubs manage their own members, safeguarding across the platform, 16+, your club owns its data, NZ privacy law | Calm `surface-raised` cards with line icons |
+| **Safe and fair** | Clubs manage their own members, safeguarding across the platform, guardians manage juniors, your club owns its data, privacy law in your country | Calm `surface-raised` cards with line icons |
 | **Story** | "Started at Three Wolves in Christchurch", with a quote (with the club's consent) | Photo with the club's colours as a co-brand moment |
 | **FAQ** | Cost, payments, sports supported, languages, data ownership, getting incorporated | Accordion; FAQ structured data |
 | **Footer** | Stacked lockup, language switch, App Store / Google Play badges ("coming soon" until launch), legal, contact, "A product of The GOAT Solution" | Net Navy section with dark-theme logo |
@@ -823,7 +881,7 @@ The research behind this (2026 trend roundups from Figma, Envato, Elementor, GoD
 | **View transitions** | Switching language, sport chip or colour scheme cross-fades smoothly instead of jumping | Progressive enhancement only |
 | **Bold, "dopamine" colour, controlled** | Big colour blocks in Court Green, Smash Lime and Rally Coral on warm Shuttle White, echoing the cover. The scheme picker shows off the 12 club schemes | One accent colour per *section* (the brand's one-per-screen rule, adapted for long pages); text always on `surface` or a token pair that passes AA |
 | **Organic, friendly shapes** | The logo's rounded **petals** become a shape family: soft petal and pill shapes behind photos and stats, and a petal-shaped mask on community photos | Max 2 decorative shapes per section; never behind body text |
-| **Tactile "sticker" accents** (light skeuomorphism) | A few rounded badge stickers, slightly tilted: "Free for clubs", "16+ and safe", "EN · VI", in lime or coral with a soft edge | Max 3 on the page; real text, not images |
+| **Tactile "sticker" accents** (light skeuomorphism) | A few rounded badge stickers, slightly tilted: "Free for clubs", "Safe for juniors", "EN · VI", in lime or coral with a soft edge | Max 3 on the page; real text, not images |
 | **Real people, real places** (the top fitness-site lesson) | Photos of real NZ community sport: halls, courts, parks, mixed ages, abilities and backgrounds, laughing between games. Simple line illustrations of different sports in the brand icon style (1.9px stroke, round caps) fill gaps | No stock "athletes", no AI-generated people, no posed gym shots |
 | **Interactive previews** ("show the experience") | Three small demos: the **scheme picker**, a **"build your club"** toggle where switching modules on lights up bento cards, and a **sport switch** that re-words the page | Each works with keyboard and touch, and has a static fallback |
 | **Accessibility and honesty as design** | Large readable type (18px body on the site), generous spacing, clear focus rings, plain-language copy | No pop-ups, countdowns or pre-ticked boxes, no dark patterns, no cookie wall (no tracking cookies at all) |
@@ -857,7 +915,13 @@ Each is reviewed with you before build.
 
 ## 8. Phase 7: global modules (opt-in per club)
 
-Build them in this order, each one releasable on its own:
+Build them in this order, each one releasable on its own. **Decision Z: social and marketplace are gated.** Items 1 and 2 are built first. Items 3 and 4 start only when the **gate** passes:
+- **Enough density:** thresholds set after the partner period (proposed: at least 15 active clubs and 500 weekly active players in the region, so there's something to see and to moderate).
+- **Moderation capacity:** a named owner, a published process and response times.
+- **The country's legal checks are done (written down, with counsel):**
+  - **NZ:** the Harmful Digital Communications Act safe-harbour complaints process (48-hour deadlines), spam-law compliance, Fair Trading Act advice for the marketplace.
+  - **Vietnam:** whether the social features need a **licence or notification under Decree 147/2024** and what applies to livestream and revenue features; the **E-commerce Law (from 1 July 2026)**: platform type, seller verification through VNeID, a legal representative or entity; children's data rules; data hosting (§6.9).
+- Vietnam's roadmap includes both (decision X), but they ship there only when this gate passes for Vietnam.
 
 1. **Find a club nearby:**
    - PostGIS radius search, a map (MapLibre with an open tile provider), and a city/postcode fallback when location isn't shared.
@@ -874,7 +938,7 @@ Build them in this order, each one releasable on its own:
    - Cross-club challenges.
    - **Each club manages its own social space:** its admins moderate their members' posts and enable or disable players.
    - **Safeguarding is platform-wide:**
-     - 16+ only.
+     - Adults only (juniors have no social access).
      - Report and block on every post and profile.
      - Keyword and image filters (the photo moderation already built).
      - A platform-level review queue for serious reports.
@@ -885,7 +949,7 @@ Build them in this order, each one releasable on its own:
    - When a buyer commits to buy and the seller confirms, a **"Contact seller" / "Contact buyer"** button appears **for those two people only**. It opens their own email app with the other person's address filled in. All further talk happens outside the platform, and the users are responsible for it.
    - **Verified sellers:**
      - Clubs from launch, and later shops, which can also post promoted items and adverts.
-     - They carry a verified badge and **can take payment through the platform** (Stripe Connect, with a platform fee that sits at 0% while everything is free).
+     - They carry a verified badge and **can take payment through the platform** (the country's payment provider, §6.5, with a platform fee that sits at 0% while everything is free).
    - **Player-to-player listings are unverified:** no payment through the platform, and a clear "trade at your own risk" notice. The platform takes no responsibility, as on Facebook Marketplace.
    - Listings can be reported. Banned-item rules, sold or expired listings auto-hide, and listing photos go through the same image moderation.
 
@@ -894,18 +958,22 @@ Build them in this order, each one releasable on its own:
 ## 9. Sequencing and timeline
 
 ```
+Wk  0–8   Track B  Business foundations: NZ company, legal pack, accounts, trademark, IP audit, cost model (§11.3)
+Wk  0–8   Track V  Vietnam discovery with 5–10 clubs (no engineering) (§11.4)
 Wk  0–1   Phase 0  Safety net: preview databases, CI gates, restore drill (test plan §2, §6)
 Wk  1–3   Phase 1  Tidy Three Wolves (ship)
 Wk  3–6   Phase 2  Monorepo, Next 16, Neon+Drizzle, module skeleton, design tokens
 Wk  6–11  Phase 3  Multi-tenant core + Three Wolves migration (ship, invisible to members)
+Wk 11–14  Phase 3b Junior accounts and safeguarding (§6.8)
 Wk 10–14  Phase 4  Player app as SPA on new API (ship as PWA at app.luvallplay.com)
 Wk 13–17  Phase 5  Capacitor, native features, compliance, TestFlight / Play testing → store launch
 Wk  3–7   Track R  Luvallplay introduction website (EN + VI, "coming soon" + waitlist) on luvallplay.org (§7.4)
 Wk 16–20  Phase 6  Platform site in launch mode, club templates, wizard, Admin → Modules (onboard 1–2 pilot clubs)
-Wk 20+    Phase 7  Find a club → Global leaderboards → Social → Marketplace
+Wk 20+    Phase 7  Find a club → per-sport leaderboards; social and marketplace only when the gate passes
+Wk 20–26  Track V  Vietnam launch pack: VietQR, local payments, Zalo, Vietnamese region and legal pack (§11.4)
 ```
 
-Phases overlap where they don't depend on each other. Start the Apple and Google organization accounts and the D-U-N-S number **in week 1**, because approval can take 1–3 weeks.
+**Treat the week numbers as a best case.** They don't include waiting on lawyers, the NZ company, app-store review or Vietnamese counsel. Phase 2 has already found surprises, so **re-baseline the whole schedule after Phase 2 and again after Phase 3** using real progress. Phases overlap where they don't depend on each other. Start the Apple and Google organization accounts and the D-U-N-S number **in week 1**, because approval can take 1–3 weeks.
 
 **Main risks and how they're handled:**
 
@@ -916,6 +984,15 @@ Phases overlap where they don't depend on each other. Start the Apple and Google
 | App Store rejection | Bundled app, native features, demo account, careful review notes; ask App Review for a pre-submission consultation if needed |
 | Scope creep in global features | Each global module ships on its own after the platform is live with pilot clubs |
 | Tenant data leak | RLS + app-level filters + automated isolation tests on every repo function |
+| **Nobody has written down who owns the product or who contracts with clubs** | Track B and the four hard gates before the first outside club (§11.3) |
+| **Production lives in personal accounts** (the only Vercel team is a personal one) | Gate 2: move everything into company-owned accounts with two or more owners (§11.3) |
+| **A Vietnamese entity can't be the Stripe platform for NZ clubs** | The NZ company holds the Stripe platform account (§6.5, §11.1) |
+| **Vietnam's rules** (social licensing, e-commerce law, data law) | Discovery and Vietnamese counsel first, region-aware platform, social and marketplace gated (§6.9, §8, §11.4) |
+| **Payments don't fit Vietnam** (no Stripe, wallets with payout delays, VND has no minor unit) | One Payments interface with several providers, VietQR first, minor-unit audit (§6.5) |
+| **Active Vietnamese competitors** (pickleball and court-booking apps) | Discovery before building; position on club nights and community, not court rental (§11.4) |
+| **"Luvallplay" isn't protected anywhere** (Vietnam awards trademarks to whoever files first) | Conflict search, then file in NZ, Australia and Vietnam early (§11.3) |
+| **Free forever for NZ badminton can't pay its own way** | Fair-use limits, metering and a cost model (§11.2, §11.3); revenue comes from the paid markets |
+| **Schedule is optimistic** | Re-baseline after Phase 2 and Phase 3 |
 
 ---
 
@@ -930,7 +1007,92 @@ Phases overlap where they don't depend on each other. Start the Apple and Google
 | **E** ✅ | Business model: club subscription (tiers or per module), % fee on payments, marketplace commission, or a mix? | Free starter tier + paid tiers by module, plus a small application fee on payments |
 | **F** ✅ | Brand palette and type in §7.1: approve, or adjust? Do you already own `luvallplay.com`? | Approve as the starting point; I can make a visual preview page |
 | **G** ✅ | Marketplace scope: club storefronts only, or player-to-player gear too? | Club storefronts first |
-| **H** ✅ | Do clubs have juniors (under 13 / under 16)? This affects age rating, social features and consent | Social features 16+ only; juniors managed through a parent's account |
+| **H** ✅ | Do clubs have juniors (under 13 / under 16)? | Superseded: junior accounts are built early, guardian-managed (§6.8, decision V) |
 | **I** ✅ | Admin emails: which account email do Timba and Kelcee sign in with? Should both also be **Luvallplay platform admins**, or only club owners? | Both Three Wolves owners; platform admin for whoever runs Luvallplay |
 | **J** ✅ | Languages: keep en + vi, and add others? | Keep en + vi; the system lets clubs pick more later |
 | **K** ✅ | Company: is there a registered company (for D-U-N-S, Apple/Google organization accounts, Stripe platform)? | Register the accounts under that company in week 1 |
+
+---
+
+## 11. Operating model, markets and readiness gates
+
+*Decided on 23 Nov after the plan review ([`luvallplay-plan-review.md`](./luvallplay-plan-review.md)). Items marked **Check** need a lawyer, accountant or other professional, not just this plan.*
+
+### 11.1 Who does what
+
+| Entity | Role |
+|---|---|
+| **The GOAT Solution (TGS), Vietnam** | Owns the Luvallplay IP and brand. Runs development. Runs the **Vietnam** business: contracts with Vietnamese clubs, Vietnamese payments and tax. Licenses the platform to the NZ company. Holds the Apple and Google developer accounts (decision K). |
+| **NZ company, owned by TGS** (e.g. Luvallplay Ltd) | Runs the platform for **NZ and Australia**. Contracts with every club there, including Three Wolves and the free-for-feedback partner clubs. Holds the **Stripe Connect platform account**. Accountable under NZ privacy law. Needs a **NZ-resident director** (**Check** the Companies Office rules) and a NZ bank account. |
+| **Three Wolves** | A club and a licensee, not a party to anyone else's contract. Gets a **free licence** with data-export and exit rights. Its name, logo, wolf artwork and "Wolf" terms stay Three Wolves' own. |
+| **Kelcee (Three Wolves)** | Helps recruit NZ clubs. Role in writing: volunteer ambassador, TGS agent or contractor, and whether any equity or fee is involved. Has no authority to sign for TGS or the NZ company unless appointed. |
+
+- **The chain of rights is written down:** anyone who contributed to the existing code assigns their rights to TGS; TGS licenses the NZ company (an intercompany licence, with tax advice on royalties and transfer pricing, **Check**); the NZ company licenses clubs.
+- **Conflict of interest:** Timba is TGS's CEO and Three Wolves' Treasurer. The Three Wolves licence is in writing, the committee minutes the declared conflict, and someone other than Timba signs for Three Wolves. If Three Wolves is a registered charity or incorporated society, its own rules on related-party benefit apply (**Check**).
+- **Every other club contracts with the NZ company (or TGS in Vietnam), never with Three Wolves**, even when Kelcee recruited them.
+- **Money between the parties** has written rules: club money stays with the club; platform features are priced by TGS or the NZ company; Wolf Vision revenue (in-app purchases go to the developer-account holder) and any donations or shop sales are agreed and invoiced between the parties.
+
+### 11.2 Commercial model
+
+- **NZ badminton clubs are free for good.** That is today's partner clubs and Three Wolves, and every NZ badminton club that joins later. The agreement says so, with 90 days' notice for any change.
+- **Other sports and other markets pay.** The first paid market is **Vietnam**, then other sports in NZ (through the NZ company). Plans depend on **country and sport** (§6.5), and prices are set **per country in local currency** (VND for Vietnam) after the discovery round.
+- **Paid plans become real before the first paid club.** Billing, invoices (**Check** Vietnam's e-invoice rules), and the country's way of paying TGS (VietQR bank transfer or a local gateway in Vietnam) are built and tested, not just hidden behind a switch.
+- **Free forever needs guardrails.** The free tier has **fair-use limits** set from the cost model (§11.3 gate 4). Examples: email sign-in codes by default with a monthly SMS cap per club; photo and Vision storage caps; an email-volume cap. Going over a limit shows a warning and a conversation, and **never stops a club running its sessions**.
+- **The free-for-feedback partner programme (NZ badminton):**
+  - 5 to 10 clubs at first, with a written agreement: feedback and idea licence, confidentiality, testimonial and case-study permission, best-effort support with no uptime promise, and notice before any change.
+  - A regular call, in-app feedback, a short survey, a public changelog and roadmap, and usage analytics **with consent**.
+  - Clubs join after the setup wizard (Phase 6), per the decision to keep the current order. Recruiting and interviews start now.
+
+### 11.3 Readiness gates (all four before the first outside club)
+
+| Gate | What must be true | Evidence |
+|---|---|---|
+| **1. Legal pack, reviewed by a lawyer** | NZ company formed. Licence to Three Wolves, club terms, player terms, privacy policy, data-processing terms (the club is the controller, the platform the processor; for global features the platform is a controller too), acceptable-use and safeguarding policies, the partner agreement, marketplace terms (when the marketplace is built). The NZ complaints process under the Harmful Digital Communications Act (48-hour deadlines) and spam-law compliance (consent, sender identity, working unsubscribe). Insurance quotes (cyber and professional indemnity). Three Wolves committee minutes declaring the conflict. | Signed documents and minutes, listed on the release checklist (the documents themselves are not stored in the code repository) |
+| **2. Accounts, domains and trademark** | Production moves out of personal accounts. Today the only Vercel team is a personal one. Move **Vercel, Neon, Resend, Sanity, Google Cloud/Firebase, Akahu, Cloudflare, domains and DNS, GitHub and the app stores** into company ownership with **two or more owners**, hardware-key two-factor, a shared password vault and a written break-glass runbook. Three Wolves keeps its own Stripe account; the platform Stripe account belongs to the NZ company. **Domains:** luvallplay.com, .org, .nz and .vn. **Trademark:** a conflict search first (also for app-store names), then filings in NZ, Australia and **Vietnam, which awards marks to whoever files first and can take 18 to 24 months** (**Check** with an IP lawyer). | Account ownership table, domain registrations, trademark search report and filing receipts |
+| **3. IP and licence audit** | The **UTM Copperplate fonts** shipped with the site have no licence record (they may be restricted): get a commercial licence or replace them. A licence report for every npm dependency in CI. Ownership of the wolf artwork and rank art. Photo permissions. **Vision:** consent wording, retention limits and an opt-out for footage used to train the shuttle model, and the licence of the model itself. | Audit report, CI licence check, consent text in the app |
+| **4. Cost model, metering and limits** | A cost-per-club and cost-per-active-player model: Neon, Vercel, email, SMS (sign-in codes run on Google's free allowance, capped at about 10 texts a day, which a dozen clubs will exceed), storage and image moderation, push, maps, domains, Apple and Google fees, support time. **Usage is metered per club from day one**, and the fair-use limits in §11.2 are set from the model. A platform-admin usage dashboard with alerts. | Model spreadsheet, metering tests, limits table |
+
+**An extra gate before the first paid club in Vietnam:** Vietnamese counsel has reviewed the points in §11.4, the legal pack exists in Vietnamese, and the Vietnamese trademark is filed.
+
+### 11.4 Vietnam
+
+**Launch scope (decision X):**
+- **Club tools with VietQR bank transfer:** sessions, sign-ups, memberships; payment by bank transfer with a VietQR code carrying the amount and a payment reference, matched manually or by a bank-feed provider (§6.5).
+- **Local online payments** through a Vietnamese gateway (chosen after discovery).
+- **Zalo support:** sharing and invites first; notifications or a mini app later, depending on discovery.
+- **Social and marketplace:** in the Vietnam roadmap, **shipped only when the gate in §8 passes for Vietnam**.
+- **Localisation:** Vietnamese-quality copy (not machine-translated), accent-insensitive search, family-name-first names, +84 phone formats, the Asia/Ho_Chi_Minh time zone, **VND with no minor unit**, Vietnamese sport vocabulary, a `.vn` home and Zalo/Facebook share cards (§6.9).
+
+**Discovery (starts now, no engineering):** interview 5 to 10 Vietnamese badminton and pickleball clubs.
+- What they use today (Zalo and Facebook groups, spreadsheets, court-booking apps), what hurts, how they collect money, and which payment methods they use.
+- Willingness to pay and price points.
+- A comparison with the local apps. Vietnam already has several (PickoNow, Padel Hub VN, the national pickleball association's app, ThePickleHub), and most look like **court-rental booking**, not club-night management. Luvallplay's position is club nights, community and ratings, and discovery should confirm that gap exists.
+- Results decide the launch scope, the price points, the payment gateway and whether Vietnam is really the right first paid market.
+
+**Checks with Vietnamese counsel (all marked Check):**
+- **Decree 147/2024 (internet services):** licence or notification thresholds for social networks (one summary cites 10,000 monthly visits for six months or 1,000 regular users a month), obligations for livestream and revenue-generating features, and what applies to foreign providers.
+- **E-commerce Law (from 1 July 2026):** whether the shop or marketplace makes Luvallplay a regulated platform, seller identification through VNeID, and a legal representative or entity.
+- **Personal data law and Decree 356/2025 (from 1 Jan 2026):** consent, the data-transfer assessment filed within 60 days of processing or transfer, penalties for cross-border transfer violations (one source says up to 5% of revenue), children's data, and where the Vietnam region is hosted (§6.9).
+- **E-invoices and tax** for fees TGS charges and for clubs that sell to members; **advertising and sports-event rules**; **trademark** (§11.3).
+
+### 11.5 Support, operations and security (before commercial launch)
+
+- **Support:** a help centre (English and Vietnamese), a support inbox with a named owner and response targets, a status page, an incident process with a written template, and a clear "best effort, no SLA" statement for partner clubs.
+- **Club offboarding, export and restore:** a club can export all its data, can leave or close (with defined retention and deletion), and a **single club can be restored** without rolling back everyone (tenant-scoped export and restore tooling). Both directions of exit for Three Wolves are written down: if the platform stopped, Three Wolves keeps its data and a way to keep running.
+- **Release rings:** an internal test club first, then partner clubs, then everyone; per-club feature flags; a changelog; a deprecation policy for the API and webhooks. Three Wolves is no longer also the test bed.
+- **Platform console:** support "view as admin" only with consent and an audit trail, a club health dashboard, per-club rate limits, and suspending a club for abuse.
+- **Email:** each club can send from its own domain (DKIM and SPF), with bounce and complaint handling so one club can't damage everyone's deliverability.
+- **Club verification and anti-impersonation:** reserved names (federations, "Badminton NZ"), criteria for the verified badge (for example an incorporated society number or federation approval), and a takedown route.
+- **Trust and safety operations:** who reviews reports and when, escalation contacts, and the 48-hour process in NZ.
+- **Security posture for selling to associations:** a security page, a vulnerability disclosure policy, an external penetration test before multi-club launch, a dependency and licence inventory, and later a SOC 2-style programme.
+- **People risk:** production accounts, credentials and recovery are never held by one person (gate 2). Runbooks are written so a non-engineer can confirm the data-guard checks.
+
+### 11.6 Success measures and decision gates
+
+- **Measure from the first partner club:** active clubs; weekly active players per club; sessions run through the app; 30- and 90-day retention; the "very disappointed if it went away" score from a short survey; cost per club (§11.3 gate 4); support load per club.
+- **Decision gates (thresholds are proposals to confirm after the first partner period):**
+  - **A: open to all NZ badminton clubs.** 5 partner clubs active for 8 weeks, with a majority "very disappointed if gone".
+  - **B: go or no-go on Vietnam as the first paid market.** After the discovery round (§11.4).
+  - **C: social and marketplace** (§8).
+  - **D: first paid price.** Tested with Vietnamese discovery clubs and the first paid pilots.
+

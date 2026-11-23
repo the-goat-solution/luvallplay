@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { getClubToday } from "@/lib/dates";
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
   );
   const nz = (iso: string | null) =>
     iso
-      ? new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "medium", timeStyle: "short" }).format(new Date(iso))
+      ? new Intl.DateTimeFormat("en-NZ", { timeZone: CLUB_TIME_ZONE, dateStyle: "medium", timeStyle: "short" }).format(new Date(iso))
       : "";
 
   const wb = new ExcelJS.Workbook();

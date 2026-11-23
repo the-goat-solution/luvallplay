@@ -1,5 +1,6 @@
 "use client";
 
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { ModalShell } from "@/components/modals/ModalShell";
@@ -147,7 +148,7 @@ function formatWhen(iso: string, lang: Lang) {
     month: "short",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "Pacific/Auckland",
+    timeZone: CLUB_TIME_ZONE,
   }).format(new Date(iso));
 }
 

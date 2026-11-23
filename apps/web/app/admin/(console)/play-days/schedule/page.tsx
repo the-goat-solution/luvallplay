@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import adminStyles from "@/components/admin/admin.module.css";
@@ -98,7 +99,7 @@ async function removeRequest(id: number) {
 }
 
 function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-NZ", { timeZone: "Pacific/Auckland", day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString("en-NZ", { timeZone: CLUB_TIME_ZONE, day: "numeric", month: "short" });
 }
 
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;

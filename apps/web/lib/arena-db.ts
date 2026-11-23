@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "./constants";
 import crypto from "crypto";
 import { sql, db } from "./database";
 import { revalidateTag } from "next/cache";
@@ -89,7 +90,7 @@ function refresh(): void {
 function nzOffsetMinutes(at: Date): number {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
-      timeZone: "Pacific/Auckland",
+      timeZone: CLUB_TIME_ZONE,
       hourCycle: "h23",
       year: "numeric",
       month: "2-digit",

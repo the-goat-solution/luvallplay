@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
@@ -608,7 +609,7 @@ export default async function PlayDaysAdminPage({
                           <span className={kit.sub}>{w.email}</span>
                         </div>
                       </td>
-                      <td data-label="Joined">{dayLabel(new Date(w.createdAt).toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" }))}</td>
+                      <td data-label="Joined">{dayLabel(new Date(w.createdAt).toLocaleDateString("en-CA", { timeZone: CLUB_TIME_ZONE }))}</td>
                       <td data-label="Status">{w.notifiedAt ? <Badge tone="good">Emailed</Badge> : <Badge>Waiting</Badge>}</td>
                       <td data-label="">
                         <form action={removeWaitlistEntry.bind(null, selectedDate, w.id)}>

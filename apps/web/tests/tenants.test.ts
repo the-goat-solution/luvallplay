@@ -36,9 +36,7 @@ function urlFor(db: string) {
 }
 
 test("the migration's club time zone is the one the code uses today", () => {
-  // lib/dates.ts keeps the zone private; read it from the source.
-  const dates = readFileSync(new URL("../lib/dates.ts", import.meta.url), "utf8");
-  assert.match(dates, /const CLUB_TIME_ZONE = "Pacific\/Auckland";/);
+  assert.equal(C.CLUB_TIME_ZONE, "Pacific/Auckland");
 });
 
 describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST_URL" : false }, () => {

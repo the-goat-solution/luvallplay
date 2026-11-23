@@ -9,14 +9,7 @@ import type Stripe from "stripe";
 import { insertOneTimeDonation, setDonationStatusBySubscription } from "@/lib/repos/donations";
 import { setMembershipStatusBySubscription } from "@/lib/repos/memberships";
 import { getStripe } from "@/lib/stripe";
-import {
-  activateMembershipByPaymentIntentId,
-  activateMembershipBySubscriptionId,
-  applyMembershipRenewal,
-  ensureTables,
-  listSessionsInRange,
-  reserveBookingSlot,
-} from "@/lib/db";
+import { activateMembershipByPaymentIntentId, activateMembershipBySubscriptionId, applyMembershipRenewal, listSessionsInRange, reserveBookingSlot } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import {
   sendAdminBookingRaceAlertEmail,
@@ -56,19 +49,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  // Every event type below eventually touches a column ensureTables() may
-  // still need to create (e.g. last_renewal_invoice_id on a fresh deploy) —
-  // run it once up front rather than per-branch, so a cold serverless
-  // instance handling a webhook before any other route has run doesn't fail.
-  if (process.env.POSTGRES_URL) {
-    await ensureTables();
-  }
-
   if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object as Stripe.PaymentIntent;
     if (pi.metadata?.type === "casual" && pi.metadata.sessionDate) {
       if (process.env.POSTGRES_URL) {
-        await ensureTables();
         const sessionDate = pi.metadata.sessionDate;
         const ok = await reserveBookingSlot(sessionDate, {
           firstName: pi.metadata.firstName ?? "",
@@ -172,7 +156,6 @@ export async function POST(request: Request) {
 
     if (pi.metadata?.type === "donation") {
       if (process.env.POSTGRES_URL) {
-        await ensureTables();
         await insertOneTimeDonation({
           email: pi.metadata.email ?? pi.receipt_email ?? "",
           firstName: pi.metadata.firstName ?? "",
@@ -311,7 +294,6 @@ export async function POST(request: Request) {
       invoice.metadata.sessionDate &&
       process.env.POSTGRES_URL
     ) {
-      await ensureTables();
       const sessionDate = invoice.metadata.sessionDate;
       const offlineRef = offlinePaymentRef(
         offlineMethodFromSource(invoice.metadata.source) ?? "cash",

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getPlayerFromRequest } from "@/lib/player-auth";
-import { ensurePlayerTables } from "@/lib/player-db";
 import { listPlayersForPicker } from "@/lib/repos/players";
 
 // Wolf Vision set-up: the registered players ("wolves") a signed-in player can
@@ -12,7 +11,6 @@ export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL) return NextResponse.json({ players: [] });
   const me = await getPlayerFromRequest(request);
   if (!me) return NextResponse.json({ error: "signed_out" }, { status: 401 });
-  await ensurePlayerTables();
   const players = await listPlayersForPicker();
   return NextResponse.json(
     { players: players.map((p) => ({ ...p, me: p.id === me.id })) },

@@ -1,6 +1,5 @@
 import { sql } from "./database";
 import { DEFAULT_PAUSED_DAYS, WEEKDAYS, type Weekday } from "./constants";
-import { ensureTables } from "./db";
 import { isDatePaused } from "./dates";
 
 export function isWeekday(value: unknown): value is Weekday {
@@ -13,7 +12,6 @@ export function isWeekday(value: unknown): value is Weekday {
 export async function getPausedDays(): Promise<Weekday[]> {
   if (!process.env.POSTGRES_URL) return [...DEFAULT_PAUSED_DAYS];
   try {
-    await ensureTables();
     const { rows } = await sql`
       SELECT day FROM day_signup_settings WHERE paused = TRUE;
     `;

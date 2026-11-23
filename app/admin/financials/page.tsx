@@ -39,16 +39,7 @@ import {
   type FinanceKind,
   type FinanceTotals,
 } from "@/lib/finance";
-import {
-  createManualEntry,
-  deleteManualEntry,
-  ensureFinanceTables,
-  getManualEntry,
-  listKnownPeople,
-  setEntryReceipt,
-  updateManualEntry,
-  type ManualEntryInput,
-} from "@/lib/finance-db";
+import { createManualEntry, deleteManualEntry, getManualEntry, listKnownPeople, setEntryReceipt, updateManualEntry, type ManualEntryInput } from "@/lib/finance-db";
 import { loadFinanceReport } from "@/lib/finance-report";
 import { MatchError, getBankTransaction, learnBankRule, matchBankLine } from "@/lib/bank-db";
 import { FinanceSubNav } from "@/components/admin/finance/FinanceSubNav";
@@ -127,7 +118,6 @@ async function saveEntry(
     return fail("Receipt storage isn't set up yet — save without the image, or add BLOB_READ_WRITE_TOKEN.");
   }
 
-  await ensureFinanceTables();
   const input: ManualEntryInput = {
     kind,
     name,
@@ -224,7 +214,6 @@ async function deleteEntry(formData: FormData) {
   if (!Number.isSafeInteger(id) || id <= 0) {
     redirect(backTo(returnTo, { financeError: "That entry no longer exists." }));
   }
-  await ensureFinanceTables();
   const deleted = await deleteManualEntry(id);
   if (!deleted) {
     redirect(backTo(returnTo, { financeError: "That entry no longer exists or can't be deleted." }));
@@ -368,8 +357,6 @@ export default async function FinancialsPage({
       </div>
     );
   }
-
-  await ensureFinanceTables();
 
   // Keep the Stripe side fresh: if nobody (and no cron) has synced in the
   // last few minutes, sync now before reading. An incremental sync only

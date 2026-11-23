@@ -16,7 +16,7 @@ import {
   normalizePhone,
 } from "@/lib/jersey";
 import { hashIp } from "@/lib/jersey-server";
-import { earlyBirdsLeft, ensureJerseyTables, registerJersey } from "@/lib/jersey-db";
+import { earlyBirdsLeft, registerJersey } from "@/lib/jersey-db";
 import { checkRateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -126,7 +126,6 @@ export async function POST(request: Request) {
   const printCountry = body.addPrint && printNumber === null ? cleanPrintText(body.printCountry) || null : null;
 
   try {
-    await ensureJerseyTables();
     const result = await registerJersey({
       firstName: body.firstName,
       lastName: body.lastName,

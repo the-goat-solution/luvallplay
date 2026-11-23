@@ -2,17 +2,7 @@ import { linkMemberAccount } from "@/lib/player-db";
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
-import {
-  activateMembershipByPaymentIntentId,
-  assignAndReserveMembershipAccessStart,
-  attachStripeIdToMembership,
-  ensureTables,
-  getTotalActiveMemberCount,
-  listMemberships,
-  listRecentlyEndedMemberships,
-  addDays,
-  type MembershipRow,
-} from "@/lib/db";
+import { activateMembershipByPaymentIntentId, assignAndReserveMembershipAccessStart, attachStripeIdToMembership, getTotalActiveMemberCount, listMemberships, listRecentlyEndedMemberships, addDays, type MembershipRow } from "@/lib/db";
 import {
   auditMembershipStatuses,
   type MembershipAuditResult,
@@ -72,8 +62,6 @@ async function addOfflineMember(formData: FormData) {
       `/admin/members?cashMemberError=${encodeURIComponent("Name and email are required")}`,
     );
   }
-
-  await ensureTables();
 
   const assignment = await assignAndReserveMembershipAccessStart(
     plan,
@@ -390,7 +378,6 @@ function RecentlyEndedTable({ members }: { members: MembershipRow[] }) {
 export default async function MembersAdminPage() {
   const { memberships, activeMemberCount, recentlyEnded, audit, reconciliation } = process.env.POSTGRES_URL
     ? await (async () => {
-        await ensureTables();
         // Same upkeep the daily cron runs, so the list below never shows a
         // membership that has already ended as active.
         let audit: MembershipAuditResult | null = null;

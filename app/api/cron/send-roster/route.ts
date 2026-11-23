@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureTables, getRosterForDate, getUpcomingSessionDates } from "@/lib/db";
+import { getRosterForDate, getUpcomingSessionDates } from "@/lib/db";
 import { sendRosterEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -16,8 +16,6 @@ export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
-
-  await ensureTables();
 
   const [date] = await getUpcomingSessionDates(0);
   if (!date) {

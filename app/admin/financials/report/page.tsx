@@ -19,12 +19,7 @@ import {
   parseFinanceFilters,
   type CategoryBreakdown,
 } from "@/lib/finance";
-import {
-  ensureFinanceTables,
-  getCategoryBreakdown,
-  getEarliestEntryDate,
-  getMonthlyTotals,
-} from "@/lib/finance-db";
+import { getCategoryBreakdown, getEarliestEntryDate, getMonthlyTotals } from "@/lib/finance-db";
 import { getFundsAt, getOpeningBalances } from "@/lib/bank-db";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +83,6 @@ export default async function AnnualReportPage({
       </div>
     );
   }
-  await ensureFinanceTables();
 
   const earliest = await getEarliestEntryDate();
   const firstFy = earliest ? Math.min(financialYearOf(earliest), currentFy) : currentFy;

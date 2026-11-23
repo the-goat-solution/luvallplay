@@ -1,8 +1,8 @@
 import crypto from "crypto";
 import { sql, db } from "./database";
 import { revalidateTag } from "next/cache";
-import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";
-import { ensureStatsTables, runStatsBackfill, syncRosterAttendance } from "./stats-db";
+import { getPlayerSetting, setPlayerSetting } from "./player-db";
+import { runStatsBackfill, syncRosterAttendance } from "./stats-db";
 import { after } from "next/server";
 import { hmac } from "./player-auth";
 import { clubDateKeyForInstant, getClubToday } from "./dates";
@@ -41,7 +41,6 @@ import {
   type WpEvent,
   type WpSource,
 } from "./ranks";
-import { onceThisDeploy } from "./schema-gate";
 
 // The challenge feature ("The Arena"): pairs, 5-digit codes, challenges, and
 // Wolf Points worked out from play days, round robin results and challenges.
@@ -66,127 +65,6 @@ export const ARENA_SANDBOX = PREFIX !== "";
 
 /** Minutes between check-in and entering a score (shorter on previews so testing doesn't stall). */
 export const MIN_GAME_MINUTES = Number(process.env.ARENA_MIN_GAME_MINUTES ?? (process.env.VERCEL_ENV === "preview" ? 1 : CHECKIN_MIN_MINUTES_BEFORE_SCORE));
-
-let ensurePromise: Promise<void> | null = null;
-export function ensureArenaTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("arena", async () => {
-      await ensurePlayerTables();
-      await ensureStatsTables();
-      await sql.query(`
-        CREATE TABLE IF NOT EXISTS ${T.pairs} (
-          id SERIAL PRIMARY KEY,
-          player_low INT NOT NULL,
-          player_high INT NOT NULL,
-          name TEXT,
-          formed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          ended_at TIMESTAMPTZ,
-          ended_reason TEXT
-        );`);
-      await sql.query(`
-        CREATE TABLE IF NOT EXISTS ${T.members} (
-          pair_id INT NOT NULL,
-          player_id INT NOT NULL,
-          active BOOLEAN NOT NULL DEFAULT TRUE,
-          PRIMARY KEY (pair_id, player_id)
-        );`);
-      // One current partner per player: two confirmations at the same moment can't both win.
-      await sql.query(`CREATE UNIQUE INDEX IF NOT EXISTS ${T.members}_one_active ON ${T.members} (player_id) WHERE active;`);
-      await sql.query(`
-        CREATE TABLE IF NOT EXISTS ${T.codes} (
-          id SERIAL PRIMARY KEY,
-          purpose TEXT NOT NULL,
-          code_hash TEXT NOT NULL,
-          owner_id INT NOT NULL,
-          challenge_id INT,
-          status TEXT NOT NULL DEFAULT 'live',
-          expires_at TIMESTAMPTZ NOT NULL,
-          consumed_by INT,
-          consumed_at TIMESTAMPTZ,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );`);
-      await sql.query(`CREATE INDEX IF NOT EXISTS ${T.codes}_hash ON ${T.codes} (purpose, code_hash) WHERE status = 'live';`);
-      await sql.query(`
-        CREATE TABLE IF NOT EXISTS ${T.attempts} (
-          player_id INT NOT NULL,
-          at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );`);
-      await sql.query(`
-        CREATE TABLE IF NOT EXISTS ${T.challenges} (
-          id SERIAL PRIMARY KEY,
-          posting_pair INT NOT NULL,
-          p1 INT NOT NULL,
-          p2 INT NOT NULL,
-          accepting_pair INT,
-          a1 INT,
-          a2 INT,
-          note TEXT,
-          status TEXT NOT NULL DEFAULT 'open',
-          available_until TIMESTAMPTZ NOT NULL,
-          posted_by INT NOT NULL,
-          posted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          accepted_by INT,
-          accepted_at TIMESTAMPTZ,
-          called_off_by INT,
-          checked_in_at TIMESTAMPTZ,
-          played_on DATE,
-          score_posting INT,
-          score_accepting INT,
-          retired_by TEXT,
-          entered_by INT,
-          entered_at TIMESTAMPTZ,
-          confirmed_by INT,
-          auto_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
-          disputed_by INT,
-          disputed_at TIMESTAMPTZ,
-          dispute_note TEXT,
-          resolved_by_admin BOOLEAN NOT NULL DEFAULT FALSE,
-          completed_at TIMESTAMPTZ,
-          void_reason TEXT
-        );`);
-      await sql.query(`CREATE UNIQUE INDEX IF NOT EXISTS ${T.challenges}_one_open ON ${T.challenges} (posting_pair) WHERE status = 'open';`);
-      await sql.query(`CREATE INDEX IF NOT EXISTS ${T.challenges}_status ON ${T.challenges} (status);`);
-      await sql.query(`
-        CREATE TABLE IF NOT EXISTS ${T.after} (
-          challenge_id INT NOT NULL,
-          player_id INT NOT NULL,
-          keep_pair BOOLEAN,
-          again BOOLEAN,
-          answered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (challenge_id, player_id)
-        );`);
-      // Match Analyzer stats a court assistant recorded for a challenge
-      // (lib/match-stats-db.ts). One row per challenge; JSON shaped by
-      // SavedMatchStats.
-      await sql.query(`
-        CREATE TABLE IF NOT EXISTS ${T.matchStats} (
-          challenge_id INT PRIMARY KEY,
-          recorded_by INT NOT NULL,
-          stats JSONB NOT NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );`);
-      // Wolf Vision live tracking: a phone set up for the game sends a heartbeat.
-      // status 'tracking' until the assistant saves the final numbers ('final').
-      await sql.query(`ALTER TABLE ${T.matchStats} ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'final';`);
-      await sql.query(`ALTER TABLE ${T.matchStats} ADD COLUMN IF NOT EXISTS live JSONB;`);
-      await sql.query(`ALTER TABLE ${T.matchStats} ADD COLUMN IF NOT EXISTS live_at TIMESTAMPTZ;`);
-      await sql.query(`
-        CREATE TABLE IF NOT EXISTS ${T.ranks} (
-          player_id INT PRIMARY KEY,
-          seen_index INT NOT NULL DEFAULT 0,
-          peak_index INT NOT NULL DEFAULT 0,
-          was_tarnished BOOLEAN NOT NULL DEFAULT FALSE,
-          polished_at TIMESTAMPTZ,
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );`);
-    }).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
 
 export class ArenaError extends Error {
   code: string;
@@ -452,7 +330,6 @@ export async function recalculateAllPoints(): Promise<{ attendance: number; roun
 }
 
 export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<World> {
-  await ensureArenaTables();
   if (!opts.skipSync) syncPointsLater();
   await tick();
   const today = getClubToday().dateKey;
@@ -699,12 +576,10 @@ function busyChallengeFor(world: World, pairId: number): ChallengeRow | undefine
 }
 
 export async function createPairCode(playerId: number): Promise<{ code: string; expiresAt: string }> {
-  await ensureArenaTables();
   return issueCode("pair", playerId, null);
 }
 
 export async function enterPairCode(playerId: number, raw: string): Promise<{ ownerId: number }> {
-  await ensureArenaTables();
   await checkAttempts(playerId);
   const code = cleanCode(raw);
   if (code.length !== 5) throw new ArenaError("bad_code");
@@ -742,7 +617,6 @@ async function endPair(client: { query: typeof sql.query }, pairId: number, reas
 }
 
 export async function respondPairRequest(ownerId: number, accept: boolean): Promise<void> {
-  await ensureArenaTables();
   const { rows } = await sql.query(
     `SELECT id, consumed_by FROM ${T.codes} WHERE purpose = 'pair' AND owner_id = $1 AND status = 'requested' AND expires_at > NOW()
      ORDER BY id DESC LIMIT 1;`,
@@ -793,12 +667,10 @@ const INVITE_TTL_SECONDS = 24 * 3600;
 
 /** A shareable link code: whoever opens it while signed in is paired with the sender straight away. */
 export async function createPairInvite(playerId: number): Promise<{ code: string; expiresAt: string }> {
-  await ensureArenaTables();
   return issueCode("pair", playerId, null, { digits: INVITE_DIGITS, ttlSeconds: INVITE_TTL_SECONDS });
 }
 
 export async function joinPairInvite(playerId: number, raw: string): Promise<void> {
-  await ensureArenaTables();
   await checkAttempts(playerId);
   const code = cleanCode(raw);
   if (code.length !== INVITE_DIGITS) throw new ArenaError("bad_code");
@@ -1226,7 +1098,6 @@ export async function getRankBadges(): Promise<Record<number, { index: number; s
 
 /** The player's accepted challenge that hasn't been played yet, if any (one cheap query). */
 export async function liveMatchFor(playerId: number): Promise<number | null> {
-  await ensureArenaTables();
   const { rows } = await sql.query(
     `SELECT id FROM ${T.challenges} WHERE status = 'accepted' AND $1 IN (p1, p2, a1, a2) ORDER BY accepted_at DESC LIMIT 1;`,
     [playerId],
@@ -1236,7 +1107,6 @@ export async function liveMatchFor(playerId: number): Promise<number | null> {
 
 /** Things waiting on the player (badge on the Arena tab): a score to confirm, a team-up request. Two cheap queries. */
 export async function countArenaActions(playerId: number): Promise<number> {
-  await ensureArenaTables();
   const [scores, requests] = await Promise.all([
     sql.query(
       `SELECT count(*)::int AS n FROM ${T.challenges}
@@ -1257,7 +1127,6 @@ export async function countArenaActions(playerId: number): Promise<number> {
 // ---------------------------------------------------------------------------
 
 export async function adminResolve(id: number, outcome: "posting" | "accepting" | "void" | "as_entered", reason: string): Promise<void> {
-  await ensureArenaTables();
   const c = await getChallenge(id);
   if (outcome === "void") {
     await sql.query(`UPDATE ${T.challenges} SET status = 'void', void_reason = $2 WHERE id = $1;`, [id, reason.trim().slice(0, 300) || "Voided by an admin"]);
@@ -1278,7 +1147,6 @@ export async function adminResolve(id: number, outcome: "posting" | "accepting" 
 
 export async function countDisputes(): Promise<number> {
   try {
-    await ensureArenaTables();
     const { rows } = await sql.query(`SELECT count(*)::int AS n FROM ${T.challenges} WHERE status = 'disputed';`);
     return rows[0]?.n ?? 0;
   } catch {
@@ -1288,7 +1156,6 @@ export async function countDisputes(): Promise<number> {
 
 /** Removes everything a deleted account had in the Arena from play (results stay for the other players). */
 export async function endPlayerArena(playerId: number): Promise<void> {
-  await ensureArenaTables();
   const { rows } = await sql.query(`SELECT pair_id FROM ${T.members} WHERE player_id = $1 AND active;`, [playerId]);
   for (const r of rows) await endPair(sql, r.pair_id, "account_deleted");
   await sql.query(
@@ -1298,7 +1165,6 @@ export async function endPlayerArena(playerId: number): Promise<void> {
 }
 
 export async function arenaExport(playerId: number): Promise<Record<string, unknown>> {
-  await ensureArenaTables();
   const [pairs, challenges] = await Promise.all([
     sql.query(`SELECT p.* FROM ${T.pairs} p WHERE player_low = $1 OR player_high = $1 ORDER BY id;`, [playerId]),
     sql.query(

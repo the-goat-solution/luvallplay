@@ -6,7 +6,7 @@ import {
   setReportedBankBalance,
   type BankTransactionInput,
 } from "./bank-db";
-import { ensureFinanceTables, getSyncState, markSyncFailed, markSyncSucceeded } from "./finance-db";
+import { getSyncState, markSyncFailed, markSyncSucceeded } from "./finance-db";
 import { sideEffectAllowed } from "./side-effects.ts";
 
 // ANZ → the club, via Akahu (https://akahu.nz).
@@ -134,7 +134,6 @@ export type AkahuSyncResult = { inserted: number; duplicates: number; matched: n
 
 export async function syncAkahu(): Promise<AkahuSyncResult> {
   if (!akahuConfigured()) throw new Error("Akahu isn't set up (AKAHU_APP_TOKEN / AKAHU_USER_TOKEN).");
-  await ensureFinanceTables();
   const startedAt = new Date();
   try {
     const account = await pickAccount();
@@ -181,6 +180,5 @@ export async function syncAkahu(): Promise<AkahuSyncResult> {
 }
 
 export async function getAkahuSyncState() {
-  await ensureFinanceTables();
   return getSyncState(SYNC_KEY);
 }

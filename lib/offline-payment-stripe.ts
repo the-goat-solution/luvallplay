@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { getStripe } from "./stripe";
-import { ensureFinanceTables, upsertStripeLines } from "./finance-db";
+import { upsertStripeLines } from "./finance-db";
 import { lineForOfflineInvoice } from "./finance-stripe";
 import { autoMatchBankTransactions, getOfflinePaymentReconciliation } from "./bank-db";
 import { offlinePaymentRef, type OfflineMethod } from "./offline-payment";
@@ -84,7 +84,6 @@ export async function reconcileOfflinePayment(
   try {
     const line = lineForOfflineInvoice(recorded.invoice);
     if (!line) return null;
-    await ensureFinanceTables();
     await upsertStripeLines([line]);
     if (method === "cash") return "cash";
     await autoMatchBankTransactions();

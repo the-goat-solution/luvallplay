@@ -27,52 +27,6 @@ export type PassKind = keyof typeof PASS_PRICE_CENTS;
 /** A used pass still opens the same session again within this window (resume after a crash). */
 const RESUME_HOURS = 6;
 
-let ensured = false;
-export async function ensureWolfVisionTables() {
-  if (ensured) return;
-  await sql.query(`CREATE TABLE IF NOT EXISTS ${WV.passes} (
-    id SERIAL PRIMARY KEY,
-    player_id INTEGER NOT NULL,
-    kind TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    amount_cents INTEGER NOT NULL,
-    test BOOLEAN NOT NULL DEFAULT FALSE,
-    stripe_session TEXT UNIQUE,
-    challenge_id INTEGER,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    paid_at TIMESTAMPTZ,
-    used_at TIMESTAMPTZ
-  );`);
-  await sql.query(`CREATE INDEX IF NOT EXISTS ${WV.passes}_player ON ${WV.passes} (player_id, status);`);
-  await sql.query(`CREATE TABLE IF NOT EXISTS ${WV.models} (
-    id SERIAL PRIMARY KEY,
-    kind TEXT NOT NULL,
-    weights JSONB NOT NULL,
-    n INTEGER NOT NULL,
-    sessions INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );`);
-  await sql.query(`CREATE TABLE IF NOT EXISTS ${WV.updates} (
-    id SERIAL PRIMARY KEY,
-    kind TEXT NOT NULL,
-    weights JSONB NOT NULL,
-    n INTEGER NOT NULL,
-    player_id INTEGER,
-    meta JSONB,
-    merged BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );`);
-  await sql.query(`CREATE TABLE IF NOT EXISTS ${WV.labels} (
-    id SERIAL PRIMARY KEY,
-    player_id INTEGER,
-    video_name TEXT NOT NULL,
-    duration REAL,
-    hits JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );`);
-  ensured = true;
-}
-
 // ── Passes ────────────────────────────────────────────────────────────────
 
 export type Pass = { id: number; kind: PassKind; status: "pending" | "paid" | "used"; test: boolean; usedAt: string | null };
@@ -82,7 +36,6 @@ function rowToPass(r: Record<string, unknown>): Pass {
 }
 
 export async function createPass(playerId: number, kind: PassKind, opts: { test: boolean; challengeId?: number | null }): Promise<Pass> {
-  await ensureWolfVisionTables();
   const { rows } = await sql.query(
     `INSERT INTO ${WV.passes} (player_id, kind, status, amount_cents, test, challenge_id, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;`,
     [playerId, kind, opts.test ? "paid" : "pending", opts.test ? 0 : PASS_PRICE_CENTS[kind], opts.test, opts.challengeId ?? null, opts.test ? new Date().toISOString() : null],
@@ -96,7 +49,6 @@ export async function attachStripeSession(passId: number, sessionId: string) {
 
 /** Marks a pass paid (Stripe confirmed the payment). Idempotent. */
 export async function markPassPaid(sessionId: string): Promise<Pass | null> {
-  await ensureWolfVisionTables();
   const { rows } = await sql.query(
     `UPDATE ${WV.passes} SET status = CASE WHEN status = 'pending' THEN 'paid' ELSE status END, paid_at = COALESCE(paid_at, NOW()) WHERE stripe_session = $1 RETURNING *;`,
     [sessionId],
@@ -106,7 +58,6 @@ export async function markPassPaid(sessionId: string): Promise<Pass | null> {
 
 /** A pass the player can start a session with: an unused paid one, or one used recently (resume). */
 export async function usablePass(playerId: number, kind: PassKind): Promise<Pass | null> {
-  await ensureWolfVisionTables();
   const { rows } = await sql.query(
     `SELECT * FROM ${WV.passes} WHERE player_id = $1 AND kind = $2 AND (status = 'paid' OR (status = 'used' AND used_at > NOW() - INTERVAL '${RESUME_HOURS} hours'))
      ORDER BY (status = 'used') DESC, created_at DESC LIMIT 1;`,
@@ -117,7 +68,6 @@ export async function usablePass(playerId: number, kind: PassKind): Promise<Pass
 
 /** Starts a session on a pass (first use stamps it; a resume within the window is allowed). */
 export async function consumePass(playerId: number, passId: number): Promise<Pass | null> {
-  await ensureWolfVisionTables();
   const { rows } = await sql.query(
     `UPDATE ${WV.passes} SET status = 'used', used_at = COALESCE(used_at, NOW())
      WHERE id = $1 AND player_id = $2 AND (status = 'paid' OR (status = 'used' AND used_at > NOW() - INTERVAL '${RESUME_HOURS} hours')) RETURNING *;`,
@@ -145,7 +95,6 @@ export const checkerUpdateSchema = z.object({
 
 /** The shared model for a kind, or null (clients then use the weights bundled with the app). */
 export async function latestModel(kind: "checker"): Promise<{ weights: CheckerWeights; sessions: number; createdAt: string } | null> {
-  await ensureWolfVisionTables();
   const { rows } = await sql.query(`SELECT weights, sessions, created_at FROM ${WV.models} WHERE kind = $1 ORDER BY id DESC LIMIT 1;`, [kind]);
   return rows[0] ? { weights: rows[0].weights as CheckerWeights, sessions: Number(rows[0].sessions), createdAt: new Date(rows[0].created_at).toISOString() } : null;
 }
@@ -174,7 +123,6 @@ function distance(a: CheckerWeights, b: CheckerWeights): number {
  * kept for inspection but not merged.
  */
 export async function submitCheckerUpdate(playerId: number | null, base: CheckerWeights, u: z.infer<typeof checkerUpdateSchema>): Promise<{ stored: boolean; merged: boolean }> {
-  await ensureWolfVisionTables();
   if (u.trained < MIN_SESSION_SAMPLES) return { stored: false, merged: false };
   const outlier = distance(u.weights, base) > 0.5;
   await sql.query(`INSERT INTO ${WV.updates} (kind, weights, n, player_id, meta, merged) VALUES ('checker', $1, $2, $3, $4, $5);`, [
@@ -205,7 +153,6 @@ export const labelSchema = z.object({
 });
 
 export async function saveLabels(playerId: number, l: z.infer<typeof labelSchema>): Promise<number> {
-  await ensureWolfVisionTables();
   const { rows } = await sql.query(`INSERT INTO ${WV.labels} (player_id, video_name, duration, hits) VALUES ($1, $2, $3, $4) RETURNING id;`, [
     playerId,
     l.videoName,

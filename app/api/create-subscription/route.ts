@@ -7,12 +7,7 @@ import {
   createOneTimeMembershipPaymentIntent,
 } from "@/lib/stripe";
 import { checkRateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
-import {
-  assignAndReserveMembershipAccessStart,
-  attachStripeIdToMembership,
-  ensureTables,
-  type MembershipAssignment,
-} from "@/lib/db";
+import { assignAndReserveMembershipAccessStart, attachStripeIdToMembership, type MembershipAssignment } from "@/lib/db";
 import { getClubToday } from "@/lib/dates";
 import { isDayPaused } from "@/lib/day-requests";
 import { getPlayerFromRequest } from "@/lib/player-auth";
@@ -77,7 +72,6 @@ export async function POST(request: Request) {
     // this entirely; there's no capacity data to check against.
     let assignment: (MembershipAssignment & { blocked: false }) | null = null;
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
       const result = await assignAndReserveMembershipAccessStart(
         body.plan,
         body.day,

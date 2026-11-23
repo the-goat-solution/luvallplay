@@ -1,11 +1,6 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import {
-  createDraw,
-  ensureMiniGameTables,
-  getMiniGameState,
-  lockScore,
-} from "@/lib/mini-game-db";
+import { createDraw, getMiniGameState, lockScore } from "@/lib/mini-game-db";
 import { drawTeams } from "@/lib/mini-game-roster";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
@@ -36,7 +31,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
   if (!process.env.POSTGRES_URL) return unavailable();
-  await ensureMiniGameTables();
   return stateResponse();
 }
 
@@ -62,7 +56,6 @@ export async function POST(request: Request) {
   // saved, and only before the official draw: once teams exist, everyone
   // gets the live game (409 + current state) instead.
   if (body.action === "preview") {
-    await ensureMiniGameTables();
     const state = await getMiniGameState();
     if (state.draw) {
       return NextResponse.json(state, { status: 409, headers: NO_STORE });
@@ -77,13 +70,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Incorrect password" }, { status: 401 });
   }
 
-  await ensureMiniGameTables();
-
   switch (body.action) {
     case "draw":
       await createDraw();
       return stateResponse();
-
 
     case "score": {
       const result = await lockScore(

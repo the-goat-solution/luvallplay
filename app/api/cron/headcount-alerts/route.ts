@@ -1,11 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  ensureTables,
-  getSessionAlertState,
-  getSessionHeadcount,
-  getUpcomingSessionDates,
-  upsertSessionAlertState,
-} from "@/lib/db";
+import { getSessionAlertState, getSessionHeadcount, getUpcomingSessionDates, upsertSessionAlertState } from "@/lib/db";
 import { sendHeadcountAlertEmail } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -23,8 +17,6 @@ export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL) {
     return NextResponse.json({ skipped: true });
   }
-
-  await ensureTables();
 
   const dates = await getUpcomingSessionDates(ALERT_LEAD_DAYS);
   const results: { date: string; state: string; total: number }[] = [];

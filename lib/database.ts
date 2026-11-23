@@ -83,13 +83,14 @@ export type SqlTag = {
 };
 
 export const sql: SqlTag = Object.assign(
-  <R extends QueryResultRow = AnyRow>(strings: TemplateStringsArray, ...values: Primitive[]) => {
+  // async throughout: a missing database is a rejected promise, never a throw.
+  async <R extends QueryResultRow = AnyRow>(strings: TemplateStringsArray, ...values: Primitive[]) => {
     const [text, params] = fromTemplate(strings, values);
     return viaHttp<R>(text, params);
   },
   {
-    query: <R extends QueryResultRow = AnyRow>(text: string, params?: unknown[]) => getPool().query<R>(text, params),
-    connect: () => getPool().connect(),
+    query: async <R extends QueryResultRow = AnyRow>(text: string, params?: unknown[]) => getPool().query<R>(text, params),
+    connect: async () => getPool().connect(),
   },
 );
 

@@ -132,6 +132,7 @@ export async function startEnv({ log = console.log } = {}) {
   // The schema comes from the versioned migrations, as in every new
   // environment (production's shape, docs/schema/production.sql).
   runNode(["scripts/db/migrate.mjs"]);
+  runNode(["scripts/db/seed.mjs"]);
   const proxy = spawn(process.execPath, ["scripts/e2e/ws-proxy.mjs", String(WS_PORT)], { stdio: "ignore" });
   const env = {
     ...process.env,
@@ -153,7 +154,7 @@ export async function startEnv({ log = console.log } = {}) {
   server.stdout.on("data", (d) => serverLog.push(String(d)));
   server.stderr.on("data", (d) => serverLog.push(String(d)));
   await waitFor(`${BASE}/login`);
-  // The app creates its own tables on first use (ensureTables); warm them up.
+  // Warm the server up (the tables already exist: the migrations made them).
   for (const path of ["/", "/login", "/api/health/db", "/casual-play", "/api/arena"]) await fetch(BASE + path).catch(() => {});
   await fetch(`${BASE}/api/auth/email/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "warmup@e2e.test" }) });
   // Messages and stats tables.

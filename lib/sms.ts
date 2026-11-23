@@ -1,5 +1,5 @@
 import { db, sql } from "./database";
-import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";
+import { getPlayerSetting, setPlayerSetting } from "./player-db";
 import { sha256 } from "./player-auth";
 import { sendAdminAlertEmail } from "./player-email";
 import { sideEffectAllowed } from "./side-effects.ts";
@@ -60,7 +60,6 @@ export async function getSmsUsage(): Promise<SmsUsage> {
   if (!process.env.POSTGRES_URL) {
     return { configured, switchedOn: false, limit, used: 0, nextSlotAt: null, available: false };
   }
-  await ensurePlayerTables();
   const [switchedOn, { rows }] = await Promise.all([
     isSmsSwitchedOn(),
     sql`
@@ -162,7 +161,6 @@ export async function sendSmsCode(input: {
   const key = apiKey();
   const limit = smsFreeLimit();
   if (!key || limit <= 0 || !(await isSmsSwitchedOn())) return { ok: false, reason: "unavailable" };
-  await ensurePlayerTables();
   const phoneHash = sha256(input.phoneE164);
 
   const { rows: perNumber } = await sql`

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { SESSION_CAPACITY } from "@/lib/constants";
-import { getSpotsAndHeadcountForDates, ensureTables } from "@/lib/db";
+import { getSpotsAndHeadcountForDates } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
 export async function GET(request: Request) {
@@ -22,7 +22,6 @@ export async function GET(request: Request) {
 
   try {
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
       ({ spots, signedUp, locked } = await getSpotsAndHeadcountForDates(dates));
     } else {
       for (const date of dates) {

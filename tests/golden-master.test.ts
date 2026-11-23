@@ -39,7 +39,7 @@ const MODULES = [
   "db", "player-db", "player-auth", "stats-db", "arena-db", "arena-state", "match-stats-db", "messages-db",
   "photos-db", "shop-db", "jersey-db", "finance-db", "bank-db", "casual-play-db", "mini-game-db", "day-requests",
   "membership-self-service", "me-data", "profile-badges", "player-export", "player-merge", "wolf-vision-db",
-  "webhooks", "api-v1", "admin-access", "sms", "schema-gate",
+  "webhooks", "api-v1", "admin-access", "sms",
 ] as const;
 type ModName = (typeof MODULES)[number];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -575,13 +575,12 @@ function cases(): Case[] {
 // reason; anything else exported must have a case above.
 const NOT_COVERED: Partial<Record<ModName, Record<string, string>>> = {
   db: {
-    ensureTables: "request-time DDL; checked by the schema drift test (removed in PR 3)",
     memberNotAbsentSql: "builds SQL text only",
     membershipCoversDateSql: "builds SQL text only",
     projectedPeriodEndSql: "builds SQL text only",
     addDays: "date arithmetic only",
   },
-  "player-db": { ensurePlayerTables: "request-time DDL", defaultDisplayName: "string helper", mapPlayer: "row mapper", normalizeAccountEmail: "string helper", toE164: "re-exported phone helper" },
+  "player-db": { defaultDisplayName: "string helper", mapPlayer: "row mapper", normalizeAccountEmail: "string helper", toE164: "re-exported phone helper" },
   "player-auth": {
     sha256: "hash helper",
     hmac: "hash helper",
@@ -590,21 +589,21 @@ const NOT_COVERED: Partial<Record<ModName, Record<string, string>>> = {
     getCurrentPlayer: "needs a Next.js request (cookies()); same path as getPlayerFromRequest (covered)",
   },
   "stats-db": {
-    ensureStatsTables: "request-time DDL",
+
     computeStreaks: "re-exported pure helper",
     periodFromKey: "re-exported pure helper",
     periodRange: "re-exported pure helper",
     weekKey: "re-exported pure helper",
   },
-  "arena-db": { ensureArenaTables: "request-time DDL", nzEndOfDay: "date helper" },
-  "messages-db": { ensureMessageTables: "request-time DDL" },
-  "photos-db": { ensurePhotoTables: "request-time DDL" },
-  "shop-db": { ensureShopTables: "request-time DDL", endOfClubDay: "date helper" },
-  "jersey-db": { ensureJerseyTables: "request-time DDL" },
-  "finance-db": { ensureFinanceTables: "request-time DDL" },
+  "arena-db": { nzEndOfDay: "date helper" },
+  "messages-db": {},
+  "photos-db": {},
+  "shop-db": { endOfClubDay: "date helper" },
+  "jersey-db": {},
+  "finance-db": {},
   "bank-db": { isBankStatus: "value check only" },
-  "casual-play-db": { ensureCasualPlayTables: "request-time DDL" },
-  "mini-game-db": { ensureMiniGameTables: "request-time DDL" },
+  "casual-play-db": {},
+  "mini-game-db": {},
   "day-requests": { isWeekday: "value check only" },
   "membership-self-service": {
     formatNzDate: "date formatting only",
@@ -617,8 +616,8 @@ const NOT_COVERED: Partial<Record<ModName, Record<string, string>>> = {
     confirmAutoRenewFromOneTime: "creates a Stripe subscription (needs live Stripe)",
   },
   "player-merge": { runMerge: "inner step of mergeMembers (covered, both dry run and apply)" },
-  "wolf-vision-db": { ensureWolfVisionTables: "request-time DDL" },
-  webhooks: { ensureIntegrationTables: "request-time DDL", bearerFrom: "header parsing only", isAllowedWebhookUrl: "URL check only", signPayload: "HMAC helper" },
+  "wolf-vision-db": {},
+  webhooks: { bearerFrom: "header parsing only", isAllowedWebhookUrl: "URL check only", signPayload: "HMAC helper" },
   "api-v1": { json: "response helper", parsePeriod: "string parsing only" },
   "admin-access": {
     decide: "pure permission decision (tests/phase1-rules.test.ts)",
@@ -634,7 +633,6 @@ const NOT_COVERED: Partial<Record<ModName, Record<string, string>>> = {
     getRecaptchaSiteKey: "Google API only",
     sendSmsCode: "needs reCAPTCHA + Google Identity Toolkit (external)",
   },
-  "schema-gate": { onceThisDeploy: "request-time DDL gate; checked by the schema drift test (removed in PR 3)" },
 };
 
 // ---------------------------------------------------------------------------

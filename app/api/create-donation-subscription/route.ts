@@ -4,7 +4,6 @@ import { insertMonthlyDonation } from "@/lib/repos/donations";
 import { DONATION_MIN_CENTS, DONATION_MAX_CENTS } from "@/lib/constants";
 import { getStripe, getDonationProductId, getInvoicePaymentIntent } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
-import { ensureTables } from "@/lib/db";
 
 const bodySchema = z.object({
   amount: z.number().positive(),
@@ -94,7 +93,6 @@ export async function POST(request: Request) {
     });
 
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
       await insertMonthlyDonation({ email: body.email, firstName: body.firstName, lastName: body.lastName, amountCents, stripeSubscriptionId: subscription.id });
     }
 

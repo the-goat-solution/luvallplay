@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { WEEKDAYS, WEEKDAY_LABEL } from "@/lib/constants";
 import { addDayRequest, isDayPaused } from "@/lib/day-requests";
-import { ensureTables } from "@/lib/db";
 import {
   sendDayRequestAdminAlertEmail,
   sendDayRequestConfirmationEmail,
@@ -30,7 +29,6 @@ export async function POST(request: Request) {
 
     let isNew = true;
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
       isNew = await addDayRequest(day, body.name, body.email);
     }
 

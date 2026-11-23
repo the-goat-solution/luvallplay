@@ -12,7 +12,7 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 1 | Tenants schema, Three Wolves as club #1 (#101) | **Done.** Production data run passed (23 Nov, 07:36 UTC); merged and live (07:48 UTC) |
 | 2 | `tenant_id` on every club-owned table (#102) | **Done.** Production data run passed (23 Nov, 08:25 UTC); live (08:28 UTC) |
 | 3 | Email links → `user_id` (#103) | **Production data run done and passed** (23 Nov, 09:09 UTC). Merged 09:11 UTC |
-| 4 | Settings replace constants (behind flags) | In progress. First part built: the settings loader and the shadow comparison (§4) |
+| 4 | Settings replace constants (behind flags) | In progress. Parts 1 and 2 live (#104); **shadow reads for settings started 23 Nov, 09:50 UTC**. Parts 3 and 4 in #105 (§4) |
 | 5 | Module enforcement | Not started |
 | 6 | Second database driver, region routing | Not started |
 | 7 | Money audit (minor units, VND) | Not started |
@@ -190,13 +190,22 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 
 **Admin → Setup check → Club settings** shows the comparison at any time, whatever the source.
 
-**Needs you, once part 1 is deployed:** set `CLUB_SETTINGS_SOURCE=shadow` for Production in Vercel → Settings → Environment Variables, and redeploy. That starts the 7-day clock for settings. Rollback is deleting the variable.
+**Shadow reads are on (23 Nov 2026, 09:50 UTC).** `CLUB_SETTINGS_SOURCE=shadow` is set for Production (by the build session, under the owner's blanket approval), and #104's deploy picked it up. The earliest day to switch to `database` is **30 Nov**, if the logs and Admin → Setup check → Club settings show no difference. Rollback at any time is deleting the variable and redeploying.
 
-**Still to build in step 4:** the app's code reading its settings through this loader instead of the constants (time zone, courts → players, booking window and cut-off, membership days and cycles, donation limits, the "Wolf" terms), and the crons, emails, webhooks and API becoming club-scoped.
+**Parts so far:**
+
+| Part | What reads the club's settings | Where |
+|---|---|---|
+| 1 | The loader and the comparison | #104, live |
+| 2 | Donation limits; how far ahead a membership start is searched, and how long an unpaid checkout holds a spot | #104, live |
+| 3 | The time zone literal collected into one constant (16 files), with a scan that fails on new copies | #105 |
+| 4 | Play-day capacity: courts → players, general capacity, the mini-game field, including the booking guard's SQL, which had its own typed copy of the table | #105 |
+
+**Still to build in step 4:** the time zone, booking window and cut-off read from the settings at run time (server and client); membership days and cycle lengths; the "Wolf" terms in the translated strings; capacity in the admin pages and client components; and the crons, emails, webhooks and API becoming club-scoped.
 
 ## 5. Housekeeping that needs you
 
-- **Rehearsal branches.** `rehearsal-phase-2` and `rehearsal-phase-3-tenants` were deleted on 23 Nov, at the owner's request. From now on the session deletes each rehearsal branch once its step has run on production.
+- **Rehearsal branch.** One reusable branch, `rehearsal-phase-3`, is kept for the rest of the phase and reset to a fresh copy of production before each rehearsal, so its host needs approving only once. It holds real data: delete it when Phase 3 is done.
 - **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.
 - **Point-in-time restore covers 6 hours, not 7 days.** The project's history retention is 21,600 seconds (the free plan's limit). Test plan §4.4 asks for a window that covers the next 7 days. Until the plan changes, the named `pre-<step>` branch is the restore point for each step, and it's kept until the step's watch period ends.
 - **Each new Neon branch has a new host**, and the build session's network only allows named hosts. Expect one approval card per rehearsal (two hosts: direct and pooled).

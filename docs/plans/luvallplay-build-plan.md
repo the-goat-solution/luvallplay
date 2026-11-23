@@ -840,6 +840,9 @@ Findings and changes recorded as the work goes:
   - A missing or malformed stored value falls back to the built-in value for that field only, and is reported. A database error never breaks a page.
   - A test proves the settings migration 0003 stored for Three Wolves equal today's constants exactly, so the shadow comparison starts empty. Admin → Setup check shows it live.
   - The loader is tested with a second, synthetic club (Vietnam, VND, its own days and limits) to show nothing is borrowed from Three Wolves' values.
+  - Part 2: the donation routes and the membership start search read the loader. Shadow reads for settings started on production on 23 Nov 2026, 09:50 UTC.
+  - Part 3: `"Pacific/Auckland"` was typed into 16 files. They share one constant now, which is also the built-in value of the `timezone` setting, and a scan fails on new copies.
+  - Part 4: play-day capacity reads the settings. **Finding:** the booking guard's SQL had its own typed copy of the courts → players table ("keep the two in sync" in a comment). It now takes the table as a parameter, so the query and the code can't disagree.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

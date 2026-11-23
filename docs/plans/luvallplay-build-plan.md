@@ -17,6 +17,11 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **J:** English and Vietnamese only for now.
 - **K:** everything (developer accounts, D-U-N-S, the Stripe platform account) is registered under **The GOAT Solution**.
 
+**Added (23 Nov):**
+- **L: free-play clubs.** Some clubs charge nothing at all. Every club picks a **payment mode**: *Free play* (no payments anywhere, no Stripe), *Cash or bank transfer*, or *Online payments*. A free-play club gets the full product without a single price on screen (§6.2.1).
+- **M: 12 ready-made colour schemes** for new clubs, each tested for contrast in light and dark mode (§6.3.1, preview in `docs/plans/assets/club-color-schemes.png`).
+- **N: bring your own brand.** Clubs can import their own logo, font and colour palette, or pull them from their existing website (§6.3.2).
+
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
 
 > **Luvallplay:** "Love all, play" is the umpire's call that starts every badminton match. It's a great name for a badminton platform, and the brand below leans into it.
@@ -337,7 +342,9 @@ Playwright visual snapshots run at each window class on every pull request. Real
 
 ```
 tenants            id, slug, name, status, country, timezone, currency, languages[], location (PostGIS point),
-                   theme jsonb, terms jsonb (e.g. points_name: "Wolf Points"), custom_domain, created_at
+                   payment_mode (free | offline | online), theme jsonb (preset id or imported brand),
+                   terms jsonb (e.g. points_name: "Wolf Points"), custom_domain, created_at
+club_brand_assets  tenant_id, kind (logo | logo_dark | font_display | font_text), file, checked_at, licence_confirmed_by
 tenant_modules     tenant_id, module_id, enabled, settings jsonb, enabled_at        ← what the wizard writes
 users              id, email, phone, first/last/display name, avatar, lang, ...      ← global identity (today's players)
 club_members       tenant_id, user_id, role (owner|admin|coach|member|guest), status, joined_at,
@@ -384,9 +391,28 @@ export default defineModule({
 |---|---|---|
 | Core (always on) | Club profile & website · Members & roles · Messages (inbox) · Admin | |
 | Run your club | **Play days & bookings** (incl. calendar sync) · **Casual play** (drop-in, guest checkout) · **Day requests** · **Round robin / mini games** | Courts, capacity and cut-offs become settings |
-| Money | **Memberships** (plans, cycles, days) · **Shop & merch** (jersey pre-orders become a shop product type) · **Donations** · **Finance & reports** · **Bank reconciliation (NZ, Akahu)** | All need Payments (Stripe Connect) |
+| Money | **Memberships** (plans, cycles, days; a plan can be free) · **Shop & merch** (jersey pre-orders become a shop product type) · **Donations** · **Finance & reports** · **Bank reconciliation (NZ, Akahu)** | All optional. Card payments need Stripe Connect; cash and bank transfer don't. A free-play club leaves the whole group off (§6.2.1) |
 | Engage players | **Arena** (challenges, ranks, club leaderboard) · **Vision** (AI match analysis) · **Gallery & photos** · **Integrations** (API, webhooks, MCP) | Ranks and art are themeable per club |
 | Global (opt-in) | **Find a club** · **Global leaderboards** · **Social** · **Marketplace** | §8 |
+
+#### 6.2.1 Free-play clubs and payment modes
+
+Some clubs offer free play to everyone, so **payments are never required**. Every club has a **payment mode** (`tenants.payment_mode`), chosen in the setup wizard and changeable in Admin:
+
+| Mode | What players see | What's switched off |
+|---|---|---|
+| **Free play** | "Free to play" on the club site and in the app. Play days are **free sign-ups** (RSVP) with the same capacity, waitlist, "I can't make it" and attendance as paid ones. Joining the club is a free membership: tap Join and you're in | Every price, checkout, Stripe, invoices, the Money admin group, membership renewals and payment reminders. Stripe Connect onboarding is never shown |
+| **Cash or bank transfer** | Prices, with "Pay at the hall" or bank details. Admins mark payments received (the cash and bank-transfer recording Three Wolves already uses) | Card checkout and Stripe Connect |
+| **Online payments** | Card checkout through the club's Stripe connected account, plus cash/transfer if the club allows | Nothing |
+
+- Free play is a first-class mode, not "paid with a price of 0": no "$0.00", no checkout step, no receipts, and no "payment pending" states anywhere.
+- Mixed clubs work too. A paid club can mark individual play days or membership plans as **free** (e.g. a free open night), and those skip checkout.
+- Optional extras still work for free clubs if they choose: **Donations** ("Support the club") and a **Shop** can be switched on later without changing the mode for play.
+- Switching mode later is guarded:
+  - Free → paid: prices apply only to bookings and memberships made after the switch.
+  - Paid → free: blocked while active paid subscriptions exist, until the admin chooses to let them run to the end of their period or cancel and refund them.
+  - Players get a notice either way.
+- Module manifests declare `payments: "none" | "optional" | "required"`. The wizard and Admin hide anything that needs payments when the club is on Free play, and the API refuses payment calls for a free club (tested, test plan §3.8 journey S3).
 
 **Settings replacing constants:**
 - `MEMBERSHIP_ACCESS_DAYS` → `memberships.settings.days`
@@ -397,10 +423,54 @@ export default defineModule({
 
 ### 6.3 Whitelabel and the Three Wolves exception
 
-- Every club gets the **Luvallplay default theme** and generic terms ("Luv Points", "Vision", generic rank art).
-- A club **theme** has: logo, colours (primary/accent, generated into an accessible palette), fonts (from a curated list), rank-art set, and terms.
-- **Three Wolves keeps everything already built for it:** the wolf rank art, "Wolf Points", "Wolf Vision", Copperplate fonts and the navy palette. These are stored as *its* theme and terms, not as code.
-- Theming works through CSS custom properties set per club. The same components render differently with no per-club code.
+- Every club gets generic terms by default ("Luv Points", "Vision", generic rank art) and a **theme**.
+- A theme has: logo, colours, fonts, rank-art set and terms.
+- **Three Wolves keeps everything already built for it:** the wolf rank art, "Wolf Points", "Wolf Vision", Copperplate fonts and the navy palette. These are stored as *its* imported brand (§6.3.2) and terms, not as code. It's the first real test of custom branding.
+- Theming works through **semantic** CSS custom properties set per club (`--primary`, `--on-primary`, `--accent`, `--on-accent`, `--surface`, `--ink`, `--font-display`, `--font-text`, …). The same components render differently with no per-club code. `packages/ui` (Phase 2) uses only semantic tokens, never brand names, so presets and imported brands plug straight in.
+- A theme applies to the club's website, the club's spaces inside the app, emails, QR posters and the club's shop. The store app's icon and the sign-in screens stay Luvallplay.
+
+#### 6.3.1 Twelve ready-made colour schemes
+
+New clubs pick one in the wizard. Each is a primary colour (headers, buttons) plus an accent that pops (live badges, highlights, rank-ups). Each has a tested dark-mode version, and all pass WCAG AA contrast in both modes (`docs/plans/assets/club-color-schemes.json`, checked by `club-color-schemes.py`; preview in `club-color-schemes.png`).
+
+| Scheme | Primary | Accent | Feel |
+|---|---|---|---|
+| **Court Green** (default) | `#0E6B4F` | `#D4F23C` | Luvallplay's own: the court with a lime shuttle |
+| **Midnight Rally** | `#1E3A8A` | `#FBBF24` | Deep navy under hall lights, gold smash |
+| **Shuttle Mono** | `#18181B` | `#FACC15` | Black and white like a feather shuttle, yellow strike (flips to white buttons in dark mode) |
+| **Sunset Smash** | `#C2410C` | `#FDE047` | Burnt orange with sunny yellow |
+| **Ocean Drive** | `#0F766E` | `#F9A8D4` | Deep teal with flamingo pink |
+| **Royal Drop** | `#6D28D9` | `#6EE7B7` | Regal violet with fresh mint |
+| **Cherry Net** | `#BE123C` | `#FCD34D` | Bold cherry with golden yellow |
+| **Electric Serve** | `#1D4ED8` | `#FB923C` | Electric blue with hot orange |
+| **Jungle Rally** | `#166534` | `#FDA4AF` | Forest green with a coral pop |
+| **Aurora** | `#0E7490` | `#FEF08A` | Glacier cyan with a lemon glow |
+| **Plum Clear** | `#86198F` | `#5EEAD4` | Rich plum with an aqua flash |
+| **Arctic Smash** | `#075985` | `#F0ABFC` | Ice-deep blue with orchid |
+
+- The wizard shows each scheme live on the club's own name, a play-day card and a button, in light and dark, before the club picks.
+- Neutrals (backgrounds, text, borders) are shared across schemes, so every scheme stays readable.
+- More schemes can be added later as data (one entry in the JSON), with the same automated contrast check in CI.
+
+#### 6.3.2 Bring your own brand
+
+Clubs that already have a look can import it instead of picking a scheme (wizard step ③ or **Admin → Look & feel**):
+
+- **Logo:**
+  - Upload an SVG, PNG or JPG. SVGs are sanitised (scripts, external links and event handlers stripped); raster images need to be at least 512px.
+  - An optional separate version for dark backgrounds.
+  - Luvallplay generates the favicon, the square club avatar, the email header and the QR-poster version automatically. The admin checks a preview of each.
+- **Fonts:**
+  - Pick from a curated list of Google Fonts, or upload the club's own (WOFF2, WOFF, TTF or OTF, max 2 MB per file, one display and one text face). The uploader confirms the club has the licence to use it on the web.
+  - Luvallplay checks the font covers English and **Vietnamese** characters and warns about anything missing, with the built-in face filling the gaps.
+  - Fonts are served from Luvallplay's own storage, with fallbacks so text never disappears while a font loads.
+- **Colour palette:**
+  - Enter colours (hex, or pick visually), take them from the logo (automatic extraction suggests 3–5 colours), or **import from the club's website**. Luvallplay fetches the page server-side and reads its theme colour, logo and fonts (safe fetch: public addresses only, size and time limits).
+  - The club picks which colour is primary and which is the accent.
+  - **Contrast is automatic.** If a chosen colour can't carry readable text, Luvallplay keeps the colour for the logo and decorative uses but adjusts the shade used behind text, shows the original and adjusted side by side, and explains why in one sentence. A dark-mode version is generated the same way as for the presets.
+- Imported brands are stored per club (`club_brand_assets`), isolated like all club data, and can be replaced or reverted to a preset at any time. Changes preview before they go live.
+
+**Settings replacing constants:**
 
 ### 6.4 Domains and routing
 
@@ -418,7 +488,7 @@ export default defineModule({
 
 ### 6.5 Payments: Stripe Connect
 
-- Each club is a **connected account** created with **Accounts v2** (Stripe's recommended path for new Connect integrations). Charges are **direct charges**, so the club is the merchant of record and pays its own Stripe fees and refunds. Luvallplay optionally takes an **application fee**.
+- Each club is a **connected account** created with **Accounts v2** (Stripe's recommended path for new Connect integrations). Charges are **direct charges**, so the club is the merchant of record and pays its own Stripe fees and refunds. Luvallplay optionally takes an **application fee**. Stripe Connect is only for clubs on the *Online payments* mode (§6.2.1); free-play and cash clubs never see it.
 - **Three Wolves' existing Stripe account is connected rather than recreated**, so live subscriptions, customers and payouts stay where they are.
 - **Business model: free for now, paid plans ready but hidden.**
   - Tables `plans` and `club_plans`, plus an **entitlements** check that every module calls (`can(club, "module.feature")`).
@@ -469,32 +539,35 @@ Name: **Luvallplay**. Domain to buy: **luvallplay.org** (+ .com, .nz). The brand
 - **Type:** **Be Vietnam Pro** for text (full Vietnamese support, less generic than Inter) + **Barlow Condensed** for scores, ranks and headlines. Both are free Google Fonts.
 - **Dark mode** from day one.
 
-All palettes are validated for WCAG AA in light and dark. Club colours are auto-adjusted to meet contrast.
+All palettes are validated for WCAG AA in light and dark. Clubs choose from 12 tested schemes or import their own brand, with automatic contrast adjustment (§6.3.1–6.3.2).
 
 ### 7.2 Setup wizard ("Start your club", about 5 minutes)
 
 ```
-① Sign in (code)  →  ② Your club  →  ③ Pick modules  →  ④ Go global?  →  ⑤ Payments  →  ⑥ Invite & import  →  ⑦ Launch
+① Sign in (code) → ② Your club → ③ Look & feel → ④ How you charge → ⑤ Pick modules → ⑥ Go global? → ⑦ Invite & import → ⑧ Launch
 ```
 
 | Step | Content | Best practice applied |
 |---|---|---|
-| ② Your club | Name, URL slug (live availability check), city/venue (map pin, used by Find a club), logo upload (colours extracted automatically), languages | Autosave every field; live preview of the club page on the right (desktop) or a "Preview" toggle (mobile) |
-| ③ Pick modules | Starter **presets**: *Social club*, *Competitive club*, *Coaching academy*. Then grouped cards (Run your club · Money · Engage players) with on/off toggles | Dependencies selected automatically with a note ("Memberships needs Play days"); 3–4 sensible defaults pre-selected; never more than one decision per card |
-| ④ Go global? | Four plain toggles: list in **Find a club** · players can appear on **global leaderboards** · **social** · **marketplace**, each with a one-line privacy explanation | Opt-in, off by default except the directory listing; changeable any time |
-| ⑤ Payments | Stripe Connect onboarding (hosted), or **Skip — cash/bank transfer only for now** | Optional; the club can launch without it |
-| ⑥ Invite & import | Invite co-admins by email; import members from CSV or a spreadsheet paste | Skippable |
-| ⑦ Launch | Checklist summary, club link, QR poster for the hall, "Get the app" link | Celebrate; next-step suggestions |
+| ② Your club | Name, URL slug (live availability check), city/venue (map pin, used by Find a club), languages | Autosave every field; live preview of the club page on the right (desktop) or a "Preview" toggle (mobile) |
+| ③ Look & feel | Pick one of the **12 colour schemes** (§6.3.1), shown live on the club's own name, a play-day card and a button in light and dark. Or **Use our own branding**: upload logo, font and colours, or import them from the club's website (§6.3.2) | One tap picks a scheme; the custom path has its own short sub-steps with previews; automatic contrast fixes explained in plain words |
+| ④ How you charge | Three cards: **Free play** (no payments at all) · **Cash or bank transfer** · **Online payments** (Stripe Connect, which can also be connected later) (§6.2.1) | Free play is a full, first-class choice, not a fallback. Choosing it hides every money module and step that follows |
+| ⑤ Pick modules | Starter **presets**: *Free social club*, *Social club*, *Competitive club*, *Coaching academy*. Then grouped cards (Run your club · Money · Engage players) with on/off toggles. Money cards are hidden for Free play | Dependencies selected automatically with a note ("Memberships needs Play days"); 3–4 sensible defaults pre-selected; never more than one decision per card |
+| ⑥ Go global? | Four plain toggles: list in **Find a club** · players can appear on **global leaderboards** · **social** · **marketplace**, each with a one-line privacy explanation | Opt-in, off by default except the directory listing; changeable any time |
+| ⑦ Invite & import | Invite co-admins by email; import members from CSV or a spreadsheet paste | Skippable |
+| ⑧ Launch | Checklist summary, club link, QR poster for the hall (in the club's colours), "Get the app" link | Celebrate; next-step suggestions |
 
 - A progress bar and Back / Next on every step.
 - Everything after step ② is skippable.
-- Every choice can be changed later in **Admin → Modules**, which reuses the wizard's step ③ and ④ components.
+- Every choice can be changed later: **Admin → Look & feel** reuses step ③, **Admin → Payments** step ④ (with the mode-switch guards in §6.2.1), and **Admin → Modules** steps ⑤ and ⑥.
 
 ### 7.3 Club landing pages
 
 - Built from `packages/site-templates` sections fed by club settings, plus content from the built-in **Website editor** in Admin: text, photos, FAQ and reviews, with live preview.
 - Two or three templates to start: *Classic*, *Bold*, *Minimal*.
+- Templates render in the club's theme (preset or imported brand), so every template works with every scheme.
 - The site's job is to explain the club, show the schedule, prices and gallery, and turn visitors into players through **Join in the app** and **Book a casual session**.
+- For free-play clubs the price section becomes a clear **"Free to play: just turn up"** block, and the call to action is **Sign up for a play day**.
 
 ---
 

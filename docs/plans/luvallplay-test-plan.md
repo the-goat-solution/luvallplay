@@ -78,6 +78,9 @@ Pure logic, aiming for full coverage of the risky parts:
 - **Capacity:** courts → players, mini-game cap, waitlist promotion.
 - **i18n:** every English key has a Vietnamese key, and vice versa.
 - **Module dependency resolution** (Phase 6): enabling a module enables what it requires; disabling one that others need is refused.
+- **Payment modes:** for each mode (free, offline, online) the set of visible modules, prices and checkout steps is exactly what build plan §6.2.1 says. Mode switches obey the guards (paid → free blocked while paid subscriptions are active).
+- **Colour schemes:** every scheme in `docs/plans/assets/club-color-schemes.json` (and any added later) passes the contrast floors in light and dark: text on primary and accent ≥ 4.5:1, primary on the light background ≥ 4.5:1, fills on the dark background ≥ 3:1. Runs in CI, so a new scheme can't ship without passing.
+- **Imported brand colours:** the automatic contrast adjustment always returns a shade that passes, keeps the hue, changes lightness as little as possible, and leaves the original for logo use. Property-based tests over random colours.
 
 ### 3.3 Database integration tests (real Postgres)
 - Every repository function runs against a real database loaded with the fixture.
@@ -142,12 +145,15 @@ Each journey has an ID, runs in CI on phone and desktop sizes, and is also on th
 | P1 | Photo upload → moderation → gallery |
 | P2 | Shop order (card + cash), stock decrements, cancel, collect |
 | P3 | Data export; **account deletion** (and what is kept) |
-| S1 | Setup wizard: create a club, pick modules, skip payments, launch (Phase 6) |
+| S1 | Setup wizard: create a club, pick a colour scheme, choose online payments, pick modules, launch (Phase 6) |
+| S3 | **Free-play club:** set up with *Free play*. The club site says "Free to play", players join and sign up for a play day with no checkout, waitlist and "I can't make it" work, and **no price, "$0", checkout, receipt or Stripe call appears anywhere** (asserted on every page and by a Stripe mock that fails the test if called). Admin has no Money group. Later switch to cash payments and back, checking the guards |
+| S4 | **Look & feel:** pick each of the 12 schemes and confirm the club site, Me page and an email render in it, light and dark. Then import a brand: SVG logo, uploaded font, palette from the logo and from a test website. Confirm the automatic contrast fix, the generated favicon/avatar, and a revert to a preset |
 | S2 | Disable a module → its screens, admin pages, API and crons disappear; data is kept and comes back on re-enable |
 | X1 | Marketplace (Phase 7): list an item, public question and answer, buyer commits, seller confirms, contact details released by email only to the two parties |
 
 ### 3.9 Visual, accessibility and performance
 - Playwright screenshots of every main screen at each window class (320, 375, 600, 840, 1200, plus foldable split and tablet split).
+- From Phase 6: the key club screens (site home, Me, Arena, a play-day card, an email) are snapshotted **in every colour scheme, light and dark**, plus the Three Wolves imported brand. A scheme that breaks a layout or fails axe contrast fails CI.
 - Diffs are reviewed in the pull request.
 - axe accessibility scan: zero serious issues.
 - Lighthouse budgets for the club site (≥ 95) and app shell (≤ 150 KB JS, interactive < 1.5s on mid-range Android).
@@ -180,6 +186,11 @@ Each journey has an ID, runs in CI on phone and desktop sizes, and is also on th
 - OWASP ZAP baseline scan against the preview.
 - Tests for code brute force (5 tries, rate limits), session fixation, cross-origin request protection, CSP and CORS allow-lists.
 - Insecure direct object references are covered by the tenant suite.
+- **Brand uploads** (Phase 6):
+  - SVG logos with scripts, event handlers, external references or embedded HTML must come out clean, and none of it can run.
+  - Fonts and images over the size limit, with the wrong file type or malformed are refused.
+  - A club's assets can't be read or replaced by another club.
+- **"Import from website"** fetches only public addresses (no private, local or cloud-metadata IPs, no redirects into them), with time and size limits.
 - An external penetration test before public launch of multi-club.
 
 ### 3.14 Load
@@ -297,6 +308,8 @@ npm run data-guard -- rehearse --expect <file> --run "<migration command>"   # o
 | Stripe Connect (3) | Subscriptions charged twice, or not at all | Sandbox rehearsal. Reconciliation (every active subscription ↔ one membership) before and after. Test clocks across a renewal |
 | Account merge / deletion tools (all) | Wrong person's data moved or wiped | Expectations name the exact account ids. Finance records are kept on deletion (anonymised, not removed) |
 | Store app launch (5) | People can't sign in on the new app | Review demo account. Upgrade test. Sign-in journey on every device in the matrix |
+| Three Wolves theme → imported brand (6) | The live club's look changes, or a member sees another club's colours | Characterisation screenshots of Three Wolves before and after must match. Tenant suite covers theme and assets |
+| Switching a club's payment mode (6) | Paying members lose paid-for access, or get charged after going free | Mode-switch guard tests. Data guard: memberships by status unchanged. Stripe reconciliation after the switch |
 
 ---
 
@@ -369,7 +382,7 @@ On every pull request, and required before merging to `main`:
 | 3 Multi-tenant | Isolation suite, permission matrix, shadow reads clean for 7 days, data guard clean, Stripe reconciliation, characterisation check |
 | 4 API-driven app | Contract tests, old-client tests, offline tests |
 | 5 Store apps | Device matrix, upgrade test, in-app purchase sandbox, store checklist, beta feedback |
-| 6 Brand, sites, wizard | S1, S2, Lighthouse ≥ 95, accessibility clean, custom-domain tests |
+| 6 Brand, sites, wizard | S1–S4, every colour scheme passes contrast and visual checks, brand upload security tests, Lighthouse ≥ 95, accessibility clean, custom-domain tests |
 | 7 Global modules | Opt-in/out tests, moderation and safeguarding flows (16+ only), marketplace X1, abuse reports |
 
 ---

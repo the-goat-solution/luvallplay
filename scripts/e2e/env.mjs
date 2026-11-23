@@ -1,7 +1,7 @@
 // End-to-end test environment: a fresh local Postgres database, the
 // WebSocket bridge, the built app (`next start`) with email captured and side
 // effects off, then synthetic people and play days (test plan §7: synthetic
-// data only). Roles come from the real migration and the real grant script.
+// data only). The schema comes from the migrations; roles from the real grant script.
 //
 //   npm run build && node scripts/e2e/env.mjs        (prints the base URL, keeps running)
 //
@@ -129,6 +129,9 @@ function runNode(args) {
 
 export async function startEnv({ log = console.log } = {}) {
   await recreateDb();
+  // The schema comes from the versioned migrations, as in every new
+  // environment (production's shape, docs/schema/production.sql).
+  runNode(["scripts/db/migrate.mjs"]);
   const proxy = spawn(process.execPath, ["scripts/e2e/ws-proxy.mjs", String(WS_PORT)], { stdio: "ignore" });
   const env = {
     ...process.env,
@@ -143,7 +146,9 @@ export async function startEnv({ log = console.log } = {}) {
     PORT: String(PORT),
   };
   delete env.VERCEL_ENV;
-  const server = spawn("npx", ["next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"] });
+  // Own process group, so stop() ends next-server too (killing only npx left
+  // it running and held the test file open until its timeout).
+  const server = spawn("npx", ["next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"], detached: true });
   const serverLog = [];
   server.stdout.on("data", (d) => serverLog.push(String(d)));
   server.stderr.on("data", (d) => serverLog.push(String(d)));
@@ -160,14 +165,18 @@ export async function startEnv({ log = console.log } = {}) {
   await c.end();
   if (missing.length) throw new Error(`tables missing after warm-up: ${missing.join(", ")}\n` + serverLog.join(""));
   const seeded = await seed();
-  // The real migration and the real grant script (as in production).
-  runNode(["scripts/run-migration.mjs", "scripts/migrations/2026-11-phase1-admin-roles.sql"]);
+  // The real grant script (as in production). The Phase 1 roles tables are
+  // part of the baseline migration.
   runNode(["scripts/grant-role.mjs", "--role", "owner", "--platform", "--email", PEOPLE.owner.email]);
   runNode(["scripts/grant-role.mjs", "--role", "admin", "--email", PEOPLE.admin.email]);
   runNode(["scripts/grant-role.mjs", "--role", "coach", "--email", PEOPLE.coach.email]);
   log(`e2e: app at ${BASE}, database ${DB}`);
   const stop = () => {
-    server.kill("SIGTERM");
+    try {
+      process.kill(-server.pid, "SIGTERM");
+    } catch {
+      server.kill("SIGTERM");
+    }
     proxy.kill("SIGTERM");
   };
   return { base: BASE, dbUrl: DB_URL, seeded, stop, serverLog };

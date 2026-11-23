@@ -4,7 +4,20 @@ The code for each Phase 2 pull request is built and tested in its PR. These step
 
 ---
 
-## 0. Vercel no longer deploys from GitHub at all (found 23 Nov, needs your decision)
+## Status (23 Nov 2026, after the merge)
+
+- **Merged and deployed:** PRs 4, 6, 7 and 8 (#86, #88, #89, #91), on top of PRs 1, 2, 3 and 5.
+- **§0 resolved:** the repository is back on a personal GitHub account, and pushes deploy again (production on merge, previews on every branch).
+- **§1 done (option B):** the nine stale `preview/claude/*` branches in the old US Neon project are deleted, and previews build again. Option A (previews on Sydney branches) is still the long-term fix.
+- **§8 done:** Vercel Root Directory is `apps/web` (with files outside the root included), and production builds from it.
+- **§5 still to do (the production migrations):**
+  - The restore point **`pre-phase-2-data`** (branch `br-calm-silence-a73pvz66`) was taken on 23 Nov at 05:03 UTC.
+  - A read-only snapshot passed: 66 tables, 17 accounts, 15 live.
+  - The three migrations have **not** run: the build session's safety check blocks it from writing to the production database, so you run the commands below.
+  - The site works meanwhile and reads pricing from Sanity as before. **Admin → Money → Pricing & settings** shows a notice ("the settings tables haven't been created yet") until 0002 runs; edit prices in Sanity until then.
+- **§7 still to do:** the Studio move.
+
+## 0. Vercel no longer deploys from GitHub at all (found 23 Nov; resolved the same day)
 
 **What's wrong:** the repository now lives in the GitHub organisation `The-GOAT-Solution-VN`, and the Vercel team ("Timba Le's projects") is on the **Hobby** plan. Hobby can't deploy from a **private organisation** repository. So since the move, no push creates a deployment, neither previews nor production. Vercel's bot says so on every PR (#86, #88–#91, and #90 from another session). Production keeps serving its last deployment. Merges to main (#87, #90) aren't live until someone deploys them.
 
@@ -69,27 +82,28 @@ The site doesn't depend on any of this to keep working. Until 0002 has run, it k
 
 **Second sign-off (T−3):** Kelcee (or Timba) reads the two reports and says OK on PR #86.
 
-**Production run (T0)**, at a quiet time, not a play-day evening. From a checkout of the PR 6 branch, after `npm ci` (if PR 7, the monorepo, has merged by then: `pnpm install` at the root, then run these from `apps/web`):
+**Production run (T0)**, at a quiet time, not a play-day evening. PRs 4–8 are merged, so run it from an up-to-date checkout of `main`: `pnpm install` at the root, then the commands from `apps/web`.
 
 ```bash
-# 1. Restore point (instant): Neon console → Branches → New branch from main, now → name pre-phase-2-data
-#    (or ask the build session to create it through the Neon API).
+# 1. Restore point: already taken (pre-phase-2-data, 23 Nov 05:03 UTC). If more than a day
+#    has passed, take a fresh one: Neon console → Branches → New branch from main, now.
 
+cd apps/web
 export POSTGRES_URL='<production direct connection string>'      # the SYD_POSTGRES_URL_NON_POOLING value
-export PRODUCTION_DATABASE_HOSTS='<production host(s)>'           # the runner then refuses without --production
+export PRODUCTION_DATABASE_HOSTS='ep-shiny-rain-a76n3kg6.ap-southeast-2.aws.neon.tech'   # the runner then refuses without --production
 
 # 2. Snapshot, migrate, snapshot, diff, verify
-npm run data-guard -- snapshot --out .data-guard/prod-before.json      # read-only
-npm run db:migrate -- --baseline --production   # re-checks production = frozen dump, records the baseline
-npm run db:migrate -- --production              # 0001 then 0002, each in one transaction (lock_timeout 3s)
-npm run data-guard -- snapshot --out .data-guard/prod-after.json
-npm run data-guard -- diff .data-guard/prod-before.json .data-guard/prod-after.json \
+pnpm data-guard snapshot --out .data-guard/prod-before.json      # read-only
+pnpm db:migrate --baseline --production   # re-checks production = frozen dump, records the baseline
+pnpm db:migrate --production              # 0001 then 0002, each in one transaction (lock_timeout 3s)
+pnpm data-guard snapshot --out .data-guard/prod-after.json
+pnpm data-guard diff .data-guard/prod-before.json .data-guard/prod-after.json \
   --expect scripts/data-guard/expectations/2026-11-phase2-business-config.production.json
-npm run db:drift                                 # must say: No schema drift
+pnpm db:drift                                    # must say: No schema drift
 node scripts/verify-business-config.mjs          # must say: matches Sanity exactly
 ```
 
-**Done when:** the diff passes with 0 errors, drift is empty and the business config matches. Then merge PR 4 and PR 6 and deploy.
+**Done when:** the diff passes with 0 errors, drift is empty and the business config matches. No deploy is needed: the live site reads the database first and picks the new tables up within a minute (the home page refreshes every 60 seconds). `/admin/setup` → "Database schema" then shows all migrations applied.
 
 **If anything fails:** stop. Each migration is one transaction, so a failure leaves nothing half-done. Undoing a completed run is schema-only: swap the constraints back, or drop the two new tables. `pre-phase-2-data` holds the exact state from before.
 

@@ -8,17 +8,20 @@ const eslintConfig = [
   ...nextVitals,
   ...nextTs,
   {
-    // New in eslint-config-next 16 (react-hooks v7, written for the React
-    // Compiler). They flag patterns in existing screens that work today
-    // (setState in an effect, reading refs during render). Warnings for now;
-    // fixing them is listed in build plan §3.3 and is needed before turning
-    // on the React Compiler.
     rules: {
-      "react-hooks/set-state-in-effect": "warn",
-      "react-hooks/refs": "warn",
-      "react-hooks/immutability": "warn",
-      "react-hooks/purity": "warn",
-      "react-hooks/static-components": "warn",
+      // eslint-config-next 16's React Compiler rules (react-hooks v7) are
+      // errors: every screen follows them (fixed in Phase 2), which is what
+      // turning on the React Compiler needs.
+      "react-hooks/set-state-in-effect": "error",
+      "react-hooks/refs": "error",
+      "react-hooks/immutability": "error",
+      "react-hooks/purity": "error",
+      "react-hooks/static-components": "error",
+      // Plain <img> on purpose: player photos, shop images and gallery come
+      // from Vercel Blob and the Sanity CDN already sized, previews are blob:
+      // URLs, and logos are tiny. next/image would send every one through
+      // Vercel Image Optimization, which the Hobby plan caps.
+      "@next/next/no-img-element": "off",
     },
   },
 ];

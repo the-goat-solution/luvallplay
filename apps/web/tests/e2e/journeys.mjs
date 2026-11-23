@@ -93,11 +93,6 @@ async function api(token, body) {
   return { status: r.status, json };
 }
 
-async function playerId(email) {
-  const { rows } = await db.query(`SELECT id FROM players WHERE email = $1`, [email]);
-  return rows[0].id;
-}
-
 async function shot(page, name) {
   // Fully loaded (no loading skeleton) and no sheet still animating in.
   await page.waitForLoadState("networkidle");

@@ -1084,7 +1084,11 @@ export async function getPointsBoard(source: PointsSource, range: PeriodRange, i
   rows.sort((a, b) => b.value - a.value || b.index - a.index || a.name.localeCompare(b.name));
   return rankRows(rows)
     .slice(0, 200)
-    .map(({ tie: _tie, ...r }) => r);
+    .map((r) => {
+      const { tie, ...rest } = r;
+      void tie; // rankRows needs a tie key; the points board leaves it empty and drops it here
+      return rest;
+    });
 }
 
 /** Rank icon data for every player (leaderboards show it beside names). */

@@ -256,13 +256,13 @@ Nothing here changes data, and nothing changes behaviour until a setting is swit
 
 ## 7. Step 7: money audit (no data run)
 
-**What was audited.** Every multiply or divide by 100 in the app (71 lines) and every typed currency code (13 lines).
+**What was audited.** Every multiply or divide by 100 in the app and every typed currency code.
 
 | Found | Count | Now |
 |---|---|---|
-| Money converted by hand (`cents / 100`, `Math.round(amount * 100)`, `toFixed(2)` with a typed `$`) | 40 lines in 26 files | `toMinor`, `fromMinor`, `roundToMinor`, `minorToDecimal`, `formatMoney` in `@luvallplay/core/money`, with the currency as a parameter |
-| `currency: "nzd"` typed into payment calls | 8 calls | The club's currency |
-| Percentages, progress bars, rounding of measurements | 31 lines in 16 files | Left alone, and listed in the scan with what each number is |
+| Money converted by hand (`cents / 100`, `Math.round(amount * 100)`, `toFixed(2)` with a typed `$`) | 41 lines | `toMinor`, `fromMinor`, `roundToMinor`, `minorToDecimal`, `formatMoney` in `@luvallplay/core/money`, with the currency as a parameter |
+| `currency: "nzd"` typed into payment calls | 12 lines (payment calls, a balance filter, two defaults) | The club's currency |
+| Percentages, progress bars, rounding of measurements | 25 lines in 16 files | Left alone, and listed in the scan with what each number is |
 
 **How VND is handled.** A currency's decimal places come from one table (NZD 2, AUD 2, VND 0). 50,000 dong is stored as `50000` and shown as `50.000 ₫`; it is never divided by 100, and `50000.5` is refused as an amount. A currency that isn't in the table throws; it is never guessed.
 
@@ -271,7 +271,7 @@ Nothing here changes data, and nothing changes behaviour until a setting is swit
 **Unchanged for Three Wolves.** A test compares the new formatting with the old expression for a range of amounts, and the ledger's parsing and formatting with their old results.
 
 **Decisions.**
-- The `*_cents` columns keep their names. They hold minor units; for VND a "cents" column holds whole dong. Renaming 30 columns is a contract step for a later release.
+- The `*_cents` columns keep their names. They hold minor units; for VND a "cents" column holds whole dong. Renaming them (12 columns) is a contract step for a later release.
 - A row's currency is its club's currency (`tenants.currency`); rows don't carry their own. A club has one currency.
 - Until reads are tenant-aware (step 11), conversions that don't have the club's settings to hand use the built-in `CLUB_CURRENCY`, which a test keeps equal to the built-in `currency` setting. Property names such as `priceNzd` stay for now.
 

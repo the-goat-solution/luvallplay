@@ -867,7 +867,7 @@ Findings and changes recorded as the work goes:
   - **Finding:** two scheduled jobs didn't require the scheduler's secret when it was unset. All five now share one check that refuses in production without a secret.
   - **Not done in Phase 3:** the S3-compatible storage provider, the platform's own hosts (marketing, app, admin, api) and cross-region forwarding. They belong to the Vietnam launch and Phase 6.
 - **Step 7, money audit (no migration):**
-  - `@luvallplay/core/money` holds the currency table (exponents), exact conversion both ways, and formatting. 40 hand-written conversions in 26 files and 8 typed `"nzd"` payment calls now use it.
+  - `@luvallplay/core/money` holds the currency table (exponents), exact conversion both ways, and formatting. 41 hand-written conversions and 12 typed currency codes now use it.
   - VND cases are in the tests: whole dong, no division, fractions refused, Vietnamese grouping.
   - Two CI scans: arithmetic by 100 outside the helpers, and typed currency codes.
   - **Decision: column names stay (`*_cents`), and a row's currency is its club's.** Both are written in the runbook (§7).

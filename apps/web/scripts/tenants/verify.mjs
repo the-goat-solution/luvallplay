@@ -10,14 +10,16 @@
 // readiness gates are open, build plan §11.3); one module row per module in
 // the registry; one club_members row per account; every club_roles role
 // mirrored; at least one live owner; and, once migration 0004 has run, every
-// row of every club-owned table belongs to the club (no NULL tenant_id).
+// row of every club-owned table belongs to the club (no NULL tenant_id); and,
+// once migration 0005 has run, user_id agrees with the email join on every
+// row of the ten email-linked tables, and the triggers that keep it so exist.
 // Prints counts only, never an email.
 //
 // POSTGRES_URL chooses the database. DB_DRIVER=neon-ws works as in the other
 // operator scripts.
 import { dbClient } from "../db-client.mjs";
 import { MODULES } from "@luvallplay/modules";
-import { CLUB_OWNED_TABLES } from "@luvallplay/db/tenancy";
+import { CLUB_OWNED_TABLES, EMAIL_LINKED_TABLES } from "@luvallplay/db/tenancy";
 import { clubMemberDrift, defaultTenantSlug, reconcileClubMembers } from "../../lib/tenant-members.ts";
 
 const url = process.env.POSTGRES_URL;
@@ -81,6 +83,36 @@ try {
     console.log(`tenant_id: ${CLUB_OWNED_TABLES.length} club-owned tables, ${rows} rows checked.`);
   } else {
     console.log("tenant_id: columns not added yet (migration 0004 pending).");
+  }
+
+  // Step 3: user_id beside the email (skipped before migration 0005).
+  const withUserId = new Set(
+    (await db.query(`SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'user_id'`)).rows.map((r) => r.table_name),
+  );
+  if (withUserId.has("memberships")) {
+    let rows = 0;
+    let linked = 0;
+    for (const t of EMAIL_LINKED_TABLES) {
+      const r = (
+        await db.query(
+          `SELECT count(*)::int AS n, count(r.user_id)::int AS linked,
+                  count(*) FILTER (WHERE r.user_id IS DISTINCT FROM (SELECT p.id FROM players p WHERE p.deleted_at IS NULL AND p.email = lower(trim(r.email))))::int AS bad
+           FROM ${t} r`,
+        )
+      ).rows[0];
+      rows += r.n;
+      linked += r.linked;
+      if (r.bad) problems.push(`${t}: ${r.bad} row(s) where user_id and the email disagree`);
+    }
+    console.log(`user_id: ${EMAIL_LINKED_TABLES.length} email-linked tables, ${rows} rows, ${linked} linked to an account, ${rows - linked} for people without one.`);
+    const untidy = (await db.query(`SELECT count(*)::int AS n FROM players WHERE email <> lower(trim(email))`)).rows[0].n;
+    if (untidy) problems.push(`${untidy} account email(s) aren't trimmed and lower-case, so rows can't link to them`);
+    const triggers = new Set((await db.query(`SELECT tgname FROM pg_trigger WHERE NOT tgisinternal`)).rows.map((r) => r.tgname));
+    for (const name of [...EMAIL_LINKED_TABLES.map((t) => `${t}_link_account`), "players_link_rows"]) {
+      if (!triggers.has(name)) problems.push(`trigger ${name} is missing`);
+    }
+  } else {
+    console.log("user_id: links not added yet (migration 0005 pending).");
   }
 
   const drift = await clubMemberDrift(db, slug);

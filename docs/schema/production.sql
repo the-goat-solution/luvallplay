@@ -240,6 +240,8 @@ CREATE TABLE attendance (
   removed boolean DEFAULT false NOT NULL,
   recorded_at timestamp with time zone DEFAULT now() NOT NULL,
   tenant_id integer DEFAULT 1,
+  user_id integer,
+  CONSTRAINT attendance_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT attendance_email_not_null NOT NULL email,
   CONSTRAINT attendance_recorded_at_not_null NOT NULL recorded_at,
   CONSTRAINT attendance_removed_not_null NOT NULL removed,
@@ -249,6 +251,7 @@ CREATE TABLE attendance (
   CONSTRAINT attendance_pkey PRIMARY KEY (session_date, email)
 );
 CREATE INDEX attendance_email_idx ON public.attendance USING btree (email, session_date);
+CREATE INDEX attendance_user_id_idx ON public.attendance USING btree (user_id);
 
 CREATE TABLE auth_codes (
   id integer DEFAULT nextval('auth_codes_id_seq'::regclass) NOT NULL,
@@ -360,7 +363,9 @@ CREATE TABLE bookings (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   reminder_sent_at timestamp with time zone,
   tenant_id integer DEFAULT 1,
+  user_id integer,
   CONSTRAINT bookings_session_date_fkey FOREIGN KEY (session_date) REFERENCES sessions(date),
+  CONSTRAINT bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT bookings_created_at_not_null NOT NULL created_at,
   CONSTRAINT bookings_email_not_null NOT NULL email,
   CONSTRAINT bookings_first_name_not_null NOT NULL first_name,
@@ -371,6 +376,7 @@ CREATE TABLE bookings (
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
   CONSTRAINT bookings_payment_intent_id_key UNIQUE (payment_intent_id)
 );
+CREATE INDEX bookings_user_id_idx ON public.bookings USING btree (user_id);
 
 CREATE TABLE cancellation_feedback (
   id integer DEFAULT nextval('cancellation_feedback_id_seq'::regclass) NOT NULL,
@@ -395,10 +401,13 @@ CREATE TABLE casual_play_profiles (
   nickname text,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   tenant_id integer DEFAULT 1,
+  user_id integer,
+  CONSTRAINT casual_play_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT casual_play_profiles_email_not_null NOT NULL email,
   CONSTRAINT casual_play_profiles_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT casual_play_profiles_pkey PRIMARY KEY (email)
 );
+CREATE INDEX casual_play_profiles_user_id_idx ON public.casual_play_profiles USING btree (user_id);
 
 CREATE TABLE casual_play_sessions (
   date date NOT NULL,
@@ -473,6 +482,8 @@ CREATE TABLE day_requests (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   notified_at timestamp with time zone,
   tenant_id integer DEFAULT 1,
+  user_id integer,
+  CONSTRAINT day_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT day_requests_created_at_not_null NOT NULL created_at,
   CONSTRAINT day_requests_day_not_null NOT NULL day,
   CONSTRAINT day_requests_email_not_null NOT NULL email,
@@ -481,6 +492,7 @@ CREATE TABLE day_requests (
   CONSTRAINT day_requests_pkey PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX day_requests_pending_idx ON public.day_requests USING btree (day, lower(email)) WHERE (notified_at IS NULL);
+CREATE INDEX day_requests_user_id_idx ON public.day_requests USING btree (user_id);
 
 CREATE TABLE day_signup_settings (
   day text NOT NULL,
@@ -505,6 +517,8 @@ CREATE TABLE donations (
   status text DEFAULT 'pending'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   tenant_id integer DEFAULT 1,
+  user_id integer,
+  CONSTRAINT donations_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT donations_amount_cents_not_null NOT NULL amount_cents,
   CONSTRAINT donations_created_at_not_null NOT NULL created_at,
   CONSTRAINT donations_email_not_null NOT NULL email,
@@ -517,6 +531,7 @@ CREATE TABLE donations (
   CONSTRAINT donations_stripe_payment_intent_id_key UNIQUE (stripe_payment_intent_id),
   CONSTRAINT donations_stripe_subscription_id_key UNIQUE (stripe_subscription_id)
 );
+CREATE INDEX donations_user_id_idx ON public.donations USING btree (user_id);
 
 CREATE TABLE finance_entries (
   id integer DEFAULT nextval('finance_entries_id_seq'::regclass) NOT NULL,
@@ -620,7 +635,9 @@ CREATE TABLE jersey_registrations (
   lang text DEFAULT 'en'::text NOT NULL,
   print_country text,
   tenant_id integer DEFAULT 1,
+  user_id integer,
   CONSTRAINT jersey_registrations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'paid'::text, 'released'::text, 'cancelled'::text]))),
+  CONSTRAINT jersey_registrations_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT jersey_registrations_created_at_not_null NOT NULL created_at,
   CONSTRAINT jersey_registrations_early_bird_not_null NOT NULL early_bird,
   CONSTRAINT jersey_registrations_email_normalized_not_null NOT NULL email_normalized,
@@ -640,6 +657,7 @@ CREATE TABLE jersey_registrations (
   CONSTRAINT jersey_registrations_ref_code_key UNIQUE (ref_code)
 );
 CREATE UNIQUE INDEX jersey_one_per_email ON public.jersey_registrations USING btree (email_normalized) WHERE (status = ANY (ARRAY['pending'::text, 'paid'::text]));
+CREATE INDEX jersey_registrations_user_id_idx ON public.jersey_registrations USING btree (user_id);
 
 CREATE TABLE junior_profiles (
   id integer DEFAULT nextval('junior_profiles_id_seq'::regclass) NOT NULL,
@@ -694,6 +712,8 @@ CREATE TABLE memberships (
   renewal_of integer,
   free_days_granted integer DEFAULT 0 NOT NULL,
   tenant_id integer DEFAULT 1,
+  user_id integer,
+  CONSTRAINT memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT memberships_cancel_at_period_end_not_null NOT NULL cancel_at_period_end,
   CONSTRAINT memberships_created_at_not_null NOT NULL created_at,
   CONSTRAINT memberships_day_not_null NOT NULL day,
@@ -708,6 +728,7 @@ CREATE TABLE memberships (
   CONSTRAINT memberships_stripe_payment_intent_id_key UNIQUE (stripe_payment_intent_id),
   CONSTRAINT memberships_stripe_subscription_id_key UNIQUE (stripe_subscription_id)
 );
+CREATE INDEX memberships_user_id_idx ON public.memberships USING btree (user_id);
 
 CREATE TABLE message_threads (
   id integer DEFAULT nextval('message_threads_id_seq'::regclass) NOT NULL,
@@ -801,11 +822,14 @@ CREATE TABLE player_absences (
   email text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   tenant_id integer DEFAULT 1,
+  user_id integer,
+  CONSTRAINT player_absences_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT player_absences_created_at_not_null NOT NULL created_at,
   CONSTRAINT player_absences_email_not_null NOT NULL email,
   CONSTRAINT player_absences_session_date_not_null NOT NULL session_date,
   CONSTRAINT player_absences_pkey PRIMARY KEY (session_date, email)
 );
+CREATE INDEX player_absences_user_id_idx ON public.player_absences USING btree (user_id);
 
 CREATE TABLE player_events (
   id integer DEFAULT nextval('player_events_id_seq'::regclass) NOT NULL,
@@ -1211,7 +1235,9 @@ CREATE TABLE session_fill_ins (
   phone text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   tenant_id integer DEFAULT 1,
+  user_id integer,
   CONSTRAINT session_fill_ins_one_target CHECK (((membership_id IS NULL) <> (booking_id IS NULL))),
+  CONSTRAINT session_fill_ins_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT session_fill_ins_created_at_not_null NOT NULL created_at,
   CONSTRAINT session_fill_ins_email_not_null NOT NULL email,
   CONSTRAINT session_fill_ins_first_name_not_null NOT NULL first_name,
@@ -1222,6 +1248,7 @@ CREATE TABLE session_fill_ins (
 );
 CREATE UNIQUE INDEX session_fill_ins_booking_idx ON public.session_fill_ins USING btree (session_date, booking_id) WHERE (booking_id IS NOT NULL);
 CREATE UNIQUE INDEX session_fill_ins_membership_idx ON public.session_fill_ins USING btree (session_date, membership_id) WHERE (membership_id IS NOT NULL);
+CREATE INDEX session_fill_ins_user_id_idx ON public.session_fill_ins USING btree (user_id);
 
 CREATE TABLE sessions (
   date date NOT NULL,
@@ -1480,12 +1507,15 @@ CREATE TABLE waitlist (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   notified_at timestamp with time zone,
   tenant_id integer DEFAULT 1,
+  user_id integer,
+  CONSTRAINT waitlist_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT waitlist_created_at_not_null NOT NULL created_at,
   CONSTRAINT waitlist_email_not_null NOT NULL email,
   CONSTRAINT waitlist_id_not_null NOT NULL id,
   CONSTRAINT waitlist_name_not_null NOT NULL name,
   CONSTRAINT waitlist_pkey PRIMARY KEY (id)
 );
+CREATE INDEX waitlist_user_id_idx ON public.waitlist USING btree (user_id);
 
 CREATE TABLE webhook_deliveries (
   id integer DEFAULT nextval('webhook_deliveries_id_seq'::regclass) NOT NULL,
@@ -1658,3 +1688,62 @@ CREATE SEQUENCE wv_labels_id_seq AS integer OWNED BY wv_labels.id;
 CREATE SEQUENCE wv_models_id_seq AS integer OWNED BY wv_models.id;
 CREATE SEQUENCE wv_passes_id_seq AS integer OWNED BY wv_passes.id;
 CREATE SEQUENCE wv_updates_id_seq AS integer OWNED BY wv_updates.id;
+
+-- Functions
+CREATE OR REPLACE FUNCTION public.link_account_to_rows()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.deleted_at IS NOT NULL THEN
+    UPDATE "attendance" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "bookings" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "casual_play_profiles" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "day_requests" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "donations" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "jersey_registrations" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "memberships" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "player_absences" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "session_fill_ins" SET user_id = NULL WHERE user_id = NEW.id;
+    UPDATE "waitlist" SET user_id = NULL WHERE user_id = NEW.id;
+  ELSE
+    UPDATE "attendance" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "bookings" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "casual_play_profiles" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "day_requests" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "donations" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "jersey_registrations" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "memberships" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "player_absences" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "session_fill_ins" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+    UPDATE "waitlist" SET user_id = NEW.id WHERE user_id IS NULL AND lower(trim(email)) = NEW.email;
+  END IF;
+  RETURN NULL;
+END $function$;
+CREATE OR REPLACE FUNCTION public.link_row_to_account()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.user_id IS NULL AND NEW.email IS NOT NULL THEN
+      SELECT p.id INTO NEW.user_id FROM players p WHERE p.deleted_at IS NULL AND p.email = lower(trim(NEW.email));
+    END IF;
+  ELSIF NEW.email IS DISTINCT FROM OLD.email THEN
+    NEW.user_id := (SELECT p.id FROM players p WHERE p.deleted_at IS NULL AND p.email = lower(trim(NEW.email)));
+  END IF;
+  RETURN NEW;
+END $function$;
+
+-- Triggers
+CREATE TRIGGER attendance_link_account BEFORE INSERT OR UPDATE OF email ON public.attendance FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER bookings_link_account BEFORE INSERT OR UPDATE OF email ON public.bookings FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER casual_play_profiles_link_account BEFORE INSERT OR UPDATE OF email ON public.casual_play_profiles FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER day_requests_link_account BEFORE INSERT OR UPDATE OF email ON public.day_requests FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER donations_link_account BEFORE INSERT OR UPDATE OF email ON public.donations FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER jersey_registrations_link_account BEFORE INSERT OR UPDATE OF email ON public.jersey_registrations FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER memberships_link_account BEFORE INSERT OR UPDATE OF email ON public.memberships FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER player_absences_link_account BEFORE INSERT OR UPDATE OF email ON public.player_absences FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER players_link_rows AFTER INSERT OR UPDATE OF email, deleted_at ON public.players FOR EACH ROW EXECUTE FUNCTION link_account_to_rows();
+CREATE TRIGGER session_fill_ins_link_account BEFORE INSERT OR UPDATE OF email ON public.session_fill_ins FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER waitlist_link_account BEFORE INSERT OR UPDATE OF email ON public.waitlist FOR EACH ROW EXECUTE FUNCTION link_row_to_account();

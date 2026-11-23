@@ -99,3 +99,22 @@ export const PLATFORM_TABLES = [
 ] as const;
 
 export type ClubOwnedTable = (typeof CLUB_OWNED_TABLES)[number];
+
+/**
+ * Tables that used to find their person by email alone and now also carry
+ * user_id (Phase 3 step 3). The email stays as the contact field; a row for
+ * someone without an account has no user_id. Database triggers keep the link
+ * in step (migration 0005), whichever app version writes the row.
+ */
+export const EMAIL_LINKED_TABLES = [
+  "attendance",
+  "bookings",
+  "casual_play_profiles",
+  "day_requests",
+  "donations",
+  "jersey_registrations",
+  "memberships",
+  "player_absences",
+  "session_fill_ins",
+  "waitlist",
+] as const;

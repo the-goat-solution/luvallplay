@@ -127,5 +127,5 @@ export async function saveClubSetting(key: "max_casual_spots" | "booking_lock_da
   await orm()
     .insert(club_settings)
     .values({ key, value, updated_by: actorPlayerId })
-    .onConflictDoUpdate({ target: club_settings.key, set: { value, updated_at: new Date().toISOString(), updated_by: actorPlayerId } });
+    .onConflictDoUpdate({ target: [club_settings.tenant_id, club_settings.key], set: { value, updated_at: new Date().toISOString(), updated_by: actorPlayerId } });
 }

@@ -1,3 +1,4 @@
+import { visionName } from "./club-terms";
 import { db } from "./database";
 import { mirrorClubMember } from "./tenant-members";
 import { T } from "./arena-db";
@@ -146,7 +147,7 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
     const r = await q(
       `INSERT INTO attendance (session_date, email, source, verified, removed, recorded_at)
        SELECT session_date, $1, source, verified, removed, recorded_at FROM attendance WHERE lower(trim(email)) = $2
-       ON CONFLICT (session_date, email) DO UPDATE SET
+       ON CONFLICT (tenant_id, session_date, email) DO UPDATE SET
          verified = attendance.verified OR EXCLUDED.verified,
          removed = attendance.removed AND EXCLUDED.removed;`,
       [keepEmail, mergeEmail],
@@ -257,16 +258,16 @@ async function mergeAccounts(
        WHERE jsonb_typeof(stats->'players') = 'array' AND stats->'players' @> jsonb_build_array(jsonb_build_object('playerId', $2::int));`,
       [k, d],
     );
-    count("Wolf Vision match stats", r.rowCount);
+    count(`${visionName()} match stats`, r.rowCount);
   }
   // Ranks are rebuilt by the recalculation afterwards.
   if (await has(T.ranks)) await q(`DELETE FROM ${T.ranks} WHERE player_id = $1;`, [d]);
 
   // ── Other records by player id ──────────────────────────────────────
   const idTables: [string, string][] = [
-    [WV.passes, "Wolf Vision passes"],
-    [WV.updates, "Wolf Vision training updates"],
-    [WV.labels, "Wolf Vision labels"],
+    [WV.passes, `${visionName()} passes`],
+    [WV.updates, `${visionName()} training updates`],
+    [WV.labels, `${visionName()} labels`],
     ["shop_orders", "shop orders linked to the account"],
     ["player_events", "activity events"],
     ["message_threads", "message threads"],

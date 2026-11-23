@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import { clubDateKeyForInstant } from "./dates";
 import {
   autoMatchBankTransactions,
@@ -114,7 +115,7 @@ function accountLabel(a: AkahuAccount): string {
   return [a.connection?.name, a.name, a.formatted_account].filter(Boolean).join(" · ");
 }
 
-export function mapAkahuTransaction(t: AkahuTransaction, account: string | null): BankTransactionInput {
+export function mapAkahuTransaction(t: AkahuTransaction, account: string | null, timezone: string): BankTransactionInput {
   const ref = [t.meta?.particulars, t.meta?.code, t.meta?.reference].filter(Boolean).join(" / ");
   const description = [t.type && t.type !== "DEBIT" && t.type !== "CREDIT" ? t.type : null, t.merchant?.name ?? t.description]
     .filter(Boolean)
@@ -122,8 +123,8 @@ export function mapAkahuTransaction(t: AkahuTransaction, account: string | null)
   return {
     externalId: `akahu:${t._id}`,
     account,
-    // Akahu timestamps are UTC; the statement date is the NZ day.
-    date: clubDateKeyForInstant(new Date(t.date)),
+    // Akahu timestamps are UTC; the statement date is the club's day.
+    date: clubDateKeyForInstant(new Date(t.date), timezone),
     description: description || "Bank transaction",
     reference: [ref, t.meta?.other_account].filter(Boolean).join(" · ") || null,
     amountCents: dollarsToCents(t.amount),
@@ -139,6 +140,7 @@ export async function syncAkahu(): Promise<AkahuSyncResult> {
   try {
     const account = await pickAccount();
     const label = accountLabel(account);
+    const { timezone } = await clubClock();
 
     const [state, opening] = await Promise.all([getSyncState(SYNC_KEY), getOpeningBalances()]);
     const sinceMs = state.lastStartedAt
@@ -156,7 +158,7 @@ export async function syncAkahu(): Promise<AkahuSyncResult> {
       const page: { items: AkahuTransaction[]; cursor?: { next?: string | null } } = await akahu(
         `/accounts/${encodeURIComponent(account._id)}/transactions?${params}`,
       );
-      rows.push(...page.items.map((t) => mapAkahuTransaction(t, label)));
+      rows.push(...page.items.map((t) => mapAkahuTransaction(t, label, timezone)));
       cursor = page.cursor?.next ?? null;
     } while (cursor && ++pages < 50);
 

@@ -64,6 +64,27 @@
       "when": 1795463000000,
       "tag": "0008_terms_localized",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795463001000,
+      "tag": "0009_terms_seats",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795463002000,
+      "tag": "0010_tenant_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795463003000,
+      "tag": "0011_tenant_keys_contract",
+      "breakpoints": true
     }
   ]
 }

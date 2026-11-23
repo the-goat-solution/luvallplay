@@ -1,3 +1,5 @@
+import { enabledModules } from "@/lib/club-modules";
+import { sql } from "@/lib/database";
 import { NextResponse } from "next/server";
 import { CLUB_CURRENCY } from "@/lib/constants";
 import { z } from "zod";
@@ -27,6 +29,11 @@ export async function POST(request: Request) {
     body = bodySchema.parse(await request.json());
   } catch {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
+  }
+  // Reserve now, pay cash later: only while the club has "Payments to check" on
+  // (someone has to mark it paid). Existing reservations can still be completed.
+  if (body.method === "cash" && !(await enabledModules(sql)).has("payments-to-check")) {
+    return NextResponse.json({ error: "cash_unavailable" }, { status: 409 });
   }
   const name = `${player.firstName} ${player.lastName}`.trim();
   try {

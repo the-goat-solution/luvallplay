@@ -176,6 +176,8 @@ describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? 
   test("role changes are mirrored; the mirror keeps guests and disabled members as they are", async () => {
     const role = async (id: number) => (await one(`SELECT role FROM club_members WHERE user_id = $1`, [id]))?.role;
 
+    // This suite stops at 0003; the app's code names the roles key as it is after 0004 and 0010.
+    await c.query(readFileSync(new URL("./fixtures/roles-current-keys.sql", import.meta.url), "utf8"));
     // As the admin pages do: change the role in club_roles, then mirror it.
     await setRoleForPlayer(c, script, 4, "admin");
     assert.deepEqual((await clubMemberDrift(c)).map((d) => d.problem), ["role member should be admin"]);

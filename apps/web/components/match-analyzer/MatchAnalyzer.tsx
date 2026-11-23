@@ -1,5 +1,6 @@
 "use client";
 
+import { termed } from "@/lib/club-terms";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ObjectDetector } from "@mediapipe/tasks-vision";
 import { useLanguage } from "@/context/LanguageContext";
@@ -115,7 +116,8 @@ export function MatchAnalyzer({
   me?: Me | null;
 }) {
   const { lang, setLang } = useLanguage();
-  const c = COPY[lang];
+  // The club's own name for the tracker is filled in as each line is read.
+  const c = useMemo(() => termed(COPY[lang], lang), [lang]);
 
   // ── Challenge ─────────────────────────────────────────────────────────
   const [setup, setSetup] = useState<MatchSetup | null>(null);

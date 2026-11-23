@@ -111,13 +111,15 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
       const url = await freshDb("schema_ts");
       const text = readFileSync(join(out, "0000_from_schema.sql"), "utf8");
       await withClient(url, async (c) => {
+        // tenant_id's default calls this function, which a Drizzle schema can't describe (migration 0007 creates it).
+        await c.query(`CREATE FUNCTION app_tenant_id() RETURNS integer LANGUAGE sql STABLE AS $fn$ SELECT NULLIF(current_setting('app.tenant_id', true), '')::integer $fn$`);
         for (const s of text.split("--> statement-breakpoint").map((x) => x.trim()).filter(Boolean)) await c.query(s);
       });
       // Migrations after the baseline change the schema; only compare to the
       // latest dump.
       // Tables, indexes and sequences: a Drizzle schema can't describe the
       // functions and triggers, which the migrations test above covers.
-      const drift = schemaDiff(tablesOnly(readFileSync(EXPECTED_DUMP, "utf8")), await dumpOf(url));
+      const drift = schemaDiff(tablesOnly(readFileSync(EXPECTED_DUMP, "utf8")), tablesOnly(await dumpOf(url)));
       assert.deepEqual(drift, [], `a database built from db/schema.ts differs from ${EXPECTED_DUMP} (- expected, + actual):\n${drift.join("\n")}`);
 
       // Against the committed migrations: nothing new.

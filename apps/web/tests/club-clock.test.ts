@@ -50,3 +50,26 @@ test("membership cycle lengths go into SQL as whole numbers only", () => {
   assert.throws(() => projectedPeriodEndSql("$1", { monthly: 0, quarterly: 84 }));
   assert.throws(() => projectedPeriodEndSql("$1", { monthly: "28; DROP TABLE players" as unknown as number, quarterly: 84 }));
 });
+
+test("the last minute of a club day, in any time zone and across daylight saving", async () => {
+  const { endOfClubDay } = await import("../lib/shop-db.ts");
+  const iso = (dateKey: string, tz: string) => endOfClubDay(dateKey, tz).toISOString();
+  // New Zealand: +13 in summer, +12 in winter (what the old helper hard-coded).
+  assert.equal(iso("2026-11-27", "Pacific/Auckland"), "2026-11-27T10:59:00.000Z");
+  assert.equal(iso("2026-06-26", "Pacific/Auckland"), "2026-06-26T11:59:00.000Z");
+  // The days the clocks change.
+  assert.equal(iso("2026-09-27", "Pacific/Auckland"), "2026-09-27T10:59:00.000Z");
+  assert.equal(iso("2026-04-05", "Pacific/Auckland"), "2026-04-05T11:59:00.000Z");
+  // Other clubs: Hanoi (+7, no daylight saving), Sydney, and one west of UTC.
+  assert.equal(iso("2026-11-27", "Asia/Ho_Chi_Minh"), "2026-11-27T16:59:00.000Z");
+  assert.equal(iso("2026-11-27", "Australia/Sydney"), "2026-11-27T12:59:00.000Z");
+  assert.equal(iso("2026-11-27", "America/Los_Angeles"), "2026-11-28T07:59:00.000Z");
+  // Whatever the zone, that instant is still that club's day, and a minute later isn't.
+  for (const tz of ["Pacific/Auckland", "Asia/Ho_Chi_Minh", "Australia/Sydney", "America/Los_Angeles", "UTC"]) {
+    for (const day of ["2026-04-05", "2026-09-27", "2026-12-31", "2027-01-01"]) {
+      const end = endOfClubDay(day, tz);
+      assert.equal(clubDateKeyForInstant(end, tz), day, `${day} ${tz}`);
+      assert.notEqual(clubDateKeyForInstant(new Date(end.getTime() + 60_000), tz), day, `${day} ${tz} + 1 min`);
+    }
+  }
+});

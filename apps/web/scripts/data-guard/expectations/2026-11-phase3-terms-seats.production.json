@@ -1,0 +1,29 @@
+{
+  "change": "2026-11-phase3-terms-seats (production run)",
+  "description": "Phase 3 step 4 (build plan §6.3): Three Wolves' row in tenants gets its titles for the top seats on the points board: terms.alpha_name, terms.silver_name, and the Vietnamese ones under terms.localized.vi. They are the names the app already shows. One row of one platform table changes; nothing is removed. No account, email, phone, session, role, membership or club-owned row may change. Live traffic keeps writing while the migration runs, so the tables below are listed as volatile.",
+  "volatile": [
+    "player_sessions",
+    "players.claimed_at",
+    "player_settings",
+    "player_events",
+    "message_threads",
+    "messages",
+    "finance_sync_state",
+    "admin_audit_log",
+    "admin_handoffs",
+    "admin_invites",
+    "auth_codes",
+    "sms_sends",
+    "usage_counters"
+  ],
+  "allowChangedColumns": [
+    {
+      "target": "tenants.terms",
+      "reason": "The one intended change: Three Wolves' row gains the seat titles. tenants has one row."
+    },
+    {
+      "target": "tenants.updated_at",
+      "reason": "Set to now() by the same UPDATE."
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3-tenant-keys",
+  "description": "Phase 3 step 11 preparation (build plan §6.1, runbook §11): tenant_id's default on the 54 club-owned tables that have one becomes COALESCE(app_tenant_id(), 1), and 20 natural keys that assumed one club get a second unique index starting with tenant_id. Expand only: nothing is dropped. A schema change: no row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

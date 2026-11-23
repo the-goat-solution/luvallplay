@@ -35,23 +35,10 @@ test("the club's time zone is written once (lib/constants.ts), not typed into pa
   assert.deepEqual(offenders, [], "use CLUB_TIME_ZONE from lib/constants (or the club's settings) instead of the literal");
 });
 
-test("the club's clock is passed to the date helpers, except in the listed helpers that can't await it yet", () => {
-  // getClubToday() and clubDateKeyForInstant() without the club's clock use the
-  // built-in one. These are plain (non-async) helpers; each moves when its
-  // callers can hand it the clock. The list only shrinks.
-  const allowed: Record<string, number> = {
-    "apps/web/app/admin/(console)/financials/page.tsx": 1,
-    "apps/web/app/admin/(console)/members/page.tsx": 1,
-    "apps/web/app/api/casual-play/route.ts": 1,
-    "apps/web/app/api/bank/webhook/route.ts": 1,
-    "apps/web/lib/gallery-rotation.ts": 1,
-    "apps/web/lib/arena-db.ts": 1,
-    "apps/web/lib/bank-akahu.ts": 1,
-    "apps/web/lib/finance-stripe.ts": 1,
-    "apps/web/lib/casual-play-demo.ts": 1,
-    "apps/web/lib/leaderboard-data.ts": 1,
-    "apps/web/lib/shop-db.ts": 1,
-  };
+test("the club's clock is passed to every call of the date helpers", () => {
+  // getClubToday() and clubDateKeyForInstant() without the club's clock would
+  // use the built-in one. Nothing does any more; a new call without it fails here.
+  const allowed: Record<string, number> = {};
   const found: Record<string, number> = {};
   for (const dir of ["app", "lib", "components"].map((d) => join(WEB, d))) {
     for (const file of sourceFiles(dir)) {

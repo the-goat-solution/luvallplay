@@ -9,11 +9,11 @@
 // docs/screenshots/phase-1).
 import { test, before, after, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, statSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import pg from "pg";
 import { createRequire } from "node:module";
-import { startEnv, PEOPLE } from "../../scripts/e2e/env.mjs";
+import { startEnv, startSecondServer, PEOPLE } from "../../scripts/e2e/env.mjs";
 
 // Playwright is preinstalled globally (resolved through NODE_PATH, which only require() uses).
 const { chromium } = createRequire(import.meta.url)("playwright");
@@ -505,6 +505,94 @@ describe("G · Arena", () => {
     }
     assert.ok(await teaser.getByRole("link", { name: /full board in the app/i }).isVisible());
     await context.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T · tenant isolation at the routes (test plan §3.5; build plan §6.1)
+//
+// The same database, served a second time as a synthetic second club with
+// every statement run through row-level security (TENANT_SCOPE=enforce).
+// Every page and API route in the app is requested there, signed in as a
+// platform admin (who may open any club's admin). Nothing that belongs to
+// the first club may come back.
+// ---------------------------------------------------------------------------
+
+/** Every page and GET route in app/, as a URL path with made-up values for [params]. */
+function allRoutes() {
+  const out = [];
+  const fill = { date: "2026-01-02", id: "1", token: "no-such-token", slug: "x", draw: "1", code: "000000" };
+  const walk = (dir, url) => {
+    for (const name of readdirSync(dir)) {
+      const full = `${dir}/${name}`;
+      if (statSync(full).isDirectory()) {
+        if (name.startsWith("_") || name.startsWith("@")) continue;
+        const seg = name.startsWith("(") ? "" : name.startsWith("[") ? `/${fill[name.replace(/[\[\].]/g, "")] ?? "1"}` : `/${name}`;
+        walk(full, url + seg);
+      } else if (name === "page.tsx" || name === "route.ts") {
+        out.push({ path: url || "/", api: name === "route.ts" });
+      }
+    }
+  };
+  walk("app", "");
+  return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+describe("T · tenant isolation at the routes", () => {
+  test("T1 · served as a second club, no page or API route returns the first club's data", async () => {
+    // What marks the first club's data: its members, their messages, its play days' location.
+    const MARKERS = [PEOPLE.member.email, PEOPLE.player.email, PEOPLE.hidden.email, PEOPLE.coach.email, PEOPLE.admin.email, "Mia Member", "Pete Player", "Welcome to Fridays", "See you at Pioneer"];
+    // A synthetic second club, with every module on.
+    const club2 = (
+      await db.query(
+        `INSERT INTO tenants (slug, name, status, country, region, timezone, currency, languages, sports, payment_mode, incorporated, stripe_status, bank_details, theme, terms)
+         SELECT 'hanoi-smash', 'Hanoi Smash', status, 'VN', 'syd', 'Asia/Ho_Chi_Minh', 'VND', languages, sports, payment_mode, incorporated, 'none', '{}'::jsonb, theme, terms FROM tenants WHERE slug = 'three-wolves' RETURNING id`,
+      )
+    ).rows[0].id;
+    await db.query(`INSERT INTO tenant_modules (tenant_id, module_id, enabled, settings) SELECT $1, module_id, TRUE, settings FROM tenant_modules WHERE tenant_id = 1`, [club2]);
+    const second = await startSecondServer(env.serverEnv, { TENANT_SLUG: "hanoi-smash", TENANT_SCOPE: "enforce" });
+    const owner = await signedIn(PEOPLE.owner.email, DESKTOP); // an owner here, and a platform admin everywhere
+    const clubAdmin = await signedIn(PEOPLE.admin.email, DESKTOP); // an admin of the first club only
+    const get = async (base, path, token) => {
+      const r = await fetch(`${base}${path}`, { headers: token ? { Cookie: `tw_player=${token}` } : {}, redirect: "manual" });
+      return { status: r.status, body: r.status >= 300 && r.status < 400 ? "" : await r.text() };
+    };
+    try {
+      const routes = allRoutes();
+      assert.ok(routes.length > 80, `only ${routes.length} routes found`);
+      const leaks = [];
+      const broken = [];
+      let controlHits = 0;
+      for (const route of routes) {
+        for (const [who, token] of [["platform admin", owner.token], ["nobody", null]]) {
+          const there = await get(second.base, route.path, token);
+          if (there.status >= 500) broken.push(`${route.path} as ${who}: ${there.status}`);
+          const found = MARKERS.filter((m) => there.body.includes(m));
+          if (found.length) leaks.push(`${route.path} as ${who}: ${found.join(", ")}`);
+        }
+        // The control: the same request to the first club does show its data on many routes.
+        const here = await get(base(), route.path, owner.token);
+        if (MARKERS.some((m) => here.body.includes(m))) controlHits++;
+      }
+      assert.deepEqual(leaks, [], `the first club's data came back from the second club's site:\n${leaks.join("\n")}`);
+      assert.deepEqual(broken, [], `routes that fail when run through row-level security:\n${broken.join("\n")}\n${second.serverLog.join("").slice(-3000)}`);
+      assert.ok(controlHits >= 5, `the markers appear on only ${controlHits} routes of the first club: the check proves nothing`);
+      // The first club's admin is nobody at the second club.
+      assert.equal((await get(second.base, "/admin", clubAdmin.token)).status, 403);
+      assert.equal((await get(second.base, "/api/admin/finance/export", clubAdmin.token)).status, 403);
+      assert.equal((await get(base(), "/admin", clubAdmin.token)).status, 200);
+    } finally {
+      second.stop();
+      await owner.context.close();
+      await clubAdmin.context.close();
+      // Whatever the second club's visitors left behind (each club has its own rows now), then the club.
+      const owned = (await db.query(`SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'tenant_id' AND table_name <> 'tenant_modules'`)).rows;
+      for (let pass = 0; pass < 3; pass++) {
+        for (const { table_name } of owned) await db.query(`DELETE FROM "${table_name}" WHERE tenant_id = $1`, [club2]).catch(() => {});
+      }
+      await db.query(`DELETE FROM tenant_modules WHERE tenant_id = $1`, [club2]);
+      await db.query(`DELETE FROM tenants WHERE id = $1`, [club2]);
+    }
   });
 });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useClub } from "@/context/ClubContext";
 import { useMemo } from "react";
 import { GALLERY_IMAGES } from "@/lib/constants";
 import { Trans } from "@/components/Trans";
@@ -54,9 +55,10 @@ export function Gallery({ images }: { images?: CmsGalleryImage[] }) {
   // Deterministic weekly rotation (see lib/gallery-rotation.ts) — the same
   // shuffled subset shows to everyone until it rolls over next Wednesday,
   // rather than reshuffling on every page load.
+  const club = useClub();
   const galleryImages = useMemo(
-    () => selectWeeklyRotation(fullGalleryImages, GALLERY_DISPLAY_LIMIT),
-    [fullGalleryImages],
+    () => selectWeeklyRotation(fullGalleryImages, GALLERY_DISPLAY_LIMIT, club.clock),
+    [fullGalleryImages, club.clock],
   );
 
   return (

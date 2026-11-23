@@ -1,5 +1,6 @@
 "use client";
 
+import { termed, withTerms } from "@/lib/club-terms";
 import { useSyncExternalStore } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { RankIcon } from "@/components/arena/RankIcon";
@@ -22,19 +23,19 @@ const COPY = {
     lbKicker: "Leaderboard & ranks",
     lbTitle: "Climb from Plastic Shuttle to Diamond Racket",
     lbBody:
-      "Every play day, round robin win and Arena challenge earns Wolf Points. Rise through 35 ranks, fill your kit bag, and fight for the Alpha Wolf seat.",
+      "Every play day, round robin win and Arena challenge earns {pointsName}. Rise through 35 ranks, fill your kit bag, and fight for the {alphaName} seat.",
     lbStats: [
       ["35", "ranks"],
       ["4", "leagues"],
-      ["1", "Alpha Wolf"],
+      ["1", "{alphaName}"],
     ],
     lbCta: "See the leaderboard",
     ladderAlt: "Rank ladder",
-    wvKicker: "Wolf Vision",
+    wvKicker: "{visionName}",
     wvBeta: "Beta",
     wvTitle: "AI that watches your match",
     wvBody:
-      "Prop a phone on a tripod and Wolf Vision tracks all four players by itself: every hit, shot speed, distance covered and a live court map. The video never leaves your phone.",
+      "Prop a phone on a tripod and {visionName} tracks all four players by itself: every hit, shot speed, distance covered and a live court map. The video never leaves your phone.",
     wvStats: [
       ["4", "players tracked"],
       ["Every", "hit counted"],
@@ -53,19 +54,19 @@ const COPY = {
     lbKicker: "Bảng xếp hạng & cấp bậc",
     lbTitle: "Leo từ Cầu Nhựa lên Vợt Kim Cương",
     lbBody:
-      "Mỗi buổi chơi, mỗi trận thắng vòng tròn và thách đấu Arena đều mang về Wolf Points. Vượt qua 35 cấp bậc, sưu tầm đủ bộ đồ nghề và tranh ghế Alpha Wolf.",
+      "Mỗi buổi chơi, mỗi trận thắng vòng tròn và thách đấu Arena đều mang về {pointsName}. Vượt qua 35 cấp bậc, sưu tầm đủ bộ đồ nghề và tranh ghế {alphaName}.",
     lbStats: [
       ["35", "cấp bậc"],
       ["4", "giải đấu"],
-      ["1", "Alpha Wolf"],
+      ["1", "{alphaName}"],
     ],
     lbCta: "Xem bảng xếp hạng",
     ladderAlt: "Các cấp bậc",
-    wvKicker: "Wolf Vision",
+    wvKicker: "{visionName}",
     wvBeta: "Beta",
     wvTitle: "AI theo dõi trận đấu của bạn",
     wvBody:
-      "Đặt điện thoại lên giá đỡ và Wolf Vision tự theo dõi cả bốn người chơi: từng cú đánh, tốc độ cầu, quãng đường di chuyển và sơ đồ sân trực tiếp. Video không bao giờ rời khỏi điện thoại của bạn.",
+      "Đặt điện thoại lên giá đỡ và {visionName} tự theo dõi cả bốn người chơi: từng cú đánh, tốc độ cầu, quãng đường di chuyển và sơ đồ sân trực tiếp. Video không bao giờ rời khỏi điện thoại của bạn.",
     wvStats: [
       ["4", "người chơi"],
       ["Mọi", "cú đánh"],
@@ -84,7 +85,7 @@ const serverFalse = () => false;
 
 export function AppFeatures() {
   const { lang } = useLanguage();
-  const t = COPY[lang === "vi" ? "vi" : "en"];
+  const t = termed(COPY[lang === "vi" ? "vi" : "en"], lang === "vi" ? "vi" : "en");
   // Decided on the client (server snapshot is false) so the cached page never
   // shows the badge after the trial.
   const free = useSyncExternalStore(noopSubscribe, isTrial, serverFalse);
@@ -162,7 +163,7 @@ export function AppFeatures() {
           </div>
           <div className={`${s.screen} animate-in`} style={{ animationDelay: ".15s" }}>
             <div className={s.frame}>
-              <img src="/features/wolf-vision-live.webp" alt="Wolf Vision tracking a doubles match" width={1600} height={1094} loading="lazy" />
+              <img src="/features/wolf-vision-live.webp" alt={withTerms("{visionName} tracking a doubles match")} width={1600} height={1094} loading="lazy" />
               <span className={s.live}>
                 <i />
                 {t.live}

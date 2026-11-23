@@ -896,7 +896,15 @@ Findings and changes recorded as the work goes:
   - **Plan change: natural keys are widened in step 11, not step 10** (runbook §10).
   - The golden master has a fourth copy that runs through row-level security; it found three orderings without a tie-breaker, now fixed.
   - **Decision: the account-linking trigger runs as its owner**, because accounts are global and must link rows in every club.
-  - **Not done yet:** the route-level isolation suite (it needs requests for two clubs, which arrives with step 11) and a login for the app's role.
+  - **Not done yet:** a login for the app's role (runbook §11.2).
+- **Step 11, preparation (migration `0010_tenant_keys`, no row changes):**
+  - **The route-level isolation suite** is an end-to-end journey: a second, synthetic club runs on its own server under `TENANT_SCOPE=enforce`, and every route, generated from the `app` directory, is requested as a platform admin and as nobody.
+  - **Finding: the admin Players page listed every account on the platform.** Row-level security can't catch this, because accounts are global by design; the page now joins to the club's members. Lesson for later phases: every query on a platform table needs its own club condition, and only the route-level suite checks that.
+  - **Finding: `DEFAULT 1` made every write for a second club fail under `enforce`.** The default now follows the transaction's club.
+  - **Decision: keys are widened by expand and contract.** `0010` adds per-club unique indexes beside 20 natural keys and the app's upserts name them; `0011` drops the old keys and gives the per-club ones their names, reusing the indexes (no rebuild). The foreign keys to a play day carry the club.
+  - **Finding: the new version fails against a database without `0010`** (the calendar's upsert). Migrate first, then merge.
+  - **Production run, 23 Nov 2026, 22:40 UTC:** 6.0 s; data guard 18 accounts, 0 problems; no drift.
+  - **Finding about the tests:** the check "Drizzle Kit sees nothing to migrate" has not been comparing anything since migration `0006`: the journal has no snapshots after `0005`, and Drizzle Kit, given the temporary directory's absolute path, writes nothing. The other half of that test, a database built from `schema.ts` equals the reference dump, does work and covers the same ground. Left as is; to be repaired or removed in Phase 4.
 - **Tests added after step 10:**
   - **Permission matrix (test plan §3.6), from the database:** eight roles against six actions, each person's access resolved as the app's role for the club. It adds the rows Phase 3 brings: another club's admin (an admin there, nobody here), switching modules (owners and platform admins), and the platform's lock (holds for owners).
   - **Finding from journey S2:** the request proxy and the pages keep separate copies of the module switches, each remembered for a minute. So a switch takes effect at once on the instance that made it and within a minute everywhere else. `MODULES_CACHE_MS` sets the time (tests use 0).
@@ -906,6 +914,10 @@ Findings and changes recorded as the work goes:
   - **Plan change: a club's terms are per language.** Vietnamese has its own wording for the points ("Điểm Sói"), so `tenants.terms` gains `localized.<lang>`; a language with no name of its own uses the club's single name and never borrows Three Wolves'. Migration `0008_terms_localized` stores Three Wolves' Vietnamese name.
   - **Decision: the club's terms are set once per server process** (and per browser), because a deployment holds one club until step 11.
   - Sections, navigation, tabs and Me-page cards follow the module switches. Luvallplay staff can lock a module on or off with a reason.
+- **Steps 4 and 5, third round:**
+  - Every call of the date helpers passes the club's clock; the scan's list of exceptions is empty. The shop's end-of-day helper is time-zone-aware (tested in five zones and on the days the clocks change).
+  - No club term is typed outside `lib/constants.ts`: app code uses `pointsName()`, `visionName()`, `alphaName()`, `silverName()` or `withTerms()`, and module-level copy tables are wrapped so the terms are filled as each entry is read. Migration `0009_terms_seats` stores the seat titles.
+  - **Decision: switching a module off never strands money.** New "pay later" reservations stop; ones already waiting can still be marked as paid, and emails about payments already taken are still sent.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

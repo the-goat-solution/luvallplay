@@ -8,7 +8,7 @@
 
 -- Public sign-ups paused for these weekdays until an admin opens them
 -- (lib/constants.ts DEFAULT_PAUSED_DAYS).
-INSERT INTO day_signup_settings (day, paused) VALUES ('wednesday', TRUE) ON CONFLICT (day) DO NOTHING;
+INSERT INTO day_signup_settings (day, paused) VALUES ('wednesday', TRUE) ON CONFLICT (tenant_id, day) DO NOTHING;
 
 -- The current club jersey, with zero stock until an admin enters it.
 WITH jersey AS (
@@ -23,7 +23,7 @@ WITH jersey AS (
     '["/uploads/shop/jersey-port-hills-dawn-front.webp", "/uploads/shop/jersey-port-hills-dawn-back.webp"]'::jsonb,
     TRUE, TRUE, 0
   )
-  ON CONFLICT (slug) DO NOTHING
+  ON CONFLICT (tenant_id, slug) DO NOTHING
   RETURNING id
 )
 INSERT INTO shop_variants (product_id, fit, size)

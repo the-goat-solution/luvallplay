@@ -439,7 +439,8 @@ export async function markReminderSent(orderId: number): Promise<void> {
  * day (a membership day or a casual booking), or 14 days if none is booked.
  */
 export async function cashHoldUntil(email: string): Promise<{ until: Date; playDay: string | null }> {
-  const today = getClubToday(new Date(), await clubClock()).dateKey;
+  const clock = await clubClock();
+  const today = getClubToday(new Date(), clock).dateKey;
   const horizon = addDays(today, CASH_HOLD_FALLBACK_DAYS);
   const { rows } = await sql.query(
     `SELECT min(d)::text AS d FROM (
@@ -455,16 +456,27 @@ export async function cashHoldUntil(email: string): Promise<{ until: Date; playD
     [email.trim().toLowerCase(), today, horizon],
   );
   const playDay = (rows[0]?.d as string | null) ?? null;
-  return { until: endOfClubDay(playDay ?? horizon), playDay };
+  return { until: endOfClubDay(playDay ?? horizon, clock.timezone), playDay };
 }
 
-/** 11:59 PM in New Zealand on a club date, whichever of NZST/NZDT applies. */
-export function endOfClubDay(dateKey: string): Date {
-  for (const offset of ["+12:00", "+13:00"]) {
-    const candidate = new Date(`${dateKey}T23:59:00${offset}`);
-    if (getClubToday(candidate).dateKey === dateKey) return candidate;
-  }
-  return new Date(`${dateKey}T23:59:00+13:00`);
+/**
+ * 11:59 PM on a club date, in the club's time zone, whatever its offset is
+ * that day (daylight saving included).
+ */
+export function endOfClubDay(dateKey: string, timezone: string): Date {
+  // Start from 23:59 UTC on that date and correct by the zone's offset at
+  // that moment; a second pass settles days when the offset itself changes.
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const wall = Date.UTC(y, m - 1, d, 23, 59);
+  const offsetAt = (instant: number) => {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(instant));
+    const v: Record<string, number> = {};
+    for (const part of parts) if (part.type !== "literal") v[part.type] = Number(part.value);
+    return Date.UTC(v.year, v.month - 1, v.day, v.hour % 24, v.minute) - instant;
+  };
+  let instant = wall - offsetAt(wall);
+  instant = wall - offsetAt(instant);
+  return new Date(instant);
 }
 
 // ---------------------------------------------------------------------------

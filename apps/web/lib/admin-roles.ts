@@ -103,7 +103,7 @@ async function acceptPendingInvite(db: Db, playerId: number, rawEmail: string): 
      ), granted AS (
        INSERT INTO club_roles (player_id, role, granted_by)
        SELECT $1, role, invited_by FROM inv
-       ON CONFLICT (player_id) DO NOTHING
+       ON CONFLICT (tenant_id, player_id) DO NOTHING
        RETURNING role
      )
      SELECT inv.id, inv.role, inv.invited_by, (SELECT count(*) FROM granted)::int AS granted FROM inv;`,
@@ -267,7 +267,7 @@ export async function setRoleForPlayer(db: Db, actor: Actor, playerId: number, r
     const ins = await db.query(
       `INSERT INTO club_roles (player_id, role, granted_by)
        SELECT id, $2, $3 FROM players WHERE id = $1 AND deleted_at IS NULL
-       ON CONFLICT (player_id) DO NOTHING RETURNING role;`,
+       ON CONFLICT (tenant_id, player_id) DO NOTHING RETURNING role;`,
       [playerId, role, actorPlayerId],
     );
     if (!ins.rows[0]) throw new RoleError("not_found");

@@ -1,5 +1,7 @@
 "use client";
 
+import { useClub } from "@/context/ClubContext";
+import { moduleOn } from "@/lib/club-public";
 import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { useEffect, useRef, useState } from "react";
 import { useProfileT } from "@/lib/profile-i18n";
@@ -87,6 +89,7 @@ function PhotoViewer({ images, start, alt, onClose }: { images: string[]; start:
 
 function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg: string) => void }) {
   const { tr, lang } = useProfileT();
+  const cashAllowed = moduleOn(useClub(), "payments-to-check");
   const { refresh, refreshing } = useBusyAction();
   const fits = product.hasFit ? (["men", "women"] as const) : (["unisex"] as const);
   const [fit, setFit] = useState<string>(fits[0]);
@@ -233,9 +236,12 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
           <button type="button" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={!effectiveVariant || busy !== null || refreshing} aria-busy={busy === "card"} onClick={() => order("card")}>
             <BusyLabel busy={busy === "card"}>{effectiveVariant ? tr("shop_pay_card", { price }) : tr("shop_pick_size")}</BusyLabel>
           </button>
-          <button type="button" className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`} disabled={!effectiveVariant || busy !== null || refreshing} aria-busy={busy === "cash" || (refreshing && busy === null)} onClick={() => order("cash")}>
-            <BusyLabel busy={busy === "cash"}>{tr("shop_pay_cash")}</BusyLabel>
-          </button>
+          {/* Reserving now and paying cash later needs someone to mark it paid: only with that module on. */}
+          {cashAllowed && (
+            <button type="button" className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`} disabled={!effectiveVariant || busy !== null || refreshing} aria-busy={busy === "cash" || (refreshing && busy === null)} onClick={() => order("cash")}>
+              <BusyLabel busy={busy === "cash"}>{tr("shop_pay_cash")}</BusyLabel>
+            </button>
+          )}
         </div>
       </div>
 

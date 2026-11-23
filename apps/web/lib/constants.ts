@@ -9,7 +9,13 @@ export const CLUB_CURRENCY = "NZD";
 
 // The club's own names for points and for the match tracker: the built-in
 // values of the `terms` setting (lib/club-terms.ts).
-export const CLUB_TERMS = { pointsName: "Wolf Points", visionName: "Wolf Vision", localized: { vi: { pointsName: "Điểm Sói" } } } as const;
+export const CLUB_TERMS = {
+  pointsName: "Wolf Points",
+  visionName: "Wolf Vision",
+  alphaName: "Alpha Wolf",
+  silverName: "Silver Wolf",
+  localized: { vi: { pointsName: "Điểm Sói", alphaName: "Sói Đầu Đàn", silverName: "Sói Bạc" } },
+} as const;
 
 // Days of the week that grant recurring-membership access. Every other day
 // is casual-bookings-only. See lib/dates.ts's getMembershipDayForDate for the

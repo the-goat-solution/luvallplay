@@ -58,8 +58,7 @@ export const dynamic = "force-dynamic";
 // Only these keys survive a round trip through a server action's
 // "returnTo", so a crafted value can't smuggle anything else into the
 // redirect URL.
-function sanitizeReturnTo(raw: FormDataEntryValue | null): string {
-  const { dateKey: today } = getClubToday();
+function sanitizeReturnTo(raw: FormDataEntryValue | null, today: string): string {
   const params = new URLSearchParams(typeof raw === "string" ? raw : "");
   const filters = parseFinanceFilters(Object.fromEntries(params), today);
   return financeFiltersToSearchParams(filters).toString();
@@ -81,7 +80,7 @@ async function saveEntry(
 ): Promise<EntryFormState> {
   "use server";
 
-  const returnTo = sanitizeReturnTo(formData.get("returnTo"));
+  const returnTo = sanitizeReturnTo(formData.get("returnTo"), getClubToday(new Date(), await clubClock()).dateKey);
   const values: Record<string, string> = {};
   for (const key of ["entryDate", "amount", "method", "name", "person", "notes"]) {
     values[key] = String(formData.get(key) ?? "");
@@ -208,7 +207,7 @@ async function saveEntry(
 async function deleteEntry(formData: FormData) {
   "use server";
 
-  const returnTo = sanitizeReturnTo(formData.get("returnTo"));
+  const returnTo = sanitizeReturnTo(formData.get("returnTo"), getClubToday(new Date(), await clubClock()).dateKey);
   const id = Number(formData.get("id"));
   if (!Number.isSafeInteger(id) || id <= 0) {
     redirect(backTo(returnTo, { financeError: "That entry no longer exists." }));
@@ -225,7 +224,7 @@ async function deleteEntry(formData: FormData) {
 async function syncNow(formData: FormData) {
   "use server";
 
-  const returnTo = sanitizeReturnTo(formData.get("returnTo"));
+  const returnTo = sanitizeReturnTo(formData.get("returnTo"), getClubToday(new Date(), await clubClock()).dateKey);
   let destination: string;
   try {
     const result = await syncStripeFinance({ full: formData.get("full") === "1" });

@@ -811,6 +811,9 @@ Findings and changes recorded as the work goes:
   - The accounts table keeps the name `players`. New tables call the link `user_id`, the name the plan uses for the global identity.
   - The migration also creates Three Wolves in every new database (CI, previews, local). A second region's database needs its own first club, which is decided with the Hanoi work.
   - Rehearsed on a fresh Neon branch of production: 17 live accounts, 0 problems, no schema drift, 2 owners and 2 platform admins unchanged (`docs/rehearsals/2026-11-phase3-tenants.md`).
+  - **Production run, 23 Nov 2026, 07:36 UTC:** restore point `pre-phase-3-tenants`; the migration took 5.5 s; the data guard diff passed with 17 accounts and 0 problems; no drift; 19 accounts and 19 club members, mirror drift 0.
+  - Finding for step 6 (host routing): the site is served from `www.threewolvesbadminton.org` (the bare domain redirects there), and `tenants.custom_domain` holds the bare domain. The host lookup has to treat both as Three Wolves.
+  - Finding for step 10: many tables have keys that only work for one club (`sessions` by date, `attendance` by date and email, `club_settings` by key, `pricing_plans` by plan id, and others). Their primary keys and unique indexes have to gain `tenant_id` before a second club can exist.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

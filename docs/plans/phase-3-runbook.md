@@ -8,8 +8,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 
 | Step | What | State |
 |---|---|---|
-| 0 | Plan documents to `main` (#100, docs only) | **Needs you: merge #100** |
-| 1 | Tenants schema, Three Wolves as club #1 (#101) | Built. Rehearsal passed (0 problems). **Needs you: sign-off and the OK for the production run** (§1) |
+| 0 | Plan documents to `main` (#100, docs only) | Done: merged 23 Nov |
+| 1 | Tenants schema, Three Wolves as club #1 (#101) | **Production data run done and passed** (23 Nov, 07:36 UTC). **Needs you: merge #101** |
 | 2 | `tenant_id` columns, nullable, backfilled in batches | Not started |
 | 3 | Email links → `user_id` | Not started. Precondition met today: no `ACTIVE_MEMBERSHIP_WITHOUT_ACCOUNT` on the 23 Nov branch |
 | 4 | Settings replace constants (behind flags) | Not started |
@@ -31,6 +31,17 @@ The updated plans (decisions L to AF, §6.2.1 to §6.9, §11, test plan §3.16 t
 **Done when:** #100 is merged, and #101's diff no longer lists `docs/plans/luvallplay-*.md`.
 
 ## 1. Step 1: tenants schema (#101), one production data run
+
+**Done (23 Nov 2026, 07:36 UTC), run by the build session at the owner's request, after CI went green on #101:**
+- Restore point: `pre-phase-3-tenants` (`br-still-sound-a7oqk653`, 07:32 UTC).
+- Before: 17 live accounts, 17 signed in, access checks passed.
+- `0003_tenants` applied in 5.5 s.
+- Diff against `2026-11-phase3-tenants.production.json`: **passed**. 17 accounts checked, 0 problems; the only changes are the five new tables.
+- Drift: none. `verify.mjs`: 1 club, 22 modules on, 19 accounts and 19 club members (2 owners, 17 members), 2 `club_roles` rows and 2 platform admins unchanged, mirror drift 0.
+- The live site answers (`/`, `/login`). It runs the previous app version until #101 is merged, which ignores the new tables.
+- **Still to do:** merge #101, then the smoke test below. Roles changed between now and that deploy aren't mirrored; run `verify.mjs --reconcile` after the deploy if any were.
+
+What follows is the record of how the run was prepared.
 
 **What runs:** migration `0003_tenants`. Additive: five new tables (`tenants`, `tenant_modules`, `club_members`, `junior_profiles`, `guardianships`), then three inserts: Three Wolves' row, its 22 module rows, and one `club_members` row per account. No existing table, row or role changes. The site doesn't read the new tables yet.
 

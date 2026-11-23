@@ -15,8 +15,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 4 | Settings replace constants (behind flags) | In progress. Parts 1 to 5 merged (#104, #105); **shadow reads for settings started 23 Nov, 09:50 UTC** (§4) |
 | 5 | Module enforcement | Part 1 merged and live (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5) |
 | 6 | Second database driver, region routing | Built: the standard-Postgres driver, host routing (off until switched on), storage and scheduled-job interfaces (§6) |
-| 7 | Money audit (minor units, VND) | Not started |
-| 8 | Payments interface | Not started |
+| 7 | Money audit (minor units, VND) | Built: currency helpers, every conversion moved onto them, VND tests, two CI scans (§7) |
+| 8 | Payments interface | Built: the interface, Stripe as the first provider, a shared contract suite; one-off payments and the webhook signature check use it (§8) |
 | 9 | Entitlements and metering | Not started |
 | 10 | `NOT NULL`, foreign keys, row-level security | Not started |
 | 11 | Reads switched to tenant-aware queries | After **7 clean days of shadow reads** |
@@ -254,7 +254,45 @@ Nothing here changes data, and nothing changes behaviour until a setting is swit
 
 **Still provider-specific** (listed in `lib/storage.ts`, enforced by a test): browser-direct photo uploads and finance receipts use Vercel Blob's own protocol. They move with the S3-compatible provider for the Hanoi region.
 
-## 7. Housekeeping that needs you
+## 7. Step 7: money audit (no data run)
+
+**What was audited.** Every multiply or divide by 100 in the app and every typed currency code.
+
+| Found | Count | Now |
+|---|---|---|
+| Money converted by hand (`cents / 100`, `Math.round(amount * 100)`, `toFixed(2)` with a typed `$`) | 41 lines | `toMinor`, `fromMinor`, `roundToMinor`, `minorToDecimal`, `formatMoney` in `@luvallplay/core/money`, with the currency as a parameter |
+| `currency: "nzd"` typed into payment calls | 12 lines (payment calls, a balance filter, two defaults) | The club's currency |
+| Percentages, progress bars, rounding of measurements | 25 lines in 16 files | Left alone, and listed in the scan with what each number is |
+
+**How VND is handled.** A currency's decimal places come from one table (NZD 2, AUD 2, VND 0). 50,000 dong is stored as `50000` and shown as `50.000 ₫`; it is never divided by 100, and `50000.5` is refused as an amount. A currency that isn't in the table throws; it is never guessed.
+
+**Two scans run in CI** (`tests/money-scan.test.ts`): a new `/ 100` or `* 100` outside the money helpers fails unless its file is listed with what the number is, and a typed currency code fails outside four listed files.
+
+**Unchanged for Three Wolves.** A test compares the new formatting with the old expression for a range of amounts, and the ledger's parsing and formatting with their old results.
+
+**Decisions.**
+- The `*_cents` columns keep their names. They hold minor units; for VND a "cents" column holds whole dong. Renaming them (12 columns) is a contract step for a later release.
+- A row's currency is its club's currency (`tenants.currency`); rows don't carry their own. A club has one currency.
+- Until reads are tenant-aware (step 11), conversions that don't have the club's settings to hand use the built-in `CLUB_CURRENCY`, which a test keeps equal to the built-in `currency` setting. Property names such as `priceNzd` stay for now.
+
+## 8. Step 8: payments interface (no data run)
+
+| Piece | Where |
+|---|---|
+| The interface: create a payment, read it, refund, verify a webhook, list what succeeded (reconcile), payout status; and the provider's **capabilities** | `@luvallplay/core/payments` |
+| Stripe, the first provider | `lib/payments/stripe-provider.ts` |
+| A test provider that keeps real state and signs its webhooks; it also plays "a QR provider with no cards, recurring charges, refunds or webhooks" | `lib/payments/fake-provider.ts` |
+| The provider this deployment uses | `PAYMENTS_PROVIDER` (default `stripe`; an unknown value throws) |
+
+**The shared contract suite** (`tests/payments.test.ts`) runs on every provider: create, idempotency, refused amounts and currencies, full and partial refunds, never more than was paid, webhook signatures (real, altered, missing, forged), **events replayed twice and out of order**, reconcile, payout status, capability flags. Stripe runs it against a stand-in for its API with Stripe's own webhook signing.
+
+**Events twice and out of order.** `applyPaymentEvent` folds events into a payment's state so the result is the same in any order and with any repeats: a seen event changes nothing, a status only moves forward, a refunded total only grows and never passes the amount. A test runs every ordering of four events, each delivered twice.
+
+**What uses the interface now:** casual-play payments, one-off donations, shop orders, and the webhook's signature check. A test proves the request sent to Stripe is exactly what those routes sent before.
+
+**Still on Stripe's own API** (16 files, pinned by a test so the list only shrinks): subscriptions and their self-service changes, offline (cash and bank) invoices, the Vision pass checkout page, the ledger sync and the webhook's handlers. They move as their modules are touched; the recurring ones need the interface's subscription operations, which arrive with the first provider that lacks them (Vietnam).
+
+## 9. Housekeeping that needs you
 
 - **Rehearsal branch.** One reusable branch, `rehearsal-phase-3`, is kept for the rest of the phase and reset to a fresh copy of production before each rehearsal, so its host needs approving only once. It holds real data: delete it when Phase 3 is done.
 - **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.

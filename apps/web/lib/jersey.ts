@@ -1,3 +1,4 @@
+import { clubMoney } from "./money";
 // Club jersey registration — the rules, kept free of the database so they
 // can be reasoned about (and tested) on their own. Storage lives in
 // lib/jersey-db.ts; the public page is app/jersey.
@@ -72,7 +73,7 @@ export function priceCents(earlyBird: boolean, withPrint: boolean): number {
 }
 
 export function formatDollars(cents: number): string {
-  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+  return clubMoney(cents);
 }
 
 // One registration per person: the same inbox written differently

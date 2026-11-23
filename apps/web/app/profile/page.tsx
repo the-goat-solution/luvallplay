@@ -17,6 +17,7 @@ import { MeHeader, type MembershipPill } from "@/components/profile/me/MeHeader"
 import { NextUpCard } from "@/components/profile/me/NextUpCard";
 import { InboxPreview } from "@/components/profile/me/InboxPreview";
 import m from "@/components/profile/me/me.module.css";
+import { clubMajor } from "@/lib/money";
 
 // Me (home tab): "What's my status, and what's next?" Account and Membership
 // in one page (build plan §2.2). Settings are one tap away (⚙), the inbox is
@@ -47,7 +48,7 @@ export default async function MePage() {
     listShopProductsForPlayer(),
     listOrdersForPlayer(player.id),
   ]);
-  const prices = { monthly: MONTHLY_PRICE_CENTS / 100, quarterly: QUARTERLY_PRICE_CENTS / 100 };
+  const prices = { monthly: clubMajor(MONTHLY_PRICE_CENTS), quarterly: clubMajor(QUARTERLY_PRICE_CENTS) };
   const contact = { firstName: player.firstName, lastName: player.lastName, email: player.email, phone: player.phone ?? "" };
   const initials = `${player.firstName.trim()[0] ?? player.email[0] ?? "?"}${player.lastName.trim()[0] ?? ""}`.toUpperCase();
 
@@ -76,7 +77,7 @@ export default async function MePage() {
           ) : (
             <JoinPanel prices={prices} pausedDays={pausedDays} player={contact} />
           )}
-          <PlayCalendar days={calendar} player={contact} casualPriceNzd={CASUAL_PRICE_CENTS / 100} />
+          <PlayCalendar days={calendar} player={contact} casualPriceNzd={clubMajor(CASUAL_PRICE_CENTS)} />
         </div>
         <div className={m.col}>
           <ShopSection products={products} orders={orders} />

@@ -12,6 +12,7 @@ import {
   type MembershipTier,
 } from "@/lib/constants";
 import { formatDateLong } from "@/lib/dates";
+import { clubMoney } from "@/lib/money";
 
 const DAY_LABEL: Record<MembershipDay, string> = {
   friday: "Friday",
@@ -153,7 +154,7 @@ export function RenewMembershipForm({
               </div>
               <div className="plan-opt-desc">{p.desc}</div>
             </div>
-            <div className="plan-opt-price">${p.cents / 100}</div>
+            <div className="plan-opt-price">{clubMoney(p.cents)}</div>
           </div>
         ))}
       </div>

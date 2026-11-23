@@ -11,7 +11,9 @@
     "./safe-next": "./src/safe-next.ts",
     "./first-name": "./src/first-name.ts",
     "./club-config": "./src/club-config.ts",
-    "./host-routing": "./src/host-routing.ts"
+    "./host-routing": "./src/host-routing.ts",
+    "./money": "./src/money.ts",
+    "./payments": "./src/payments.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

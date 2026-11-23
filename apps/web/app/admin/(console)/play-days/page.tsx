@@ -25,6 +25,7 @@ import {
 import { reconcileOfflinePayment, recordOfflinePayment } from "@/lib/offline-payment-stripe";
 import { getOfflinePaymentReconciliation, type OfflineReconciliation } from "@/lib/bank-db";
 import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMethodField";
+import { clubMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -460,7 +461,7 @@ export default async function PlayDaysAdminPage({
         <>
           <FormPanel summary="＋ Add a player" title="Add a player who paid cash or by bank transfer" id="add">
             <p className={kit.muted} style={{ fontSize: 13, margin: 0 }}>
-              Records the ${CASUAL_PRICE_CENTS / 100} payment and adds them to this play day, even when sign-ups are closed. A bank transfer is matched on the{" "}
+              Records the {clubMoney(CASUAL_PRICE_CENTS)} payment and adds them to this play day, even when sign-ups are closed. A bank transfer is matched on the{" "}
               <AdminLink href="/admin/financials/bank">Bank</AdminLink> page as soon as it shows up.
             </p>
             <form action={addOfflinePlayer.bind(null, selectedDate)} className={kit.formGrid}>

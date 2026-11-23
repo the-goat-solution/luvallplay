@@ -24,6 +24,7 @@ import {
 } from "@/lib/shop-db";
 import { getStripe } from "@/lib/stripe";
 import { publicBlobConfigured, uploadPublicImage } from "@/lib/public-blob";
+import { clubMajor, clubMinor, clubMoney, clubCurrencyLower } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ function back(param: "toast" | "toastError", message: string, extra = "", tab: "
   redirect(`/admin/shop?${tab === "products" ? "tab=products&" : ""}${param}=${encodeURIComponent(message)}${extra}`);
 }
 
-const money = (c: number) => `$${(c / 100).toFixed(c % 100 === 0 ? 0 : 2)}`;
+const money = (c: number) => clubMoney(c);
 
 /** Records the cash in Stripe (invoice paid out of band) so Financials imports it as Cash. */
 async function recordCashInStripe(order: Order): Promise<string | null> {
@@ -41,7 +42,7 @@ async function recordCashInStripe(order: Order): Promise<string | null> {
   const customers = await stripe.customers.list({ email: order.email, limit: 1 });
   const customer = customers.data[0] ?? (await stripe.customers.create({ email: order.email, name: order.name || undefined }));
   const items = order.items.map((i) => i.label).join(", ");
-  await stripe.invoiceItems.create({ customer: customer.id, amount: order.totalCents, currency: "nzd", description: `Three Wolves shop — ${items} — cash` });
+  await stripe.invoiceItems.create({ customer: customer.id, amount: order.totalCents, currency: clubCurrencyLower(), description: `Three Wolves shop — ${items} — cash` });
   const invoice = await stripe.invoices.create({
     customer: customer.id,
     collection_method: "send_invoice",
@@ -143,7 +144,7 @@ async function saveProductAction(productId: number | null, formData: FormData) {
     nameVi: String(formData.get("nameVi") ?? "").trim(),
     descEn: String(formData.get("descEn") ?? "").trim(),
     descVi: String(formData.get("descVi") ?? "").trim(),
-    priceCents: Math.round(price * 100),
+    priceCents: clubMinor(price),
     hasFit: formData.get("hasFit") === "on",
     hasSizes: formData.get("hasSizes") === "on",
     active: formData.get("active") === "on",
@@ -256,7 +257,7 @@ function ProductForm({ product }: { product: Product | null }) {
       <textarea name="descVi" defaultValue={product?.descVi} placeholder="Description (Vietnamese)" rows={3} className={kit.input} style={{ fontFamily: "inherit" }} />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", fontSize: 13 }}>
         <label>
-          Price $ <input name="price" type="number" step="0.01" min="0.5" defaultValue={product ? product.priceCents / 100 : ""} required className={kit.input} style={{ width: 90 }} />
+          Price $ <input name="price" type="number" step="0.01" min="0.5" defaultValue={product ? clubMajor(product.priceCents) : ""} required className={kit.input} style={{ width: 90 }} />
         </label>
         <label>
           Display order <input name="sort" type="number" defaultValue={product?.sort ?? 0} className={kit.input} style={{ width: 60 }} />

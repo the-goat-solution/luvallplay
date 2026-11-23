@@ -28,6 +28,7 @@ import { MemberRetryButton } from "@/components/admin/MemberRetryButton";
 import { MemberFreeMonthButton } from "@/components/admin/MemberFreeMonthButton";
 import { StripeSyncButton } from "@/components/admin/StripeSyncButton";
 import { SubmitButton } from "@/components/admin/SubmitButton";
+import { clubMajor, clubMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -139,7 +140,7 @@ async function addOfflineMember(formData: FormData) {
       firstName: activated.name,
       plan: activated.plan,
       day: activated.day,
-      priceNzd: amount / 100,
+      priceNzd: clubMajor(amount),
       recurring: false,
       periodStart: activated.periodStart,
       periodEnd: activated.periodEnd,
@@ -382,8 +383,8 @@ export default async function MembersAdminPage({ searchParams }: { searchParams:
                 <label className={kit.field}>
                   Plan
                   <select name="plan" defaultValue="monthly" className={kit.select}>
-                    <option value="monthly">Monthly (${MONTHLY_PRICE_CENTS / 100})</option>
-                    <option value="quarterly">Quarterly (${QUARTERLY_PRICE_CENTS / 100})</option>
+                    <option value="monthly">Monthly ({clubMoney(MONTHLY_PRICE_CENTS)})</option>
+                    <option value="quarterly">Quarterly ({clubMoney(QUARTERLY_PRICE_CENTS)})</option>
                   </select>
                 </label>
                 <OfflinePaymentMethodField />

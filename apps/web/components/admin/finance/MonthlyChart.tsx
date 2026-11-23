@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatCents, monthLabel } from "@/lib/finance";
 import styles from "./financials.module.css";
+import { clubMajor } from "@/lib/money";
 
 type Month = { month: string; receivedCents: number; spentCents: number };
 
@@ -32,7 +33,7 @@ function niceStep(range: number, targetTicks = 4): number {
 }
 
 function compactDollars(cents: number): string {
-  const d = cents / 100;
+  const d = clubMajor(cents);
   const abs = Math.abs(d);
   const sign = d < 0 ? "−" : "";
   if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1)}K`;

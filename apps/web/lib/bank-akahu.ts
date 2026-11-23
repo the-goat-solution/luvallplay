@@ -8,6 +8,7 @@ import {
 } from "./bank-db";
 import { getSyncState, markSyncFailed, markSyncSucceeded } from "./finance-db";
 import { sideEffectAllowed } from "./side-effects.ts";
+import { clubMinor } from "./money";
 
 // ANZ → the club, via Akahu (https://akahu.nz).
 //
@@ -83,7 +84,7 @@ async function akahu<T>(path: string): Promise<T> {
 // Akahu amounts are dollars as JSON numbers (e.g. -45.5). Round through a
 // fixed 2-dp string so 0.1 + 0.2-style float noise can't shift a cent.
 export function dollarsToCents(amount: number): number {
-  return Math.round(Number(amount.toFixed(2)) * 100);
+  return clubMinor(Number(amount.toFixed(2)));
 }
 
 export async function listAkahuAccounts(): Promise<AkahuAccount[]> {

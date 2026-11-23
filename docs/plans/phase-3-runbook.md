@@ -207,9 +207,9 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 | 7 | The booking clock (time zone, booking window, cut-off hour): the date helpers take it; the booking rule and the Me page pass the club's | Built |
 | 8 | Membership cycle lengths in the renewal SQL, the Stripe sync and the free month | Built |
 | 9 | Client components read the club's public settings from a provider (capacity, mini-game cap, the booking clock) | Live (#107) |
-| 10 | The club's clock passed at every call of the date helpers. The last 11 plain helpers now get it from their callers; the test's list of exceptions is empty | Live (#112), the last 11 built |
-| 12 | The shop's end-of-day helper works in any time zone (it used to try New Zealand's two UTC offsets) | Built |
-| 13 | The club's terms typed into app code (emails, admin screens, the analyzer's and the home page's copy tables): 44 lines in 16 files now read the settings. The rank titles "Alpha Wolf" and "Silver Wolf" ("Sói Đầu Đàn", "Sói Bạc") are club terms too. Migration `0009_terms_seats` adds them to Three Wolves' row (one production data run) | Built and rehearsed |
+| 10 | The club's clock passed at every call of the date helpers. The last 11 plain helpers now get it from their callers; the test's list of exceptions is empty | Merged (#112, #113) |
+| 12 | The shop's end-of-day helper works in any time zone (it used to try New Zealand's two UTC offsets) | Merged (#113) |
+| 13 | The club's terms typed into app code (emails, admin screens, the analyzer's and the home page's copy tables): 44 lines in 16 files now read the settings. The rank titles "Alpha Wolf" and "Silver Wolf" ("Sói Đầu Đàn", "Sói Bạc") are club terms too. Migration `0009_terms_seats` adds them to Three Wolves' row | **Done.** Production data run passed (23 Nov, 21:14 UTC): 18 accounts, 0 problems, no drift; restore point `rehearsal-phase-3`, reset just before. Merged (#113) |
 | 11 | The club's own terms leave the shared dictionaries: "Wolf Points", "Wolf Vision" and the Vietnamese "Điểm Sói" are placeholders, filled per language from the club's settings. Migration `0008_terms_localized` adds the Vietnamese name to Three Wolves' row | **Done.** Production data run passed (23 Nov, 20:23 UTC): 17 accounts, 0 problems, no drift. The restore point was `rehearsal-phase-3`, reset to a fresh copy of production just before, because the Neon branch limit left no room for a new one. Merged (#112) |
 
 **Still to build in step 4:** the time zone, booking window and cut-off read from the settings at run time (server and client); membership days and cycle lengths; the "Wolf" terms in the translated strings; capacity in the admin pages and client components; and the crons, emails, webhooks and API becoming club-scoped.
@@ -421,6 +421,8 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 2. Set `CLUB_SETTINGS_SOURCE=database` and `TENANT_SCOPE=enforce` for Production, one at a time, a day apart, redeploying each time. Watch the error log for an hour after each.
 3. Rollback for either: set it back to `shadow` and redeploy.
 4. Still to build before or with the switch: natural keys widened with `tenant_id`, the `DEFAULT 1` dropped, a login for the app's role (so the app can't connect as the owner at all), and the route-level isolation suite, which needs requests for two clubs.
+
+**Before step 9's tables are relied on for add-ons** (a note from the planning session, decision AK): the Xero accounting sync will be a paid add-on that any club can hold, including one on the free plan. Today `club_plans` allows one current row per club. Add-ons need either a `kind` on `plans` (`base` or `addon`) with the one-current-row rule applied to base plans only, or a separate table. Nothing is built for this yet, and nothing built so far blocks it.
 
 ## 12. Housekeeping that needs you
 

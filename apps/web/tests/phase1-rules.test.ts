@@ -17,7 +17,7 @@ import { firstNameOnly } from "../lib/first-name.ts";
 // ---------------------------------------------------------------------------
 
 type Expect = "allow" | "deny" | "sign-in" | "step-up";
-type RoleName = "anonymous" | "player" | "member" | "coach" | "admin" | "owner" | "platform" | "break-glass";
+type RoleName = "anonymous" | "player" | "member" | "coach" | "admin" | "owner" | "platform";
 
 const ROUTES = {
   adminPlayDays: { path: "/admin/play-days", api: false },
@@ -38,11 +38,9 @@ export const MATRIX: Record<RoleName, Record<RouteName, Expect>> = {
   admin: { adminPlayDays: "allow", adminMembers: "allow", adminFinancials: "allow", manageAdmins: "deny", platformAdmins: "deny", refundFreeMonth: "allow", cancelMembership: "allow" },
   owner: { adminPlayDays: "allow", adminMembers: "allow", adminFinancials: "allow", manageAdmins: "allow", platformAdmins: "deny", refundFreeMonth: "allow", cancelMembership: "allow" },
   platform: { adminPlayDays: "allow", adminMembers: "allow", adminFinancials: "allow", manageAdmins: "allow", platformAdmins: "allow", refundFreeMonth: "allow", cancelMembership: "allow" },
-  // The ADMIN_PASSWORD cookie, kept two weeks as break-glass.
-  "break-glass": { adminPlayDays: "allow", adminMembers: "allow", adminFinancials: "allow", manageAdmins: "allow", platformAdmins: "allow", refundFreeMonth: "allow", cancelMembership: "allow" },
 };
 
-const ROLE_ACCESS: Record<Exclude<RoleName, "anonymous" | "break-glass">, Access> = {
+const ROLE_ACCESS: Record<Exclude<RoleName, "anonymous">, Access> = {
   player: { role: null, platformAdmin: false },
   member: { role: null, platformAdmin: false },
   coach: { role: "coach" as ClubRole, platformAdmin: false },
@@ -53,7 +51,6 @@ const ROLE_ACCESS: Record<Exclude<RoleName, "anonymous" | "break-glass">, Access
 
 function ctxFor(role: RoleName, signedInHoursAgo = 1): AdminContext | null {
   if (role === "anonymous") return null;
-  if (role === "break-glass") return { kind: "break-glass" };
   const signedInAt = new Date(Date.now() - signedInHoursAgo * 3_600_000);
   return {
     kind: "player",
@@ -85,7 +82,7 @@ test("permission matrix: every role × every Phase 1 admin route", () => {
 
 test("permission matrix: step-up — a sign-in older than 12 hours asks for a fresh code, only where access would be allowed", () => {
   for (const [role, row] of Object.entries(MATRIX) as [RoleName, Record<RouteName, Expect>][]) {
-    if (role === "anonymous" || role === "break-glass") continue;
+    if (role === "anonymous") continue;
     for (const [route, expected] of Object.entries(row) as [RouteName, Expect][]) {
       const got = answer(ctxFor(role, 13), route);
       assert.equal(got, expected === "allow" ? "step-up" : expected, `${role} → ${route} with a 13-hour-old sign-in`);
@@ -103,8 +100,19 @@ test("permission matrix: every admin page in the nav has a column", async () => 
       const v = decide(ctxFor(role), href, false);
       if (role === "anonymous") assert.equal(v.ok, false);
       if (role === "player" || role === "member") assert.equal(v.ok, false, `${role} can't open ${href}`);
-      if (role === "platform" || role === "break-glass") assert.equal(v.ok, true, `${role} opens ${href}`);
+      if (role === "platform") assert.equal(v.ok, true, `${role} opens ${href}`);
     }
+  }
+});
+
+test("break-glass is gone: the old admin_token cookie opens nothing, and the password routes are removed", async () => {
+  const { existsSync } = await import("node:fs");
+  const { adminContextFromCookies } = await import("../lib/admin-access.ts");
+  // A cookie minted by the old password login, alone, is no admin session.
+  const ctx = await adminContextFromCookies((name) => (name === "admin_token" ? "9999999999999.deadbeef" : undefined));
+  assert.equal(ctx, null);
+  for (const route of ["../app/api/admin-login/route.ts", "../app/api/admin-logout/route.ts", "../app/admin/login/page.tsx", "../lib/admin-session.ts"]) {
+    assert.equal(existsSync(new URL(route, import.meta.url)), false, route);
   }
 });
 

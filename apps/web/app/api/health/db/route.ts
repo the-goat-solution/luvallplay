@@ -39,7 +39,6 @@ export async function GET(request: Request) {
     // Present or not (values are never shown).
     settings: {
       email: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM),
-      adminPassword: Boolean(process.env.ADMIN_PASSWORD),
       playerSessionSecret: Boolean(process.env.PLAYER_SESSION_SECRET),
     },
   };

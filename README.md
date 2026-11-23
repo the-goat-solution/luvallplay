@@ -124,7 +124,7 @@ Set up:
 - `RESEND_API_KEY` / `EMAIL_FROM` — provision via `vercel integration add resend/resend-email` (Vercel Marketplace), or manually in the [Resend dashboard](https://resend.com). `EMAIL_FROM` must be a verified sending address/domain.
 - `CRON_SECRET` — set automatically by Vercel when a project has cron jobs; also protects manual calls to the endpoint.
 
-View the roster for any past or upcoming play day at `/admin/play-days` — pick a date from the dropdown. Log in at `/admin/login` with just a password (set `ADMIN_PASSWORD`).
+View the roster for any past or upcoming play day at `/admin/play-days` — pick a date from the dropdown. Admin opens from your own account: sign in at `/login` with an account that has a club role (owner, admin or coach) or platform admin. There is no admin password.
 
 > Note: Vercel Cron runs in UTC with no DST awareness. The schedule (`0 3 * * *`) targets 4:00 PM NZDT (daylight saving); during NZST (non-DST months) the check will run around 5:00 PM instead.
 

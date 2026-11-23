@@ -54,7 +54,6 @@ export const HANDOFF_TTL_SECONDS = 60;
 
 export type Actor =
   | { kind: "player"; playerId: number; access: Access }
-  | { kind: "break-glass" }
   | { kind: "script" };
 
 
@@ -70,7 +69,7 @@ function isMissingTable(err: unknown): boolean {
  * The player's admin access. A pending invite for their email is applied
  * here, so it takes effect the first time they sign in, whichever way they
  * sign in. Missing tables (migration not run yet) mean no access, never an
- * error: the break-glass password still works.
+ * error.
  */
 export async function getAccess(db: Db, playerId: number, email?: string | null): Promise<Access> {
   try {
@@ -356,6 +355,7 @@ export async function setPlatformAdmin(db: Db, actor: Actor, playerId: number, o
 // Audit log
 // ---------------------------------------------------------------------------
 
+/** "break-glass" appears only on rows written before the password login was removed (Phase 2). */
 export type AuditActorKind = "player" | "break-glass" | "script" | "system";
 
 export type AuditEntry = {

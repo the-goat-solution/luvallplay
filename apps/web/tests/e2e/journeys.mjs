@@ -326,17 +326,16 @@ describe("A · accounts and admin", () => {
     await owner.context.close();
   });
 
-  test("A · break-glass: /admin/login goes to sign-in; the password form still works and is audited", async () => {
+  test("A · no break-glass: /admin/login (with or without ?breakglass=1) goes to sign-in, and the password login is gone", async () => {
     const context = await browser.newContext({ viewport: DESKTOP, baseURL: base() });
     const page = await context.newPage();
     await page.goto("/admin/login");
     assert.match(page.url(), /\/login\?next=%2Fadmin/);
     await page.goto("/admin/login?breakglass=1");
-    await page.getByLabel("Admin password").fill("e2e-break-glass");
-    await page.getByRole("button").first().click();
-    await page.waitForURL(/\/admin\/play-days/);
-    const { rows } = await db.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'admin.break_glass_login'`);
-    assert.ok(rows[0].n >= 1);
+    assert.match(page.url(), /\/login\?next=%2Fadmin/);
+    const r = await fetch(`${base()}/api/admin-login`, { method: "POST", body: new URLSearchParams({ password: "e2e-break-glass" }), redirect: "manual" });
+    assert.equal(r.status, 404);
+    assert.equal(r.headers.get("set-cookie"), null);
     await context.close();
   });
 

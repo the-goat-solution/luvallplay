@@ -1,12 +1,6 @@
 // First: choose the database before any import below can connect.
 import "@/lib/db-env";
 import { NextResponse, type NextRequest } from "next/server";
-import {
-  ADMIN_COOKIE,
-  adminCookieOptions,
-  appendLegacyAdminCookieClear,
-  signAdminToken,
-} from "@/lib/admin-session";
 import { audit, resolveAdmin } from "@/lib/admin-access";
 import { summarizeAdminRequest } from "@/lib/admin-roles";
 
@@ -42,13 +36,7 @@ function loginRedirect(request: NextRequest, stepUp: boolean): NextResponse {
   const url = new URL("/login", request.url);
   url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
   if (stepUp) url.searchParams.set("stepup", "1");
-  const response = redirectTo(request, url);
-  // A dead break-glass cookie is cleared so it stops being re-checked.
-  if (request.cookies.get(ADMIN_COOKIE)) {
-    response.cookies.set(ADMIN_COOKIE, "", { ...adminCookieOptions(), maxAge: 0 });
-    appendLegacyAdminCookieClear(response);
-  }
-  return response;
+  return redirectTo(request, url);
 }
 
 function forbidden(api: boolean): NextResponse {
@@ -88,11 +76,8 @@ async function guardAdmin(request: NextRequest): Promise<NextResponse> {
   const path = request.nextUrl.pathname;
   const api = path.startsWith("/api/admin");
 
-  // The old password page. Admin is now reached by signing in as yourself;
-  // the password form stays reachable at /admin/login?breakglass=1 for two
-  // weeks after the switch-over (break-glass), then it's removed.
+  // The old password page: admin is reached by signing in as yourself.
   if (path === "/admin/login") {
-    if (request.nextUrl.searchParams.get("breakglass") === "1" && process.env.ADMIN_PASSWORD) return NextResponse.next();
     const url = new URL("/login", request.url);
     url.searchParams.set("next", "/admin");
     return redirectTo(request, url);
@@ -121,13 +106,7 @@ async function guardAdmin(request: NextRequest): Promise<NextResponse> {
     await audit(verdict.ctx, summary);
   }
 
-  const response = NextResponse.next();
-  if (verdict.ctx.kind === "break-glass") {
-    // Sliding expiry: any admin page pushes the 48-hour deadline out again.
-    const refreshed = await signAdminToken();
-    if (refreshed) response.cookies.set(ADMIN_COOKIE, refreshed, adminCookieOptions());
-  }
-  return response;
+  return NextResponse.next();
 }
 
 export async function proxy(request: NextRequest) {

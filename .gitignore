@@ -41,3 +41,9 @@ next-env.d.ts
 
 # MediaPipe runtime, copied from node_modules by scripts/copy-mediapipe.mjs
 /public/mediapipe
+
+# data guard snapshots and rehearsal reports (hashed, but keep them out of git)
+/.data-guard
+
+# Raw end-to-end screenshots (the committed contact sheets are the .jpg files)
+/docs/screenshots/**/*.png

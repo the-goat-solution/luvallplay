@@ -1,8 +1,11 @@
 import type { NextConfig } from "next";
-import { applyDatabaseSwitch } from "./lib/db-switch";
+import { applyDatabaseSwitch, guardPreviewDatabase } from "./lib/db-switch";
+import { REDIRECTS } from "./lib/redirects";
 
 // Pages built at deploy time read the same database as the running site.
 applyDatabaseSwitch();
+// Previews never touch the production database (lib/db-switch.ts).
+guardPreviewDatabase();
 
 // Player accounts add: Vercel Blob (player photos, shop images: shown from
 // *.public.blob.vercel-storage.com, uploaded straight from the browser via
@@ -25,6 +28,10 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // End-to-end test builds only (E2E_BUILD=1): one shared copy of the
+  // database driver, so lib/local-neon.ts can point it at a local Postgres.
+  // Production builds are unchanged.
+  ...(process.env.E2E_BUILD === "1" ? { serverExternalPackages: ["@vercel/postgres", "@neondatabase/serverless", "ws"] } : {}),
   experimental: {
     // Receipt photos on the admin Financials form go up through a Server
     // Action. The default 1 MB cap is too small for a PDF invoice; Vercel's
@@ -38,13 +45,10 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
     ],
   },
-  // Wolf Vision lives in the profile app now; the old standalone page sends people there
-  // (query kept, so old Arena links and payment returns still land on the right match).
+  // Every URL that moved (lib/redirects.ts): Wolf Vision, Account and
+  // Membership (now Me), and the public leaderboard (now in the Arena).
   async redirects() {
-    return [
-      { source: "/match-analyzer/label", destination: "/profile/wolf-vision/label", permanent: true },
-      { source: "/match-analyzer", destination: "/profile/wolf-vision", permanent: true },
-    ];
+    return REDIRECTS;
   },
   async headers() {
     return [

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { smsVerifySchema } from "@/lib/auth-schemas";
 import { checkRateLimit, getClientIp } from "@/lib/security";
-import { createPlayerSession, getPlayerFromRequest, safeNextPath } from "@/lib/player-auth";
+import { endSessionFromRequest, createPlayerSession, getPlayerFromRequest, safeNextPath } from "@/lib/player-auth";
 import { getPlayerByVerifiedPhone, markPhoneVerified } from "@/lib/player-db";
 import { verifySmsCode } from "@/lib/sms";
 import { signPhoneProof } from "@/lib/phone-proof";
@@ -38,6 +38,7 @@ export async function POST(request: Request) {
     // this proof attaches the number to that account.
     return NextResponse.json({ ok: true, needsEmail: true, phoneProof: signPhoneProof(result.phoneE164) });
   }
+  await endSessionFromRequest(request);
   const token = await createPlayerSession(player.id, request.headers.get("user-agent"));
   const response = NextResponse.json({
     ok: true,

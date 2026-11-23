@@ -104,6 +104,25 @@ async function playerForToken(token: string | undefined): Promise<Player | null>
   return mapPlayer(row as PlayerRow);
 }
 
+/**
+ * The player and when this session signed in (created by a code or a
+ * handoff link). Admin step-up compares against the sign-in time: sessions
+ * slide for 90 days, but admin needs a sign-in within 12 hours.
+ */
+export async function sessionForToken(token: string | undefined): Promise<{ player: Player; signedInAt: Date } | null> {
+  if (!token || token.length > 100) return null;
+  await ensurePlayerTables();
+  const { rows } = await sql.query(
+    `SELECT ${PLAYER_COLUMNS}, s.created_at AS session_created
+     FROM player_sessions s JOIN players p ON p.id = s.player_id
+     WHERE s.token_hash = $1 AND s.expires_at > NOW() AND p.deleted_at IS NULL;`,
+    [sha256(token)],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return { player: mapPlayer(row as PlayerRow), signedInAt: new Date(row.session_created as Date) };
+}
+
 /** The signed-in player for this request (server components and actions). */
 export const getCurrentPlayer = cache(async (): Promise<Player | null> => {
   const store = await cookies();
@@ -126,6 +145,21 @@ export async function endPlayerSession(token: string | undefined): Promise<void>
   if (!token) return;
   await ensurePlayerTables();
   await sql`DELETE FROM player_sessions WHERE token_hash = ${sha256(token)};`;
+}
+
+/**
+ * A new sign-in on this device replaces the session it had (e.g. the admin
+ * step-up asks a signed-in player for a fresh code): the old one is ended so
+ * sessions don't pile up.
+ */
+export async function endSessionFromRequest(request: Request): Promise<void> {
+  const header = request.headers.get("cookie") ?? "";
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq !== -1 && part.slice(0, eq).trim() === PLAYER_COOKIE) {
+      await endPlayerSession(decodeURIComponent(part.slice(eq + 1).trim()));
+    }
+  }
 }
 
 export async function endAllPlayerSessions(playerId: number): Promise<void> {

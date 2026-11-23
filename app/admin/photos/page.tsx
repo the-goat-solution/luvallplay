@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminLink } from "@/components/admin/AdminLink";
-import { AdminToastBridge } from "@/components/admin/AdminToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { btn, btnDanger, btnSecondary, card, formatNz, pill } from "@/components/admin/ui";
@@ -91,7 +91,7 @@ export default async function PhotosAdminPage({ searchParams }: { searchParams: 
         inappropriate ones are blocked (and you get an email).
       </p>
       <AdminNav active="photos" />
-      <AdminToastBridge />
+      <FlashToast />
 
       <p style={{ fontSize: 13, color: pct > 70 ? "#a12a2a" : "#666", marginTop: 0 }}>
         Storage used: {mb(used)} of the free 1 GB ({pct}%).

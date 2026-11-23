@@ -17,6 +17,7 @@ export function Sheet({
   header,
   onHoldChange,
   dismissible = true,
+  wide = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -28,6 +29,8 @@ export function Sheet({
   /** Called with true while a finger/pointer is held on the sheet. */
   onHoldChange?: (holding: boolean) => void;
   dismissible?: boolean;
+  /** Tablets: a wider dialog (the inbox's list + thread side by side). */
+  wide?: boolean;
 }) {
   const titleId = useId();
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -105,7 +108,7 @@ export function Sheet({
     >
       <div
         ref={sheetRef}
-        className={styles.sheet}
+        className={`${styles.sheet} ${wide ? styles.sheetWide : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy ?? (title ? titleId : undefined)}

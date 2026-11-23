@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createPlayerSession, safeNextPath, verifyLinkToken } from "@/lib/player-auth";
+import { endSessionFromRequest, createPlayerSession, safeNextPath, verifyLinkToken } from "@/lib/player-auth";
 import { ensurePlayerForEmail } from "@/lib/player-db";
 import { setPlayerCookies } from "@/lib/player-cookies";
 
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(`/login?expired=1&next=${encodeURIComponent(next)}`, url), 303);
   }
   const { player } = await ensurePlayerForEmail(result.email, { via: "signup" });
+  await endSessionFromRequest(request);
   const token = await createPlayerSession(player.id, request.headers.get("user-agent"));
   const target = player.firstName.trim() ? next : `/login/details?next=${encodeURIComponent(next)}`;
   const response = NextResponse.redirect(new URL(target, url), 303);

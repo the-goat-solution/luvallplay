@@ -75,7 +75,7 @@ export async function POST(request: Request) {
         result = await confirmAutoRenewFromOneTime(player, m, body.plan, body.setupIntentId);
         break;
     }
-    revalidatePath("/profile/membership");
+    revalidatePath("/profile");
     return NextResponse.json({ ok: true, ...(result as object) });
   } catch (err) {
     if (err instanceof SelfServiceError) return NextResponse.json({ error: err.code }, { status: 409 });

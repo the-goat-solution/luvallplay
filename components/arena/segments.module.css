@@ -1,0 +1,75 @@
+/* Arena segmented control: Challenges · Leaderboard · Ranks. */
+.segments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 14px;
+  border-radius: 999px;
+  background: var(--cream-dark);
+  max-width: 520px;
+}
+.segment {
+  min-height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-mid);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 6px;
+}
+.on {
+  background: var(--navy-dark);
+  color: var(--cream);
+}
+.segment:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+@media (max-width: 359px) {
+  .segment {
+    font-size: 12.5px;
+  }
+}
+
+.ladder {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+.ladder li {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 8px;
+  border-radius: 10px;
+}
+.ladder li small {
+  color: var(--text-mid);
+  font-size: 12.5px;
+}
+.ladder li em {
+  grid-column: 2 / -1;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bronze-dark);
+  margin-top: -6px;
+}
+.tierName {
+  font-weight: 600;
+  color: var(--navy-dark);
+}
+.here {
+  background: #fffaf0;
+  box-shadow: inset 3px 0 0 var(--bronze);
+}

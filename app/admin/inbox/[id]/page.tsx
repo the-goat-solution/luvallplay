@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminLink } from "@/components/admin/AdminLink";
-import { AdminToastBridge } from "@/components/admin/AdminToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { btn, btnSecondary, card, formatNz, input, pill } from "@/components/admin/ui";
@@ -40,7 +40,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
     <div className={adminStyles.page}>
       <h1 className={adminStyles.title}>Inbox</h1>
       <AdminNav active="inbox" />
-      <AdminToastBridge />
+      <FlashToast />
       <p style={{ marginTop: 0 }}>
         <AdminLink href="/admin/inbox">← All conversations</AdminLink>
       </p>

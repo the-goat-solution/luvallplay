@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminLink } from "@/components/admin/AdminLink";
-import { AdminToastBridge } from "@/components/admin/AdminToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { btn, btnSecondary, card, formatNz, input, pill, td, th } from "@/components/admin/ui";
@@ -196,7 +196,7 @@ export default async function PlayersPage({
         Player accounts: {allPlayers.length} in total, {signedIn} signed in at least once, {installed} added the app to their home screen.
       </p>
       <AdminNav active="players" />
-      <AdminToastBridge />
+      <FlashToast />
       <p style={{ marginTop: 0, fontSize: 13 }}>
         <AdminLink href="/admin/setup">Setup check →</AdminLink>
       </p>

@@ -13,7 +13,7 @@ import {
 } from "@/components/admin/finance/EntryForm";
 import { FinanceFilters } from "@/components/admin/finance/FinanceFilters";
 import { MonthlyChart } from "@/components/admin/finance/MonthlyChart";
-import { FinancialsToastBridge } from "@/components/admin/finance/FinancialsToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import styles from "@/components/admin/finance/financials.module.css";
 import { getClubToday } from "@/lib/dates";
 import {
@@ -356,7 +356,7 @@ export default async function FinancialsPage({
       </p>
       <AdminNav active="financials" />
       <FinanceSubNav active="ledger" />
-      <FinancialsToastBridge />
+      <FlashToast rules="financials" />
     </>
   );
 

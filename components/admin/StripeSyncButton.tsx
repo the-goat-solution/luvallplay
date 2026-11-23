@@ -21,7 +21,7 @@ export function StripeSyncButton() {
     try {
       const res = await fetch("/api/admin/stripe-sync", { method: "POST" });
       if (res.status === 401) {
-        window.location.href = "/admin/login?expired=1";
+        window.location.href = `/login?stepup=1&next=${encodeURIComponent(window.location.pathname)}`;
         return;
       }
       const data = await res.json().catch(() => null);

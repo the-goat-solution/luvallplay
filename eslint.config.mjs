@@ -9,6 +9,11 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 });
 
-const eslintConfig = [...compat.extends("next/core-web-vitals", "next/typescript")];
+const eslintConfig = [
+  // Build output and vendored files copied in at build time (MediaPipe's
+  // WebAssembly glue): not our code.
+  { ignores: [".next/**", "public/mediapipe/**", "node_modules/**", "docs/screenshots/**", "next-env.d.ts"] },
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+];
 
 export default eslintConfig;

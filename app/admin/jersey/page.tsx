@@ -4,7 +4,7 @@ import { AdminLink } from "@/components/admin/AdminLink";
 import { AdminNav } from "@/components/admin/AdminNav";
 import adminStyles from "@/components/admin/admin.module.css";
 import { JerseyExport } from "@/components/admin/JerseyExport";
-import { JerseyToastBridge } from "@/components/admin/JerseyToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { sendJerseyPaidEmail } from "@/lib/email";
 import {
@@ -188,7 +188,7 @@ export default async function JerseyAdminPage() {
         Bank payments carrying a registration&apos;s 5-digit code are marked paid automatically; mark the rest paid by hand.
       </p>
       <AdminNav active="jersey" />
-      <JerseyToastBridge />
+      <FlashToast />
 
       {!hasDb ? (
         <p>Database is not configured.</p>

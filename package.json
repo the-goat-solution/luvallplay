@@ -11,7 +11,9 @@
     "lint": "next lint",
     "db:migrate": "node scripts/migrate.mjs",
     "stripe:setup": "node scripts/stripe-setup.mjs",
-    "test": "node --test tests/*.test.ts"
+    "data-guard": "node scripts/data-guard/cli.ts",
+    "test": "node --import ./tests/register.mjs --test tests/*.test.ts",
+    "e2e": "E2E_BUILD=1 npm run build && node --test --test-concurrency=1 --test-timeout=240000 tests/e2e/journeys.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
@@ -33,17 +35,18 @@
     "resend": "^6.22.0",
     "sanity": "^3.99.0",
     "stripe": "^18.2.1",
-    "styled-components": "^6.1.18",
     "zod": "^3.25.67"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@types/node": "^22.15.30",
+    "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "eslint": "^9.28.0",
     "eslint-config-next": "^15.3.3",
+    "pg": "^8.23.1",
     "typescript": "^5.8.3"
   }
 }

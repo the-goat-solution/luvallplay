@@ -72,7 +72,7 @@ export function Navigation() {
                 <a href="/#reviews">Reviews</a>
               </li>
               <li>
-                <a href="/leaderboard">{lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}</a>
+                <a href="/#leaderboard">{lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}</a>
               </li>
             </ul>
             <div className="nav-actions">
@@ -143,7 +143,7 @@ export function Navigation() {
         <a href="/#membership" onClick={closeMobile}>
           <Trans k="nav_membership" />
         </a>
-        <a href="/leaderboard" onClick={closeMobile}>
+        <a href="/#leaderboard" onClick={closeMobile}>
           {lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}
         </a>
         <a href={accountHref} className="mobile-menu-join" onClick={closeMobile}>

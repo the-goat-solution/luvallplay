@@ -120,7 +120,7 @@ export function AppFeatures() {
                 <RankIcon index={0} seat="alpha" px={48} color="#fcfbf2" />
               </span>
             </div>
-            <a href="/leaderboard" className={s.link}>
+            <a href="#leaderboard" className={s.link}>
               {t.lbCta} <span aria-hidden>→</span>
             </a>
           </div>

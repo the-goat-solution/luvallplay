@@ -307,6 +307,7 @@ export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolea
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const toggle = async (next: boolean) => {
     setVisible(next);
@@ -318,9 +319,11 @@ export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolea
 
   const deleteAccount = async () => {
     setBusy(true);
-    const { ok } = await postJson("/api/profile/delete", { confirm: confirmText });
+    setDeleteError(null);
+    const { ok, data } = await postJson("/api/profile/delete", { confirm: confirmText });
     setBusy(false);
     if (ok) replace("/login?signed_out=1");
+    else setDeleteError(tr(data.error === "last_owner" ? "acc_delete_last_owner" : "login_err_generic"));
   };
 
   return (
@@ -352,6 +355,7 @@ export function PrivacyCard({ leaderboardVisible }: { leaderboardVisible: boolea
         <p className={styles.muted} style={{ marginBottom: 14 }}>
           {tr("acc_delete_confirm")}
         </p>
+        {deleteError && <div className={styles.error}>{deleteError}</div>}
         <div className={styles.field}>
           <label htmlFor="delete-confirm">{tr("acc_delete_type")}</label>
           <input

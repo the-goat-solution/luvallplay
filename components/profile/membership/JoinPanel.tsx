@@ -173,7 +173,7 @@ export function JoinPanel({
           <StripeCardForm
             clientSecret={clientSecret}
             amountLabel={tr("mem_pay", { amount: price })}
-            returnPath="/profile/membership"
+            returnPath="/profile"
             onSuccess={() => {
               setDone(true);
               window.setTimeout(() => refresh(), 2500);

@@ -52,7 +52,7 @@ export function MemberFreeMonthButton({
       // The session can lapse while this page sits open. Send them to the
       // login page rather than showing an "Unauthorized" they can't act on.
       if (res.status === 401) {
-        window.location.href = "/admin/login?expired=1";
+        window.location.href = `/login?stepup=1&next=${encodeURIComponent(window.location.pathname)}`;
         return;
       }
       const data = await res.json();

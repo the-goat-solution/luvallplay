@@ -127,3 +127,46 @@
   min-height: 52px;
   flex: 1;
 }
+
+/* Split layout (the inbox sheet and tablets): list and thread side by side
+   once the panel itself is wide enough, whatever the screen. Narrow: one at a
+   time, as in the card. */
+.splitWrap {
+  container-type: inline-size;
+}
+.panes[data-open="true"] .listPane {
+  display: none;
+}
+.emptyPane {
+  display: none;
+}
+@container (min-width: 620px) {
+  .panes {
+    display: grid;
+    grid-template-columns: minmax(220px, 36%) 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .panes[data-open="true"] .listPane {
+    display: block;
+  }
+  .listPane {
+    border-right: 1px solid var(--cream-dark);
+    padding-right: 16px;
+    max-height: 70dvh;
+    overflow-y: auto;
+  }
+  .backBtn {
+    display: none;
+  }
+  .emptyPane {
+    display: grid;
+    place-items: center;
+    min-height: 240px;
+    color: var(--text-mid);
+    font-size: 14px;
+  }
+  .activeThread {
+    background: var(--cream-dark);
+  }
+}

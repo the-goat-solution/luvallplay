@@ -310,6 +310,23 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
     });
   }, [act, initial.me, showToast, t]);
 
+  // From a player card (?vs=<player id>): show their open challenge, or
+  // point at posting one they can accept.
+  const vsRan = useRef(false);
+  useEffect(() => {
+    if (vsRan.current) return;
+    const url = new URL(window.location.href);
+    const vs = Number(url.searchParams.get("vs"));
+    if (!vs) return;
+    vsRan.current = true;
+    url.searchParams.delete("vs");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    const theirs = initial.open.find((c) => c.posting.players.some((p) => p.id === vs));
+    const target = document.getElementById(theirs ? `challenge-${theirs.id}` : "arena-me");
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!theirs) showToast(t("vs_hint"));
+  }, [initial.open, showToast, t]);
+
   const me = state.me;
   const mine = state.mine;
   const versusPending = mine.find(
@@ -382,7 +399,7 @@ export function ArenaView({ initial, embedded = false }: { initial: ArenaState; 
         <Hero state={state} />
         <div className={s.grid}>
           <div className={s.col}>
-            <section className={s.aMe}>
+            <section className={s.aMe} id="arena-me">
               <MePanel state={state} busy={busy} act={act} />
             </section>
             {mine.length > 0 && (
@@ -1328,7 +1345,7 @@ function FightCard({
   const partner = me?.pair?.players.find((p) => p.id !== me.id);
   const blockerKey = c.blocker ? (`block_${c.blocker}` as ArenaKey) : null;
   return (
-    <article className={s.fight}>
+    <article className={s.fight} id={`challenge-${c.id}`}>
       {(hot || c.crownMatch) && (
         <div className={`${s.ribbon} ${c.crownMatch ? s.ribbonCrown : ""}`}>
           {c.crownMatch ? t("crown_ribbon") : t("hot_ribbon")}

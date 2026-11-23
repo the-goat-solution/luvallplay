@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 // Makes the profile installable ("Add to Home Screen"). Opens at the
-// profile; scope "/" keeps the leaderboard and gallery inside the app too.
+// Me page; scope "/" keeps the club site and gallery inside the app too.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Three Wolves Badminton Club",
@@ -22,9 +22,10 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
     shortcuts: [
-      { name: "Membership", url: "/profile/membership", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      // Old installs keep their old shortcut URLs; lib/redirects.ts sends those here.
+      { name: "Me", url: "/profile", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
       { name: "My stats", url: "/profile/player", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
-      { name: "Leaderboard", url: "/leaderboard", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "Leaderboard", url: "/profile/arena?tab=leaderboard", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
     ],
   };
 }

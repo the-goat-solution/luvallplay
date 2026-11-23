@@ -31,10 +31,9 @@ import {
 } from "@/lib/dates";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AttendanceSection } from "@/components/admin/AttendanceSection";
-import { AdminToastBridge } from "@/components/admin/AdminToastBridge";
+import { FlashToast } from "@/components/admin/FlashToast";
 import adminStyles from "@/components/admin/admin.module.css";
 import { FillInButton } from "@/components/admin/FillInButton";
-import { PlayDaysToastBridge } from "@/components/admin/PlayDaysToastBridge";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
 import {
@@ -401,8 +400,7 @@ export default async function PlayDaysAdminPage({
         other days default to 1 court, casual bookings only.
       </p>
       <AdminNav active="play-days" />
-      <AdminToastBridge />
-      <PlayDaysToastBridge />
+      <FlashToast rules="playDays" />
 
       {!process.env.POSTGRES_URL ? (
         <p>Database is not configured.</p>

@@ -1,0 +1,63 @@
+# Required checks on every pull request and on main (test plan §6).
+#
+# - Types, lint (0 errors), unit tests.
+# - Database tests and data guard scenarios against a real Postgres 16, with
+#   DATA_GUARD_REQUIRE_DB=1 so they can't be skipped silently.
+# - Production build.
+#
+# Nothing here talks to production: no secrets are used, side effects are off
+# outside production (lib/side-effects.ts), and the database is the service
+# container below.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Types, lint, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dg_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATA_GUARD_TEST_URL: postgres://postgres:postgres@localhost:5432/dg_test
+      DATA_GUARD_REQUIRE_DB: "1"
+      ROLES_TEST_URL: postgres://postgres:postgres@localhost:5432/dg_test
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Types
+        run: npx tsc --noEmit
+      - name: Lint (0 errors)
+        run: npx eslint .
+      - name: Tests (unit, database, data guard)
+        run: npm test
+      - name: Build
+        run: npm run build

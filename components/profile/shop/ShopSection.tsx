@@ -248,7 +248,7 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
               {name}
               {selected ? ` — ${product.hasFit ? `${tr(fit === "women" ? "shop_women" : "shop_men")} ` : ""}${selected.size}` : ""} · {price}
             </p>
-            <StripeCardForm clientSecret={checkout.clientSecret} amountLabel={tr("mem_pay", { amount: (product.priceCents / 100).toString() })} onSuccess={paid} returnPath="/profile/membership#shop" />
+            <StripeCardForm clientSecret={checkout.clientSecret} amountLabel={tr("mem_pay", { amount: (product.priceCents / 100).toString() })} onSuccess={paid} returnPath="/profile#shop" />
           </>
         )}
       </Sheet>

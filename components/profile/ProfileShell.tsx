@@ -17,24 +17,20 @@ const TABS: {
   key: ProfileKey;
   icon: ReactNode;
   special?: boolean;
+  /** Other paths that belong to this tab (Me: its Settings page). */
+  also?: string[];
+  exact?: boolean;
 }[] = [
   {
-    href: "/profile/account",
-    key: "tab_account",
+    // Me: Account + Membership in one (build plan §2.1–2.2).
+    href: "/profile",
+    key: "tab_me",
+    exact: true,
+    also: ["/profile/settings"],
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <circle cx="12" cy="8" r="4" />
         <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
-      </svg>
-    ),
-  },
-  {
-    href: "/profile/membership",
-    key: "tab_membership",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="3" y="5" width="18" height="14" rx="3" />
-        <path d="M3 10h18M7 15h4" />
       </svg>
     ),
   },
@@ -255,9 +251,13 @@ export function ProfileShell({
   }, [menuOpen]);
 
   const badgeFor = (href: string) => {
-    const key = href.split("/").pop() as "account" | "membership" | "player" | "arena";
+    // Me carries what used to be the Account and Membership badges.
+    if (href === "/profile") return (badges?.account ?? 0) + (badges?.membership ?? 0);
+    const key = href.split("/").pop() as "player" | "arena";
     return badges?.[key] ?? 0;
   };
+  const isActive = (t: (typeof TABS)[number]) =>
+    (t.exact ? pathname === t.href : Boolean(pathname?.startsWith(t.href))) || Boolean(t.also?.some((p) => pathname?.startsWith(p)));
 
   return (
     <ProfileFocusContext.Provider value={setFocus}>
@@ -265,7 +265,7 @@ export function ProfileShell({
         <LangSync lang={player.lang} />
         {!focus && (
           <header className={styles.topbar}>
-            <Link href="/profile/membership" className={styles.brand} aria-label="Three Wolves">
+            <Link href="/profile" className={styles.brand} aria-label="Three Wolves">
               <img src="/icons/wolf-mark-light.png" alt="" width={44} height={24} />
               <span className={styles.brandTitle}>{tr("app_title")}</span>
             </Link>
@@ -300,12 +300,12 @@ export function ProfileShell({
               {menuOpen && (
                 <div className={styles.menu} role="menu">
                   <div className={styles.menuEmail}>{player.email}</div>
-                  <Link href="/profile/account" role="menuitem" onClick={() => setMenuOpen(false)}>
-                    {tr("tab_account")}
+                  <Link href="/profile/settings" role="menuitem" onClick={() => setMenuOpen(false)}>
+                    {tr("me_settings")}
                   </Link>
-                  <a href="/leaderboard" role="menuitem">
+                  <Link href="/profile/arena?tab=leaderboard" role="menuitem" onClick={() => setMenuOpen(false)}>
                     {tr("leaderboard")}
-                  </a>
+                  </Link>
                   <Link href="/" role="menuitem">
                     {tr("view_site")}
                   </Link>
@@ -327,7 +327,7 @@ export function ProfileShell({
         {!focus && (
           <nav className={styles.tabs} aria-label="Profile">
             {TABS.map((t) => {
-              const active = pathname?.startsWith(t.href);
+              const active = isActive(t);
               const badge = badgeFor(t.href);
               return (
                 <Link

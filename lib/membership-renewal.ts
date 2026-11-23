@@ -21,7 +21,7 @@ export function renewalUrl(token: string): string {
 // on auto-renew. The private token is still issued, so links in reminders
 // sent before accounts existed keep working (renewalUrl above).
 export function profileRenewalUrl(email: string): string {
-  return `${getSiteUrl()}/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent("/profile/membership")}`;
+  return `${getSiteUrl()}/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent("/profile")}`;
 }
 
 // Emails every active one-time membership ending within the next

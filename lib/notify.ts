@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { capturingResend, sideEffectAllowed } from "./side-effects.ts";
 import { heading, paragraph, renderEmailLayout, withDisplayName } from "./email-layout";
 
 let resend: Resend | null = null;
@@ -7,6 +8,8 @@ export function getResend(): Resend {
   if (!process.env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY is not configured");
   }
+  // Outside production every email is captured, never sent (lib/side-effects.ts).
+  if (!sideEffectAllowed("email")) return capturingResend() as unknown as Resend;
   if (!resend) {
     resend = new Resend(process.env.RESEND_API_KEY);
   }

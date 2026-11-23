@@ -152,7 +152,7 @@ export function LeaveFlow({
                 >
                   {tr("leave_alt_day")}
                 </button>
-                <a className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`} href="/profile/account">
+                <a className={`${styles.btn} ${styles.secondary} ${styles.btnBlock}`} href="/profile?inbox=1">
                   {tr("leave_alt_message_btn")}
                 </a>
                 <p className={styles.small}>{tr("leave_alt_message")}</p>

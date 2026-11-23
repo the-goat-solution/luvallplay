@@ -1,81 +1,33 @@
 import { LoginSubmitButton } from "@/components/admin/LoginSubmitButton";
+import { Notice, kit } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
 
+// Break-glass only. Admin is reached by signing in as yourself (a player
+// account with a club role); the middleware sends /admin/login to /login.
+// This password form stays reachable at /admin/login?breakglass=1 for two
+// weeks after the switch-over, in case account sign-in fails, then it's
+// removed along with ADMIN_PASSWORD.
 export default async function AdminLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    error?: string;
-    expired?: string;
-    loggedOut?: string;
-  }>;
+  searchParams: Promise<{ error?: string; loggedOut?: string }>;
 }) {
-  const { error, expired, loggedOut } = await searchParams;
+  const { error, loggedOut } = await searchParams;
 
   return (
-    <div
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 320,
-        margin: "120px auto",
-        padding: "0 20px",
-      }}
-    >
-      <h1 style={{ fontSize: 20, marginBottom: 16 }}>Admin login</h1>
-      {expired && !error ? (
-        <p
-          style={{
-            background: "#fdf3e3",
-            color: "#7a4a00",
-            padding: "9px 12px",
-            borderRadius: 6,
-            fontSize: 13,
-            marginBottom: 14,
-            lineHeight: 1.5,
-          }}
-        >
-          Your session timed out after 48 hours without activity. Please log in
-          again.
-        </p>
-      ) : null}
-      {loggedOut && !error ? (
-        <p
-          style={{
-            background: "#eef2f7",
-            color: "#1a2a4a",
-            padding: "9px 12px",
-            borderRadius: 6,
-            fontSize: 13,
-            marginBottom: 14,
-          }}
-        >
-          You&apos;ve been logged out.
-        </p>
-      ) : null}
+    <div className={kit.login}>
+      <h1 className={kit.title}>Admin password (break-glass)</h1>
+      <Notice>
+        Admin now opens from your own profile: sign in at <a href="/login?next=/admin">the normal sign-in page</a>. Use this password only if that
+        isn&apos;t working. Every use is logged.
+      </Notice>
+      {loggedOut && !error ? <Notice>You&apos;ve been logged out.</Notice> : null}
       <form method="POST" action="/api/admin-login">
-        <input
-          type="password"
-          name="password"
-          placeholder="Password"
-          autoFocus
-          required
-          style={{
-            width: "100%",
-            padding: "8px 10px",
-            borderRadius: 6,
-            border: "1px solid #ccc",
-            fontSize: 14,
-            marginBottom: 10,
-          }}
-        />
+        <input type="password" name="password" placeholder="Password" autoFocus required className={kit.loginInput} aria-label="Admin password" />
         <LoginSubmitButton />
       </form>
-      {error && (
-        <p style={{ color: "#b00020", fontSize: 13, marginTop: 10 }}>
-          Incorrect password.
-        </p>
-      )}
+      {error && <Notice tone="error">Incorrect password.</Notice>}
     </div>
   );
 }

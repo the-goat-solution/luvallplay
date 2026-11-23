@@ -1,0 +1,255 @@
+/* Me page (Account + Membership merged, build plan §2.2).
+   Phones: one column. Medium and wider (≥600px, tablets, unfolded
+   foldables): two columns, Next up / Membership / Calendar on the left,
+   Shop and the inbox preview on the right. */
+
+.header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 16px;
+}
+.avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--cream);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 19px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.who {
+  min-width: 0;
+}
+.name {
+  font-family: var(--font-display);
+  color: var(--navy-dark);
+  font-size: 22px;
+  line-height: 1.15;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--cream-dark);
+  color: var(--text-mid);
+  max-width: 100%;
+}
+.pillActive {
+  background: #e3f4e8;
+  color: #1d6b35;
+}
+.pillActive::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.icons {
+  display: flex;
+  gap: 4px;
+  align-self: start;
+}
+.iconBtn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--navy-dark);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  text-decoration: none;
+}
+.iconBtn svg {
+  width: 24px;
+  height: 24px;
+}
+.iconBtn:active {
+  background: var(--cream-dark);
+}
+@media (hover: hover) {
+  .iconBtn:hover {
+    background: var(--cream-dark);
+  }
+}
+.iconBtn:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+.dot {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #d64545;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+.adminBtn {
+  grid-column: 1 / -1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--navy-dark);
+  color: var(--cream);
+  font-weight: 600;
+  font-size: 14.5px;
+  text-decoration: none;
+}
+.adminBtn:focus-visible {
+  outline: 2px solid var(--bronze);
+  outline-offset: 2px;
+}
+
+/* Two columns from medium windows up. Order on phones: Next up, Membership,
+   Calendar, Shop, Welcome (the inbox lives behind the bell). */
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.col {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+.inboxPreview {
+  display: none;
+}
+@media (min-width: 600px) {
+  .grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .inboxPreview {
+    display: block;
+  }
+}
+/* Foldables held open: split at the hinge so nothing sits in the fold. */
+@media (horizontal-viewport-segments: 2) {
+  .grid {
+    grid-template-columns: env(viewport-segment-width 0 0, 1fr) env(viewport-segment-width 1 0, 1fr);
+    column-gap: calc(env(viewport-segment-left 1 0, 0px) - env(viewport-segment-right 0 0, 0px));
+  }
+}
+
+.nextCard {
+  background: var(--navy-dark);
+  color: var(--cream);
+}
+.nextCard h2 {
+  color: var(--cream);
+}
+.nextDate {
+  font-family: var(--font-display);
+  font-size: 24px;
+  margin: 2px 0 4px;
+}
+.nextMeta {
+  font-size: 14px;
+  opacity: 0.85;
+  margin: 0 0 12px;
+}
+.nextTag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  margin-bottom: 12px;
+}
+
+.previewList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: grid;
+  gap: 2px;
+}
+.previewItem {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  padding: 10px;
+  margin: 0 -10px;
+  width: calc(100% + 20px);
+  border-radius: 12px;
+  display: grid;
+  gap: 2px;
+  min-height: 52px;
+  cursor: pointer;
+}
+.previewItem:active {
+  background: var(--cream-dark);
+}
+.previewItem strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.previewItem span {
+  font-size: 13px;
+  color: var(--text-mid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.unread strong::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d64545;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* Settings: two columns from medium windows up. */
+.settingsGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 600px) {
+  .settingsGrid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}

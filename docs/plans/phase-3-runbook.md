@@ -429,7 +429,7 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 | **Finding 1, fixed** | The admin Players page listed every account on the platform, because accounts are global. It now lists the club's members |
 | **Finding 2, fixed by migration `0010`** | Under `enforce`, a row written for a second club was refused: `tenant_id` defaulted to 1. The default now follows the club the transaction is scoped to (`COALESCE(app_tenant_id(), 1)`); for the owner's connection, as the app runs today, it is still 1 |
 | **Keys per club (expand)** | Migration `0010` adds a second unique index starting with `tenant_id` beside 20 natural keys (a play day's date, a setting's name, one role per person, one pending invite per email, and so on). The app's upserts now name the per-club keys |
-| **Keys per club (contract)** | Not done, on purpose: dropping the old keys is a separate step after the new version has run for a while, because the previous version names them. Until then a second club couldn't reuse, say, a play-day date; nothing can leak. Three of the old keys are primary keys that other tables point at (`sessions`, and through it `bookings` and `session_alert_state`), so their swap changes those foreign keys too |
+| **Keys per club (contract)** | Migration `0011`: the old keys are dropped and the per-club keys take their names (5 unique indexes, 2 unique constraints, 13 primary keys), so the names the app checks are unchanged. The foreign keys from `bookings` and `session_alert_state` to a play day carry the club: a booking can only point at its own club's day. A second club can now have its own play days, settings and roles. **The app version before #114 can't run on this schema**; rolling back past #114 needs `0011` rolled back first |
 | **A login for the app's role** | Not created; see 11.2 |
 
 **Not changed:** `platform_admins`, `player_settings` and accounts are platform tables and keep their keys. The old preview copies of the Arena tables (`pv_…`) have no club column and keep theirs.
@@ -439,6 +439,10 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 **Production run of `0010`, done 23 Nov 2026, 22:40 UTC** (by the build session, approved in advance, after green CI and a clean rehearsal): the restore point was `rehearsal-phase-3`, reset to a fresh copy of production just before; the migration took 6.0 s; data guard 18 accounts, 0 problems; no drift; verify consistent. #114 merged afterwards.
 
 **How it was run:** the same commands as §10, with `--expect scripts/data-guard/expectations/2026-11-phase3-tenant-keys.production.json`. **Migrate first, then merge:** the new version's upserts name the new keys, and the rehearsal showed the calendar failing when the order is reversed.
+
+**Rehearsal of `0011` (23 Nov UTC), on `rehearsal-phase-3`, reset to a fresh copy of production:** data guard 18 accounts, 0 problems; 7.7 s; views identical, also through row-level security; no drift; verify consistent. Report: `docs/rehearsals/2026-11-phase3-tenant-keys-contract.md`.
+
+**Production run of `0011`, done 23 Nov 2026, 23:24 UTC** (by the build session, at the owner's request, after green CI and a clean rehearsal): restore point `pre-phase-3-tenant-keys-contract`; the migration took 7.7 s; data guard 18 accounts, 0 problems; no drift; verify consistent. #115 merged afterwards.
 
 ### 11.2 A login for the app's role (for you, after `enforce` has been quiet for a week)
 

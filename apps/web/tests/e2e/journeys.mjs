@@ -585,6 +585,11 @@ describe("T · tenant isolation at the routes", () => {
       second.stop();
       await owner.context.close();
       await clubAdmin.context.close();
+      // Whatever the second club's visitors left behind (each club has its own rows now), then the club.
+      const owned = (await db.query(`SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'tenant_id' AND table_name <> 'tenant_modules'`)).rows;
+      for (let pass = 0; pass < 3; pass++) {
+        for (const { table_name } of owned) await db.query(`DELETE FROM "${table_name}" WHERE tenant_id = $1`, [club2]).catch(() => {});
+      }
       await db.query(`DELETE FROM tenant_modules WHERE tenant_id = $1`, [club2]);
       await db.query(`DELETE FROM tenants WHERE id = $1`, [club2]);
     }

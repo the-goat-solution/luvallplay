@@ -80,7 +80,7 @@ async function seed() {
     await c.query(
       `INSERT INTO sessions (date, max_spots, google_event_id, event_start_time, event_end_time, event_location)
        VALUES ($1::date, 16, 'e2e-' || $1::text, ($1::text || ' ' || $2::text || ':00 Pacific/Auckland')::timestamptz, ($1::text || ' ' || $2::text || ':00 Pacific/Auckland')::timestamptz + INTERVAL '2 hours', 'Pioneer Stadium')
-       ON CONFLICT (date) DO NOTHING`,
+       ON CONFLICT (tenant_id, date) DO NOTHING`,
       [d, start],
     );
   }

@@ -1,0 +1,19 @@
+{
+  "change": "2026-11-phase3-tenant-keys-contract (production run)",
+  "description": "Same change as 2026-11-phase3-tenant-keys-contract.json, on the live production database between two snapshots. A schema change: no row changes. Live traffic keeps writing while the migration runs, so the tables below are listed as volatile: their changes are members using the site, not the migration.",
+  "volatile": [
+    "player_sessions",
+    "players.claimed_at",
+    "player_settings",
+    "player_events",
+    "message_threads",
+    "messages",
+    "finance_sync_state",
+    "admin_audit_log",
+    "admin_handoffs",
+    "admin_invites",
+    "auth_codes",
+    "sms_sends",
+    "usage_counters"
+  ]
+}

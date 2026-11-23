@@ -57,8 +57,7 @@ CREATE TABLE admin_invites (
   CONSTRAINT admin_invites_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT admin_invites_pkey PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX admin_invites_one_pending ON public.admin_invites USING btree (email) WHERE ((accepted_at IS NULL) AND (revoked_at IS NULL));
-CREATE UNIQUE INDEX admin_invites_one_pending_tenant ON public.admin_invites USING btree (tenant_id, email) WHERE ((accepted_at IS NULL) AND (revoked_at IS NULL));
+CREATE UNIQUE INDEX admin_invites_one_pending ON public.admin_invites USING btree (tenant_id, email) WHERE ((accepted_at IS NULL) AND (revoked_at IS NULL));
 
 CREATE TABLE api_tokens (
   id integer DEFAULT nextval('api_tokens_id_seq'::regclass) NOT NULL,
@@ -217,8 +216,7 @@ CREATE TABLE arena_pair_members (
   CONSTRAINT arena_pair_members_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT arena_pair_members_pkey PRIMARY KEY (pair_id, player_id)
 );
-CREATE UNIQUE INDEX arena_pair_members_one_active ON public.arena_pair_members USING btree (player_id) WHERE active;
-CREATE UNIQUE INDEX arena_pair_members_one_active_tenant ON public.arena_pair_members USING btree (tenant_id, player_id) WHERE active;
+CREATE UNIQUE INDEX arena_pair_members_one_active ON public.arena_pair_members USING btree (tenant_id, player_id) WHERE active;
 
 CREATE TABLE arena_pairs (
   id integer DEFAULT nextval('arena_pairs_id_seq'::regclass) NOT NULL,
@@ -253,9 +251,8 @@ CREATE TABLE arena_player_ranks (
   CONSTRAINT arena_player_ranks_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT arena_player_ranks_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT arena_player_ranks_was_tarnished_not_null NOT NULL was_tarnished,
-  CONSTRAINT arena_player_ranks_pkey PRIMARY KEY (player_id)
+  CONSTRAINT arena_player_ranks_pkey PRIMARY KEY (tenant_id, player_id)
 );
-CREATE UNIQUE INDEX arena_player_ranks_tenant_key ON public.arena_player_ranks USING btree (tenant_id, player_id);
 
 CREATE TABLE attendance (
   session_date date NOT NULL,
@@ -275,10 +272,9 @@ CREATE TABLE attendance (
   CONSTRAINT attendance_source_not_null NOT NULL source,
   CONSTRAINT attendance_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT attendance_verified_not_null NOT NULL verified,
-  CONSTRAINT attendance_pkey PRIMARY KEY (session_date, email)
+  CONSTRAINT attendance_pkey PRIMARY KEY (tenant_id, session_date, email)
 );
 CREATE INDEX attendance_email_idx ON public.attendance USING btree (email, session_date);
-CREATE UNIQUE INDEX attendance_tenant_key ON public.attendance USING btree (tenant_id, session_date, email);
 CREATE INDEX attendance_user_id_idx ON public.attendance USING btree (user_id);
 
 CREATE TABLE auth_codes (
@@ -346,9 +342,8 @@ CREATE TABLE bank_rules (
   CONSTRAINT bank_rules_pattern_not_null NOT NULL pattern,
   CONSTRAINT bank_rules_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT bank_rules_pkey PRIMARY KEY (id),
-  CONSTRAINT bank_rules_pattern_direction_key UNIQUE (pattern, direction)
+  CONSTRAINT bank_rules_pattern_direction_key UNIQUE (tenant_id, pattern, direction)
 );
-CREATE UNIQUE INDEX bank_rules_tenant_key ON public.bank_rules USING btree (tenant_id, pattern, direction);
 
 CREATE TABLE bank_transactions (
   id integer DEFAULT nextval('bank_transactions_id_seq'::regclass) NOT NULL,
@@ -399,7 +394,7 @@ CREATE TABLE bookings (
   reminder_sent_at timestamp with time zone,
   tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
-  CONSTRAINT bookings_session_date_fkey FOREIGN KEY (session_date) REFERENCES sessions(date),
+  CONSTRAINT bookings_session_date_fkey FOREIGN KEY (tenant_id, session_date) REFERENCES sessions(tenant_id, date),
   CONSTRAINT bookings_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT bookings_created_at_not_null NOT NULL created_at,
@@ -446,9 +441,8 @@ CREATE TABLE casual_play_profiles (
   CONSTRAINT casual_play_profiles_email_not_null NOT NULL email,
   CONSTRAINT casual_play_profiles_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT casual_play_profiles_updated_at_not_null NOT NULL updated_at,
-  CONSTRAINT casual_play_profiles_pkey PRIMARY KEY (email)
+  CONSTRAINT casual_play_profiles_pkey PRIMARY KEY (tenant_id, email)
 );
-CREATE UNIQUE INDEX casual_play_profiles_tenant_key ON public.casual_play_profiles USING btree (tenant_id, email);
 CREATE INDEX casual_play_profiles_user_id_idx ON public.casual_play_profiles USING btree (user_id);
 
 CREATE TABLE casual_play_sessions (
@@ -463,9 +457,8 @@ CREATE TABLE casual_play_sessions (
   CONSTRAINT casual_play_sessions_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT casual_play_sessions_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT casual_play_sessions_version_not_null NOT NULL version,
-  CONSTRAINT casual_play_sessions_pkey PRIMARY KEY (date)
+  CONSTRAINT casual_play_sessions_pkey PRIMARY KEY (tenant_id, date)
 );
-CREATE UNIQUE INDEX casual_play_sessions_tenant_key ON public.casual_play_sessions USING btree (tenant_id, date);
 
 CREATE TABLE club_members (
   tenant_id integer NOT NULL,
@@ -531,9 +524,8 @@ CREATE TABLE club_roles (
   CONSTRAINT club_roles_role_not_null NOT NULL role,
   CONSTRAINT club_roles_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT club_roles_updated_at_not_null NOT NULL updated_at,
-  CONSTRAINT club_roles_pkey PRIMARY KEY (player_id)
+  CONSTRAINT club_roles_pkey PRIMARY KEY (tenant_id, player_id)
 );
-CREATE UNIQUE INDEX club_roles_tenant_key ON public.club_roles USING btree (tenant_id, player_id);
 
 CREATE TABLE club_settings (
   key text NOT NULL,
@@ -545,9 +537,8 @@ CREATE TABLE club_settings (
   CONSTRAINT club_settings_key_not_null NOT NULL key,
   CONSTRAINT club_settings_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT club_settings_updated_at_not_null NOT NULL updated_at,
-  CONSTRAINT club_settings_pkey PRIMARY KEY (key)
+  CONSTRAINT club_settings_pkey PRIMARY KEY (tenant_id, key)
 );
-CREATE UNIQUE INDEX club_settings_tenant_key ON public.club_settings USING btree (tenant_id, key);
 
 CREATE TABLE day_requests (
   id integer DEFAULT nextval('day_requests_id_seq'::regclass) NOT NULL,
@@ -568,8 +559,7 @@ CREATE TABLE day_requests (
   CONSTRAINT day_requests_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT day_requests_pkey PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX day_requests_pending_idx ON public.day_requests USING btree (day, lower(email)) WHERE (notified_at IS NULL);
-CREATE UNIQUE INDEX day_requests_pending_tenant_idx ON public.day_requests USING btree (tenant_id, day, lower(email)) WHERE (notified_at IS NULL);
+CREATE UNIQUE INDEX day_requests_pending_idx ON public.day_requests USING btree (tenant_id, day, lower(email)) WHERE (notified_at IS NULL);
 CREATE INDEX day_requests_user_id_idx ON public.day_requests USING btree (user_id);
 
 CREATE TABLE day_signup_settings (
@@ -582,9 +572,8 @@ CREATE TABLE day_signup_settings (
   CONSTRAINT day_signup_settings_paused_not_null NOT NULL paused,
   CONSTRAINT day_signup_settings_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT day_signup_settings_updated_at_not_null NOT NULL updated_at,
-  CONSTRAINT day_signup_settings_pkey PRIMARY KEY (day)
+  CONSTRAINT day_signup_settings_pkey PRIMARY KEY (tenant_id, day)
 );
-CREATE UNIQUE INDEX day_signup_settings_tenant_key ON public.day_signup_settings USING btree (tenant_id, day);
 
 CREATE TABLE donations (
   id integer DEFAULT nextval('donations_id_seq'::regclass) NOT NULL,
@@ -664,9 +653,8 @@ CREATE TABLE finance_settings (
   CONSTRAINT finance_settings_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT finance_settings_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT finance_settings_value_not_null NOT NULL value,
-  CONSTRAINT finance_settings_pkey PRIMARY KEY (key)
+  CONSTRAINT finance_settings_pkey PRIMARY KEY (tenant_id, key)
 );
-CREATE UNIQUE INDEX finance_settings_tenant_key ON public.finance_settings USING btree (tenant_id, key);
 
 CREATE TABLE finance_sync_state (
   key text NOT NULL,
@@ -677,9 +665,8 @@ CREATE TABLE finance_sync_state (
   CONSTRAINT finance_sync_state_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT finance_sync_state_key_not_null NOT NULL key,
   CONSTRAINT finance_sync_state_tenant_id_not_null NOT NULL tenant_id,
-  CONSTRAINT finance_sync_state_pkey PRIMARY KEY (key)
+  CONSTRAINT finance_sync_state_pkey PRIMARY KEY (tenant_id, key)
 );
-CREATE UNIQUE INDEX finance_sync_state_tenant_key ON public.finance_sync_state USING btree (tenant_id, key);
 
 CREATE TABLE guardianships (
   guardian_user_id integer NOT NULL,
@@ -749,8 +736,7 @@ CREATE TABLE jersey_registrations (
   CONSTRAINT jersey_registrations_pkey PRIMARY KEY (id),
   CONSTRAINT jersey_registrations_ref_code_key UNIQUE (ref_code)
 );
-CREATE UNIQUE INDEX jersey_one_per_email ON public.jersey_registrations USING btree (email_normalized) WHERE (status = ANY (ARRAY['pending'::text, 'paid'::text]));
-CREATE UNIQUE INDEX jersey_one_per_email_tenant ON public.jersey_registrations USING btree (tenant_id, email_normalized) WHERE (status = ANY (ARRAY['pending'::text, 'paid'::text]));
+CREATE UNIQUE INDEX jersey_one_per_email ON public.jersey_registrations USING btree (tenant_id, email_normalized) WHERE (status = ANY (ARRAY['pending'::text, 'paid'::text]));
 CREATE INDEX jersey_registrations_user_id_idx ON public.jersey_registrations USING btree (user_id);
 
 CREATE TABLE junior_profiles (
@@ -893,8 +879,7 @@ CREATE TABLE mini_game_draws (
   CONSTRAINT mini_game_draws_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT mini_game_draws_pkey PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX mini_game_draws_one_active ON public.mini_game_draws USING btree ((true)) WHERE (archived_at IS NULL);
-CREATE UNIQUE INDEX mini_game_draws_one_active_tenant ON public.mini_game_draws USING btree (tenant_id) WHERE (archived_at IS NULL);
+CREATE UNIQUE INDEX mini_game_draws_one_active ON public.mini_game_draws USING btree (tenant_id) WHERE (archived_at IS NULL);
 
 CREATE TABLE mini_game_scores (
   draw_id integer NOT NULL,
@@ -964,9 +949,8 @@ CREATE TABLE player_absences (
   CONSTRAINT player_absences_email_not_null NOT NULL email,
   CONSTRAINT player_absences_session_date_not_null NOT NULL session_date,
   CONSTRAINT player_absences_tenant_id_not_null NOT NULL tenant_id,
-  CONSTRAINT player_absences_pkey PRIMARY KEY (session_date, email)
+  CONSTRAINT player_absences_pkey PRIMARY KEY (tenant_id, session_date, email)
 );
-CREATE UNIQUE INDEX player_absences_tenant_key ON public.player_absences USING btree (tenant_id, session_date, email);
 CREATE INDEX player_absences_user_id_idx ON public.player_absences USING btree (user_id);
 
 CREATE TABLE player_events (
@@ -1111,9 +1095,8 @@ CREATE TABLE pricing_plans (
   CONSTRAINT pricing_plans_sort_not_null NOT NULL sort,
   CONSTRAINT pricing_plans_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT pricing_plans_updated_at_not_null NOT NULL updated_at,
-  CONSTRAINT pricing_plans_pkey PRIMARY KEY (plan_id)
+  CONSTRAINT pricing_plans_pkey PRIMARY KEY (tenant_id, plan_id)
 );
-CREATE UNIQUE INDEX pricing_plans_tenant_key ON public.pricing_plans USING btree (tenant_id, plan_id);
 
 CREATE TABLE pv_arena_after_game (
   challenge_id integer NOT NULL,
@@ -1361,16 +1344,15 @@ CREATE TABLE session_alert_state (
   headcount integer DEFAULT 0 NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
-  CONSTRAINT session_alert_state_session_date_fkey FOREIGN KEY (session_date) REFERENCES sessions(date),
+  CONSTRAINT session_alert_state_session_date_fkey FOREIGN KEY (tenant_id, session_date) REFERENCES sessions(tenant_id, date),
   CONSTRAINT session_alert_state_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT session_alert_state_headcount_not_null NOT NULL headcount,
   CONSTRAINT session_alert_state_session_date_not_null NOT NULL session_date,
   CONSTRAINT session_alert_state_state_not_null NOT NULL state,
   CONSTRAINT session_alert_state_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT session_alert_state_updated_at_not_null NOT NULL updated_at,
-  CONSTRAINT session_alert_state_pkey PRIMARY KEY (session_date)
+  CONSTRAINT session_alert_state_pkey PRIMARY KEY (tenant_id, session_date)
 );
-CREATE UNIQUE INDEX session_alert_state_tenant_key ON public.session_alert_state USING btree (tenant_id, session_date);
 
 CREATE TABLE session_fill_ins (
   id integer DEFAULT nextval('session_fill_ins_id_seq'::regclass) NOT NULL,
@@ -1422,9 +1404,8 @@ CREATE TABLE sessions (
   CONSTRAINT sessions_mini_game_not_null NOT NULL mini_game,
   CONSTRAINT sessions_registration_locked_not_null NOT NULL registration_locked,
   CONSTRAINT sessions_tenant_id_not_null NOT NULL tenant_id,
-  CONSTRAINT sessions_pkey PRIMARY KEY (date)
+  CONSTRAINT sessions_pkey PRIMARY KEY (tenant_id, date)
 );
-CREATE UNIQUE INDEX sessions_tenant_key ON public.sessions USING btree (tenant_id, date);
 
 CREATE TABLE shop_order_items (
   id integer DEFAULT nextval('shop_order_items_id_seq'::regclass) NOT NULL,
@@ -1516,9 +1497,8 @@ CREATE TABLE shop_products (
   CONSTRAINT shop_products_sort_not_null NOT NULL sort,
   CONSTRAINT shop_products_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT shop_products_pkey PRIMARY KEY (id),
-  CONSTRAINT shop_products_slug_key UNIQUE (slug)
+  CONSTRAINT shop_products_slug_key UNIQUE (tenant_id, slug)
 );
-CREATE UNIQUE INDEX shop_products_tenant_key ON public.shop_products USING btree (tenant_id, slug);
 
 CREATE TABLE shop_stock_log (
   id integer DEFAULT nextval('shop_stock_log_id_seq'::regclass) NOT NULL,

@@ -29,7 +29,7 @@ const playDays: FlashRules = {
   cashAdded: (v) => ok(offlineAddedMessage(v, "Player")),
   cashError: (v) => err(v),
   removed: () => ok("Player removed from the roster."),
-  courtsUpdated: (v) => ok(`Courts booked updated to ${v} court${v === "1" ? "" : "s"}.`),
+  courtsUpdated: (v) => ok(`Courts saved: ${v} court${v === "1" ? "" : "s"}.`),
   courtsError: (v) => err(v),
   waitlistNotified: (v) => {
     const n = Number(v);
@@ -37,15 +37,15 @@ const playDays: FlashRules = {
   },
   waitlistRemoved: () => ok("Removed from the waitlist."),
   registration: (v) =>
-    v === "locked" ? ok("Registration locked — no new sign-ups for this play day.") : v === "unlocked" ? ok("Registration reopened for this play day.") : null,
+    v === "locked" ? ok("Sign-ups closed for this play day. You can still add players.") : v === "unlocked" ? ok("Sign-ups are open for this play day.") : null,
   miniGame: (v) =>
     v === "on"
       ? ok(`Mini game day on — casual sign-ups closed, capped at ${MINI_GAME_MAX_PLAYERS} players. Members are included.`)
       : v === "off"
-        ? ok("Mini game day off — court-based capacity is back and registration reopened.")
+        ? ok("Mini game off: sign-ups are open again and capacity follows the courts.")
         : null,
-  fillInSaved: () => ok("Fill-in saved and emailed the session details."),
-  fillInRemoved: () => ok("Fill-in removed — the original player is back on the roster."),
+  fillInSaved: () => ok("Stand-in saved, and emailed the play day details."),
+  fillInRemoved: () => ok("Stand-in removed: the original player is back on the roster."),
   fillInError: (v) => err(v),
 };
 

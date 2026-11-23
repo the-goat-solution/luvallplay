@@ -56,7 +56,12 @@ export const admin = defineModule({
   requires: ["members"],
   plan: "free",
   name: { en: "Admin", vi: "Quản trị" },
-  admin: { nav: [{ group: "Club", href: "/admin/setup" }] },
+  admin: {
+    nav: [
+      { group: "", href: "/admin" },
+      { group: "Club", href: "/admin/setup" },
+    ],
+  },
 });
 
 // ── Run your club ────────────────────────────────────────────────────────────

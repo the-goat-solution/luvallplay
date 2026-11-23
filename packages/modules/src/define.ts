@@ -27,6 +27,7 @@ export type ModuleManifest<Id extends string = string> = {
   /** Where today's settings live (table or club_settings keys), until `settings` takes over. */
   settingsStoredIn?: string[];
   app?: { tabs?: string[]; meCards?: string[]; routes?: string[] };
+  /** Admin menu pages; group "" is the ungrouped top of the menu (Today). */
   admin?: { nav?: { group: string; href: string }[] };
   site?: { sections?: string[]; routes?: string[] };
   /** Scheduled jobs; path is today's Vercel cron route. */

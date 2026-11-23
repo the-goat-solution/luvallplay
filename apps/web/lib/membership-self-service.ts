@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import Stripe from "stripe";
 import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
 import { sql } from "./database";
@@ -73,7 +74,7 @@ function view(r: Row, continuation: MemberView["continuation"]): MemberView {
 /** The member's current (or next upcoming) membership, if any. */
 export async function getCurrentMembership(email: string): Promise<MemberView | null> {
   if (!process.env.POSTGRES_URL) return null;
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const { rows } = await sql.query(
     `SELECT id, plan, day, status, period_start::text AS period_start, period_end::text AS period_end,
        recurring, cancel_at_period_end, stripe_subscription_id, stripe_payment_intent_id, renewal_of
@@ -103,7 +104,7 @@ export async function getCurrentMembership(email: string): Promise<MemberView | 
 /** Play days left in the member's current window (from today). */
 export async function playDaysLeft(m: MemberView): Promise<number> {
   if (!m.periodEnd) return 0;
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const from = m.periodStart && m.periodStart > today ? m.periodStart : today;
   const sessions = await listSessionsInRange(from, m.periodEnd);
   const dow = m.day === "friday" ? 5 : 3;
@@ -277,7 +278,7 @@ export async function scheduleChangeAtRenewal(m: MemberView, plan: MembershipTie
   }
   if (day !== m.day) {
     if (await isDayPaused(day)) throw new SelfServiceError("day_paused");
-    const from = m.periodEnd ? addDays(m.periodEnd, 1) : getClubToday().dateKey;
+    const from = m.periodEnd ? addDays(m.periodEnd, 1) : getClubToday(new Date(), await clubClock()).dateKey;
     if (!(await dayHasRoom(day, from))) throw new SelfServiceError("sessions_full");
   }
   const stripe = getStripe();

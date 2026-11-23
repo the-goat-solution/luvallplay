@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import { db, sql } from "./database";
 import { getClubConfig } from "./club-config";
 import { sessionCapacityFor } from "@luvallplay/core/club-config";
@@ -358,7 +359,7 @@ export async function assignAndReserveMembershipAccessStart(
   // is taken, so the locked section makes no extra round trip.
   const cfg = await getClubConfig(sql);
   const { startSearchDays, pendingHoldMinutes } = cfg.memberships;
-  const { dateKey: clubToday, cutoffPassed } = getClubToday();
+  const { dateKey: clubToday, cutoffPassed } = getClubToday(new Date(), await clubClock());
   const earliestStart = (() => {
     const fromToday = addDays(clubToday, cutoffPassed ? 1 : 0);
     if (!renewalOf) return fromToday;
@@ -637,7 +638,7 @@ export async function listMemberMiniGameDates(
 export async function getUpcomingSessionDates(
   withinDays: number,
 ): Promise<string[]> {
-  const { dateKey: clubToday } = getClubToday();
+  const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
   const { rows } = await sql`
     SELECT date::text AS date FROM sessions
     WHERE date >= ${clubToday}::date AND date <= ${clubToday}::date + ${withinDays}::int

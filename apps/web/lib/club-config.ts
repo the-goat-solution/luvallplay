@@ -41,7 +41,7 @@ export const DEFAULT_CLUB_CONFIG: ClubConfig = {
   timezone: C.CLUB_TIME_ZONE,
   currency: C.CLUB_CURRENCY,
   languages: ["en", "vi"],
-  terms: { pointsName: "Wolf Points", visionName: "Wolf Vision" },
+  terms: { pointsName: C.CLUB_TERMS.pointsName, visionName: C.CLUB_TERMS.visionName, localized: { vi: { ...C.CLUB_TERMS.localized.vi } } },
   playDays: {
     courtsToMaxPlayers: C.COURTS_TO_MAX_PLAYERS,
     sessionCapacity: C.SESSION_CAPACITY,

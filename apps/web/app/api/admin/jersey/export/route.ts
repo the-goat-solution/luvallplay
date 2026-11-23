@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
@@ -123,7 +124,7 @@ export async function GET(request: Request) {
   const sm = wb.addWorksheet("Summary");
   sm.columns = [{ width: 34 }, { width: 14 }, { width: 14 }, { width: 14 }];
   const n = Math.max(shown.length, 1) + 1;
-  sm.addRow([`Three Wolves jersey registrations — ${getClubToday().dateKey}`]).font = { bold: true, size: 14 };
+  sm.addRow([`Three Wolves jersey registrations — ${getClubToday(new Date(), await clubClock()).dateKey}`]).font = { bold: true, size: 14 };
   sm.addRow([]);
   styleHeader(sm.addRow(["Totals (Registrations sheet)", "Count", "$ amount"]));
   const R = (col: string) => `Registrations!$${col}$2:$${col}$${n}`;
@@ -144,7 +145,7 @@ export async function GET(request: Request) {
   return new NextResponse(buf as ArrayBuffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="three-wolves-jersey-${getClubToday().dateKey}.xlsx"`,
+      "Content-Disposition": `attachment; filename="three-wolves-jersey-${getClubToday(new Date(), await clubClock()).dateKey}.xlsx"`,
       "Cache-Control": "no-store",
     },
   });

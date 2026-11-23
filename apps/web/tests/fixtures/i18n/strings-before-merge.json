@@ -468,7 +468,7 @@
    "wd_sunday": "Chủ Nhật",
    "lb_teaser_kicker": "Tháng này",
    "lb_teaser_title": "Bảng xếp hạng",
-   "lb_teaser_sub": "Năm người dẫn đầu về Wolf Points tháng này, từ ngày chơi, round robin và thách đấu.",
+   "lb_teaser_sub": "Năm người dẫn đầu về Điểm Sói tháng này, từ ngày chơi, round robin và thách đấu.",
    "lb_teaser_cta": "Xem toàn bộ bảng xếp hạng trong ứng dụng",
    "lb_teaser_empty": "Bảng xếp hạng sẽ có sau ngày chơi đầu tiên của tháng.",
    "lb_teaser_hidden": "Xong: bạn đã được ẩn khỏi bảng xếp hạng. Bạn có thể đổi lại bất cứ lúc nào trong phần Cài đặt của ứng dụng.",
@@ -1887,7 +1887,7 @@
    "card_hidden": "Người chơi này không hiện trên bảng xếp hạng.",
    "card_close": "Đóng",
    "ranks_title": "Bậc thang",
-   "ranks_sub": "Cấp bậc của bạn tính theo tổng Wolf Points. Alpha Wolf và Silver Wolf dành cho bốn người dẫn đầu trong 90 ngày qua.",
+   "ranks_sub": "Cấp bậc của bạn tính theo tổng Điểm Sói. Alpha Wolf và Silver Wolf dành cho bốn người dẫn đầu trong 90 ngày qua.",
    "ranks_from": "từ 7 WP",
    "ranks_start": "khởi đầu",
    "ranks_you_here": "Bạn"

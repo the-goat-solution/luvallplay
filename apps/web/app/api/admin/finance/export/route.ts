@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const { dateKey: today } = getClubToday();
+  const { dateKey: today } = getClubToday(new Date(), await clubClock());
   const filters = parseFinanceFilters(Object.fromEntries(url.searchParams), today);
   const report = await loadFinanceReport(filters, today);
 

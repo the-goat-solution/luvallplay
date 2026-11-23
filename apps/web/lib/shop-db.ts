@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import { db, sql } from "./database";
 import { addDays } from "./db";
 import { getClubToday } from "./dates";
@@ -438,7 +439,7 @@ export async function markReminderSent(orderId: number): Promise<void> {
  * day (a membership day or a casual booking), or 14 days if none is booked.
  */
 export async function cashHoldUntil(email: string): Promise<{ until: Date; playDay: string | null }> {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const horizon = addDays(today, CASH_HOLD_FALLBACK_DAYS);
   const { rows } = await sql.query(
     `SELECT min(d)::text AS d FROM (

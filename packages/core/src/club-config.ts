@@ -22,7 +22,8 @@ export type ClubConfig = {
   /** ISO 4217. Amounts are integer minor units of this currency. */
   currency: string;
   languages: string[];
-  terms: { pointsName: string; visionName: string };
+  /** The club's own names; `localized` holds a language's own wording where it differs (e.g. vi). */
+  terms: { pointsName: string; visionName: string; localized: Record<string, { pointsName?: string; visionName?: string }> };
   playDays: {
     /** Courts booked → players allowed. */
     courtsToMaxPlayers: Record<number, number>;
@@ -89,6 +90,20 @@ function intMap(v: unknown): Record<number, number> | null {
  * list of fields that fell back to `defaults` (empty when every value was
  * present and valid).
  */
+function localizedTerms(raw: unknown): Record<string, { pointsName?: string; visionName?: string }> {
+  const out: Record<string, { pointsName?: string; visionName?: string }> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [lang, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^[a-z]{2}$/.test(lang) || !v || typeof v !== "object") continue;
+    const names = v as Record<string, unknown>;
+    const entry: { pointsName?: string; visionName?: string } = {};
+    if (typeof names.points_name === "string" && names.points_name.trim()) entry.pointsName = names.points_name.trim();
+    if (typeof names.vision_name === "string" && names.vision_name.trim()) entry.visionName = names.vision_name.trim();
+    if (entry.pointsName || entry.visionName) out[lang] = entry;
+  }
+  return out;
+}
+
 export function parseClubConfig(tenant: TenantRow, modules: ModuleSettingsRow[], defaults: ClubConfig): { config: ClubConfig; problems: string[] } {
   const problems: string[] = [];
   const settings = new Map(modules.map((m) => [m.module_id, isObj(m.settings) ? m.settings : {}]));
@@ -137,6 +152,8 @@ export function parseClubConfig(tenant: TenantRow, modules: ModuleSettingsRow[],
     terms: {
       pointsName: pick("tenant.terms.points_name", terms.points_name, str, defaults.terms.pointsName),
       visionName: pick("tenant.terms.vision_name", terms.vision_name, str, defaults.terms.visionName),
+      // Optional, and never borrowed from the defaults: a language with no name of its own uses the club's.
+      localized: localizedTerms(terms.localized),
     },
     playDays: {
       courtsToMaxPlayers: courts ?? defaults.playDays.courtsToMaxPlayers,

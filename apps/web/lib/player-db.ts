@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import { sql } from "./database";
 import { getClubToday } from "./dates";
 import type { Lang } from "./i18n";
@@ -322,7 +323,7 @@ export type ImportCandidate = {
 
 /** Lower-cased emails with a membership that grants access today or later. */
 export async function listActiveMemberEmails(): Promise<string[]> {
-  const { dateKey } = getClubToday();
+  const { dateKey } = getClubToday(new Date(), await clubClock());
   const { rows } = await sql.query(
     `SELECT DISTINCT lower(trim(email)) AS email FROM memberships
      WHERE status IN ('active', 'trialing', 'past_due')
@@ -345,7 +346,7 @@ function inboxKey(email: string): string {
 }
 
 export async function previewMemberImport(): Promise<ImportCandidate[]> {
-  const { dateKey } = getClubToday();
+  const { dateKey } = getClubToday(new Date(), await clubClock());
   const { rows } = await sql.query(
     `SELECT DISTINCT ON (lower(trim(m.email)))
         lower(trim(m.email)) AS email, m.first_name, m.last_name, m.phone,
@@ -397,7 +398,7 @@ export type AdminPlayerRow = Player & {
 };
 
 export async function listPlayersForAdmin(search?: string): Promise<AdminPlayerRow[]> {
-  const { dateKey } = getClubToday();
+  const { dateKey } = getClubToday(new Date(), await clubClock());
   const q = search?.trim() ? `%${search.trim().toLowerCase()}%` : null;
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS},

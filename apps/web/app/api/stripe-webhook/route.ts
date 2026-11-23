@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { getOrder, markOrderPaidByCard } from "@/lib/shop-db";
 import { payments } from "@/lib/payments";
 import { offlineMethodFromSource, offlinePaymentRef } from "@/lib/offline-payment";
@@ -133,7 +134,7 @@ export async function POST(request: Request) {
         });
       }
       if (activated?.periodStart && activated.periodEnd) {
-        const { dateKey: clubToday } = getClubToday();
+        const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,
@@ -241,7 +242,7 @@ export async function POST(request: Request) {
         );
         await applyMembershipRenewal(subId, invoice.id);
       } else if (activated?.periodStart && activated.periodEnd && activated.periodEnd >= activated.periodStart) {
-        const { dateKey: clubToday } = getClubToday();
+        const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,
@@ -286,7 +287,7 @@ export async function POST(request: Request) {
         }, "admin");
       }
       if (activated?.periodStart && activated.periodEnd) {
-        const { dateKey: clubToday } = getClubToday();
+        const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
         await sendMembershipConfirmationEmail(activated.email, {
           firstName: activated.name,
           plan: activated.plan,

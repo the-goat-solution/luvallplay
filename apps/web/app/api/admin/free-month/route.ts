@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
   try {
     // One-time (including cash) memberships: 4 more weeks on the end date.
     if (!membership.recurring) {
-      const today = getClubToday().dateKey;
+      const today = getClubToday(new Date(), await clubClock()).dateKey;
       if (!membership.periodEnd || membership.periodEnd < today) {
         return NextResponse.json(
           { error: `${membership.name}'s membership has already ended.` },

@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import {
@@ -75,7 +76,7 @@ async function resolveDate(requested: string | null): Promise<{ date: string | n
   if (isCasualPlayDemo()) dates = demoDates();
   else dates = await listAllSessionDates();
   if (requested) return { date: dates.includes(requested) ? requested : null, dates };
-  return { date: defaultDate(dates, getClubToday().dateKey), dates };
+  return { date: defaultDate(dates, getClubToday(new Date(), await clubClock()).dateKey), dates };
 }
 
 export async function GET(request: Request) {

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { sql } from "@vercel/postgres";
-import { ensureTables } from "@/lib/db";
+import { addToWaitlist } from "@/lib/repos/waitlist";
 import { isSessionDatePaused } from "@/lib/day-requests";
 import { sendWaitlistAdminAlertEmail, sendWaitlistConfirmationEmail } from "@/lib/email";
 import { checkRateLimit, getClientIp } from "@/lib/security";
@@ -32,11 +31,7 @@ export async function POST(request: Request) {
     }
 
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
-      await sql`
-        INSERT INTO waitlist (session_date, name, email)
-        VALUES (${body.sessionDate ?? null}, ${body.name}, ${body.email});
-      `;
+      await addToWaitlist({ sessionDate: body.sessionDate ?? null, name: body.name, email: body.email });
     }
 
     // Best-effort notifications — a Resend outage shouldn't fail the signup

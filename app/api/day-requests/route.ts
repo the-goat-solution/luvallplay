@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { WEEKDAYS, WEEKDAY_LABEL } from "@/lib/constants";
 import { addDayRequest, isDayPaused } from "@/lib/day-requests";
-import { ensureTables } from "@/lib/db";
 import {
   sendDayRequestAdminAlertEmail,
   sendDayRequestConfirmationEmail,
@@ -16,7 +15,7 @@ const bodySchema = z.object({
 });
 
 // "Notify me when this day opens" — for a paused day coming back, or a day
-// the club doesn't run yet. Listed for admins at /admin/day-requests.
+// the club doesn't run yet. Listed for admins at /admin/play-days/schedule.
 export async function POST(request: Request) {
   const ip = getClientIp(request);
   if (!checkRateLimit(`dr:${ip}`, 15)) {
@@ -30,7 +29,6 @@ export async function POST(request: Request) {
 
     let isNew = true;
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
       isNew = await addDayRequest(day, body.name, body.email);
     }
 

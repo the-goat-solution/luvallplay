@@ -1,8 +1,7 @@
 import crypto from "crypto";
-import { sql } from "@vercel/postgres";
-import { ensureTables } from "./db";
+import { sql } from "./database";
 import { MEMBERSHIP_DAY_TO_DOW } from "./constants";
-import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";
+import { getPlayerSetting, setPlayerSetting } from "./player-db";
 import { getClubToday } from "./dates";
 import { computeStandings, type Match, type Score, type Team } from "./mini-game";
 import { PLAYER_NAMES } from "./mini-game-roster";
@@ -22,12 +21,11 @@ export { PERIODS, computeStreaks, periodFromKey, periodRange, weekKey } from "./
 export type { Period, PeriodRange } from "./stats-periods";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
-import { onceThisDeploy } from "./schema-gate";
 
 /** Refreshes the cached public leaderboard (no-op outside a request). */
 function refreshLeaderboard(): void {
   try {
-    revalidateTag("leaderboard");
+    revalidateTag("leaderboard", { expire: 0 });
   } catch {
     // called outside a request (scripts/tests): nothing cached to refresh
   }
@@ -53,60 +51,6 @@ function refreshLeaderboard(): void {
 // links a name to an account, so linking a name later applies to every past
 // result at once.
 
-let ensurePromise: Promise<void> | null = null;
-
-export function ensureStatsTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("stats", async () => {
-      await ensureTables();
-      await ensurePlayerTables();
-      await sql`
-        CREATE TABLE IF NOT EXISTS attendance (
-          session_date DATE NOT NULL,
-          email TEXT NOT NULL,
-          source TEXT NOT NULL,
-          verified BOOLEAN NOT NULL DEFAULT TRUE,
-          removed BOOLEAN NOT NULL DEFAULT FALSE,
-          recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (session_date, email)
-        );
-      `;
-      await sql`CREATE INDEX IF NOT EXISTS attendance_email_idx ON attendance (email, session_date);`;
-      await sql`
-        CREATE TABLE IF NOT EXISTS rr_results (
-          draw_id INT NOT NULL,
-          mg_name TEXT NOT NULL,
-          session_date DATE NOT NULL,
-          team_id INT NOT NULL,
-          wins INT NOT NULL,
-          losses INT NOT NULL,
-          points_for INT NOT NULL,
-          points_against INT NOT NULL,
-          rr_points INT NOT NULL,
-          finish_place INT NOT NULL,
-          teams_count INT NOT NULL,
-          PRIMARY KEY (draw_id, mg_name)
-        );
-      `;
-      await sql`CREATE INDEX IF NOT EXISTS rr_results_name_idx ON rr_results (lower(mg_name), session_date);`;
-      // "Can't make it" from the Membership tab: frees the spot and keeps the
-      // member's streak intact for that week.
-      await sql`
-        CREATE TABLE IF NOT EXISTS player_absences (
-          session_date DATE NOT NULL,
-          email TEXT NOT NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (session_date, email)
-        );
-      `;
-    }).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
-
 export type AttendanceSource = "admin" | "board" | "minigame" | "roster" | "booking_history" | "api";
 
 /**
@@ -121,7 +65,6 @@ export async function recordAttendance(
 ): Promise<number> {
   const clean = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
   if (clean.length === 0) return 0;
-  await ensureStatsTables();
   const { rowCount } = await sql.query(
     `INSERT INTO attendance (session_date, email, source, verified, removed)
      SELECT $1::date, e, $2, $3, FALSE FROM unnest($4::text[]) AS e
@@ -140,7 +83,6 @@ export async function recordAttendance(
 }
 
 export async function removeAttendance(date: string, email: string): Promise<void> {
-  await ensureStatsTables();
   await sql`
     INSERT INTO attendance (session_date, email, source, verified, removed)
     VALUES (${date}, ${email.trim().toLowerCase()}, 'admin', TRUE, TRUE)
@@ -150,14 +92,12 @@ export async function removeAttendance(date: string, email: string): Promise<voi
 }
 
 export async function confirmAttendance(date: string, email: string): Promise<void> {
-  await ensureStatsTables();
   await sql`
     UPDATE attendance SET verified = TRUE WHERE session_date = ${date} AND email = ${email.trim().toLowerCase()};
   `;
 }
 
 export async function listAttendanceForDate(date: string): Promise<{ email: string; source: string; verified: boolean; removed: boolean }[]> {
-  await ensureStatsTables();
   const { rows } = await sql`
     SELECT email, source, verified, removed FROM attendance WHERE session_date = ${date} ORDER BY email;
   `;
@@ -165,7 +105,6 @@ export async function listAttendanceForDate(date: string): Promise<{ email: stri
 }
 
 export async function listUnverifiedAttendance(): Promise<{ date: string; email: string; recordedAt: string }[]> {
-  await ensureStatsTables();
   const { rows } = await sql`
     SELECT session_date::text AS d, email, recorded_at FROM attendance
     WHERE verified = FALSE AND removed = FALSE ORDER BY session_date DESC LIMIT 100;
@@ -207,7 +146,6 @@ async function drawDate(drawId: number, createdAt: Date): Promise<string> {
 
 /** Writes (or rewrites) every player's result for one draw. */
 export async function storeDrawResults(drawId: number): Promise<number> {
-  await ensureStatsTables();
   const { rows: drawRows } = await sql`
     SELECT id, teams, matches, created_at FROM mini_game_draws WHERE id = ${drawId};
   `;
@@ -267,7 +205,6 @@ export type NameMatch = { name: string; playerId: number | null };
 
 export async function listMinigameNameMatches(): Promise<NameMatch[]> {
   if (!process.env.POSTGRES_URL) return [];
-  await ensureStatsTables();
   const names = new Set<string>(PLAYER_NAMES);
   try {
     const { rows } = await sql`SELECT teams FROM mini_game_draws;`;
@@ -283,7 +220,6 @@ export async function listMinigameNameMatches(): Promise<NameMatch[]> {
 }
 
 export async function setMinigameName(name: string, playerId: number | null): Promise<void> {
-  await ensureStatsTables();
   const clean = name.trim();
   if (!clean) throw new Error("Name is empty");
   await sql`UPDATE players SET minigame_name = NULL WHERE lower(minigame_name) = lower(${clean});`;
@@ -312,7 +248,6 @@ const ROSTER_MEMBERSHIP_STATUSES = ["active", "trialing", "past_due", "expired",
  */
 export async function recordRosterAttendance(): Promise<number> {
   if (!process.env.POSTGRES_URL) return 0;
-  await ensureStatsTables();
   const today = getClubToday().dateKey;
   // Weekday of each membership pool, e.g. friday → 5 (Postgres DOW: Sunday = 0).
   const dowCase = Object.entries(MEMBERSHIP_DAY_TO_DOW)
@@ -411,7 +346,6 @@ export async function syncRosterAttendance(force = false): Promise<void> {
 
 export async function getStatsBackfillPreview(): Promise<{ boardDays: number; draws: number; bookingDays: number }> {
   if (!process.env.POSTGRES_URL) return { boardDays: 0, draws: 0, bookingDays: 0 };
-  await ensureStatsTables();
   const today = getClubToday().dateKey;
   const count = async (q: string, params: unknown[] = []) => {
     try {
@@ -454,7 +388,6 @@ async function knownEmailsByBoardId(): Promise<Map<string, string>> {
 }
 
 export async function runStatsBackfill(): Promise<{ attendance: number; roundRobin: number }> {
-  await ensureStatsTables();
   const today = getClubToday().dateKey;
   let attendance = 0;
   let roundRobin = 0;
@@ -519,7 +452,6 @@ export type LeaderboardRow = {
  */
 export async function getLeaderboard(metric: Metric, range: PeriodRange, includePlayerId?: number): Promise<LeaderboardRow[]> {
   if (!process.env.POSTGRES_URL) return [];
-  await ensureStatsTables();
   const start = range.start;
   const end = range.end;
   if (metric === "attendance") {
@@ -600,7 +532,6 @@ export async function getPlayerStats(player: { id: number; email: string; miniga
     rrHistory: [],
   };
   if (!process.env.POSTGRES_URL) return empty;
-  await ensureStatsTables();
   syncRosterAttendanceLater();
 
   const [{ rows: att }, { rows: club }, { rows: abs }, rr] = await Promise.all([
@@ -669,7 +600,6 @@ export async function getPlayerStats(player: { id: number; email: string; miniga
 // ---------------------------------------------------------------------------
 
 export async function setAbsence(date: string, email: string, absent: boolean): Promise<void> {
-  await ensureStatsTables();
   const e = email.trim().toLowerCase();
   if (absent) {
     await sql`INSERT INTO player_absences (session_date, email) VALUES (${date}, ${e}) ON CONFLICT DO NOTHING;`;
@@ -679,7 +609,6 @@ export async function setAbsence(date: string, email: string, absent: boolean): 
 }
 
 export async function listAbsences(email: string, fromDate: string): Promise<string[]> {
-  await ensureStatsTables();
   const { rows } = await sql`
     SELECT session_date::text AS d FROM player_absences WHERE email = ${email.trim().toLowerCase()} AND session_date >= ${fromDate};
   `;
@@ -689,7 +618,6 @@ export async function listAbsences(email: string, fromDate: string): Promise<str
 /** Just the streak and this month's attendance rank (for the Membership tab). */
 export async function getQuickStats(player: { id: number; email: string }): Promise<{ streak: number; monthRank: number | null }> {
   if (!process.env.POSTGRES_URL) return { streak: 0, monthRank: null };
-  await ensureStatsTables();
   syncRosterAttendanceLater();
   const today = getClubToday().dateKey;
   const [{ rows: att }, { rows: club }, { rows: abs }, board] = await Promise.all([

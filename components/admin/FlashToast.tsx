@@ -3,8 +3,8 @@
 import { useFlashToast, type FlashRules } from "@/hooks/useFlashToast";
 import { MINI_GAME_MAX_PLAYERS } from "@/lib/constants";
 
-// The messages each admin page's server actions redirect back with. Pages
-// render <FlashToast rules="…" />; the hook does the rest.
+// The messages each admin page's server actions redirect back with. The
+// admin frame renders <FlashToast />; the hook does the rest.
 
 const ok = (text: string) => ({ text, kind: "success" as const });
 const err = (text: string) => ({ text, kind: "error" as const });
@@ -29,7 +29,7 @@ const playDays: FlashRules = {
   cashAdded: (v) => ok(offlineAddedMessage(v, "Player")),
   cashError: (v) => err(v),
   removed: () => ok("Player removed from the roster."),
-  courtsUpdated: (v) => ok(`Courts booked updated to ${v} court${v === "1" ? "" : "s"}.`),
+  courtsUpdated: (v) => ok(`Courts saved: ${v} court${v === "1" ? "" : "s"}.`),
   courtsError: (v) => err(v),
   waitlistNotified: (v) => {
     const n = Number(v);
@@ -37,15 +37,15 @@ const playDays: FlashRules = {
   },
   waitlistRemoved: () => ok("Removed from the waitlist."),
   registration: (v) =>
-    v === "locked" ? ok("Registration locked — no new sign-ups for this play day.") : v === "unlocked" ? ok("Registration reopened for this play day.") : null,
+    v === "locked" ? ok("Sign-ups closed for this play day. You can still add players.") : v === "unlocked" ? ok("Sign-ups are open for this play day.") : null,
   miniGame: (v) =>
     v === "on"
-      ? ok(`Mini game day on — registration locked and capped at ${MINI_GAME_MAX_PLAYERS} players.`)
+      ? ok(`Mini game day on — casual sign-ups closed, capped at ${MINI_GAME_MAX_PLAYERS} players. Members are included.`)
       : v === "off"
-        ? ok("Mini game day off — court-based capacity is back and registration reopened.")
+        ? ok("Mini game off: sign-ups are open again and capacity follows the courts.")
         : null,
-  fillInSaved: () => ok("Fill-in saved and emailed the session details."),
-  fillInRemoved: () => ok("Fill-in removed — the original player is back on the roster."),
+  fillInSaved: () => ok("Stand-in saved, and emailed the play day details."),
+  fillInRemoved: () => ok("Stand-in removed: the original player is back on the roster."),
   fillInError: (v) => err(v),
 };
 
@@ -66,9 +66,26 @@ const financials: FlashRules = {
   financeError: (v) => (v ? err(v) : null),
 };
 
-export const FLASH_RULES = { generic, playDays, members, financials } as const;
+const membersAll: FlashRules = { ...generic, ...members };
+const financialsAll: FlashRules = { ...generic, ...financials };
 
-export function FlashToast({ rules = "generic" }: { rules?: keyof typeof FLASH_RULES }) {
-  useFlashToast(FLASH_RULES[rules]);
+export const FLASH_RULES = { generic, playDays, members: membersAll, financials: financialsAll } as const;
+
+/** The messages a page's server actions can redirect back with. */
+export function flashRulesFor(pathname: string): FlashRules {
+  if (pathname.startsWith("/admin/play-days")) return playDays;
+  if (pathname.startsWith("/admin/members")) return membersAll;
+  if (pathname.startsWith("/admin/financials")) return financialsAll;
+  return generic;
+}
+
+/**
+ * Rendered once by the admin frame (AdminShell), not by each page: the frame
+ * stays mounted across navigations, so it always sees the ?toast=… a server
+ * action redirects back with. (Inside a page it could miss one when the
+ * action's redirect re-rendered the page.)
+ */
+export function FlashToast({ pathname }: { pathname: string }) {
+  useFlashToast(flashRulesFor(pathname));
   return null;
 }

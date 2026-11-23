@@ -1,6 +1,6 @@
 // Same database as the rest of the site, whichever bundle loads this (lib/db-env.ts).
 import "./db-env";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { cookies } from "next/headers";
 import { ADMIN_COOKIE, verifyAdminToken } from "./admin-session";
 import { PLAYER_COOKIE, sessionForToken } from "./player-auth";
@@ -132,4 +132,13 @@ export function readCookie(request: Request, name: string): string | undefined {
     if (eq !== -1 && part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
   }
   return undefined;
+}
+
+/**
+ * Whether this admin sees a page in the menu and on the Today page. The
+ * break-glass password sees the club pages, not the role pages.
+ */
+export function canOpenAdminPage(ctx: AdminContext | null, href: string): boolean {
+  if (ctx?.kind === "player") return adminPathAllowed(ctx.access, href);
+  return !href.startsWith("/admin/people") && !href.startsWith("/admin/platform");
 }

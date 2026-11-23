@@ -1,5 +1,4 @@
-import { db, sql } from "@vercel/postgres";
-import { ensureFinanceTables } from "./finance-db";
+import { db, sql } from "./database";
 import type { FinanceEntry, FinanceKind } from "./finance";
 import {
   payeeKey,
@@ -114,22 +113,28 @@ async function setSetting(key: string, value: unknown): Promise<void> {
 }
 
 export async function getOpeningBalances(): Promise<OpeningBalances | null> {
-  await ensureFinanceTables();
   return getSetting<OpeningBalances>("opening");
 }
 
+/** Bank lines still to reconcile since the opening balances (admin menu badge). */
+export async function countBankToReconcile(): Promise<number> {
+  const from = (await getOpeningBalances())?.date ?? null;
+  const { rows } = await sql`
+    SELECT COUNT(*)::int AS count FROM bank_transactions
+    WHERE status = 'unmatched' AND (${from}::date IS NULL OR txn_date >= ${from}::date);
+  `;
+  return (rows[0] as { count: number })?.count ?? 0;
+}
+
 export async function setOpeningBalances(value: OpeningBalances): Promise<void> {
-  await ensureFinanceTables();
   await setSetting("opening", value);
 }
 
 export async function getReportedBankBalance(): Promise<ReportedBankBalance | null> {
-  await ensureFinanceTables();
   return getSetting<ReportedBankBalance>("bank_balance");
 }
 
 export async function setReportedBankBalance(value: ReportedBankBalance): Promise<void> {
-  await ensureFinanceTables();
   await setSetting("bank_balance", value);
 }
 
@@ -146,7 +151,6 @@ export async function insertBankTransactions(
   source: string,
   rows: BankTransactionInput[],
 ): Promise<{ inserted: number; duplicates: number }> {
-  await ensureFinanceTables();
   if (rows.length === 0) return { inserted: 0, duplicates: 0 };
 
   const ids = rows.map((r) => r.externalId);
@@ -278,7 +282,6 @@ export async function matchBankLine(
     adjustment = null,
   }: { auto?: boolean; reason?: string | null; adjustment?: MatchAdjustment | null } = {},
 ): Promise<{ adjustmentEntryId: number | null }> {
-  await ensureFinanceTables();
   const ids = [...new Set(entryIds)].filter((n) => Number.isSafeInteger(n) && n > 0);
   if (ids.length === 0 && !adjustment) throw new MatchError("Choose at least one entry to match.");
 
@@ -340,7 +343,6 @@ export async function matchBankLine(
 // Classifies a bank line as something other than a ledger match (or puts
 // it back to "unmatched"). Any entry matches it had are released.
 export async function setBankTransactionStatus(id: number, status: Exclude<BankStatus, "matched">): Promise<void> {
-  await ensureFinanceTables();
   await sql`DELETE FROM bank_matches WHERE bank_txn_id = ${id};`;
   await sql`
     UPDATE bank_transactions SET
@@ -369,7 +371,6 @@ const toRule = (r: Record<string, unknown>): MatchRule => ({
 });
 
 export async function listBankRules(): Promise<MatchRule[]> {
-  await ensureFinanceTables();
   const { rows } = await sql`SELECT * FROM bank_rules ORDER BY hits DESC, last_used_at DESC NULLS LAST;`;
   return rows.map(toRule);
 }
@@ -387,7 +388,6 @@ export async function learnBankRule(
 ): Promise<void> {
   const pattern = payeeKey(description);
   if (!pattern) return;
-  await ensureFinanceTables();
   const direction = amountCents > 0 ? "in" : "out";
   const v =
     action.action === "classify"
@@ -429,7 +429,6 @@ export async function deleteBankRule(id: number): Promise<void> {
 // entry from the rule (dated on the bank line, for its exact amount) and
 // matches the two.
 export async function applyBankRule(bankTxnId: number, ruleId: number, { auto = false } = {}): Promise<void> {
-  await ensureFinanceTables();
   const [{ rows: lines }, { rows: rules }] = await Promise.all([
     sql`SELECT id, status FROM bank_transactions WHERE id = ${bankTxnId};`,
     sql`SELECT * FROM bank_rules WHERE id = ${ruleId};`,
@@ -543,7 +542,6 @@ function suggestAll(pool: Awaited<ReturnType<typeof loadMatchingPool>>): Map<num
 
 // Suggestions for every unreconciled line, for the bank page.
 export async function getBankSuggestions(): Promise<Map<number, Suggestion>> {
-  await ensureFinanceTables();
   return suggestAll(await loadMatchingPool());
 }
 
@@ -553,7 +551,6 @@ export async function markStripePayout(
   payoutId: string | null,
   { auto = false, reason = null }: { auto?: boolean; reason?: string | null } = {},
 ): Promise<void> {
-  await ensureFinanceTables();
   const { rowCount } = await sql`
     UPDATE bank_transactions SET status = 'stripe_payout', payout_id = ${payoutId},
       auto_matched = ${auto}, match_reason = ${reason}
@@ -567,7 +564,6 @@ export async function markStripePayout(
 // and arrival date), clear single matches, and bank rules the treasurer
 // switched to automatic. Everything else stays a suggestion on the page.
 export async function autoMatchBankTransactions(): Promise<number> {
-  await ensureFinanceTables();
   let matched = 0;
 
   // Jersey payments carry their registration's 5-digit code in the
@@ -611,7 +607,6 @@ export async function getOfflinePaymentReconciliation(
 ): Promise<Map<string, OfflineReconciliation>> {
   const out = new Map<string, OfflineReconciliation>();
   if (invoiceIds.length === 0) return out;
-  await ensureFinanceTables();
   const { rows } = await sql.query(
     `SELECT e.external_id, b.txn_date::text AS bank_date
      FROM finance_entries e
@@ -645,7 +640,6 @@ export async function listBankTransactions({
   reconciled?: boolean;
   limit?: number;
 }): Promise<BankTransaction[]> {
-  await ensureFinanceTables();
   const where: string[] = [];
   const params: (string | number)[] = [];
   const add = (clause: (p: string) => string, v: string | number) => {
@@ -784,7 +778,6 @@ export type FundsSummary = {
 };
 
 export async function getFundsSummary(): Promise<FundsSummary> {
-  await ensureFinanceTables();
   const [opening, bankReported] = await Promise.all([getOpeningBalances(), getReportedBankBalance()]);
   const from = opening?.date ?? null;
 

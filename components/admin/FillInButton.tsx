@@ -38,7 +38,8 @@ function splitName(name: string): { firstName: string; lastName: string } {
   };
 }
 
-// "Fill in" / "Edit fill-in" control for one roster row. The popup collects
+// "Add stand-in" / "Edit stand-in" control for one roster row (a stand-in,
+// or fill-in, takes the place of a player who can't make it). The popup collects
 // the same four fields as the cash-player form; saving and clearing are
 // Server Actions the play-days page binds to this row's date and player
 // before passing them down.
@@ -90,7 +91,7 @@ export function FillInButton({
           cursor: "pointer",
         }}
       >
-        {existing ? "Edit fill-in" : "Fill in"}
+        {existing ? "Edit stand-in" : "Add stand-in"}
       </button>
 
       {open ? (
@@ -114,7 +115,7 @@ export function FillInButton({
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
-            aria-label={`Fill-in player for ${playerName}`}
+            aria-label={`Stand-in for ${playerName}`}
             style={{
               background: "#fff",
               borderRadius: 10,
@@ -127,7 +128,7 @@ export function FillInButton({
             }}
           >
             <h3 style={{ fontSize: 16, margin: "0 0 4px" }}>
-              {existing ? "Edit fill-in" : "Add fill-in"}
+              {existing ? `Edit the stand-in for ${playerName}` : `Add a stand-in for ${playerName}`}
             </h3>
             <p
               style={{
@@ -230,7 +231,7 @@ export function FillInButton({
                     fontWeight: 600,
                   }}
                 >
-                  {existing ? "Save fill-in" : "Add fill-in"}
+                  {existing ? "Save stand-in" : "Add stand-in"}
                 </SubmitButton>
               </div>
             </form>
@@ -257,7 +258,7 @@ export function FillInButton({
                     fontSize: 12,
                   }}
                 >
-                  Remove fill-in — {playerName} is playing after all
+                  Remove the stand-in: {playerName} is playing after all
                 </SubmitButton>
               </form>
             ) : null}

@@ -6,16 +6,10 @@ import { linkMemberAccount } from "@/lib/player-db";
 import { NextResponse } from "next/server";
 import { markPassPaid } from "@/lib/wolf-vision-db";
 import type Stripe from "stripe";
-import { sql } from "@vercel/postgres";
+import { insertOneTimeDonation, setDonationStatusBySubscription } from "@/lib/repos/donations";
+import { setMembershipStatusBySubscription } from "@/lib/repos/memberships";
 import { getStripe } from "@/lib/stripe";
-import {
-  activateMembershipByPaymentIntentId,
-  activateMembershipBySubscriptionId,
-  applyMembershipRenewal,
-  ensureTables,
-  listSessionsInRange,
-  reserveBookingSlot,
-} from "@/lib/db";
+import { activateMembershipByPaymentIntentId, activateMembershipBySubscriptionId, applyMembershipRenewal, listMemberMiniGameDates, listSessionsInRange, reserveBookingSlot } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import {
   sendAdminBookingRaceAlertEmail,
@@ -55,19 +49,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  // Every event type below eventually touches a column ensureTables() may
-  // still need to create (e.g. last_renewal_invoice_id on a fresh deploy) —
-  // run it once up front rather than per-branch, so a cold serverless
-  // instance handling a webhook before any other route has run doesn't fail.
-  if (process.env.POSTGRES_URL) {
-    await ensureTables();
-  }
-
   if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object as Stripe.PaymentIntent;
     if (pi.metadata?.type === "casual" && pi.metadata.sessionDate) {
       if (process.env.POSTGRES_URL) {
-        await ensureTables();
         const sessionDate = pi.metadata.sessionDate;
         const ok = await reserveBookingSlot(sessionDate, {
           firstName: pi.metadata.firstName ?? "",
@@ -154,6 +139,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
           renewal: pi.metadata.renewal === "true",
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
@@ -171,20 +161,13 @@ export async function POST(request: Request) {
 
     if (pi.metadata?.type === "donation") {
       if (process.env.POSTGRES_URL) {
-        await ensureTables();
-        await sql`
-          INSERT INTO donations (email, first_name, last_name, amount_cents, frequency, stripe_payment_intent_id, status)
-          VALUES (
-            ${pi.metadata.email ?? pi.receipt_email ?? ""},
-            ${pi.metadata.firstName ?? ""},
-            ${pi.metadata.lastName ?? ""},
-            ${pi.amount},
-            'once',
-            ${pi.id},
-            'succeeded'
-          )
-          ON CONFLICT (stripe_payment_intent_id) DO NOTHING;
-        `;
+        await insertOneTimeDonation({
+          email: pi.metadata.email ?? pi.receipt_email ?? "",
+          firstName: pi.metadata.firstName ?? "",
+          lastName: pi.metadata.lastName ?? "",
+          amountCents: pi.amount,
+          stripePaymentIntentId: pi.id,
+        });
       }
     }
   }
@@ -205,28 +188,16 @@ export async function POST(request: Request) {
       // A plan/day change scheduled from the profile (lib/membership-
       // self-service.ts) lands here as new subscription metadata.
       await syncPlanFromSubscriptionMetadata(sub.id, sub.metadata);
-      await sql`
-        UPDATE memberships SET status = ${membershipStatus}, cancel_at_period_end = ${sub.cancel_at_period_end}
-        WHERE stripe_subscription_id = ${sub.id};
-      `;
-      await sql`
-        UPDATE donations SET status = ${sub.status}
-        WHERE stripe_subscription_id = ${sub.id};
-      `;
+      await setMembershipStatusBySubscription(sub.id, membershipStatus, sub.cancel_at_period_end);
+      await setDonationStatusBySubscription(sub.id, sub.status);
     }
   }
 
   if (event.type === "customer.subscription.deleted") {
     const sub = event.data.object as Stripe.Subscription;
     if (process.env.POSTGRES_URL) {
-      await sql`
-        UPDATE memberships SET status = 'canceled'
-        WHERE stripe_subscription_id = ${sub.id};
-      `;
-      await sql`
-        UPDATE donations SET status = 'canceled'
-        WHERE stripe_subscription_id = ${sub.id};
-      `;
+      await setMembershipStatusBySubscription(sub.id, "canceled");
+      await setDonationStatusBySubscription(sub.id, "canceled");
     }
   }
 
@@ -252,10 +223,7 @@ export async function POST(request: Request) {
           stripeCustomerId: typeof invoice.customer === "string" ? invoice.customer : (invoice.customer?.id ?? null),
         });
       }
-      await sql`
-        UPDATE donations SET status = 'active'
-        WHERE stripe_subscription_id = ${subId};
-      `;
+      await setDonationStatusBySubscription(subId, "active");
       // billing_reason distinguishes a renewal invoice from the initial
       // signup invoice — only renewals should extend the access window.
       // applyMembershipRenewal is idempotent against Stripe's at-least-once
@@ -279,6 +247,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
         );
@@ -319,6 +292,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
         );
@@ -331,7 +309,6 @@ export async function POST(request: Request) {
       invoice.metadata.sessionDate &&
       process.env.POSTGRES_URL
     ) {
-      await ensureTables();
       const sessionDate = invoice.metadata.sessionDate;
       const offlineRef = offlinePaymentRef(
         offlineMethodFromSource(invoice.metadata.source) ?? "cash",

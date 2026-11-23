@@ -1,9 +1,7 @@
-import { sql } from "@vercel/postgres";
-import { ensureTables } from "./db";
+import { sql } from "./database";
 import { getClubToday } from "./dates";
 import type { Lang } from "./i18n";
 import { toE164 } from "./phone";
-import { onceThisDeploy } from "./schema-gate";
 
 // Player accounts. Everything a player has done is already stored under
 // their email (memberships, bookings, jersey registrations, court board
@@ -11,120 +9,6 @@ import { onceThisDeploy } from "./schema-gate";
 // of the app links to it by email rather than by a new foreign key. That
 // keeps every existing table untouched and means an account picks up its
 // history the moment it exists.
-//
-// Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
-
-let ensurePromise: Promise<void> | null = null;
-
-export function ensurePlayerTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("players", ensureImpl).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
-
-async function ensureImpl() {
-  await ensureTables();
-  await sql`
-    CREATE TABLE IF NOT EXISTS players (
-      id SERIAL PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      first_name TEXT NOT NULL DEFAULT '',
-      last_name TEXT NOT NULL DEFAULT '',
-      display_name TEXT,
-      phone TEXT,
-      phone_e164 TEXT,
-      phone_verified_at TIMESTAMPTZ,
-      lang TEXT NOT NULL DEFAULT 'en',
-      stripe_customer_id TEXT,
-      leaderboard_visible BOOLEAN NOT NULL DEFAULT TRUE,
-      minigame_name TEXT,
-      avatar_url TEXT,
-      created_via TEXT NOT NULL DEFAULT 'signup',
-      claimed_at TIMESTAMPTZ,
-      welcome_sent_at TIMESTAMPTZ,
-      welcome_card_dismissed_at TIMESTAMPTZ,
-      install_hint_shown_at TIMESTAMPTZ,
-      installed_at TIMESTAMPTZ,
-      leaderboard_optout_token TEXT UNIQUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      deleted_at TIMESTAMPTZ
-    );
-  `;
-  await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
-  // A confirmed phone number signs in exactly one account.
-  await sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS players_phone_verified_idx
-      ON players (phone_e164)
-      WHERE phone_verified_at IS NOT NULL AND deleted_at IS NULL;
-  `;
-  await sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS players_minigame_name_idx
-      ON players (lower(minigame_name))
-      WHERE minigame_name IS NOT NULL;
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS auth_codes (
-      id SERIAL PRIMARY KEY,
-      email TEXT NOT NULL,
-      code_hash TEXT NOT NULL,
-      link_token_hash TEXT NOT NULL UNIQUE,
-      attempts INT NOT NULL DEFAULT 0,
-      expires_at TIMESTAMPTZ NOT NULL,
-      consumed_at TIMESTAMPTZ,
-      ip_hash TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  await sql`CREATE INDEX IF NOT EXISTS auth_codes_email_idx ON auth_codes (email, created_at DESC);`;
-  await sql`
-    CREATE TABLE IF NOT EXISTS player_sessions (
-      id SERIAL PRIMARY KEY,
-      player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      token_hash TEXT NOT NULL UNIQUE,
-      user_agent TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ NOT NULL
-    );
-  `;
-  // Every text message Google sends for us, for the rolling 24-hour cap on
-  // SMS codes (lib/sms.ts). phone_hash lets the per-number limit work
-  // without keeping numbers in a log.
-  await sql`
-    CREATE TABLE IF NOT EXISTS sms_sends (
-      id SERIAL PRIMARY KEY,
-      purpose TEXT NOT NULL,
-      phone_hash TEXT NOT NULL,
-      ip_hash TEXT,
-      sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  await sql`CREATE INDEX IF NOT EXISTS sms_sends_sent_at_idx ON sms_sends (sent_at);`;
-  // Small key/value store for player-side switches (SMS on/off, the last
-  // "cap reached" alert) that admins change at runtime.
-  await sql`
-    CREATE TABLE IF NOT EXISTS player_settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  // Install-guide and welcome-card events, so admins can see how many
-  // players added the app to their home screen.
-  await sql`
-    CREATE TABLE IF NOT EXISTS player_events (
-      id SERIAL PRIMARY KEY,
-      player_id INT REFERENCES players(id) ON DELETE CASCADE,
-      event TEXT NOT NULL,
-      detail TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-}
 
 export type Player = {
   id: number;
@@ -219,7 +103,6 @@ export function normalizeAccountEmail(raw: string): string {
 export { toE164 } from "./phone";
 
 export async function getPlayerById(id: number): Promise<Player | null> {
-  await ensurePlayerTables();
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS} FROM players p WHERE p.id = $1 AND p.deleted_at IS NULL;`,
     [id],
@@ -228,7 +111,6 @@ export async function getPlayerById(id: number): Promise<Player | null> {
 }
 
 export async function getPlayerByEmail(email: string): Promise<Player | null> {
-  await ensurePlayerTables();
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS} FROM players p WHERE p.email = $1 AND p.deleted_at IS NULL;`,
     [normalizeAccountEmail(email)],
@@ -237,7 +119,6 @@ export async function getPlayerByEmail(email: string): Promise<Player | null> {
 }
 
 export async function getPlayerByVerifiedPhone(phoneE164: string): Promise<Player | null> {
-  await ensurePlayerTables();
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS} FROM players p
      WHERE p.phone_e164 = $1 AND p.phone_verified_at IS NOT NULL AND p.deleted_at IS NULL;`,
@@ -259,7 +140,6 @@ type MemberDetails = {
  * registrations.
  */
 export async function latestDetailsForEmail(email: string): Promise<MemberDetails | null> {
-  await ensureTables();
   const { rows } = await sql.query(
     `SELECT first_name, last_name, phone, created_at FROM (
        SELECT first_name, last_name, phone, created_at, 1 AS rank FROM memberships
@@ -290,7 +170,6 @@ export async function ensurePlayerForEmail(
     details?: Partial<MemberDetails>;
   },
 ): Promise<{ player: Player; created: boolean }> {
-  await ensurePlayerTables();
   const email = normalizeAccountEmail(rawEmail);
   const existing = await getPlayerByEmail(email);
   if (existing) {
@@ -391,18 +270,15 @@ export async function markClaimed(id: number): Promise<void> {
 }
 
 export async function recordPlayerEvent(playerId: number | null, event: string, detail?: string): Promise<void> {
-  await ensurePlayerTables();
   await sql`INSERT INTO player_events (player_id, event, detail) VALUES (${playerId}, ${event}, ${detail ?? null});`;
 }
 
 export async function getPlayerSetting(key: string): Promise<string | null> {
-  await ensurePlayerTables();
   const { rows } = await sql`SELECT value FROM player_settings WHERE key = ${key};`;
   return (rows[0]?.value as string | undefined) ?? null;
 }
 
 export async function setPlayerSetting(key: string, value: string): Promise<void> {
-  await ensurePlayerTables();
   await sql`
     INSERT INTO player_settings (key, value, updated_at) VALUES (${key}, ${value}, NOW())
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
@@ -441,7 +317,6 @@ export type ImportCandidate = {
 
 /** Lower-cased emails with a membership that grants access today or later. */
 export async function listActiveMemberEmails(): Promise<string[]> {
-  await ensureTables();
   const { dateKey } = getClubToday();
   const { rows } = await sql.query(
     `SELECT DISTINCT lower(trim(email)) AS email FROM memberships
@@ -465,7 +340,6 @@ function inboxKey(email: string): string {
 }
 
 export async function previewMemberImport(): Promise<ImportCandidate[]> {
-  await ensurePlayerTables();
   const { dateKey } = getClubToday();
   const { rows } = await sql.query(
     `SELECT DISTINCT ON (lower(trim(m.email)))
@@ -518,7 +392,6 @@ export type AdminPlayerRow = Player & {
 };
 
 export async function listPlayersForAdmin(search?: string): Promise<AdminPlayerRow[]> {
-  await ensurePlayerTables();
   const { dateKey } = getClubToday();
   const q = search?.trim() ? `%${search.trim().toLowerCase()}%` : null;
   const { rows } = await sql.query(
@@ -548,7 +421,6 @@ export async function listPlayersForAdmin(search?: string): Promise<AdminPlayerR
  * has Stripe access).
  */
 export async function changePlayerEmail(id: number, newEmailRaw: string): Promise<{ oldEmail: string; newEmail: string }> {
-  await ensurePlayerTables();
   const newEmail = normalizeAccountEmail(newEmailRaw);
   const player = await getPlayerById(id);
   if (!player) throw new Error("Player not found");
@@ -576,7 +448,6 @@ export async function changePlayerEmail(id: number, newEmailRaw: string): Promis
 // ---------------------------------------------------------------------------
 
 export async function countWelcomePending(): Promise<number> {
-  await ensurePlayerTables();
   const { rows } = await sql`
     SELECT count(*)::int AS n FROM players
     WHERE created_via = 'member_import' AND welcome_sent_at IS NULL AND deleted_at IS NULL;
@@ -585,7 +456,6 @@ export async function countWelcomePending(): Promise<number> {
 }
 
 export async function listWelcomePending(limit: number): Promise<Player[]> {
-  await ensurePlayerTables();
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS} FROM players p
      WHERE p.created_via = 'member_import' AND p.welcome_sent_at IS NULL AND p.deleted_at IS NULL
@@ -611,7 +481,6 @@ export async function markWelcomeSent(playerId: number): Promise<void> {
 
 /** Sets (or clears) a player's profile picture; returns the previous URL so the caller can delete it. */
 export async function setPlayerAvatar(playerId: number, url: string | null): Promise<string | null> {
-  await ensurePlayerTables();
   const { rows } = await sql.query(
     `UPDATE players p SET avatar_url = $2
      FROM (SELECT id, avatar_url AS old FROM players WHERE id = $1) o

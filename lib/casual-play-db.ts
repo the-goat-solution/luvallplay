@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import {
   ActionError,
   applyAction,
@@ -16,43 +16,6 @@ import { notifyWaitlistIfSpotOpened } from "./waitlist-notify";
 import { maxPlayersForCourts } from "./constants";
 import { demoRoster, demoStore, isCasualPlayDemo } from "./casual-play-demo";
 import { recordBoardAttendance } from "./stats-db";
-import { onceThisDeploy } from "./schema-gate";
-
-// Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
-let ensurePromise: Promise<void> | null = null;
-
-export function ensureCasualPlayTables(): Promise<void> {
-  if (isCasualPlayDemo()) return Promise.resolve();
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("casual_play", ensureImpl).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
-
-async function ensureImpl() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS casual_play_sessions (
-      date DATE PRIMARY KEY,
-      state JSONB NOT NULL,
-      version INT NOT NULL DEFAULT 1,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  // Tier is remembered per person (by email), so next week's board starts
-  // with everyone already in the right tier. nickname is no longer used: the
-  // board shows names from the play day roster.
-  await sql`
-    CREATE TABLE IF NOT EXISTS casual_play_profiles (
-      email TEXT PRIMARY KEY,
-      tier SMALLINT,
-      nickname TEXT,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-}
 
 /**
  * Stable, opaque player id derived from the email, so the board can be

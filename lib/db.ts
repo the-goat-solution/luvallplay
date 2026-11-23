@@ -1,16 +1,6 @@
-import { db, sql, types } from "@vercel/postgres";
-
-// By default the driver parses Postgres DATE columns into JS Date objects at
-// local midnight, so converting back with .toISOString().slice(0,10) silently
-// shifts the day whenever the process's timezone isn't UTC (verified: it
-// breaks under Pacific/Auckland, the club's own timezone — the exact
-// environment this app cares about getting right). DATE has no time-of-day
-// component to begin with, so keep it as the plain 'YYYY-MM-DD' string
-// Postgres already sends, sidestepping the conversion entirely everywhere in
-// this file. OID 1082 = date.
-types.setTypeParser(1082, (val: string) => val);
+import { db, sql } from "./database";
+// DATE columns come back as plain 'YYYY-MM-DD' strings (lib/database.ts).
 import {
-  DEFAULT_PAUSED_DAYS,
   MEMBERSHIP_CYCLE_DAYS,
   MEMBERSHIP_DAYS,
   MEMBERSHIP_DAY_TO_DOW,
@@ -27,250 +17,8 @@ import {
   getClubToday,
   getMembershipDayForDate,
 } from "./dates";
-import { onceThisDeploy } from "./schema-gate";
+import { memberHasRoom } from "./membership-start";
 import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
-
-// Every route touching the DB calls ensureTables() first, and it's ~24
-// sequential DDL statements — cheap individually but a heavy tax when paid
-// on every request. The DDL is idempotent (IF NOT EXISTS / ADD COLUMN IF NOT
-// EXISTS), so it only ever needs to actually run once per warm server
-// instance; memoize the promise so later calls resolve immediately.
-let ensureTablesPromise: Promise<void> | null = null;
-
-export function ensureTables(): Promise<void> {
-  if (!ensureTablesPromise) {
-    ensureTablesPromise = onceThisDeploy("core", ensureTablesImpl).catch((err) => {
-      ensureTablesPromise = null;
-      throw err;
-    });
-  }
-  return ensureTablesPromise;
-}
-
-async function ensureTablesImpl() {
-  // DEFAULT must be a literal — Postgres rejects bind params in CREATE TABLE DDL.
-  await sql`
-    CREATE TABLE IF NOT EXISTS sessions (
-      date DATE PRIMARY KEY,
-      max_spots INT NOT NULL DEFAULT 12,
-      booked_spots INT NOT NULL DEFAULT 0
-    );
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS bookings (
-      id SERIAL PRIMARY KEY,
-      session_date DATE NOT NULL REFERENCES sessions(date),
-      first_name TEXT NOT NULL,
-      last_name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      phone TEXT,
-      payment_intent_id TEXT UNIQUE,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS waitlist (
-      id SERIAL PRIMARY KEY,
-      session_date DATE,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS memberships (
-      id SERIAL PRIMARY KEY,
-      email TEXT NOT NULL,
-      plan TEXT NOT NULL,
-      first_name TEXT,
-      last_name TEXT,
-      phone TEXT,
-      period_start DATE,
-      period_end DATE,
-      stripe_subscription_id TEXT UNIQUE,
-      status TEXT NOT NULL DEFAULT 'active',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS first_name TEXT;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_name TEXT;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS phone TEXT;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS period_start DATE;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS period_end DATE;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS recurring BOOLEAN NOT NULL DEFAULT TRUE;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT UNIQUE;`;
-  // Guards the additive period_end advance on renewal (see applyRenewal)
-  // against Stripe's at-least-once webhook delivery re-granting a cycle.
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_renewal_invoice_id TEXT;`;
-  // Which weekday's membership pool this row grants access to — defaults to
-  // 'friday' since every membership predating this column was Friday-only.
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS day TEXT NOT NULL DEFAULT 'friday';`;
-  // One-time membership renewal (see lib/membership-renewal.ts): the cron
-  // emails a private renewal link 5 days before period_end. The token in that
-  // link is what opens renewal for the member; renewal_reminder_sent_at
-  // guarantees one reminder per membership. A renewal row points back at the
-  // membership it continues via renewal_of.
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_token TEXT UNIQUE;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_reminder_sent_at TIMESTAMPTZ;`;
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS renewal_of INT;`;
-  // Total free days an admin has given this membership ("Give free month"),
-  // shown on the Members page.
-  await sql`ALTER TABLE memberships ADD COLUMN IF NOT EXISTS free_days_granted INT NOT NULL DEFAULT 0;`;
-  await sql`
-    CREATE TABLE IF NOT EXISTS donations (
-      id SERIAL PRIMARY KEY,
-      email TEXT NOT NULL,
-      first_name TEXT NOT NULL,
-      last_name TEXT NOT NULL,
-      amount_cents INT NOT NULL,
-      frequency TEXT NOT NULL DEFAULT 'once',
-      stripe_payment_intent_id TEXT UNIQUE,
-      stripe_subscription_id TEXT UNIQUE,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  await sql`
-    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS google_event_id TEXT;
-  `;
-  await sql`
-    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS calendar_summary TEXT;
-  `;
-  await sql`
-    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_start_time TIMESTAMPTZ;
-  `;
-  await sql`
-    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_end_time TIMESTAMPTZ;
-  `;
-  await sql`
-    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS event_location TEXT;
-  `;
-  await sql`
-    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ;
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS session_alert_state (
-      session_date DATE PRIMARY KEY REFERENCES sessions(date),
-      state TEXT NOT NULL DEFAULT 'ok',
-      headcount INT NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  // Courts booked for a play day, admin-configurable (default 2, matching the
-  // previous fixed 12-player capacity). Unlike max_spots, this is never
-  // touched by the calendar sync's upsert, so it doesn't drift.
-  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS courts INT NOT NULL DEFAULT 2;`;
-  // Admin switch that closes registration for a play day before it's full.
-  // While set, the day offers no casual spots and new memberships won't
-  // start on it; existing bookings and members keep their places.
-  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS registration_locked BOOLEAN NOT NULL DEFAULT FALSE;`;
-  // Mini game day: capacity is MINI_GAME_MAX_PLAYERS whatever the courts,
-  // and registration is locked while it's on (see setMiniGameDay).
-  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS mini_game BOOLEAN NOT NULL DEFAULT FALSE;`;
-  // Set once a "spot opened" email has actually been sent for this waitlist
-  // row, so notifyWaitlistIfSpotOpened (lib/waitlist-notify.ts) never
-  // double-emails someone across repeated capacity-increase triggers.
-  await sql`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;`;
-  // People asking to be emailed when a weekday opens up for play — either a
-  // paused day coming back (see day_signup_settings below) or a day the club
-  // doesn't run yet. notified_at is set once the "it's open" email has sent.
-  await sql`
-    CREATE TABLE IF NOT EXISTS day_requests (
-      id SERIAL PRIMARY KEY,
-      day TEXT NOT NULL,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      notified_at TIMESTAMPTZ
-    );
-  `;
-  // One pending request per person per day, so a double submit (or asking
-  // twice) doesn't send them two "it's open" emails.
-  await sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS day_requests_pending_idx
-      ON day_requests (day, LOWER(email))
-      WHERE notified_at IS NULL;
-  `;
-  // Admin switch pausing public sign-ups (memberships and casual bookings)
-  // for every play day on a weekday. Seeded once from DEFAULT_PAUSED_DAYS;
-  // ON CONFLICT DO NOTHING means an admin's later choice is never undone.
-  await sql`
-    CREATE TABLE IF NOT EXISTS day_signup_settings (
-      day TEXT PRIMARY KEY,
-      paused BOOLEAN NOT NULL DEFAULT FALSE,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  for (const day of DEFAULT_PAUSED_DAYS) {
-    await sql`
-      INSERT INTO day_signup_settings (day, paused)
-      VALUES (${day}, TRUE)
-      ON CONFLICT (day) DO NOTHING;
-    `;
-  }
-  // Dedup guard for the day-before membership reminder cron — a given
-  // membership should only ever get one reminder for a given play day, even
-  // if the cron is retried or runs more than once on the same day.
-  await sql`
-    CREATE TABLE IF NOT EXISTS membership_reminders_sent (
-      membership_id INT NOT NULL,
-      session_date DATE NOT NULL,
-      sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (membership_id, session_date)
-    );
-  `;
-  // Dedup guard for the day-before casual-booking reminder — a booking only
-  // ever covers one session_date, so a single nullable column (unlike the
-  // membership table above) is enough to guarantee at most one reminder.
-  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;`;
-  // A player standing in for a member (or casual booking) who can't make a
-  // given session. The original player has already paid, so a fill-in is
-  // purely a substitution: it never creates a booking, never touches
-  // capacity, and carries no payment of its own. Exactly one of
-  // membership_id / booking_id identifies whose spot is being filled.
-  await sql`
-    CREATE TABLE IF NOT EXISTS session_fill_ins (
-      id SERIAL PRIMARY KEY,
-      session_date DATE NOT NULL,
-      membership_id INT,
-      booking_id INT,
-      first_name TEXT NOT NULL,
-      last_name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      phone TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      CONSTRAINT session_fill_ins_one_target CHECK (
-        (membership_id IS NULL) <> (booking_id IS NULL)
-      )
-    );
-  `;
-  // One fill-in per player per session — the partial indexes let the unused
-  // target column stay NULL without colliding (NULLs aren't equal in a
-  // plain UNIQUE constraint, so every row would otherwise be "distinct").
-  await sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS session_fill_ins_membership_idx
-      ON session_fill_ins (session_date, membership_id)
-      WHERE membership_id IS NOT NULL;
-  `;
-  await sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS session_fill_ins_booking_idx
-      ON session_fill_ins (session_date, booking_id)
-      WHERE booking_id IS NOT NULL;
-  `;
-  // A member saying "Can't make it" for one play day (profile Membership
-  // tab). They don't count toward that day's headcount or roster, so their
-  // spot opens up for a casual player.
-  await sql`
-    CREATE TABLE IF NOT EXISTS player_absences (
-      session_date DATE NOT NULL,
-      email TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (session_date, email)
-    );
-  `;
-}
 
 // A member who said they can't make that play day (see player_absences).
 // `dateExpr` / `alias` as for membershipCoversDateSql.
@@ -386,8 +134,10 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   spots: Record<string, number>;
   signedUp: Record<string, number>;
   locked: Record<string, boolean>;
+  // Mini game days: locked to casual sign-ups, but members are always in.
+  miniGame: Record<string, boolean>;
 }> {
-  if (dates.length === 0) return { spots: {}, signedUp: {}, locked: {} };
+  if (dates.length === 0) return { spots: {}, signedUp: {}, locked: {}, miniGame: {} };
 
   // Each date may default to a different court count (membership day vs.
   // not), so the per-date default is computed in JS and zipped with the
@@ -462,6 +212,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   const spots: Record<string, number> = {};
   const signedUp: Record<string, number> = {};
   const locked: Record<string, boolean> = {};
+  const miniGame: Record<string, boolean> = {};
   for (const date of dates) {
     const booked = bookedByDate.get(date) ?? 0;
     // Already scoped to the right membership day (or zero for casual-only
@@ -473,10 +224,11 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
       miniGameDates.has(date),
     );
     locked[date] = lockedDates.has(date);
+    miniGame[date] = miniGameDates.has(date);
     spots[date] = locked[date] ? 0 : Math.max(0, maxPlayers - activeMembers - booked);
     signedUp[date] = booked + activeMembers;
   }
-  return { spots, signedUp, locked };
+  return { spots, signedUp, locked, miniGame };
 }
 
 export async function reserveBookingSlot(
@@ -653,9 +405,11 @@ export async function assignAndReserveMembershipAccessStart(
       : await client.query(
           // A play day an admin has locked never becomes a new member's
           // first day; the admin-chosen preferredDate above bypasses this.
+          // A mini game day is the exception: its lock is for casual sign-ups
+          // only, members are always included (see isMemberStartCandidate).
           `SELECT date::text AS date FROM sessions
            WHERE google_event_id IS NOT NULL
-             AND NOT registration_locked
+             AND (NOT registration_locked OR mini_game)
              AND EXTRACT(DOW FROM date) = $2
              AND date >= $1::date
              AND date <= ($1::date + $3::int)
@@ -696,7 +450,14 @@ export async function assignAndReserveMembershipAccessStart(
         );
         const activeMembers = (memberCountRows[0] as { count: number }).count;
 
-        if (maxPlayers - activeMembers - booked > 0) {
+        if (
+          memberHasRoom({
+            miniGame: Boolean(session?.mini_game),
+            maxPlayers,
+            activeMembers,
+            booked,
+          })
+        ) {
           const periodEnd = addDays(date, MEMBERSHIP_DAYS[plan]);
           const { rows: inserted } = await client.query(
             `INSERT INTO memberships
@@ -836,6 +597,24 @@ export async function listSessionsInRange(
   });
 }
 
+// Mini game play days on a membership's weekday within its period. Members
+// are always included in a mini game, so their confirmation email names
+// these days (and points to "Can't make it" in the app).
+export async function listMemberMiniGameDates(
+  day: MembershipDay,
+  from: string,
+  to: string,
+): Promise<string[]> {
+  const { rows } = await sql`
+    SELECT date::text AS date FROM sessions
+    WHERE mini_game AND google_event_id IS NOT NULL
+      AND date >= ${from} AND date <= ${to}
+      AND EXTRACT(DOW FROM date) = ${MEMBERSHIP_DAY_TO_DOW[day]}
+    ORDER BY date;
+  `;
+  return rows.map((r) => (r as { date: string }).date);
+}
+
 // Postgres CURRENT_DATE is UTC-based, which disagrees with the club's
 // Pacific/Auckland "today" for roughly half of every NZ calendar day —
 // exactly the same class of bug documented on getClubToday. Bind the club-
@@ -889,6 +668,14 @@ export async function getActiveMemberCountForDate(
 export async function getTotalActiveMemberCount(): Promise<number> {
   const { rows } = await sql`
     SELECT COUNT(*)::int AS count FROM memberships WHERE status = 'active';
+  `;
+  return (rows[0] as { count: number })?.count ?? 0;
+}
+
+/** Memberships whose last payment failed (admin menu badge, Today page). */
+export async function countFailedMemberPayments(): Promise<number> {
+  const { rows } = await sql`
+    SELECT COUNT(*)::int AS count FROM memberships WHERE status IN ('past_due', 'unpaid');
   `;
   return (rows[0] as { count: number })?.count ?? 0;
 }

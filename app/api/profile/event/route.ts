@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@vercel/postgres";
+import { markInstalled, markInstallHintShown, markWelcomeDismissed } from "@/lib/repos/players";
 import { z } from "zod";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { recordPlayerEvent } from "@/lib/player-db";
@@ -27,16 +27,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
   if (body.event === "install_hint_shown") {
-    await sql`UPDATE players SET install_hint_shown_at = coalesce(install_hint_shown_at, NOW()) WHERE id = ${player.id};`;
+    await markInstallHintShown(player.id);
   } else if (body.event === "opened_homescreen" || body.event === "install_accepted") {
     // Once installed there's nothing to show, so the guide counts as shown too.
-    await sql`
-      UPDATE players SET installed_at = coalesce(installed_at, NOW()),
-        install_hint_shown_at = coalesce(install_hint_shown_at, NOW())
-      WHERE id = ${player.id};
-    `;
+    await markInstalled(player.id);
   } else if (body.event === "welcome_dismissed") {
-    await sql`UPDATE players SET welcome_card_dismissed_at = coalesce(welcome_card_dismissed_at, NOW()) WHERE id = ${player.id};`;
+    await markWelcomeDismissed(player.id);
   }
   await recordPlayerEvent(player.id, body.event, body.detail);
   return NextResponse.json({ ok: true });

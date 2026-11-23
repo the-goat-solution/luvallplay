@@ -1,14 +1,7 @@
 import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { clubDateKeyForInstant } from "./dates";
-import {
-  ensureFinanceTables,
-  getSyncState,
-  markSyncFailed,
-  markSyncSucceeded,
-  upsertStripeLines,
-  type StripeLedgerLine,
-} from "./finance-db";
+import { getSyncState, markSyncFailed, markSyncSucceeded, upsertStripeLines, type StripeLedgerLine } from "./finance-db";
 import type { FinanceKind } from "./finance";
 import { upsertStripePayouts } from "./bank-db";
 import { offlineMethodFromSource } from "./offline-payment";
@@ -296,7 +289,6 @@ export function lineForOfflineInvoice(invoice: Stripe.Invoice): StripeLedgerLine
 export type StripeSyncResult = { imported: number; scanned: number };
 
 export async function syncStripeFinance({ full = false } = {}): Promise<StripeSyncResult> {
-  await ensureFinanceTables();
   const stripe = getStripe();
   const startedAt = new Date();
   const state = await getSyncState(SYNC_KEY);
@@ -356,7 +348,6 @@ export async function syncStripeFinance({ full = false } = {}): Promise<StripeSy
 }
 
 export async function getStripeSyncState() {
-  await ensureFinanceTables();
   return getSyncState(SYNC_KEY);
 }
 

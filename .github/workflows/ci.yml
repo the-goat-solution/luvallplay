@@ -6,6 +6,9 @@
 #   they can't be skipped silently.
 # - Production build.
 #
+# Monorepo (pnpm workspaces): the app is apps/web, the schema and
+# migrations packages/db.
+#
 # Nothing here talks to production: no secrets are used, side effects are off
 # outside production (lib/side-effects.ts), and the database is the service
 # container below.
@@ -49,16 +52,17 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Types
-        run: npx tsc --noEmit
+        run: pnpm --filter web typecheck
       - name: Lint (0 errors)
-        run: npx eslint .
-      - name: Tests (unit, database, data guard, schema drift)
-        run: npm test
+        run: pnpm --filter web exec eslint .
+      - name: Tests (unit, database, data guard, schema drift, golden master)
+        run: pnpm --filter web test
       - name: Build
-        run: npm run build
+        run: pnpm --filter web build

@@ -14,7 +14,7 @@
 // this file to an empty database gives back the production dump exactly.
 import { readFileSync } from "node:fs";
 
-const dump = readFileSync(process.argv[2] ?? "docs/schema/production-2026-11.sql", "utf8");
+const dump = readFileSync(process.argv[2] ?? new URL("../../../../docs/schema/production-2026-11.sql", import.meta.url), "utf8");
 
 const sequences = [];
 const owners = [];

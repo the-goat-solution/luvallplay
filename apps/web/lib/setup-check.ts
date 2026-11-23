@@ -5,7 +5,7 @@ import { getSmsUsage, lookupRecaptchaSiteKey } from "./sms";
 import { PUBLIC_BLOB_SETUP_HINT, publicBlobAuth } from "./public-blob";
 import { getSiteUrl } from "./email-layout";
 import { sql } from "./database";
-import journal from "../db/migrations/meta/_journal.json";
+import journal from "@luvallplay/db/migrations/meta/_journal.json";
 
 // Live checks behind Admin → Setup check: each piece the player accounts
 // rely on, tested for real (no secrets are shown), with what to do if it

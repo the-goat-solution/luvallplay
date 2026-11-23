@@ -18,7 +18,7 @@ import { startEnv, PEOPLE } from "../../scripts/e2e/env.mjs";
 // Playwright is preinstalled globally (resolved through NODE_PATH, which only require() uses).
 const { chromium } = createRequire(import.meta.url)("playwright");
 
-const SHOTS = process.env.E2E_SHOTS ?? "docs/screenshots/phase-1";
+const SHOTS = process.env.E2E_SHOTS ?? "../../docs/screenshots/phase-1";
 const WIDTHS = [320, 375, 600, 840, 1200];
 const PHONE = { width: 375, height: 812 };
 const DESKTOP = { width: 1200, height: 900 };

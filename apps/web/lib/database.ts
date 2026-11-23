@@ -22,7 +22,7 @@
 import "./db-env.ts";
 import { Pool, neon, types, type PoolClient, type QueryResult, type QueryResultRow } from "@neondatabase/serverless";
 import { drizzle, type NeonDatabase } from "drizzle-orm/neon-serverless";
-import * as schema from "../db/schema.ts";
+import * as schema from "@luvallplay/db/schema";
 
 // Postgres DATE columns stay the 'YYYY-MM-DD' string Postgres sends. The
 // driver's default turns them into a Date at local midnight, which shifts the

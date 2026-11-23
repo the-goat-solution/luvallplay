@@ -34,8 +34,9 @@ import path from "node:path";
 import { dbClient } from "../db-client.mjs";
 import { dumpSchema, schemaDiff } from "./dump-schema.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const MIGRATIONS_DIR = path.join(ROOT, "db/migrations");
+// apps/web/scripts/db → the repository root (docs/) and packages/db (migrations).
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+export const MIGRATIONS_DIR = path.join(ROOT, "packages/db/migrations");
 /** Production's schema when the baseline was taken (frozen; what 0000_baseline produces). */
 export const BASELINE_DUMP = path.join(ROOT, "docs/schema/production-2026-11.sql");
 /** Production's schema after every migration (updated with each migration; CI checks it). */

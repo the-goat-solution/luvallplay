@@ -57,7 +57,7 @@ The site doesn't depend on any of this to keep working. Until 0002 has run, it k
 
 **Second sign-off (T−3):** Kelcee (or Timba) reads the two reports and says OK on PR #86.
 
-**Production run (T0)**, at a quiet time, not a play-day evening. From a checkout of the PR 6 branch, after `npm ci`:
+**Production run (T0)**, at a quiet time, not a play-day evening. From a checkout of the PR 6 branch, after `npm ci` (if PR 7, the monorepo, has merged by then: `pnpm install` at the root, then run these from `apps/web`):
 
 ```bash
 # 1. Restore point (instant): Neon console → Branches → New branch from main, now → name pre-phase-2-data
@@ -95,3 +95,19 @@ The build plan moves the Studio out of the web app into its own deploy (`apps/st
 - **B:** Sanity → manage → project `c0v5j4dz` → API → Tokens → add a token with **Deploy Studio** permission, and save it when the build session asks for it (a secure form; you never paste it in chat). The session then deploys it.
 
 Then `/studio` on the site redirects to the hosted Studio, and `next-sanity` and the npm `overrides` entry can leave the web app.
+
+## 8. The monorepo switch on Vercel (PR 7) — last, and production never breaks
+
+PR 7 moves the app into `apps/web` and the schema into `packages/db` (pnpm workspaces + Turborepo). Vercel must then build from `apps/web`. Production keeps serving its current deployment throughout: a deployment that fails to build never replaces the live one.
+
+**Order:**
+1. PR 4 and PR 6 are merged (after the production data run, §5), then PR 7 is merged.
+2. **Vercel → Project `three-wolves-badminton` → Settings → Build and Deployment:**
+   - **Root Directory:** `apps/web` → **Save**.
+   - Leave **"Include files outside the root directory in the Build Step"** on (the default). The app imports `packages/db`.
+   - **Framework Preset:** Next.js. Leave Build Command, Output Directory and Install Command on their defaults. Vercel finds `pnpm-lock.yaml` at the repository root and runs `pnpm install` there.
+   - Node.js version: leave at 24.x.
+3. **Deployments → the latest `main` deployment → ⋯ → Redeploy** (or ask the build session to start it).
+4. **Done when:** the deployment is Ready and the smoke test passes: `/`, `/login`, sign in → Me, `/admin` as an owner, Arena, `/studio`. The crons are in `apps/web/vercel.json` and are picked up from the new root. Check **Settings → Cron Jobs** still lists 5.
+
+**If the build fails:** production is untouched. Set Root Directory back to empty (`/`) only if you also revert PR 7. Otherwise send the build log to the build session.

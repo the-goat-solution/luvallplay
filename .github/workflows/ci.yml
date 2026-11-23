@@ -1,8 +1,9 @@
 # Required checks on every pull request and on main (test plan §6).
 #
 # - Types, lint (0 errors), unit tests.
-# - Database tests and data guard scenarios against a real Postgres 16, with
-#   DATA_GUARD_REQUIRE_DB=1 so they can't be skipped silently.
+# - Database tests, data guard scenarios and the schema drift check against a
+#   real Postgres 18 (production's version), with DATA_GUARD_REQUIRE_DB=1 so
+#   they can't be skipped silently.
 # - Production build.
 #
 # Nothing here talks to production: no secrets are used, side effects are off
@@ -29,7 +30,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -57,7 +58,7 @@ jobs:
         run: npx tsc --noEmit
       - name: Lint (0 errors)
         run: npx eslint .
-      - name: Tests (unit, database, data guard)
+      - name: Tests (unit, database, data guard, schema drift)
         run: npm test
       - name: Build
         run: npm run build

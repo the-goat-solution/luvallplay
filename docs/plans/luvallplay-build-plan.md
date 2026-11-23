@@ -843,6 +843,14 @@ Findings and changes recorded as the work goes:
   - Part 2: the donation routes and the membership start search read the loader. Shadow reads for settings started on production on 23 Nov 2026, 09:50 UTC.
   - Part 3: `"Pacific/Auckland"` was typed into 16 files. They share one constant now, which is also the built-in value of the `timezone` setting, and a scan fails on new copies.
   - Part 4: play-day capacity reads the settings. **Finding:** the booking guard's SQL had its own typed copy of the courts → players table ("keep the two in sync" in a comment). It now takes the table as a parameter, so the query and the code can't disagree.
+  - Part 5: the remaining server-side capacity uses read the settings.
+- **Step 5, module enforcement (no migration):**
+  - **Plan change: route ownership is one table (`packages/modules/src/routes.ts`), not spread over the manifests.** Each prefix has an owner: a module, `core`, `account` (sign-in and the player's own account) or `platform`. The longest prefix wins. A test generated from the app's route list fails on a route without an owner, which is the "new endpoint without coverage fails CI" rule applied to modules.
+  - Enforcement is in the request proxy: a path whose module is off answers 404, for pages, API routes and crons alike. The proxy now sees every `/api` request; the check is an in-memory lookup, with the club's switches read at most once a minute.
+  - **Decision: enforcement fails open.** If the switches can't be read, every module counts as on. Modules are a product switch, not a security boundary, and a database hiccup must not turn a club's features off. Tenant lookup (step 6) fails closed, as the plan says.
+  - A module without a row is off; the core is on whatever the table says.
+  - The minimal switch is Admin → Settings → Modules, for owners and platform admins, using the registry's `canTurnOn` / `canTurnOff`.
+  - Finding: `payments-to-check` owns no route of its own (its screens are inside Members and Shop), so it is switched inside those pages, in the next part.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

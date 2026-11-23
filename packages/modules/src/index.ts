@@ -19,3 +19,4 @@ export {
   type SwitchResult,
 } from "./define.ts";
 export * from "./registry.ts";
+export { ROUTE_OWNERS, blockedByModule, moduleOwnedPrefixes, routeOwner, type RouteOwner } from "./routes.ts";

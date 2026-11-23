@@ -12,8 +12,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 1 | Tenants schema, Three Wolves as club #1 (#101) | **Done.** Production data run passed (23 Nov, 07:36 UTC); merged and live (07:48 UTC) |
 | 2 | `tenant_id` on every club-owned table (#102) | **Done.** Production data run passed (23 Nov, 08:25 UTC); live (08:28 UTC) |
 | 3 | Email links → `user_id` (#103) | **Production data run done and passed** (23 Nov, 09:09 UTC). Merged 09:11 UTC |
-| 4 | Settings replace constants (behind flags) | In progress. Parts 1 and 2 live (#104); **shadow reads for settings started 23 Nov, 09:50 UTC**. Parts 3 and 4 in #105 (§4) |
-| 5 | Module enforcement | Not started |
+| 4 | Settings replace constants (behind flags) | In progress. Parts 1 to 5 merged (#104, #105); **shadow reads for settings started 23 Nov, 09:50 UTC** (§4) |
+| 5 | Module enforcement | Part 1 built (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5) |
 | 6 | Second database driver, region routing | Not started |
 | 7 | Money audit (minor units, VND) | Not started |
 | 8 | Payments interface | Not started |
@@ -198,12 +198,28 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 |---|---|---|
 | 1 | The loader and the comparison | #104, live |
 | 2 | Donation limits; how far ahead a membership start is searched, and how long an unpaid checkout holds a spot | #104, live |
-| 3 | The time zone literal collected into one constant (16 files), with a scan that fails on new copies | #105 |
-| 4 | Play-day capacity: courts → players, general capacity, the mini-game field, including the booking guard's SQL, which had its own typed copy of the table | #105 |
+| 3 | The time zone literal collected into one constant (16 files), with a scan that fails on new copies | #105, merged |
+| 4 | Play-day capacity: courts → players, general capacity, the mini-game field, including the booking guard's SQL, which had its own typed copy of the table | #105, merged |
+| 5 | The remaining server-side capacity uses: the casual-play courts change, the spots API's fallback, the admin play-days page | #105, merged |
 
 **Still to build in step 4:** the time zone, booking window and cut-off read from the settings at run time (server and client); membership days and cycle lengths; the "Wolf" terms in the translated strings; capacity in the admin pages and client components; and the crons, emails, webhooks and API becoming club-scoped.
 
-## 5. Housekeeping that needs you
+## 5. Step 5: module enforcement (no data run)
+
+Step 5 changes no data: step 1 stored a row per module for Three Wolves, all on. With every module on, nothing is stopped, so behaviour is as today.
+
+**Part 1 (#106):**
+- `packages/modules/src/routes.ts` says who owns every page and API route: a module, the core, the account or the platform. A test reads the app's real route list and fails on a route without an owner.
+- The request proxy answers 404 for a path whose module is off for the club. That covers the module's admin pages, app and site pages, API routes and cron routes in one place. The admin menu hides the same pages.
+- **Admin → Settings → Modules** (linked from Pricing & settings): the list, and a switch for owners and platform admins. The registry's rules apply: the core never switches, a needed module comes first, a module others depend on stays, and a platform lock holds for owners. Every change is in the audit log.
+- Switching off never deletes: the module's data stays and is back when it's switched on.
+- If the club's modules can't be read, every module counts as on, and it is logged. `MODULE_ENFORCEMENT=off` is the escape hatch.
+
+**Tests (journey S2 for every module):** for each of the 16 optional modules, at route level (off stops exactly its own routes) and against a real database (off, on again, data kept).
+
+**Still to build in step 5:** the parts of a module that live inside another module's page (for example the membership card on Me, the Arena tab, site sections, payments-to-check), the emails each module sends, a confirmation when a module has live activity, and the platform console's lock and availability controls.
+
+## 6. Housekeeping that needs you
 
 - **Rehearsal branch.** One reusable branch, `rehearsal-phase-3`, is kept for the rest of the phase and reset to a fresh copy of production before each rehearsal, so its host needs approving only once. It holds real data: delete it when Phase 3 is done.
 - **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.

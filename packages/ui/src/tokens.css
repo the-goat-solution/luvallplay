@@ -1,0 +1,40 @@
+/* Luvallplay brand tokens: generated from packages/ui/src/luvallplay.ts by brandCss(). Don't edit by hand. */
+:root {
+  --lp-court-green: #0e6b4f;
+  --lp-on-court-green: #fafaf7;
+  --lp-smash-lime: #d4f23c;
+  --lp-on-smash-lime: #0b1b2b;
+  --lp-rally-coral: #ff6b4a;
+  --lp-on-rally-coral: #0b1b2b;
+  --lp-surface: #fafaf7;
+  --lp-surface-raised: #ffffff;
+  --lp-ink: #0b1b2b;
+  --lp-ink-muted: #4a5a55;
+  --lp-line: #e3e7e4;
+  --lp-control-border: #7b8a85;
+  --lp-court-line: #fafaf7;
+  --lp-focus: #157a5a;
+  --lp-danger: #b42318;
+  --lp-font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --lp-font-text: "Be Vietnam Pro", system-ui, sans-serif;
+  --lp-space-1: 4px;
+  --lp-space-2: 8px;
+  --lp-space-4: 16px;
+  --lp-space-6: 24px;
+  --lp-space-10: 40px;
+  --lp-radius-sm: 6px;
+  --lp-radius-lg: 16px;
+  --lp-radius-pill: 999px;
+}
+
+[data-theme="dark"] {
+  --lp-court-green: #157a5a;
+  --lp-surface: #0b1b2b;
+  --lp-surface-raised: #12263a;
+  --lp-ink: #f2f5f1;
+  --lp-ink-muted: #a9b8b2;
+  --lp-line: #22384c;
+  --lp-control-border: #6f8496;
+  --lp-focus: #d4f23c;
+  --lp-danger: #ff8a75;
+}

@@ -20,7 +20,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@luvallplay/auth": "workspace:*",
+    "@luvallplay/core": "workspace:*",
     "@luvallplay/db": "workspace:*",
+    "@luvallplay/i18n": "workspace:*",
+    "@luvallplay/modules": "workspace:*",
+    "@luvallplay/ui": "workspace:*",
     "@mediapipe/tasks-vision": "^0.10.35",
     "@neondatabase/serverless": "^1.2.1",
     "@sanity/client": "^7.6.0",

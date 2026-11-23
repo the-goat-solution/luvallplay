@@ -10,9 +10,14 @@ pnpm workspaces + Turborepo:
 |---|---|
 | `apps/web` | The Next.js site, app, admin and API (Vercel Root Directory) |
 | `packages/db` | Drizzle schema, versioned migrations, default seed (`@luvallplay/db`) |
+| `packages/core` | Pure club logic: play periods, ranks and points, phone numbers, safe redirects, names (`@luvallplay/core`) |
+| `packages/auth` | Pure access rules: club roles, which admin pages each role opens, step-up (`@luvallplay/auth`) |
+| `packages/i18n` | All text, typed namespaces `site`, `profile`, `arena`, `jersey`, in English and Vietnamese (`@luvallplay/i18n`) |
+| `packages/ui` | Design tokens: the Luvallplay brand (`tokens.css`) and the Three Wolves club theme (`@luvallplay/ui`) |
+| `packages/modules` | The module system skeleton: `defineModule()` and the registry of today's features (`@luvallplay/modules`) |
 | `docs/` | Plans, runbooks, schema dumps, rehearsal reports |
 
-Run things from the root with `pnpm --filter web <script>` (or `cd apps/web`). The build plan (§3.1) lists the packages still to come.
+Run things from the root with `pnpm --filter web <script>` (or `cd apps/web`). Packages are TypeScript source compiled by Next (`transpilePackages`); `pnpm --filter "./packages/*" typecheck` checks them on their own. The build plan (§3.1) lists the packages still to come.
 
 ## Stack
 

@@ -1,0 +1,16 @@
+{
+  "name": "@luvallplay/modules",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The module system skeleton: defineModule() manifests and the registry of what the club runs today.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

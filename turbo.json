@@ -1,9 +1,30 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "envMode": "loose",
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": [".next/**", "!.next/cache/**"], "env": ["NEXT_PUBLIC_*", "VERCEL_ENV", "DATABASE_URL_VAR", "E2E_BUILD"] },
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**"
+      ],
+      "env": [
+        "NEXT_PUBLIC_*",
+        "VERCEL_ENV",
+        "DATABASE_URL_VAR",
+        "E2E_BUILD"
+      ]
+    },
     "lint": {},
     "typecheck": {},
-    "test": { "env": ["DATA_GUARD_TEST_URL", "DATA_GUARD_REQUIRE_DB", "ROLES_TEST_URL"] }
+    "test": {
+      "env": [
+        "DATA_GUARD_TEST_URL",
+        "DATA_GUARD_REQUIRE_DB",
+        "ROLES_TEST_URL"
+      ]
+    }
   }
 }

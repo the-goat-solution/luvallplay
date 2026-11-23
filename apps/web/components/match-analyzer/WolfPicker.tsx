@@ -31,7 +31,6 @@ export function initialsOf(name: string): string {
 
 export function WolfAvatar({ wolf, color, size = 28 }: { wolf: Pick<Wolf, "name" | "avatarUrl">; color: string; size?: number }) {
   return wolf.avatarUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
     <img src={wolf.avatarUrl} alt="" className={s.wolfAvatar} style={{ width: size, height: size, borderColor: color }} />
   ) : (
     <span className={s.wolfAvatar} style={{ width: size, height: size, borderColor: color, background: color, fontSize: size * 0.4 }} aria-hidden="true">

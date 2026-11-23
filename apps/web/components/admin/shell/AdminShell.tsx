@@ -29,7 +29,11 @@ export function AdminShell({
   const attention = (Object.values(badges) as number[]).reduce((a, b) => a + (b > 0 ? b : 0), 0);
 
   // Close the phone menu once the next page is showing.
-  useEffect(() => setOpen(false), [pathname]);
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setOpen(false);
+  }
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);

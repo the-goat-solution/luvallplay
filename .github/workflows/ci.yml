@@ -62,8 +62,8 @@ jobs:
         run: pnpm --filter web typecheck
       - name: Types (shared packages)
         run: pnpm --filter "./packages/*" typecheck
-      - name: Lint (0 errors)
-        run: pnpm --filter web exec eslint .
+      - name: Lint (0 errors, 0 warnings)
+        run: pnpm --filter web exec eslint . --max-warnings 0
       - name: Tests (unit, database, data guard, schema drift, golden master)
         run: pnpm --filter web test
       - name: Build

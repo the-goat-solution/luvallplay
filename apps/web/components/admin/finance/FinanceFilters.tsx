@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingIcon } from "@/components/LoadingIcon";
 import {
@@ -29,11 +29,14 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
   const [from, setFrom] = useState(filters.from ?? "");
   const [to, setTo] = useState(filters.to ?? "");
 
-  useEffect(() => {
+  // Re-sync the local copies whenever the URL filters change.
+  const [synced, setSynced] = useState({ from: filters.from, to: filters.to, q: filters.q });
+  if (synced.from !== filters.from || synced.to !== filters.to || synced.q !== filters.q) {
+    setSynced({ from: filters.from, to: filters.to, q: filters.q });
     setFrom(filters.from ?? "");
     setTo(filters.to ?? "");
     setQ(filters.q);
-  }, [filters.from, filters.to, filters.q]);
+  }
 
   function go(overrides: Partial<Filters>) {
     const params = financeFiltersToSearchParams(filters, overrides);

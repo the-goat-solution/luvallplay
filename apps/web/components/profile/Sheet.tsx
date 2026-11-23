@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import styles from "./profile.module.css";
+
+const noopSubscribe = () => () => {};
+const clientTrue = () => true;
+const serverFalse = () => false;
 
 /**
  * Bottom sheet on phones (swipe down to close), centred dialog on tablets.
@@ -36,9 +40,8 @@ export function Sheet({
   const sheetRef = useRef<HTMLDivElement>(null);
   const [dragY, setDragY] = useState(0);
   const dragStart = useRef<number | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  // false on the server and during hydration (no document.body to portal into).
+  const mounted = useSyncExternalStore(noopSubscribe, clientTrue, serverFalse);
 
   useEffect(() => {
     if (!open) return;

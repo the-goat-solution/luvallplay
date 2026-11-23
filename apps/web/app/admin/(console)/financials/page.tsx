@@ -358,6 +358,7 @@ export default async function FinancialsPage({
   let syncError: string | null = null;
   if (
     syncState &&
+    // eslint-disable-next-line react-hooks/purity -- async Server Component: runs once per request, never re-renders on the client
     (!syncState.lastFinishedAt || Date.now() - syncState.lastFinishedAt.getTime() > AUTO_SYNC_AFTER_MS)
   ) {
     try {
@@ -617,7 +618,6 @@ export default async function FinancialsPage({
                           title="Open receipt"
                         >
                           {e.receiptContentType?.startsWith("image/") && !e.receiptContentType.includes("hei") ? (
-                            // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={`/api/admin/finance/receipts/${e.id}`}
                               alt={`Receipt for ${e.name}`}

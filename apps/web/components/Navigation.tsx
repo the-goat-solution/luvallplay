@@ -1,22 +1,24 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- hash links to the home page must work from sub-pages like /leaderboard too */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { Trans } from "@/components/Trans";
 import type { Lang } from "@/lib/i18n";
 
 const FB_URL = "https://www.facebook.com/profile.php?id=61575583556969";
 
+const noopSubscribe = () => () => {};
+const serverFalse = () => false;
+const readSignedInCookie = () => document.cookie.split(";").some((c) => c.trim().startsWith("tw_signed_in=1"));
+
 export function Navigation() {
   const { lang, setLang } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
   // A readable hint cookie (no secret) set at sign-in, so the header can say
   // "My profile" without asking the server.
-  const [signedIn, setSignedIn] = useState(false);
-  useEffect(() => {
-    setSignedIn(document.cookie.split(";").some((c) => c.trim().startsWith("tw_signed_in=1")));
-  }, []);
+  // Read on the client only (server snapshot is false) to avoid a hydration mismatch.
+  const signedIn = useSyncExternalStore(noopSubscribe, readSignedInCookie, serverFalse);
   const accountLabel = signedIn ? (lang === "vi" ? "Hồ sơ của tôi" : "My profile") : lang === "vi" ? "Đăng ký / Đăng nhập" : "Sign up / Sign in";
   const accountHref = signedIn ? "/profile" : "/login";
 

@@ -149,10 +149,10 @@ export function LoginForm({
     setStep("code");
   };
 
-  const verify = async (e?: React.FormEvent) => {
+  const verify = async (e?: React.FormEvent, typedCode: string = code) => {
     e?.preventDefault();
     setError(null);
-    const digits = code.replace(/\D/g, "");
+    const digits = typedCode.replace(/\D/g, "");
     if (digits.length !== 6) return showError("invalid");
     setBusy(true);
     if (method === "email") {
@@ -175,11 +175,15 @@ export function LoginForm({
     finish(res.data);
   };
 
-  // Auto-submit once six digits are in (typed, pasted or autofilled).
-  useEffect(() => {
-    if (step === "code" && code.replace(/\D/g, "").length === 6 && !busy) void verify();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  const onCodeChange = (value: string) => {
+    const nextCode = value.replace(/[^\d]/g, "").slice(0, 6);
+    setCode(nextCode);
+    // Auto-submit once six digits are in (typed, pasted or autofilled) —
+    // only when the code actually changed, as before.
+    if (nextCode !== code && step === "code" && nextCode.replace(/\D/g, "").length === 6 && !busy) {
+      void verify(undefined, nextCode);
+    }
+  };
 
   const resend = async () => {
     setCode("");
@@ -304,7 +308,7 @@ export function LoginForm({
               maxLength={7}
               value={code}
               readOnly={busy}
-              onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6))}
+              onChange={(e) => onCodeChange(e.target.value)}
             />
           </div>
           <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.btnBlock}`} disabled={busy} aria-busy={busy}>

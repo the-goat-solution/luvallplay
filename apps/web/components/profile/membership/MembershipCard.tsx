@@ -53,15 +53,19 @@ export function MembershipCard({
   const [payment, setPayment] = useState<{ clientSecret: string; amountLabel: string; periodStart?: string; mode: "payment" | "setup" } | null>(null);
   const [renewPlan, setRenewPlan] = useState(m.plan);
 
-  const loadBilling = useCallback(async () => {
-    try {
-      const res = await fetch("/api/profile/membership/billing", { cache: "no-store" });
-      if (!res.ok) throw new Error();
-      setBilling((await res.json()) as Billing);
-    } catch {
-      setBillingFailed(true);
-    }
-  }, []);
+  // State is only set once the response is in (inside .then/.catch), never
+  // synchronously, so the mount effect below can call it directly.
+  const loadBilling = useCallback(
+    (): Promise<void> =>
+      fetch("/api/profile/membership/billing", { cache: "no-store" })
+        .then((res) => {
+          if (!res.ok) throw new Error();
+          return res.json() as Promise<Billing>;
+        })
+        .then((data) => setBilling(data))
+        .catch(() => setBillingFailed(true)),
+    [],
+  );
 
   useEffect(() => {
     void loadBilling();

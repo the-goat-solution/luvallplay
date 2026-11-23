@@ -210,6 +210,7 @@ export function MiniGame() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- false positive: load() is async and only sets state after awaiting fetch
     load();
     const poll = window.setInterval(() => {
       if (document.visibilityState === "visible") load();
@@ -341,14 +342,13 @@ export function MiniGame() {
   // Once teams are officially drawn the live game always wins: preview mode
   // is only ever available before the draw.
   const liveDrawId = state?.draw?.id ?? null;
-  useEffect(() => {
-    if (liveDrawId === null || !demo) return;
+  if (liveDrawId !== null && demo) {
     setDemo(null);
     setDrafts({});
     setPending(null);
     setJustDrawn(true);
     setNotice(c.officialDraw);
-  }, [liveDrawId, demo, c.officialDraw]);
+  }
 
   const game = state?.draw ?? demo ?? null;
   const inPreview = !state?.draw && demo !== null;

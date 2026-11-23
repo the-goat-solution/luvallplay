@@ -393,11 +393,9 @@ export async function runStatsBackfill(): Promise<{ attendance: number; roundRob
   let roundRobin = 0;
 
   // 1. Saved court boards.
-  let boardDates = new Set<string>();
   try {
     const idToEmail = await knownEmailsByBoardId();
     const { rows } = await sql`SELECT date::text AS d, state FROM casual_play_sessions WHERE date <= ${today};`;
-    boardDates = new Set(rows.map((r) => r.d as string));
     for (const r of rows) {
       const state = r.state as { players?: { id: string; games: number; guest: boolean }[] };
       const emails = (state.players ?? [])

@@ -38,11 +38,15 @@ export function DonateModal() {
     document.body.style.overflow = "";
   };
 
+  // Each time the modal opens it starts again at step 1.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setStep(1);
+  }
+
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-      setStep(1);
-    }
+    if (open) document.body.style.overflow = "hidden";
   }, [open]);
 
   const parsedAmount = Number(amount);

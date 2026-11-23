@@ -34,8 +34,8 @@ export async function runSetupChecks(): Promise<Check[]> {
       : {
           area: "Basics",
           name: "Sign-in secret",
-          status: "warn",
-          detail: "Not set: sign-in works using a key derived from ADMIN_PASSWORD, but changing that password would expire codes sent in the last 10 minutes.",
+          status: "fail",
+          detail: "Not set: sign-in codes can't be checked, so nobody can sign in.",
           fix: "Add PLAYER_SESSION_SECRET (any long random string) in Vercel → Settings → Environment Variables, then redeploy.",
         },
   );

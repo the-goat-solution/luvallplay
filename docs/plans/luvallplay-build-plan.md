@@ -248,6 +248,7 @@ Findings and changes recorded as the work goes:
     - Finding: the `membership.changed` webhook event is declared but nothing emits it yet.
   - **Plan change:** modules are one package with the registry for now, not one package per module (§3.1). Each module's server, app, admin and site code moves into it as Phase 3 builds the API, so code doesn't move twice.
   - Packages import nothing from Next, React, the database or the app (a test enforces it); CI typechecks them on their own.
+- **Break-glass removed (23 Nov 2026):** the `ADMIN_PASSWORD` login (`/admin/login?breakglass=1`, `/api/admin-login`, `/api/admin-logout`, `lib/admin-session.ts`) is gone, along with its fallbacks: `PLAYER_SESSION_SECRET` is now required (it's set in production and preview), and jersey links hash with `CANCEL_LINK_SECRET`. Admin is reached only by signing in with an account that has a club role or platform admin. Old audit rows keep the actor kind `break-glass`. The `ADMIN_PASSWORD` variable in Vercel is no longer read and can be deleted.
 - **PR 5, Next.js 16** (16.4.6, Turbopack builds):
   - `middleware.ts` is now `proxy.ts` (`export function proxy`), on the Node runtime, which is fixed in 16, so the `runtime` setting is gone.
   - `revalidateTag(tag)` is now `revalidateTag(tag, { expire: 0 })`. That keeps today's behaviour (the next request reads fresh data), not the stale-while-revalidate `"max"` profile.

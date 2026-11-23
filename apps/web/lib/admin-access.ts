@@ -2,7 +2,6 @@
 import "./db-env";
 import { sql } from "./database";
 import { cookies } from "next/headers";
-import { ADMIN_COOKIE, verifyAdminToken } from "./admin-session";
 import { PLAYER_COOKIE, sessionForToken } from "./player-auth";
 import {
   adminApiAllowed,
@@ -19,11 +18,9 @@ import { configureLocalNeon } from "./local-neon";
 
 // Who is using admin right now (build plan §2.4).
 //
-// Two ways in:
-// - A signed-in player whose account has a club role or platform admin
-//   (the normal way). Admin pages also need a sign-in within 12 hours.
-// - The ADMIN_PASSWORD "break-glass" cookie, kept for two weeks after the
-//   switch-over and then removed. It's audited as "break-glass".
+// One way in: a signed-in player whose account has a club role or platform
+// admin. Admin pages also need a sign-in within 12 hours. (The ADMIN_PASSWORD
+// "break-glass" login was removed in Phase 2; old audit rows keep its name.)
 //
 // The middleware (Node runtime) calls resolveAdmin() for every /admin and
 // /api/admin request, so server actions are covered too; pages and actions
@@ -42,9 +39,7 @@ export const db: Db = {
 
 export type AdminPlayer = { id: number; email: string; firstName: string; lastName: string };
 
-export type AdminContext =
-  | { kind: "player"; player: AdminPlayer; access: Access; signedInAt: Date; stepUpFresh: boolean }
-  | { kind: "break-glass" };
+export type AdminContext = { kind: "player"; player: AdminPlayer; access: Access; signedInAt: Date; stepUpFresh: boolean };
 
 export type AdminVerdict =
   | { ok: true; ctx: AdminContext }
@@ -55,7 +50,6 @@ export type CookieReader = (name: string) => string | undefined;
 /** Signed-in player's context (no permission decision yet). */
 export async function adminContextFromCookies(read: CookieReader): Promise<AdminContext | null> {
   await localReady;
-  if (await verifyAdminToken(read(ADMIN_COOKIE))) return { kind: "break-glass" };
   const session = await sessionForToken(read(PLAYER_COOKIE));
   if (!session) return null;
   const { player, signedInAt } = session;
@@ -72,7 +66,6 @@ export async function adminContextFromCookies(read: CookieReader): Promise<Admin
 /** The decision for one admin page or API path. */
 export function decide(ctx: AdminContext | null, path: string, api: boolean): AdminVerdict {
   if (!ctx) return { ok: false, reason: "signed_out" };
-  if (ctx.kind === "break-glass") return { ok: true, ctx };
   const allowed = api ? adminApiAllowed(ctx.access) : adminPathAllowed(ctx.access, path);
   if (!ctx.access.role && !ctx.access.platformAdmin) return { ok: false, reason: "no_access", ctx };
   if (!allowed) return { ok: false, reason: "not_allowed", ctx };
@@ -91,7 +84,7 @@ export async function currentAdmin(): Promise<AdminContext | null> {
 }
 
 export function actorFor(ctx: AdminContext): Actor {
-  return ctx.kind === "player" ? { kind: "player", playerId: ctx.player.id, access: ctx.access } : { kind: "break-glass" };
+  return { kind: "player", playerId: ctx.player.id, access: ctx.access };
 }
 
 /**
@@ -109,8 +102,8 @@ export async function requireAdminActor(path: string): Promise<{ ctx: AdminConte
 export async function audit(ctx: AdminContext | null, e: Omit<AuditEntry, "actorPlayerId" | "actorKind">): Promise<void> {
   try {
     await writeAudit(db, {
-      actorPlayerId: ctx?.kind === "player" ? ctx.player.id : null,
-      actorKind: ctx?.kind === "player" ? "player" : "break-glass",
+      actorPlayerId: ctx ? ctx.player.id : null,
+      actorKind: ctx ? "player" : "system",
       ...e,
     });
   } catch (err) {
@@ -118,7 +111,7 @@ export async function audit(ctx: AdminContext | null, e: Omit<AuditEntry, "actor
   }
 }
 
-/** Route handlers under /api/admin: break-glass or a full club admin with a fresh sign-in. */
+/** Route handlers under /api/admin: a full club admin with a fresh sign-in. */
 export async function isAdminApiRequest(request: Request): Promise<boolean> {
   const verdict = await resolveAdmin((n) => readCookie(request, n), new URL(request.url).pathname, true);
   return verdict.ok;
@@ -134,11 +127,7 @@ export function readCookie(request: Request, name: string): string | undefined {
   return undefined;
 }
 
-/**
- * Whether this admin sees a page in the menu and on the Today page. The
- * break-glass password sees the club pages, not the role pages.
- */
+/** Whether this admin sees a page in the menu and on the Today page. */
 export function canOpenAdminPage(ctx: AdminContext | null, href: string): boolean {
-  if (ctx?.kind === "player") return adminPathAllowed(ctx.access, href);
-  return !href.startsWith("/admin/people") && !href.startsWith("/admin/platform");
+  return ctx ? adminPathAllowed(ctx.access, href) : false;
 }

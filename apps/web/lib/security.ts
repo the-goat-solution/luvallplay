@@ -1,5 +1,4 @@
 import { BOOKING_WINDOW_DAYS } from "./constants";
-import { ADMIN_COOKIE, verifyAdminToken } from "./admin-session";
 import { isBookable, startOfDay } from "./dates";
 import { sessionExists } from "./db";
 import { isAdminApiRequest } from "./admin-access";
@@ -72,24 +71,9 @@ export function parseSessionDate(sessionDate: string): Date {
   return startOfDay(new Date(y, m - 1, d));
 }
 
-function getCookieFromRequest(request: Request, name: string): string | null {
-  const header = request.headers.get("cookie");
-  if (!header) return null;
-  for (const part of header.split(";")) {
-    const eq = part.indexOf("=");
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === name) {
-      return decodeURIComponent(part.slice(eq + 1).trim());
-    }
-  }
-  return null;
-}
-
-// Mirrors the admin check in middleware.ts, for use in API route handlers
-// (which get a plain Request). Both go through lib/admin-access.ts: a full
-// club admin signed in within 12 hours, or the break-glass password cookie
-// while it still exists.
+// Mirrors the admin check in proxy.ts, for use in API route handlers (which
+// get a plain Request). Both go through lib/admin-access.ts: a full club
+// admin signed in within 12 hours.
 export async function isAdminRequest(request: Request): Promise<boolean> {
-  if (await verifyAdminToken(getCookieFromRequest(request, ADMIN_COOKIE))) return true;
   return isAdminApiRequest(request);
 }

@@ -57,7 +57,7 @@ function roleErrorMessage(err: unknown): string {
 }
 
 function actorName(ctx: Awaited<ReturnType<typeof requireAdminActor>>["ctx"]): string {
-  return ctx.kind === "player" ? `${ctx.player.firstName} ${ctx.player.lastName}`.trim() || ctx.player.email : "Someone with the admin password";
+  return `${ctx.player.firstName} ${ctx.player.lastName}`.trim() || ctx.player.email;
 }
 
 async function addAdmin(formData: FormData) {

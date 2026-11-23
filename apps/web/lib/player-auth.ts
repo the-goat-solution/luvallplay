@@ -16,23 +16,12 @@ export const CODE_MAX_ATTEMPTS = 5;
 /** Codes per email in any 15 minutes. */
 export const CODE_REQUESTS_PER_WINDOW = 3;
 
-let warnedFallback = false;
-
 // Keys the HMAC of sign-in codes and phone proofs (session tokens are random
-// and stored as plain SHA-256, so they don't depend on it). If
-// PLAYER_SESSION_SECRET isn't set yet, a key derived from ADMIN_PASSWORD
-// keeps sign-in working right after deploy; Admin → Setup check flags it.
+// and stored as plain SHA-256, so they don't depend on it). Required in
+// production; the ADMIN_PASSWORD fallback went with the break-glass login.
 function secret(): string {
   const s = process.env.PLAYER_SESSION_SECRET;
   if (s) return s;
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin) {
-    if (!warnedFallback) {
-      warnedFallback = true;
-      console.warn("[players] PLAYER_SESSION_SECRET is not set; using a key derived from ADMIN_PASSWORD.");
-    }
-    return crypto.createHash("sha256").update(`three-wolves-player:${admin}`).digest("hex");
-  }
   if (process.env.NODE_ENV !== "production") return "dev-only-player-session-secret";
   throw new Error("PLAYER_SESSION_SECRET is not configured");
 }

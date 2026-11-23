@@ -78,6 +78,6 @@ Commit `docs/schema/production-2026-11.sql` (schema only, no data), then delete 
 
 **Roll back** on any data-guard error or sign-in failure: Vercel → Deployments → previous production deployment → **Instant Rollback** first, then report. The new tables are additive, so the previous app version works with them in place.
 
-## 6. Two weeks after the production deploy: remove break-glass
+## 6. Two weeks after the production deploy: remove break-glass (done 23 Nov 2026, Phase 2)
 
 The `ADMIN_PASSWORD` login stays reachable at `/admin/login?breakglass=1` (every use is audited) for two weeks after the deploy. Then remove `ADMIN_PASSWORD`, `lib/admin-session.ts` and its routes, and the fallback in `lib/player-auth.ts` (`PLAYER_SESSION_SECRET` becomes required). Put the date in your calendar when you deploy: **deploy date + 14 days**.

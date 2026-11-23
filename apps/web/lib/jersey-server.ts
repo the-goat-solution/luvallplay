@@ -13,6 +13,6 @@ export function generateRefCode(): string {
 export function hashIp(ip: string): string | null {
   if (!ip || ip === "unknown") return null;
   const secret =
-    process.env.JERSEY_HASH_SECRET || process.env.CANCEL_LINK_SECRET || process.env.ADMIN_PASSWORD || "three-wolves";
+    process.env.JERSEY_HASH_SECRET || process.env.CANCEL_LINK_SECRET || "three-wolves";
   return crypto.createHmac("sha256", secret).update(ip).digest("hex").slice(0, 32);
 }

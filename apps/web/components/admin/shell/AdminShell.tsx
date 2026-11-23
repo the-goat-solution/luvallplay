@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
-import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
 import { CountBadge } from "@/components/admin/kit";
 import { FlashToast } from "@/components/admin/FlashToast";
 import { activeHref, type BadgeKey, type NavGroup } from "@/components/admin/nav-config";
@@ -19,7 +18,7 @@ export function AdminShell({
 }: {
   groups: NavGroup[];
   badges: Partial<Record<BadgeKey, number>>;
-  /** Signed-in admin's name, or null for the break-glass password session. */
+  /** Signed-in admin's name (null only if the session vanished mid-request). */
   who: string | null;
   children: ReactNode;
 }) {
@@ -106,13 +105,9 @@ export function AdminShell({
               My profile
             </a>
           ) : (
-            // Break-glass: a plain form post, so logging out still works when
-            // the session is already broken (no JavaScript, no valid cookie).
-            <form method="POST" action="/api/admin-logout">
-              <PlainSubmitButton loadingText="Logging out…" className={s.logout}>
-                Log out
-              </PlainSubmitButton>
-            </form>
+            <a href="/login?next=/admin" className={s.footerLink}>
+              Sign in
+            </a>
           )}
         </div>
       </aside>

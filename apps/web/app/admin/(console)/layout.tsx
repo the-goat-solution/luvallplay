@@ -4,7 +4,7 @@ import { NAV_GROUPS, type BadgeKey, type NavGroup } from "@/components/admin/nav
 import { canOpenAdminPage, currentAdmin } from "@/lib/admin-access";
 import { attentionCount } from "@/lib/admin-attention";
 
-// Every admin page (except the break-glass login and the app handoff) sits
+// Every admin page (except the app handoff) sits
 // in this frame: the grouped sidebar, badges for what needs attention, and
 // the way back to your profile.
 export default async function AdminConsoleLayout({ children }: { children: ReactNode }) {

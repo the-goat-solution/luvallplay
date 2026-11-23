@@ -18,6 +18,9 @@
 // shadow read must not break the request it rides on.
 import { compareClubConfig, type Db } from "./club-config.ts";
 import { deploymentRegion, routingMode, routingSelfCheck } from "./tenant-routing.ts";
+import { CLUB_OWNED_TABLES } from "@luvallplay/db/tenancy";
+import { defaultTenantSlug } from "./tenant-members.ts";
+import { probeTenantIsolation, type PoolLike } from "./tenant-scope.ts";
 
 export type ShadowResult = "clean" | "differ" | "unavailable";
 
@@ -33,7 +36,7 @@ export async function recordShadow(db: Db, what: string, result: ShadowResult, m
 }
 
 /** The daily check of every shadow read that can be run on demand. Returns what it recorded. */
-export async function shadowHeartbeat(db: Db): Promise<{ what: string; result: ShadowResult; differences: string[] }[]> {
+export async function shadowHeartbeat(db: Db, pool?: PoolLike): Promise<{ what: string; result: ShadowResult; differences: string[] }[]> {
   const out: { what: string; result: ShadowResult; differences: string[] }[] = [];
   try {
     const r = await compareClubConfig(db);
@@ -56,6 +59,23 @@ export async function shadowHeartbeat(db: Db): Promise<{ what: string; result: S
     const message = String((err as Error)?.message ?? err).slice(0, 200);
     await recordShadow(db, "routing", "unavailable", { error: message, heartbeat: true });
     out.push({ what: "routing", result: "unavailable", differences: [message] });
+  }
+  // Row-level security (steps 10 and 11): the app's role must see exactly the
+  // club's rows in every club-owned table, and none with no club named.
+  // Needs a connection of its own (a transaction), so only when a pool is passed.
+  if (pool) {
+    try {
+      const { rows } = await db.query(`SELECT id FROM tenants WHERE slug = $1`, [defaultTenantSlug()]);
+      if (!rows[0]) throw new Error("the club isn't in tenants");
+      const differences = await probeTenantIsolation(pool, rows[0].id as number, CLUB_OWNED_TABLES);
+      const result: ShadowResult = differences.length ? "differ" : "clean";
+      await recordShadow(db, "tenant-reads", result, { tables: CLUB_OWNED_TABLES.length, differences: differences.slice(0, 20), heartbeat: true });
+      out.push({ what: "tenant-reads", result, differences });
+    } catch (err) {
+      const message = String((err as Error)?.message ?? err).slice(0, 200);
+      await recordShadow(db, "tenant-reads", "unavailable", { error: message, heartbeat: true });
+      out.push({ what: "tenant-reads", result: "unavailable", differences: [message] });
+    }
   }
   return out;
 }

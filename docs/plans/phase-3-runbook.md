@@ -17,8 +17,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 6 | Second database driver, region routing | Built: the standard-Postgres driver, host routing (off until switched on), storage and scheduled-job interfaces (§6) |
 | 7 | Money audit (minor units, VND) | Built: currency helpers, every conversion moved onto them, VND tests, two CI scans (§7) |
 | 8 | Payments interface | Built: the interface, Stripe as the first provider, a shared contract suite; one-off payments and the webhook signature check use it (§8) |
-| 9 | Entitlements and metering | Built and rehearsed (17 accounts, 0 problems). Production data run: see §9 |
-| 10 | `NOT NULL`, foreign keys, row-level security | Not started |
+| 9 | Entitlements and metering | **Done.** Production data run passed (23 Nov, 17:09 UTC); merged (#109) |
+| 10 | `NOT NULL`, foreign keys, row-level security | Built and rehearsed (17 accounts, 0 problems; identical views through row-level security). Production data run: see §10 |
 | 11 | Reads switched to tenant-aware queries | After **7 clean days of shadow reads** |
 | 12 | Old email joins dropped | A later release, after a quiet week |
 
@@ -327,11 +327,73 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 # 2. Merge the step 9 pull request. Wait for the production deployment to be Ready.
 ```
 
+**Production run, done 23 Nov 2026, 17:09 UTC** (by the build session, approved in advance, after green CI and a clean rehearsal): restore point `pre-phase-3-entitlements`; the migration took 3.5 s; the data guard diff passed with 17 accounts and 0 problems; no drift; verify consistent; Three Wolves is on `nz-badminton-free`. #109 merged afterwards.
+
 **Rollback:** `DROP TABLE usage_counters, club_plans, plans;` and remove the migration's row, or restore `pre-phase-3-entitlements`. Nothing else points at these tables.
 
 **Not in this step:** the platform admin's usage dashboard with alerts, and the limits themselves. Both wait for the cost model (§11.3 gate 4).
 
-## 10. Housekeeping that needs you
+## 10. Step 10: required club id, foreign keys, row-level security (one production data run)
+
+**The change (migration `0007_tenant_rls`). No row changes; what changes is what the database accepts.**
+
+| Part | What |
+|---|---|
+| Required | `tenant_id` is `NOT NULL` with a foreign key to `tenants` (`ON DELETE RESTRICT`) on every club-owned table (59). The `DEFAULT 1` stays until step 11, because the running app still writes without naming the club |
+| The app's role | `luvallplay_app`: not the owner, no `BYPASSRLS`, no login. A connection switches to it with `SET LOCAL ROLE` |
+| Row-level security | Enabled and **forced** on all 59 club-owned tables, one policy each: a row is visible and writable only when its `tenant_id` is the club named in the transaction setting `app.tenant_id` |
+| Fails closed | With no club named, the app's role sees no rows and can write none. A value that isn't a number is an error |
+| Accounts stay global | The trigger that links a new account to the person's earlier rows runs as its owner, so it links rows in every club |
+
+**The live app is not affected by the migration.** It connects as the database owner, which has `BYPASSRLS` (checked on the copy of production). `TENANT_SCOPE` decides when the app starts using the role:
+
+| `TENANT_SCOPE` | What happens | When |
+|---|---|---|
+| unset or `off` | As today: the owner's connection | Until shadow reads start |
+| `shadow` | As today, **and** one read in ten is run a second time as the app's role for the club, in a read-only transaction; a read that answers differently is written to the shadow record (`shadow.tenant-reads`). The daily heartbeat also checks every club-owned table | The 7-day shadow period |
+| `enforce` | Every statement runs as the app's role for the club. **This is step 11** | After 7 clean days |
+
+An unknown value counts as `enforce`.
+
+**Evidence that `enforce` gives the same answers:**
+- The golden master runs every repository function a fourth time, as the app's role through row-level security, and requires identical results and identical rows afterwards.
+- On the rehearsal copy of production, every account's views (17 accounts, 12 views each, and 6 club views) are identical through row-level security.
+- **Finding, fixed:** three list queries had no tie-breaker in their `ORDER BY` (message threads and the ledger's known people), so their order depended on the query plan. They have one now.
+
+**The tenant-isolation suite** (`tests/tenant-isolation.test.ts`) is generated from the table list: for every club-owned table it proves a second, synthetic club can't read, change, delete or take the first club's rows, that nothing is visible with no club named, and that the role can't alter tables or policies. A new table is covered as soon as it is classified.
+
+**Plan change: natural keys keep their shape until step 11.** Many tables have keys that assume one club (a play day's date, a setting's name). Widening them to include `tenant_id` changes every `ON CONFLICT` that names them, so it goes with step 11, where those queries change anyway. Until then the keys are stricter than they need to be, which can't leak anything; it only means a second club couldn't share, say, a play-day date. There is no second club in production.
+
+**Rehearsal (23 Nov), on `rehearsal-phase-3`, reset to a fresh copy of production:** data guard 17 accounts, 0 problems; migration 2.1 s; no drift; verify consistent. Report: `docs/rehearsals/2026-11-phase3-tenant-rls.md`.
+
+**Production run (T0):** approved in advance by the owner, on condition of green CI and a clean rehearsal. Migrate first, then merge.
+
+```bash
+# 1. Restore point: a Neon branch from main, now. Name: pre-phase-3-tenant-rls
+cd apps/web
+export POSTGRES_URL='<production direct connection string>'
+export PRODUCTION_DATABASE_HOSTS='ep-shiny-rain-a76n3kg6.ap-southeast-2.aws.neon.tech'
+pnpm data-guard snapshot --out .data-guard/prod-before.json
+pnpm db:migrate --production                                      # 0007 (lock_timeout 3s)
+pnpm data-guard snapshot --out .data-guard/prod-after.json
+pnpm data-guard diff .data-guard/prod-before.json .data-guard/prod-after.json \
+  --expect scripts/data-guard/expectations/2026-11-phase3-tenant-rls.production.json
+pnpm db:drift                                                     # must say: No schema drift
+node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: tenants tables are consistent
+# 2. Merge the step 10 pull request. Wait for the production deployment to be Ready.
+# 3. Set TENANT_SCOPE=shadow for Production and redeploy: the 7-day shadow period for step 11 starts.
+```
+
+**Rollback:** in the rehearsal report. The quick one is deleting `TENANT_SCOPE` and redeploying: the app is back on the owner's connection and the policies don't apply to it.
+
+## 11. Step 11: the switch (after 7 clean days)
+
+1. `node --import ./tests/register.mjs scripts/shadow-report.mjs` on production: seven days with `clean` rows for `settings`, `routing` and `tenant-reads`, and no `differ` row.
+2. Set `CLUB_SETTINGS_SOURCE=database` and `TENANT_SCOPE=enforce` for Production, one at a time, a day apart, redeploying each time. Watch the error log for an hour after each.
+3. Rollback for either: set it back to `shadow` and redeploy.
+4. Still to build before or with the switch: natural keys widened with `tenant_id`, the `DEFAULT 1` dropped, a login for the app's role (so the app can't connect as the owner at all), and the route-level isolation suite, which needs requests for two clubs.
+
+## 12. Housekeeping that needs you
 
 - **Rehearsal branch.** One reusable branch, `rehearsal-phase-3`, is kept for the rest of the phase and reset to a fresh copy of production before each rehearsal, so its host needs approving only once. It holds real data: delete it when Phase 3 is done.
 - **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.

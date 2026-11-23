@@ -362,7 +362,7 @@ export async function listKnownPeople(): Promise<string[]> {
     ) t
     WHERE name <> ''
     GROUP BY name
-    ORDER BY MAX(seen) DESC
+    ORDER BY MAX(seen) DESC, name
     LIMIT 300;
   `;
   return rows.map((r) => r.name as string);

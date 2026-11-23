@@ -177,6 +177,8 @@ async function settle(side: Side) {
 type Outcome = { ok: true; value: unknown } | { ok: false; error: unknown };
 async function run(side: Side, c: Case, seed: number): Promise<Outcome> {
   process.env.POSTGRES_URL = side.url;
+  // Only the "rls" copy runs as the app's role; it stays set while that copy's after() work drains.
+  process.env.TENANT_SCOPE = side.name === "rls" ? "enforce" : "off";
   resetRandom(seed);
   try {
     const fn = side.m[c.mod][c.fn];
@@ -719,6 +721,8 @@ describe("golden master: old driver vs new driver", { skip: !BASE_URL && !REQUIR
     const newUrl = await freshFixtureDb(`golden_new_${process.pid}`);
     // The same app on the standard-Postgres driver (Phase 3 step 6).
     const pgUrl = await freshFixtureDb(`golden_pg_${process.pid}`);
+    // The same app as the app's role, through row-level security (Phase 3 steps 10 and 11).
+    const rlsUrl = await freshFixtureDb(`golden_rls_${process.pid}`);
     const pgPort = new URL(BASE_URL!).port || "5432";
     const wsPort = String(await (await import("./golden/free-port.ts")).freePort());
     proxy = spawn(process.execPath, ["scripts/e2e/ws-proxy.mjs", wsPort, pgPort], { stdio: "ignore" });
@@ -727,7 +731,7 @@ describe("golden master: old driver vs new driver", { skip: !BASE_URL && !REQUIR
     await pointDriversAt(`localhost:${wsPort}`);
     register("./golden/hook.mjs", import.meta.url);
     installDeterministicRandom();
-    for (const [name, url, suffix] of [["legacy", legacyUrl, "?golden=legacy"], ["new", newUrl, ""], ["pg", pgUrl, "?golden=pg"]] as const) {
+    for (const [name, url, suffix] of [["legacy", legacyUrl, "?golden=legacy"], ["new", newUrl, ""], ["pg", pgUrl, "?golden=pg"], ["rls", rlsUrl, "?golden=rls"]] as const) {
       const m = {} as Mods;
       for (const mod of MODULES) m[mod] = await import(`../lib/${mod}.ts${suffix}`);
       sides.push({ name, url, m });
@@ -751,6 +755,9 @@ describe("golden master: old driver vs new driver", { skip: !BASE_URL && !REQUIR
     await newClient.closeDatabase();
     const pgClient = await import("./golden/pg-database.ts?golden=pg");
     await pgClient.closeDatabase();
+    const rlsClient = await import("../lib/database.ts?golden=rls");
+    await rlsClient.closeDatabase();
+    delete process.env.TENANT_SCOPE;
     proxy?.kill("SIGTERM");
     await admin(async (c) => {
       for (const name of created) await c.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
@@ -830,6 +837,33 @@ describe("golden master: old driver vs new driver", { skip: !BASE_URL && !REQUIR
 
   // The repository pairs below run on the first two copies only, so the
   // standard-Postgres copy's rows are compared here, after the same calls.
+  test("after the function cases, the copy run through row-level security holds the same rows", async () => {
+    process.env.TENANT_SCOPE = "off";
+    const rlsSide = sides.find((x) => x.name === "rls");
+    assert.ok(rlsSide, "the rls copy is loaded");
+    assert.notEqual(rlsSide.m.db.listMemberships, sides[1].m.db.listMemberships);
+    const a = await tableContents(sides[0].url);
+    const b = await tableContents(rlsSide.url);
+    const failures: string[] = [];
+    for (const t of Object.keys(a)) {
+      const d = diff(a[t], b[t], t);
+      if (d) failures.push(d);
+    }
+    assert.deepEqual(failures, [], `table contents differ through row-level security:\n${failures.join("\n")}`);
+    // It really ran as the app's role: the enforced client can't see another club's rows.
+    const rlsDb = await import("../lib/database.ts?golden=rls");
+    process.env.POSTGRES_URL = rlsSide.url;
+    process.env.TENANT_SCOPE = "enforce";
+    try {
+      const who = await rlsDb.sql.query(`SELECT current_user AS role, current_setting('app.tenant_id', true) AS club`);
+      assert.deepEqual(who.rows, [{ role: "luvallplay_app", club: "1" }]);
+      const viaHttp = await rlsDb.sql`SELECT current_user AS role, current_setting('app.tenant_id', true) AS club`;
+      assert.deepEqual(viaHttp.rows, [{ role: "luvallplay_app", club: "1" }]);
+    } finally {
+      process.env.TENANT_SCOPE = "off";
+    }
+  });
+
   test("after the function cases, the standard-Postgres copy holds the same rows", async () => {
     const pgSide = sides.find((x) => x.name === "pg");
     assert.ok(pgSide, "the pg copy is loaded");

@@ -880,6 +880,16 @@ Findings and changes recorded as the work goes:
   - `can()` is built and tested with billing on and off. **Decision: the free tier survives everything** (no plan, an ended plan, a plan that can't be read), so a billing problem never takes away what a free club runs its sessions with. A late payment switches nothing off.
   - Usage is counted for emails, sign-in texts, uploads and payments started. **Decision: limits report, they never block**, and the limits are empty until the cost model sets them.
   - Rehearsed on a fresh copy of production: 17 accounts, 0 problems.
+  - **Production run, 23 Nov 2026, 17:09 UTC:** restore point `pre-phase-3-entitlements`; 3.5 s; data guard 17 accounts, 0 problems; no drift.
+- **Step 10, required club id and row-level security (migration `0007_tenant_rls`, no row changes):**
+  - `tenant_id` is `NOT NULL` with a foreign key on all 59 club-owned tables. Row-level security is enabled and forced on each, with one policy keyed on the transaction setting `app.tenant_id`. The app's role `luvallplay_app` has no login and can't bypass it. With no club named, nothing is visible.
+  - **Finding: the database owner on Neon has `BYPASSRLS`.** So the policies can go in without touching the live app, and the app moves onto the role by a setting (`TENANT_SCOPE`), not by a deploy of new queries.
+  - **Decision: the role and the club are set per transaction** (`SET LOCAL ROLE`, `set_config(…, true)`), never per session, because the pooled endpoint hands a server connection to another request after each transaction.
+  - **Plan change: shadow reads are done at the database client.** In `shadow` mode a sample of real reads is run a second time as the app's role, in a read-only transaction, and compared as a set of rows. This tests the app's actual queries, not a list someone wrote.
+  - **Plan change: natural keys are widened in step 11, not step 10** (runbook §10).
+  - The golden master has a fourth copy that runs through row-level security; it found three orderings without a tie-breaker, now fixed.
+  - **Decision: the account-linking trigger runs as its owner**, because accounts are global and must link rows in every club.
+  - **Not done yet:** the route-level isolation suite (it needs requests for two clubs, which arrives with step 11) and a login for the app's role.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

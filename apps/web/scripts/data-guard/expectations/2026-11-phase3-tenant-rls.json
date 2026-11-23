@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3-tenant-rls",
+  "description": "Phase 3 step 10 (build plan §6.1, §6.6 step 5): tenant_id becomes NOT NULL with a foreign key to tenants on the 54 club-owned tables that got the column in step 2; the role luvallplay_app is created; row-level security is enabled and forced, with one policy, on all 59 club-owned tables. A constraint change: no row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

@@ -6,7 +6,9 @@ const LEGACY_CLIENT = new URL("./legacy-database.ts", import.meta.url).href;
 const NEXT_SERVER = new URL("./next-server.ts", import.meta.url).href;
 const PG_CLIENT = new URL("./pg-database.ts", import.meta.url).href;
 // "golden=legacy": the old client. "golden=pg": the standard-Postgres driver.
-const MARKS = ["golden=legacy", "golden=pg"];
+// "golden=rls": the new client again, as its own copy, run as the app's role
+// through row-level security (TENANT_SCOPE=enforce).
+const MARKS = ["golden=legacy", "golden=pg", "golden=rls"];
 
 export async function resolve(specifier, context, next) {
   // The app's modules get after() that the test can wait for (both copies).
@@ -15,6 +17,6 @@ export async function resolve(specifier, context, next) {
   const result = await next(mark ? specifier.replace(`?${mark}`, "") : specifier, context);
   if (!mark || !result.url.startsWith("file:") || result.url.includes("/node_modules/")) return result;
   let url = result.url.split("?")[0];
-  if (url.endsWith("/lib/database.ts")) url = mark === "golden=pg" ? PG_CLIENT : LEGACY_CLIENT;
+  if (url.endsWith("/lib/database.ts") && mark !== "golden=rls") url = mark === "golden=pg" ? PG_CLIENT : LEGACY_CLIENT;
   return { ...result, url: `${url}?${mark}` };
 }

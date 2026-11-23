@@ -21,6 +21,7 @@ import { dbClient } from "../db-client.mjs";
 import { MODULES } from "@luvallplay/modules";
 import { CLUB_OWNED_TABLES, EMAIL_LINKED_TABLES } from "@luvallplay/db/tenancy";
 import { clubMemberDrift, defaultTenantSlug, reconcileClubMembers } from "../../lib/tenant-members.ts";
+import { probeTenantIsolation } from "../../lib/tenant-scope.ts";
 
 const url = process.env.POSTGRES_URL;
 if (!url) {
@@ -118,6 +119,25 @@ try {
   const drift = await clubMemberDrift(db, slug);
   console.log(`Mirror drift: ${drift.length} row(s).`);
   for (const d of drift) problems.push(`account ${d.userId}: ${d.problem}`);
+
+  // Step 10: row-level security, once migration 0007 has run. The app's role
+  // must see exactly the club's rows in every club-owned table, and none
+  // with no club named. Read-only (a READ ONLY transaction, rolled back).
+  const hasRls = (await client.query(`SELECT 1 FROM pg_proc WHERE proname = 'app_tenant_id'`)).rows.length > 0;
+  if (hasRls) {
+    const one = { query: (t, p) => client.query(t, p), connect: async () => ({ query: (t, p) => client.query(t, p), release() {} }) };
+    const differences = await probeTenantIsolation(one, clubs[0]?.id ?? 1, CLUB_OWNED_TABLES);
+    for (const d of differences) problems.push(`row-level security: ${d}`);
+    const unprotected = (
+      await client.query(
+        `SELECT r.relname FROM pg_class r JOIN pg_namespace n ON n.oid = r.relnamespace
+         WHERE n.nspname = 'public' AND r.relkind = 'r' AND r.relname = ANY($1) AND NOT (r.relrowsecurity AND r.relforcerowsecurity)`,
+        [[...CLUB_OWNED_TABLES]],
+      )
+    ).rows.map((r) => r.relname);
+    if (unprotected.length) problems.push(`club-owned tables without forced row-level security: ${unprotected.join(", ")}`);
+    console.log(`Row-level security: ${CLUB_OWNED_TABLES.length} club-owned tables, ${differences.length + unprotected.length} problem(s).`);
+  }
 } finally {
   await client.end();
 }

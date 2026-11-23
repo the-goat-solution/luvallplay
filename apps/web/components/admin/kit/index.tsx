@@ -109,3 +109,20 @@ export function DataTable<Row>({
     </div>
   );
 }
+
+/** A labelled number, e.g. "Spots left 4 of 12". */
+export function StatTile({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: ReactNode; tone?: "warn" | "bad" | "good" }) {
+  const toneClass = tone === "bad" ? k.statBad : tone === "warn" ? k.statWarn : tone === "good" ? k.statGood : "";
+  return (
+    <div className={`${k.stat} ${toneClass}`}>
+      <div className={k.statLabel}>{label}</div>
+      <div className={k.statValue}>{value}</div>
+      {hint && <div className={k.statHint}>{hint}</div>}
+    </div>
+  );
+}
+
+/** A row of StatTiles that wraps to two columns on phones. */
+export function StatGrid({ children }: { children: ReactNode }) {
+  return <div className={k.statGrid}>{children}</div>;
+}

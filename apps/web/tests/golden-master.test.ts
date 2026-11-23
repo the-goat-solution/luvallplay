@@ -627,6 +627,7 @@ const NOT_COVERED: Partial<Record<ModName, Record<string, string>>> = {
     decide: "pure permission decision (tests/phase1-rules.test.ts)",
     currentAdmin: "needs a Next.js request (cookies()); same path as resolveAdmin (covered)",
     actorFor: "maps a context, no database",
+    canOpenAdminPage: "pure menu filter over a context, no database",
     requireAdminActor: "needs a Next.js request (cookies()); same path as resolveAdmin (covered)",
     audit: "writes through lib/admin-roles.ts on node-postgres (not the swapped driver; tests/admin-roles.test.ts)",
     isAdminApiRequest: "header check only",

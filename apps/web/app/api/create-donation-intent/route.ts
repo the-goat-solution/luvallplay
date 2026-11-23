@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { clubConfig } from "@/lib/club";
-import { getStripe } from "@/lib/stripe";
+import { payments } from "@/lib/payments";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 import { formatMoney, roundToMinor } from "@/lib/money";
 
@@ -34,32 +34,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const stripe = getStripe();
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: amountCents,
-        currency: club.currency.toLowerCase(),
-        automatic_payment_methods: { enabled: true },
-        metadata: {
-          type: "donation",
-          firstName: body.firstName,
-          lastName: body.lastName,
-          email: body.email,
-          phone: body.phone ?? "",
-        },
-        receipt_email: body.email,
-        description: "Donation — Three Wolves Badminton Club",
+    const payment = await payments().createPayment({
+      amount: amountCents,
+      currency: club.currency,
+      metadata: {
+        type: "donation",
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        phone: body.phone ?? "",
       },
-      {
-        idempotencyKey: `donation-${body.email}-${amountCents}-${Date.now()}`,
-      },
-    );
+      receiptEmail: body.email,
+      description: "Donation — Three Wolves Badminton Club",
+      idempotencyKey: `donation-${body.email}-${amountCents}-${Date.now()}`,
+    });
 
-    if (!paymentIntent.client_secret) {
+    if (!payment.clientSecret) {
       return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
     }
 
-    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
+    return NextResponse.json({ clientSecret: payment.clientSecret });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";
     const status = message.includes("STRIPE") ? 503 : 400;

@@ -872,6 +872,9 @@ Findings and changes recorded as the work goes:
   - Two CI scans: arithmetic by 100 outside the helpers, and typed currency codes.
   - **Decision: column names stay (`*_cents`), and a row's currency is its club's.** Both are written in the runbook (§7).
   - **Finding:** a negative amount used to print as `$-10.50`; it now prints as `-$10.50`.
+- **Step 8, payments interface (no migration):**
+  - The interface and its rules are pure (`@luvallplay/core/payments`); Stripe is the first provider. One contract suite runs on every provider, including replay twice and out of order.
+  - One-off payments (casual play, donations, shop) and the webhook signature check use it. **Plan change: subscriptions stay on Stripe's own API for now**, behind a pinned list of files; the interface's subscription operations are designed with the first provider that can't charge again by itself, so they aren't shaped by Stripe alone.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

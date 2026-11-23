@@ -1,4 +1,5 @@
 import { getOrder, markOrderPaidByCard } from "@/lib/shop-db";
+import { payments } from "@/lib/payments";
 import { offlineMethodFromSource, offlinePaymentRef } from "@/lib/offline-payment";
 import { notifyOrderPlaced, notifyOversold } from "@/lib/shop-notify";
 import { syncPlanFromSubscriptionMetadata } from "@/lib/membership-self-service";
@@ -43,9 +44,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
+  // The signature is checked by the provider behind the Payments interface
+  // (lib/payments); the handlers below still read Stripe's own event.
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    event = (await payments().verifyWebhook({ body, headers: { "stripe-signature": signature } })).raw as Stripe.Event;
   } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }

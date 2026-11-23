@@ -74,6 +74,8 @@ test("the currency code is written once, not typed into payment calls", () => {
     "packages/core/src/money.ts", // the table of currencies
     "apps/web/lib/bank-akahu.ts", // Akahu is New Zealand's bank feed: it reports NZD balances
     "apps/web/lib/bank-match.ts", // words to ignore when matching NZ bank references
+    "apps/web/lib/payments/stripe-provider.ts", // the currencies this provider takes
+    "apps/web/lib/payments/fake-provider.ts", // the test provider's currencies
   ]);
   const offenders: string[] = [];
   for (const dir of dirs) {

@@ -16,7 +16,7 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 5 | Module enforcement | Part 1 merged and live (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5) |
 | 6 | Second database driver, region routing | Built: the standard-Postgres driver, host routing (off until switched on), storage and scheduled-job interfaces (§6) |
 | 7 | Money audit (minor units, VND) | Built: currency helpers, every conversion moved onto them, VND tests, two CI scans (§7) |
-| 8 | Payments interface | Not started |
+| 8 | Payments interface | Built: the interface, Stripe as the first provider, a shared contract suite; one-off payments and the webhook signature check use it (§8) |
 | 9 | Entitlements and metering | Not started |
 | 10 | `NOT NULL`, foreign keys, row-level security | Not started |
 | 11 | Reads switched to tenant-aware queries | After **7 clean days of shadow reads** |
@@ -275,7 +275,24 @@ Nothing here changes data, and nothing changes behaviour until a setting is swit
 - A row's currency is its club's currency (`tenants.currency`); rows don't carry their own. A club has one currency.
 - Until reads are tenant-aware (step 11), conversions that don't have the club's settings to hand use the built-in `CLUB_CURRENCY`, which a test keeps equal to the built-in `currency` setting. Property names such as `priceNzd` stay for now.
 
-## 8. Housekeeping that needs you
+## 8. Step 8: payments interface (no data run)
+
+| Piece | Where |
+|---|---|
+| The interface: create a payment, read it, refund, verify a webhook, list what succeeded (reconcile), payout status; and the provider's **capabilities** | `@luvallplay/core/payments` |
+| Stripe, the first provider | `lib/payments/stripe-provider.ts` |
+| A test provider that keeps real state and signs its webhooks; it also plays "a QR provider with no cards, recurring charges, refunds or webhooks" | `lib/payments/fake-provider.ts` |
+| The provider this deployment uses | `PAYMENTS_PROVIDER` (default `stripe`; an unknown value throws) |
+
+**The shared contract suite** (`tests/payments.test.ts`) runs on every provider: create, idempotency, refused amounts and currencies, full and partial refunds, never more than was paid, webhook signatures (real, altered, missing, forged), **events replayed twice and out of order**, reconcile, payout status, capability flags. Stripe runs it against a stand-in for its API with Stripe's own webhook signing.
+
+**Events twice and out of order.** `applyPaymentEvent` folds events into a payment's state so the result is the same in any order and with any repeats: a seen event changes nothing, a status only moves forward, a refunded total only grows and never passes the amount. A test runs every ordering of four events, each delivered twice.
+
+**What uses the interface now:** casual-play payments, one-off donations, shop orders, and the webhook's signature check. A test proves the request sent to Stripe is exactly what those routes sent before.
+
+**Still on Stripe's own API** (16 files, pinned by a test so the list only shrinks): subscriptions and their self-service changes, offline (cash and bank) invoices, the Vision pass checkout page, the ledger sync and the webhook's handlers. They move as their modules are touched; the recurring ones need the interface's subscription operations, which arrive with the first provider that lacks them (Vietnam).
+
+## 9. Housekeeping that needs you
 
 - **Rehearsal branch.** One reusable branch, `rehearsal-phase-3`, is kept for the rest of the phase and reset to a fresh copy of production before each rehearsal, so its host needs approving only once. It holds real data: delete it when Phase 3 is done.
 - **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.

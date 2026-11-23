@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { clubCurrencyLower } from "@/lib/money";
+import { CLUB_CURRENCY } from "@/lib/constants";
 import { z } from "zod";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { checkRateLimit } from "@/lib/security";
-import { getStripe } from "@/lib/stripe";
+import { payments } from "@/lib/payments";
 import { stripeCustomerFor } from "@/lib/membership-self-service";
 import { ShopError, attachPaymentIntent, cancelOrder, cashHoldUntil, createOrder } from "@/lib/shop-db";
 import { notifyOrderPlaced } from "@/lib/shop-notify";
@@ -46,20 +46,17 @@ export async function POST(request: Request) {
     try {
       const customer = await stripeCustomerFor(player, true);
       const items = order.items.map((i) => i.label).join(", ");
-      const pi = await getStripe().paymentIntents.create(
-        {
-          amount: order.totalCents,
-          currency: clubCurrencyLower(),
-          customer: customer ?? undefined,
-          automatic_payment_methods: { enabled: true },
-          receipt_email: player.email,
-          description: `Three Wolves shop — ${items}`,
-          metadata: { type: "shop", orderId: String(order.id), items: items.slice(0, 450), email: player.email, firstName: player.firstName, lastName: player.lastName },
-        },
-        { idempotencyKey: `shop-order-${order.id}` },
-      );
-      await attachPaymentIntent(order.id, pi.id);
-      return NextResponse.json({ ok: true, order, clientSecret: pi.client_secret });
+      const payment = await payments().createPayment({
+        amount: order.totalCents,
+        currency: CLUB_CURRENCY,
+        customerId: customer ?? undefined,
+        receiptEmail: player.email,
+        description: `Three Wolves shop — ${items}`,
+        metadata: { type: "shop", orderId: String(order.id), items: items.slice(0, 450), email: player.email, firstName: player.firstName, lastName: player.lastName },
+        idempotencyKey: `shop-order-${order.id}`,
+      });
+      await attachPaymentIntent(order.id, payment.id);
+      return NextResponse.json({ ok: true, order, clientSecret: payment.clientSecret ?? null });
     } catch (err) {
       await cancelOrder(order.id).catch(() => {});
       throw err;

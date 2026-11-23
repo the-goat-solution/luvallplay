@@ -2,7 +2,7 @@ import { linkMemberAccount } from "@/lib/player-db";
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
-import { activateMembershipByPaymentIntentId, assignAndReserveMembershipAccessStart, attachStripeIdToMembership, getTotalActiveMemberCount, listMemberships, listRecentlyEndedMemberships, addDays, type MembershipRow } from "@/lib/db";
+import { activateMembershipByPaymentIntentId, assignAndReserveMembershipAccessStart, attachStripeIdToMembership, getTotalActiveMemberCount, listMemberMiniGameDates, listMemberships, listRecentlyEndedMemberships, addDays, type MembershipRow } from "@/lib/db";
 import {
   auditMembershipStatuses,
   type MembershipAuditResult,
@@ -143,6 +143,11 @@ async function addOfflineMember(formData: FormData) {
       periodStart: activated.periodStart,
       periodEnd: activated.periodEnd,
       delayed: activated.periodStart > clubToday,
+      miniGameDates: await listMemberMiniGameDates(
+        activated.day,
+        activated.periodStart,
+        activated.periodEnd,
+      ).catch(() => []),
     }).catch((err) =>
       console.error("Failed to send membership confirmation email", err),
     );

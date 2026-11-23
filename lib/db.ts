@@ -17,6 +17,7 @@ import {
   getClubToday,
   getMembershipDayForDate,
 } from "./dates";
+import { memberHasRoom } from "./membership-start";
 import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
 
 // A member who said they can't make that play day (see player_absences).
@@ -133,8 +134,10 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   spots: Record<string, number>;
   signedUp: Record<string, number>;
   locked: Record<string, boolean>;
+  // Mini game days: locked to casual sign-ups, but members are always in.
+  miniGame: Record<string, boolean>;
 }> {
-  if (dates.length === 0) return { spots: {}, signedUp: {}, locked: {} };
+  if (dates.length === 0) return { spots: {}, signedUp: {}, locked: {}, miniGame: {} };
 
   // Each date may default to a different court count (membership day vs.
   // not), so the per-date default is computed in JS and zipped with the
@@ -209,6 +212,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   const spots: Record<string, number> = {};
   const signedUp: Record<string, number> = {};
   const locked: Record<string, boolean> = {};
+  const miniGame: Record<string, boolean> = {};
   for (const date of dates) {
     const booked = bookedByDate.get(date) ?? 0;
     // Already scoped to the right membership day (or zero for casual-only
@@ -220,10 +224,11 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
       miniGameDates.has(date),
     );
     locked[date] = lockedDates.has(date);
+    miniGame[date] = miniGameDates.has(date);
     spots[date] = locked[date] ? 0 : Math.max(0, maxPlayers - activeMembers - booked);
     signedUp[date] = booked + activeMembers;
   }
-  return { spots, signedUp, locked };
+  return { spots, signedUp, locked, miniGame };
 }
 
 export async function reserveBookingSlot(
@@ -400,9 +405,11 @@ export async function assignAndReserveMembershipAccessStart(
       : await client.query(
           // A play day an admin has locked never becomes a new member's
           // first day; the admin-chosen preferredDate above bypasses this.
+          // A mini game day is the exception: its lock is for casual sign-ups
+          // only, members are always included (see isMemberStartCandidate).
           `SELECT date::text AS date FROM sessions
            WHERE google_event_id IS NOT NULL
-             AND NOT registration_locked
+             AND (NOT registration_locked OR mini_game)
              AND EXTRACT(DOW FROM date) = $2
              AND date >= $1::date
              AND date <= ($1::date + $3::int)
@@ -443,7 +450,14 @@ export async function assignAndReserveMembershipAccessStart(
         );
         const activeMembers = (memberCountRows[0] as { count: number }).count;
 
-        if (maxPlayers - activeMembers - booked > 0) {
+        if (
+          memberHasRoom({
+            miniGame: Boolean(session?.mini_game),
+            maxPlayers,
+            activeMembers,
+            booked,
+          })
+        ) {
           const periodEnd = addDays(date, MEMBERSHIP_DAYS[plan]);
           const { rows: inserted } = await client.query(
             `INSERT INTO memberships
@@ -581,6 +595,24 @@ export async function listSessionsInRange(
       eventLocation: r.event_location,
     };
   });
+}
+
+// Mini game play days on a membership's weekday within its period. Members
+// are always included in a mini game, so their confirmation email names
+// these days (and points to "Can't make it" in the app).
+export async function listMemberMiniGameDates(
+  day: MembershipDay,
+  from: string,
+  to: string,
+): Promise<string[]> {
+  const { rows } = await sql`
+    SELECT date::text AS date FROM sessions
+    WHERE mini_game AND google_event_id IS NOT NULL
+      AND date >= ${from} AND date <= ${to}
+      AND EXTRACT(DOW FROM date) = ${MEMBERSHIP_DAY_TO_DOW[day]}
+    ORDER BY date;
+  `;
+  return rows.map((r) => (r as { date: string }).date);
 }
 
 // Postgres CURRENT_DATE is UTC-based, which disagrees with the club's

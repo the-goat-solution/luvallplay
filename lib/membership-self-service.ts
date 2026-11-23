@@ -240,8 +240,10 @@ async function dayHasRoom(day: MembershipDay, fromDate: string): Promise<boolean
     .filter((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === dow)
     .slice(0, 4);
   if (sessions.length === 0) return true; // not on the calendar yet: nothing to check against
-  const { spots } = await getSpotsAndHeadcountForDates(sessions);
-  return sessions.some((d) => (spots[d] ?? 0) > 0);
+  const { spots, miniGame } = await getSpotsAndHeadcountForDates(sessions);
+  // A mini game day reports 0 casual spots (its sign-ups are locked), but
+  // members are always included in it, so it counts as room for a member.
+  return sessions.some((d) => miniGame[d] || (spots[d] ?? 0) > 0);
 }
 
 async function currentSubscription(m: MemberView): Promise<Stripe.Subscription> {

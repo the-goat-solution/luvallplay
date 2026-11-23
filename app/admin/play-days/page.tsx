@@ -477,8 +477,8 @@ export default async function PlayDaysAdminPage({
               </strong>
               <span style={{ color: "#666" }}>
                 {miniGame
-                  ? ` — registration is locked and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. Add players below.`
-                  : ` — turn on to lock registration and cap this play day at ${MINI_GAME_MAX_PLAYERS} players.`}
+                  ? ` — members are included automatically (they tap "Can't make it" if they can't come). Casual sign-ups are closed and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. Add players below.`
+                  : ` — turn on to close casual sign-ups and cap this play day at ${MINI_GAME_MAX_PLAYERS} players. Members stay included.`}
               </span>
             </div>
             <form action={setMiniGame.bind(null, selectedDate, !miniGame)}>

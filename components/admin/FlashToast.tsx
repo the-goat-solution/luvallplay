@@ -40,7 +40,7 @@ const playDays: FlashRules = {
     v === "locked" ? ok("Registration locked — no new sign-ups for this play day.") : v === "unlocked" ? ok("Registration reopened for this play day.") : null,
   miniGame: (v) =>
     v === "on"
-      ? ok(`Mini game day on — registration locked and capped at ${MINI_GAME_MAX_PLAYERS} players.`)
+      ? ok(`Mini game day on — casual sign-ups closed, capped at ${MINI_GAME_MAX_PLAYERS} players. Members are included.`)
       : v === "off"
         ? ok("Mini game day off — court-based capacity is back and registration reopened.")
         : null,

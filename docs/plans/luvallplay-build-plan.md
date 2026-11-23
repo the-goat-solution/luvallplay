@@ -22,6 +22,7 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **M: 12 ready-made colour schemes** for new clubs, each tested for contrast in light and dark mode (§6.3.1, preview in `docs/plans/assets/club-color-schemes.png`).
 - **N: bring your own brand.** Clubs can import their own logo, font and colour palette, or pull them from their existing website (§6.3.2).
 - **O: online payments only for incorporated clubs with their own Stripe account.** Setup asks both questions; every other paying club is set up for cash and bank transfer only, with an admin area built for that (§6.2.2). Three Wolves never collects or passes on money for other clubs (Stripe forbids it, and it would make the collector a regulated money-transfer business under NZ's AML/CFT Act).
+- **P: a small core admin; everything else is a module.** The core is only what a free, no-money club needs to run play days. Every other admin area is a module that can be turned on or off during setup, by the club's owners, or by Luvallplay's platform admins (§6.2.3).
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
 
@@ -328,7 +329,7 @@ Playwright visual snapshots run at each window class on every pull request. Real
 |---|---|
 | **Website** (club landing) | Rebuilt from template sections (§7.3): Hero → Why play with us → Schedule & venue → Membership & casual → Leaderboard teaser → Gallery → Reviews → Get the app → FAQ → Footer. The main call to action is **"Join the club in the app"**; casual booking stays available as guest checkout. Lighthouse ≥ 95 on all four scores, structured data (`SportsClub`, `Event` for play days) for local search |
 | **App** | §2 structure; one component library (`packages/ui`); every screen has loading skeleton, empty, error and offline states; consistent sheets and modals; one toast system |
-| **Admin** | Grouped sidebar: **Club** (dashboard, settings, modules, website) · **People** (members, players, roles, inbox) · **Play** (play days, attendance, round robin, challenges, day requests) · **Money** (financials, bank, shop, payouts) · **Content** (photos, gallery). Shared `DataTable` (sort, filter, export, becomes cards on mobile), dashboard home ("needs attention": unread messages, photos to review, disputes, failed payments) |
+| **Admin** | A small **core** sidebar (Home · Play days · People · Messages · Website · Settings), with each module adding its own items under **Play**, **Money**, **Players** or **Content** only when it's switched on (§6.2.3). Shared `DataTable` (sort, filter, export, becomes cards on mobile), dashboard home ("needs attention": unread messages, photos to review, disputes, failed payments) |
 | **Sanity** | Business config removed (pricing plans, `stripePriceId`, casual spots and booking lock days move to the database and Admin). Studio holds Luvallplay content only: marketing pages, blog, help centre, release notes. Three Wolves content migrates into the club website editor (🟡 Decision D) |
 | **Code** | Runtime DDL → migrations; email links → `user_id` foreign keys; constants → club/module settings; "Three Wolves" strings → club config; `hasDb` checks removed (a database is required); error boundaries per route; zod validation at every API edge |
 | **Tests** | Unit (core logic), integration (repos against a Neon branch), **tenant isolation** (every repo function is tested to make sure club A can't read club B), Playwright end-to-end for sign-in, booking, membership, challenge and admin flows |
@@ -391,8 +392,8 @@ export default defineModule({
 
 | Group | Module | Notes |
 |---|---|---|
-| Core (always on) | Club profile & website · Members & roles · Messages (inbox) · Admin | |
-| Run your club | **Play days & bookings** (incl. calendar sync) · **Casual play** (drop-in, guest checkout) · **Day requests** · **Round robin / mini games** | Courts, capacity and cut-offs become settings |
+| Core (always on) | Club profile & website · **Play days** (schedule, sign-ups, capacity, waitlist, cancellations, attendance) · People & roles · Messages & announcements · Admin essentials | Exactly what a free, no-money club needs to run (§6.2.3) |
+| Run your club | **Calendar sync** (Google Calendar) · **Casual play** (drop-in bookings for non-members, guest checkout) · **Court board** (live court rotation) · **Round robin / mini games** · **Day requests** · **Multiple venues** | Extend Play days; courts, capacity and cut-offs are Play days settings |
 | Money | **Memberships** (plans, cycles, days; a plan can be free) · **Shop & merch** (jersey pre-orders become a shop product type) · **Donations** · **Finance & reports** · **Bank reconciliation (NZ, Akahu)** | All optional. Card payments need Stripe Connect; cash and bank transfer don't. A free-play club leaves the whole group off (§6.2.1) |
 | Engage players | **Arena** (challenges, ranks, club leaderboard) · **Vision** (AI match analysis) · **Gallery & photos** · **Integrations** (API, webhooks, MCP) | Ranks and art are themeable per club |
 | Global (opt-in) | **Find a club** · **Global leaderboards** · **Social** · **Marketplace** | §8 |
@@ -458,6 +459,67 @@ Do you charge players to play?
 - The item stays "Awaiting payment" until it's matched or marked paid, then shows "Paid".
 - Reminders go out before the play day if still unpaid.
 - No card form, saved card, "manage card" or auto-renew option appears anywhere, and the API refuses card-payment calls for these clubs.
+
+#### 6.2.3 Admin: the core and the optional modules
+
+**The test for the core:** could a free-play club with no money flow run its play days without this? If yes, it's a module. What's left is deliberately small, so a new volunteer-run club sees a simple admin that doesn't overwhelm them.
+
+**Core admin (always on, can't be turned off):**
+
+| Area | What it covers | Why it's essential |
+|---|---|---|
+| **Home** | "Needs attention": next play day and its sign-ups, join requests, unread messages, anything a module adds (e.g. photos to review) | One place to start |
+| **Play days** | Recurring schedule and one-off days (date, time, venue, courts → capacity), sign-up list and waitlist, open or close sign-ups, cancel a day (members told automatically), tick attendance | Running play days is what every club does |
+| **People** | Members list, join requests (approve or decline), invite by email or link, edit details, **enable or disable a player** (the club's own decision), merge duplicate accounts | The club decides who plays |
+| **Messages** | Inbox for messages from members, and **announcements** to all members by email and app notification (e.g. "Courts moved to Hall B") | Members and admins must be able to reach each other, also needed for safeguarding |
+| **Website** | The basic club page: about, schedule, venue, contact, "Join the club" and "Sign up for a play day" | How new players find and join the club |
+| **Settings** | Club details and venue, time zone and languages, Look & feel, Payments (mode, §6.2.2), **Modules**, Admins & roles, Audit log (read-only), Data & privacy (export club data, handle deletion requests) | Running the club account safely and legally |
+
+For a free club with nothing else switched on, the admin sidebar is just: **Home · Play days · People · Messages · Website · Settings.**
+
+**Optional modules and the admin areas they add** (today's Three Wolves admin tabs mapped across):
+
+| Module | Admin area it adds | Today's tab | Needs |
+|---|---|---|---|
+| Calendar sync | Play days → calendar connection | (inside Play days) | – |
+| Casual play | Casual bookings, guest list | (inside Play days) | – |
+| Court board | Organiser screen for live court rotation | `/casual-play` link | – |
+| Round robin / mini games | Draws, scores, mini game days | Play days toggle, `/mini-game` | – |
+| Day requests | Requests for extra play days | Day requests | – |
+| Multiple venues | Venue list, per-venue capacity | – | – |
+| Memberships | Plans, cycles, renewals, membership list | Members | Payment mode not *Free play* (free clubs use the core People list) |
+| Payments to check | Unpaid items, mark as paid, references | (Members, Shop) | Cash/transfer or online |
+| Bank matching (NZ, Akahu) | Bank feed, auto-match | Financials → Bank | Cash/transfer or online |
+| Card payments | Stripe payouts, card refunds, retries, Stripe sync | (Members) | Online payments (§6.2.2) |
+| Finance & reports | Income, expenses, receipts, AGM report | Financials | – (free clubs can track expenses too) |
+| Shop & merch | Products, stock, orders (jersey pre-orders are a product type) | Shop, Jersey | Cash/transfer or online |
+| Donations | Donation settings and list | (home page) | Cash/transfer or online |
+| Arena | Challenges, disputes, ranks, club leaderboard | Challenges | – |
+| Vision | Passes, device check, training labels | Device check | – |
+| Gallery & photos | Photo moderation, gallery | Photos | – |
+| Integrations | API keys, webhooks, MCP | (Player tab) | – |
+| Global: Find a club, Global leaderboards, Social, Marketplace | Directory listing, opt-ins, moderation queues | – | Each opted into separately (§8) |
+
+Not club modules at all: **Setup check** (environment diagnostics) and **Platform** (platform admins) move to the Luvallplay platform console, which only platform admins see.
+
+**Who turns modules on and off:**
+- **During setup:** the club picks modules in wizard step ⑤ (presets or individual cards).
+- **Club owners:** in **Settings → Modules** at any time. Club admins can see which modules are on, but only owners change them. Every change is written to the audit log.
+- **Luvallplay platform admins**, in the platform console:
+  - turn any module on or off for any club (e.g. to help a club set up, or to switch off a module being misused);
+  - **lock** a module on or off for a club, so the club's owners can't change it, with a reason the owners can see;
+  - control **availability platform-wide**: a module can be *available*, *beta* (only for clubs the platform chooses) or *hidden* (e.g. while a problem is fixed);
+  - every change is in the platform audit log.
+- **The rules every switch follows:**
+  - **Turning a module off hides it, it doesn't delete anything.** Its admin areas, app screens, website sections, API routes, crons and emails stop. Its data is kept and returns when it's turned back on (test plan journey S2).
+  - A module can't be turned on until its needs are met (e.g. Shop needs a payment mode other than Free play). A module that others depend on can't be turned off while they're on. The switch explains why.
+  - Turning off a module with live activity (e.g. Arena with challenges in progress, a Shop with unpaid orders) shows what's affected and asks for confirmation. Members are told if something they use goes away.
+- **Presets** in setup:
+  - *Free social club*: core only.
+  - *Social club*: core + Court board + Casual play.
+  - *Competitive club*: + Round robin, Arena, Gallery.
+  - *Coaching academy*: + Memberships, Day requests.
+  - Three Wolves keeps every module it uses today.
 
 **Settings replacing constants:**
 - `MEMBERSHIP_ACCESS_DAYS` → `memberships.settings.days`
@@ -597,7 +659,7 @@ All palettes are validated for WCAG AA in light and dark. Clubs choose from 12 t
 | ② Your club | Name, URL slug (live availability check), city/venue (map pin, used by Find a club), languages | Autosave every field; live preview of the club page on the right (desktop) or a "Preview" toggle (mobile) |
 | ③ Look & feel | Pick one of the **12 colour schemes** (§6.3.1), shown live on the club's own name, a play-day card and a button in light and dark. Or **Use our own branding**: upload logo, font and colours, or import them from the club's website (§6.3.2) | One tap picks a scheme; the custom path has its own short sub-steps with previews; automatic contrast fixes explained in plain words |
 | ④ How you charge | Up to three questions (§6.2.2): *Do you charge players?* → *Is your club incorporated?* → *Does it have its own Stripe account?* The answers set the mode: **Free play**, **Cash and bank transfer only**, or **Online payments** (connect the club's Stripe account right there). Cash and bank transfer clubs then enter bank details and choose cash-at-the-hall, confirm-before-paid and Akahu matching | One question per screen, plain words with an "Not sure?" explainer. Free play is a full, first-class choice. Cards are only offered to incorporated clubs with Stripe; everyone else gets a working cash and bank-transfer setup plus the "Getting incorporated" guide. Admin is configured from the answers |
-| ⑤ Pick modules | Starter **presets**: *Free social club*, *Social club*, *Competitive club*, *Coaching academy*. Then grouped cards (Run your club · Money · Engage players) with on/off toggles. Money cards are hidden for Free play | Dependencies selected automatically with a note ("Memberships needs Play days"); 3–4 sensible defaults pre-selected; never more than one decision per card |
+| ⑤ Pick modules | Starter **presets** (§6.2.3): *Free social club* (core only), *Social club*, *Competitive club*, *Coaching academy*. Then grouped cards (Run your club · Money · Engage players) with on/off toggles. The core is shown as "Always included"; Money cards are hidden for Free play | Dependencies selected automatically with a note ("Memberships needs Play days"); 3–4 sensible defaults pre-selected; never more than one decision per card |
 | ⑥ Go global? | Four plain toggles: list in **Find a club** · players can appear on **global leaderboards** · **social** · **marketplace**, each with a one-line privacy explanation | Opt-in, off by default except the directory listing; changeable any time |
 | ⑦ Invite & import | Invite co-admins by email; import members from CSV or a spreadsheet paste | Skippable |
 | ⑧ Launch | Checklist summary, club link, QR poster for the hall (in the club's colours), "Get the app" link | Celebrate; next-step suggestions |

@@ -109,6 +109,8 @@ One table drives an automated test. Every row is a role and every column a route
 | Me page | sign-in | ✔ | ✔ | limited | ✔ | ✔ | ✔ | ✔ (own club) | ✔ |
 | Club admin pages | sign-in | ✖ | ✖ | ✖ | partial | ✔ | ✔ | **✖** | ✔ |
 | Add/remove admins | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ | ✔ | ✖ | ✔ |
+| Turn club modules on/off | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ (sees them) | ✔ (unless locked) | ✖ | ✔ (incl. lock) |
+| Module availability platform-wide | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ | ✔ |
 | Refund / free month | ✖ | ✖ | ✖ | ✖ | ✖ | ✔ (+step-up) | ✔ (+step-up) | ✖ | ✔ |
 | Platform admin | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ | ✔ |
 
@@ -149,7 +151,8 @@ Each journey has an ID, runs in CI on phone and desktop sizes, and is also on th
 | S3 | **Free-play club:** set up with *Free play*. The club site says "Free to play", players join and sign up for a play day with no checkout, waitlist and "I can't make it" work, and **no price, "$0", checkout, receipt or Stripe call appears anywhere** (asserted on every page and by a Stripe mock that fails the test if called). Admin has no Money group. Later switch to cash payments and back, checking the guards |
 | S5 | **Unincorporated club:** answer *Yes, we charge* → *Not incorporated*. The club is set to cash and bank transfer only. Then:<ul><li>Setup collects bank details.</li><li>A player books and sees the bank details, amount and a unique reference.</li><li>The booking shows "Awaiting payment" until an admin marks it paid, or a test bank feed matches it.</li><li>**No card form, saved card, auto-renew or Stripe call appears anywhere** (Stripe mock fails the test if called), and the card-payment API returns an error.</li><li>Admin shows Payments to check, Bank matching and Finance, but no Stripe payouts, card refunds or retries.</li></ul>Repeat for *Incorporated, no Stripe* (same result). Then *Incorporated + Stripe* connects a test-mode account and shows card checkout. Finally, "Turn on card payments" on a cash club carries prices and history over |
 | S4 | **Look & feel:** pick each of the 12 schemes and confirm the club site, Me page and an email render in it, light and dark. Then import a brand: SVG logo, uploaded font, palette from the logo and from a test website. Confirm the automatic contrast fix, the generated favicon/avatar, and a revert to a preset |
-| S2 | Disable a module → its screens, admin pages, API and crons disappear; data is kept and comes back on re-enable |
+| S2 | Disable a module → its screens, admin pages, API and crons disappear; data is kept and comes back on re-enable. Runs for **every** module. Also covers dependency and payment-mode blocks, the "live activity" confirmation, a platform admin locking a module (the owner can't change it and sees the reason), and a module set to *hidden* platform-wide |
+| S6 | **Core-only club:** a free club with no modules runs a full month: schedule play days, members join (with approval), sign up, waitlist, a day is cancelled (members notified), attendance ticked, an announcement and an inbox reply, a second admin added. Admin shows exactly **Home · Play days · People · Messages · Website · Settings**, and no module's screen, API route, cron or email exists for this club |
 | X1 | Marketplace (Phase 7): list an item, public question and answer, buyer commits, seller confirms, contact details released by email only to the two parties |
 
 ### 3.9 Visual, accessibility and performance
@@ -383,7 +386,7 @@ On every pull request, and required before merging to `main`:
 | 3 Multi-tenant | Isolation suite, permission matrix, shadow reads clean for 7 days, data guard clean, Stripe reconciliation, characterisation check |
 | 4 API-driven app | Contract tests, old-client tests, offline tests |
 | 5 Store apps | Device matrix, upgrade test, in-app purchase sandbox, store checklist, beta feedback |
-| 6 Brand, sites, wizard | S1–S5, the payment-mode × admin-area table in build plan §6.2.2 as an automated test, every colour scheme passes contrast and visual checks, brand upload security tests, Lighthouse ≥ 95, accessibility clean, custom-domain tests |
+| 6 Brand, sites, wizard | S1–S6, the payment-mode × admin-area table in build plan §6.2.2 as an automated test, every colour scheme passes contrast and visual checks, brand upload security tests, Lighthouse ≥ 95, accessibility clean, custom-domain tests |
 | 7 Global modules | Opt-in/out tests, moderation and safeguarding flows (16+ only), marketplace X1, abuse reports |
 
 ---

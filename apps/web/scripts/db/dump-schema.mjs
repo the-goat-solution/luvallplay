@@ -92,6 +92,23 @@ export async function dumpSchema(c) {
     for (const t of trgs) out.push(`${t.def};`);
     out.push("");
   }
+  // Row-level security (Phase 3 step 10): which tables have it, whether it
+  // is forced on the owner too, and every policy. Only when there is some.
+  const rls = (
+    await c.query(`SELECT r.relname, r.relforcerowsecurity AS forced FROM pg_class r JOIN pg_namespace n ON n.oid = r.relnamespace
+      WHERE n.nspname = 'public' AND r.relkind = 'r' AND r.relrowsecurity ORDER BY r.relname`)
+  ).rows;
+  const policies = (
+    await c.query(`SELECT tablename, policyname, permissive, roles::text AS roles, cmd, qual, with_check FROM pg_policies WHERE schemaname = 'public' ORDER BY tablename, policyname`)
+  ).rows;
+  if (rls.length || policies.length) {
+    out.push("-- Row-level security");
+    for (const r of rls) out.push(`ALTER TABLE ${r.relname} ENABLE${r.forced ? " AND FORCE" : ""} ROW LEVEL SECURITY;`);
+    for (const p of policies) {
+      out.push(`POLICY ${p.policyname} ON ${p.tablename} (${p.permissive}) FOR ${p.cmd} TO ${p.roles} USING (${p.qual ?? ""}) WITH CHECK (${p.with_check ?? ""});`);
+    }
+    out.push("");
+  }
   return out.join("\n");
 }
 

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   // Once a day, whether or not there is a play day: the shadow reads'
   // result goes on record (Phase 3; lib/shadow-log.ts). Never throws.
-  const shadow = await shadowHeartbeat(sql);
+  const shadow = await shadowHeartbeat(sql, sql);
 
   const [date] = await getUpcomingSessionDates(0);
   if (!date) {

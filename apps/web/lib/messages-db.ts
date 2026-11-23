@@ -56,10 +56,10 @@ export async function listThreadsForPlayer(playerId: number): Promise<ThreadSumm
   if (!process.env.POSTGRES_URL) return [];
   const { rows } = await sql.query(
     `SELECT t.id, t.subject, t.status, t.last_message_at, t.unread_for_player AS unread,
-       (SELECT body FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS preview,
-       (SELECT sender FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_sender
+       (SELECT body FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS preview,
+       (SELECT sender FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_sender
      FROM message_threads t WHERE t.player_id = $1
-     ORDER BY t.last_message_at DESC LIMIT 50;`,
+     ORDER BY t.last_message_at DESC, t.id DESC LIMIT 50;`,
     [playerId],
   );
   return rows.map((r) => mapSummary(r as ThreadRow));
@@ -142,12 +142,12 @@ export type AdminThreadSummary = ThreadSummary & {
 export async function listThreadsForAdmin(filter: "open" | "closed" | "all" = "open"): Promise<AdminThreadSummary[]> {
   const { rows } = await sql.query(
     `SELECT t.id, t.subject, t.status, t.last_message_at, t.unread_for_admin AS unread,
-       (SELECT body FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS preview,
-       (SELECT sender FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_sender,
+       (SELECT body FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS preview,
+       (SELECT sender FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_sender,
        p.id AS player_id, p.email, trim(p.first_name || ' ' || p.last_name) AS player_name
      FROM message_threads t JOIN players p ON p.id = t.player_id
      WHERE ($1 = 'all' OR t.status = $1)
-     ORDER BY t.unread_for_admin DESC, t.last_message_at DESC LIMIT 200;`,
+     ORDER BY t.unread_for_admin DESC, t.last_message_at DESC, t.id DESC LIMIT 200;`,
     [filter],
   );
   return rows.map((r) => ({

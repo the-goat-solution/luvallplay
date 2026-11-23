@@ -509,6 +509,55 @@ describe("G · Arena", () => {
 });
 
 // ---------------------------------------------------------------------------
+// S · modules (build plan §6.2.3; test plan S2)
+// ---------------------------------------------------------------------------
+
+describe("S · modules", () => {
+  test("S2 · an owner switches a module off: its pages and API are gone, its data is kept; back on, everything returns; an admin can't switch", async () => {
+    const owner = await signedIn(PEOPLE.owner.email, DESKTOP);
+    const page = await owner.context.newPage();
+    const row = () => page.locator("li", { has: page.locator("input[name=moduleId][value=gallery]") });
+    const status = async (path) => (await fetch(`${base()}${path}`, { redirect: "manual" })).status;
+    const photosBefore = (await db.query(`SELECT count(*)::int AS n FROM player_photos`)).rows[0].n;
+    try {
+      assert.equal(await status("/gallery"), 200);
+      assert.equal((await page.goto("/admin/settings/modules")).status(), 200);
+      await row().getByRole("button", { name: "Switch off" }).click();
+      await page.getByText(/is now off\. Its data is kept\./).waitFor();
+      // Off: the page and the module's API answer like something that doesn't exist.
+      assert.equal(await status("/gallery"), 404);
+      assert.equal(await status("/api/profile/photos"), 404);
+      assert.equal((await page.goto("/admin/photos")).status(), 404);
+      // The rest of the club carries on.
+      assert.equal(await status("/"), 200);
+      assert.equal(await status("/casual-play"), 200);
+      // The data is kept, the switch is on record, and the admin menu no longer offers the page.
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM player_photos`)).rows[0].n, photosBefore);
+      assert.equal((await db.query(`SELECT enabled FROM tenant_modules WHERE module_id = 'gallery'`)).rows[0].enabled, false);
+      await page.goto("/admin");
+      assert.equal(await page.locator('a[href="/admin/photos"]').count(), 0);
+      // An admin who isn't an owner sees the list and has no switch.
+      const admin = await signedIn(PEOPLE.admin.email, DESKTOP);
+      const adminPage = await admin.context.newPage();
+      assert.equal((await adminPage.goto("/admin/settings/modules")).status(), 200);
+      await adminPage.getByText("Only owners (and platform admins) can switch modules.").waitFor();
+      assert.equal(await adminPage.getByRole("button", { name: /Switch (on|off)/ }).count(), 0);
+      await admin.context.close();
+      // Back on: everything returns.
+      await page.goto("/admin/settings/modules");
+      await row().getByRole("button", { name: "Switch on" }).click();
+      await page.getByText(/is now on\./).waitFor();
+      assert.equal(await status("/gallery"), 200);
+      assert.equal((await page.goto("/admin/photos")).status(), 200);
+    } finally {
+      // Whatever happened above, leave the module on for the journeys that follow.
+      await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE module_id = 'gallery'`);
+      await owner.context.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Redirects and screenshots
 // ---------------------------------------------------------------------------
 

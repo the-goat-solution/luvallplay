@@ -32,6 +32,8 @@ export type PgDatabase = {
     connect(): Promise<pg.PoolClient>;
   };
   orm(): NodePgDatabase<typeof schema>;
+  /** The pool itself, for lib/database.ts to scope (lib/tenant-scope.ts). */
+  pool(): pg.Pool;
   close(): Promise<void>;
 };
 
@@ -65,6 +67,7 @@ export function createPgDatabase(connectionString: () => string): PgDatabase {
   return {
     sql,
     orm: () => (ormInstance ??= drizzle({ client: getPool(), schema })),
+    pool: getPool,
     close: async () => {
       const p = pool;
       pool = null;

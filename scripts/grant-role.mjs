@@ -11,7 +11,7 @@
 // - Every change is written to admin_audit_log as actor "script".
 // - Rehearse first: data-guard rehearse --run "node scripts/grant-role.mjs ..."
 //   on a Neon branch of production (test plan §4.5).
-import pg from "pg";
+import { dbClient } from "./db-client.mjs";
 import { setPlatformAdmin, setRoleByEmail, normalizeEmail } from "../lib/admin-roles.ts";
 
 function parseArgs(argv) {
@@ -41,7 +41,7 @@ if (!url) {
 // Never print an email in full: logs may be shared.
 const mask = (e) => e.replace(/^(.).*?(@.*)$/, "$1***$2");
 
-const client = new pg.Client({ connectionString: url, application_name: "grant-role" });
+const client = await dbClient(url, "grant-role");
 await client.connect();
 const db = { query: (text, params) => client.query(text, params) };
 const actor = { kind: "script" };

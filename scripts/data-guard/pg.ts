@@ -6,8 +6,10 @@
 import pg from "pg";
 import { DEFAULT_CONFIG, snapshot, type GuardConfig, type Query, type Snapshot } from "./core.ts";
 
-export function clientFor(url: string): pg.Client {
-  return new pg.Client({ connectionString: url, application_name: "data-guard" });
+/** node-postgres by default; Neon over WebSocket with DB_DRIVER=neon-ws (scripts/db-client.mjs). */
+export async function clientFor(url: string): Promise<pg.Client> {
+  const { dbClient } = await import("../db-client.mjs");
+  return (await dbClient(url, "data-guard")) as pg.Client;
 }
 
 export function queryFor(client: pg.Client): Query {
@@ -26,7 +28,7 @@ export function describeUrl(url: string): string {
 
 export async function takeSnapshot(url: string, opts: { label?: string; config?: GuardConfig } = {}): Promise<Snapshot> {
   const config = opts.config ?? DEFAULT_CONFIG;
-  const client = clientFor(url);
+  const client = await clientFor(url);
   await client.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");

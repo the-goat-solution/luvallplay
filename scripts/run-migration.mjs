@@ -7,7 +7,7 @@
 // Migrations are idempotent and forward-only (test plan §4.2). Nothing here
 // runs at request time.
 import { readFileSync } from "node:fs";
-import pg from "pg";
+import { dbClient } from "./db-client.mjs";
 
 const file = process.argv[2];
 const url = process.env.POSTGRES_URL;
@@ -21,7 +21,7 @@ if (!url) {
 }
 
 const sqlText = readFileSync(file, "utf8");
-const client = new pg.Client({ connectionString: url, application_name: "run-migration" });
+const client = await dbClient(url, "run-migration");
 const started = Date.now();
 await client.connect();
 try {

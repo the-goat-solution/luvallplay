@@ -170,8 +170,10 @@ describe("admin roles on Postgres", { skip: DB_URL ? false : "set DATA_GUARD_TES
     for (const bad of ["AFTER_NO_ADMIN", "NO_ADMIN", "SIGNED_OUT", "DATA_LOST", "ROWS_LOST", "ACCOUNT_", "EMAIL_CHANGED", "VALUES_CHANGED"]) {
       assert.ok(!report.includes(bad), `report has no ${bad}:\n${report}`);
     }
-    // Emails are masked in the script's output.
+    // Emails are masked in the script's output and in the report (it goes on the pull request).
     assert.ok(!r.stdout.includes("player1@example.test"));
+    assert.ok(!report.includes("player1@example.test") && !report.toLowerCase().includes("player2@example.test"), "report masks emails");
+    assert.match(report, /p\*\*\*@example\.test/);
     writeFileSync(join(tmpdir(), "phase1-roles-fixture-report.md"), report);
   });
 

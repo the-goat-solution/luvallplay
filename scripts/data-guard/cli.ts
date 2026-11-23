@@ -27,6 +27,11 @@ import {
 } from "./core.ts";
 import { describeUrl, takeSnapshot } from "./pg.ts";
 
+/** Reports are shared (pull requests): emails in a --run command are masked, like grant-role's output. */
+export function maskEmails(text: string): string {
+  return text.replace(/([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g, "$1***@$2");
+}
+
 function arg(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`);
   return i === -1 ? undefined : args[i + 1];
@@ -157,7 +162,7 @@ async function main(argv: string[]): Promise<number> {
       const findings = diffSnapshots(before, after, x);
       writeFileSync(
         join(dir, "report.md"),
-        markdownReport(`Rehearsal: ${x.change}`, findings, { Database: describeUrl(url), Command: run, Duration: `${seconds}s`, Expectations: arg(args, "expect") ?? "none" }),
+        markdownReport(`Rehearsal: ${x.change}`, findings, { Database: describeUrl(url), Command: maskEmails(run), Duration: `${seconds}s`, Expectations: arg(args, "expect") ?? "none" }),
       );
       console.log(`\nMigration took ${seconds}s. Report: ${join(dir, "report.md")}`);
       return report(`Rehearsal: ${x.change}`, findings, flag(args, "strict"));

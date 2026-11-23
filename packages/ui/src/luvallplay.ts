@@ -3,6 +3,8 @@
 // version 1). It frames the platform: store listing, app icon, sign-in, the
 // platform site and the club finder. Clubs keep their own look inside the app
 // (see ./three-wolves.ts). Change values there first, then here.
+// These are the brand's own names: components never use them, only the
+// semantic tokens in ./semantic.ts.
 
 export const luvallplay = {
   name: "Luvallplay",

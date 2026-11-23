@@ -13,8 +13,8 @@ pnpm workspaces + Turborepo:
 | `packages/core` | Pure club logic: play periods, ranks and points, phone numbers, safe redirects, names (`@luvallplay/core`) |
 | `packages/auth` | Pure access rules: club roles, which admin pages each role opens, step-up (`@luvallplay/auth`) |
 | `packages/i18n` | All text, typed namespaces `site`, `profile`, `arena`, `jersey`, in English and Vietnamese (`@luvallplay/i18n`) |
-| `packages/ui` | Design tokens: the Luvallplay brand (`tokens.css`) and the Three Wolves club theme (`@luvallplay/ui`) |
-| `packages/modules` | The module system skeleton: `defineModule()` and the registry of today's features (`@luvallplay/modules`) |
+| `packages/ui` | Design tokens: semantic theme tokens, the 12 club colour schemes (default Court Green, `tokens.css`), the Luvallplay brand and the Three Wolves theme (`@luvallplay/ui`) |
+| `packages/modules` | The module system skeleton: `defineModule()`, switching rules, and the registry (core + optional modules) of today's features (`@luvallplay/modules`) |
 | `docs/` | Plans, runbooks, schema dumps, rehearsal reports |
 
 Run things from the root with `pnpm --filter web <script>` (or `cd apps/web`). Packages are TypeScript source compiled by Next (`transpilePackages`); `pnpm --filter "./packages/*" typecheck` checks them on their own. The build plan (§3.1) lists the packages still to come.

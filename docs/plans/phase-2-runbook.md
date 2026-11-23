@@ -4,6 +4,18 @@ The code for each Phase 2 pull request is built and tested in its PR. These step
 
 ---
 
+## 0. Vercel no longer deploys from GitHub at all (found 23 Nov, needs your decision)
+
+**What's wrong:** the repository now lives in the GitHub organisation `The-GOAT-Solution-VN`, and the Vercel team ("Timba Le's projects") is on the **Hobby** plan. Hobby can't deploy from a **private organisation** repository. So since the move, no push creates a deployment, neither previews nor production. Vercel's bot says so on every PR (#86, #88–#91, and #90 from another session). Production keeps serving its last deployment. Merges to main (#87, #90) aren't live until someone deploys them.
+
+**Fix (pick one):**
+- **A. Upgrade the Vercel team to Pro.** Git deploys work again, from the organisation repo, with nothing else changed. It's a paid plan, so it goes against the free-tier decision.
+- **B. Make the repository public.** It contains no secrets (they live in Vercel and Neon), but it's the club's whole code base and planning docs.
+- **C. Move the repository back to a personal GitHub account** (GitHub → Settings → Transfer), then reconnect it under Vercel → Project → Settings → Git. Hobby deploys from personal private repos.
+- **Until then:** the build session can still deploy by hand through the Vercel API (that's how Phase 2 PRs 2, 3 and 5 went live), so nothing is blocked. Each deploy just needs asking for.
+
+**Done when:** a push to a PR branch shows a Vercel check on the PR, not the "Unable to deploy" comment. Then §1 applies.
+
 ## 1. Make Vercel previews work again (any time, the sooner the better)
 
 **What's wrong:** every preview fails in about a second with "Resource provisioning failed". The project's Neon integration still makes a database branch per preview in the **old US Neon project** (`neon-almond-button`, project id `cold-mud-10922679`). That project already has 10 branches (main + 9 old `preview/claude/*` branches from 16–19 Nov), and 10 is the Neon free plan's limit, so the branch for each new preview can't be created. Production deploys don't need a branch, so they still work.

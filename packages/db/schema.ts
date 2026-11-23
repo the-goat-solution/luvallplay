@@ -1447,3 +1447,73 @@ export const guardianships = pgTable("guardianships", {
 		}).onDelete("restrict"),
 	primaryKey({ columns: [table.guardian_user_id, table.junior_profile_id], name: "guardianships_pkey"}),
 ]);
+
+// Phase 3 step 9: plans, what each club is on, and usage per club (build
+// plan §6.5, §11.2). Platform-wide: what a plan includes, for which country
+// and sport, and what it costs (minor units + currency).
+export const plans = pgTable("plans", {
+	id: text().primaryKey().notNull(),
+	name: text().notNull(),
+	country: text(),
+	sport: text(),
+	tiers: text().array().default(sql`ARRAY['free']::text[]`).notNull(),
+	price_minor: integer().default(0).notNull(),
+	currency: text().notNull(),
+	billing_interval: text(),
+	limits: jsonb().default({}).notNull(),
+	active: boolean().default(true).notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	check("plans_id_check", sql`id ~ '^[a-z][a-z0-9-]*$'::text`),
+	check("plans_country_check", sql`country ~ '^[A-Z]{2}$'::text`),
+	check("plans_currency_check", sql`currency ~ '^[A-Z]{3}$'::text`),
+	check("plans_price_minor_check", sql`price_minor >= 0`),
+	check("plans_billing_interval_check", sql`billing_interval = ANY (ARRAY['month'::text, 'year'::text])`),
+]);
+
+// Which plan a club is on, and since when. One current row per club (ends_at
+// IS NULL); a change of plan closes the row and opens another.
+export const club_plans = pgTable("club_plans", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	plan_id: text().notNull(),
+	status: text().default('active').notNull(),
+	starts_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	ends_at: timestamp({ withTimezone: true, mode: 'string' }),
+	note: text(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("club_plans_current_idx").using("btree", table.tenant_id.asc().nullsLast().op("int4_ops")).where(sql`(ends_at IS NULL)`),
+	index("club_plans_plan_id_idx").using("btree", table.plan_id.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "club_plans_tenant_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.plan_id],
+			foreignColumns: [plans.id],
+			name: "club_plans_plan_id_fkey"
+		}).onDelete("restrict"),
+	check("club_plans_status_check", sql`status = ANY (ARRAY['active'::text, 'trial'::text, 'past_due'::text, 'canceled'::text])`),
+	check("club_plans_period_check", sql`ends_at IS NULL OR ends_at > starts_at`),
+]);
+
+// One number per club, metric and calendar month (period = the 1st).
+export const usage_counters = pgTable("usage_counters", {
+	tenant_id: integer().notNull(),
+	metric: text().notNull(),
+	period: date().notNull(),
+	quantity: bigint({ mode: "number" }).default(0).notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.tenant_id],
+			foreignColumns: [tenants.id],
+			name: "usage_counters_tenant_id_fkey"
+		}).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.metric, table.period], name: "usage_counters_pkey"}),
+	check("usage_counters_metric_check", sql`metric ~ '^[a-z][a-z0-9_.]*$'::text`),
+	check("usage_counters_period_check", sql`EXTRACT(day FROM period) = 1`),
+	check("usage_counters_quantity_check", sql`quantity >= 0`),
+]);

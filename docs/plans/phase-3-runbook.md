@@ -17,7 +17,7 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 6 | Second database driver, region routing | Built: the standard-Postgres driver, host routing (off until switched on), storage and scheduled-job interfaces (§6) |
 | 7 | Money audit (minor units, VND) | Built: currency helpers, every conversion moved onto them, VND tests, two CI scans (§7) |
 | 8 | Payments interface | Built: the interface, Stripe as the first provider, a shared contract suite; one-off payments and the webhook signature check use it (§8) |
-| 9 | Entitlements and metering | Not started |
+| 9 | Entitlements and metering | Built and rehearsed (17 accounts, 0 problems). Production data run: see §9 |
 | 10 | `NOT NULL`, foreign keys, row-level security | Not started |
 | 11 | Reads switched to tenant-aware queries | After **7 clean days of shadow reads** |
 | 12 | Old email joins dropped | A later release, after a quiet week |
@@ -292,7 +292,46 @@ Nothing here changes data, and nothing changes behaviour until a setting is swit
 
 **Still on Stripe's own API** (16 files, pinned by a test so the list only shrinks): subscriptions and their self-service changes, offline (cash and bank) invoices, the Vision pass checkout page, the ledger sync and the webhook's handlers. They move as their modules are touched; the recurring ones need the interface's subscription operations, which arrive with the first provider that lacks them (Vietnam).
 
-## 9. Housekeeping that needs you
+## 9. Step 9: plans, entitlements and usage (one production data run)
+
+**The change (migration `0006_entitlements`, additive only):**
+
+| Table | What it holds | After the migration |
+|---|---|---|
+| `plans` (platform) | What a plan includes (tiers), for which country and sport, and its price in minor units and a currency | One row: `nz-badminton-free`, New Zealand badminton, free for good |
+| `club_plans` | Which plan a club is on and since when; one current row per club | One row: Three Wolves on `nz-badminton-free` |
+| `usage_counters` | One number per club, metric and calendar month | Empty; fills as the club uses the app |
+
+**In the app:**
+- `can(db, "module")` or `can(db, "module.feature")` answers whether the club's plan includes a module's tier (`lib/entitlements.ts`, rules in `@luvallplay/core/entitlements`).
+- **`BILLING_ENABLED` is off** (unset). With billing off, `can()` allows every real module without reading the plan. With it on, the free tier is allowed even with no plan, a late payment doesn't switch anything off, and a plan that can't be read allows the feature and logs an error.
+- **Usage is counted per club from now on:** emails sent, sign-in texts sent, bytes uploaded to file storage, online payments started. A count that can't be written is dropped; it never fails the email, text, upload or payment.
+- **Fair-use limits report, they never block** (§11.2). The plan's `limits` are empty until the cost model sets them (§11.3 gate 4), so no limit applies today.
+
+**Rehearsal (23 Nov), on `rehearsal-phase-3`, reset to a fresh copy of production:** data guard 17 accounts, 0 problems; migration 3.5 s; characterisation identical before and after; no drift; verify consistent. Report: `docs/rehearsals/2026-11-phase3-entitlements.md`.
+
+**Production run (T0):** approved in advance by the owner, on condition of green CI and a clean rehearsal. Migrate first, then merge.
+
+```bash
+# 1. Restore point: a Neon branch from main, now. Name: pre-phase-3-entitlements
+cd apps/web
+export POSTGRES_URL='<production direct connection string>'
+export PRODUCTION_DATABASE_HOSTS='ep-shiny-rain-a76n3kg6.ap-southeast-2.aws.neon.tech'
+pnpm data-guard snapshot --out .data-guard/prod-before.json
+pnpm db:migrate --production                                      # 0006 (lock_timeout 3s)
+pnpm data-guard snapshot --out .data-guard/prod-after.json
+pnpm data-guard diff .data-guard/prod-before.json .data-guard/prod-after.json \
+  --expect scripts/data-guard/expectations/2026-11-phase3-entitlements.production.json
+pnpm db:drift                                                     # must say: No schema drift
+node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: tenants tables are consistent
+# 2. Merge the step 9 pull request. Wait for the production deployment to be Ready.
+```
+
+**Rollback:** `DROP TABLE usage_counters, club_plans, plans;` and remove the migration's row, or restore `pre-phase-3-entitlements`. Nothing else points at these tables.
+
+**Not in this step:** the platform admin's usage dashboard with alerts, and the limits themselves. Both wait for the cost model (§11.3 gate 4).
+
+## 10. Housekeeping that needs you
 
 - **Rehearsal branch.** One reusable branch, `rehearsal-phase-3`, is kept for the rest of the phase and reset to a fresh copy of production before each rehearsal, so its host needs approving only once. It holds real data: delete it when Phase 3 is done.
 - **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.

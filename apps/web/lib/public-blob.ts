@@ -1,4 +1,5 @@
 import { publicStorage, vercelPublicAuth } from "./storage.ts";
+import { countUpload } from "./usage-hooks.ts";
 
 // Storing and deleting goes through the storage interface (lib/storage.ts);
 // what stays here is the Vercel-specific setup the browser upload needs.
@@ -47,6 +48,7 @@ export async function uploadPublicImage(file: File, prefix: string): Promise<str
   if (file.size > ADMIN_IMAGE_MAX_BYTES) throw new Error("Image is too large: please keep it under 8 MB.");
   if (!IMAGE_TYPES.includes(file.type)) throw new Error("Please choose a JPG, PNG, WebP or HEIC image.");
   const stored = await storage.put(`${prefix}/${safeName(file.name)}`, Buffer.from(await file.arrayBuffer()), { contentType: file.type });
+  await countUpload(file.size);
   return stored.url;
 }
 

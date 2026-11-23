@@ -28,6 +28,7 @@ export const CLUB_OWNED_TABLES = [
   "casual_play_profiles",
   "casual_play_sessions",
   "club_members",
+  "club_plans",
   "club_roles",
   "club_settings",
   "day_requests",
@@ -58,6 +59,7 @@ export const CLUB_OWNED_TABLES = [
   "shop_variants",
   "stripe_payouts",
   "tenant_modules",
+  "usage_counters",
   "waitlist",
   "webhook_deliveries",
   "webhook_endpoints",
@@ -76,6 +78,7 @@ export const PLATFORM_TABLES = [
   "admin_handoffs", // single-use sign-in handoff for an account
   "auth_codes", // sign-in codes
   "guardianships", // guardian ↔ junior profile; the profile carries the club
+  "plans", // what Luvallplay offers, per country and sport
   "platform_admins",
   "player_events", // account events (sign-in, install)
   "player_sessions",

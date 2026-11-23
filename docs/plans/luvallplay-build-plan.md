@@ -875,6 +875,11 @@ Findings and changes recorded as the work goes:
 - **Step 8, payments interface (no migration):**
   - The interface and its rules are pure (`@luvallplay/core/payments`); Stripe is the first provider. One contract suite runs on every provider, including replay twice and out of order.
   - One-off payments (casual play, donations, shop) and the webhook signature check use it. **Plan change: subscriptions stay on Stripe's own API for now**, behind a pinned list of files; the interface's subscription operations are designed with the first provider that can't charge again by itself, so they aren't shaped by Stripe alone.
+- **Step 9, entitlements and metering (migration `0006_entitlements`, additive):**
+  - `plans` (platform), `club_plans` and `usage_counters`. Three Wolves is on `nz-badminton-free`. Prices are minor units plus a currency; a test adds a Vietnamese plan priced in whole dong.
+  - `can()` is built and tested with billing on and off. **Decision: the free tier survives everything** (no plan, an ended plan, a plan that can't be read), so a billing problem never takes away what a free club runs its sessions with. A late payment switches nothing off.
+  - Usage is counted for emails, sign-in texts, uploads and payments started. **Decision: limits report, they never block**, and the limits are empty until the cost model sets them.
+  - Rehearsed on a fresh copy of production: 17 accounts, 0 problems.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

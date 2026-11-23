@@ -1,0 +1,173 @@
+/* Today (admin home). */
+
+.muted {
+  color: #6b7383;
+  font-size: 13px;
+}
+
+.nextHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 20px;
+  align-items: flex-start;
+}
+
+.nextWhen {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7383;
+}
+
+.nextDate {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1a2a4a;
+}
+
+.nextMeta {
+  font-size: 14px;
+  color: #555;
+  margin-top: 2px;
+}
+
+.nextState {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 280px;
+  text-align: right;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.primary,
+.chip,
+.quickLink,
+.todoAction {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.primary {
+  padding: 0 16px;
+  background: #1a2a4a;
+  color: #fff;
+}
+
+.chip {
+  padding: 0 12px;
+  border: 1px solid #dfe3ea;
+  background: #fff;
+  color: #3a4354;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.chip:hover,
+.quickLink:hover {
+  border-color: #1a2a4a;
+}
+
+.todo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todoItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f1f4;
+}
+
+.todoItem:last-child {
+  border-bottom: 0;
+}
+
+.todoCount {
+  flex: none;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef2f7;
+  color: #1a2a4a;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.todoAlert {
+  background: #fbe9e9;
+  color: #a12a2a;
+}
+
+.todoText {
+  flex: 1;
+  font-size: 15px;
+  color: #232a36;
+}
+
+.todoAction {
+  padding: 0 12px;
+  color: #1a2a4a;
+  background: #f3f5f8;
+}
+
+.todoAction:hover {
+  background: #e7ebf1;
+}
+
+.quick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.quickLink {
+  padding: 0 14px;
+  min-height: 48px;
+  border: 1px solid #dfe3ea;
+  background: #fafbfc;
+  color: #1a2a4a;
+  white-space: normal;
+}
+
+@media (max-width: 600px) {
+  .nextState {
+    align-items: flex-start;
+    text-align: left;
+    max-width: none;
+  }
+
+  .todoItem {
+    flex-wrap: wrap;
+  }
+
+  .todoText {
+    flex-basis: calc(100% - 50px);
+  }
+
+  .todoAction {
+    margin-left: 46px;
+  }
+}

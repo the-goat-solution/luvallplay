@@ -14,9 +14,24 @@ importers:
 
   apps/web:
     dependencies:
+      '@luvallplay/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@luvallplay/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@luvallplay/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@luvallplay/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
+      '@luvallplay/modules':
+        specifier: workspace:*
+        version: link:../../packages/modules
+      '@luvallplay/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@mediapipe/tasks-vision':
         specifier: ^0.10.35
         version: 0.10.35
@@ -118,6 +133,18 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  packages/auth:
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/core:
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   packages/db:
     dependencies:
       drizzle-orm:
@@ -127,6 +154,28 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+
+  packages/i18n:
+    dependencies:
+      '@luvallplay/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/modules:
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/ui:
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
 packages:
 

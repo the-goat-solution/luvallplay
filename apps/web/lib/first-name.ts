@@ -1,4 +1,2 @@
-/** "Mai T." / "Mai Tran" → "Mai". Never more than the first word (the public leaderboard teaser). */
-export function firstNameOnly(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? "";
-}
+// Moved to packages/core (Phase 2): pure club logic, shared by every app.
+export * from "@luvallplay/core/first-name";

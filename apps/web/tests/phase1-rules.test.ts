@@ -167,27 +167,20 @@ test("redirects: no code still links to a moved URL", async () => {
 // i18n: every English key has a Vietnamese key, and vice versa (test plan §3.2).
 // ---------------------------------------------------------------------------
 
-async function dictKeys(file: string): Promise<{ en: string[]; vi: string[] }> {
-  const { readFileSync } = await import("node:fs");
-  const src = readFileSync(new URL(`../lib/${file}`, import.meta.url), "utf8");
-  // Top-level keys of the EN / VI objects: "  key: ..." at two-space (or four-space for lib/i18n.ts) indent.
-  const block = (start: RegExp, end: RegExp) => {
-    const from = src.search(start);
-    const rest = src.slice(from);
-    const to = rest.search(end);
-    return rest.slice(0, to);
-  };
-  const keysOf = (text: string, indent: number) =>
-    [...text.matchAll(new RegExp(`^ {${indent}}([a-zA-Z_][a-zA-Z0-9_]*)\\s*:`, "gm"))].map((m) => m[1]).sort();
-  if (file === "i18n.ts" || file === "jersey-i18n.ts") {
-    return { en: keysOf(block(/^\s{2}en: \{/m, /^\s{2}\},\n\s{2}vi: \{/m), 4), vi: keysOf(block(/^\s{2}vi: \{/m, /^\s{2}\},\n\} as const/m), 4) };
-  }
-  return { en: keysOf(block(/^const EN = \{/m, /^\} as const;/m), 2), vi: keysOf(block(/^const VI(: Dict)? = \{/m, /^\};/m), 2) };
+// The dictionaries moved to @luvallplay/i18n in Phase 2 (one namespace per old
+// file); load them directly instead of parsing the files' text.
+const OLD_FILES = { "i18n.ts": "site", "profile-i18n.ts": "profile", "arena-i18n.ts": "arena", "jersey-i18n.ts": "jersey" } as const;
+
+async function dictFor(file: keyof typeof OLD_FILES): Promise<{ en: Record<string, string>; vi: Record<string, string> }> {
+  const { messages } = await import("@luvallplay/i18n");
+  return messages[OLD_FILES[file]] as unknown as { en: Record<string, string>; vi: Record<string, string> };
 }
 
-for (const file of ["i18n.ts", "profile-i18n.ts", "arena-i18n.ts", "jersey-i18n.ts"]) {
-  test(`i18n parity: ${file} has every key in English and Vietnamese`, async () => {
-    const { en, vi } = await dictKeys(file);
+for (const file of Object.keys(OLD_FILES) as (keyof typeof OLD_FILES)[]) {
+  test(`i18n parity: ${file} (namespace ${OLD_FILES[file]}) has every key in English and Vietnamese`, async () => {
+    const dict = await dictFor(file);
+    const en = Object.keys(dict.en).sort();
+    const vi = Object.keys(dict.vi).sort();
     assert.ok(en.length > 10, `${file}: found the English keys`);
     const missingVi = en.filter((k) => !vi.includes(k));
     const missingEn = vi.filter((k) => !en.includes(k));
@@ -196,22 +189,17 @@ for (const file of ["i18n.ts", "profile-i18n.ts", "arena-i18n.ts", "jersey-i18n.
 }
 
 test("i18n: the Phase 1 strings are translated (Vietnamese differs from English)", async () => {
-  const { readFileSync } = await import("node:fs");
-  // The dictionaries import React context, so read their text rather than load them.
-  const valueIn = (file: string, key: string): string[] => {
-    const src = readFileSync(new URL(`../lib/${file}`, import.meta.url), "utf8");
-    return [...src.matchAll(new RegExp(`^\\s+${key}:\\s*"([^"]*)"`, "gm"))].map((m) => m[1]);
-  };
-  const check = (file: string, keys: string[]) => {
+  const check = async (file: keyof typeof OLD_FILES, keys: string[]) => {
+    const dict = await dictFor(file);
     for (const k of keys) {
-      const [en, vi] = valueIn(file, k);
+      const [en, vi] = [dict.en[k], dict.vi[k]];
       assert.ok(en && vi, `${file} ${k}: both languages present`);
       assert.notEqual(en, vi, `${file} ${k}: Vietnamese is not a copy of English`);
     }
   };
-  check("profile-i18n.ts", ["tab_me", "me_club_admin", "me_settings", "me_next_up", "settings_title", "login_stepup", "acc_delete_last_owner", "me_pill_none"]);
-  check("arena-i18n.ts", ["seg_challenges", "seg_leaderboard", "seg_ranks", "card_challenge", "card_form", "vs_hint"]);
-  check("i18n.ts", ["lb_teaser_title", "lb_teaser_cta", "lb_teaser_hidden"]);
+  await check("profile-i18n.ts", ["tab_me", "me_club_admin", "me_settings", "me_next_up", "settings_title", "login_stepup", "acc_delete_last_owner", "me_pill_none"]);
+  await check("arena-i18n.ts", ["seg_challenges", "seg_leaderboard", "seg_ranks", "card_challenge", "card_form", "vs_hint"]);
+  await check("i18n.ts", ["lb_teaser_title", "lb_teaser_cta", "lb_teaser_hidden"]);
 });
 
 // ---------------------------------------------------------------------------

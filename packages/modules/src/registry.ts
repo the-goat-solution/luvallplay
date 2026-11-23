@@ -1,0 +1,333 @@
+// What Three Wolves runs today, as the core plus optional modules (build plan
+// §6.2 catalogue and §6.2.3). Descriptive only: the app doesn't read this
+// yet. tests/modules.test.ts checks it against the real admin menu
+// (components/admin/nav-config.ts), crons (vercel.json) and webhook events
+// (lib/webhooks.ts), so it can't drift.
+
+import { defineModule } from "./define.ts";
+
+// ── Core: always on; exactly what a free, no-money club needs (§6.2.3) ────────
+// Admin sidebar for a core-only club: Home · Play days · People · Messages · Website · Settings.
+
+export const home = defineModule({
+  id: "home",
+  scope: "club",
+  group: "core",
+  core: true,
+  payments: "none",
+  plan: "free",
+  name: { en: "Home", vi: "Trang chủ" },
+  admin: { nav: [{ group: "", href: "/admin" }] },
+});
+
+export const playDays = defineModule({
+  id: "play-days",
+  scope: "club",
+  group: "core",
+  core: true,
+  // Free sign-ups on Free play; paid clubs see prices on the same play days.
+  payments: "optional",
+  plan: "free",
+  name: { en: "Play days", vi: "Buổi chơi" },
+  settingsStoredIn: ["club_settings: max_casual_spots, booking_lock_days", "day_signup_settings", "lib/constants.ts"],
+  app: { meCards: ["next-up", "calendar"] },
+  admin: { nav: [{ group: "Play", href: "/admin/play-days" }] },
+  site: { sections: ["schedule"] },
+  crons: [
+    { id: "headcount-alerts", schedule: "0 18 * * *", path: "/api/cron/headcount-alerts" },
+    { id: "send-roster", schedule: "0 3 * * *", path: "/api/cron/send-roster" },
+  ],
+  emails: ["headcount-alert", "play-day-roster"],
+  webhooks: ["attendance.recorded"],
+});
+
+export const people = defineModule({
+  id: "people",
+  scope: "club",
+  group: "core",
+  core: true,
+  payments: "none",
+  plan: "free",
+  name: { en: "People & roles", vi: "Thành viên & vai trò" },
+  app: { tabs: ["me"], routes: ["/login", "/profile", "/profile/settings", "/profile/player"] },
+  admin: { nav: [{ group: "People", href: "/admin/players" }] },
+  emails: ["welcome"],
+});
+
+export const messages = defineModule({
+  id: "messages",
+  scope: "club",
+  group: "core",
+  core: true,
+  payments: "none",
+  plan: "free",
+  name: { en: "Messages & announcements", vi: "Tin nhắn & thông báo" },
+  app: { meCards: ["inbox"] },
+  admin: { nav: [{ group: "People", href: "/admin/inbox" }] },
+});
+
+export const website = defineModule({
+  id: "website",
+  scope: "club",
+  group: "core",
+  core: true,
+  payments: "none",
+  plan: "free",
+  name: { en: "Website", vi: "Trang web" },
+  site: { sections: ["hero", "about", "app-features", "reviews"], routes: ["/"] },
+  settingsStoredIn: ["Sanity: siteSettings, about, reviews"],
+});
+
+export const settings = defineModule({
+  id: "settings",
+  scope: "club",
+  group: "core",
+  core: true,
+  payments: "none",
+  plan: "free",
+  name: { en: "Settings", vi: "Cài đặt" },
+  admin: {
+    nav: [
+      // Today's "Pricing & settings" page; the plans part moves to Memberships with the theming/settings work.
+      { group: "Money", href: "/admin/settings" },
+      { group: "Club", href: "/admin/people/admins" },
+    ],
+  },
+});
+
+// ── Run your club ────────────────────────────────────────────────────────────
+
+export const calendarSync = defineModule({
+  id: "calendar-sync",
+  scope: "club",
+  group: "run",
+  payments: "none",
+  plan: "free",
+  name: { en: "Calendar sync", vi: "Đồng bộ lịch" },
+  crons: [{ id: "sync-calendar", schedule: "0 2 * * *", path: "/api/cron/sync-calendar" }],
+});
+
+export const casualPlay = defineModule({
+  id: "casual-play",
+  scope: "club",
+  group: "run",
+  payments: "optional",
+  plan: "free",
+  name: { en: "Casual play", vi: "Chơi vãng lai" },
+  liveActivity: "upcoming casual bookings",
+});
+
+export const courtBoard = defineModule({
+  id: "court-board",
+  scope: "club",
+  group: "run",
+  payments: "none",
+  plan: "free",
+  name: { en: "Court board", vi: "Bảng sân" },
+  site: { routes: ["/casual-play"] },
+  api: ["/api/casual-play"],
+});
+
+export const roundRobin = defineModule({
+  id: "round-robin",
+  scope: "club",
+  group: "run",
+  payments: "none",
+  plan: "free",
+  name: { en: "Round robin & mini games", vi: "Đấu vòng tròn & mini game" },
+  app: { routes: ["/mini-game"] },
+  webhooks: ["round_robin.result"],
+});
+
+export const dayRequests = defineModule({
+  id: "day-requests",
+  scope: "club",
+  group: "run",
+  payments: "none",
+  plan: "free",
+  name: { en: "Day requests", vi: "Yêu cầu ngày chơi" },
+  admin: { nav: [{ group: "Play", href: "/admin/play-days/schedule" }], pages: ["/admin/day-requests"] },
+});
+
+// ── Money (all optional; a free-play club leaves the group off, §6.2.1) ──────
+
+export const memberships = defineModule({
+  id: "memberships",
+  scope: "club",
+  group: "money",
+  payments: "required",
+  plan: "free",
+  name: { en: "Memberships", vi: "Hội viên" },
+  liveActivity: "active membership subscriptions",
+  settingsStoredIn: ["pricing_plans"],
+  app: { tabs: ["membership"], routes: ["/renew-membership", "/cancel-membership/confirm"] },
+  admin: { nav: [{ group: "People", href: "/admin/members" }] },
+  site: { sections: ["membership"] },
+  crons: [{ id: "membership-reminders", schedule: "0 19 * * *", path: "/api/cron/membership-reminders" }],
+  emails: ["membership-reminder"],
+  // Declared for integrations; nothing emits it yet.
+  webhooks: ["membership.changed"],
+});
+
+export const paymentsToCheck = defineModule({
+  id: "payments-to-check",
+  scope: "club",
+  group: "money",
+  payments: "required",
+  plan: "free",
+  name: { en: "Payments to check", vi: "Khoản thanh toán cần kiểm tra" },
+  liveActivity: "unpaid items waiting to be marked as paid",
+});
+
+export const bankMatching = defineModule({
+  id: "bank-matching",
+  scope: "club",
+  group: "money",
+  requires: ["finance"],
+  payments: "required",
+  plan: "free",
+  name: { en: "Bank matching (NZ, Akahu)", vi: "Đối soát ngân hàng (NZ, Akahu)" },
+  admin: { nav: [{ group: "Money", href: "/admin/financials/bank" }] },
+});
+
+export const cardPayments = defineModule({
+  id: "card-payments",
+  scope: "club",
+  group: "money",
+  payments: "required",
+  paymentModes: ["online"],
+  plan: "free",
+  name: { en: "Card payments", vi: "Thanh toán bằng thẻ" },
+  liveActivity: "card subscriptions and pending payouts",
+});
+
+export const finance = defineModule({
+  id: "finance",
+  scope: "club",
+  group: "money",
+  // Free clubs can track expenses too.
+  payments: "none",
+  plan: "free",
+  name: { en: "Finance & reports", vi: "Tài chính & báo cáo" },
+  admin: {
+    nav: [
+      { group: "Money", href: "/admin/financials" },
+      { group: "Money", href: "/admin/financials/report" },
+    ],
+  },
+  crons: [{ id: "sync-finance", schedule: "0 13 * * *", path: "/api/cron/sync-finance" }],
+});
+
+export const shop = defineModule({
+  id: "shop",
+  scope: "club",
+  group: "money",
+  payments: "required",
+  plan: "free",
+  name: { en: "Shop & merch", vi: "Cửa hàng & đồ câu lạc bộ" },
+  liveActivity: "unpaid or undelivered orders",
+  admin: { nav: [{ group: "Money", href: "/admin/shop" }], pages: ["/admin/jersey"] },
+  site: { routes: ["/jersey"] },
+});
+
+export const donations = defineModule({
+  id: "donations",
+  scope: "club",
+  group: "money",
+  payments: "required",
+  plan: "free",
+  name: { en: "Donations", vi: "Ủng hộ" },
+  site: { sections: ["donate"] },
+});
+
+// ── Engage players ───────────────────────────────────────────────────────────
+
+export const arena = defineModule({
+  id: "arena",
+  scope: "club",
+  group: "engage",
+  payments: "none",
+  plan: "free",
+  name: { en: "Arena", vi: "Đấu Trường" },
+  liveActivity: "challenges in progress",
+  app: { tabs: ["arena"], routes: ["/profile/arena", "/challenges"] },
+  admin: { nav: [{ group: "Play", href: "/admin/challenges" }] },
+  site: { sections: ["leaderboard-teaser"] },
+});
+
+export const vision = defineModule({
+  id: "vision",
+  scope: "club",
+  group: "engage",
+  recommends: ["arena"],
+  payments: "none",
+  plan: "free",
+  name: { en: "Vision (match analysis)", vi: "Vision (phân tích trận đấu)" },
+  app: { tabs: ["wolf-vision"], routes: ["/profile/wolf-vision"] },
+  admin: { pages: ["/admin/device-check"] },
+});
+
+export const gallery = defineModule({
+  id: "gallery",
+  scope: "club",
+  group: "engage",
+  payments: "none",
+  plan: "free",
+  name: { en: "Gallery & photos", vi: "Hình ảnh" },
+  admin: { nav: [{ group: "Club", href: "/admin/photos" }] },
+  site: { sections: ["gallery"], routes: ["/gallery"] },
+  webhooks: ["photo.approved"],
+});
+
+export const integrations = defineModule({
+  id: "integrations",
+  scope: "club",
+  group: "engage",
+  payments: "none",
+  plan: "free",
+  name: { en: "Integrations (API, webhooks, MCP)", vi: "Tích hợp (API, webhook, MCP)" },
+  api: ["/api/v1/me", "/api/v1/sessions/upcoming", "/api/v1/leaderboard", "/api/mcp"],
+});
+
+/** The core first, then every optional module in catalogue order. Global modules (§8) arrive in a later phase. */
+export const MODULES = [
+  home,
+  playDays,
+  people,
+  messages,
+  website,
+  settings,
+  calendarSync,
+  casualPlay,
+  courtBoard,
+  roundRobin,
+  dayRequests,
+  memberships,
+  paymentsToCheck,
+  bankMatching,
+  cardPayments,
+  finance,
+  shop,
+  donations,
+  arena,
+  vision,
+  gallery,
+  integrations,
+] as const;
+
+export type ModuleId = (typeof MODULES)[number]["id"];
+
+/**
+ * Admin pages that aren't club features: they move to the Luvallplay platform
+ * console, which only platform admins see (§6.2.3).
+ */
+export const PLATFORM_CONSOLE_PAGES = [
+  { group: "Club", href: "/admin/setup" },
+  { group: "Club", href: "/admin/platform/admins" },
+] as const;
+
+/** Three Wolves: online payments, and every module it uses today switched on. */
+export const THREE_WOLVES = {
+  paymentMode: "online",
+  modules: MODULES.filter((m) => !m.core).map((m) => m.id),
+} as const;

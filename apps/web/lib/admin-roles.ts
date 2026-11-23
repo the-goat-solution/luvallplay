@@ -8,8 +8,8 @@
 //
 // Everything here takes a small `Db` (anything with `query(text, params)`),
 // so the app (@vercel/postgres), the grant script and the tests (node-postgres)
-// share one implementation. No extensionless imports: the grant script loads
-// this file directly with Node.
+// share one implementation. No extensionless relative imports: the grant
+// script loads this file directly with Node.
 //
 // Guardrails, all enforced here rather than in the UI:
 // - only owners and platform admins manage admins;
@@ -23,85 +23,43 @@ export type Db = {
   query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; rowCount?: number | null }>;
 };
 
-export const CLUB_ROLES = ["owner", "admin", "coach"] as const;
-export type ClubRole = (typeof CLUB_ROLES)[number];
+// The pure rules (roles, which pages each role opens, step-up freshness)
+// moved to @luvallplay/auth in Phase 2. Re-exported so imports stay put.
+import {
+  type Access,
+  type ClubRole,
+  canManageAdmins,
+  isClubRole,
+  NO_ACCESS,
+  normalizeEmail,
+} from "@luvallplay/auth";
+export {
+  CLUB_ROLES,
+  type ClubRole,
+  isClubRole,
+  STEP_UP_MAX_AGE_MS,
+  type Access,
+  NO_ACCESS,
+  normalizeEmail,
+  hasAdminAccess,
+  isClubAdmin,
+  canManageAdmins,
+  adminPathAllowed,
+  adminApiAllowed,
+  isStepUpFresh,
+} from "@luvallplay/auth";
 
-export function isClubRole(value: unknown): value is ClubRole {
-  return typeof value === "string" && (CLUB_ROLES as readonly string[]).includes(value);
-}
-
-/** Admin pages need a sign-in (a code) within this long. Player sessions last 90 days. */
-export const STEP_UP_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 /** The native app's "Club admin" handoff link. */
 export const HANDOFF_TTL_SECONDS = 60;
-
-export type Access = {
-  role: ClubRole | null;
-  platformAdmin: boolean;
-};
-
-export const NO_ACCESS: Access = { role: null, platformAdmin: false };
 
 export type Actor =
   | { kind: "player"; playerId: number; access: Access }
   | { kind: "break-glass" }
   | { kind: "script" };
 
-export function normalizeEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
 
 function isMissingTable(err: unknown): boolean {
   return (err as { code?: string })?.code === "42P01";
-}
-
-// ---------------------------------------------------------------------------
-// Who may do what (pure; the permission matrix test drives these)
-// ---------------------------------------------------------------------------
-
-/** Any admin area at all. */
-export function hasAdminAccess(a: Access): boolean {
-  return a.platformAdmin || a.role !== null;
-}
-
-/** Full club admin (everything except managing admins). */
-export function isClubAdmin(a: Access): boolean {
-  return a.platformAdmin || a.role === "owner" || a.role === "admin";
-}
-
-/** Add, remove or change admins. */
-export function canManageAdmins(a: Access): boolean {
-  return a.platformAdmin || a.role === "owner";
-}
-
-/** Coaches see the play-day side of admin only ("partial" in the matrix). */
-const COACH_PAGES = ["/admin/play-days", "/admin/challenges", "/admin/day-requests"];
-const OWNER_PAGES = ["/admin/people/admins"];
-const PLATFORM_PAGES = ["/admin/platform"];
-
-function under(path: string, prefix: string): boolean {
-  return path === prefix || path.startsWith(`${prefix}/`);
-}
-
-/** May this person open this admin page (or post its server actions)? */
-export function adminPathAllowed(a: Access, path: string): boolean {
-  if (!hasAdminAccess(a)) return false;
-  if (PLATFORM_PAGES.some((p) => under(path, p))) return a.platformAdmin;
-  if (OWNER_PAGES.some((p) => under(path, p))) return canManageAdmins(a);
-  if (isClubAdmin(a)) return true;
-  // Coach: the admin home (redirects to Play days) and the play-day pages.
-  return path === "/admin" || COACH_PAGES.some((p) => under(path, p));
-}
-
-/** /api/admin/* (refunds, free months, exports): full club admins only. */
-export function adminApiAllowed(a: Access): boolean {
-  return isClubAdmin(a);
-}
-
-export function isStepUpFresh(signedInAt: Date | string | null | undefined, now: number = Date.now()): boolean {
-  if (!signedInAt) return false;
-  const t = new Date(signedInAt).getTime();
-  return Number.isFinite(t) && now - t <= STEP_UP_MAX_AGE_MS && t <= now + 60_000;
 }
 
 // ---------------------------------------------------------------------------

@@ -60,6 +60,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Types
         run: pnpm --filter web typecheck
+      - name: Types (shared packages)
+        run: pnpm --filter "./packages/*" typecheck
       - name: Lint (0 errors)
         run: pnpm --filter web exec eslint .
       - name: Tests (unit, database, data guard, schema drift, golden master)

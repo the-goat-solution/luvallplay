@@ -1,0 +1,16 @@
+{
+  "name": "@luvallplay/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure access rules: club roles, which admin pages each role opens, step-up freshness.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

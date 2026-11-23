@@ -141,7 +141,7 @@ async function run(q) {
   await q(
     `INSERT INTO attendance (session_date, email, source, verified, removed, recorded_at)
      SELECT session_date, $1, source, verified, removed, recorded_at FROM attendance WHERE email = $2
-     ON CONFLICT (session_date, email) DO UPDATE SET
+     ON CONFLICT (tenant_id, session_date, email) DO UPDATE SET
        verified = attendance.verified OR EXCLUDED.verified,
        removed = attendance.removed AND EXCLUDED.removed;`,
     [keepEmail, mergeEmail],

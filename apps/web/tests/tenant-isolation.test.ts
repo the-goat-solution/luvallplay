@@ -187,6 +187,29 @@ describe("tenant isolation at the database", { skip: !BASE_URL && !REQUIRE_DB ? 
     for (const t of CLUB_OWNED_TABLES) assert.equal((await c.query(`SELECT count(*)::int AS n FROM "${t}" WHERE tenant_id = 1`)).rows[0].n, counts[t], t);
   });
 
+  test("a row written without naming the club belongs to the request's club; the owner's default is still club 1", async () => {
+    await asApp(club2, async () => {
+      const made = await c.query(`INSERT INTO club_settings (key, value) VALUES ('isolation.default', '1'::jsonb) RETURNING tenant_id`);
+      assert.equal(made.rows[0].tenant_id, club2);
+    });
+    await c.query("BEGIN");
+    try {
+      const made = await c.query(`INSERT INTO club_settings (key, value) VALUES ('isolation.default', '1'::jsonb) RETURNING tenant_id`);
+      assert.equal(made.rows[0].tenant_id, 1, "as the owner, with no club named");
+    } finally {
+      await c.query("ROLLBACK");
+    }
+  });
+
+  test("the widened keys: an upsert that names the club's key updates the club's own row", async () => {
+    await asApp(1, async () => {
+      await c.query(`INSERT INTO day_signup_settings (day, paused) VALUES ('isolation-day', false)`);
+      await c.query(`INSERT INTO day_signup_settings (day, paused) VALUES ('isolation-day', true) ON CONFLICT (tenant_id, day) DO UPDATE SET paused = EXCLUDED.paused`);
+      const rows = (await c.query(`SELECT paused FROM day_signup_settings WHERE day = 'isolation-day'`)).rows;
+      assert.deepEqual(rows, [{ paused: true }]);
+    });
+  });
+
   test("the club setting ends with the transaction: the next one starts with no club", async () => {
     await c.query("BEGIN");
     await c.query("SET LOCAL ROLE luvallplay_app");

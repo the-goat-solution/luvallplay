@@ -453,7 +453,7 @@ export async function markSyncSucceeded(key: string, startedAt: Date): Promise<v
   await sql`
     INSERT INTO finance_sync_state (key, last_started_at, last_finished_at, last_error)
     VALUES (${key}, ${startedAt.toISOString()}, NOW(), NULL)
-    ON CONFLICT (key) DO UPDATE SET
+    ON CONFLICT (tenant_id, key) DO UPDATE SET
       last_started_at = EXCLUDED.last_started_at,
       last_finished_at = NOW(),
       last_error = NULL;
@@ -464,6 +464,6 @@ export async function markSyncFailed(key: string, error: string): Promise<void> 
   await sql`
     INSERT INTO finance_sync_state (key, last_error)
     VALUES (${key}, ${error})
-    ON CONFLICT (key) DO UPDATE SET last_error = EXCLUDED.last_error;
+    ON CONFLICT (tenant_id, key) DO UPDATE SET last_error = EXCLUDED.last_error;
   `;
 }

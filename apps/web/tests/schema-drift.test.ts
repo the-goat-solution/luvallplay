@@ -111,6 +111,8 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
       const url = await freshDb("schema_ts");
       const text = readFileSync(join(out, "0000_from_schema.sql"), "utf8");
       await withClient(url, async (c) => {
+        // tenant_id's default calls this function, which a Drizzle schema can't describe (migration 0007 creates it).
+        await c.query(`CREATE FUNCTION app_tenant_id() RETURNS integer LANGUAGE sql STABLE AS $fn$ SELECT NULLIF(current_setting('app.tenant_id', true), '')::integer $fn$`);
         for (const s of text.split("--> statement-breakpoint").map((x) => x.trim()).filter(Boolean)) await c.query(s);
       });
       // Migrations after the baseline change the schema; only compare to the

@@ -53,6 +53,8 @@ import {
 // mix with real ones. Real attendance and round robin history are only read.
 
 const PREFIX = process.env.ARENA_TABLE_PREFIX ?? (process.env.VERCEL_ENV === "preview" ? "pv_" : "");
+// The ranks table's key is per club; the old preview copies ("pv_") have no club column.
+const RANKS_KEY = PREFIX ? "(player_id)" : "(tenant_id, player_id)";
 export const T = {
   pairs: `${PREFIX}arena_pairs`,
   members: `${PREFIX}arena_pair_members`,
@@ -894,7 +896,7 @@ export async function markRankSeen(playerId: number): Promise<void> {
   if (!r) return;
   await sql.query(
     `INSERT INTO ${T.ranks} (player_id, seen_index, peak_index) VALUES ($1, $2, $2)
-     ON CONFLICT (player_id) DO UPDATE SET seen_index = GREATEST(${T.ranks}.seen_index, $2), updated_at = NOW();`,
+     ON CONFLICT ${RANKS_KEY} DO UPDATE SET seen_index = GREATEST(${T.ranks}.seen_index, $2), updated_at = NOW();`,
     [playerId, r.earned],
   );
 }

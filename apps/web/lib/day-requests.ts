@@ -34,7 +34,7 @@ export async function setDayPaused(day: Weekday, paused: boolean): Promise<void>
   await sql`
     INSERT INTO day_signup_settings (day, paused, updated_at)
     VALUES (${day}, ${paused}, NOW())
-    ON CONFLICT (day) DO UPDATE SET paused = EXCLUDED.paused, updated_at = NOW();
+    ON CONFLICT (tenant_id, day) DO UPDATE SET paused = EXCLUDED.paused, updated_at = NOW();
   `;
 }
 
@@ -57,7 +57,7 @@ export async function addDayRequest(
   const { rowCount } = await sql`
     INSERT INTO day_requests (day, name, email)
     VALUES (${day}, ${name}, ${email})
-    ON CONFLICT (day, LOWER(email)) WHERE notified_at IS NULL DO NOTHING;
+    ON CONFLICT (tenant_id, day, LOWER(email)) WHERE notified_at IS NULL DO NOTHING;
   `;
   return (rowCount ?? 0) > 0;
 }

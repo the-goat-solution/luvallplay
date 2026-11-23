@@ -107,7 +107,7 @@ export function Schedule({
   const isFull = spotsAvail <= 0;
   // Closed early by an admin, whether or not the session has filled.
   const adminLocked = dateKey ? Boolean(lockedByDate[dateKey]) : false;
-  // Sign-ups for this weekday are paused by an admin (see /admin/day-requests).
+  // Sign-ups for this weekday are paused by an admin (see /admin/play-days/schedule).
   const pausedWeekday =
     dateKey && isDatePaused(dateKey, pausedDays) ? getWeekdayForDate(dateKey) : null;
   const isNextGame =

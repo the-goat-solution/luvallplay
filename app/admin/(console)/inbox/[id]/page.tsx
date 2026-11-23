@@ -3,7 +3,9 @@ import { revalidatePath } from "next/cache";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
-import { btn, btnSecondary, card, formatNz, input, pill } from "@/components/admin/ui";
+import { formatNz } from "@/components/admin/ui";
+import { Badge, PageHeader, Section, kit } from "@/components/admin/kit";
+import s from "../inbox.module.css";
 import { addAdminMessage, getThreadForAdmin, setThreadStatus } from "@/lib/messages-db";
 import { notifyPlayerOfReply } from "@/lib/message-notify";
 
@@ -33,64 +35,62 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
   if (!Number.isInteger(id) || id <= 0) notFound();
   const thread = await getThreadForAdmin(id);
   if (!thread) notFound();
+  const open = thread.status === "open";
 
   return (
     <div className={adminStyles.page}>
-      <h1 className={adminStyles.title}>Inbox</h1>
-      <p style={{ marginTop: 0 }}>
-        <AdminLink href="/admin/inbox">← All conversations</AdminLink>
+      <p className={s.crumb}>
+        <AdminLink href="/admin/inbox">← Inbox</AdminLink>
       </p>
+      <PageHeader
+        title={thread.subject}
+        subtitle={
+          <>
+            With <AdminLink href={`/admin/players?q=${encodeURIComponent(thread.playerEmail)}`}>{thread.playerName}</AdminLink> ({thread.playerEmail})
+            {!open && (
+              <>
+                {" "}
+                <Badge>Closed</Badge>
+              </>
+            )}
+          </>
+        }
+        actions={
+          <form action={setStatus.bind(null, thread.id, open ? "closed" : "open")}>
+            <SubmitButton className={kit.btnSecondary} loadingText="Saving…">
+              {open ? "Close conversation" : "Reopen conversation"}
+            </SubmitButton>
+          </form>
+        }
+      />
 
-      <section style={card}>
-        <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap", marginBottom: 12 }}>
-          <h2 style={{ fontSize: 18, margin: 0 }}>{thread.subject}</h2>
-          {thread.status === "closed" && <span style={pill("#eee", "#666")}>Closed</span>}
-          <span style={{ color: "#666", fontSize: 13 }}>
-            with{" "}
-            <AdminLink href={`/admin/players?q=${encodeURIComponent(thread.playerEmail)}`}>{thread.playerName}</AdminLink> ({thread.playerEmail})
-          </span>
-        </div>
-        <div style={{ display: "grid", gap: 10 }}>
+      <Section>
+        <div className={s.messages}>
           {thread.messages.map((m) => (
-            <div
-              key={m.id}
-              style={{
-                justifySelf: m.sender === "admin" ? "end" : "start",
-                maxWidth: "80%",
-                background: m.sender === "admin" ? "#1a2a4a" : "#f2efe3",
-                color: m.sender === "admin" ? "#fff" : "#222",
-                borderRadius: 12,
-                padding: "10px 14px",
-                fontSize: 14,
-                lineHeight: 1.5,
-              }}
-            >
-              <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 3 }}>
+            <div key={m.id} className={`${s.bubble} ${m.sender === "admin" ? s.mine : s.theirs}`}>
+              <div className={s.meta}>
                 {m.sender === "admin" ? "Club" : thread.playerName} · {formatNz(m.createdAt, true)}
               </div>
-              <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{m.body}</div>
+              <div className={s.body}>{m.body}</div>
             </div>
           ))}
         </div>
-      </section>
+      </Section>
 
-      <section style={card}>
-        <form action={reply.bind(null, thread.id)} style={{ display: "grid", gap: 8 }}>
-          <textarea name="body" rows={4} maxLength={4000} placeholder={`Reply to ${thread.playerName}…`} required style={{ ...input, fontFamily: "inherit" }} />
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <SubmitButton loadingText="Sending…" style={btn}>
+      <Section title={`Reply to ${thread.playerName}`}>
+        <form action={reply.bind(null, thread.id)} style={{ display: "grid", gap: 10 }}>
+          <label className={kit.srOnly} htmlFor="reply">
+            Reply
+          </label>
+          <textarea id="reply" name="body" rows={4} maxLength={4000} placeholder="Write your reply…" required className={`${kit.input} ${s.textarea}`} />
+          <div className={kit.rowActions}>
+            <SubmitButton className={kit.btn} loadingText="Sending…">
               Send reply
             </SubmitButton>
+            <span className={kit.muted}>They get an email that you replied, with a link to the conversation.</span>
           </div>
         </form>
-        <p style={{ color: "#888", fontSize: 12, marginBottom: 0 }}>The player gets an email that you replied, with a link to the conversation.</p>
-      </section>
-
-      <form action={setStatus.bind(null, thread.id, thread.status === "open" ? "closed" : "open")}>
-        <SubmitButton loadingText="Saving…" style={btnSecondary}>
-          {thread.status === "open" ? "Close conversation" : "Reopen conversation"}
-        </SubmitButton>
-      </form>
+      </Section>
     </div>
   );
 }

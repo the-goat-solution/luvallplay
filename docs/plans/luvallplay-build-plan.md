@@ -896,6 +896,7 @@ Findings and changes recorded as the work goes:
   - **Finding: `DEFAULT 1` made every write for a second club fail under `enforce`.** The default now follows the transaction's club.
   - **Decision: keys are widened by expand and contract.** `0010` adds per-club unique indexes beside 20 natural keys and the app's upserts name them; the old keys are dropped in a later step.
   - **Finding: the new version fails against a database without `0010`** (the calendar's upsert). Migrate first, then merge.
+  - **Production run, 23 Nov 2026, 22:40 UTC:** 6.0 s; data guard 18 accounts, 0 problems; no drift.
   - **Finding about the tests:** the check "Drizzle Kit sees nothing to migrate" has not been comparing anything since migration `0006`: the journal has no snapshots after `0005`, and Drizzle Kit, given the temporary directory's absolute path, writes nothing. The other half of that test, a database built from `schema.ts` equals the reference dump, does work and covers the same ground. Left as is; to be repaired or removed in Phase 4.
 - **Tests added after step 10:**
   - **Permission matrix (test plan §3.6), from the database:** eight roles against six actions, each person's access resolved as the app's role for the club. It adds the rows Phase 3 brings: another club's admin (an admin there, nobody here), switching modules (owners and platform admins), and the platform's lock (holds for owners).

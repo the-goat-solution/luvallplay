@@ -436,7 +436,9 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 **Rehearsal of `0010` (23 Nov), on `rehearsal-phase-3`, reset to a fresh copy of production:** data guard 18 accounts, 0 problems; 6.0 s; the version live today works on the migrated copy; the new version gives identical views, also through row-level security; no drift; verify consistent. Report: `docs/rehearsals/2026-11-phase3-tenant-keys.md`.
 
-**Production run of `0010`:** the same commands as §10, with `--expect scripts/data-guard/expectations/2026-11-phase3-tenant-keys.production.json`. **Migrate first, then merge:** the new version's upserts name the new keys, and the rehearsal showed the calendar failing when the order is reversed.
+**Production run of `0010`, done 23 Nov 2026, 22:40 UTC** (by the build session, approved in advance, after green CI and a clean rehearsal): the restore point was `rehearsal-phase-3`, reset to a fresh copy of production just before; the migration took 6.0 s; data guard 18 accounts, 0 problems; no drift; verify consistent. #114 merged afterwards.
+
+**How it was run:** the same commands as §10, with `--expect scripts/data-guard/expectations/2026-11-phase3-tenant-keys.production.json`. **Migrate first, then merge:** the new version's upserts name the new keys, and the rehearsal showed the calendar failing when the order is reversed.
 
 ### 11.2 A login for the app's role (for you, after `enforce` has been quiet for a week)
 

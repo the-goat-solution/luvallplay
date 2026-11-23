@@ -10,11 +10,14 @@ The code for each Phase 2 pull request is built and tested in its PR. These step
 - **§0 resolved:** the repository is back on a personal GitHub account, and pushes deploy again (production on merge, previews on every branch).
 - **§1 done (option B):** the nine stale `preview/claude/*` branches in the old US Neon project are deleted, and previews build again. Option A (previews on Sydney branches) is still the long-term fix.
 - **§8 done:** Vercel Root Directory is `apps/web` (with files outside the root included), and production builds from it.
-- **§5 still to do (the production migrations):**
-  - The restore point **`pre-phase-2-data`** (branch `br-calm-silence-a73pvz66`) was taken on 23 Nov at 05:03 UTC.
-  - A read-only snapshot passed: 66 tables, 17 accounts, 15 live.
-  - The three migrations have **not** run: the build session's safety check blocks it from writing to the production database, so you run the commands below.
-  - The site works meanwhile and reads pricing from Sanity as before. **Admin → Money → Pricing & settings** shows a notice ("the settings tables haven't been created yet") until 0002 runs; edit prices in Sanity until then.
+- **§5 done (23 Nov, 05:34–05:40 UTC), run by the build session at the owner's request:**
+  - Restore points: `pre-phase-2-data` (05:03 UTC) and `pre-phase-2-data-run` (`br-broad-dew-a7vymz4y`, 05:34 UTC, taken just before the run).
+  - Before: 66 tables, 17 accounts (15 live), access checks passed.
+  - `--baseline`: the schema matched the frozen dump. Then 0001 (5.0 s) and 0002 (2.1 s) were applied.
+  - Diff against `2026-11-phase2-business-config.production.json`: **passed**. 15 accounts, 0 problems; the only changes are the two new tables.
+  - Drift: none. `verify-business-config`: **matches Sanity exactly** (5 plans, capacity default, booking lock 14 days).
+  - The live site has no runtime errors and shows the same prices, now from the database.
+  - Edit prices and plans in **Admin → Money → Pricing & settings** from now on, not in Sanity.
 - **§7 still to do:** the Studio move.
 
 ## 0. Vercel no longer deploys from GitHub at all (found 23 Nov; resolved the same day)

@@ -59,9 +59,8 @@ export const admin_invites = pgTable("admin_invites", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("admin_invites_one_pending_tenant").using("btree", table.tenant_id.asc().nullsLast(), table.email.asc().nullsLast()).where(sql`((accepted_at IS NULL) AND (revoked_at IS NULL))`),
-	uniqueIndex("admin_invites_one_pending").using("btree", table.email.asc().nullsLast()).where(sql`((accepted_at IS NULL) AND (revoked_at IS NULL))`),
+	// One per club.
+	uniqueIndex("admin_invites_one_pending").using("btree", table.tenant_id.asc().nullsLast(), table.email.asc().nullsLast()).where(sql`((accepted_at IS NULL) AND (revoked_at IS NULL))`),
 	check("admin_invites_role_check", sql`role = ANY (ARRAY['owner'::text, 'admin'::text, 'coach'::text])`),
 ]);
 
@@ -174,7 +173,7 @@ export const arena_pairs = pgTable("arena_pairs", {
 });
 
 export const arena_player_ranks = pgTable("arena_player_ranks", {
-	player_id: integer().primaryKey().notNull(),
+	player_id: integer().notNull(),
 	seen_index: integer().default(0).notNull(),
 	peak_index: integer().default(0).notNull(),
 	was_tarnished: boolean().default(false).notNull(),
@@ -183,8 +182,8 @@ export const arena_player_ranks = pgTable("arena_player_ranks", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("arena_player_ranks_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.player_id.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.player_id], name: "arena_player_ranks_pkey"}),
 ]);
 
 export const auth_codes = pgTable("auth_codes", {
@@ -219,9 +218,7 @@ export const bank_rules = pgTable("bank_rules", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("bank_rules_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.pattern.asc().nullsLast(), table.direction.asc().nullsLast()),
-	unique("bank_rules_pattern_direction_key").on(table.pattern, table.direction),
+	unique("bank_rules_pattern_direction_key").on(table.tenant_id, table.pattern, table.direction),
 	check("bank_rules_action_check", sql`action = ANY (ARRAY['create'::text, 'classify'::text])`),
 	check("bank_rules_direction_check", sql`direction = ANY (ARRAY['in'::text, 'out'::text])`),
 ]);
@@ -250,8 +247,8 @@ export const bookings = pgTable("bookings", {
 			name: "bookings_user_id_fkey"
 		}).onDelete("restrict"),
 	foreignKey({
-			columns: [table.session_date],
-			foreignColumns: [sessions.date],
+			columns: [table.tenant_id, table.session_date],
+			foreignColumns: [sessions.tenant_id, sessions.date],
 			name: "bookings_session_date_fkey"
 		}),
 	unique("bookings_payment_intent_id_key").on(table.payment_intent_id),
@@ -276,7 +273,7 @@ export const cancellation_feedback = pgTable("cancellation_feedback", {
 ]);
 
 export const club_roles = pgTable("club_roles", {
-	player_id: integer().primaryKey().notNull(),
+	player_id: integer().notNull(),
 	role: text().notNull(),
 	granted_by: integer(),
 	granted_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -284,8 +281,8 @@ export const club_roles = pgTable("club_roles", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("club_roles_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.player_id.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.player_id], name: "club_roles_pkey"}),
 	foreignKey({
 			columns: [table.player_id],
 			foreignColumns: [players.id],
@@ -295,7 +292,7 @@ export const club_roles = pgTable("club_roles", {
 ]);
 
 export const casual_play_profiles = pgTable("casual_play_profiles", {
-	email: text().primaryKey().notNull(),
+	email: text().notNull(),
 	tier: smallint(),
 	nickname: text(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -305,8 +302,8 @@ export const casual_play_profiles = pgTable("casual_play_profiles", {
 	// email stays as the contact field; people without an account have no link.
 	user_id: integer(),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("casual_play_profiles_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.email.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.email], name: "casual_play_profiles_pkey"}),
 	index("casual_play_profiles_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
 	foreignKey({
 			columns: [table.user_id],
@@ -316,15 +313,15 @@ export const casual_play_profiles = pgTable("casual_play_profiles", {
 ]);
 
 export const casual_play_sessions = pgTable("casual_play_sessions", {
-	date: date().primaryKey().notNull(),
+	date: date().notNull(),
 	state: jsonb().notNull(),
 	version: integer().default(1).notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("casual_play_sessions_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.date.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.date], name: "casual_play_sessions_pkey"}),
 ]);
 
 export const day_requests = pgTable("day_requests", {
@@ -340,26 +337,25 @@ export const day_requests = pgTable("day_requests", {
 	// email stays as the contact field; people without an account have no link.
 	user_id: integer(),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("day_requests_pending_tenant_idx").using("btree", table.tenant_id.asc().nullsLast(), table.day.asc().nullsLast(), sql`lower(email)`).where(sql`(notified_at IS NULL)`),
+	// One per club.
+	uniqueIndex("day_requests_pending_idx").using("btree", table.tenant_id.asc().nullsLast(), table.day.asc().nullsLast(), sql`lower(email)`).where(sql`(notified_at IS NULL)`),
 	index("day_requests_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
 	foreignKey({
 			columns: [table.user_id],
 			foreignColumns: [players.id],
 			name: "day_requests_user_id_fkey"
 		}).onDelete("restrict"),
-	uniqueIndex("day_requests_pending_idx").using("btree", sql`day`, sql`lower(email)`).where(sql`(notified_at IS NULL)`),
 ]);
 
 export const day_signup_settings = pgTable("day_signup_settings", {
-	day: text().primaryKey().notNull(),
+	day: text().notNull(),
 	paused: boolean().default(false).notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("day_signup_settings_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.day.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.day], name: "day_signup_settings_pkey"}),
 ]);
 
 export const donations = pgTable("donations", {
@@ -462,26 +458,26 @@ export const message_threads = pgTable("message_threads", {
 ]);
 
 export const finance_settings = pgTable("finance_settings", {
-	key: text().primaryKey().notNull(),
+	key: text().notNull(),
 	value: jsonb().notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("finance_settings_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.key.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.key], name: "finance_settings_pkey"}),
 ]);
 
 export const finance_sync_state = pgTable("finance_sync_state", {
-	key: text().primaryKey().notNull(),
+	key: text().notNull(),
 	last_started_at: timestamp({ withTimezone: true, mode: 'string' }),
 	last_finished_at: timestamp({ withTimezone: true, mode: 'string' }),
 	last_error: text(),
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("finance_sync_state_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.key.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.key], name: "finance_sync_state_pkey"}),
 ]);
 
 export const jersey_registrations = pgTable("jersey_registrations", {
@@ -518,15 +514,14 @@ export const jersey_registrations = pgTable("jersey_registrations", {
 	// email stays as the contact field; people without an account have no link.
 	user_id: integer(),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("jersey_one_per_email_tenant").using("btree", table.tenant_id.asc().nullsLast(), table.email_normalized.asc().nullsLast()).where(sql`(status = ANY (ARRAY['pending'::text, 'paid'::text]))`),
+	// One per club.
+	uniqueIndex("jersey_one_per_email").using("btree", table.tenant_id.asc().nullsLast(), table.email_normalized.asc().nullsLast()).where(sql`(status = ANY (ARRAY['pending'::text, 'paid'::text]))`),
 	index("jersey_registrations_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
 	foreignKey({
 			columns: [table.user_id],
 			foreignColumns: [players.id],
 			name: "jersey_registrations_user_id_fkey"
 		}).onDelete("restrict"),
-	uniqueIndex("jersey_one_per_email").using("btree", table.email_normalized.asc().nullsLast()).where(sql`(status = ANY (ARRAY['pending'::text, 'paid'::text]))`),
 	unique("jersey_registrations_ref_code_key").on(table.ref_code),
 	check("jersey_registrations_status_check", sql`status = ANY (ARRAY['pending'::text, 'paid'::text, 'released'::text, 'cancelled'::text])`),
 ]);
@@ -579,9 +574,8 @@ export const mini_game_draws = pgTable("mini_game_draws", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("mini_game_draws_one_active_tenant").using("btree", table.tenant_id.asc().nullsLast()).where(sql`(archived_at IS NULL)`),
-	uniqueIndex("mini_game_draws_one_active").using("btree", sql`(true)`).where(sql`(archived_at IS NULL)`),
+	// One per club.
+	uniqueIndex("mini_game_draws_one_active").using("btree", table.tenant_id.asc().nullsLast()).where(sql`(archived_at IS NULL)`),
 ]);
 
 export const finance_entries = pgTable("finance_entries", {
@@ -873,24 +867,24 @@ export const session_fill_ins = pgTable("session_fill_ins", {
 ]);
 
 export const session_alert_state = pgTable("session_alert_state", {
-	session_date: date().primaryKey().notNull(),
+	session_date: date().notNull(),
 	state: text().default('ok').notNull(),
 	headcount: integer().default(0).notNull(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("session_alert_state_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.session_date.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.session_date], name: "session_alert_state_pkey"}),
 	foreignKey({
-			columns: [table.session_date],
-			foreignColumns: [sessions.date],
+			columns: [table.tenant_id, table.session_date],
+			foreignColumns: [sessions.tenant_id, sessions.date],
 			name: "session_alert_state_session_date_fkey"
 		}),
 ]);
 
 export const sessions = pgTable("sessions", {
-	date: date().primaryKey().notNull(),
+	date: date().notNull(),
 	max_spots: integer().default(8).notNull(),
 	booked_spots: integer().default(0).notNull(),
 	google_event_id: text(),
@@ -905,8 +899,8 @@ export const sessions = pgTable("sessions", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("sessions_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.date.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.date], name: "sessions_pkey"}),
 ]);
 
 export const waitlist = pgTable("waitlist", {
@@ -950,9 +944,7 @@ export const shop_products = pgTable("shop_products", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("shop_products_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.slug.asc().nullsLast()),
-	unique("shop_products_slug_key").on(table.slug),
+	unique("shop_products_slug_key").on(table.tenant_id, table.slug),
 ]);
 
 export const webhook_endpoints = pgTable("webhook_endpoints", {
@@ -1158,9 +1150,8 @@ export const arena_pair_members = pgTable("arena_pair_members", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("arena_pair_members_one_active_tenant").using("btree", table.tenant_id.asc().nullsLast(), table.player_id.asc().nullsLast()).where(sql`active`),
-	uniqueIndex("arena_pair_members_one_active").using("btree", table.player_id.asc().nullsLast()).where(sql`active`),
+	// One per club.
+	uniqueIndex("arena_pair_members_one_active").using("btree", table.tenant_id.asc().nullsLast(), table.player_id.asc().nullsLast()).where(sql`active`),
 	primaryKey({ columns: [table.pair_id, table.player_id], name: "arena_pair_members_pkey"}),
 ]);
 
@@ -1184,15 +1175,14 @@ export const player_absences = pgTable("player_absences", {
 	// email stays as the contact field; people without an account have no link.
 	user_id: integer(),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("player_absences_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.session_date.asc().nullsLast(), table.email.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.session_date, table.email], name: "player_absences_pkey"}),
 	index("player_absences_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
 	foreignKey({
 			columns: [table.user_id],
 			foreignColumns: [players.id],
 			name: "player_absences_user_id_fkey"
 		}).onDelete("restrict"),
-	primaryKey({ columns: [table.session_date, table.email], name: "player_absences_pkey"}),
 ]);
 
 export const pv_arena_pair_members = pgTable("pv_arena_pair_members", {
@@ -1285,8 +1275,8 @@ export const attendance = pgTable("attendance", {
 	// email stays as the contact field; people without an account have no link.
 	user_id: integer(),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("attendance_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.session_date.asc().nullsLast(), table.email.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.session_date, table.email], name: "attendance_pkey"}),
 	index("attendance_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
 	foreignKey({
 			columns: [table.user_id],
@@ -1294,7 +1284,6 @@ export const attendance = pgTable("attendance", {
 			name: "attendance_user_id_fkey"
 		}).onDelete("restrict"),
 	index("attendance_email_idx").using("btree", table.email.asc().nullsLast(), table.session_date.asc().nullsLast()),
-	primaryKey({ columns: [table.session_date, table.email], name: "attendance_pkey"}),
 ]);
 
 export const rr_results = pgTable("rr_results", {
@@ -1319,7 +1308,7 @@ export const rr_results = pgTable("rr_results", {
 // Business config (Phase 2 PR 6): moved out of Sanity, edited in Admin →
 // Settings. Locale fields are { en, vi } objects, as they were in Sanity.
 export const pricing_plans = pgTable("pricing_plans", {
-	plan_id: text().primaryKey().notNull(),
+	plan_id: text().notNull(),
 	name: jsonb().default({}).notNull(),
 	description: jsonb().default({}).notNull(),
 	price_nzd: numeric({ precision: 10, scale: 2 }),
@@ -1333,21 +1322,21 @@ export const pricing_plans = pgTable("pricing_plans", {
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("pricing_plans_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.plan_id.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.plan_id], name: "pricing_plans_pkey"}),
 	check("pricing_plans_plan_id_check", sql`plan_id = ANY (ARRAY['casual'::text, 'fridayMonthly'::text, 'fridayQuarterly'::text, 'wednesdayMonthly'::text, 'wednesdayQuarterly'::text])`),
 ]);
 
 export const club_settings = pgTable("club_settings", {
-	key: text().primaryKey().notNull(),
+	key: text().notNull(),
 	value: jsonb(),
 	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updated_by: integer(),
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
 }, (table) => [
-	// Step 11: the same key, per club.
-	uniqueIndex("club_settings_tenant_key").using("btree", table.tenant_id.asc().nullsLast(), table.key.asc().nullsLast()),
+	// The key is per club.
+	primaryKey({ columns: [table.tenant_id, table.key], name: "club_settings_pkey"}),
 ]);
 
 // ---------------------------------------------------------------------------

@@ -210,6 +210,24 @@ describe("tenant isolation at the database", { skip: !BASE_URL && !REQUIRE_DB ? 
     });
   });
 
+  test("two clubs can each have the same natural key: a play day's date, a setting's name", async () => {
+    await asApp(1, async () => {
+      await c.query(`INSERT INTO sessions (date, max_spots, booked_spots) VALUES ('2031-01-03', 10, 0)`);
+      await c.query(`INSERT INTO club_settings (key, value) VALUES ('isolation.shared', '1'::jsonb)`);
+      await c.query("SELECT set_config('app.tenant_id', $1, true)", [String(club2)]);
+      await c.query(`INSERT INTO sessions (date, max_spots, booked_spots) VALUES ('2031-01-03', 20, 0)`);
+      await c.query(`INSERT INTO club_settings (key, value) VALUES ('isolation.shared', '2'::jsonb)`);
+      assert.deepEqual((await c.query(`SELECT max_spots FROM sessions WHERE date = '2031-01-03'`)).rows, [{ max_spots: 20 }], "the second club sees its own day");
+      // And a club still can't have the same day twice.
+      await c.query("SAVEPOINT again");
+      await assert.rejects(c.query(`INSERT INTO sessions (date, max_spots, booked_spots) VALUES ('2031-01-03', 30, 0)`), /sessions_pkey/);
+      await c.query("ROLLBACK TO SAVEPOINT again");
+      // A booking can only point at its own club's day.
+      await c.query(`DELETE FROM sessions WHERE date = '2031-01-03'`);
+      await assert.rejects(c.query(`INSERT INTO bookings (session_date, first_name, last_name, email, phone, payment_intent_id) VALUES ('2031-01-03', 'A', 'B', 'a@x.test', '1', 'pi_isolation')`), /bookings_session_date_fkey/);
+    });
+  });
+
   test("the club setting ends with the transaction: the next one starts with no club", async () => {
     await c.query("BEGIN");
     await c.query("SET LOCAL ROLE luvallplay_app");

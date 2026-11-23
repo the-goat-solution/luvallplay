@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3-tenant-keys-contract",
+  "description": "Phase 3 step 11 preparation, contract (build plan §6.1, runbook §11.1): the old single-club keys are dropped and the per-club keys from 0010 take their names (5 unique indexes, 2 unique constraints, 13 primary keys); the two foreign keys to a play day carry the club. A schema change: no row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

@@ -75,7 +75,7 @@ export default async function PlatformAdminsPage() {
           </Toolbar>
         </form>
       </Section>
-      <Section title={`Platform admins (${platform.length})`} id="list">
+      <Section title={`Platform staff (${platform.length})`} id="list">
         <DataTable
           rows={platform}
           rowKey={(a) => a.playerId}

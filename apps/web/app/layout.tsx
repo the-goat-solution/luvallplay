@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Providers } from "./providers";
+import { clubConfig } from "@/lib/club";
+import { publicClub } from "@/lib/club-public";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,15 +17,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The club's public settings, for client components (useClub()). Never
+  // throws: the built-in values answer when the database can't.
+  const club = publicClub(await clubConfig());
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <Providers club={club}>{children}</Providers>
         <Script src="https://js.stripe.com/v3/" strategy="lazyOnload" />
       </body>
     </html>

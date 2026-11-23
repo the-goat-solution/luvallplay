@@ -15,7 +15,7 @@
 //   on), as an escape hatch.
 //
 // Takes a small `Db`, like lib/club-config.ts, so scripts and tests share it.
-import { MODULES, blockedByModule, canTurnOff, canTurnOn, type ModuleId, type PaymentMode } from "@luvallplay/modules";
+import { MODULES, blockedByModule, routeOwner, canTurnOff, canTurnOn, type ModuleId, type PaymentMode } from "@luvallplay/modules";
 import { defaultTenantSlug } from "./tenant-members.ts";
 
 export type Db = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
@@ -81,6 +81,9 @@ export async function enabledModules(db: Db, now = Date.now()): Promise<Set<stri
 
 /** The module that stops this path for the club right now, or null when it is served. */
 export async function moduleBlocking(db: Db, pathname: string): Promise<ModuleId | null> {
+  // Most paths belong to the core or the account and never need the database.
+  const owner = routeOwner(pathname);
+  if (!owner || owner === "core" || owner === "account" || owner === "platform") return null;
   return blockedByModule(pathname, await enabledModules(db));
 }
 

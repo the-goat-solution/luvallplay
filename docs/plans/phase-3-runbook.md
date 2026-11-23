@@ -13,8 +13,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 2 | `tenant_id` on every club-owned table (#102) | **Done.** Production data run passed (23 Nov, 08:25 UTC); live (08:28 UTC) |
 | 3 | Email links → `user_id` (#103) | **Production data run done and passed** (23 Nov, 09:09 UTC). Merged 09:11 UTC |
 | 4 | Settings replace constants (behind flags) | In progress. Parts 1 to 5 merged (#104, #105); **shadow reads for settings started 23 Nov, 09:50 UTC** (§4) |
-| 5 | Module enforcement | Part 1 built (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5) |
-| 6 | Second database driver, region routing | Not started |
+| 5 | Module enforcement | Part 1 merged and live (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5) |
+| 6 | Second database driver, region routing | Built: the standard-Postgres driver, host routing (off until switched on), storage and scheduled-job interfaces (§6) |
 | 7 | Money audit (minor units, VND) | Not started |
 | 8 | Payments interface | Not started |
 | 9 | Entitlements and metering | Not started |
@@ -192,6 +192,8 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 
 **Shadow reads are on (23 Nov 2026, 09:50 UTC).** `CLUB_SETTINGS_SOURCE=shadow` is set for Production (by the build session, under the owner's blanket approval), and #104's deploy picked it up. The earliest day to switch to `database` is **30 Nov**, if the logs and Admin → Setup check → Club settings show no difference. Rollback at any time is deleting the variable and redeploying.
 
+**The record of shadow reads.** The hosting plan keeps server logs for one hour, so logs can't show seven clean days. Each result is a row in `admin_audit_log` (`action = shadow.settings`, `target` = `clean`, `differ` or `unavailable`): a difference is written when a request sees it, and the roster cron writes one result a day whether or not there is a play day (`lib/shadow-log.ts`). To read it: `node --import ./tests/register.mjs scripts/shadow-report.mjs` in `apps/web` with `POSTGRES_URL` set (read-only; exits 1 if any day has a difference). The gate for step 11 is seven days with a `clean` row and no `differ` row.
+
 **Parts so far:**
 
 | Part | What reads the club's settings | Where |
@@ -201,6 +203,10 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 | 3 | The time zone literal collected into one constant (16 files), with a scan that fails on new copies | #105, merged |
 | 4 | Play-day capacity: courts → players, general capacity, the mini-game field, including the booking guard's SQL, which had its own typed copy of the table | #105, merged |
 | 5 | The remaining server-side capacity uses: the casual-play courts change, the spots API's fallback, the admin play-days page | #105, merged |
+| 6 | The durable record of shadow reads (audit-log rows, a daily result from the roster cron, a report script) | Built |
+| 7 | The booking clock (time zone, booking window, cut-off hour): the date helpers take it; the booking rule and the Me page pass the club's | Built |
+| 8 | Membership cycle lengths in the renewal SQL, the Stripe sync and the free month | Built |
+| 9 | Client components read the club's public settings from a provider (capacity, mini-game cap, the booking clock) | Built |
 
 **Still to build in step 4:** the time zone, booking window and cut-off read from the settings at run time (server and client); membership days and cycle lengths; the "Wolf" terms in the translated strings; capacity in the admin pages and client components; and the crons, emails, webhooks and API becoming club-scoped.
 
@@ -219,7 +225,36 @@ Step 5 changes no data: step 1 stored a row per module for Three Wolves, all on.
 
 **Still to build in step 5:** the parts of a module that live inside another module's page (for example the membership card on Me, the Arena tab, site sections, payments-to-check), the emails each module sends, a confirmation when a module has live activity, and the platform console's lock and availability controls.
 
-## 6. Housekeeping that needs you
+## 6. Step 6: second database driver and region routing (no data run)
+
+Nothing here changes data, and nothing changes behaviour until a setting is switched.
+
+| Piece | What it is | Setting | Default |
+|---|---|---|---|
+| Second driver | `lib/database-pg.ts`: standard Postgres over TCP, behind the same client as the Neon driver. The golden master runs every repository function on the old client, the Neon driver and this one, and requires identical results and identical rows afterwards | `DATABASE_DRIVER` = `neon` or `postgres` | `neon`. An unknown value stops the app at its first query |
+| Host routing | Host → club → region (`@luvallplay/core/host-routing`, `lib/tenant-routing.ts`), checked in the request proxy for every page and API request | `TENANT_ROUTING` = `off`, `shadow` or `enforce`; `REGION` (default `syd`); `PLATFORM_DOMAINS`; `EDGE_CONFIG` | `off`. An unknown value counts as `enforce` |
+| Storage | `lib/storage.ts`: one interface for public files; Vercel Blob is the first provider. Admin image uploads, profile pictures and their deletes go through it | `STORAGE_DRIVER` | `vercel-blob`. An unknown value throws |
+| Scheduled jobs | `lib/cron.ts` is the list; `vercel.json` must match it (a test); `scripts/cron/k8s.mjs` prints Kubernetes CronJobs for a region not on Vercel. Every job checks the scheduler's secret the same way | `CRON_SECRET` | With no secret, nothing is authorised in production |
+
+**How routing fails closed** (in `enforce`): an unregistered host gets 404; a club that lives in another region gets 421; a club whose row names a region the code doesn't know gets 404; if neither Edge Config nor the database can answer, 503. Until reads are tenant-aware (step 11) a deployment holds one club's data, so a host for a different club in the same region gets 404 too.
+
+**The lookup:** Edge Config when `EDGE_CONFIG` is set (one small read per host, kept for a minute), then the `tenants` table. Edge Config is only a copy: a host missing from it is still found in the database. `scripts/tenants/hosts.mjs` prints the items for the copy, and with `--check` compares the copy with the database.
+
+**Turning routing on, when you want it** (not needed while there is one club):
+
+1. Set `REGION=syd` and `TENANT_ROUTING=shadow` for Production and redeploy. Requests are served as before; a host that would be refused is written to the shadow record (`shadow.routing`), and the daily heartbeat checks the club's own hosts through the same lookup.
+2. After a week with no `differ` row for routing (`scripts/shadow-report.mjs`), set `TENANT_ROUTING=enforce`.
+3. Rollback at any time: delete `TENANT_ROUTING` and redeploy.
+
+**Finding, handled:** the site is served on `www.threewolvesbadminton.org` while the club's row holds `threewolvesbadminton.org`. Hosts are normalised before lookup (lower case, no port, no leading `www.`), so both resolve.
+
+**Finding:** two scheduled jobs (the roster email and the membership reminders) ran without checking the scheduler's secret when `CRON_SECRET` wasn't set; the other three refused. All five now use one check, which refuses in production when no secret is set. `CRON_SECRET` must be set in Production (the three jobs that already required it are working, so it is).
+
+**Finding in the tests, fixed:** the golden master's stand-in for "work after the response" started that work at once, so a history backfill could rewrite rows while the function under test was still reading them, and which side won depended on the driver's speed. The stand-in now runs the work after the function returns, as production does.
+
+**Still provider-specific** (listed in `lib/storage.ts`, enforced by a test): browser-direct photo uploads and finance receipts use Vercel Blob's own protocol. They move with the S3-compatible provider for the Hanoi region.
+
+## 7. Housekeeping that needs you
 
 - **Rehearsal branch.** One reusable branch, `rehearsal-phase-3`, is kept for the rest of the phase and reset to a fresh copy of production before each rehearsal, so its host needs approving only once. It holds real data: delete it when Phase 3 is done.
 - **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.

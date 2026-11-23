@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/cron";
 import { NextResponse } from "next/server";
 import { syncStripeFinance } from "@/lib/finance-stripe";
 import { akahuConfigured, syncAkahu } from "@/lib/bank-akahu";
@@ -10,8 +11,7 @@ export const runtime = "nodejs";
 // finance ledger, then pull the ANZ account from Akahu and auto-reconcile —
 // so the Financials tab is current even if no admin has opened it lately.
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

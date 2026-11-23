@@ -118,11 +118,20 @@ export function resetClubConfigCache(): void {
   lastLogged = "";
 }
 
-function logOnce(kind: string, lines: string[]): void {
+/** True the first time this exact message is seen (per server instance). */
+function logOnce(kind: string, lines: string[]): boolean {
   const key = `${kind}:${lines.join("|")}`;
-  if (key === lastLogged) return;
+  if (key === lastLogged) return false;
   lastLogged = key;
   console.warn(`[shadow] club settings ${kind}: ${lines.join("; ")}`);
+  return true;
+}
+
+// Set by the app (lib/club.ts) to put a difference on the durable record
+// (lib/shadow-log.ts). Kept as a hook so this file has no dependency on it.
+let onDifference: ((db: Db, differences: string[]) => Promise<void>) | null = null;
+export function onClubConfigDifference(fn: typeof onDifference): void {
+  onDifference = fn;
 }
 
 /**
@@ -142,7 +151,7 @@ export async function getClubConfig(db: Db, now = Date.now()): Promise<ClubConfi
     } else {
       if (stored.problems.length) logOnce("problems", stored.problems);
       const differences = diffClubConfig(DEFAULT_CLUB_CONFIG, stored.config);
-      if (differences.length) logOnce("differ", differences);
+      if (differences.length && logOnce("differ", differences)) await onDifference?.(db, differences);
       if (source === "database") config = stored.config;
     }
   } catch (err) {

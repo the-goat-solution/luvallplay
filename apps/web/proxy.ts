@@ -5,6 +5,8 @@ import { audit, resolveAdmin } from "@/lib/admin-access";
 import { summarizeAdminRequest } from "@/lib/admin-roles";
 import { moduleBlocking } from "@/lib/club-modules";
 import { sql } from "@/lib/database";
+import { recordShadow } from "@/lib/shadow-log";
+import { firstRefusalOf, routeHost, routingMode } from "@/lib/tenant-routing";
 
 // The proxy (Next.js 16's name for middleware) runs on the Node runtime: the
 // admin check reads the player's session and role from the database, and it
@@ -36,6 +38,9 @@ export const config = {
     "/renew-membership/:path*",
     "/cancel-membership",
     "/cancel-membership/:path*",
+    // Step 6: every page, so a host can be refused (lib/tenant-routing.ts).
+    // Not the framework's own files or anything with a file extension.
+    "/((?!_next/|.*\\.[a-zA-Z0-9]+$).*)",
   ],
 };
 
@@ -149,8 +154,30 @@ async function guardAdmin(request: NextRequest): Promise<NextResponse> {
   return NextResponse.next();
 }
 
+// Step 6: is this host this deployment's club, in this region? Off unless
+// TENANT_ROUTING says otherwise; "shadow" only records what would be refused.
+async function guardHost(request: NextRequest, api: boolean): Promise<NextResponse | null> {
+  const mode = routingMode();
+  if (mode === "off") return null;
+  const host = request.headers.get("host");
+  const verdict = await routeHost(sql, host);
+  if (verdict.serve) return null;
+  if (mode === "shadow") {
+    if (firstRefusalOf(host ?? "")) {
+      console.warn(`[shadow] routing would refuse ${host}: ${verdict.reason}`);
+      await recordShadow(sql, "routing", "differ", { host, reason: verdict.reason, status: verdict.status });
+    }
+    return null;
+  }
+  // Nothing about the club (or whether there is one) is said to an unknown host.
+  if (api) return NextResponse.json({ error: verdict.status === 503 ? "unavailable" : "not_found" }, { status: verdict.status });
+  return new NextResponse(verdict.status === 503 ? "Service unavailable" : "Not found", { status: verdict.status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+}
+
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  const refused = await guardHost(request, path.startsWith("/api/"));
+  if (refused) return refused;
   // First: is this path's module on for the club? (Never throws; a database
   // problem counts every module as on.)
   if (await moduleBlocking(sql, path)) return notFound(path.startsWith("/api/"));

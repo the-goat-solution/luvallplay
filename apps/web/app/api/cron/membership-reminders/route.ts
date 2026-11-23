@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/cron";
 import { NextResponse } from "next/server";
 import { addDays, claimBookingReminder, claimMembershipReminder, getCasualBookingsForDate, getMembersWithPlayDayTomorrow, getRemainingSessionDatesInPeriod, listSessionsInRange, sessionExists } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
@@ -16,12 +17,8 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = request.headers.get("authorization");
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!cronAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (!process.env.POSTGRES_URL) {

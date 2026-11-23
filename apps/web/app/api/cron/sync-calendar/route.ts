@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/cron";
 import { NextResponse } from "next/server";
 import { upsertSessionFromCalendar } from "@/lib/db";
 import { listUpcomingCalendarEvents } from "@/lib/google-calendar";
@@ -6,8 +7,7 @@ import { calendarEventDateKey } from "@/lib/dates";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

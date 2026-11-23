@@ -1,8 +1,6 @@
-import { db, sql } from "@vercel/postgres";
-import { ensureTables, addDays } from "./db";
-import { ensurePlayerTables } from "./player-db";
+import { db, sql } from "./database";
+import { addDays } from "./db";
 import { getClubToday } from "./dates";
-import { onceThisDeploy } from "./schema-gate";
 
 // Club shop: the jersey now, more merchandise later. Nothing here is
 // jersey-specific: a product has a price, photos, optional men's/women's
@@ -21,120 +19,6 @@ export const FITS = ["men", "women"] as const;
 export type Fit = (typeof FITS)[number] | "unisex";
 export const CARD_HOLD_MINUTES = 15;
 export const CASH_HOLD_FALLBACK_DAYS = 14;
-
-let ensurePromise: Promise<void> | null = null;
-
-export function ensureShopTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("shop", async () => {
-      await ensureTables();
-      await ensurePlayerTables();
-      await sql`
-        CREATE TABLE IF NOT EXISTS shop_products (
-          id SERIAL PRIMARY KEY,
-          slug TEXT NOT NULL UNIQUE,
-          kind TEXT NOT NULL DEFAULT 'merch',
-          name_en TEXT NOT NULL,
-          name_vi TEXT NOT NULL DEFAULT '',
-          desc_en TEXT NOT NULL DEFAULT '',
-          desc_vi TEXT NOT NULL DEFAULT '',
-          price_cents INT NOT NULL,
-          images JSONB NOT NULL DEFAULT '[]'::jsonb,
-          has_fit BOOLEAN NOT NULL DEFAULT TRUE,
-          has_sizes BOOLEAN NOT NULL DEFAULT TRUE,
-          size_chart_men TEXT,
-          size_chart_women TEXT,
-          active BOOLEAN NOT NULL DEFAULT TRUE,
-          sort INT NOT NULL DEFAULT 0,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS shop_variants (
-          id SERIAL PRIMARY KEY,
-          product_id INT NOT NULL REFERENCES shop_products(id) ON DELETE CASCADE,
-          fit TEXT NOT NULL,
-          size TEXT NOT NULL,
-          stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
-          reserved INT NOT NULL DEFAULT 0 CHECK (reserved >= 0),
-          sold INT NOT NULL DEFAULT 0,
-          UNIQUE (product_id, fit, size)
-        );
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS shop_orders (
-          id SERIAL PRIMARY KEY,
-          player_id INT REFERENCES players(id) ON DELETE SET NULL,
-          email TEXT NOT NULL,
-          name TEXT NOT NULL DEFAULT '',
-          status TEXT NOT NULL CHECK (status IN ('pending_payment', 'reserved_cash', 'paid', 'collected', 'cancelled', 'expired', 'refunded')),
-          payment_method TEXT NOT NULL CHECK (payment_method IN ('card', 'cash')),
-          total_cents INT NOT NULL,
-          stripe_payment_intent_id TEXT UNIQUE,
-          cash_invoice_id TEXT,
-          hold_expires_at TIMESTAMPTZ,
-          reminder_sent_at TIMESTAMPTZ,
-          paid_at TIMESTAMPTZ,
-          collected_at TIMESTAMPTZ,
-          cancelled_at TIMESTAMPTZ,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS shop_order_items (
-          id SERIAL PRIMARY KEY,
-          order_id INT NOT NULL REFERENCES shop_orders(id) ON DELETE CASCADE,
-          product_id INT NOT NULL,
-          variant_id INT NOT NULL,
-          qty INT NOT NULL,
-          unit_price_cents INT NOT NULL,
-          label TEXT NOT NULL
-        );
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS shop_stock_log (
-          id SERIAL PRIMARY KEY,
-          variant_id INT NOT NULL,
-          change TEXT NOT NULL,
-          stock_after INT NOT NULL,
-          by_whom TEXT NOT NULL DEFAULT 'admin',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-      `;
-      await seedJersey();
-    }).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
-
-/** The current club jersey, added once with zero stock until an admin enters it. */
-async function seedJersey(): Promise<void> {
-  const { rows } = await sql`
-    INSERT INTO shop_products (slug, kind, name_en, name_vi, desc_en, desc_vi, price_cents, images, has_fit, has_sizes, sort)
-    VALUES (
-      'club-jersey-port-hills-dawn', 'jersey',
-      'Club Jersey · Port Hills Dawn',
-      'Áo CLB · Port Hills Dawn',
-      'The official Three Wolves jersey on the Yonex crew V-neck: a sunrise fade from rose to amber, navy side panels and the Three Wolves crest. Collect it at your next play day.',
-      'Áo đấu chính thức của Three Wolves trên nền áo Yonex cổ tim: chuyển màu bình minh từ hồng đến hổ phách, viền xanh navy và logo Three Wolves. Nhận áo tại buổi chơi tiếp theo.',
-      3000,
-      '["/uploads/shop/jersey-port-hills-dawn-front.webp", "/uploads/shop/jersey-port-hills-dawn-back.webp"]'::jsonb,
-      TRUE, TRUE, 0
-    )
-    ON CONFLICT (slug) DO NOTHING
-    RETURNING id;
-  `;
-  const id = rows[0]?.id as number | undefined;
-  if (!id) return;
-  for (const fit of FITS) {
-    for (const size of SIZES) {
-      await sql`INSERT INTO shop_variants (product_id, fit, size) VALUES (${id}, ${fit}, ${size}) ON CONFLICT DO NOTHING;`;
-    }
-  }
-}
 
 export type Variant = { id: number; fit: Fit; size: string; stock: number; reserved: number; sold: number; available: number };
 
@@ -209,7 +93,6 @@ async function loadProducts(where: string): Promise<Product[]> {
 export async function listShopProductsForPlayer(): Promise<Product[]> {
   if (!process.env.POSTGRES_URL) return [];
   try {
-    await ensureShopTables();
     await releaseExpiredHolds();
     return (await loadProducts("WHERE active")).filter((p) => p.available > 0);
   } catch (err) {
@@ -219,7 +102,6 @@ export async function listShopProductsForPlayer(): Promise<Product[]> {
 }
 
 export async function listProductsForAdmin(): Promise<Product[]> {
-  await ensureShopTables();
   await releaseExpiredHolds();
   return loadProducts("");
 }
@@ -276,7 +158,6 @@ async function loadOrders(where: string, params: unknown[]): Promise<Order[]> {
 export async function listOrdersForPlayer(playerId: number): Promise<Order[]> {
   if (!process.env.POSTGRES_URL) return [];
   try {
-    await ensureShopTables();
     return loadOrders(`WHERE player_id = $1 AND status IN ('reserved_cash', 'paid', 'collected')`, [playerId]);
   } catch (err) {
     console.error("[shop] orders failed:", err);
@@ -285,7 +166,6 @@ export async function listOrdersForPlayer(playerId: number): Promise<Order[]> {
 }
 
 export async function listOrdersForAdmin(filter: "open" | "collected" | "all"): Promise<Order[]> {
-  await ensureShopTables();
   await releaseExpiredHolds();
   const where =
     filter === "open"
@@ -297,13 +177,14 @@ export async function listOrdersForAdmin(filter: "open" | "collected" | "all"): 
 }
 
 export async function getOrder(id: number): Promise<Order | null> {
-  await ensureShopTables();
   return (await loadOrders(`WHERE id = $1`, [id]))[0] ?? null;
 }
 
 export class ShopError extends Error {
-  constructor(public code: "sold_out" | "not_found" | "invalid" | "inactive") {
+  code: "sold_out" | "not_found" | "invalid" | "inactive";
+  constructor(code: "sold_out" | "not_found" | "invalid" | "inactive") {
     super(code);
+    this.code = code;
   }
 }
 
@@ -319,7 +200,6 @@ export async function createOrder(input: {
   method: "card" | "cash";
   cashHoldUntil: Date;
 }): Promise<Order> {
-  await ensureShopTables();
   await releaseExpiredHolds();
   const client = await db.connect();
   try {
@@ -378,7 +258,6 @@ export async function attachPaymentIntent(orderId: number, paymentIntentId: stri
  * again if it's still there; if not, the order is flagged as oversold.
  */
 export async function markOrderPaidByCard(orderId: number): Promise<"paid" | "already" | "oversold" | "missing"> {
-  await ensureShopTables();
   const client = await db.connect();
   try {
     await client.query("BEGIN");
@@ -421,7 +300,6 @@ export async function markOrderPaidByCard(orderId: number): Promise<"paid" | "al
 
 /** Cash reservation paid and handed over at a play day (admin). */
 export async function markCashPaidAndCollected(orderId: number, cashInvoiceId: string | null): Promise<boolean> {
-  await ensureShopTables();
   const client = await db.connect();
   try {
     await client.query("BEGIN");
@@ -452,13 +330,11 @@ export async function markCashPaidAndCollected(orderId: number, cashInvoiceId: s
 }
 
 export async function markCollected(orderId: number): Promise<void> {
-  await ensureShopTables();
   await sql`UPDATE shop_orders SET status = 'collected', collected_at = NOW() WHERE id = ${orderId} AND status = 'paid';`;
 }
 
 /** Cancels an unpaid hold or cash reservation and returns the stock. */
 export async function cancelOrder(orderId: number, playerId?: number): Promise<boolean> {
-  await ensureShopTables();
   const client = await db.connect();
   try {
     await client.query("BEGIN");
@@ -488,7 +364,6 @@ export async function cancelOrder(orderId: number, playerId?: number): Promise<b
 
 /** A refunded card order: puts the unit back on the shelf. */
 export async function markRefunded(orderId: number): Promise<void> {
-  await ensureShopTables();
   const order = await getOrder(orderId);
   if (!order || !["paid", "collected"].includes(order.status)) return;
   for (const it of order.items) {
@@ -539,7 +414,6 @@ export async function releaseExpiredHolds(): Promise<Order[]> {
 
 /** Cash reservations that lapse today and haven't had their heads-up yet. */
 export async function cashOrdersExpiringSoon(): Promise<Order[]> {
-  await ensureShopTables();
   const orders = await loadOrders(
     `WHERE status = 'reserved_cash' AND reminder_sent_at IS NULL AND hold_expires_at < NOW() + INTERVAL '24 hours'`,
     [],
@@ -589,7 +463,6 @@ export function endOfClubDay(dateKey: string): Date {
 // ---------------------------------------------------------------------------
 
 export async function setVariantStock(variantId: number, stock: number, byWhom = "admin"): Promise<void> {
-  await ensureShopTables();
   const clean = Math.max(0, Math.floor(stock));
   const { rows } = await sql`
     UPDATE shop_variants SET stock = GREATEST(${clean}, reserved) WHERE id = ${variantId} RETURNING stock;
@@ -615,7 +488,6 @@ export async function saveProduct(input: {
   sort: number;
   images: string[];
 }): Promise<number> {
-  await ensureShopTables();
   if (input.id) {
     await sql.query(
       `UPDATE shop_products SET name_en = $2, name_vi = $3, desc_en = $4, desc_vi = $5, price_cents = $6,
@@ -647,12 +519,10 @@ async function ensureVariants(productId: number, hasFit: boolean, hasSizes: bool
 }
 
 export async function setSizeChart(productId: number, fit: "men" | "women", url: string | null): Promise<void> {
-  await ensureShopTables();
   if (fit === "men") await sql`UPDATE shop_products SET size_chart_men = ${url} WHERE id = ${productId};`;
   else await sql`UPDATE shop_products SET size_chart_women = ${url} WHERE id = ${productId};`;
 }
 
 export async function getProduct(id: number): Promise<Product | null> {
-  await ensureShopTables();
   return (await loadProducts(`WHERE id = ${Number(id) | 0}`))[0] ?? null;
 }

@@ -18,8 +18,9 @@ export function applyDatabaseSwitch(): void {
 // production data).
 //
 // Until every preview runs on its own Neon branch, a preview deployment shares
-// the production connection variables, and `ensureTables()` runs DDL at
-// request time: opening a preview of a schema change would alter production.
+// the production connection variables: opening a preview would read and
+// write members' real data. (Schema changes no longer happen at request time
+// at all: they're versioned migrations, db/README.md.)
 //
 // This guard runs before any request (instrumentation.ts) and at build
 // (next.config.ts). On a PREVIEW it keeps the database only when it can prove
@@ -32,8 +33,8 @@ export function applyDatabaseSwitch(): void {
 // - Set, and the preview's host is one of them → database switched off.
 // - Set, and the host is different (a Neon branch) → database kept.
 //
-// "Switched off" removes the connection variables, so @vercel/postgres has
-// nothing to connect to: no DDL, no writes, no reads of members' data. Pages
+// "Switched off" removes the connection variables, so lib/database.ts has
+// nothing to connect to: no writes and no reads of members' data. Pages
 // already degrade without POSTGRES_URL (the `hasDb` checks). Production,
 // local and CI are untouched.
 

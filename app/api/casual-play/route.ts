@@ -6,14 +6,8 @@ import {
   publicState,
   type CasualPlayResponse,
 } from "@/lib/casual-play";
-import {
-  ConflictError,
-  ensureCasualPlayTables,
-  getCasualPlayState,
-  runCasualPlayAction,
-  type VersionedBoard,
-} from "@/lib/casual-play-db";
-import { addDays, ensureTables, listAllSessionDates, listSessionsInRange } from "@/lib/db";
+import { ConflictError, getCasualPlayState, runCasualPlayAction, type VersionedBoard } from "@/lib/casual-play-db";
+import { addDays, listAllSessionDates, listSessionsInRange } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
 import { DEMO_PASSWORD, DEMO_SESSION, demoDates, isCasualPlayDemo } from "@/lib/casual-play-demo";
@@ -79,10 +73,7 @@ async function respond(
 async function resolveDate(requested: string | null): Promise<{ date: string | null; dates: string[] }> {
   let dates: string[];
   if (isCasualPlayDemo()) dates = demoDates();
-  else {
-    await Promise.all([ensureTables(), ensureCasualPlayTables()]);
-    dates = await listAllSessionDates();
-  }
+  else dates = await listAllSessionDates();
   if (requested) return { date: dates.includes(requested) ? requested : null, dates };
   return { date: defaultDate(dates, getClubToday().dateKey), dates };
 }

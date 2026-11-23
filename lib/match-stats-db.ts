@@ -1,6 +1,6 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { z } from "zod";
-import { ArenaError, T, ensureArenaTables, loadWorld, type World } from "./arena-db";
+import { ArenaError, T, loadWorld, type World } from "./arena-db";
 
 // Match Analyzer stats saved against an Arena challenge. A court assistant
 // (any signed-in player) films the doubles game with Wolf Vision (/profile/wolf-vision), tags
@@ -83,7 +83,6 @@ export async function loadMatchSetup(challengeId: number): Promise<{ setup: Matc
 }
 
 export async function loadMatchStats(challengeId: number): Promise<SavedMatchStats | null> {
-  await ensureArenaTables();
   const { rows } = await sql.query(`SELECT stats FROM ${T.matchStats} WHERE challenge_id = $1 AND status = 'final';`, [challengeId]);
   return (rows[0]?.stats as SavedMatchStats | undefined) ?? null;
 }

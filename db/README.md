@@ -9,7 +9,7 @@ The database schema is defined in two places that CI keeps identical:
 | `docs/schema/production.sql` | What production looks like after every migration (the drift reference). Updated in the same pull request as each migration. |
 | `docs/schema/production-2026-11.sql` | Production's real schema when the baseline was taken (frozen). |
 
-Nothing changes the schema at request time (test plan §0 rule 2). Until Phase 2 PR 3 the old `ensureTables()` DDL still runs on cold starts; the drift check proves it changes nothing on a migrated database.
+Nothing changes the schema at request time (test plan §0 rule 2): the old `ensureTables()` DDL is gone (Phase 2 PR 3). A new database gets its tables from `npm run db:migrate` and its default settings from `npm run db:seed` (`db/seed/defaults.sql`; never needed on production). Preview builds migrate their own Neon branch automatically (`scripts/db/preview-migrate.mjs`, from `prebuild`); production never migrates in a build.
 
 ## Changing the schema
 
@@ -36,6 +36,7 @@ npm run db:migrate                  # apply pending migrations to POSTGRES_URL
 npm run db:migrate -- --status      # applied / pending, changes nothing
 npm run db:drift                    # read-only: live schema vs docs/schema/production.sql
 npm run db:dump                     # print the live schema (read-only)
+npm run db:seed                     # default settings for a new database (refuses production)
 npm run db:migrate -- --baseline    # once, on production: see below
 ```
 

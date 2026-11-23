@@ -20,7 +20,6 @@ import {
 } from "@/lib/finance";
 import type { Suggestion } from "@/lib/bank-match";
 import { MatchManyPanel } from "@/components/admin/finance/MatchManyPanel";
-import { ensureFinanceTables } from "@/lib/finance-db";
 import { akahuConfigured, getAkahuSyncState, syncAkahu } from "@/lib/bank-akahu";
 import { CsvImportError, parseBankCsv, parseMoneyToCents } from "@/lib/bank-csv";
 import {
@@ -370,7 +369,6 @@ export default async function BankPage() {
     );
   }
 
-  await ensureFinanceTables();
   const { dateKey: today } = getClubToday();
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
   const [funds, akahuState, stripeBalance] = await Promise.all([

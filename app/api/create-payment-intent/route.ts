@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getAvailableSpots, ensureTables, isRegistrationLocked } from "@/lib/db";
+import { getAvailableSpots, isRegistrationLocked } from "@/lib/db";
 import { isSessionDatePaused } from "@/lib/day-requests";
 import { getWeekdayForDate } from "@/lib/dates";
 import { CASUAL_PRICE_CENTS, WEEKDAY_LABEL } from "@/lib/constants";
@@ -40,7 +40,6 @@ export async function POST(request: Request) {
     }
 
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
     }
 
     await assertSessionBookable(body.sessionDate);

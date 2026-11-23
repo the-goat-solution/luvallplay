@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import {
   ARENA_SANDBOX,
   MIN_GAME_MINUTES,

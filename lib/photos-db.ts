@@ -1,49 +1,9 @@
-import { sql } from "@vercel/postgres";
-import { ensurePlayerTables } from "./player-db";
-import { onceThisDeploy } from "./schema-gate";
+import { sql } from "./database";
 
 // Photos players share from their profile. Approved photos join the main
 // site Gallery pool. Every upload is checked by Google Cloud Vision
 // SafeSearch first (lib/photo-moderation.ts); anything unchecked or doubtful
 // waits for an admin, and blocked photos never appear anywhere public.
-
-let ensurePromise: Promise<void> | null = null;
-
-export function ensurePhotoTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("photos", async () => {
-      await ensurePlayerTables();
-      await sql`
-        CREATE TABLE IF NOT EXISTS player_photos (
-          id SERIAL PRIMARY KEY,
-          player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-          original_url TEXT NOT NULL,
-          display_url TEXT NOT NULL,
-          thumb_url TEXT NOT NULL,
-          width INT,
-          height INT,
-          bytes BIGINT NOT NULL DEFAULT 0,
-          status TEXT NOT NULL DEFAULT 'pending'
-            CHECK (status IN ('pending', 'approved', 'needs_review', 'rejected', 'hidden')),
-          safesearch JSONB,
-          caption TEXT,
-          featured BOOLEAN NOT NULL DEFAULT FALSE,
-          consent_at TIMESTAMPTZ NOT NULL,
-          reviewed_at TIMESTAMPTZ,
-          reviewed_by TEXT,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          deleted_at TIMESTAMPTZ
-        );
-      `;
-      await sql`CREATE INDEX IF NOT EXISTS player_photos_player_idx ON player_photos (player_id, created_at DESC);`;
-      await sql`CREATE INDEX IF NOT EXISTS player_photos_status_idx ON player_photos (status, created_at DESC);`;
-    }).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
 
 export const PHOTOS_PER_DAY = 20;
 
@@ -103,7 +63,6 @@ function mapPhoto(r: PhotoRow): Photo {
 }
 
 export async function countPhotosToday(playerId: number): Promise<number> {
-  await ensurePhotoTables();
   const { rows } = await sql`
     SELECT count(*)::int AS n FROM player_photos
     WHERE player_id = ${playerId} AND created_at > NOW() - INTERVAL '24 hours';
@@ -121,7 +80,6 @@ export async function insertPhoto(input: {
   bytes: number;
   caption: string | null;
 }): Promise<number> {
-  await ensurePhotoTables();
   const { rows } = await sql`
     INSERT INTO player_photos (player_id, original_url, display_url, thumb_url, width, height, bytes, caption, consent_at)
     VALUES (${input.playerId}, ${input.originalUrl}, ${input.displayUrl}, ${input.thumbUrl}, ${input.width}, ${input.height},
@@ -140,7 +98,6 @@ export async function setPhotoModeration(id: number, status: PhotoStatus, safese
 
 export async function listPhotosForPlayer(playerId: number): Promise<Photo[]> {
   if (!process.env.POSTGRES_URL) return [];
-  await ensurePhotoTables();
   const { rows } = await sql`
     SELECT * FROM player_photos WHERE player_id = ${playerId} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 200;
   `;
@@ -149,7 +106,6 @@ export async function listPhotosForPlayer(playerId: number): Promise<Photo[]> {
 
 /** Soft-deletes a player's own photo; returns its URLs so the files can go too. */
 export async function deletePlayerPhoto(playerId: number, id: number): Promise<Photo | null> {
-  await ensurePhotoTables();
   const { rows } = await sql`
     UPDATE player_photos SET deleted_at = NOW()
     WHERE id = ${id} AND player_id = ${playerId} AND deleted_at IS NULL
@@ -172,7 +128,6 @@ export type GalleryPhoto = {
 export async function listGalleryPhotos(limit = 300): Promise<GalleryPhoto[]> {
   if (!process.env.POSTGRES_URL) return [];
   try {
-    await ensurePhotoTables();
     const { rows } = await sql.query(
       `SELECT ph.id, ph.display_url, ph.thumb_url, ph.original_url, ph.caption, ph.featured,
          coalesce(nullif(trim(p.display_name), ''),
@@ -201,7 +156,6 @@ export async function listGalleryPhotos(limit = 300): Promise<GalleryPhoto[]> {
 export type AdminPhoto = Photo & { playerName: string; playerEmail: string };
 
 export async function listPhotosForAdmin(filter: "review" | "blocked" | "approved" | "hidden"): Promise<AdminPhoto[]> {
-  await ensurePhotoTables();
   const statuses =
     filter === "review" ? ["needs_review", "pending"] : filter === "blocked" ? ["rejected"] : filter === "hidden" ? ["hidden"] : ["approved"];
   const { rows } = await sql.query(
@@ -220,7 +174,6 @@ export async function listPhotosForAdmin(filter: "review" | "blocked" | "approve
 
 export async function countPhotosNeedingReview(): Promise<number> {
   if (!process.env.POSTGRES_URL) return 0;
-  await ensurePhotoTables();
   const { rows } = await sql`
     SELECT count(*)::int AS n FROM player_photos WHERE status IN ('needs_review', 'pending') AND deleted_at IS NULL;
   `;
@@ -228,23 +181,19 @@ export async function countPhotosNeedingReview(): Promise<number> {
 }
 
 export async function adminSetPhotoStatus(id: number, status: PhotoStatus): Promise<void> {
-  await ensurePhotoTables();
   await sql`UPDATE player_photos SET status = ${status}, reviewed_at = NOW(), reviewed_by = 'admin' WHERE id = ${id};`;
 }
 
 export async function adminSetFeatured(id: number, featured: boolean): Promise<void> {
-  await ensurePhotoTables();
   await sql`UPDATE player_photos SET featured = ${featured} WHERE id = ${id};`;
 }
 
 export async function getPhotoById(id: number): Promise<Photo | null> {
-  await ensurePhotoTables();
   const { rows } = await sql`SELECT * FROM player_photos WHERE id = ${id};`;
   return rows[0] ? mapPhoto(rows[0] as PhotoRow) : null;
 }
 
 export async function photoStorageBytes(): Promise<number> {
-  await ensurePhotoTables();
   const { rows } = await sql`SELECT coalesce(sum(bytes), 0)::bigint AS b FROM player_photos WHERE deleted_at IS NULL;`;
   return Number(rows[0]?.b ?? 0);
 }

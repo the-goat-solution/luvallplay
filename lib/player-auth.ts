@@ -1,15 +1,8 @@
 import crypto from "crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { sql } from "@vercel/postgres";
-import {
-  PLAYER_COLUMNS,
-  ensurePlayerTables,
-  mapPlayer,
-  normalizeAccountEmail,
-  type Player,
-  type PlayerRow,
-} from "./player-db";
+import { sql } from "./database";
+import { PLAYER_COLUMNS, mapPlayer, normalizeAccountEmail, type Player, type PlayerRow } from "./player-db";
 
 // Player sign-in: a random session token in an httpOnly cookie, stored only
 // as a SHA-256 hash, with a 90-day expiry that slides forward with use.
@@ -72,7 +65,6 @@ export function playerCookieOptions(maxAgeSeconds = PLAYER_SESSION_DAYS * 24 * 6
 // ---------------------------------------------------------------------------
 
 export async function createPlayerSession(playerId: number, userAgent: string | null): Promise<string> {
-  await ensurePlayerTables();
   const token = crypto.randomBytes(32).toString("base64url");
   await sql.query(
     `INSERT INTO player_sessions (player_id, token_hash, user_agent, expires_at)
@@ -85,7 +77,6 @@ export async function createPlayerSession(playerId: number, userAgent: string | 
 
 async function playerForToken(token: string | undefined): Promise<Player | null> {
   if (!token || token.length > 100) return null;
-  await ensurePlayerTables();
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS}, s.id AS session_id, s.last_seen_at AS session_seen
      FROM player_sessions s JOIN players p ON p.id = s.player_id
@@ -111,7 +102,6 @@ async function playerForToken(token: string | undefined): Promise<Player | null>
  */
 export async function sessionForToken(token: string | undefined): Promise<{ player: Player; signedInAt: Date } | null> {
   if (!token || token.length > 100) return null;
-  await ensurePlayerTables();
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS}, s.created_at AS session_created
      FROM player_sessions s JOIN players p ON p.id = s.player_id
@@ -143,7 +133,6 @@ export async function getPlayerFromRequest(request: Request): Promise<Player | n
 
 export async function endPlayerSession(token: string | undefined): Promise<void> {
   if (!token) return;
-  await ensurePlayerTables();
   await sql`DELETE FROM player_sessions WHERE token_hash = ${sha256(token)};`;
 }
 
@@ -177,7 +166,6 @@ export type IssueCodeResult =
   | { ok: false; reason: "too_many" };
 
 export async function issueEmailCode(rawEmail: string, ip: string): Promise<IssueCodeResult> {
-  await ensurePlayerTables();
   const email = normalizeAccountEmail(rawEmail);
   const { rows } = await sql`
     SELECT count(*)::int AS n FROM auth_codes
@@ -201,7 +189,6 @@ export type VerifyCodeResult =
 
 /** Checks a typed code against the newest live code for the email. */
 export async function verifyEmailCode(rawEmail: string, rawCode: string): Promise<VerifyCodeResult> {
-  await ensurePlayerTables();
   const email = normalizeAccountEmail(rawEmail);
   const code = rawCode.replace(/\D/g, "");
   const { rows } = await sql`
@@ -228,7 +215,6 @@ export async function verifyEmailCode(rawEmail: string, rawCode: string): Promis
 
 /** The one-tap link in the code email. */
 export async function verifyLinkToken(token: string): Promise<VerifyCodeResult> {
-  await ensurePlayerTables();
   if (!token || token.length > 100) return { ok: false, reason: "invalid" };
   const { rows } = await sql`
     UPDATE auth_codes SET consumed_at = NOW()

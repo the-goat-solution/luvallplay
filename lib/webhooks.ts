@@ -1,7 +1,5 @@
 import crypto from "crypto";
-import { sql } from "@vercel/postgres";
-import { ensurePlayerTables } from "./player-db";
-import { onceThisDeploy } from "./schema-gate";
+import { sql } from "./database";
 
 // Personal access tokens and outgoing webhooks, so habit trackers (q.buzz
 // once it has an API) and AI assistants (MCP) can read a player's activity
@@ -14,60 +12,6 @@ export type WebhookEvent = (typeof EVENTS)[number];
 
 const MAX_ATTEMPTS = 6;
 
-let ensurePromise: Promise<void> | null = null;
-
-export function ensureIntegrationTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("integrations", async () => {
-      await ensurePlayerTables();
-      await sql`
-        CREATE TABLE IF NOT EXISTS api_tokens (
-          id SERIAL PRIMARY KEY,
-          player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-          name TEXT NOT NULL,
-          scopes TEXT[] NOT NULL,
-          token_hash TEXT NOT NULL UNIQUE,
-          prefix TEXT NOT NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          last_used_at TIMESTAMPTZ,
-          revoked_at TIMESTAMPTZ
-        );
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS webhook_endpoints (
-          id SERIAL PRIMARY KEY,
-          player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-          url TEXT NOT NULL,
-          secret TEXT NOT NULL,
-          events TEXT[] NOT NULL,
-          active BOOLEAN NOT NULL DEFAULT TRUE,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          last_status TEXT
-        );
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS webhook_deliveries (
-          id SERIAL PRIMARY KEY,
-          endpoint_id INT NOT NULL REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
-          event TEXT NOT NULL,
-          payload JSONB NOT NULL,
-          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'failed')),
-          attempts INT NOT NULL DEFAULT 0,
-          last_error TEXT,
-          next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          delivered_at TIMESTAMPTZ,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-      `;
-      await sql`CREATE INDEX IF NOT EXISTS webhook_deliveries_due_idx ON webhook_deliveries (status, next_attempt_at);`;
-    }).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
-
 function sha256(v: string): string {
   return crypto.createHash("sha256").update(v).digest("hex");
 }
@@ -79,7 +23,6 @@ function sha256(v: string): string {
 export type ApiToken = { id: number; name: string; scopes: Scope[]; prefix: string; createdAt: string; lastUsedAt: string | null };
 
 export async function createApiToken(playerId: number, name: string, scopes: Scope[]): Promise<{ token: string; record: ApiToken }> {
-  await ensureIntegrationTables();
   const token = `tw_${crypto.randomBytes(24).toString("base64url")}`;
   const clean = scopes.filter((s): s is Scope => (SCOPES as readonly string[]).includes(s));
   const { rows } = await sql.query(
@@ -103,7 +46,6 @@ function mapToken(r: Record<string, unknown>): ApiToken {
 
 export async function listApiTokens(playerId: number): Promise<ApiToken[]> {
   if (!process.env.POSTGRES_URL) return [];
-  await ensureIntegrationTables();
   const { rows } = await sql`
     SELECT id, name, scopes, prefix, created_at, last_used_at FROM api_tokens
     WHERE player_id = ${playerId} AND revoked_at IS NULL ORDER BY created_at DESC;
@@ -112,14 +54,12 @@ export async function listApiTokens(playerId: number): Promise<ApiToken[]> {
 }
 
 export async function revokeApiToken(playerId: number, id: number): Promise<void> {
-  await ensureIntegrationTables();
   await sql`UPDATE api_tokens SET revoked_at = NOW() WHERE id = ${id} AND player_id = ${playerId};`;
 }
 
 /** The player and scopes behind a bearer token, or null. */
 export async function authenticateToken(raw: string | null | undefined): Promise<{ playerId: number; email: string; scopes: Scope[] } | null> {
   if (!raw || !raw.startsWith("tw_") || raw.length > 80) return null;
-  await ensureIntegrationTables();
   const { rows } = await sql`
     UPDATE api_tokens t SET last_used_at = NOW()
     FROM players p
@@ -157,7 +97,6 @@ export function isAllowedWebhookUrl(raw: string): boolean {
 }
 
 export async function createWebhookEndpoint(playerId: number, url: string, events: WebhookEvent[]): Promise<{ secret: string; endpoint: WebhookEndpoint }> {
-  await ensureIntegrationTables();
   const secret = `whsec_${crypto.randomBytes(24).toString("base64url")}`;
   const clean = events.filter((e): e is WebhookEvent => (EVENTS as readonly string[]).includes(e));
   const { rows } = await sql.query(
@@ -181,7 +120,6 @@ function mapEndpoint(r: Record<string, unknown>): WebhookEndpoint {
 
 export async function listWebhookEndpoints(playerId: number): Promise<WebhookEndpoint[]> {
   if (!process.env.POSTGRES_URL) return [];
-  await ensureIntegrationTables();
   const { rows } = await sql`
     SELECT id, url, events, active, created_at, last_status FROM webhook_endpoints
     WHERE player_id = ${playerId} ORDER BY created_at DESC;
@@ -190,7 +128,6 @@ export async function listWebhookEndpoints(playerId: number): Promise<WebhookEnd
 }
 
 export async function deleteWebhookEndpoint(playerId: number, id: number): Promise<void> {
-  await ensureIntegrationTables();
   await sql`DELETE FROM webhook_endpoints WHERE id = ${id} AND player_id = ${playerId};`;
 }
 
@@ -252,7 +189,6 @@ async function deliver(deliveryId: number): Promise<boolean> {
 export async function emitToPlayers(emails: string[], event: WebhookEvent, dataFor: (email: string) => Record<string, unknown>): Promise<void> {
   if (emails.length === 0 || !process.env.POSTGRES_URL) return;
   try {
-    await ensureIntegrationTables();
     const { rows } = await sql.query(
       `SELECT e.id, p.email FROM webhook_endpoints e JOIN players p ON p.id = e.player_id
        WHERE e.active AND $2 = ANY(e.events) AND p.email = ANY($1::text[]) AND p.deleted_at IS NULL;`,
@@ -274,7 +210,6 @@ export async function emitToPlayers(emails: string[], event: WebhookEvent, dataF
 /** Retries due deliveries (daily cron, and opportunistically on new events). */
 export async function retryWebhookDeliveries(limit = 50): Promise<{ retried: number; delivered: number }> {
   if (!process.env.POSTGRES_URL) return { retried: 0, delivered: 0 };
-  await ensureIntegrationTables();
   const { rows } = await sql`
     SELECT id FROM webhook_deliveries WHERE status = 'pending' AND next_attempt_at <= NOW()
     ORDER BY next_attempt_at LIMIT ${limit};

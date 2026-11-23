@@ -7,14 +7,7 @@ import {
   type FinanceFilters,
   type FinanceTotals,
 } from "./finance";
-import {
-  ensureFinanceTables,
-  getCategoryBreakdown,
-  getEarliestEntryDate,
-  getFinanceTotals,
-  getMonthlyTotals,
-  listFinanceEntries,
-} from "./finance-db";
+import { getCategoryBreakdown, getEarliestEntryDate, getFinanceTotals, getMonthlyTotals, listFinanceEntries } from "./finance-db";
 
 export type FinanceReport = {
   entries: FinanceEntry[];
@@ -36,7 +29,6 @@ export async function loadFinanceReport(
   filters: FinanceFilters,
   today: string,
 ): Promise<FinanceReport> {
-  await ensureFinanceTables();
   const ytd = ytdRange(today);
   const earliest = filters.from ? null : await getEarliestEntryDate();
   const months = chartMonths(filters, today, earliest);

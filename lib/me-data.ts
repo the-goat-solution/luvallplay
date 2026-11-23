@@ -1,5 +1,5 @@
-import { sql } from "@vercel/postgres";
-import { addDays, ensureTables, getSpotsAndHeadcountForDates, listSessionsInRange } from "./db";
+import { sql } from "./database";
+import { addDays, getSpotsAndHeadcountForDates, listSessionsInRange } from "./db";
 import { getClubToday, isBookable, isDatePaused, getMembershipDayForDate } from "./dates";
 import type { Weekday } from "./constants";
 import type { MemberView } from "./membership-self-service";
@@ -19,7 +19,6 @@ function covers(m: MemberView | null, date: string): boolean {
 
 /** The next five weeks of play days, as this player sees them. */
 export async function calendarFor(email: string, m: MemberView | null, pausedDays: Weekday[]): Promise<CalDay[]> {
-  await ensureTables();
   const today = getClubToday().dateKey;
   const sessions = await listSessionsInRange(today, addDays(today, CALENDAR_DAYS));
   if (sessions.length === 0) return [];

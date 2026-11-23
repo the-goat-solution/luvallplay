@@ -1,4 +1,4 @@
-import { db } from "@vercel/postgres";
+import { db } from "./database";
 import { T } from "./arena-db";
 import { WV } from "./wolf-vision-db";
 import { normalizeEmail as jerseyNormalizeEmail } from "./jersey";

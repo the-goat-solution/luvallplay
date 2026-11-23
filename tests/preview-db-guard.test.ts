@@ -66,22 +66,18 @@ test("production, local and CI are never touched", () => {
   }
 });
 
-test("schema gate refuses DDL on a blocked preview", async () => {
+test("the database client refuses to connect on a blocked preview", async () => {
   const keep = { ...process.env };
   try {
     process.env.VERCEL_ENV = "preview";
     process.env.POSTGRES_URL = PROD_POOLED;
     delete process.env.PRODUCTION_DATABASE_HOSTS;
     delete process.env.PREVIEW_DATABASE_BLOCKED;
-    const { onceThisDeploy } = await import("../lib/schema-gate.ts");
-    let ran = false;
-    await assert.rejects(
-      onceThisDeploy("test", async () => {
-        ran = true;
-      }),
-      /switched off on this preview/,
-    );
-    assert.equal(ran, false, "the DDL never ran");
+    // A fresh copy: importing it applies the guard (lib/db-env.ts) first.
+    const { sql } = await import(`../lib/database.ts?blocked-preview=${Date.now()}`);
+    assert.equal(process.env.POSTGRES_URL, undefined, "the production connection string was removed");
+    await assert.rejects(sql.query("SELECT 1"), /switched off on this preview/);
+    await assert.rejects(sql`SELECT 1`, /switched off on this preview/);
   } finally {
     for (const k of Object.keys(process.env)) delete process.env[k];
     Object.assign(process.env, keep);

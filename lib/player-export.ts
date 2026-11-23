@@ -1,5 +1,5 @@
 import { arenaExport } from "./arena-db";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import type { Player } from "./player-db";
 
 // Everything the club holds about a player, for "Download my data". Tables

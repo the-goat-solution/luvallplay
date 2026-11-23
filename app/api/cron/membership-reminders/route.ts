@@ -1,15 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  addDays,
-  claimBookingReminder,
-  claimMembershipReminder,
-  ensureTables,
-  getCasualBookingsForDate,
-  getMembersWithPlayDayTomorrow,
-  getRemainingSessionDatesInPeriod,
-  listSessionsInRange,
-  sessionExists,
-} from "@/lib/db";
+import { addDays, claimBookingReminder, claimMembershipReminder, getCasualBookingsForDate, getMembersWithPlayDayTomorrow, getRemainingSessionDatesInPeriod, listSessionsInRange, sessionExists } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import {
   sendCasualBookingReminderEmail,
@@ -37,8 +27,6 @@ export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
-
-  await ensureTables();
 
   // Line every membership up with Stripe first (dates, statuses, missed
   // webhooks), so everything below works from correct data.

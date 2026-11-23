@@ -1,26 +1,7 @@
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
-import {
-  deleteWaitlistEntry,
-  ensureTables,
-  getAvailableSpots,
-  getCourtsForDate,
-  getRosterForDate,
-  getWaitlistForDate,
-  isMiniGameDay,
-  isRegistrationLocked,
-  listAllSessionDates,
-  listSessionsInRange,
-  removeBooking,
-  removeSessionFillIn,
-  reserveBookingSlot,
-  saveSessionFillIn,
-  setCourtsForDate,
-  setMiniGameDay,
-  setRegistrationLocked,
-  type FillInTarget,
-} from "@/lib/db";
+import { deleteWaitlistEntry, getAvailableSpots, getCourtsForDate, getRosterForDate, getWaitlistForDate, isMiniGameDay, isRegistrationLocked, listAllSessionDates, listSessionsInRange, removeBooking, removeSessionFillIn, reserveBookingSlot, saveSessionFillIn, setCourtsForDate, setMiniGameDay, setRegistrationLocked, type FillInTarget } from "@/lib/db";
 import { notifyWaitlistIfSpotOpened } from "@/lib/waitlist-notify";
 import { sendFillInConfirmationEmail } from "@/lib/email";
 import {
@@ -82,8 +63,6 @@ async function addOfflinePlayer(date: string, formData: FormData) {
   if (!firstName || !lastName || !email) {
     redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent("Name and email are required")}`);
   }
-
-  await ensureTables();
 
   // Admin adds go through even when registration is locked — the lock only
   // closes public sign-ups.
@@ -163,7 +142,6 @@ async function updateCourts(date: string, formData: FormData) {
     );
   }
 
-  await ensureTables();
   const before = await getCourtsForDate(date);
   const result = await setCourtsForDate(date, courts);
   if (!result.ok) {
@@ -184,7 +162,6 @@ async function updateCourts(date: string, formData: FormData) {
 // spots are left. Existing bookings and members are untouched.
 async function setRegistration(date: string, locked: boolean) {
   "use server";
-  await ensureTables();
   if (!locked && (await isMiniGameDay(date))) {
     redirect(
       `/admin/play-days?date=${date}&courtsError=${encodeURIComponent(
@@ -205,7 +182,6 @@ async function setRegistration(date: string, locked: boolean) {
 // capacity and reopens registration.
 async function setMiniGame(date: string, on: boolean) {
   "use server";
-  await ensureTables();
   const result = await setMiniGameDay(date, on);
   if (!result.ok) {
     redirect(`/admin/play-days?date=${date}&courtsError=${encodeURIComponent(result.reason)}`);
@@ -246,8 +222,6 @@ async function saveFillIn(
   if (!firstName || !lastName || !email) {
     fail("Fill-in needs a first name, last name and email");
   }
-
-  await ensureTables();
 
   // One person can't hold two spots on the same day, so reject a fill-in
   // whose email is already on this roster — as a player, or as somebody
@@ -302,7 +276,6 @@ async function saveFillIn(
 
 async function clearFillIn(date: string, target: FillInTarget) {
   "use server";
-  await ensureTables();
   await removeSessionFillIn(date, target);
   revalidatePath("/admin/play-days");
   redirect(`/admin/play-days?date=${date}&fillInRemoved=1`);
@@ -348,7 +321,6 @@ export default async function PlayDaysAdminPage({
 
   const sessionKeys = process.env.POSTGRES_URL
     ? await (async () => {
-        await ensureTables();
         return listAllSessionDates();
       })()
     : [];

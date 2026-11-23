@@ -1,47 +1,7 @@
-import { sql } from "@vercel/postgres";
-import { ensurePlayerTables } from "./player-db";
-import { onceThisDeploy } from "./schema-gate";
+import { sql } from "./database";
 
 // Conversations between a player and the club admins (Account tab ↔
 // /admin/inbox). One thread per topic; a reply to a closed thread reopens it.
-
-let ensurePromise: Promise<void> | null = null;
-
-export function ensureMessageTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("messages", async () => {
-      await ensurePlayerTables();
-      await sql`
-        CREATE TABLE IF NOT EXISTS message_threads (
-          id SERIAL PRIMARY KEY,
-          player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-          subject TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
-          started_by TEXT NOT NULL DEFAULT 'player',
-          last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          unread_for_admin BOOLEAN NOT NULL DEFAULT FALSE,
-          unread_for_player BOOLEAN NOT NULL DEFAULT FALSE,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-      `;
-      await sql`CREATE INDEX IF NOT EXISTS message_threads_player_idx ON message_threads (player_id, last_message_at DESC);`;
-      await sql`
-        CREATE TABLE IF NOT EXISTS messages (
-          id SERIAL PRIMARY KEY,
-          thread_id INT NOT NULL REFERENCES message_threads(id) ON DELETE CASCADE,
-          sender TEXT NOT NULL CHECK (sender IN ('player', 'admin')),
-          body TEXT NOT NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-      `;
-      await sql`CREATE INDEX IF NOT EXISTS messages_thread_idx ON messages (thread_id, created_at);`;
-    }).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
 
 export const MESSAGE_MAX = 4000;
 export const SUBJECT_MAX = 120;
@@ -94,7 +54,6 @@ function mapSummary(r: ThreadRow): ThreadSummary {
 
 export async function listThreadsForPlayer(playerId: number): Promise<ThreadSummary[]> {
   if (!process.env.POSTGRES_URL) return [];
-  await ensureMessageTables();
   const { rows } = await sql.query(
     `SELECT t.id, t.subject, t.status, t.last_message_at, t.unread_for_player AS unread,
        (SELECT body FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS preview,
@@ -120,7 +79,6 @@ async function loadMessages(threadId: number): Promise<Message[]> {
 
 /** A player's own thread (null if it isn't theirs). Marks it read for them. */
 export async function getThreadForPlayer(playerId: number, threadId: number): Promise<ThreadDetail | null> {
-  await ensureMessageTables();
   const { rows } = await sql`
     UPDATE message_threads SET unread_for_player = FALSE
     WHERE id = ${threadId} AND player_id = ${playerId}
@@ -146,7 +104,6 @@ export async function createThread(input: {
   body: string;
   startedBy: "player" | "admin";
 }): Promise<number> {
-  await ensureMessageTables();
   const fromAdmin = input.startedBy === "admin";
   const { rows } = await sql`
     INSERT INTO message_threads (player_id, subject, started_by, unread_for_admin, unread_for_player)
@@ -160,7 +117,6 @@ export async function createThread(input: {
 
 /** Adds a player's reply to their own thread; reopens it if it was closed. */
 export async function addPlayerMessage(playerId: number, threadId: number, body: string): Promise<Message | null> {
-  await ensureMessageTables();
   const { rowCount } = await sql`
     UPDATE message_threads SET last_message_at = NOW(), unread_for_admin = TRUE, status = 'open'
     WHERE id = ${threadId} AND player_id = ${playerId};
@@ -184,7 +140,6 @@ export type AdminThreadSummary = ThreadSummary & {
 };
 
 export async function listThreadsForAdmin(filter: "open" | "closed" | "all" = "open"): Promise<AdminThreadSummary[]> {
-  await ensureMessageTables();
   const { rows } = await sql.query(
     `SELECT t.id, t.subject, t.status, t.last_message_at, t.unread_for_admin AS unread,
        (SELECT body FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS preview,
@@ -206,7 +161,6 @@ export async function listThreadsForAdmin(filter: "open" | "closed" | "all" = "o
 export async function countUnreadForAdmin(): Promise<number> {
   if (!process.env.POSTGRES_URL) return 0;
   try {
-    await ensureMessageTables();
     const { rows } = await sql`SELECT count(*)::int AS n FROM message_threads WHERE unread_for_admin = TRUE;`;
     return (rows[0]?.n as number) ?? 0;
   } catch {
@@ -215,7 +169,6 @@ export async function countUnreadForAdmin(): Promise<number> {
 }
 
 export async function getThreadForAdmin(threadId: number): Promise<(ThreadDetail & { playerId: number; playerName: string; playerEmail: string; playerLang: string }) | null> {
-  await ensureMessageTables();
   const { rows } = await sql`
     UPDATE message_threads t SET unread_for_admin = FALSE
     FROM players p
@@ -238,7 +191,6 @@ export async function getThreadForAdmin(threadId: number): Promise<(ThreadDetail
 }
 
 export async function addAdminMessage(threadId: number, body: string): Promise<void> {
-  await ensureMessageTables();
   await sql`
     UPDATE message_threads SET last_message_at = NOW(), unread_for_player = TRUE, unread_for_admin = FALSE, status = 'open'
     WHERE id = ${threadId};
@@ -247,6 +199,5 @@ export async function addAdminMessage(threadId: number, body: string): Promise<v
 }
 
 export async function setThreadStatus(threadId: number, status: "open" | "closed"): Promise<void> {
-  await ensureMessageTables();
   await sql`UPDATE message_threads SET status = ${status}, unread_for_admin = FALSE WHERE id = ${threadId};`;
 }

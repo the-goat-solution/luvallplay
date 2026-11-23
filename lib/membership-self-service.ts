@@ -1,16 +1,7 @@
 import Stripe from "stripe";
 import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
-import { sql } from "@vercel/postgres";
-import {
-  addDays,
-  assignAndReserveMembershipAccessStart,
-  attachStripeIdToMembership,
-  ensureTables,
-  getActiveRenewalOf,
-  getSpotsAndHeadcountForDates,
-  listSessionsInRange,
-  type MembershipRow,
-} from "./db";
+import { sql } from "./database";
+import { addDays, assignAndReserveMembershipAccessStart, attachStripeIdToMembership, getActiveRenewalOf, getSpotsAndHeadcountForDates, listSessionsInRange, type MembershipRow } from "./db";
 import { isDayPaused } from "./day-requests";
 import { getClubToday } from "./dates";
 import {
@@ -20,9 +11,8 @@ import {
   resolvePriceId,
 } from "./stripe";
 import { MEMBERSHIP_CYCLE_DAYS, type MembershipDay, type MembershipTier } from "./constants";
-import { ensurePlayerTables, type Player } from "./player-db";
+import { type Player } from "./player-db";
 import { sendAdminAlertEmail, sendPlayerNoticeEmail } from "./player-email";
-import { onceThisDeploy } from "./schema-gate";
 
 // Self-service membership management from the profile's Membership tab.
 //
@@ -82,7 +72,6 @@ function view(r: Row, continuation: MemberView["continuation"]): MemberView {
 /** The member's current (or next upcoming) membership, if any. */
 export async function getCurrentMembership(email: string): Promise<MemberView | null> {
   if (!process.env.POSTGRES_URL) return null;
-  await ensureTables();
   const today = getClubToday().dateKey;
   const { rows } = await sql.query(
     `SELECT id, plan, day, status, period_start::text AS period_start, period_end::text AS period_end,
@@ -140,7 +129,6 @@ export async function stripeCustomerFor(player: Player, create = false): Promise
     ).id;
   }
   if (id) {
-    await ensurePlayerTables();
     await sql`UPDATE players SET stripe_customer_id = ${id} WHERE id = ${player.id} AND stripe_customer_id IS NULL;`;
   }
   return id;
@@ -237,8 +225,10 @@ export async function cardUpdatePortalUrl(player: Player, returnUrl: string): Pr
 // ---------------------------------------------------------------------------
 
 export class SelfServiceError extends Error {
-  constructor(public code: string) {
+  code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
   }
 }
 
@@ -328,32 +318,7 @@ export async function cancelPendingChange(m: MemberView): Promise<void> {
   await releaseSchedule(await currentSubscription(m));
 }
 
-let feedbackReady: Promise<void> | null = null;
-async function ensureFeedbackTable() {
-  if (!feedbackReady) {
-    feedbackReady = onceThisDeploy("cancellation_feedback", async () => {
-      await ensurePlayerTables();
-      await sql`
-        CREATE TABLE IF NOT EXISTS cancellation_feedback (
-          id SERIAL PRIMARY KEY,
-          player_id INT REFERENCES players(id) ON DELETE SET NULL,
-          membership_id INT,
-          action TEXT NOT NULL,
-          reason TEXT NOT NULL,
-          comment TEXT,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-      `;
-    }).catch((e) => {
-      feedbackReady = null;
-      throw e;
-    });
-  }
-  return feedbackReady;
-}
-
 export async function recordFeedback(playerId: number, membershipId: number, action: "downgrade" | "cancel", reason: string, comment: string | null): Promise<void> {
-  await ensureFeedbackTable();
   await sql`
     INSERT INTO cancellation_feedback (player_id, membership_id, action, reason, comment)
     VALUES (${playerId}, ${membershipId}, ${action}, ${reason.slice(0, 60)}, ${comment?.slice(0, 1000) ?? null});
@@ -361,7 +326,6 @@ export async function recordFeedback(playerId: number, membershipId: number, act
 }
 
 export async function listRecentFeedback(limit = 30): Promise<{ email: string; name: string; action: string; reason: string; comment: string | null; createdAt: string }[]> {
-  await ensureFeedbackTable();
   const { rows } = await sql`
     SELECT f.action, f.reason, f.comment, f.created_at, p.email, trim(p.first_name || ' ' || p.last_name) AS name
     FROM cancellation_feedback f LEFT JOIN players p ON p.id = f.player_id

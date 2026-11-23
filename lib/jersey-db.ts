@@ -1,6 +1,5 @@
-import { db, sql } from "@vercel/postgres";
-import { ensureTables } from "./db";
-import { ensureFinanceTables, createManualEntry, deleteManualEntry } from "./finance-db";
+import { db, sql } from "./database";
+import { createManualEntry, deleteManualEntry } from "./finance-db";
 import { matchBankLine, MatchError } from "./bank-db";
 import {
   EARLY_BIRD_HOLD_HOURS,
@@ -13,7 +12,6 @@ import {
   type JerseyStatus,
 } from "./jersey";
 import { generateRefCode } from "./jersey-server";
-import { onceThisDeploy } from "./schema-gate";
 
 export type JerseyRegistration = {
   id: number;
@@ -38,61 +36,6 @@ export type JerseyRegistration = {
   expiresAt: string | null;
   createdAt: string;
 };
-
-let ensurePromise: Promise<void> | null = null;
-
-export function ensureJerseyTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("jersey", async () => {
-      await ensureTables();
-      await sql`
-        CREATE TABLE IF NOT EXISTS jersey_registrations (
-          id SERIAL PRIMARY KEY,
-          ref_code TEXT NOT NULL UNIQUE,
-          first_name TEXT NOT NULL,
-          last_name TEXT NOT NULL,
-          email TEXT NOT NULL,
-          email_normalized TEXT NOT NULL,
-          phone TEXT NOT NULL,
-          phone_normalized TEXT NOT NULL,
-          name_normalized TEXT NOT NULL,
-          size TEXT NOT NULL,
-          print_name TEXT,
-          print_number INT,
-          price_cents INT NOT NULL,
-          early_bird BOOLEAN NOT NULL,
-          status TEXT NOT NULL DEFAULT 'pending'
-            CHECK (status IN ('pending', 'paid', 'released', 'cancelled')),
-          paid_cents INT,
-          paid_at TIMESTAMPTZ,
-          paid_by TEXT,
-          bank_txn_id INT,
-          entry_id INT,
-          ip_hash TEXT,
-          device_id TEXT,
-          flags TEXT[] NOT NULL DEFAULT '{}',
-          expires_at TIMESTAMPTZ,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-      `;
-      await sql`ALTER TABLE jersey_registrations ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'en';`;
-      await sql`ALTER TABLE jersey_registrations ADD COLUMN IF NOT EXISTS print_country TEXT;`;
-      // Free entries added by an admin have no reference code (the UNIQUE
-      // constraint still allows many NULLs).
-      await sql`ALTER TABLE jersey_registrations ALTER COLUMN ref_code DROP NOT NULL;`;
-      // The database itself enforces one live registration per person, so
-      // two near-simultaneous submissions can't both get in.
-      await sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS jersey_one_per_email
-        ON jersey_registrations (email_normalized) WHERE status IN ('pending', 'paid');
-      `;
-    }).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
 
 type Row = Record<string, unknown>;
 
@@ -124,7 +67,6 @@ function toReg(r: Row): JerseyRegistration {
 
 // Unpaid early birds past their 48 hours go back to the pool.
 export async function releaseExpired(): Promise<number> {
-  await ensureJerseyTables();
   const { rowCount } = await sql`
     UPDATE jersey_registrations SET status = 'released'
     WHERE status = 'pending' AND early_bird AND expires_at IS NOT NULL AND expires_at < NOW();
@@ -245,7 +187,6 @@ export async function listJerseyRegistrations(): Promise<JerseyRegistration[]> {
 }
 
 export async function getJerseyRegistration(id: number): Promise<JerseyRegistration | null> {
-  await ensureJerseyTables();
   const { rows } = await sql`SELECT * FROM jersey_registrations WHERE id = ${id};`;
   return rows[0] ? toReg(rows[0]) : null;
 }
@@ -351,7 +292,6 @@ export async function updateJerseyRegistration(
   id: number,
   e: JerseyEdit,
 ): Promise<{ ok: true } | { ok: false; reason: "not_found" | "duplicate_email" }> {
-  await ensureJerseyTables();
   const { rows: cur } = await sql`SELECT early_bird, paid_by FROM jersey_registrations WHERE id = ${id};`;
   if (!cur[0]) return { ok: false, reason: "not_found" };
   // A free entry stays free whatever the printing option.
@@ -377,7 +317,6 @@ export async function updateJerseyRegistration(
 }
 
 export async function markJerseyPaid(id: number, paidCents: number | null): Promise<boolean> {
-  await ensureJerseyTables();
   const { rowCount } = await sql`
     UPDATE jersey_registrations
     SET status = 'paid', paid_by = 'admin', paid_at = NOW(),
@@ -388,7 +327,6 @@ export async function markJerseyPaid(id: number, paidCents: number | null): Prom
 }
 
 export async function markJerseyUnpaid(id: number): Promise<boolean> {
-  await ensureJerseyTables();
   const { rowCount } = await sql`
     UPDATE jersey_registrations
     SET status = 'pending', paid_by = NULL, paid_at = NULL, paid_cents = NULL, expires_at = NULL
@@ -398,7 +336,6 @@ export async function markJerseyUnpaid(id: number): Promise<boolean> {
 }
 
 export async function setJerseyStatus(id: number, status: "cancelled" | "released"): Promise<boolean> {
-  await ensureJerseyTables();
   const { rowCount } = await sql`
     UPDATE jersey_registrations SET status = ${status}
     WHERE id = ${id} AND (status IN ('pending', 'released') OR (${status} = 'cancelled' AND paid_by = 'free'));
@@ -414,8 +351,6 @@ export type PaidNotice = { registration: JerseyRegistration; paidCents: number }
 // reconciled against the bank line. Less than the price → flagged for the
 // admin, never paid automatically.
 export async function matchJerseyPayments(): Promise<{ paid: PaidNotice[]; underpaid: number }> {
-  await ensureJerseyTables();
-  await ensureFinanceTables();
   const { rows: lines } = await sql`
     SELECT id, txn_date::text AS d, description, reference, amount_cents
     FROM bank_transactions WHERE status = 'unmatched' AND amount_cents > 0

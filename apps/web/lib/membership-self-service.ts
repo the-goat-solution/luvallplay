@@ -10,7 +10,7 @@ import {
   oneTimeMembershipPriceCents,
   resolvePriceId,
 } from "./stripe";
-import { MEMBERSHIP_CYCLE_DAYS, type MembershipDay, type MembershipTier } from "./constants";
+import { type MembershipDay, type MembershipTier } from "./constants";
 import { type Player } from "./player-db";
 import { sendAdminAlertEmail, sendPlayerNoticeEmail } from "./player-email";
 
@@ -510,5 +510,4 @@ export async function syncPlanFromSubscriptionMetadata(subscriptionId: string, m
   `;
 }
 
-export { MEMBERSHIP_CYCLE_DAYS };
 export type { MembershipRow };

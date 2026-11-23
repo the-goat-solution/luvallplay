@@ -4,7 +4,6 @@ import { sessionCapacityFor } from "@luvallplay/core/club-config";
 // DATE columns come back as plain 'YYYY-MM-DD' strings (lib/database.ts).
 import {
   MEMBERSHIP_CYCLE_DAYS,
-  MEMBERSHIP_DAYS,
   MEMBERSHIP_DAY_TO_DOW,
   type MembershipDay,
   type MembershipTier,
@@ -62,15 +61,20 @@ export function membershipCoversDateSql(dateExpr: string, alias = ""): string {
 // period_end rolled forward by whole billing cycles until it covers that day.
 // For a member whose stored window already covers the date this is a no-op,
 // so it's safe to apply unconditionally.
-export function projectedPeriodEndSql(dateExpr: string): string {
+// `cycle` is the club's cycle lengths (settings → memberships.cycleDays);
+// they go into the SQL as whole numbers, never as text.
+export function projectedPeriodEndSql(dateExpr: string, cycle: Record<MembershipTier, number> = MEMBERSHIP_CYCLE_DAYS): string {
+  const monthly = Math.trunc(Number(cycle.monthly));
+  const quarterly = Math.trunc(Number(cycle.quarterly));
+  if (!(monthly > 0) || !(quarterly > 0)) throw new Error("membership cycle lengths must be positive whole days");
   return `(
     period_end + (
-      CASE plan WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE ${MEMBERSHIP_CYCLE_DAYS.monthly} END
+      CASE plan WHEN 'quarterly' THEN ${quarterly} ELSE ${monthly} END
       * GREATEST(
           0,
           CEIL(
             (${dateExpr}::date - period_end)::numeric
-            / CASE plan WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE ${MEMBERSHIP_CYCLE_DAYS.monthly} END
+            / CASE plan WHEN 'quarterly' THEN ${quarterly} ELSE ${monthly} END
           )::int
         )
     )
@@ -464,7 +468,8 @@ export async function assignAndReserveMembershipAccessStart(
             booked,
           })
         ) {
-          const periodEnd = addDays(date, MEMBERSHIP_DAYS[plan]);
+          // End-inclusive: one less than the club's cycle length.
+          const periodEnd = addDays(date, cfg.memberships.cycleDays[plan] - 1);
           const { rows: inserted } = await client.query(
             `INSERT INTO memberships
                (email, plan, day, first_name, last_name, phone, period_start, period_end, recurring, status, renewal_of)
@@ -1207,11 +1212,12 @@ export async function applyMembershipRenewal(
   subscriptionId: string,
   invoiceId: string,
 ): Promise<void> {
+  const { cycleDays } = (await getClubConfig(sql)).memberships;
   await sql`
     UPDATE memberships
     SET
       period_end = period_end + (
-        CASE plan WHEN 'monthly' THEN ${MEMBERSHIP_CYCLE_DAYS.monthly} WHEN 'quarterly' THEN ${MEMBERSHIP_CYCLE_DAYS.quarterly} ELSE 0 END
+        CASE plan WHEN 'monthly' THEN ${cycleDays.monthly} WHEN 'quarterly' THEN ${cycleDays.quarterly} ELSE 0 END
       ),
       last_renewal_invoice_id = ${invoiceId}
     WHERE stripe_subscription_id = ${subscriptionId}
@@ -1274,12 +1280,13 @@ export async function getMembersWithPlayDayTomorrow(
 ): Promise<MembershipReminderTarget[]> {
   const membershipDay = getMembershipDayForDate(date);
   if (!membershipDay) return [];
+  const cfg = await getClubConfig(sql);
   // period_end is reported as the projected one so the reminder email's
   // "remaining sessions in your membership" list still spans a real cycle for
   // a member whose renewal hasn't billed yet.
   const { rows } = await sql.query(
     `SELECT id, email, first_name, plan, day,
-            ${projectedPeriodEndSql("$1")}::text AS period_end
+            ${projectedPeriodEndSql("$1", cfg.memberships.cycleDays)}::text AS period_end
      FROM memberships
      WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
        AND ${memberNotAbsentSql("$1::date")};`,
@@ -1560,12 +1567,13 @@ export async function syncRecurringMembership(
   cancelAtPeriodEnd: boolean,
   today: string,
 ): Promise<void> {
+  const cfg = await getClubConfig(sql);
   await sql.query(
     `UPDATE memberships
      SET status = $2,
          cancel_at_period_end = $3,
          period_end = CASE
-           WHEN $2 = 'active' AND NOT $3 THEN ${projectedPeriodEndSql("$4")}
+           WHEN $2 = 'active' AND NOT $3 THEN ${projectedPeriodEndSql("$4", cfg.memberships.cycleDays)}
            ELSE period_end
          END
      WHERE id = $1;`,

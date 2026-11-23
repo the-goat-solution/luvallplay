@@ -1,7 +1,7 @@
 "use client";
 
 import { useFlashToast, type FlashRules } from "@/hooks/useFlashToast";
-import { MINI_GAME_MAX_PLAYERS } from "@/lib/constants";
+import { useClub } from "@/context/ClubContext";
 
 // The messages each admin page's server actions redirect back with. The
 // admin frame renders <FlashToast />; the hook does the rest.
@@ -24,7 +24,8 @@ const generic: FlashRules = {
   toastError: (v) => (v ? err(v) : null),
 };
 
-const playDays: FlashRules = {
+// The mini-game cap is the club's setting, so these rules are built per club.
+const playDaysFor = (miniGameMax: number): FlashRules => ({
   ...generic,
   cashAdded: (v) => ok(offlineAddedMessage(v, "Player")),
   cashError: (v) => err(v),
@@ -40,14 +41,14 @@ const playDays: FlashRules = {
     v === "locked" ? ok("Sign-ups closed for this play day. You can still add players.") : v === "unlocked" ? ok("Sign-ups are open for this play day.") : null,
   miniGame: (v) =>
     v === "on"
-      ? ok(`Mini game day on — casual sign-ups closed, capped at ${MINI_GAME_MAX_PLAYERS} players. Members are included.`)
+      ? ok(`Mini game day on — casual sign-ups closed, capped at ${miniGameMax} players. Members are included.`)
       : v === "off"
         ? ok("Mini game off: sign-ups are open again and capacity follows the courts.")
         : null,
   fillInSaved: () => ok("Stand-in saved, and emailed the play day details."),
   fillInRemoved: () => ok("Stand-in removed: the original player is back on the roster."),
   fillInError: (v) => err(v),
-};
+});
 
 const members: FlashRules = {
   cashMemberAdded: (v) => ok(offlineAddedMessage(v, "Member")),
@@ -69,11 +70,11 @@ const financials: FlashRules = {
 const membersAll: FlashRules = { ...generic, ...members };
 const financialsAll: FlashRules = { ...generic, ...financials };
 
-export const FLASH_RULES = { generic, playDays, members: membersAll, financials: financialsAll } as const;
+export const FLASH_RULES = { generic, playDays: playDaysFor, members: membersAll, financials: financialsAll } as const;
 
 /** The messages a page's server actions can redirect back with. */
-export function flashRulesFor(pathname: string): FlashRules {
-  if (pathname.startsWith("/admin/play-days")) return playDays;
+export function flashRulesFor(pathname: string, miniGameMax: number): FlashRules {
+  if (pathname.startsWith("/admin/play-days")) return playDaysFor(miniGameMax);
   if (pathname.startsWith("/admin/members")) return membersAll;
   if (pathname.startsWith("/admin/financials")) return financialsAll;
   return generic;
@@ -86,6 +87,7 @@ export function flashRulesFor(pathname: string): FlashRules {
  * action's redirect re-rendered the page.)
  */
 export function FlashToast({ pathname }: { pathname: string }) {
-  useFlashToast(flashRulesFor(pathname));
+  const club = useClub();
+  useFlashToast(flashRulesFor(pathname, club.miniGameMaxPlayers));
   return null;
 }

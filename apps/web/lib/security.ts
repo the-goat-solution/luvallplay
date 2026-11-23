@@ -1,4 +1,5 @@
-import { BOOKING_WINDOW_DAYS } from "./constants";
+import { clubClock } from "./club";
+import { hourLabel } from "./club-public";
 import { isBookable, startOfDay } from "./dates";
 import { sessionExists } from "./db";
 import { isAdminApiRequest } from "./admin-access";
@@ -52,9 +53,10 @@ export async function verifyTurnstile(
 export async function assertSessionBookable(sessionDate: string): Promise<void> {
   const [y, m, d] = sessionDate.split("-").map(Number);
   const date = new Date(y, m - 1, d);
-  if (!isBookable(date, new Date())) {
+  const clock = await clubClock();
+  if (!isBookable(date, new Date(), clock)) {
     throw new Error(
-      `Booking is only open from ${BOOKING_WINDOW_DAYS} days before the session until 5PM on the day of play`,
+      `Booking is only open from ${clock.bookingWindowDays} days before the session until ${hourLabel(clock.bookingCutoffHour)} on the day of play`,
     );
   }
   if (process.env.POSTGRES_URL) {

@@ -13,7 +13,7 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 2 | `tenant_id` on every club-owned table (#102) | **Done.** Production data run passed (23 Nov, 08:25 UTC); live (08:28 UTC) |
 | 3 | Email links → `user_id` (#103) | **Production data run done and passed** (23 Nov, 09:09 UTC). Merged 09:11 UTC |
 | 4 | Settings replace constants (behind flags) | In progress. Parts 1 to 5 merged (#104, #105); **shadow reads for settings started 23 Nov, 09:50 UTC** (§4) |
-| 5 | Module enforcement | Part 1 built (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5) |
+| 5 | Module enforcement | Part 1 merged and live (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5) |
 | 6 | Second database driver, region routing | Not started |
 | 7 | Money audit (minor units, VND) | Not started |
 | 8 | Payments interface | Not started |
@@ -191,6 +191,8 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 **Admin → Setup check → Club settings** shows the comparison at any time, whatever the source.
 
 **Shadow reads are on (23 Nov 2026, 09:50 UTC).** `CLUB_SETTINGS_SOURCE=shadow` is set for Production (by the build session, under the owner's blanket approval), and #104's deploy picked it up. The earliest day to switch to `database` is **30 Nov**, if the logs and Admin → Setup check → Club settings show no difference. Rollback at any time is deleting the variable and redeploying.
+
+**The record of shadow reads.** The hosting plan keeps server logs for one hour, so logs can't show seven clean days. Each result is a row in `admin_audit_log` (`action = shadow.settings`, `target` = `clean`, `differ` or `unavailable`): a difference is written when a request sees it, and the roster cron writes one result a day whether or not there is a play day (`lib/shadow-log.ts`). To read it: `node --import ./tests/register.mjs scripts/shadow-report.mjs` in `apps/web` with `POSTGRES_URL` set (read-only; exits 1 if any day has a difference). The gate for step 11 is seven days with a `clean` row and no `differ` row.
 
 **Parts so far:**
 

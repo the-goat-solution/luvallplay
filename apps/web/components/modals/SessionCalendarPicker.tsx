@@ -5,7 +5,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useApp } from "@/context/AppContext";
 import { usePausedDays } from "@/context/SignupPauseContext";
 import { weekdayKey } from "@/components/modals/DayRequestModal";
-import { SESSION_CAPACITY } from "@/lib/constants";
+import { useClub } from "@/context/ClubContext";
 import {
   formatDateLong,
   formatEventTimeRange,
@@ -36,7 +36,8 @@ export function SessionCalendarPicker() {
   // NZ hour. `today` is derived from it via the club's NZ calendar day (not
   // the browser's local midnight) for date-only comparisons below.
   const now = useMemo(() => new Date(), []);
-  const today = useMemo(() => getClubTodayDate(now), [now]);
+  const club = useClub();
+  const today = useMemo(() => getClubTodayDate(now, club.clock), [now, club.clock]);
   const [calDate, setCalDate] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
@@ -117,10 +118,10 @@ export function SessionCalendarPicker() {
     const dateMs = startOfDay(date).getTime();
     const isSessionDay = Boolean(sessionDates[toDateKey(date)]);
     const isPast = dateMs < todayMs;
-    const locked = isSessionDay && !isPast && isWithinBookingLock(date, now);
-    const open = isSessionDay && !isPast && isBookable(date, now);
+    const locked = isSessionDay && !isPast && isWithinBookingLock(date, now, club.clock);
+    const open = isSessionDay && !isPast && isBookable(date, now, club.clock);
     const spots = isSessionDay
-      ? (spotsByDate[toDateKey(date)] ?? SESSION_CAPACITY)
+      ? (spotsByDate[toDateKey(date)] ?? club.sessionCapacity)
       : 0;
     const isFull = spots === 0;
     const isSel = isSessionDay && selMs === dateMs;
@@ -254,13 +255,13 @@ export function SessionCalendarPicker() {
               {(() => {
                 const info = sessionDates[toDateKey(selectedSession)];
                 return info?.eventStartTime
-                  ? formatEventTimeRange(info.eventStartTime, info.eventEndTime)
+                  ? formatEventTimeRange(info.eventStartTime, info.eventEndTime, club.clock.timezone)
                   : tr("ngc_time");
               })()}
             </div>
           </div>
           <div className="selected-session-spots">
-            {spotsByDate[toDateKey(selectedSession)] ?? SESSION_CAPACITY}{" "}
+            {spotsByDate[toDateKey(selectedSession)] ?? club.sessionCapacity}{" "}
             {tr("spots_left")}
           </div>
         </div>

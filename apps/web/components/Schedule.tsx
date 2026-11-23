@@ -8,7 +8,7 @@ import { weekdayKey } from "@/components/modals/DayRequestModal";
 import { Trans } from "@/components/Trans";
 import { LoadingIcon } from "@/components/LoadingIcon";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
-import { SESSION_CAPACITY } from "@/lib/constants";
+import { useClub } from "@/context/ClubContext";
 import { pickLocale } from "@/lib/sanity";
 import type { CmsScheduleSettings } from "@/lib/sanity-queries";
 import {
@@ -56,7 +56,8 @@ export function Schedule({
   // NZ hour. `today` is derived from it via the club's NZ calendar day (not
   // the browser's local midnight) for date-only comparisons below.
   const now = useMemo(() => new Date(), []);
-  const today = useMemo(() => getClubTodayDate(now), [now]);
+  const club = useClub();
+  const today = useMemo(() => getClubTodayDate(now, club.clock), [now, club.clock]);
   const sortedUpcomingKeys = useMemo(() => {
     const todayKey = toDateKey(today);
     return Object.keys(sessionDates)
@@ -91,9 +92,9 @@ export function Schedule({
 
   const dateKey = displayDate ? toDateKey(displayDate) : null;
   const sessionInfo = dateKey ? sessionDates[dateKey] : undefined;
-  const maxSpots = sessionInfo?.maxSpots ?? scheduleSettings?.maxCasualSpots ?? SESSION_CAPACITY;
+  const maxSpots = sessionInfo?.maxSpots ?? scheduleSettings?.maxCasualSpots ?? club.sessionCapacity;
   const displayTimeLabel = sessionInfo?.eventStartTime
-    ? formatEventTimeRange(sessionInfo.eventStartTime, sessionInfo.eventEndTime)
+    ? formatEventTimeRange(sessionInfo.eventStartTime, sessionInfo.eventEndTime, club.clock.timezone)
     : timeLabel;
   const displayLocation = sessionInfo?.eventLocation || null;
   const spotsAvail =
@@ -102,8 +103,8 @@ export function Schedule({
     ? signedUpByDate[dateKey]
     : 0;
 
-  const withinLock = displayDate ? isWithinBookingLock(displayDate, now) : false;
-  const bookable = displayDate ? isBookable(displayDate, now) : false;
+  const withinLock = displayDate ? isWithinBookingLock(displayDate, now, club.clock) : false;
+  const bookable = displayDate ? isBookable(displayDate, now, club.clock) : false;
   const isFull = spotsAvail <= 0;
   // Closed early by an admin, whether or not the session has filled.
   const adminLocked = dateKey ? Boolean(lockedByDate[dateKey]) : false;
@@ -213,8 +214,8 @@ export function Schedule({
       if (isSessionDay && dateMs >= todayMs) {
         const isNext = dateMs === nextGameMs;
         const paused = isDatePaused(toDateKey(date), pausedDays);
-        const locked = isWithinBookingLock(date, now);
-        const canBook = isBookable(date, now);
+        const locked = isWithinBookingLock(date, now, club.clock);
+        const canBook = isBookable(date, now, club.clock);
         const isSel =
           schedulePick &&
           startOfDay(schedulePick).getTime() === dateMs;

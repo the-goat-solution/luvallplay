@@ -24,6 +24,8 @@ import { dumpSchema, schemaDiff } from "../scripts/db/dump-schema.mjs";
 import { loadMigrations, migrate, markBaseline, plan, BASELINE_DUMP, EXPECTED_DUMP, MIGRATIONS_DIR } from "../scripts/db/migrate.mjs";
 
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;
+// The Drizzle schema lives in packages/db (Phase 2 monorepo).
+const DB_SCHEMA = new URL("../../../packages/db/schema.ts", import.meta.url).pathname;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
 const quiet = () => {};
 const created: string[] = [];
@@ -104,7 +106,7 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
     const out = mkdtempSync(join(tmpdir(), "drizzle-gen-"));
     try {
       // From scratch: the whole schema as Drizzle Kit would create it.
-      const gen = spawnSync("npx", ["drizzle-kit", "generate", "--dialect", "postgresql", "--schema", "./db/schema.ts", "--out", out, "--name", "from_schema"], { encoding: "utf8" });
+      const gen = spawnSync("npx", ["drizzle-kit", "generate", "--dialect", "postgresql", "--schema", DB_SCHEMA, "--out", out, "--name", "from_schema"], { encoding: "utf8" });
       assert.equal(gen.status, 0, gen.stdout + gen.stderr);
       const url = await freshDb("schema_ts");
       const text = readFileSync(join(out, "0000_from_schema.sql"), "utf8");
@@ -118,7 +120,7 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
       // Against the committed migrations: nothing new.
       const copy = mkdtempSync(join(tmpdir(), "drizzle-migs-"));
       cpSync(MIGRATIONS_DIR, copy, { recursive: true });
-      const check = spawnSync("npx", ["drizzle-kit", "generate", "--dialect", "postgresql", "--schema", "./db/schema.ts", "--out", copy], { encoding: "utf8" });
+      const check = spawnSync("npx", ["drizzle-kit", "generate", "--dialect", "postgresql", "--schema", DB_SCHEMA, "--out", copy], { encoding: "utf8" });
       const files = readdirSync(copy).filter((f) => f.endsWith(".sql"));
       rmSync(copy, { recursive: true, force: true });
       assert.equal(check.status, 0, check.stdout + check.stderr);
@@ -219,7 +221,7 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
     const { SIZES, FITS } = await import("../lib/shop-db.ts");
     const url = await freshDb("seed");
     await withClient(url, (c) => migrate(c, { log: quiet }));
-    const seed = readFileSync("db/seed/defaults.sql", "utf8");
+    const seed = readFileSync(new URL("../../../packages/db/seed/defaults.sql", import.meta.url), "utf8");
     await withClient(url, async (c) => {
       await c.query(seed);
       await c.query(`UPDATE day_signup_settings SET paused = FALSE WHERE day = 'wednesday'`);

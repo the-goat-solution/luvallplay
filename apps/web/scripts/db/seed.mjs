@@ -20,7 +20,7 @@ if (prod.includes(endpoint(new URL(url).hostname))) {
 const c = await dbClient(url, "db-seed");
 await c.connect();
 try {
-  await c.query(readFileSync(new URL("../../db/seed/defaults.sql", import.meta.url), "utf8"));
+  await c.query(readFileSync(new URL("../../../../packages/db/seed/defaults.sql", import.meta.url), "utf8"));
   console.log("Seeded default settings (existing rows kept).");
 } finally {
   await c.end();

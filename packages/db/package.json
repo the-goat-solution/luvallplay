@@ -1,0 +1,23 @@
+{
+  "name": "@luvallplay/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Database schema (Drizzle), versioned migrations and default seed for Luvallplay. See README.md.",
+  "exports": {
+    "./schema": "./schema.ts",
+    "./relations": "./relations.ts",
+    "./migrations/meta/_journal.json": "./migrations/meta/_journal.json",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "check": "drizzle-kit check"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11"
+  }
+}

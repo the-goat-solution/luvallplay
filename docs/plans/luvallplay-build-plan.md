@@ -225,6 +225,12 @@ Findings and changes recorded as the work goes:
     - `scripts/verify-business-config.mjs`: a live database against live Sanity (catches a tampered price id);
     - a combined rehearsal (PR 4 + PR 6) on a branch of production: 0 problems, drift empty, values match.
   - **Contract later:** remove the Sanity fallback and the Sanity pricing fields once production has run 0002 and a quiet week has passed.
+- **PR 7, monorepo (pnpm workspaces + Turborepo):**
+  - `apps/web` (the whole Next.js app, its scripts and tests) and `packages/db` (`@luvallplay/db`: Drizzle schema, migrations, seed). `docs/` and `.github/` stay at the root.
+  - npm → pnpm with `node-linker=hoisted` (npm-style `node_modules`, because Sanity expects hoisting). Next's peer warning from `next-sanity` is allowed via `pnpm.peerDependencyRules`, replacing npm's `overrides`.
+  - `next.config.ts`: `transpilePackages`, `outputFileTracingRoot` and `turbopack.root` point at the repository root.
+  - The remaining packages from §3.1 (`core`, `auth`, `ui`, `i18n`, the modules) start in PR 8. `apps/studio` follows the Studio step (runbook §7).
+  - The Vercel switch is a dashboard step, done last (runbook §8). Production keeps serving the previous deployment until the new build is Ready.
 - **PR 5, Next.js 16** (16.4.6, Turbopack builds):
   - `middleware.ts` is now `proxy.ts` (`export function proxy`), on the Node runtime, which is fixed in 16, so the `runtime` setting is gone.
   - `revalidateTag(tag)` is now `revalidateTag(tag, { expire: 0 })`. That keeps today's behaviour (the next request reads fresh data), not the stale-while-revalidate `"max"` profile.

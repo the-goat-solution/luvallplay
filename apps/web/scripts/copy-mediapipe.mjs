@@ -8,7 +8,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const from = join(root, "node_modules/@mediapipe/tasks-vision/wasm");
+// The package sits in this app's node_modules or, in the monorepo's hoisted
+// layout, in a parent's: look upwards like Node does.
+function findWasm() {
+  for (let dir = root; ; dir = dirname(dir)) {
+    const candidate = join(dir, "node_modules/@mediapipe/tasks-vision/wasm");
+    if (existsSync(candidate)) return candidate;
+    if (dirname(dir) === dir) return join(root, "node_modules/@mediapipe/tasks-vision/wasm");
+  }
+}
+const from = findWasm();
 const to = join(root, "public/mediapipe");
 const files = [
   "vision_wasm_internal.js",

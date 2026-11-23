@@ -2,9 +2,22 @@
 
 Production website for Three Wolves Badminton Club (Christchurch, NZ).
 
+## Repository layout (monorepo, Phase 2)
+
+pnpm workspaces + Turborepo:
+
+| Path | What |
+|---|---|
+| `apps/web` | The Next.js site, app, admin and API (Vercel Root Directory) |
+| `packages/db` | Drizzle schema, versioned migrations, default seed (`@luvallplay/db`) |
+| `docs/` | Plans, runbooks, schema dumps, rehearsal reports |
+
+Run things from the root with `pnpm --filter web <script>` (or `cd apps/web`). The build plan (§3.1) lists the packages still to come.
+
 ## Stack
 
-- **Next.js 15** (App Router) on Vercel
+- **Next.js 16** (App Router, Turbopack) on Vercel
+- **Neon Postgres** through `@neondatabase/serverless` + **Drizzle** (`apps/web/lib/database.ts`)
 - **Sanity CMS** — content at `/studio`
 - **Stripe** — casual ($10), monthly ($33), quarterly ($85 / 3 months), donations (custom amount, one-time or monthly)
 - **Vercel Postgres** — sessions, bookings, waitlist, memberships
@@ -22,22 +35,25 @@ Production website for Three Wolves Badminton Club (Christchurch, NZ).
 ## Setup
 
 ```bash
-npm install
-cp .env.example .env.local
+pnpm install
+cp apps/web/.env.example apps/web/.env.local
 ```
 
 ### Database
 
-Link Vercel Postgres in the dashboard, then:
+Point `POSTGRES_URL` at a Postgres (a Neon branch, or a local Postgres 18), then:
 
 ```bash
-npm run db:migrate
+pnpm --filter web db:migrate   # tables from packages/db/migrations
+pnpm --filter web db:seed      # default settings for a new database
 ```
+
+See `packages/db/README.md`.
 
 ### Stripe (test)
 
 ```bash
-STRIPE_SECRET_KEY=sk_test_... npm run stripe:setup
+STRIPE_SECRET_KEY=sk_test_... pnpm --filter web stripe:setup
 ```
 
 Add printed price/product IDs to `.env.local` (including `STRIPE_PRODUCT_DONATION`). Configure webhook:

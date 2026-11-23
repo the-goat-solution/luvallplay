@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 import { applyDatabaseSwitch, guardPreviewDatabase } from "./lib/db-switch";
 import { REDIRECTS } from "./lib/redirects";
@@ -27,7 +28,14 @@ const csp = [
   "manifest-src 'self'",
 ].join("; ");
 
+// Monorepo (Phase 2): the app is apps/web; workspace packages (packages/*)
+// are TypeScript source, compiled by Next.
+const REPO_ROOT = path.join(__dirname, "../..");
+
 const nextConfig: NextConfig = {
+  transpilePackages: ["@luvallplay/db"],
+  outputFileTracingRoot: REPO_ROOT,
+  turbopack: { root: REPO_ROOT },
   // End-to-end test builds only (E2E_BUILD=1): one shared copy of the
   // database driver, so lib/local-neon.ts can point it at a local Postgres.
   // Production builds are unchanged.

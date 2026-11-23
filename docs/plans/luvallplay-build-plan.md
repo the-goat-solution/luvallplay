@@ -23,6 +23,8 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **N: bring your own brand.** Clubs can import their own logo, font and colour palette, or pull them from their existing website (§6.3.2).
 - **O: online payments only for incorporated clubs with their own Stripe account.** Setup asks both questions; every other paying club is set up for cash and bank transfer only, with an admin area built for that (§6.2.2). Three Wolves never collects or passes on money for other clubs (Stripe forbids it, and it would make the collector a regulated money-transfer business under NZ's AML/CFT Act).
 - **P: a small core admin; everything else is a module.** The core is only what a free, no-money club needs to run play days. Every other admin area is a module that can be turned on or off during setup, by the club's owners, or by Luvallplay's platform admins (§6.2.3).
+- **Q: Luvallplay is a multi-sport platform, with badminton first.** Product and marketing words stay sport-neutral where they can ("session", "game", "court or field"). Badminton-specific features (Arena terms, Vision) are modules that other sports can adapt later.
+- **R: a Luvallplay introduction website** in English and Vietnamese, multi-sport, following the brand system (§7.4). It can be built now, in parallel with the app work.
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
 
@@ -562,7 +564,7 @@ New clubs pick one in the wizard. Each is a primary colour (headers, buttons) pl
 | Scheme | Primary | Accent | Feel |
 |---|---|---|---|
 | **Court Green** (default) | `#0E6B4F` | `#D4F23C` | Luvallplay's own: the court with a lime shuttle |
-| **Midnight Rally** | `#1E3A8A` | `#FBBF24` | Deep navy under hall lights, gold smash |
+| **Midnight Rally** | `#1E3A8A` | `#FBBF24` | Deep navy under hall lights, gold smash (dark mode uses a lighter blue with dark text) |
 | **Shuttle Mono** | `#18181B` | `#FACC15` | Black and white like a feather shuttle, yellow strike (flips to white buttons in dark mode) |
 | **Sunset Smash** | `#C2410C` | `#FDE047` | Burnt orange with sunny yellow |
 | **Ocean Drive** | `#0F766E` | `#F9A8D4` | Deep teal with flamingo pink |
@@ -575,7 +577,7 @@ New clubs pick one in the wizard. Each is a primary colour (headers, buttons) pl
 | **Arctic Smash** | `#075985` | `#F0ABFC` | Ice-deep blue with orchid |
 
 - The wizard shows each scheme live on the club's own name, a play-day card and a button, in light and dark, before the club picks.
-- Neutrals (backgrounds, text, borders) are shared across schemes, so every scheme stays readable.
+- Neutrals (backgrounds, text, borders) are shared across schemes, so every scheme stays readable. Dark-mode colours are checked against the brand system's real dark grounds (`surface` #0B1B2B and `surface-raised` #12263A), so fills stand off both at ≥ 3:1.
 - More schemes can be added later as data (one entry in the JSON), with the same automated contrast check in CI.
 
 #### 6.3.2 Bring your own brand
@@ -649,9 +651,11 @@ Each step is rehearsed on a Neon branch of production, behind a feature flag, wi
 
 Name: **Luvallplay**. Domain to buy: **luvallplay.org** (+ .com, .nz). The brand lives in the **Luvallplay brand** design system: https://claude.ai/artifact/7do36zHNvLp3pFdNUC7euj (logo files, app icon, colour and type tokens, voice and usage rules). It's private until you share it.
 
-- **Mark:** a shuttlecock that is also a heart. The cork is the heart's tip, and three feather spines plus the binding band fan into the lobes. "Luv" + badminton in one shape that still reads at 16px.
-- **Wordmark:** custom lowercase **luvallplay** in round-ended single strokes, matching the app's line icons.
-- **App icon:** a Smash Lime heart-shuttle on a full-bleed Court Green square.
+The design system is the source of truth. If anything here differs from it, the design system wins.
+
+- **Mark: a heart in bloom.** A Rally Coral heart sits where four rounded Court Green petals meet (lime petals on dark grounds). The petals read as four players around a court and as a shuttle's feathers; the heart is the "love" in love all. It works for any sport.
+- **Wordmark:** lowercase **luvallplay** in Montserrat Alternates ExtraBold, outlined in the logo files (never retyped). Side-by-side, stacked and one-colour versions exist.
+- **App icon:** lime petals and a coral heart on a full-bleed Court Green square.
 
 | Token | Colour | Use |
 |---|---|---|
@@ -694,6 +698,66 @@ All palettes are validated for WCAG AA in light and dark. Clubs choose from 12 t
 - Templates render in the club's theme (preset or imported brand), so every template works with every scheme.
 - The site's job is to explain the club, show the schedule, prices and gallery, and turn visitors into players through **Join in the app** and **Book a casual session**.
 - For free-play clubs the price section becomes a clear **"Free to play: just turn up"** block, and the call to action is **Sign up for a play day**.
+
+### 7.4 Luvallplay introduction website (luvallplay.org)
+
+A public website that introduces Luvallplay to clubs, organisers and players. It's in **English and Vietnamese**, built to impress, and **sport-neutral**: Luvallplay starts with badminton but is useful to any club that runs regular sessions.
+
+**Can start now.** It only needs the brand system and the domain, so it's a parallel track and doesn't wait for Phases 3–6. Before the app is public it runs in **"coming soon"** mode with a sign-up form. It switches to full launch mode (Start your club, Find a club, store badges) when the setup wizard ships in Phase 6.
+
+**Positioning and voice:**
+- **Headline idea:** **"Love all, play."** The call that starts a game in badminton, tennis, squash and table tennis, read here as an invitation: everyone is welcome, come and play.
+- **One-line promise:** *"The free app for clubs and players. Run your sessions, welcome everyone, and play more."*
+- **Sport-neutral words:** session, game, court or field, team, members. Sport-specific examples rotate:
+  - racquet sports: badminton, pickleball, tennis, table tennis, squash;
+  - team sports: volleyball, futsal, basketball, netball;
+  - social sport generally.
+- Badminton is described as where Luvallplay started (Three Wolves), not as the limit.
+- Voice from the brand book: warm, direct, short sentences, sentence case, no emoji in headings. The brand book's "badminton words" rule is relaxed here; the brand book's Voice section should be updated to say so.
+
+**Brand (strictly from the design system):**
+- Logo files as provided: the side-by-side lockup in the header, the stacked lockup in the footer, and the dark versions on Net Navy sections.
+- Colours: `court-green` for primary actions, `smash-lime` as the one accent per screen, `rally-coral` only around the heart and social moments, and `surface` / `surface-raised` / `ink` for the page. Light and dark themes.
+- Type: **Barlow Condensed** (`display-xl` for the hero) and **Be Vietnam Pro** for all body text. It covers Vietnamese fully.
+- Shape: pill buttons, `radius-lg` cards, flat surfaces with `line` dividers, a visible `focus` ring, and 150–250ms springy motion that respects reduced motion.
+
+**Page sections, in order:**
+
+| Section | Content | How it's made attractive |
+|---|---|---|
+| **Hero** | "Love all, play." + the one-line promise. **Start your club, it's free** and **Find a club** (before launch: **Join the waitlist**) | A big `display-xl` headline on Court Green. The **lines-of-play motif**: the court-line pattern generalised to field markings that redraw from one sport to the next (badminton court → tennis → futsal pitch → volleyball) in thin `court-line` strokes, with a still image when reduced motion is on. Real community photos in rounded frames |
+| **Sports strip** | Chips: Badminton · Pickleball · Tennis · Table tennis · Volleyball · Futsal · Basketball · +more | Picking a sport swaps the photos and example wording across the page |
+| **How it works** | 3 steps: *Set up your club in 5 minutes* → *Invite your players* → *Play* | Large numerals in `score` style; short sentences |
+| **Everything your club needs** | Sessions and sign-ups, waitlists, attendance, members, messages, a club website. The optional modules shown as an "add what you need" grid | Product screenshots in phone and tablet frames, **each in a different club colour scheme**, to show off the 12 schemes |
+| **Free, the way clubs need it** | Free play, cash and bank transfer, or online payments for incorporated clubs. No platform fees today | Three cards that mirror the setup choices |
+| **Make it yours** | 12 colour schemes or your own logo, fonts and colours | An interactive scheme picker that re-colours a sample club card live |
+| **For players** | One account for every club, your stats and streaks, find a club nearby; the marketplace and social "coming soon" | A device mock with the Me page |
+| **Safe and fair** | Clubs manage their own members, safeguarding across the platform, 16+, your club owns its data, NZ privacy law | Calm `surface-raised` cards with line icons |
+| **Story** | "Started at Three Wolves in Christchurch", with a quote (with the club's consent) | Photo with the club's colours as a co-brand moment |
+| **FAQ** | Cost, payments, sports supported, languages, data ownership, getting incorporated | Accordion; FAQ structured data |
+| **Footer** | Stacked lockup, language switch, App Store / Google Play badges ("coming soon" until launch), legal, contact, "A product of The GOAT Solution" | Net Navy section with dark-theme logo |
+
+**English and Vietnamese:**
+- Every word, image alt text, meta tag and social preview image exists in both languages.
+- URLs are `/en/…` and `/vi/…` with `hreflang` links, so search engines show the right one. The first visit picks the browser's language, and a visible switch remembers the choice.
+- Vietnamese copy is written natively and reviewed by a Vietnamese speaker (not machine-translated), and layouts are checked for its longer lines.
+
+**Build:**
+- Lives in `apps/web` and is served for the `luvallplay.org` host (+ `.com`/`.nz` redirects) through the same host routing as club sites (§6.4).
+- Content comes from Sanity, per decision D (Luvallplay's own marketing content), with `en`/`vi` fields.
+- Pages are statically generated.
+- The **waitlist/interest form** asks for email, name, club, sport, city and role (organiser or player). It uses Turnstile spam protection and double opt-in by email, and is stored in Postgres with consent recorded.
+- Privacy-friendly analytics only, with no tracking cookies.
+- Structured data for Organization, SoftwareApplication and FAQPage, plus Open Graph images per language.
+- Targets: Lighthouse ≥ 95 on all four scores, WCAG AA in both themes and both languages.
+
+**Imagery:** real, diverse community sport in NZ halls and parks across several sports, licensed or commissioned (a small photo shoot with Three Wolves and one or two partner clubs is ideal). No stock "business people with rackets". Product screenshots come from the real app with demo data.
+
+**Done when:**
+- Both languages are complete.
+- The waitlist works end to end.
+- It passes the test plan gate for the intro site.
+- It's live on luvallplay.org.
 
 ---
 
@@ -742,7 +806,8 @@ Wk  3–6   Phase 2  Monorepo, Next 16, Neon+Drizzle, module skeleton, design to
 Wk  6–11  Phase 3  Multi-tenant core + Three Wolves migration (ship, invisible to members)
 Wk 10–14  Phase 4  Player app as SPA on new API (ship as PWA at app.luvallplay.com)
 Wk 13–17  Phase 5  Capacitor, native features, compliance, TestFlight / Play testing → store launch
-Wk 16–20  Phase 6  Brand, platform site, club templates, wizard, Admin → Modules (onboard 1–2 pilot clubs)
+Wk  3–7   Track R  Luvallplay introduction website (EN + VI, "coming soon" + waitlist) on luvallplay.org (§7.4)
+Wk 16–20  Phase 6  Platform site in launch mode, club templates, wizard, Admin → Modules (onboard 1–2 pilot clubs)
 Wk 20+    Phase 7  Find a club → Global leaderboards → Social → Marketplace
 ```
 

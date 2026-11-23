@@ -10,7 +10,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#187156",
+      "primary": "#2b7d64",
       "onPrimary": "#ffffff",
       "accent": "#d4f23c",
       "onAccent": "#0b1b2b"
@@ -18,11 +18,11 @@
     "contrast": {
       "on-primary/primary": 6.49,
       "primary/light-bg": 6.21,
-      "on-primary-dark/primary-dark": 5.94,
-      "primary-dark/dark-bg": 3.12,
+      "on-primary-dark/primary-dark": 4.98,
+      "primary-dark/dark-grounds": 3.09,
       "ink/accent": 13.74,
-      "accent/dark-bg": 14.62,
-      "primary-text-link/light-bg": 6.21
+      "accent/dark-grounds": 12.14,
+      "primary-text-link/light-grounds": 6.21
     }
   },
   {
@@ -36,19 +36,19 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#4b61a1",
-      "onPrimary": "#ffffff",
+      "primary": "#6f81b4",
+      "onPrimary": "#0b1b2b",
       "accent": "#fbbf24",
       "onAccent": "#0b1b2b"
     },
     "contrast": {
       "on-primary/primary": 10.36,
       "primary/light-bg": 9.91,
-      "on-primary-dark/primary-dark": 5.96,
-      "primary-dark/dark-bg": 3.11,
+      "on-primary-dark/primary-dark": 4.54,
+      "primary-dark/dark-grounds": 4.01,
       "ink/accent": 10.43,
-      "accent/dark-bg": 11.11,
-      "primary-text-link/light-bg": 9.91
+      "accent/dark-grounds": 9.22,
+      "primary-text-link/light-grounds": 9.91
     }
   },
   {
@@ -71,10 +71,10 @@
       "on-primary/primary": 17.72,
       "primary/light-bg": 16.94,
       "on-primary-dark/primary-dark": 15.84,
-      "primary-dark/dark-bg": 16.87,
+      "primary-dark/dark-grounds": 14.01,
       "ink/accent": 11.37,
-      "accent/dark-bg": 12.11,
-      "primary-text-link/light-bg": 16.94
+      "accent/dark-grounds": 10.05,
+      "primary-text-link/light-grounds": 16.94
     }
   },
   {
@@ -88,7 +88,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#c2410c",
+      "primary": "#c34511",
       "onPrimary": "#ffffff",
       "accent": "#fde047",
       "onAccent": "#0b1b2b"
@@ -96,11 +96,11 @@
     "contrast": {
       "on-primary/primary": 5.18,
       "primary/light-bg": 4.95,
-      "on-primary-dark/primary-dark": 5.18,
-      "primary-dark/dark-bg": 3.58,
+      "on-primary-dark/primary-dark": 5.02,
+      "primary-dark/dark-grounds": 3.06,
       "ink/accent": 13.21,
-      "accent/dark-bg": 14.06,
-      "primary-text-link/light-bg": 4.95
+      "accent/dark-grounds": 11.68,
+      "primary-text-link/light-grounds": 4.95
     }
   },
   {
@@ -114,7 +114,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#0f766e",
+      "primary": "#197b74",
       "onPrimary": "#ffffff",
       "accent": "#f9a8d4",
       "onAccent": "#0b1b2b"
@@ -122,11 +122,11 @@
     "contrast": {
       "on-primary/primary": 5.47,
       "primary/light-bg": 5.23,
-      "on-primary-dark/primary-dark": 5.47,
-      "primary-dark/dark-bg": 3.39,
+      "on-primary-dark/primary-dark": 5.09,
+      "primary-dark/dark-grounds": 3.03,
       "ink/accent": 9.6,
-      "accent/dark-bg": 10.22,
-      "primary-text-link/light-bg": 5.23
+      "accent/dark-grounds": 8.49,
+      "primary-text-link/light-grounds": 5.23
     }
   },
   {
@@ -140,7 +140,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#7939dc",
+      "primary": "#874fe0",
       "onPrimary": "#ffffff",
       "accent": "#6ee7b7",
       "onAccent": "#0b1b2b"
@@ -148,11 +148,11 @@
     "contrast": {
       "on-primary/primary": 7.1,
       "primary/light-bg": 6.79,
-      "on-primary-dark/primary-dark": 6.12,
-      "primary-dark/dark-bg": 3.03,
+      "on-primary-dark/primary-dark": 4.97,
+      "primary-dark/dark-grounds": 3.1,
       "ink/accent": 11.42,
-      "accent/dark-bg": 12.16,
-      "primary-text-link/light-bg": 6.79
+      "accent/dark-grounds": 10.1,
+      "primary-text-link/light-grounds": 6.79
     }
   },
   {
@@ -166,7 +166,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#bf1740",
+      "primary": "#c8385b",
       "onPrimary": "#ffffff",
       "accent": "#fcd34d",
       "onAccent": "#0b1b2b"
@@ -174,11 +174,11 @@
     "contrast": {
       "on-primary/primary": 6.29,
       "primary/light-bg": 6.01,
-      "on-primary-dark/primary-dark": 6.15,
-      "primary-dark/dark-bg": 3.01,
+      "on-primary-dark/primary-dark": 5.03,
+      "primary-dark/dark-grounds": 3.06,
       "ink/accent": 12.08,
-      "accent/dark-bg": 12.86,
-      "primary-text-link/light-bg": 6.01
+      "accent/dark-grounds": 10.68,
+      "primary-text-link/light-grounds": 6.01
     }
   },
   {
@@ -192,7 +192,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#2b59da",
+      "primary": "#3d67dd",
       "onPrimary": "#ffffff",
       "accent": "#fb923c",
       "onAccent": "#0b1b2b"
@@ -200,11 +200,11 @@
     "contrast": {
       "on-primary/primary": 6.7,
       "primary/light-bg": 6.41,
-      "on-primary-dark/primary-dark": 5.93,
-      "primary-dark/dark-bg": 3.13,
+      "on-primary-dark/primary-dark": 5.02,
+      "primary-dark/dark-grounds": 3.07,
       "ink/accent": 7.69,
-      "accent/dark-bg": 8.19,
-      "primary-text-link/light-bg": 6.41
+      "accent/dark-grounds": 6.8,
+      "primary-text-link/light-grounds": 6.41
     }
   },
   {
@@ -218,7 +218,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#297144",
+      "primary": "#377b50",
       "onPrimary": "#ffffff",
       "accent": "#fda4af",
       "onAccent": "#0b1b2b"
@@ -226,11 +226,11 @@
     "contrast": {
       "on-primary/primary": 7.13,
       "primary/light-bg": 6.82,
-      "on-primary-dark/primary-dark": 5.93,
-      "primary-dark/dark-bg": 3.12,
+      "on-primary-dark/primary-dark": 5.11,
+      "primary-dark/dark-grounds": 3.01,
       "ink/accent": 9.21,
-      "accent/dark-bg": 9.8,
-      "primary-text-link/light-bg": 6.82
+      "accent/dark-grounds": 8.14,
+      "primary-text-link/light-grounds": 6.82
     }
   },
   {
@@ -244,7 +244,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#0e7490",
+      "primary": "#187a94",
       "onPrimary": "#ffffff",
       "accent": "#fef08a",
       "onAccent": "#0b1b2b"
@@ -252,11 +252,11 @@
     "contrast": {
       "on-primary/primary": 5.36,
       "primary/light-bg": 5.12,
-      "on-primary-dark/primary-dark": 5.36,
-      "primary-dark/dark-bg": 3.46,
+      "on-primary-dark/primary-dark": 4.94,
+      "primary-dark/dark-grounds": 3.12,
       "ink/accent": 14.96,
-      "accent/dark-bg": 15.93,
-      "primary-text-link/light-bg": 5.12
+      "accent/dark-grounds": 13.23,
+      "primary-text-link/light-grounds": 5.12
     }
   },
   {
@@ -270,7 +270,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#97399f",
+      "primary": "#a14ca8",
       "onPrimary": "#ffffff",
       "accent": "#5eead4",
       "onAccent": "#0b1b2b"
@@ -278,11 +278,11 @@
     "contrast": {
       "on-primary/primary": 8.24,
       "primary/light-bg": 7.88,
-      "on-primary-dark/primary-dark": 6.17,
-      "primary-dark/dark-bg": 3.0,
+      "on-primary-dark/primary-dark": 5.1,
+      "primary-dark/dark-grounds": 3.02,
       "ink/accent": 11.77,
-      "accent/dark-bg": 12.53,
-      "primary-text-link/light-bg": 7.88
+      "accent/dark-grounds": 10.41,
+      "primary-text-link/light-grounds": 7.88
     }
   },
   {
@@ -296,7 +296,7 @@
       "onAccent": "#0b1b2b"
     },
     "dark": {
-      "primary": "#206a91",
+      "primary": "#34779b",
       "onPrimary": "#ffffff",
       "accent": "#f0abfc",
       "onAccent": "#0b1b2b"
@@ -304,11 +304,11 @@
     "contrast": {
       "on-primary/primary": 7.56,
       "primary/light-bg": 7.23,
-      "on-primary-dark/primary-dark": 5.95,
-      "primary-dark/dark-bg": 3.12,
+      "on-primary-dark/primary-dark": 4.93,
+      "primary-dark/dark-grounds": 3.12,
       "ink/accent": 9.9,
-      "accent/dark-bg": 10.54,
-      "primary-text-link/light-bg": 7.23
+      "accent/dark-grounds": 8.75,
+      "primary-text-link/light-grounds": 7.23
     }
   }
 ]

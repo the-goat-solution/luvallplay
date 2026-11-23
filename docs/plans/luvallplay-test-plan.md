@@ -386,6 +386,7 @@ On every pull request, and required before merging to `main`:
 | 3 Multi-tenant | Isolation suite, permission matrix, shadow reads clean for 7 days, data guard clean, Stripe reconciliation, characterisation check |
 | 4 API-driven app | Contract tests, old-client tests, offline tests |
 | 5 Store apps | Device matrix, upgrade test, in-app purchase sandbox, store checklist, beta feedback |
+| R Intro website | Every page complete in English and Vietnamese (an automated check finds no missing translation, alt text or meta tag), `hreflang` correct, language switch remembered. Visual snapshots of both languages at every width in light and dark. Lighthouse ≥ 95, axe clean. Waitlist: Turnstile, double opt-in, consent stored, duplicates handled, nothing sent from previews. No tracking cookies. Reduced-motion fallback for the hero |
 | 6 Brand, sites, wizard | S1–S6, the payment-mode × admin-area table in build plan §6.2.2 as an automated test, every colour scheme passes contrast and visual checks, brand upload security tests, Lighthouse ≥ 95, accessibility clean, custom-domain tests |
 | 7 Global modules | Opt-in/out tests, moderation and safeguarding flows (16+ only), marketplace X1, abuse reports |
 

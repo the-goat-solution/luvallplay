@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import type Stripe from "stripe";
 import { clubCurrencyLower } from "./money";
 import { getStripe } from "./stripe";
@@ -83,7 +84,7 @@ export async function reconcileOfflinePayment(
   method: OfflineMethod,
 ): Promise<OfflineReconcileResult> {
   try {
-    const line = lineForOfflineInvoice(recorded.invoice);
+    const line = lineForOfflineInvoice(recorded.invoice, (await clubClock()).timezone);
     if (!line) return null;
     await upsertStripeLines([line]);
     if (method === "cash") return "cash";

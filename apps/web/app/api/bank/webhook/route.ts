@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { akahuConfigured, dollarsToCents, syncAkahu } from "@/lib/bank-akahu";
@@ -62,10 +63,10 @@ function secretMatches(given: string | null | undefined): boolean {
   return diff === 0;
 }
 
-function toDateKey(raw: string): string | null {
+function toDateKey(raw: string, timezone: string): string | null {
   if (isDateKey(raw)) return raw;
   const t = Date.parse(raw);
-  return Number.isNaN(t) ? null : clubDateKeyForInstant(new Date(t));
+  return Number.isNaN(t) ? null : clubDateKeyForInstant(new Date(t), timezone);
 }
 
 export async function POST(request: Request) {
@@ -128,8 +129,9 @@ export async function POST(request: Request) {
 
   const rows = [];
   const rejected: string[] = [];
+  const { timezone } = await clubClock();
   for (const t of transactions) {
-    const date = toDateKey(t.date);
+    const date = toDateKey(t.date, timezone);
     if (!date) {
       rejected.push(t.id);
       continue;

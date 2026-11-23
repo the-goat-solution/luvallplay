@@ -64,6 +64,13 @@
       "when": 1795463000000,
       "tag": "0008_terms_localized",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795463001000,
+      "tag": "0009_terms_seats",
+      "breakpoints": true
     }
   ]
 }

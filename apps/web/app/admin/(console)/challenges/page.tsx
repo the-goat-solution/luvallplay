@@ -1,3 +1,4 @@
+import { alphaName, pointsName, silverName } from "@/lib/club-terms";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import adminStyles from "@/components/admin/admin.module.css";
@@ -206,9 +207,9 @@ export default async function ChallengesAdminPage({ searchParams }: { searchPara
 
       {tab === "ladder" && (
         <>
-          <InfoDisclosure summary="How Wolf Points and ranks work">
-            <p>Players earn Wolf Points (WP): 1 per play day, 2 per round robin win, and 2 per challenge win plus bonuses. Their points set their rank.</p>
-            <p>Seats go by Wolf Points in the last 90 days: the top player is the Alpha Wolf, the next three are Silver Wolves.</p>
+          <InfoDisclosure summary={`How ${pointsName()} and ranks work`}>
+            <p>Players earn {pointsName()} (WP): 1 per play day, 2 per round robin win, and 2 per challenge win plus bonuses. Their points set their rank.</p>
+            <p>Seats go by {pointsName()} in the last 90 days: the top player is the {alphaName()}, and each of the next three is a {silverName()}.</p>
             <p>The top ranks need regular play: without enough points in the last 60 days the rank &ldquo;tarnishes&rdquo; and slips one rank per 30 days (never below the start of its league). Points are never taken away, so playing again restores it.</p>
           </InfoDisclosure>
           <Section title={`Players per rank (${withPoints.length} with points)`}>
@@ -227,15 +228,15 @@ export default async function ChallengesAdminPage({ searchParams }: { searchPara
               ))}
             </div>
           </Section>
-          <Section title="Top 25 by Wolf Points">
+          <Section title={`Top 25 by ${pointsName()}`}>
             {top.length === 0 ? (
-              <EmptyState>Nobody has Wolf Points yet.</EmptyState>
+              <EmptyState>Nobody has {pointsName()} yet.</EmptyState>
             ) : (
               <ol style={{ fontSize: 14, margin: 0, paddingLeft: 22, lineHeight: 1.7 }}>
                 {top.map(([id, r]) => (
                   <li key={id}>
                     {world.players.get(id)?.name}: <strong>{r.wpTotal} WP</strong>, {rankName(LADDER[r.earned], "en")}
-                    {r.seat ? ` · ${r.seat === "alpha" ? "Alpha Wolf" : "Silver Wolf"}` : ""}
+                    {r.seat ? ` · ${r.seat === "alpha" ? alphaName() : silverName()}` : ""}
                     {r.tarnishing ? " · tarnishing" : ""}
                     <span className={kit.sub}>
                       play days {r.wpPlayDays} · round robin {r.wpRoundRobin} · challenges {r.wpChallenges + r.wpBonuses}

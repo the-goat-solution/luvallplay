@@ -21,7 +21,7 @@ const NAME = `club_config_${process.pid}`;
 
 const TENANT: TenantRow = {
   id: 7, slug: "synthetic-club", name: "Synthetic Club", country: "VN", region: "han", timezone: "Asia/Ho_Chi_Minh", currency: "VND",
-  languages: ["vi", "en"], terms: { points_name: "Luv Points", vision_name: "Vision" },
+  languages: ["vi", "en"], terms: { points_name: "Luv Points", vision_name: "Vision", alpha_name: "Champion", silver_name: "Contender", localized: { vi: { points_name: "Điểm Luv", alpha_name: "Nhà vô địch" } } },
 };
 const MODULES = [
   { module_id: "play-days", settings: { courtsToMaxPlayers: { "1": 4, "2": 8 }, sessionCapacity: 8, casualOnlyDefaultCourts: 1, bookingWindowDays: 14, bookingCutoffHour: 20 } },
@@ -35,7 +35,7 @@ test("another club's rows give another club's settings, with nothing borrowed fr
   assert.deepEqual(problems, []);
   assert.deepEqual(config, {
     tenantId: 7, slug: "synthetic-club", name: "Synthetic Club", country: "VN", region: "han", timezone: "Asia/Ho_Chi_Minh", currency: "VND",
-    languages: ["vi", "en"], terms: { pointsName: "Luv Points", visionName: "Vision", localized: {} },
+    languages: ["vi", "en"], terms: { pointsName: "Luv Points", visionName: "Vision", alphaName: "Champion", silverName: "Contender", localized: { vi: { pointsName: "Điểm Luv", alphaName: "Nhà vô địch" } } },
     playDays: { courtsToMaxPlayers: { 1: 4, 2: 8 }, sessionCapacity: 8, casualOnlyDefaultCourts: 1, bookingWindowDays: 14, bookingCutoffHour: 20 },
     roundRobin: { miniGameMaxPlayers: 12 },
     memberships: { days: ["tuesday"], defaultCourts: { tuesday: 2 }, cycleDays: { monthly: 30, quarterly: 90 }, startSearchDays: 60, pendingHoldMinutes: 15 },
@@ -59,12 +59,12 @@ test("a missing or malformed value falls back for that field only, and is report
   assert.equal(config.timezone, D.timezone);
   assert.equal(config.currency, D.currency);
   // The names fall back; a language's own wording is never borrowed from the defaults.
-  assert.deepEqual(config.terms, { pointsName: D.terms.pointsName, visionName: D.terms.visionName, localized: {} });
+  assert.deepEqual(config.terms, { pointsName: D.terms.pointsName, visionName: D.terms.visionName, alphaName: D.terms.alphaName, silverName: D.terms.silverName, localized: {} });
   assert.deepEqual(config.playDays, D.playDays);
   assert.deepEqual(config.roundRobin, D.roundRobin);
   assert.deepEqual(config.memberships, D.memberships);
   assert.deepEqual(config.donations, D.donations);
-  for (const path of ["tenant.timezone", "tenant.currency", "tenant.terms.points_name", "tenant.terms.vision_name", "play-days.courtsToMaxPlayers",
+  for (const path of ["tenant.timezone", "tenant.currency", "tenant.terms.points_name", "tenant.terms.vision_name", "tenant.terms.alpha_name", "tenant.terms.silver_name", "play-days.courtsToMaxPlayers",
     "play-days.sessionCapacity", "play-days.casualOnlyDefaultCourts", "play-days.bookingWindowDays", "play-days.bookingCutoffHour",
     "round-robin.miniGameMaxPlayers", "memberships.days", "memberships.defaultCourts", "memberships.cycleDays", "memberships.startSearchDays",
     "memberships.pendingHoldMinutes", "donations"]) {

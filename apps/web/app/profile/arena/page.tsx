@@ -1,3 +1,5 @@
+import { clubClock } from "@/lib/club";
+import { getClubToday } from "@/lib/dates";
 import { ArenaView } from "@/components/arena/ArenaView";
 import { ArenaSegments, type ArenaSegment } from "@/components/arena/ArenaSegments";
 import { RanksView } from "@/components/arena/RanksView";
@@ -23,7 +25,7 @@ export default async function ProfileArenaPage({ searchParams }: { searchParams:
   const tab: ArenaSegment = SEGMENTS.includes(params.tab as ArenaSegment) ? (params.tab as ArenaSegment) : "challenges";
 
   if (tab === "leaderboard") {
-    const sel = selectBoard(params);
+    const sel = selectBoard(params, getClubToday(new Date(), await clubClock()).dateKey);
     const hasDb = Boolean(process.env.POSTGRES_URL);
     const rows = hasDb ? await cachedBoard(sel.source, sel.period, sel.range.key) : [];
     // A hidden player sees only their own rank (the opt-out is respected).

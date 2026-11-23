@@ -59,13 +59,14 @@ async function respond(
   dates: string[],
   status = 200,
 ) {
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const body: CasualPlayResponse = {
     state: organiser ? state : publicState(state),
     version,
     organiser,
     serverNow: Date.now(),
     // A window around today is plenty to pick from on a phone.
-    dates: organiser ? dates.filter((d) => d >= addDays(getClubToday().dateKey, -21)).slice(0, 20) : [],
+    dates: organiser ? dates.filter((d) => d >= addDays(today, -21)).slice(0, 20) : [],
     session: await sessionInfo(date),
   };
   return NextResponse.json(body, { status, headers: NO_STORE });
@@ -73,7 +74,7 @@ async function respond(
 
 async function resolveDate(requested: string | null): Promise<{ date: string | null; dates: string[] }> {
   let dates: string[];
-  if (isCasualPlayDemo()) dates = demoDates();
+  if (isCasualPlayDemo()) dates = demoDates(await clubClock());
   else dates = await listAllSessionDates();
   if (requested) return { date: dates.includes(requested) ? requested : null, dates };
   return { date: defaultDate(dates, getClubToday(new Date(), await clubClock()).dateKey), dates };

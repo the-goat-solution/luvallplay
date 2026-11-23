@@ -15,15 +15,28 @@ export type Vars = Record<string, string | number>;
  * {visionName}; format() fills them. The neutral names are the platform's;
  * the app sets the club's (setTerms).
  */
-export type Terms = { pointsName: string; visionName: string; localized?: Readonly<Record<string, { pointsName?: string; visionName?: string }>> };
-export const NEUTRAL_TERMS: Terms = { pointsName: "Points", visionName: "Vision" };
-let terms: Terms = NEUTRAL_TERMS;
+export type Terms = {
+  pointsName: string;
+  visionName: string;
+  /** The titles of the top seat and the seats below it on the points board. */
+  alphaName?: string;
+  silverName?: string;
+  localized?: Readonly<Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string }>>;
+};
+export const NEUTRAL_TERMS: Required<Omit<Terms, "localized">> = { pointsName: "Points", visionName: "Vision", alphaName: "Top seat", silverName: "Runner-up seat" };
+let terms: Required<Terms> = { ...NEUTRAL_TERMS, localized: {} };
 
 /** Use this club's names in every translated string from now on. */
 export function setTerms(next: Terms): void {
-  terms = { pointsName: next.pointsName || NEUTRAL_TERMS.pointsName, visionName: next.visionName || NEUTRAL_TERMS.visionName, localized: next.localized ?? {} };
+  terms = {
+    pointsName: next.pointsName || NEUTRAL_TERMS.pointsName,
+    visionName: next.visionName || NEUTRAL_TERMS.visionName,
+    alphaName: next.alphaName || NEUTRAL_TERMS.alphaName,
+    silverName: next.silverName || NEUTRAL_TERMS.silverName,
+    localized: next.localized ?? {},
+  };
 }
-export function currentTerms(): Terms {
+export function currentTerms(): Required<Terms> {
   return terms;
 }
 
@@ -38,5 +51,7 @@ export function format(template: string, vars?: Vars, lang?: string): string {
   const own = lang ? terms.localized?.[lang] : undefined;
   if (s.includes("{pointsName}")) s = s.split("{pointsName}").join(own?.pointsName ?? terms.pointsName);
   if (s.includes("{visionName}")) s = s.split("{visionName}").join(own?.visionName ?? terms.visionName);
+  if (s.includes("{alphaName}")) s = s.split("{alphaName}").join(own?.alphaName ?? terms.alphaName);
+  if (s.includes("{silverName}")) s = s.split("{silverName}").join(own?.silverName ?? terms.silverName);
   return s;
 }

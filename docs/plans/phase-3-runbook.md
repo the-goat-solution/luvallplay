@@ -207,14 +207,18 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 | 7 | The booking clock (time zone, booking window, cut-off hour): the date helpers take it; the booking rule and the Me page pass the club's | Built |
 | 8 | Membership cycle lengths in the renewal SQL, the Stripe sync and the free month | Built |
 | 9 | Client components read the club's public settings from a provider (capacity, mini-game cap, the booking clock) | Live (#107) |
-| 10 | The club's clock passed at every async call site of the date helpers (about 40); 11 plain helpers stay on the built-in clock, pinned by a test | Merged (#112) |
+| 10 | The club's clock passed at every call of the date helpers. The last 11 plain helpers now get it from their callers; the test's list of exceptions is empty | Live (#112), the last 11 built |
+| 12 | The shop's end-of-day helper works in any time zone (it used to try New Zealand's two UTC offsets) | Built |
+| 13 | The club's terms typed into app code (emails, admin screens, the analyzer's and the home page's copy tables): 44 lines in 16 files now read the settings. The rank titles "Alpha Wolf" and "Silver Wolf" ("Sói Đầu Đàn", "Sói Bạc") are club terms too. Migration `0009_terms_seats` adds them to Three Wolves' row (one production data run) | Built and rehearsed |
 | 11 | The club's own terms leave the shared dictionaries: "Wolf Points", "Wolf Vision" and the Vietnamese "Điểm Sói" are placeholders, filled per language from the club's settings. Migration `0008_terms_localized` adds the Vietnamese name to Three Wolves' row | **Done.** Production data run passed (23 Nov, 20:23 UTC): 17 accounts, 0 problems, no drift. The restore point was `rehearsal-phase-3`, reset to a fresh copy of production just before, because the Neon branch limit left no room for a new one. Merged (#112) |
 
 **Still to build in step 4:** the time zone, booking window and cut-off read from the settings at run time (server and client); membership days and cycle lengths; the "Wolf" terms in the translated strings; capacity in the admin pages and client components; and the crons, emails, webhooks and API becoming club-scoped.
 
 **A wording change you should know about.** Two Vietnamese sentences said "Wolf Points" where the rest of the Vietnamese text says "Điểm Sói" (the home page's leaderboard teaser and the Arena's line about ranks). They now say "Điểm Sói" like the rest. Every other string renders exactly as before; the snapshot test covers all of them.
 
-**Still built in, on purpose:** the rank titles "Alpha Wolf" and "Silver Wolf", the 🐺 in a few labels, and about 38 app files that type "Wolf Points" or "Wolf Vision" outside the dictionaries (admin screens, emails). They move with the brand work in Phase 6.
+**More wording changes in Vietnamese (round two).** The Arena's line about ranks and the home page's feature list said "Alpha Wolf" and "Silver Wolf" in Vietnamese sentences, while the rank badges say "Sói Đầu Đàn" and "Sói Bạc". They now use the Vietnamese titles throughout. In English, one admin sentence changed from "the next three are Silver Wolves" to "each of the next three is a Silver Wolf", so the title is never pluralised by code.
+
+**Still built in, on purpose:** the club's name ("Three Wolves") in emails and page titles, the 🐺 in a few labels, and route names such as `/profile/wolf-vision`. They move with the brand work in Phase 6. A test now fails on any typed "Wolf Points", "Wolf Vision", "Alpha Wolf", "Silver Wolf" or their Vietnamese forms outside `lib/constants.ts`.
 
 ## 5. Step 5: module enforcement (no data run)
 
@@ -242,7 +246,9 @@ Step 5 changes no data: step 1 stored a row per module for Three Wolves, all on.
 | Cached pages | Refreshed when a module is switched |
 | **The platform's lock** | Luvallplay staff can lock a module on or off for the club, with a reason the owners see, and unlock it (Admin → Settings → Modules). Locking puts the module in that state by the same rules as any switch; an owner can't undo it |
 
-**Not done:** a switch for the parts of "payments to check" that sit inside Members and Shop (that module owns no screen of its own yet), and per-module emails beyond what route ownership already stops (a module that is off can't start the flows that send its emails, and its reminder cron answers 404).
+**Payments to check.** With that module off, the shop no longer offers "reserve now, pay cash at pickup" (the page hides it and the API refuses it). **Decision: what is already waiting can still be finished.** A reservation made before the switch can still be marked as paid, and the Members page keeps showing whether a bank transfer has been matched; otherwise switching the module off would strand money.
+
+**Per-module emails. Decision: nothing more to switch.** A module that is off can't start the flows that send its emails, and its reminder cron answers 404. An email about a payment that was already taken (a webhook arriving after the switch) is still sent, for the same reason as above.
 
 ## 6. Step 6: second database driver and region routing (no data run)
 

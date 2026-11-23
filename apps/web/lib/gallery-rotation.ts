@@ -1,3 +1,4 @@
+import type { ClubClock } from "./dates";
 import { getClubToday } from "./dates";
 
 // Every Wednesday (club-local time) the homepage gallery masonry shows a
@@ -10,8 +11,8 @@ function daysSinceEpoch(dateKey: string): number {
   return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
 
-export function getWeeklyRotationSeed(now: Date = new Date()): number {
-  const { dateKey } = getClubToday(now);
+export function getWeeklyRotationSeed(now: Date, clock: ClubClock): number {
+  const { dateKey } = getClubToday(now, clock);
   return Math.floor((daysSinceEpoch(dateKey) - 6) / 7);
 }
 
@@ -46,8 +47,9 @@ function seededShuffle<T>(items: T[], seed: number): T[] {
 export function selectWeeklyRotation<T>(
   items: T[],
   limit: number,
+  clock: ClubClock,
   now: Date = new Date(),
 ): T[] {
-  const seed = getWeeklyRotationSeed(now);
+  const seed = getWeeklyRotationSeed(now, clock);
   return seededShuffle(items, seed).slice(0, limit);
 }

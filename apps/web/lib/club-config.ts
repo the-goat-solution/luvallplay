@@ -39,7 +39,7 @@ export const DEFAULT_CLUB_CONFIG: ClubConfig = {
   country: "NZ",
   region: "syd",
   timezone: C.CLUB_TIME_ZONE,
-  currency: "NZD",
+  currency: C.CLUB_CURRENCY,
   languages: ["en", "vi"],
   terms: { pointsName: "Wolf Points", visionName: "Wolf Vision" },
   playDays: {

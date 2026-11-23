@@ -13,6 +13,8 @@ import {
   DONATION_MAX_CENTS,
   type DonationFrequency,
 } from "@/lib/constants";
+import { fromMinor, roundToMinor } from "@/lib/money";
+import { useClub } from "@/context/ClubContext";
 
 export function DonateModal() {
   const { tr } = useLanguage();
@@ -49,8 +51,9 @@ export function DonateModal() {
     if (open) document.body.style.overflow = "hidden";
   }, [open]);
 
+  const club = useClub();
   const parsedAmount = Number(amount);
-  const amountCents = Math.round(parsedAmount * 100);
+  const amountCents = Number.isFinite(parsedAmount) ? roundToMinor(parsedAmount, club.currency) : NaN;
 
   const validateAmount = () => {
     if (
@@ -205,8 +208,8 @@ export function DonateModal() {
             </label>
             <input
               type="number"
-              min={DONATION_MIN_CENTS / 100}
-              max={DONATION_MAX_CENTS / 100}
+              min={fromMinor(DONATION_MIN_CENTS, club.currency)}
+              max={fromMinor(DONATION_MAX_CENTS, club.currency)}
               step="1"
               inputMode="decimal"
               className="form-input"

@@ -1,4 +1,6 @@
 import type { BankTransactionInput } from "./bank-db";
+import { toMinor } from "./money";
+import { CLUB_CURRENCY } from "./constants";
 
 // Parses a bank statement CSV export into bank lines. Built for ANZ NZ's
 // internet-banking export (Type, Details, Particulars, Code, Reference,
@@ -61,10 +63,9 @@ export function parseMoneyToCents(raw: string): number | null {
     negative = !negative;
     s = s.slice(1);
   } else if (s.startsWith("+")) s = s.slice(1);
-  const m = /^(\d+)(?:\.(\d{1,2}))?$/.exec(s);
-  if (!m) return null;
-  const cents = Number(m[1]) * 100 + Number((m[2] ?? "").padEnd(2, "0"));
-  if (!Number.isSafeInteger(cents)) return null;
+  if (!/^(\d+)(?:\.(\d{1,2}))?$/.test(s)) return null;
+  const cents = toMinor(s, CLUB_CURRENCY);
+  if (cents === null) return null;
   return negative ? -cents : cents;
 }
 

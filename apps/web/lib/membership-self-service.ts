@@ -13,6 +13,7 @@ import {
 import { type MembershipDay, type MembershipTier } from "./constants";
 import { type Player } from "./player-db";
 import { sendAdminAlertEmail, sendPlayerNoticeEmail } from "./player-email";
+import { clubMajor } from "./money";
 
 // Self-service membership management from the profile's Membership tab.
 //
@@ -420,7 +421,7 @@ export async function startOneTimeRenewal(player: Player, m: MemberView, plan: M
   });
   if (!pi.client_secret) throw new SelfServiceError("payment_failed");
   await attachStripeIdToMembership(assignment.membershipId, { stripePaymentIntentId: pi.id });
-  return { clientSecret: pi.client_secret, periodStart: assignment.periodStart, periodEnd: assignment.periodEnd, priceNzd: oneTimeMembershipPriceCents(plan) / 100 };
+  return { clientSecret: pi.client_secret, periodStart: assignment.periodStart, periodEnd: assignment.periodEnd, priceNzd: clubMajor(oneTimeMembershipPriceCents(plan)) };
 }
 
 /**

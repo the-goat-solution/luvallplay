@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clubCurrencyLower } from "@/lib/money";
 import { z } from "zod";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { checkRateLimit } from "@/lib/security";
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       const pi = await getStripe().paymentIntents.create(
         {
           amount: order.totalCents,
-          currency: "nzd",
+          currency: clubCurrencyLower(),
           customer: customer ?? undefined,
           automatic_payment_methods: { enabled: true },
           receipt_email: player.email,

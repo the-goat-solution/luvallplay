@@ -1,4 +1,5 @@
 import type { Lang } from "@/lib/i18n";
+import { clubMoney } from "@/lib/money";
 
 /** "Fri 12 Dec" (or the Vietnamese equivalent) from a YYYY-MM-DD club date. */
 export function fmtDate(dateKey: string | null | undefined, lang: Lang, withYear = false): string {
@@ -14,7 +15,7 @@ export function fmtDate(dateKey: string | null | undefined, lang: Lang, withYear
 }
 
 export function fmtMoney(cents: number): string {
-  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+  return clubMoney(cents);
 }
 
 export async function postJson(

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clubCurrencyLower } from "@/lib/money";
 import { z } from "zod";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { checkRateLimit } from "@/lib/security";
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
       {
         quantity: 1,
         price_data: {
-          currency: "nzd",
+          currency: clubCurrencyLower(),
           unit_amount: PASS_PRICE_CENTS[kind],
           product_data: {
             name: kind === "live" ? "Wolf Vision AI tracker: live match" : "Wolf Vision AI tracker: video analysis",

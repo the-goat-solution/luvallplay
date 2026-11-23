@@ -16,6 +16,7 @@ import {
   renderEmailLayout,
   withDisplayName,
 } from "./email-layout";
+import { clubMoney } from "./money";
 
 let resend: Resend | null = null;
 
@@ -791,7 +792,7 @@ export async function sendJerseyRegistrationEmail(input: {
   deadline: Date | null;
 }): Promise<void> {
   const vi = input.lang === "vi";
-  const price = `$${(input.priceCents / 100).toFixed(2)}`;
+  const price = clubMoney(input.priceCents, { trimZeros: false });
   const deadline = input.deadline
     ? new Intl.DateTimeFormat(vi ? "vi-VN" : "en-NZ", {
         timeZone: CLUB_TIME_ZONE,
@@ -885,7 +886,7 @@ export async function sendJerseyPaidEmail(input: {
 }): Promise<void> {
   const vi = input.lang === "vi";
   const extra = input.paidCents - input.priceCents;
-  const extraAmt = `$${(extra / 100).toFixed(2)}`;
+  const extraAmt = clubMoney(extra, { trimZeros: false });
   const T = vi
     ? {
         h: "Đã nhận thanh toán — bạn đã có áo!",

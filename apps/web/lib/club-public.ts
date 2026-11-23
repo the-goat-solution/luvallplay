@@ -4,7 +4,7 @@
 // (app/layout.tsx) and handed to client components through ClubProvider
 // (context/ClubContext.tsx → useClub()).
 import type { ClubConfig } from "@luvallplay/core/club-config";
-import { MINI_GAME_MAX_PLAYERS, SESSION_CAPACITY } from "./constants.ts";
+import { CLUB_CURRENCY, MINI_GAME_MAX_PLAYERS, SESSION_CAPACITY } from "./constants.ts";
 import { DEFAULT_CLUB_CLOCK, type ClubClock } from "./dates.ts";
 
 export type PublicClub = {
@@ -17,7 +17,7 @@ export type PublicClub = {
 /** The built-in values: what a client component sees outside a provider (tests, stories). */
 export const DEFAULT_PUBLIC_CLUB: PublicClub = {
   clock: DEFAULT_CLUB_CLOCK,
-  currency: "NZD",
+  currency: CLUB_CURRENCY,
   sessionCapacity: SESSION_CAPACITY,
   miniGameMaxPlayers: MINI_GAME_MAX_PLAYERS,
 };

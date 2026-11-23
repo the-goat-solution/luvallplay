@@ -9,6 +9,7 @@ import {
   type MatchRule,
   type Suggestion,
 } from "./bank-match";
+import { clubMoney } from "./money";
 
 // Bank feed + reconciliation storage. See finance-db.ts for the tables.
 //
@@ -315,7 +316,7 @@ export async function matchBankLine(
     if (difference !== 0) {
       if (!adjustment) {
         throw new MatchError(
-          `Those entries come to ${(sum / 100).toFixed(2)}, but the bank line is ${(bankAmount / 100).toFixed(2)}.`,
+          `Those entries come to ${clubMoney(sum, { trimZeros: false, bare: true })}, but the bank line is ${clubMoney(bankAmount, { trimZeros: false, bare: true })}.`,
         );
       }
       const { rows: created } = await client.query(

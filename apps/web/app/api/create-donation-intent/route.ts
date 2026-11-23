@@ -3,6 +3,7 @@ import { z } from "zod";
 import { clubConfig } from "@/lib/club";
 import { getStripe } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
+import { formatMoney, roundToMinor } from "@/lib/money";
 
 const bodySchema = z.object({
   amount: z.number().positive(),
@@ -20,13 +21,14 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await request.json());
-    const amountCents = Math.round(body.amount * 100);
+    const club = await clubConfig();
+    const amountCents = roundToMinor(body.amount, club.currency);
     // The club's donation limits (Phase 3 step 4: settings, not constants).
-    const { minAmount, maxAmount } = (await clubConfig()).donations;
+    const { minAmount, maxAmount } = club.donations;
     if (amountCents < minAmount || amountCents > maxAmount) {
       return NextResponse.json(
         {
-          error: `Amount must be between $${minAmount / 100} and $${maxAmount / 100} NZD`,
+          error: `Amount must be between ${formatMoney(minAmount, club.currency, { trimZeros: true })} and ${formatMoney(maxAmount, club.currency, { trimZeros: true, code: true })}`,
         },
         { status: 400 },
       );
@@ -36,7 +38,7 @@ export async function POST(request: Request) {
     const paymentIntent = await stripe.paymentIntents.create(
       {
         amount: amountCents,
-        currency: "nzd",
+        currency: club.currency.toLowerCase(),
         automatic_payment_methods: { enabled: true },
         metadata: {
           type: "donation",

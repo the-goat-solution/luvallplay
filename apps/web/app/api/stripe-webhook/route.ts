@@ -18,6 +18,7 @@ import {
   sendMembershipConfirmationEmail,
 } from "@/lib/email";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
+import { clubMajor } from "@/lib/money";
 
 const MEMBERSHIP_PRICE_CENTS: Record<"monthly" | "quarterly", number> = {
   monthly: MONTHLY_PRICE_CENTS,
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
             await sendCasualBookingFullRefundEmail(customerEmail, {
               firstName: pi.metadata.firstName ?? "",
               sessionDate,
-              amountNzd: pi.amount / 100,
+              amountNzd: clubMajor(pi.amount),
             }).catch((err) => console.error("Failed to send refund email", err));
           }
 
@@ -134,7 +135,7 @@ export async function POST(request: Request) {
           firstName: activated.name,
           plan: activated.plan,
           day: activated.day,
-          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          priceNzd: clubMajor(MEMBERSHIP_PRICE_CENTS[activated.plan]),
           recurring: activated.recurring,
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
@@ -242,7 +243,7 @@ export async function POST(request: Request) {
           firstName: activated.name,
           plan: activated.plan,
           day: activated.day,
-          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          priceNzd: clubMajor(MEMBERSHIP_PRICE_CENTS[activated.plan]),
           recurring: activated.recurring,
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
@@ -287,7 +288,7 @@ export async function POST(request: Request) {
           firstName: activated.name,
           plan: activated.plan,
           day: activated.day,
-          priceNzd: MEMBERSHIP_PRICE_CENTS[activated.plan] / 100,
+          priceNzd: clubMajor(MEMBERSHIP_PRICE_CENTS[activated.plan]),
           recurring: false,
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,

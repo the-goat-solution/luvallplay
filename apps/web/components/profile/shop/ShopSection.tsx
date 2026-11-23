@@ -11,6 +11,7 @@ import { useBusyAction } from "../useBusyAction";
 import styles from "../profile.module.css";
 import shop from "./shop.module.css";
 import { fmtMoney, postJson } from "../membership/format";
+import { clubMajor } from "@/lib/money";
 
 const SIZE_ORDER = ["S", "M", "L", "XL", "2XL", "3XL"];
 
@@ -249,7 +250,7 @@ function ProductCard({ product, onOrdered }: { product: Product; onOrdered: (msg
               {name}
               {selected ? ` — ${product.hasFit ? `${tr(fit === "women" ? "shop_women" : "shop_men")} ` : ""}${selected.size}` : ""} · {price}
             </p>
-            <StripeCardForm clientSecret={checkout.clientSecret} amountLabel={tr("mem_pay", { amount: (product.priceCents / 100).toString() })} onSuccess={paid} returnPath="/profile#shop" />
+            <StripeCardForm clientSecret={checkout.clientSecret} amountLabel={tr("mem_pay", { amount: clubMajor(product.priceCents).toString() })} onSuccess={paid} returnPath="/profile#shop" />
           </>
         )}
       </Sheet>

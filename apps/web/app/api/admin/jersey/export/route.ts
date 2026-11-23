@@ -5,6 +5,7 @@ import { getClubToday } from "@/lib/dates";
 import { FLAG_LABEL, JERSEY_SIZES } from "@/lib/jersey";
 import { listJerseyRegistrations } from "@/lib/jersey-db";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
+import { clubMajor } from "@/lib/money";
 
 export const runtime = "nodejs";
 
@@ -83,10 +84,10 @@ export async function GET(request: Request) {
       pname: r.printName ?? "",
       pnum: r.printNumber ?? "",
       pcountry: r.printCountry ?? "",
-      price: r.priceCents / 100,
+      price: clubMajor(r.priceCents),
       early: r.earlyBird ? "Yes" : "No",
       status: r.status,
-      paid: r.paidCents === null ? null : r.paidCents / 100,
+      paid: r.paidCents === null ? null : clubMajor(r.paidCents),
       paidAt: nz(r.paidAt),
       paidBy: r.paidBy ?? "",
       flags: r.flags.map((f) => FLAG_LABEL[f] ?? f).join("; "),

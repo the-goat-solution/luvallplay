@@ -2,11 +2,12 @@ import { CLUB_TIME_ZONE } from "./constants";
 import { sendAdminAlertEmail, sendPlayerNoticeEmail } from "./player-email";
 import { cashOrdersExpiringSoon, markReminderSent, releaseExpiredHolds, type Order } from "./shop-db";
 import { getPlayerByEmail } from "./player-db";
+import { clubMoney } from "./money";
 
 // Shop emails. Best effort: a failed email never undoes an order.
 
 function money(cents: number): string {
-  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+  return clubMoney(cents);
 }
 
 function nzDate(iso: string | null): string {

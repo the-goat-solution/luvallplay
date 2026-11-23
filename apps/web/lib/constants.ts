@@ -3,6 +3,10 @@
 // the built-in value of the club's `timezone` setting (lib/club-config.ts).
 export const CLUB_TIME_ZONE = "Pacific/Auckland";
 
+// The club's currency: the built-in value of the `currency` setting, and the
+// only place the code is written (lib/money.ts; tests/club-literals.test.ts).
+export const CLUB_CURRENCY = "NZD";
+
 // Days of the week that grant recurring-membership access. Every other day
 // is casual-bookings-only. See lib/dates.ts's getMembershipDayForDate for the
 // date -> MembershipDay mapping used everywhere capacity/roster logic needs

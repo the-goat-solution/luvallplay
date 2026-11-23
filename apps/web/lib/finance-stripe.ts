@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { clubCurrencyLower } from "./money";
 import { getStripe } from "./stripe";
 import { clubDateKeyForInstant } from "./dates";
 import { getSyncState, markSyncFailed, markSyncSucceeded, upsertStripeLines, type StripeLedgerLine } from "./finance-db";
@@ -356,6 +357,6 @@ export async function getStripeSyncState() {
 export async function getStripeBalanceCents(): Promise<number> {
   const balance = await getStripe().balance.retrieve();
   const sum = (list: { amount: number; currency: string }[] | undefined) =>
-    (list ?? []).filter((b) => b.currency === "nzd").reduce((t, b) => t + b.amount, 0);
+    (list ?? []).filter((b) => b.currency === clubCurrencyLower()).reduce((t, b) => t + b.amount, 0);
   return sum(balance.available) + sum(balance.pending);
 }

@@ -4,6 +4,7 @@ import { insertMonthlyDonation } from "@/lib/repos/donations";
 import { clubConfig } from "@/lib/club";
 import { getStripe, getDonationProductId, getInvoicePaymentIntent } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
+import { formatMoney, roundToMinor } from "@/lib/money";
 
 const bodySchema = z.object({
   amount: z.number().positive(),
@@ -21,13 +22,14 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await request.json());
-    const amountCents = Math.round(body.amount * 100);
+    const club = await clubConfig();
+    const amountCents = roundToMinor(body.amount, club.currency);
     // The club's donation limits (Phase 3 step 4: settings, not constants).
-    const { minAmount, maxAmount } = (await clubConfig()).donations;
+    const { minAmount, maxAmount } = club.donations;
     if (amountCents < minAmount || amountCents > maxAmount) {
       return NextResponse.json(
         {
-          error: `Amount must be between $${minAmount / 100} and $${maxAmount / 100} NZD`,
+          error: `Amount must be between ${formatMoney(minAmount, club.currency, { trimZeros: true })} and ${formatMoney(maxAmount, club.currency, { trimZeros: true, code: true })}`,
         },
         { status: 400 },
       );
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
       items: [
         {
           price_data: {
-            currency: "nzd",
+            currency: club.currency.toLowerCase(),
             product: productId,
             unit_amount: amountCents,
             recurring: { interval: "month" },

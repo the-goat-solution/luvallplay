@@ -12,6 +12,7 @@ import {
   type JerseyStatus,
 } from "./jersey";
 import { generateRefCode } from "./jersey-server";
+import { clubMoney } from "./money";
 
 export type JerseyRegistration = {
   id: number;
@@ -390,7 +391,7 @@ export async function matchJerseyPayments(): Promise<{ paid: PaidNotice[]; under
         person: `${reg.firstName} ${reg.lastName}`,
         entryDate: line.d as string,
         amountCents: amount,
-        notes: extra > 0 ? `Includes $${(extra / 100).toFixed(2)} over the price, kept as club funds.` : null,
+        notes: extra > 0 ? `Includes ${clubMoney(extra, { trimZeros: false })} over the price, kept as club funds.` : null,
       });
       await matchBankLine(line.id as number, [entryId], {
         auto: true,

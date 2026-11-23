@@ -866,6 +866,12 @@ Findings and changes recorded as the work goes:
   - Storage (`lib/storage.ts`) and scheduled jobs (`lib/cron.ts`) are interfaces with Vercel as the first provider; a contract test is ready for the S3-compatible provider, and `scripts/cron/k8s.mjs` prints Kubernetes CronJobs from the same list as `vercel.json`.
   - **Finding:** two scheduled jobs didn't require the scheduler's secret when it was unset. All five now share one check that refuses in production without a secret.
   - **Not done in Phase 3:** the S3-compatible storage provider, the platform's own hosts (marketing, app, admin, api) and cross-region forwarding. They belong to the Vietnam launch and Phase 6.
+- **Step 7, money audit (no migration):**
+  - `@luvallplay/core/money` holds the currency table (exponents), exact conversion both ways, and formatting. 40 hand-written conversions in 26 files and 8 typed `"nzd"` payment calls now use it.
+  - VND cases are in the tests: whole dong, no division, fractions refused, Vietnamese grouping.
+  - Two CI scans: arithmetic by 100 outside the helpers, and typed currency codes.
+  - **Decision: column names stay (`*_cents`), and a row's currency is its club's.** Both are written in the runbook (§7).
+  - **Finding:** a negative amount used to print as `$-10.50`; it now prints as `-$10.50`.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

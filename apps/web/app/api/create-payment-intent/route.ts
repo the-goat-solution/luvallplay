@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clubCurrencyLower } from "@/lib/money";
 import { z } from "zod";
 import { getAvailableSpots, isRegistrationLocked } from "@/lib/db";
 import { isSessionDatePaused } from "@/lib/day-requests";
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
     const paymentIntent = await stripe.paymentIntents.create(
       {
         amount: CASUAL_PRICE_CENTS,
-        currency: "nzd",
+        currency: clubCurrencyLower(),
         automatic_payment_methods: { enabled: true },
         metadata: {
           type: "casual",

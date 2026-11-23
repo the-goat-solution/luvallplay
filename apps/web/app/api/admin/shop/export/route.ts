@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { isAdminRequest } from "@/lib/security";
 import { listOrdersForAdmin, listProductsForAdmin } from "@/lib/shop-db";
+import { clubMajor } from "@/lib/money";
 
 export const runtime = "nodejs";
 
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
       name: o.name,
       email: o.email,
       items: o.items.map((i) => i.label).join(", "),
-      amount: o.totalCents / 100,
+      amount: clubMajor(o.totalCents),
       method: o.method,
       status: o.status.replace("_", " "),
       created: nz(o.createdAt),

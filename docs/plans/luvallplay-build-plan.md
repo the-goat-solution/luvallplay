@@ -41,6 +41,11 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **AD: Zalo support means chat and booking.** **One Luvallplay Official Account** messages members for all clubs, and one Luvallplay mini app offers booking, with club pages. Zalo's rules are **unverified** (§11.4).
 - **AE: the Vietnam region is hosted in Hanoi**, on a Vietnamese cloud with managed services, run by TGS engineers. That means a second hosting stack, because Vercel and Neon have no Hanoi region (§6.9).
 - **AF: Vision is a platform product, and its revenue goes to TGS** (§11.2).
+- **AG: one integration framework, many connectors** (§12.1), with a prioritised NZ catalogue (§12.2).
+- **AH: Shopify connector (§12.5):** a club connects its own Shopify store; Luvallplay shows its products in the Shop tab and app, and buyers **check out on Shopify** (Shop Pay, Apple Pay, cards). Order notifications come back into Luvallplay. Start with a custom app per partner club; a public Shopify app is a later, separate decision.
+- **AI: Xero scope (§12.3):** push **sales, payments, fees, refunds and expenses**, and pull **accounts, tax rates, tracking categories and bank accounts**. Bank lines stay with Xero's own bank feed.
+- **AJ: NZ launch bar (§12.6):** before the first paid NZ club, **NZ direct debit for memberships**, a **MYOB connector** and the **Windcave gateway** are ready. Pay by bank (open banking) is not required for launch.
+- **AK: the Xero connection is a paid add-on** (decided 24 Nov). It's priced to cover Xero's developer-tier costs, certification and support. *Assumptions to confirm (§12.9): the MYOB connector is a paid add-on too; the Shopify connector, direct debit and Windcave are included in base plans; Three Wolves gets add-ons free under its licence.*
 - **First outside feedback:** the current order stays (outside clubs join after the setup wizard). Recruiting and interviews, which need no engineering, still start now.
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
@@ -475,7 +480,7 @@ export default defineModule({
 |---|---|---|
 | Core (always on) | Club profile & website · **Play days** (schedule, sign-ups, capacity, waitlist, cancellations, attendance) · People & roles · Messages & announcements · Admin essentials | Exactly what a free, no-money club needs to run (§6.2.3) |
 | Run your club | **Calendar sync** (Google Calendar) · **Casual play** (drop-in bookings for non-members, guest checkout) · **Court board** (live court rotation) · **Round robin / mini games** · **Day requests** · **Multiple venues** | Extend Play days; courts, capacity and cut-offs are Play days settings |
-| Money | **Memberships** (plans, cycles, days; a plan can be free) · **Shop & merch** (jersey pre-orders become a shop product type) · **Donations** · **Finance & reports** · **Bank reconciliation (NZ, Akahu)** | All optional. Card payments need Stripe Connect; cash and bank transfer don't. A free-play club leaves the whole group off (§6.2.1) |
+| Money | **Memberships** (plans, cycles, days; a plan can be free) · **Shop & merch** (jersey pre-orders become a shop product type; or a **Shopify connector** for clubs that already sell there, §12.5) · **Accounting sync (Xero, MYOB)**, a **paid add-on** (§12.3) · **Donations** · **Finance & reports** · **Bank reconciliation (NZ, Akahu)** | All optional. Card payments need Stripe Connect; cash and bank transfer don't. A free-play club leaves the whole group off (§6.2.1) |
 | Engage players | **Arena** (challenges, ranks, club leaderboard) · **Vision** (AI match analysis) · **Gallery & photos** · **Integrations** (API, webhooks, MCP) | Ranks and art are themeable per club |
 | Global (opt-in) | **Find a club** · **Global leaderboards** · **Social** · **Marketplace** | §8 |
 
@@ -575,6 +580,8 @@ For a free club with nothing else switched on, the admin sidebar is just: **Home
 | Bank matching (NZ, Akahu) | Bank feed, auto-match | Financials → Bank | Cash/transfer or online |
 | Card payments | Stripe payouts, card refunds, retries, Stripe sync | (Members) | Online payments (§6.2.2) |
 | Finance & reports | Income, expenses, receipts, AGM report | Financials | – (free clubs can track expenses too) |
+| **Accounting sync (Xero, MYOB)** | Connection status, account and tax mapping, sync log, error queue, daily reconciliation report (§12.3) | – | Finance & reports; a payment mode other than Free play. **Paid add-on** (decision AK) |
+| **Shopify connector** | Connection status, product display settings, order list (read-only) (§12.5) | Shop | Shop & merch |
 | Shop & merch | Products, stock, orders (jersey pre-orders are a product type) | Shop, Jersey | Cash/transfer or online |
 | Donations | Donation settings and list | (home page) | Cash/transfer or online |
 | Arena | Challenges, disputes, ranks, club leaderboard | Challenges | – |
@@ -682,7 +689,7 @@ The three payment modes (§6.2.1: free, cash or bank transfer, online) stay the 
 
 | Country | Online payments | Bank transfer | Bank-feed matching |
 |---|---|---|---|
-| **NZ, Australia** | **Stripe Connect**, with the **NZ company** as the platform account (Accounts v2, direct charges, application fee 0%) | NZ bank account details and a unique reference | Akahu (NZ). Australia needs another provider |
+| **NZ, Australia** | **Stripe Connect**, with the **NZ company** as the platform account (Accounts v2, direct charges, application fee 0%): cards, Apple Pay and Google Pay, and in NZ **BECS direct debit** for memberships (§12.6). **Windcave** is a second provider for clubs that already have a merchant account there (§12.6) | NZ bank account details and a unique reference | Akahu (NZ). Australia needs another provider |
 | **Vietnam** | **MoMo** (decision AC), with **each club connecting its own MoMo merchant account**. **Stripe isn't a realistic option there** | **VietQR** code with amount and reference, from the club's own bank account. This is the default, and the only option for clubs that can't get a MoMo merchant account | A Vietnamese bank-feed matching provider (to choose) |
 
 *Unverified for MoMo:* I couldn't read MoMo's developer documentation from the planning environment. These points need confirming at developers.momo.vn or with MoMo before the Vietnam build: whether clubs and informal groups can become merchants (and with which documents), whether MoMo has a platform or partner programme for many sub-merchants, whether recurring or auto-debit payments exist, settlement timing (general sources say wallet payouts can take 1 to 7 working days), refunds, and webhooks (IPN). **Why each club has its own account:** collecting money for other businesses and paying it on can need a State Bank payment-intermediary licence in Vietnam (Decree 52/2024, with high capital requirements reported for collection and payment support services; **Check** with Vietnamese counsel).
@@ -1114,6 +1121,7 @@ Wk 13–17  Phase 5  Capacitor, native features, compliance, TestFlight / Play t
 Wk  3–7   Track R  Luvallplay introduction website (EN + VI, "coming soon" + waitlist) on luvallplay.org (§7.4)
 Wk 16–20  Phase 6  Platform site in launch mode, club templates, wizard, Admin → Modules (onboard 1–2 pilot clubs)
 Wk 20+    Phase 7  Find a club → per-sport leaderboards; social and marketplace only when the gate passes
+Wk 14–26  Track I  Integrations for NZ: framework + Xero sync, NZ direct debit, Windcave, Shopify connector, MYOB connector (§12). Needs Phase 3 and live NZ billing
 Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat and booking, Vietnamese legal pack (§11.4)
 ```
 
@@ -1140,6 +1148,11 @@ Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat 
 | **Active Vietnamese competitors** (pickleball and court-booking apps) | Discovery before building; position on club nights and community, not court rental (§11.4) |
 | **"Luvallplay" isn't protected anywhere** (Vietnam awards trademarks to whoever files first) | Conflict search, then file in NZ, Australia and Vietnam early (§11.3) |
 | **Free forever for NZ badminton can't pay its own way** | Fair-use limits, metering and a cost model (§11.2, §11.3); revenue comes from the paid markets |
+| **Xero's developer pricing and certification** (tiers since 2 Mar 2026; certification and an annual security assessment for higher tiers) | The add-on is priced to cover it; start with design partners inside the free Starter tier; certify before growing; budget it in the cost model (§12.3) |
+| **Double-posting sales to Xero** (Shopify's own Xero connection and Luvallplay both posting) | Luvallplay doesn't post Shopify sales to Xero by default; a setting makes the choice explicit (§12.5) |
+| **Postings rejected by Xero** (lock dates, deleted accounts, rate limits) | Error queue, no deletes in Xero, daily reconciliation report (§12.3) |
+| **Direct debit scheme duties** (mandates, notifications, disputes) | Mandate flow and notification emails built to the scheme rules, tested with Stripe's NZ test mode (§12.6) |
+| **Shopify's distribution choice can't be changed** | Custom apps for partner clubs first; a public app is a separate, later decision (§12.5) |
 | **Schedule is optimistic** | Re-baseline after Phase 2 and Phase 3 |
 
 ---
@@ -1189,6 +1202,7 @@ Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat 
 
 - **NZ badminton clubs are free for good.** That is today's partner clubs and Three Wolves, and every NZ badminton club that joins later. The agreement says so, with 90 days' notice for any change.
 - **Other sports and other markets pay.** The first paid market is **Vietnam**, then other sports in NZ (through the NZ company). Plans depend on **country and sport** (§6.5), and prices are set **per country in local currency** (VND for Vietnam) after the discovery round.
+- **Paid add-ons (decision AK).** The **accounting sync** is a paid add-on for **every** club, NZ badminton included. It's the first thing an NZ badminton club may pay for, so **billing must be real in NZ too** (Stripe Billing through the NZ company, with GST where it applies, **Check**) before the add-on is sold, not only in Vietnam.
 - **Paid plans become real before the first paid club.** Billing, invoices (**Check** Vietnam's e-invoice rules), and the country's way of paying TGS (VietQR bank transfer or a local gateway in Vietnam) are built and tested, not just hidden behind a switch.
 - **Vision is a platform product, and its revenue goes to TGS** (decision AF).
   - It's renamed **Vision** on the platform (Wolf Vision stays Three Wolves' own term, set in its brand). It's badminton-only for now (§6.7).
@@ -1262,4 +1276,140 @@ Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat 
   - **B: go or no-go on Vietnam as the first paid market.** After the discovery round (§11.4).
   - **C: social and marketplace** (§8).
   - **D: first paid price.** Tested with Vietnamese discovery clubs and the first paid pilots.
+
+---
+
+## 12. Integrations: industry-standard and NZ-ready
+
+*Decisions AG to AK (24 Nov). Research is summarised in [`luvallplay-plan-review.md`](./luvallplay-plan-review.md); anything marked **Check** or **unverified** needs the provider's current documentation or a professional before building.*
+
+### 12.1 One integration framework, many connectors
+
+Every connector (Xero, MYOB, Shopify, Windcave and later ones) is built on the same framework, so adding one is a module, not a rewrite:
+
+- **Connections:**
+  - Each club authorises its own account by OAuth 2.0. Only owners and admins can connect, with a fresh sign-in code (step-up).
+  - Tokens are **encrypted per club** (envelope encryption, keys in a secret manager), never logged, and shown to nobody.
+  - A health screen shows connected, expiring, revoked or error, and a **Reconnect** button.
+  - **Disconnect** revokes the token at the provider, deletes ours, and writes the audit log.
+  - Xero's refresh tokens rotate, so the new token is stored atomically before the old one is dropped; expiry and rotation rules are **unverified**, so confirm them in Xero's documentation.
+- **Sync engine:**
+  - An **outbox**: every business event (payment, refund, order, donation) becomes a job.
+  - Jobs are **idempotent** (a mapping table records which Luvallplay item became which external item), retried with backoff, respect each provider's per-club rate limits, and land in a dead-letter queue with a replay button.
+  - **Nothing is ever deleted in a club's accounting system**: a void or credit note is posted instead.
+  - If an item is changed in the external system after it synced, Luvallplay **flags** it and never overwrites it.
+  - A daily **reconciliation report** compares Luvallplay's totals with the external ones.
+- **Tables:** `integration_connections`, `integration_mappings`, `integration_sync_log` and `integration_usage` (all `tenant_id`, with RLS and the isolation tests of test plan §3.5).
+- **Modules and money:** each connector is a module (§6.2.3) with its own entitlement (included or add-on, §12.9). Calls, egress and connection counts are **metered per club** (readiness gate 4, §11.3), because providers charge by usage.
+- **Privacy:** a connector sends only what's needed (contact name and email, amounts, references). Providers are listed in the data-processing terms. **Xero's developer terms prohibit using its API data for AI or machine-learning training** (as reported; **Check**), and nothing in Luvallplay does.
+- **Regions:** NZ and Australian connectors run in the **Sydney region only**. Vietnam's equivalents (e-invoice providers and local accounting software) are designed after the Vietnamese discovery round (§11.4).
+- **Testing against sandboxes** (test plan §3.19): a Xero demo company, a Shopify development store, Stripe test mode and Windcave's test environment, plus recorded-response tests for failure cases.
+
+### 12.2 NZ catalogue and priority
+
+| Priority | Integration | Why | Status |
+|---|---|---|---|
+| **Ready for the first paid NZ club** (decision AJ) | **Xero accounting sync** | Xero is NZ's dominant small-business accounting tool (one blog says about 70%, unsourced), and NZ club software such as Hello Club pushes payments, invoices and credit notes into it | Paid add-on (§12.3) |
+| | **NZ direct debit for memberships** (Stripe BECS) | Cheaper than cards and automatic renewals | Base plan (§12.6) |
+| | **Windcave gateway** | A second NZ card gateway for clubs and councils that already use it | Base plan (§12.6) |
+| | **MYOB connector** | NZ's other main accounting package | Add-on (§12.4) |
+| | **Shopify connector** | Many clubs already sell merchandise there | Base plan (§12.5) |
+| | **Cards, Apple Pay, Google Pay** (Stripe) | Digital wallets are now NZ's leading online payment method (a July 2026 payments report), so wallets must be on | Exists; confirm wallets are enabled on NZ accounts (**Check**) |
+| | **Akahu bank matching, Google Calendar, public API and webhooks** | Already built | Exists |
+| **Within about six months of NZ launch** | Pay by bank (open banking payments) | Account-to-account payments are emerging; the banks' obligations under the Customer and Product Data Act are being phased in over 2026 and 2027, and some deadlines may move (**Check** MBIE) | Not required for launch |
+| | Mailchimp | Hello Club lists it; clubs already have lists | Later |
+| | Zapier and Make | Through the existing public API and webhooks | Documented, not built |
+| | Microsoft 365 calendar | For clubs not on Google | Later |
+| | QuickBooks Online connector | A third accounting package | Later |
+| | A POS for tuck shop and door sales (for example Square) | Not researched | Later, **Check** demand |
+| **When selling to associations and councils** | **Peppol e-invoicing** | New Zealand's e-invoicing is voluntary for business to business, with a mandate for large suppliers to government planned from 1 January 2027 (sources differ on earlier dates; **Check** MBIE and Inland Revenue) | Later |
+
+### 12.3 Xero accounting sync (the paid add-on)
+
+**Direction and scope (decision AI).** Luvallplay is the source of truth for transactions; Xero is the source of truth for the chart of accounts.
+
+- **Pushed to Xero:**
+  - Members and payers as **contacts**, matched by email.
+  - Memberships, casual bookings, shop orders and donations as **sales invoices**, with the payment applied to the invoice.
+  - **Refunds as credit notes.**
+  - **Card fees as expense lines.**
+  - **Expenses** from Finance (money spent, with the receipt attached).
+- **Pulled from Xero:** the chart of accounts, tax rates, tracking categories and bank accounts, for the mapping screen.
+- **Not pushed:** bank transactions. Xero's own bank feed (and Luvallplay's Akahu matching) handle the bank, so the same money isn't reconciled twice.
+
+**The standard design for card payments** (used by Stripe's own Xero guidance and by settlement connectors such as A2X):
+- Payments post to a **clearing account** at full value, fees go to a fee expense account, and each **payout is posted as one settlement** whose net equals the single bank line, so Xero reconciles it in one click.
+- The clearing account should net to zero each cycle. A leftover balance points to a missing fee, refund or timing item, and the daily report flags it.
+- Payouts are **transfers**, never income, to avoid double-counting.
+- Auto-reconciliation by charge ID needs an automatic payout schedule and **one payment account per Xero organisation** (as Stripe documents; **Check**).
+- Cash and bank-transfer payments post straight to the bank or deposit account, so the matching bank-feed line reconciles to them.
+
+**Mapping and controls**
+- A setup screen maps each Luvallplay income type to a Xero account, tax rate and tracking category, with sensible defaults per NZ club type. Defaults are suggestions the club's accountant can change.
+- A **sync start date** (history isn't pushed unless the club chooses a start date), a **dry-run preview**, and a per-item "resync".
+- **Xero lock dates** are respected: a posting before the lock date is queued with a clear alert, never forced.
+- Failures show a plain-language fix ("this account was archived in Xero") in the error queue.
+
+**NZ specifics (Check each with an accountant)**
+- **GST at 15%**, with an option for clubs that aren't GST-registered, and the information Inland Revenue requires on taxable supplies (supplier, date, description, amount, GST; the exact requirements depend on the amount).
+- **Donation receipts** for clubs that are donee organisations, and treatment of donations as outside GST.
+- The existing finance categories and AGM report map onto Xero accounts and tracking categories so a club's reports match in both places.
+
+**Xero's commercial terms (unverified, from third-party summaries; read Xero's developer pricing and certification pages):**
+- Since **2 March 2026** developers pay by **tier** (Starter, Core, Plus, Advanced, Enterprise) based on connected organisations and data pulled out. One source gives Starter as free to about 5 connections, Core about €20 a month to 50, Plus about €140 to 1,000, and Advanced about €820 to 10,000.
+- **App certification and an annual security assessment** are needed for the paid tiers, and apps reaching 1,000 connections need an advanced assessment. Sources disagree on the limits for uncertified apps (25 connections per app, or a cap on uncertified apps per organisation) and on how many active connections are needed to apply (10 in the newer source).
+- New apps use **granular scopes**. The Journals endpoint is reported as restricted to the Advanced tier, so the design avoids it and uses invoices, payments, bank transactions and credit notes.
+- **Plan:** launch with design partners inside the free Starter tier, apply for certification when connections approach the limit, align the security work with the §11.5 security programme, and set the add-on price from the cost model.
+
+### 12.4 MYOB (and later QuickBooks)
+
+The sync is written against an **`AccountingProvider` interface** (contacts, invoices, payments, credit notes, spend money, accounts, tax rates, tracking, attachments). Xero is the first implementation and **MYOB the second** (decision AJ); QuickBooks Online is third. MYOB's NZ API, authentication and limits are **unverified**, so a short spike confirms them before the build. The mapping screen, sync engine, reconciliation report and cost metering are shared. MYOB is a paid add-on on the same terms as Xero (assumption, §12.9).
+
+### 12.5 Shopify connector (decision AH)
+
+- **Model:** the club connects **its own Shopify store**. Luvallplay shows the club's products in the Shop tab and the app's Shop screen (read through Shopify's APIs), and the buy button opens **Shopify's checkout**.
+  - Shopify's payments, including Shop Pay, only work inside a Shopify checkout, so Luvallplay never tries to run them itself. NZ businesses can use Shopify Payments for cards, Apple Pay, Google Pay and Shop Pay (per Shopify's NZ help page). Shopify POS Tap to Pay is **not** available in NZ.
+  - Order, payment and refund **webhooks** come back and appear in Admin → Shop as read-only orders, and trigger the club's notifications. Stock stays in Shopify.
+- **Distribution:** Shopify makes you choose between a **custom app** (installed on one store through a link, no review, no Shopify billing) and a **public app** (App Store listing, review, billing), and **the choice can't be changed afterwards**. Start with a custom app per partner club. Build a public app as a separate, later decision once many clubs use Shopify. From 20 Nov 2026 a custom app needs an **IP allowlist** before installing on a store outside your own organisation (as reported; **Check**).
+- **Unverified:** the exact Admin and Storefront API surface Luvallplay needs, the privacy and compliance webhooks Shopify requires of public apps, and app-review requirements. Read Shopify's current developer documentation before the build.
+- **Avoid double accounting:** clubs on Shopify usually already send sales to Xero through a Shopify connector. When the Shopify connector is on, **Luvallplay does not post those sales to Xero by default**; a setting lets a club choose to post summaries instead.
+- **The native Luvallplay shop** (pre-orders, cash on collection, the jersey flow) stays for clubs without Shopify.
+
+### 12.6 NZ payment methods
+
+- **Wallets and cards (Stripe):** Apple Pay and Google Pay on the Payment Element, enabled for NZ accounts (**Check**).
+- **NZ direct debit for memberships (Stripe BECS, decision AJ).**
+  - Members sign a **Direct Debit Authority** and are debited automatically. It works with Stripe Subscriptions and in NZD only.
+  - **Scheme duties:** the club notifies the member by email within 5 days of the authority and on the day of each debit (as Stripe documents; **Check**); debits are **delayed** (several business days to settle); and the bank-account holder has a dispute process.
+  - So Luvallplay builds the authority screen with the scheme wording, stores the authority record, sends the notification emails in English and Vietnamese, handles failed and disputed debits (retry, alert, member message), and shows "pending" until funds arrive.
+- **Windcave (decision AJ).** A second provider behind the Payments interface (§6.5), connected with the club's own Windcave merchant account (Windcave was formerly Payment Express and offers card and account-to-account products). Its API, onboarding and fees are **unverified**; a short spike precedes the build. Luvallplay still never holds club money.
+- **Pay by bank (open banking payments).** Not required for launch. Watch MBIE's open banking rollout and Akahu's accredited-requestor status (Akahu is on MBIE's register), and revisit when major banks' obligations are in force.
+- **Not planned:** buy-now-pay-later, and legacy online EFTPOS or POLi-style redirects.
+- **PCI:** payment details go only through the provider's hosted fields or checkout, so Luvallplay stays at the lightest PCI level (**Check** each provider's rules).
+
+### 12.7 Evidence and caveats
+
+- Found: Xero is NZ's dominant package (market-share figures are unsourced); Hello Club's Xero app pushes payments, invoices and credit notes to Xero and pulls accounts; Stripe documents NZ BECS direct debit with Subscriptions; Shopify documents Shopify Payments in NZ and the custom-versus-public app choice; Xero's pricing and certification pages describe tiers, assessment and granular scopes; Inland Revenue and e-invoicing pages cover taxable supply information and Peppol.
+- **Not found or unverified:** Xero refresh-token and rate-limit specifics, MYOB's NZ API, Windcave's API and fees, Shopify's compliance webhooks and API surface, whether Apple Pay and Google Pay are enabled by default on NZ Stripe accounts, donee-organisation receipt rules, and the final dates of NZ open banking and e-invoicing milestones.
+
+### 12.8 NZ compliance checklist for selling the add-ons
+
+GST rules for the add-on's own invoices (the NZ company); taxable-supply information on club invoices; donation receipts (**Check**); Privacy Act terms for connectors (processor role, §11.1); direct-debit scheme duties; Consumer Guarantees Act for shop sales; and a written statement of what each connector reads and writes, shown on its connect screen.
+
+### 12.9 Pricing and entitlements
+
+- **The accounting sync is a paid add-on** (decision AK), implemented as an **add-on plan kind** in the entitlements (`plans` and `club_plans`, §6.5), switched by billing.
+- **Assumptions to confirm:**
+  - MYOB, as an accounting connector, is a paid add-on on the same terms.
+  - The **Shopify connector, direct debit and Windcave are included in the base plans** (Shopify has no per-connection fee like Xero's, but the build still costs money).
+  - **Three Wolves gets add-ons free under its licence.** (Three Wolves is a club on a free licence, so this needs writing into the licence.)
+- **Price:** not set. It covers Xero's developer tier, certification, support and margin, from the cost model (§11.3 gate 4) and a price test with design partners (§11.6 gate D). Billing runs through Stripe Billing via the NZ company, with GST where it applies.
+
+### 12.10 Phasing
+
+1. **After Phase 3 and live NZ billing:** the integration framework, then the Xero sync (read accounts, push contacts, invoices, payments, fees, refunds, expenses), then NZ direct debit.
+2. **Then:** the Windcave provider, the Shopify connector, the MYOB connector.
+3. **Later (§12.2):** pay by bank, Mailchimp, Microsoft 365, QuickBooks, a POS, Peppol.
+
+Rough best-case build effort, to be re-baselined after Phase 3: framework and Xero 5 to 7 weeks, direct debit 2 to 3, Windcave 3 to 4, Shopify 3 to 4, MYOB 3 to 4. They share the framework, so later connectors are faster. Track I (§9) can run beside Phase 4 and 5.
 

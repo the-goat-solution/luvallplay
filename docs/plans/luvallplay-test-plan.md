@@ -245,6 +245,23 @@ The four hard gates and the Vietnam gate in build plan §11.3 are items on the r
 - **Licences:** the CI licence report fails on any dependency outside the approved list.
 - **Accounts:** an automated check lists the owners of every production account from the ownership table and fails if any has fewer than two.
 
+### 3.19 Integrations (Track I)
+- **Sandboxes:** a Xero demo company, a Shopify development store, Stripe test mode (including NZ BECS direct debit) and Windcave's test environment. CI runs recorded-response tests; a nightly job runs against the live sandboxes.
+- **Contract tests per connector:** connect, reconnect, token rotation, revoke and disconnect (tokens deleted, audit written), and permission checks (only owners and admins, with step-up).
+- **Credential isolation:** one club's tokens can't be read, used or replaced by another (the tenant suite, §3.5), they never appear in logs, errors or exports, and a data-guard run proves a disconnect leaves everything else intact.
+- **Sync correctness (Xero and MYOB, the shared suite):**
+  - **Idempotency:** replay every job twice and out of order and get one result.
+  - **No deletes:** a voided payment posts a credit note, and nothing is ever deleted in the external system.
+  - **Settlement:** a payout with sales, fees and refunds nets to the bank line, and the clearing account ends at zero.
+  - **Rejections:** lock dates, archived accounts and rate limits end up in the error queue with the right message, and a retry succeeds once fixed.
+  - **Edited externally:** a changed item is flagged, not overwritten.
+  - **Totals:** the daily reconciliation report matches to the cent, in NZD.
+- **NZ tax:** GST 15%, a non-GST-registered club, and donations outside GST, each against fixtures an accountant has reviewed.
+- **Shopify:** products show, checkout opens on Shopify, order, payment and refund webhooks (with signature checks) create read-only orders, and **no sale is posted to Xero by default** when both connectors are on.
+- **Direct debit:** authority capture with the scheme wording, notification emails (English and Vietnamese) within the required time, a delayed settlement, a failed debit, a dispute, a cancelled authority, and renewal behaviour for each.
+- **Windcave:** the shared payments-provider contract suite (§3.16).
+- **Entitlements and metering:** a club without the add-on can't connect or call the sync (the API refuses), a paid add-on lapsing turns the sync off without deleting mappings, and API calls, egress and connections are metered per club and reconcile with the provider's usage.
+
 ## 4. Data change protocol (the heart of this plan)
 
 ### 4.1 Classify every change
@@ -424,6 +441,7 @@ On every pull request, and required before merging to `main`:
 | 3b Junior accounts | J1, the junior permission matrix (§3.17), the data guard per account for guardian export and deletion, store-policy review, a safeguarding review with someone experienced in junior sport |
 | B Business foundations | All four hard gates ticked with evidence (§3.18). Gate checks pass |
 | V Vietnam launch | V1, R1, the Vietnam region isolation, **the Hanoi restore drill and the no-branch rehearsal**, the regional services matrix check, MoMo and Zalo contract tests, payments contract suite for the Vietnamese providers, Vietnamese quality review, **Vietnamese counsel sign-off**, Vietnam trademark filed |
+| I Integrations (NZ) | §3.19 complete for each connector shipped, live NZ billing in place, the Xero security self-assessment started, direct-debit scheme checks reviewed, and the accountant's review of the GST and mapping fixtures |
 | 7 Global modules | Opt-in/out tests, **the §8 gate evidence** (thresholds, moderation owner, the country's legal checks), moderation and safeguarding flows (adults only), marketplace X1, abuse reports |
 
 ---

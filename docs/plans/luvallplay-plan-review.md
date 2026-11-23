@@ -222,3 +222,20 @@ Where I found a fact in the repo or the accounts, I say so. Where I'm relying on
 - The tax questions: intercompany licence and royalties, GST on NZ Vision sales, tax residency of TGS, Vietnamese VAT and e-invoices.
 - Vision training footage: the consent wording and what to do about footage already collected.
 - The proposed thresholds in §8 and §11.6.
+
+---
+
+## Integrations for NZ (24 Nov)
+
+| Question | Answer | Where in the plan |
+|---|---|---|
+| Shopify | **Show products in Luvallplay, check out on Shopify.** Custom app per partner club first; a public app is a later decision | §12.5 |
+| Xero scope | **Push sales, payments, fees, refunds and expenses; pull accounts, tax rates, tracking categories and bank accounts** | §12.3 |
+| Ready for the first paid NZ club | **NZ direct debit, a MYOB connector and the Windcave gateway.** Pay by bank isn't required | §12.6 |
+| Who pays for Xero | **A paid add-on** | §12.9 |
+
+**Assumptions to confirm:** MYOB is a paid add-on too; the Shopify connector, direct debit and Windcave are included in base plans; Three Wolves gets add-ons free under its licence.
+
+**What I couldn't verify (read before building):** Xero's refresh-token and rate-limit rules, Xero's certification thresholds (sources disagree on 25 connections versus a limit of uncertified apps per organisation, and on 3 versus 10 connections to apply), MYOB's NZ API, Windcave's API and fees, Shopify's compliance webhooks and API surface, Apple Pay and Google Pay defaults on NZ Stripe accounts, donee-organisation receipt rules, and the final dates of NZ open banking and e-invoicing milestones. Euro prices for Xero's tiers come from a single source.
+
+**Why the add-on is paid:** Xero now charges developers by tier since 2 March 2026, with certification and an annual security assessment for the higher tiers, so the cost grows with each connected club. It also means NZ badminton clubs, otherwise free for good, will pay for this one feature, which makes live NZ billing a prerequisite for selling it.

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SESSION_CAPACITY } from "@/lib/constants";
+import { clubConfig } from "@/lib/club";
 import { getSpotsAndHeadcountForDates } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
@@ -15,6 +15,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "dates required" }, { status: 400 });
   }
 
+  // The club's general capacity: the answer when a day can't be looked up.
+  const { sessionCapacity } = (await clubConfig()).playDays;
   const dates = datesParam.split(",").map((d) => d.trim()).filter(Boolean);
   let spots: Record<string, number> = {};
   let signedUp: Record<string, number> = {};
@@ -26,13 +28,13 @@ export async function GET(request: Request) {
       ({ spots, signedUp, locked, miniGame } = await getSpotsAndHeadcountForDates(dates));
     } else {
       for (const date of dates) {
-        spots[date] = SESSION_CAPACITY;
+        spots[date] = sessionCapacity;
         signedUp[date] = 0;
       }
     }
   } catch {
     for (const date of dates) {
-      spots[date] = SESSION_CAPACITY;
+      spots[date] = sessionCapacity;
       signedUp[date] = 0;
     }
   }

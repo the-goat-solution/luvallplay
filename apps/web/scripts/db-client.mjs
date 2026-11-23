@@ -42,4 +42,7 @@ export async function proxyAppDatabaseClient() {
       super(address, protocols, agent ? { agent } : {});
     }
   };
+  // HTTP queries go to the database's own host (it serves /sql too), not the
+  // regional api.* host, so a network allowlist only needs the one host.
+  neonConfig.fetchEndpoint = (host) => `https://${host}/sql`;
 }

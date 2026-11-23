@@ -100,7 +100,8 @@ async function snapshot(out: string) {
       // Read-only: getAccess would also apply a pending invite.
       access: await view(async () => (await database.sql.query(
         `SELECT (SELECT role FROM club_roles WHERE player_id = $1) AS role, EXISTS (SELECT 1 FROM platform_admins WHERE player_id = $1) AS platform`, [id])).rows[0]),
-      export: await view(() => exporter.collectPlayerData(player)),
+      // Without the export's own timestamp, which is the time of the run.
+      export: await view(async () => ({ ...(await exporter.collectPlayerData(player)), exportedAt: null })),
     };
   }
   const club: Views = {

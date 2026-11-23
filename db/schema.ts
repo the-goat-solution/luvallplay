@@ -11,7 +11,7 @@
 // from this file alone equals docs/schema/production.sql, and that Drizzle
 // Kit sees nothing to migrate. Change the schema here, then
 // `npx drizzle-kit generate` for the migration (see db/README.md).
-import { pgTable, index, check, bigserial, timestamp, integer, text, jsonb, foreignKey, unique, serial, uniqueIndex, date, boolean, smallint, bigint, real, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, numeric, index, check, bigserial, timestamp, integer, text, jsonb, foreignKey, unique, serial, uniqueIndex, date, boolean, smallint, bigint, real, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
@@ -1077,3 +1077,28 @@ export const rr_results = pgTable("rr_results", {
 	index("rr_results_name_idx").using("btree", sql`lower(mg_name)`, sql`session_date`),
 	primaryKey({ columns: [table.draw_id, table.mg_name], name: "rr_results_pkey"}),
 ]);
+
+// Business config (Phase 2 PR 6): moved out of Sanity, edited in Admin →
+// Settings. Locale fields are { en, vi } objects, as they were in Sanity.
+export const pricing_plans = pgTable("pricing_plans", {
+	plan_id: text().primaryKey().notNull(),
+	name: jsonb().default({}).notNull(),
+	description: jsonb().default({}).notNull(),
+	price_nzd: numeric({ precision: 10, scale: 2 }),
+	period_label: jsonb().default({}).notNull(),
+	featured: boolean().default(false).notNull(),
+	features: jsonb().default([]).notNull(),
+	stripe_price_id: text(),
+	sort: integer().notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updated_by: integer(),
+}, () => [
+	check("pricing_plans_plan_id_check", sql`plan_id = ANY (ARRAY['casual'::text, 'fridayMonthly'::text, 'fridayQuarterly'::text, 'wednesdayMonthly'::text, 'wednesdayQuarterly'::text])`),
+]);
+
+export const club_settings = pgTable("club_settings", {
+	key: text().primaryKey().notNull(),
+	value: jsonb(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updated_by: integer(),
+});

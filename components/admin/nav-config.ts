@@ -47,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/financials/bank", label: "Bank", badge: "bank" },
       { href: "/admin/financials/report", label: "Annual report" },
       { href: "/admin/shop", label: "Shop", badge: "shop" },
+      { href: "/admin/settings", label: "Pricing & settings" },
     ],
   },
   {

@@ -17,8 +17,8 @@ import {
   fetchAbout,
   fetchGallery,
   fetchScheduleSettings,
-  fetchPricingPlans,
 } from "@/lib/sanity-queries";
+import { getMaxCasualSpots, getPricingPlans } from "@/lib/business-config";
 import { buildGalleryPool } from "@/lib/gallery-pool";
 import { LeaderboardTeaser } from "@/components/leaderboard/LeaderboardTeaser";
 import { teaserBoard } from "@/lib/leaderboard-data";
@@ -49,12 +49,15 @@ export default async function HomePage() {
     fetchAbout(),
     fetchGallery(),
     fetchScheduleSettings(),
-    fetchPricingPlans(),
+    // Business config lives in the database now (lib/business-config.ts).
+    getPricingPlans(),
     getPausedDays(),
     // Top five, first names only (the full board is in the app's Arena).
     process.env.POSTGRES_URL ? teaserBoard().catch(() => []) : Promise.resolve([]),
   ]);
 
+  const maxCasualSpots = await getMaxCasualSpots(scheduleSettings?.maxCasualSpots);
+  const schedule = scheduleSettings || maxCasualSpots !== null ? { ...(scheduleSettings ?? {}), maxCasualSpots: maxCasualSpots ?? undefined } : undefined;
   const calendarSubscribe = getCalendarSubscribeLinks(process.env.GOOGLE_CALENDAR_ID);
   // Club photos plus approved player photos (see lib/gallery-pool.ts).
   const galleryPool = await buildGalleryPool(gallery);
@@ -68,7 +71,7 @@ export default async function HomePage() {
       />
       <About stats={siteSettings?.stats} cms={about ?? undefined} />
       <Schedule
-        scheduleSettings={scheduleSettings ?? undefined}
+        scheduleSettings={schedule}
         calendarSubscribe={calendarSubscribe}
       />
       <Gallery images={galleryPool} />

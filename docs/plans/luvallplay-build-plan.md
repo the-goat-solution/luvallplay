@@ -217,6 +217,14 @@ Findings and changes recorded as the work goes:
   - All **eight** foreign keys to `players` change, not only the six `CASCADE` ones. The two `SET NULL` ones (`shop_orders`, `cancellation_feedback`) would detach a person's orders on a hard delete, and accounts are only ever soft-deleted (test plan §4.2), so RESTRICT is right for them too.
   - Migration `0001_account_fks_restrict.sql`: same constraint names, `NOT VALID` then `VALIDATE`, one transaction.
   - Rehearsed on a fresh branch of production: 15 accounts, 0 problems, drift empty afterwards, and a hard delete of an account with data is refused.
+- **PR 6, business config → database:**
+  - New tables `pricing_plans` and `club_settings` (migration `0002_business_config`), filled with the published Sanity values read on 23 Nov 2026: 5 plans with their Stripe price ids, capacity unset, booking lock 14 days (`bookingLockDays` isn't read by the app today; it's kept).
+  - `lib/business-config.ts` reads the database first and falls back to Sanity while the tables don't exist yet (expand). Edits happen in **Admin → Money → Pricing & settings** (club admins; audited).
+  - Checked three ways:
+    - `tests/business-config.test.ts`: every field equals the committed Sanity snapshot, and the plans render identically in English and Vietnamese;
+    - `scripts/verify-business-config.mjs`: a live database against live Sanity (catches a tampered price id);
+    - a combined rehearsal (PR 4 + PR 6) on a branch of production: 0 problems, drift empty, values match.
+  - **Contract later:** remove the Sanity fallback and the Sanity pricing fields once production has run 0002 and a quiet week has passed.
 - **PR 5, Next.js 16** (16.4.6, Turbopack builds):
   - `middleware.ts` is now `proxy.ts` (`export function proxy`), on the Node runtime, which is fixed in 16, so the `runtime` setting is gone.
   - `revalidateTag(tag)` is now `revalidateTag(tag, { expire: 0 })`. That keeps today's behaviour (the next request reads fresh data), not the stale-while-revalidate `"max"` profile.

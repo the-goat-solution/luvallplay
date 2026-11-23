@@ -41,40 +41,57 @@ Production already has every table, because the baseline migration is production
 
 Rollback: Vercel Instant Rollback. The previous version still creates tables only if they're missing, and they all exist.
 
-## 5. Phase 2 PR 4: account foreign keys CASCADE / SET NULL → RESTRICT (production data change)
+## 5. Phase 2 PR 4 + PR 6: one production data run (needs your sign-off)
 
-**What:** the eight foreign keys from account-owned tables (sessions, photos, messages, events, API keys, webhooks, shop orders, cancellation feedback) to `players` change to `ON DELETE RESTRICT`. Schema only, no rows change. In the same run, production is marked as at the baseline migration (additive: a `drizzle` schema with one table and one row).
+**What runs:** three migrations in order, in one sitting:
+1. **Mark production as at the baseline.** Additive: a `drizzle` schema with one table and one row. It runs only after re-checking that production's schema equals the frozen dump.
+2. **`0001_account_fks_restrict` (PR 4).** The eight foreign keys to `players` become `ON DELETE RESTRICT`. Schema only, no rows change.
+3. **`0002_business_config` (PR 6).** Two new tables, `pricing_plans` and `club_settings`, filled with the published Sanity values (5 plans with their Stripe price ids; capacity unset; booking lock 14 days). Additive.
 
-**Already done (T−5, T−4):** rehearsal on a fresh Neon branch of production (`rehearsal-phase-2`, reset from production at 02:30 UTC on 23 Nov):
-- `data-guard rehearse`: **15 accounts checked, 0 problems** (report in the PR);
-- drift afterwards empty;
-- a hard delete of an account with data is now refused (checked in a rolled-back transaction).
+The site doesn't depend on any of this to keep working. Until 0002 has run, it keeps reading pricing from Sanity; afterwards it reads from the database, with the same values.
 
-**Second sign-off (T−3):** Kelcee (or Timba) reads the PR's rehearsal report and says OK on the PR.
+**Already done (T−5, T−4), on fresh Neon branches of production:**
+- PR 4 alone: **15 accounts, 0 problems**, drift empty, and a hard delete of an account with data is refused (in a rolled-back transaction).
+- PR 4 + PR 6 together, exactly as below: **15 accounts, 0 problems** (two tables added), drift empty, and `verify-business-config`: **matches Sanity exactly**.
+- Reports: `docs/rehearsals/`.
 
-**Production run (T0), at a quiet time, not a play-day evening.** From a checkout of the PR branch, after `npm ci`:
+**Second sign-off (T−3):** Kelcee (or Timba) reads the two reports and says OK on PR #86.
+
+**Production run (T0)**, at a quiet time, not a play-day evening. From a checkout of the PR 6 branch, after `npm ci`:
 
 ```bash
-# 1. Restore point (instant): Neon console → Branches → New branch from main, now → name pre-phase-2-pr4
+# 1. Restore point (instant): Neon console → Branches → New branch from main, now → name pre-phase-2-data
 #    (or ask the build session to create it through the Neon API).
 
-export POSTGRES_URL='<production direct connection string>'      # SYD_POSTGRES_URL_NON_POOLING
-export PRODUCTION_DATABASE_HOSTS='<production host(s)>'           # the runner refuses without --production
+export POSTGRES_URL='<production direct connection string>'      # the SYD_POSTGRES_URL_NON_POOLING value
+export PRODUCTION_DATABASE_HOSTS='<production host(s)>'           # the runner then refuses without --production
 
-# 2. Snapshot, migrate, snapshot, diff
-npm run data-guard -- snapshot --out .data-guard/pr4-before.json                  # read-only
-npm run db:migrate -- --baseline --production    # checks production's schema = the frozen dump, then records the baseline
-npm run db:migrate -- --production               # applies 0001_account_fks_restrict (one transaction, lock_timeout 3s)
-npm run data-guard -- snapshot --out .data-guard/pr4-after.json
-npm run data-guard -- diff .data-guard/pr4-before.json .data-guard/pr4-after.json \
-  --expect scripts/data-guard/expectations/2026-11-phase2-account-fks-restrict.production.json
+# 2. Snapshot, migrate, snapshot, diff, verify
+npm run data-guard -- snapshot --out .data-guard/prod-before.json      # read-only
+npm run db:migrate -- --baseline --production   # re-checks production = frozen dump, records the baseline
+npm run db:migrate -- --production              # 0001 then 0002, each in one transaction (lock_timeout 3s)
+npm run data-guard -- snapshot --out .data-guard/prod-after.json
+npm run data-guard -- diff .data-guard/prod-before.json .data-guard/prod-after.json \
+  --expect scripts/data-guard/expectations/2026-11-phase2-business-config.production.json
 npm run db:drift                                 # must say: No schema drift
+node scripts/verify-business-config.mjs          # must say: matches Sanity exactly
 ```
 
-**Done when:** the diff passes with 0 errors and the drift check is empty. Then merge PR 4 (the code doesn't depend on the new constraints, so the order doesn't matter for the app).
+**Done when:** the diff passes with 0 errors, drift is empty and the business config matches. Then merge PR 4 and PR 6 and deploy.
 
-**If anything fails:** stop. The migration runs in one transaction, so a failure leaves nothing half-done. To undo a completed run, swap the constraints back. That's a schema-only change and no data is involved. `pre-phase-2-pr4` holds the exact state from before.
+**If anything fails:** stop. Each migration is one transaction, so a failure leaves nothing half-done. Undoing a completed run is schema-only: swap the constraints back, or drop the two new tables. `pre-phase-2-data` holds the exact state from before.
+
+**After the run:** edit prices and plans in **Admin → Money → Pricing & settings**, not in Sanity.
 
 ## 6. Phase 2 PR 5 (Next.js 16): nothing to do
 
 After the deploy, smoke test: `/login`, sign in → Me, **`/admin` as an owner** (the admin check now runs in `proxy.ts`), `/studio` loads, and Arena works. Rollback: Vercel Instant Rollback.
+
+## 7. Moving Sanity Studio out of the web app (needs you, once)
+
+The build plan moves the Studio out of the web app into its own deploy (`apps/studio`). The club's Sanity project (`c0v5j4dz`) isn't in the Sanity account connected to the build session, so one step needs you. Pick one:
+
+- **A (simplest):** on your computer, in a checkout of the branch that adds `apps/studio`, run `npx sanity login`, then `npx sanity deploy` from `apps/studio`, and choose the hostname `threewolves`. The Studio is then at `https://threewolves.sanity.studio` (Sanity handles CORS for its own hosts). Tell the build session it's done.
+- **B:** Sanity → manage → project `c0v5j4dz` → API → Tokens → add a token with **Deploy Studio** permission, and save it when the build session asks for it (a secure form; you never paste it in chat). The session then deploys it.
+
+Then `/studio` on the site redirects to the hosted Studio, and `next-sanity` and the npm `overrides` entry can leave the web app.

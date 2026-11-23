@@ -22,6 +22,7 @@ import {
   type ClubRole,
 } from "@/lib/admin-roles";
 import { notifyRoleChange } from "@/lib/admin-notify";
+import { mirrorClubMember } from "@/lib/tenant-members";
 import { formatNz } from "@/components/admin/ui";
 
 // Admin → People → Admins (build plan §2.4). Owners and platform admins add
@@ -68,6 +69,7 @@ async function addAdmin(formData: FormData) {
   let message: string;
   try {
     const r = await setRoleByEmail(db, actor, { email, role });
+    if (r.kind === "granted") await mirrorClubMember(db, r.playerId);
     if (r.kind === "unchanged") back("toast", `${email.trim()} is already ${r.role}.`);
     const { admins } = await listAdmins(db);
     const person = r.kind === "invited" ? null : admins.find((a) => a.playerId === r.playerId);
@@ -99,6 +101,7 @@ async function changeRole(formData: FormData) {
   try {
     if (!Number.isInteger(playerId) || !isClubRole(role)) throw new RoleError("invalid_role");
     const r = await setRoleForPlayer(db, actor, playerId, role);
+    if (r.kind === "granted") await mirrorClubMember(db, playerId);
     const person = (await listAdmins(db)).admins.find((a) => a.playerId === playerId);
     if (r.kind === "granted" && person) {
       await notifyRoleChange({ email: person.email, name: person.name, role, invited: false, by: actorName(ctx), ownerEmails: await ownerEmails(db) });
@@ -118,6 +121,7 @@ async function removeAdmin(formData: FormData) {
   try {
     const before = (await listAdmins(db)).admins.find((a) => a.playerId === playerId);
     const { removed } = await removeRole(db, actor, playerId);
+    if (removed) await mirrorClubMember(db, playerId);
     if (removed && before) {
       await notifyRoleChange({ email: before.email, name: before.name, role: null, invited: false, by: actorName(ctx), ownerEmails: await ownerEmails(db) });
     }

@@ -851,6 +851,21 @@ Findings and changes recorded as the work goes:
   - A module without a row is off; the core is on whatever the table says.
   - The minimal switch is Admin → Settings → Modules, for owners and platform admins, using the registry's `canTurnOn` / `canTurnOff`.
   - Finding: `payments-to-check` owns no route of its own (its screens are inside Members and Shop), so it is switched inside those pages, in the next part.
+  - Part 2 (after #106): what's left of step 5 is module parts inside other modules' pages, per-module emails and the platform console's lock.
+- **Step 4, continued:**
+  - **Finding: the hosting plan keeps server logs for one hour**, so logs can't show "shadow reads clean for 7 days". **Plan change:** each shadow result is a row in `admin_audit_log` (`shadow.<what>`: `clean`, `differ` or `unavailable`). A difference is written when a request sees it; the roster cron writes one result a day. `scripts/shadow-report.mjs` prints the record and is the evidence for the step 11 gate.
+  - The booking clock (time zone, booking window, cut-off hour) is a parameter of the date helpers. The booking rule, the Me page and the calendar components pass the club's. About 50 other callers still use the default (the built-in values, equal to Three Wolves' settings); they move as their modules are touched.
+  - Membership cycle lengths in the renewal SQL, the Stripe sync and the free month come from the settings. They go into SQL as whole numbers only.
+  - Client components read the club's public settings from a provider (`useClub()`), filled by the root layout.
+- **Step 6, second driver and region routing (no migration):**
+  - `DATABASE_DRIVER` chooses the Neon driver (default) or standard Postgres (`lib/database-pg.ts`). The golden master compares three clients: the old one, the Neon driver and standard Postgres. An unknown driver name stops the app.
+  - Host → club → region is pure logic in `@luvallplay/core/host-routing`, with every host type of §6.4 told apart. `TENANT_ROUTING` is `off` (default), `shadow` or `enforce`; an unknown value enforces. Refusals: 404 unknown host, 421 another region's club, 503 when the lookup can't answer.
+  - **Decision: Edge Config is a copy, the `tenants` table is the truth.** A host missing from the copy is looked up in the database, so a new club's domain works before the copy is refreshed, and a broken copy doesn't take clubs offline. If both fail, nothing is served.
+  - **Decision: one club per deployment until step 11.** A host that resolves to a different club in the same region is refused, because reads aren't tenant-aware yet.
+  - **Decision: the deployment's own host names** (the hosting provider's URLs, used by its scheduler and previews) serve the deployment's club. This rule goes away when a deployment holds more than one club.
+  - Storage (`lib/storage.ts`) and scheduled jobs (`lib/cron.ts`) are interfaces with Vercel as the first provider; a contract test is ready for the S3-compatible provider, and `scripts/cron/k8s.mjs` prints Kubernetes CronJobs from the same list as `vercel.json`.
+  - **Finding:** two scheduled jobs didn't require the scheduler's secret when it was unset. All five now share one check that refuses in production without a secret.
+  - **Not done in Phase 3:** the S3-compatible storage provider, the platform's own hosts (marketing, app, admin, api) and cross-region forwarding. They belong to the Vietnam launch and Phase 6.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

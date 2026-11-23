@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/cron";
 import { NextResponse } from "next/server";
 import { getSessionAlertState, getSessionHeadcount, getUpcomingSessionDates, upsertSessionAlertState } from "@/lib/db";
 import { sendHeadcountAlertEmail } from "@/lib/notify";
@@ -9,8 +10,7 @@ const MIN_COMFORTABLE = 8;
 const MAX_COMFORTABLE = 12;
 
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -17,6 +17,7 @@
 // scripts/shadow-report.mjs prints the record. Writing never throws: a
 // shadow read must not break the request it rides on.
 import { compareClubConfig, type Db } from "./club-config.ts";
+import { deploymentRegion, routingMode, routingSelfCheck } from "./tenant-routing.ts";
 
 export type ShadowResult = "clean" | "differ" | "unavailable";
 
@@ -44,6 +45,17 @@ export async function shadowHeartbeat(db: Db): Promise<{ what: string; result: S
     const message = String((err as Error)?.message ?? err).slice(0, 200);
     await recordShadow(db, "settings", "unavailable", { error: message, heartbeat: true });
     out.push({ what: "settings", result: "unavailable", differences: [message] });
+  }
+  // Host routing: the club's own hosts, through the lookup requests use.
+  try {
+    const r = await routingSelfCheck(db);
+    const result: ShadowResult = r.differences.length ? "differ" : "clean";
+    await recordShadow(db, "routing", result, { mode: routingMode(), region: deploymentRegion(), checked: r.checked, differences: r.differences, heartbeat: true });
+    out.push({ what: "routing", result, differences: r.differences });
+  } catch (err) {
+    const message = String((err as Error)?.message ?? err).slice(0, 200);
+    await recordShadow(db, "routing", "unavailable", { error: message, heartbeat: true });
+    out.push({ what: "routing", result: "unavailable", differences: [message] });
   }
   return out;
 }

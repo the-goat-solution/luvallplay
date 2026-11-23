@@ -51,9 +51,13 @@ describe("shadow record", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TES
 
   test("the heartbeat records a clean day", async () => {
     const out = await shadowHeartbeat(c);
-    assert.deepEqual(out, [{ what: "settings", result: "clean", differences: [] }]);
+    assert.deepEqual(out, [
+      { what: "settings", result: "clean", differences: [] },
+      { what: "routing", result: "clean", differences: [] },
+    ]);
     const all = await rows();
-    assert.equal(all.length, 1);
+    assert.equal(all.length, 2);
+    assert.deepEqual(all[1].meta.checked, ["three-wolves.luvallplay.com", "threewolvesbadminton.org", "www.threewolvesbadminton.org"]);
     assert.equal(all[0].actor_kind, "system");
     assert.equal(all[0].action, "shadow.settings");
     assert.equal(all[0].target, "clean");
@@ -77,14 +81,16 @@ describe("shadow record", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TES
     assert.equal(differ.length, 2);
 
     const report = await shadowReport(c, 2);
-    assert.equal(report.length, 1);
-    assert.deepEqual({ clean: report[0].clean, differ: report[0].differ, unavailable: report[0].unavailable, what: report[0].what }, { clean: 1, differ: 2, unavailable: 0, what: "settings" });
+    assert.deepEqual(report.map((r) => ({ what: r.what, clean: r.clean, differ: r.differ, unavailable: r.unavailable })), [
+      { what: "routing", clean: 2, differ: 0, unavailable: 0 },
+      { what: "settings", clean: 1, differ: 2, unavailable: 0 },
+    ]);
   });
 
   test("a database that can't answer never throws", async () => {
     const broken = { query: async () => { throw new Error("connection lost"); } };
     await recordShadow(broken, "settings", "clean");
     const out = await shadowHeartbeat(broken);
-    assert.equal(out[0].result, "unavailable");
+    assert.deepEqual(out.map((o) => o.result), ["unavailable", "unavailable"]);
   });
 });

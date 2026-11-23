@@ -1,14 +1,5 @@
-import { db, sql, types } from "@vercel/postgres";
-
-// By default the driver parses Postgres DATE columns into JS Date objects at
-// local midnight, so converting back with .toISOString().slice(0,10) silently
-// shifts the day whenever the process's timezone isn't UTC (verified: it
-// breaks under Pacific/Auckland, the club's own timezone — the exact
-// environment this app cares about getting right). DATE has no time-of-day
-// component to begin with, so keep it as the plain 'YYYY-MM-DD' string
-// Postgres already sends, sidestepping the conversion entirely everywhere in
-// this file. OID 1082 = date.
-types.setTypeParser(1082, (val: string) => val);
+import { db, sql } from "./database";
+// DATE columns come back as plain 'YYYY-MM-DD' strings (lib/database.ts).
 import {
   DEFAULT_PAUSED_DAYS,
   MEMBERSHIP_CYCLE_DAYS,

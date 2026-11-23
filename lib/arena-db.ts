@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { sql, db } from "@vercel/postgres";
+import { sql, db } from "./database";
 import { revalidateTag } from "next/cache";
 import { ensurePlayerTables, getPlayerSetting, setPlayerSetting } from "./player-db";
 import { ensureStatsTables, runStatsBackfill, syncRosterAttendance } from "./stats-db";
@@ -189,8 +189,10 @@ export function ensureArenaTables(): Promise<void> {
 }
 
 export class ArenaError extends Error {
-  constructor(public code: string) {
+  code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
   }
 }
 
@@ -455,24 +457,27 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
   await tick();
   const today = getClubToday().dateKey;
   const [pl, att, rr, pairs, members, ch, peaks, club, stats] = await Promise.all([
+    // Every list is ordered so the world (and any tie-break in it) is the same
+    // on every load; without ORDER BY, Postgres returns rows in storage order,
+    // which vacuum can change.
     sql.query(
       `SELECT p.id, p.email, p.first_name, ${DISPLAY_NAME_SQL} AS name, p.leaderboard_visible, p.avatar_url
-       FROM players p WHERE p.deleted_at IS NULL;`,
+       FROM players p WHERE p.deleted_at IS NULL ORDER BY p.id;`,
     ),
     sql.query(
       `SELECT p.id, a.session_date::text AS d FROM attendance a JOIN players p ON p.email = a.email
-       WHERE a.verified AND NOT a.removed AND p.deleted_at IS NULL;`,
+       WHERE a.verified AND NOT a.removed AND p.deleted_at IS NULL ORDER BY p.id, a.session_date;`,
     ),
     sql.query(
       `SELECT p.id, r.session_date::text AS d, r.rr_points FROM rr_results r
-       JOIN players p ON lower(p.minigame_name) = lower(r.mg_name) WHERE p.deleted_at IS NULL;`,
+       JOIN players p ON lower(p.minigame_name) = lower(r.mg_name) WHERE p.deleted_at IS NULL ORDER BY p.id, r.session_date, r.draw_id;`,
     ),
-    sql.query(`SELECT * FROM ${T.pairs};`),
-    sql.query(`SELECT pair_id, player_id FROM ${T.members} WHERE active;`),
+    sql.query(`SELECT * FROM ${T.pairs} ORDER BY id;`),
+    sql.query(`SELECT pair_id, player_id FROM ${T.members} WHERE active ORDER BY pair_id, player_id;`),
     sql.query(`SELECT * FROM ${T.challenges} ORDER BY id;`),
-    sql.query(`SELECT * FROM ${T.ranks};`),
+    sql.query(`SELECT * FROM ${T.ranks} ORDER BY player_id;`),
     sql.query(`SELECT date::text AS d FROM sessions WHERE date <= $1 ORDER BY date;`, [today]),
-    sql.query(`SELECT challenge_id, status, live, (live_at > NOW() - INTERVAL '90 seconds') AS fresh FROM ${T.matchStats};`),
+    sql.query(`SELECT challenge_id, status, live, (live_at > NOW() - INTERVAL '90 seconds') AS fresh FROM ${T.matchStats} ORDER BY challenge_id;`),
   ]);
 
   const players = new Map<number, ArenaPlayer>();

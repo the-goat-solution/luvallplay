@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { ensurePlayerTables } from "./player-db";
 import { onceThisDeploy } from "./schema-gate";
 

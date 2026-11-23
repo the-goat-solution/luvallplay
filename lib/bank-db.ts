@@ -1,4 +1,4 @@
-import { db, sql } from "@vercel/postgres";
+import { db, sql } from "./database";
 import { ensureFinanceTables } from "./finance-db";
 import type { FinanceEntry, FinanceKind } from "./finance";
 import {

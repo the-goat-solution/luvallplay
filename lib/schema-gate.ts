@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { guardPreviewDatabase } from "./db-switch.ts";
 
 // Start-up table checks, once per deployment instead of once per server.

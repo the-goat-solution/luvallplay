@@ -188,7 +188,7 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
     await withClient(url, (c) => migrate(c, { log: quiet }));
     const before = await dumpOf(url);
     const pgPort = new URL(BASE_URL!).port || "5432";
-    const wsPort = String(5600 + (process.pid % 300));
+    const wsPort = String(await (await import("./golden/free-port.ts")).freePort());
     const proxy = spawn(process.execPath, ["scripts/e2e/ws-proxy.mjs", wsPort, pgPort], { stdio: "ignore" });
     try {
       await new Promise((r) => setTimeout(r, 500));

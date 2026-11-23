@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import {
   PLAYER_COLUMNS,
   ensurePlayerTables,

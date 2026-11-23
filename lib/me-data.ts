@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { addDays, ensureTables, getSpotsAndHeadcountForDates, listSessionsInRange } from "./db";
 import { getClubToday, isBookable, isDatePaused, getMembershipDayForDate } from "./dates";
 import type { Weekday } from "./constants";

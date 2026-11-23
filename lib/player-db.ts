@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import { ensureTables } from "./db";
 import { getClubToday } from "./dates";
 import type { Lang } from "./i18n";

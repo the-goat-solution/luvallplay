@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { sql } from "@vercel/postgres";
+import { insertMonthlyDonation } from "@/lib/repos/donations";
 import { DONATION_MIN_CENTS, DONATION_MAX_CENTS } from "@/lib/constants";
 import { getStripe, getDonationProductId, getInvoicePaymentIntent } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
@@ -95,11 +95,7 @@ export async function POST(request: Request) {
 
     if (process.env.POSTGRES_URL) {
       await ensureTables();
-      await sql`
-        INSERT INTO donations (email, first_name, last_name, amount_cents, frequency, stripe_subscription_id, status)
-        VALUES (${body.email}, ${body.firstName}, ${body.lastName}, ${amountCents}, 'monthly', ${subscription.id}, 'pending')
-        ON CONFLICT (stripe_subscription_id) DO NOTHING;
-      `;
+      await insertMonthlyDonation({ email: body.email, firstName: body.firstName, lastName: body.lastName, amountCents, stripeSubscriptionId: subscription.id });
     }
 
     return NextResponse.json({

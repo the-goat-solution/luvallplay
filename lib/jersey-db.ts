@@ -1,4 +1,4 @@
-import { db, sql } from "@vercel/postgres";
+import { db, sql } from "./database";
 import { ensureTables } from "./db";
 import { ensureFinanceTables, createManualEntry, deleteManualEntry } from "./finance-db";
 import { matchBankLine, MatchError } from "./bank-db";

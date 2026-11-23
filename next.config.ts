@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
   // End-to-end test builds only (E2E_BUILD=1): one shared copy of the
   // database driver, so lib/local-neon.ts can point it at a local Postgres.
   // Production builds are unchanged.
-  ...(process.env.E2E_BUILD === "1" ? { serverExternalPackages: ["@vercel/postgres", "@neondatabase/serverless", "ws"] } : {}),
+  ...(process.env.E2E_BUILD === "1" ? { serverExternalPackages: ["@neondatabase/serverless", "ws"] } : {}),
   experimental: {
     // Receipt photos on the admin Financials form go up through a Server
     // Action. The default 1 MB cap is too small for a PDF invoice; Vercel's

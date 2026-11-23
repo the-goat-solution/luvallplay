@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { sql } from "@vercel/postgres";
+import { sql } from "./database";
 import {
   ActionError,
   applyAction,

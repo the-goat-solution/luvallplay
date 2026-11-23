@@ -103,7 +103,7 @@ pnpm db:drift                                    # must say: No schema drift
 node scripts/verify-business-config.mjs          # must say: matches Sanity exactly
 ```
 
-**Done when:** the diff passes with 0 errors, drift is empty and the business config matches. No deploy is needed: the live site picks the new tables up on its own (it reads the database first). `/admin/setup` → "Database schema" then shows all migrations applied.
+**Done when:** the diff passes with 0 errors, drift is empty and the business config matches. No deploy is needed: the live site reads the database first and picks the new tables up within a minute (the home page refreshes every 60 seconds). `/admin/setup` → "Database schema" then shows all migrations applied.
 
 **If anything fails:** stop. Each migration is one transaction, so a failure leaves nothing half-done. Undoing a completed run is schema-only: swap the constraints back, or drop the two new tables. `pre-phase-2-data` holds the exact state from before.
 

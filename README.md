@@ -2,9 +2,27 @@
 
 Production website for Three Wolves Badminton Club (Christchurch, NZ).
 
+## Repository layout (monorepo, Phase 2)
+
+pnpm workspaces + Turborepo:
+
+| Path | What |
+|---|---|
+| `apps/web` | The Next.js site, app, admin and API (Vercel Root Directory) |
+| `packages/db` | Drizzle schema, versioned migrations, default seed (`@luvallplay/db`) |
+| `packages/core` | Pure club logic: play periods, ranks and points, phone numbers, safe redirects, names (`@luvallplay/core`) |
+| `packages/auth` | Pure access rules: club roles, which admin pages each role opens, step-up (`@luvallplay/auth`) |
+| `packages/i18n` | All text, typed namespaces `site`, `profile`, `arena`, `jersey`, in English and Vietnamese (`@luvallplay/i18n`) |
+| `packages/ui` | Design tokens: semantic theme tokens, the 12 club colour schemes (default Court Green, `tokens.css`), the Luvallplay brand and the Three Wolves theme (`@luvallplay/ui`) |
+| `packages/modules` | The module system skeleton: `defineModule()`, switching rules, and the registry (core + optional modules) of today's features (`@luvallplay/modules`) |
+| `docs/` | Plans, runbooks, schema dumps, rehearsal reports |
+
+Run things from the root with `pnpm --filter web <script>` (or `cd apps/web`). Packages are TypeScript source compiled by Next (`transpilePackages`); `pnpm --filter "./packages/*" typecheck` checks them on their own. The build plan (§3.1) lists the packages still to come.
+
 ## Stack
 
-- **Next.js 15** (App Router) on Vercel
+- **Next.js 16** (App Router, Turbopack) on Vercel
+- **Neon Postgres** through `@neondatabase/serverless` + **Drizzle** (`apps/web/lib/database.ts`)
 - **Sanity CMS** — content at `/studio`
 - **Stripe** — casual ($10), monthly ($33), quarterly ($85 / 3 months), donations (custom amount, one-time or monthly)
 - **Vercel Postgres** — sessions, bookings, waitlist, memberships
@@ -22,22 +40,25 @@ Production website for Three Wolves Badminton Club (Christchurch, NZ).
 ## Setup
 
 ```bash
-npm install
-cp .env.example .env.local
+pnpm install
+cp apps/web/.env.example apps/web/.env.local
 ```
 
 ### Database
 
-Link Vercel Postgres in the dashboard, then:
+Point `POSTGRES_URL` at a Postgres (a Neon branch, or a local Postgres 18), then:
 
 ```bash
-npm run db:migrate
+pnpm --filter web db:migrate   # tables from packages/db/migrations
+pnpm --filter web db:seed      # default settings for a new database
 ```
+
+See `packages/db/README.md`.
 
 ### Stripe (test)
 
 ```bash
-STRIPE_SECRET_KEY=sk_test_... npm run stripe:setup
+STRIPE_SECRET_KEY=sk_test_... pnpm --filter web stripe:setup
 ```
 
 Add printed price/product IDs to `.env.local` (including `STRIPE_PRODUCT_DONATION`). Configure webhook:
@@ -103,7 +124,7 @@ Set up:
 - `RESEND_API_KEY` / `EMAIL_FROM` — provision via `vercel integration add resend/resend-email` (Vercel Marketplace), or manually in the [Resend dashboard](https://resend.com). `EMAIL_FROM` must be a verified sending address/domain.
 - `CRON_SECRET` — set automatically by Vercel when a project has cron jobs; also protects manual calls to the endpoint.
 
-View the roster for any past or upcoming play day at `/admin/play-days` — pick a date from the dropdown. Log in at `/admin/login` with just a password (set `ADMIN_PASSWORD`).
+View the roster for any past or upcoming play day at `/admin/play-days` — pick a date from the dropdown. Admin opens from your own account: sign in at `/login` with an account that has a club role (owner, admin or coach) or platform admin. There is no admin password.
 
 > Note: Vercel Cron runs in UTC with no DST awareness. The schedule (`0 3 * * *`) targets 4:00 PM NZDT (daylight saving); during NZST (non-DST months) the check will run around 5:00 PM instead.
 

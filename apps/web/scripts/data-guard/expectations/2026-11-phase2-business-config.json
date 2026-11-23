@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase2-business-config",
+  "description": "Phase 2 PR 6 (build plan §5, Sanity row): two new tables, pricing_plans and club_settings, filled with the published Sanity business config (5 pricing plans with Stripe price ids; session capacity and booking lock days). Additive only: no existing table, column, row, account, email, phone, session or role may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

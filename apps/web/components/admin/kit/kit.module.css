@@ -1,0 +1,531 @@
+/* Admin UI kit: the shared look of the admin pages (plain system font, navy
+   buttons), as CSS instead of inline style objects. */
+
+.header {
+  margin-bottom: 4px;
+}
+.title {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+.subtitle {
+  margin: 0 0 14px;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.section {
+  border: 1px solid #e3e3e3;
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  background: #fff;
+}
+.sectionTitle {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #333;
+}
+
+.input,
+.select {
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  background: #fff;
+  min-height: 34px;
+}
+
+.btn,
+.btnSecondary,
+.btnDanger {
+  font-family: inherit;
+  padding: 7px 13px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 34px;
+  border: 1px solid #1a2a4a;
+  background: #1a2a4a;
+  color: #fff;
+}
+.btnSecondary {
+  border-color: #ccc;
+  background: #fff;
+  color: #333;
+}
+.btnDanger {
+  border-color: #e3b4b4;
+  background: #fff;
+  color: #a12a2a;
+}
+.btn:disabled,
+.btnSecondary:disabled,
+.btnDanger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.btn:focus-visible,
+.btnSecondary:focus-visible,
+.btnDanger:focus-visible,
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid #1a2a4a;
+  outline-offset: 2px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: #eef2f7;
+  color: #1a2a4a;
+}
+.badgeOwner {
+  background: #1a2a4a;
+  color: #fff;
+}
+.badgeGood {
+  background: #e3f4e8;
+  color: #1d6b35;
+}
+.badgeWarn {
+  background: #fdf3e3;
+  color: #7a4a00;
+}
+.badgeBad {
+  background: #fbe9e9;
+  color: #a12a2a;
+}
+.count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #d64545;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.notice,
+.errorNote {
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+  background: #fdf3e3;
+  color: #7a4a00;
+}
+.errorNote {
+  background: #fbe9e9;
+  color: #a12a2a;
+}
+
+.empty {
+  padding: 18px;
+  text-align: center;
+  color: #666;
+  font-size: 14px;
+  border: 1px dashed #ddd;
+  border-radius: 8px;
+}
+
+/* DataTable: a table on wide screens, one card per row on phones. */
+.tableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #555;
+  border-bottom: 1px solid #e3e3e3;
+  white-space: nowrap;
+}
+.table td {
+  padding: 8px;
+  vertical-align: top;
+  border-bottom: 1px solid #f0f0f0;
+}
+.muted {
+  color: #666;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .table thead {
+    display: none;
+  }
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+  .table tr {
+    border: 1px solid #e3e3e3;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+  .table td {
+    border: 0;
+    padding: 4px 0;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    align-items: flex-start;
+    overflow-wrap: anywhere;
+  }
+  .table td::before {
+    content: attr(data-label);
+    font-size: 12px;
+    color: #666;
+    flex: 0 0 auto;
+  }
+  .input,
+  .select {
+    font-size: 16px;
+  }
+}
+
+.login {
+  font-family: system-ui, sans-serif;
+  max-width: 340px;
+  margin: 120px auto;
+  padding: 0 20px;
+}
+.loginInput {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* StatTile / StatGrid */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.stat {
+  border: 1px solid #e6e8ec;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fafbfc;
+}
+.statLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7383;
+}
+.statValue {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1a2a4a;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+.statHint {
+  font-size: 12px;
+  color: #6b7383;
+  margin-top: 2px;
+}
+.statGood .statValue {
+  color: #1d6b35;
+}
+.statWarn {
+  background: #fffaf1;
+  border-color: #f1dfbd;
+}
+.statWarn .statValue {
+  color: #8a5300;
+}
+.statBad {
+  background: #fdf6f6;
+  border-color: #efcaca;
+}
+.statBad .statValue {
+  color: #a12a2a;
+}
+@media (max-width: 600px) {
+  .statGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e3e6eb;
+  margin: 18px 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7383;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.tab:hover {
+  color: #1a2a4a;
+}
+.tabActive {
+  color: #1a2a4a;
+  border-bottom-color: #1a2a4a;
+}
+.tabCount {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: #eef2f7;
+  color: #1a2a4a;
+  line-height: 18px;
+}
+
+/* InfoDisclosure */
+.info {
+  font-size: 13px;
+  color: #555;
+  margin: 0 0 14px;
+}
+.info summary {
+  cursor: pointer;
+  color: #1a2a4a;
+  font-weight: 600;
+  list-style: none;
+}
+.info summary::-webkit-details-marker {
+  display: none;
+}
+.info summary::before {
+  content: "ⓘ ";
+}
+.infoBody {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f6f7f9;
+  line-height: 1.55;
+}
+.infoBody p {
+  margin: 0 0 6px;
+}
+.infoBody p:last-child {
+  margin-bottom: 0;
+}
+
+/* FormPanel */
+.panel {
+  margin-bottom: 14px;
+}
+.panel > summary {
+  display: inline-flex;
+  align-items: center;
+  list-style: none;
+  cursor: pointer;
+}
+.panel > summary::-webkit-details-marker {
+  display: none;
+}
+.panel[open] > summary {
+  background: #fff;
+  color: #333;
+  border-color: #ccc;
+}
+.panelBody {
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid #e3e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+.panelTitle {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+/* Form grid: labelled fields that wrap, one column on phones. */
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  align-items: end;
+  margin-top: 10px;
+}
+.formGrid .input,
+.formGrid .select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Segmented control (one choice of a few, each a submit button). */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid #d5dae2;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+  background: #f3f5f8;
+}
+.segmented form {
+  display: contents;
+}
+.segment {
+  font-family: inherit;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #3a4354;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.segment:hover {
+  background: #e7ebf1;
+}
+span.segment {
+  display: inline-flex;
+  align-items: center;
+}
+.segmentOn,
+.segmentOn:hover {
+  background: #1a2a4a;
+  color: #fff;
+  cursor: default;
+}
+.strike {
+  text-decoration: line-through;
+  color: #999;
+}
+.sub {
+  display: block;
+  font-size: 12px;
+  color: #6b7383;
+}
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Kit buttons used on links (AdminLink / <a>). */
+a.btn,
+a.btnSecondary,
+a.btnDanger,
+span.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+/* PageHeader with actions on the right. */
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.headerActions {
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* A FormPanel inside a Toolbar takes the full width once opened. */
+.toolbar > .panel {
+  margin-bottom: 0;
+}
+.toolbar > .panel[open] {
+  flex-basis: 100%;
+  order: 2;
+}
+
+/* A small "Change …" disclosure inside a table row. */
+.inlineEdit > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+}
+.inlineEdit > summary::-webkit-details-marker {
+  display: none;
+}
+.inlineEdit[open] > summary {
+  margin-bottom: 6px;
+}
+
+/* A select sizes itself to its longest option; never let it push the page
+   wider than the screen. */
+.select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+.field {
+  min-width: 0;
+  max-width: 100%;
+}

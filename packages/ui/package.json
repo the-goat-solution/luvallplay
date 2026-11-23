@@ -1,0 +1,17 @@
+{
+  "name": "@luvallplay/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Design tokens: semantic theme tokens, the 12 club colour schemes, the Luvallplay brand and the Three Wolves theme.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

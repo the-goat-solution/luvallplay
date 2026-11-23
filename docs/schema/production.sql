@@ -63,7 +63,7 @@ CREATE TABLE api_tokens (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   last_used_at timestamp with time zone,
   revoked_at timestamp with time zone,
-  CONSTRAINT api_tokens_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+  CONSTRAINT api_tokens_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT api_tokens_created_at_not_null NOT NULL created_at,
   CONSTRAINT api_tokens_id_not_null NOT NULL id,
   CONSTRAINT api_tokens_name_not_null NOT NULL name,
@@ -364,7 +364,7 @@ CREATE TABLE cancellation_feedback (
   reason text NOT NULL,
   comment text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT cancellation_feedback_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL,
+  CONSTRAINT cancellation_feedback_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT cancellation_feedback_action_not_null NOT NULL action,
   CONSTRAINT cancellation_feedback_created_at_not_null NOT NULL created_at,
   CONSTRAINT cancellation_feedback_id_not_null NOT NULL id,
@@ -407,6 +407,16 @@ CREATE TABLE club_roles (
   CONSTRAINT club_roles_role_not_null NOT NULL role,
   CONSTRAINT club_roles_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT club_roles_pkey PRIMARY KEY (player_id)
+);
+
+CREATE TABLE club_settings (
+  key text NOT NULL,
+  value jsonb,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_by integer,
+  CONSTRAINT club_settings_key_not_null NOT NULL key,
+  CONSTRAINT club_settings_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT club_settings_pkey PRIMARY KEY (key)
 );
 
 CREATE TABLE day_requests (
@@ -619,7 +629,7 @@ CREATE TABLE message_threads (
   unread_for_player boolean DEFAULT false NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT message_threads_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text]))),
-  CONSTRAINT message_threads_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+  CONSTRAINT message_threads_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT message_threads_created_at_not_null NOT NULL created_at,
   CONSTRAINT message_threads_id_not_null NOT NULL id,
   CONSTRAINT message_threads_last_message_at_not_null NOT NULL last_message_at,
@@ -707,7 +717,7 @@ CREATE TABLE player_events (
   event text NOT NULL,
   detail text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT player_events_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+  CONSTRAINT player_events_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT player_events_created_at_not_null NOT NULL created_at,
   CONSTRAINT player_events_event_not_null NOT NULL event,
   CONSTRAINT player_events_id_not_null NOT NULL id,
@@ -733,7 +743,7 @@ CREATE TABLE player_photos (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   deleted_at timestamp with time zone,
   CONSTRAINT player_photos_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'needs_review'::text, 'rejected'::text, 'hidden'::text]))),
-  CONSTRAINT player_photos_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+  CONSTRAINT player_photos_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT player_photos_bytes_not_null NOT NULL bytes,
   CONSTRAINT player_photos_consent_at_not_null NOT NULL consent_at,
   CONSTRAINT player_photos_created_at_not_null NOT NULL created_at,
@@ -757,7 +767,7 @@ CREATE TABLE player_sessions (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
   expires_at timestamp with time zone NOT NULL,
-  CONSTRAINT player_sessions_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+  CONSTRAINT player_sessions_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT player_sessions_created_at_not_null NOT NULL created_at,
   CONSTRAINT player_sessions_expires_at_not_null NOT NULL expires_at,
   CONSTRAINT player_sessions_id_not_null NOT NULL id,
@@ -815,6 +825,30 @@ CREATE TABLE players (
 );
 CREATE UNIQUE INDEX players_minigame_name_idx ON public.players USING btree (lower(minigame_name)) WHERE (minigame_name IS NOT NULL);
 CREATE UNIQUE INDEX players_phone_verified_idx ON public.players USING btree (phone_e164) WHERE ((phone_verified_at IS NOT NULL) AND (deleted_at IS NULL));
+
+CREATE TABLE pricing_plans (
+  plan_id text NOT NULL,
+  name jsonb DEFAULT '{}'::jsonb NOT NULL,
+  description jsonb DEFAULT '{}'::jsonb NOT NULL,
+  price_nzd numeric(10,2),
+  period_label jsonb DEFAULT '{}'::jsonb NOT NULL,
+  featured boolean DEFAULT false NOT NULL,
+  features jsonb DEFAULT '[]'::jsonb NOT NULL,
+  stripe_price_id text,
+  sort integer NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_by integer,
+  CONSTRAINT pricing_plans_plan_id_check CHECK ((plan_id = ANY (ARRAY['casual'::text, 'fridayMonthly'::text, 'fridayQuarterly'::text, 'wednesdayMonthly'::text, 'wednesdayQuarterly'::text]))),
+  CONSTRAINT pricing_plans_description_not_null NOT NULL description,
+  CONSTRAINT pricing_plans_featured_not_null NOT NULL featured,
+  CONSTRAINT pricing_plans_features_not_null NOT NULL features,
+  CONSTRAINT pricing_plans_name_not_null NOT NULL name,
+  CONSTRAINT pricing_plans_period_label_not_null NOT NULL period_label,
+  CONSTRAINT pricing_plans_plan_id_not_null NOT NULL plan_id,
+  CONSTRAINT pricing_plans_sort_not_null NOT NULL sort,
+  CONSTRAINT pricing_plans_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT pricing_plans_pkey PRIMARY KEY (plan_id)
+);
 
 CREATE TABLE pv_arena_after_game (
   challenge_id integer NOT NULL,
@@ -1147,7 +1181,7 @@ CREATE TABLE shop_orders (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT shop_orders_payment_method_check CHECK ((payment_method = ANY (ARRAY['card'::text, 'cash'::text]))),
   CONSTRAINT shop_orders_status_check CHECK ((status = ANY (ARRAY['pending_payment'::text, 'reserved_cash'::text, 'paid'::text, 'collected'::text, 'cancelled'::text, 'expired'::text, 'refunded'::text]))),
-  CONSTRAINT shop_orders_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL,
+  CONSTRAINT shop_orders_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT shop_orders_created_at_not_null NOT NULL created_at,
   CONSTRAINT shop_orders_email_not_null NOT NULL email,
   CONSTRAINT shop_orders_id_not_null NOT NULL id,
@@ -1307,7 +1341,7 @@ CREATE TABLE webhook_endpoints (
   active boolean DEFAULT true NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   last_status text,
-  CONSTRAINT webhook_endpoints_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+  CONSTRAINT webhook_endpoints_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT webhook_endpoints_active_not_null NOT NULL active,
   CONSTRAINT webhook_endpoints_created_at_not_null NOT NULL created_at,
   CONSTRAINT webhook_endpoints_events_not_null NOT NULL events,

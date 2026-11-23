@@ -74,7 +74,7 @@ export const api_tokens = pgTable("api_tokens", {
 			columns: [table.player_id],
 			foreignColumns: [players.id],
 			name: "api_tokens_player_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	unique("api_tokens_token_hash_key").on(table.token_hash),
 ]);
 
@@ -232,7 +232,7 @@ export const cancellation_feedback = pgTable("cancellation_feedback", {
 			columns: [table.player_id],
 			foreignColumns: [players.id],
 			name: "cancellation_feedback_player_id_fkey"
-		}).onDelete("set null"),
+		}).onDelete("restrict"),
 ]);
 
 export const club_roles = pgTable("club_roles", {
@@ -359,7 +359,7 @@ export const message_threads = pgTable("message_threads", {
 			columns: [table.player_id],
 			foreignColumns: [players.id],
 			name: "message_threads_player_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	check("message_threads_status_check", sql`status = ANY (ARRAY['open'::text, 'closed'::text])`),
 ]);
 
@@ -501,7 +501,7 @@ export const player_photos = pgTable("player_photos", {
 			columns: [table.player_id],
 			foreignColumns: [players.id],
 			name: "player_photos_player_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	check("player_photos_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'needs_review'::text, 'rejected'::text, 'hidden'::text])`),
 ]);
 
@@ -518,7 +518,7 @@ export const player_sessions = pgTable("player_sessions", {
 			columns: [table.player_id],
 			foreignColumns: [players.id],
 			name: "player_sessions_player_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	unique("player_sessions_token_hash_key").on(table.token_hash),
 ]);
 
@@ -637,7 +637,7 @@ export const player_events = pgTable("player_events", {
 			columns: [table.player_id],
 			foreignColumns: [players.id],
 			name: "player_events_player_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 ]);
 
 export const pv_arena_pairs = pgTable("pv_arena_pairs", {
@@ -793,7 +793,7 @@ export const webhook_endpoints = pgTable("webhook_endpoints", {
 			columns: [table.player_id],
 			foreignColumns: [players.id],
 			name: "webhook_endpoints_player_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 ]);
 
 export const shop_stock_log = pgTable("shop_stock_log", {
@@ -866,7 +866,7 @@ export const shop_orders = pgTable("shop_orders", {
 			columns: [table.player_id],
 			foreignColumns: [players.id],
 			name: "shop_orders_player_id_fkey"
-		}).onDelete("set null"),
+		}).onDelete("restrict"),
 	unique("shop_orders_stripe_payment_intent_id_key").on(table.stripe_payment_intent_id),
 	check("shop_orders_payment_method_check", sql`payment_method = ANY (ARRAY['card'::text, 'cash'::text])`),
 	check("shop_orders_status_check", sql`status = ANY (ARRAY['pending_payment'::text, 'reserved_cash'::text, 'paid'::text, 'collected'::text, 'cancelled'::text, 'expired'::text, 'refunded'::text])`),

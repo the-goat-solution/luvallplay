@@ -213,6 +213,10 @@ Findings and changes recorded as the work goes:
   - Preview builds migrate their own Neon branch (`prebuild` → `scripts/db/preview-migrate.mjs`). The preview guard decides first, and a branch made before production had a migration history is baselined only after its schema matches the frozen dump. Production builds never migrate.
   - Admin → Setup check now reports migration status ("Database schema") instead of creating tables.
   - The `schema_runs` table is now unused. It's left in place, because dropping it is a destructive change for a later release (test plan §0 rule 3).
+- **PR 4, account foreign keys → RESTRICT:**
+  - All **eight** foreign keys to `players` change, not only the six `CASCADE` ones. The two `SET NULL` ones (`shop_orders`, `cancellation_feedback`) would detach a person's orders on a hard delete, and accounts are only ever soft-deleted (test plan §4.2), so RESTRICT is right for them too.
+  - Migration `0001_account_fks_restrict.sql`: same constraint names, `NOT VALID` then `VALIDATE`, one transaction.
+  - Rehearsed on a fresh branch of production: 15 accounts, 0 problems, drift empty afterwards, and a hard delete of an account with data is refused.
 - **Vercel previews ("Resource provisioning failed")**: the Vercel project's Neon integration still creates preview branches in the *old US* Neon project (`neon-almond-button`). That project is at the free plan's 10-branch limit (main + 9 stale `preview/claude/*` branches), so every preview fails before building. The fix is a dashboard action (see the Phase 2 runbook).
 
 ---

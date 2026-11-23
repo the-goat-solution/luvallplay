@@ -18,7 +18,7 @@ The code for each Phase 2 pull request is built and tested in its PR. These step
   - Drift: none. `verify-business-config`: **matches Sanity exactly** (5 plans, capacity default, booking lock 14 days).
   - The live site has no runtime errors and shows the same prices, now from the database.
   - Edit prices and plans in **Admin → Money → Pricing & settings** from now on, not in Sanity.
-- **§7 still to do:** the Studio move.
+- **§7 done (23 Nov):** the Studio is its own app (`apps/studio`), deployed by Sanity to https://threewolves.sanity.studio; the site's `/studio` redirects there. The web app no longer ships `sanity`, `@sanity/vision` or `next-sanity` (the publish webhook checks signatures with `@sanity/webhook`).
 
 ## 0. Vercel no longer deploys from GitHub at all (found 23 Nov; resolved the same day)
 
@@ -120,7 +120,7 @@ After the deploy, smoke test: `/login`, sign in → Me, **`/admin` as an owner**
 
 No behaviour or data changes: code moves into `packages/core`, `auth`, `i18n`, `ui` and `modules`, and every string renders exactly as before (tested). Smoke test after the deploy: `/` in English and Tiếng Việt, Me, Arena, `/jersey`, `/admin` as an owner. Rollback: Vercel Instant Rollback.
 
-## 7. Moving Sanity Studio out of the web app (needs you, once)
+## 7. Moving Sanity Studio out of the web app (done 23 Nov 2026)
 
 The build plan moves the Studio out of the web app into its own deploy (`apps/studio`). The club's Sanity project (`c0v5j4dz`) isn't in the Sanity account connected to the build session, so one step needs you. Pick one:
 

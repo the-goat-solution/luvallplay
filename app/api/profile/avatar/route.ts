@@ -50,7 +50,7 @@ export async function DELETE(request: Request) {
 
 function refresh() {
   try {
-    revalidateTag("leaderboard");
+    revalidateTag("leaderboard", { expire: 0 });
   } catch {
     // outside a request
   }

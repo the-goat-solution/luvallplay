@@ -70,8 +70,8 @@ export function AdminShell({
 
         <nav className={s.nav}>
           {groups.map((g) => (
-            <div key={g.label} className={s.group}>
-              <div className={s.groupLabel}>{g.label}</div>
+            <div key={g.label || "home"} className={s.group}>
+              {g.label && <div className={s.groupLabel}>{g.label}</div>}
               <ul className={s.items}>
                 {g.items.map((item) => {
                   const isActive = item.href === current;

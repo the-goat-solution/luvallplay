@@ -442,6 +442,8 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 **Rehearsal of `0011` (23 Nov UTC), on `rehearsal-phase-3`, reset to a fresh copy of production:** data guard 18 accounts, 0 problems; 7.7 s; views identical, also through row-level security; no drift; verify consistent. Report: `docs/rehearsals/2026-11-phase3-tenant-keys-contract.md`.
 
+**Production run of `0011`, done 23 Nov 2026, 23:24 UTC** (by the build session, at the owner's request, after green CI and a clean rehearsal): restore point `pre-phase-3-tenant-keys-contract`; the migration took 7.7 s; data guard 18 accounts, 0 problems; no drift; verify consistent. #115 merged afterwards.
+
 ### 11.2 A login for the app's role (for you, after `enforce` has been quiet for a week)
 
 Today the app connects as the database owner and steps down to `luvallplay_app` in each transaction. That is enough for isolation as long as the code always steps down. A separate login removes the "as long as": a connection that can't be the owner.

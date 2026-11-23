@@ -2,19 +2,15 @@ import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { revalidatePath } from "next/cache";
 import { deleteWaitlistEntry, getAvailableSpots, getCourtsForDate, getRosterForDate, getWaitlistForDate, isMiniGameDay, isRegistrationLocked, listAllSessionDates, listSessionsInRange, removeBooking, removeSessionFillIn, reserveBookingSlot, saveSessionFillIn, setCourtsForDate, setMiniGameDay, setRegistrationLocked, type FillInTarget } from "@/lib/db";
+import { Badge, EmptyState, FormPanel, InfoDisclosure, PageHeader, Section, StatGrid, StatTile, Tabs, Toolbar, kit } from "@/components/admin/kit";
+import { PlayDayPicker } from "@/components/admin/PlayDayPicker";
 import { notifyWaitlistIfSpotOpened } from "@/lib/waitlist-notify";
 import { sendFillInConfirmationEmail } from "@/lib/email";
-import {
-  formatDateLong,
-  formatEventTimeRange,
-  getClubToday,
-  getDayName,
-} from "@/lib/dates";
+import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import { AttendanceSection } from "@/components/admin/AttendanceSection";
 import adminStyles from "@/components/admin/admin.module.css";
 import { FillInButton } from "@/components/admin/FillInButton";
 import { SubmitButton } from "@/components/admin/SubmitButton";
-import { PlainSubmitButton } from "@/components/admin/PlainSubmitButton";
 import {
   CASUAL_PRICE_CENTS,
   MINI_GAME_MAX_PLAYERS,
@@ -29,7 +25,6 @@ import {
 import { reconcileOfflinePayment, recordOfflinePayment } from "@/lib/offline-payment-stripe";
 import { getOfflinePaymentReconciliation, type OfflineReconciliation } from "@/lib/bank-db";
 import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMethodField";
-import { MiniGameToggle } from "@/components/admin/MiniGameToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +33,6 @@ const PLAN_LABEL = {
   monthly: "Monthly member",
   quarterly: "Quarterly member",
 } as const;
-
-function parseDateKey(key: string): Date {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
 
 // Adds a player who paid outside the online checkout — cash at the
 // session or a bank transfer to the club account. The payment is recorded
@@ -156,44 +146,39 @@ async function updateCourts(date: string, formData: FormData) {
   redirect(`/admin/play-days?date=${date}&courtsUpdated=${courts}`);
 }
 
-// Closes (or reopens) public sign-ups for a play day regardless of how many
-// spots are left. Existing bookings and members are untouched.
-async function setRegistration(date: string, locked: boolean) {
-  "use server";
-  if (!locked && (await isMiniGameDay(date))) {
-    redirect(
-      `/admin/play-days?date=${date}&courtsError=${encodeURIComponent(
-        "This is a mini game day — turn mini game day off to reopen registration.",
-      )}`,
-    );
-  }
-  await setRegistrationLocked(date, locked);
-  // Reopening may free spots that were hidden by the lock — let the
-  // waitlist know, the same as when courts are added.
-  if (!locked) await notifyWaitlistIfSpotOpened(date);
-  revalidatePath("/admin/play-days");
-  redirect(`/admin/play-days?date=${date}&registration=${locked ? "locked" : "unlocked"}`);
-}
+type SignupMode = "open" | "closed" | "mini";
 
-// Mini game day: capacity becomes MINI_GAME_MAX_PLAYERS and registration
-// locks (admins still add players). Turning it off restores court-based
-// capacity and reopens registration.
-async function setMiniGame(date: string, on: boolean) {
+// One control for who can sign up: open, closed (admins can still add
+// players), or a mini game (members in, casual sign-ups closed, 16 max).
+// Built from the two switches above, so the rules stay the same.
+async function setSignupMode(date: string, mode: SignupMode) {
   "use server";
-  const result = await setMiniGameDay(date, on);
-  if (!result.ok) {
-    redirect(`/admin/play-days?date=${date}&courtsError=${encodeURIComponent(result.reason)}`);
+  const fail = (reason: string) => redirect(`/admin/play-days?date=${date}&courtsError=${encodeURIComponent(reason)}`);
+  const mini = await isMiniGameDay(date);
+  if (mode === "mini") {
+    if (!mini) {
+      const result = await setMiniGameDay(date, true);
+      if (!result.ok) fail(result.reason);
+    }
+    revalidatePath("/admin/play-days");
+    redirect(`/admin/play-days?date=${date}&miniGame=on`);
   }
-  if (!on) await notifyWaitlistIfSpotOpened(date);
+  if (mini) {
+    // Turning mini game off also reopens sign-ups.
+    const result = await setMiniGameDay(date, false);
+    if (!result.ok) fail(result.reason);
+  }
+  await setRegistrationLocked(date, mode === "closed");
+  if (mode === "open") await notifyWaitlistIfSpotOpened(date);
   revalidatePath("/admin/play-days");
-  redirect(`/admin/play-days?date=${date}&miniGame=${on ? "on" : "off"}`);
+  redirect(`/admin/play-days?date=${date}&registration=${mode === "closed" ? "locked" : "unlocked"}`);
 }
 
 async function notifyWaitlistNow(date: string) {
   "use server";
   const count = await notifyWaitlistIfSpotOpened(date);
   revalidatePath("/admin/play-days");
-  redirect(`/admin/play-days?date=${date}&waitlistNotified=${count}`);
+  redirect(`/admin/play-days?date=${date}&tab=waitlist&waitlistNotified=${count}`);
 }
 
 // Records the stand-in for a player who can't make this session. No payment
@@ -218,7 +203,7 @@ async function saveFillIn(
     );
 
   if (!firstName || !lastName || !email) {
-    fail("Fill-in needs a first name, last name and email");
+    fail("A stand-in needs a first name, last name and email");
   }
 
   // One person can't hold two spots on the same day, so reject a fill-in
@@ -240,7 +225,7 @@ async function saveFillIn(
     }
     if (entry.fillIn && entry.fillIn.email.toLowerCase() === emailKey) {
       fail(
-        `That email is already filling in for ${entry.name} on this date.`,
+        `That email is already standing in for ${entry.name} on this date.`,
       );
     }
   }
@@ -283,324 +268,277 @@ async function removeWaitlistEntry(date: string, id: number) {
   "use server";
   await deleteWaitlistEntry(id);
   revalidatePath("/admin/play-days");
-  redirect(`/admin/play-days?date=${date}&waitlistRemoved=1`);
+  redirect(`/admin/play-days?date=${date}&tab=waitlist&waitlistRemoved=1`);
+}
+
+type Tab = "roster" | "waitlist" | "attendance";
+
+function dayLabel(key: string, opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" }): string {
+  return new Date(`${key}T00:00:00Z`).toLocaleDateString("en-NZ", { timeZone: "UTC", ...opts });
 }
 
 function TransferStatus({ status }: { status: OfflineReconciliation | undefined }) {
   return status?.reconciled ? (
-    <div style={{ fontSize: 12, color: "#1a7a3c" }}>
-      ✓ Matched to bank{status.bankDate ? ` (${status.bankDate})` : ""}
-    </div>
+    <span className={kit.sub} style={{ color: "#1a7a3c" }}>
+      ✓ Matched to the bank{status.bankDate ? ` (${dayLabel(status.bankDate)})` : ""}
+    </span>
   ) : (
-    <div style={{ fontSize: 12, color: "#8a4b00" }}>Awaiting bank transaction</div>
+    <span className={kit.sub} style={{ color: "#8a4b00" }}>
+      Waiting for the bank transfer
+    </span>
   );
 }
+
+const MODE_HELP: Record<SignupMode, string> = {
+  open: "Anyone can sign up while there are spots. Members are always in.",
+  closed: "No new casual sign-ups or memberships start on this day, even with spots left. Everyone already in keeps their place, and you can still add players.",
+  mini: `Mini game: members are in automatically (they tap "Can't make it" if they can't come). Casual sign-ups are closed and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. You can still add players.`,
+};
 
 export default async function PlayDaysAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    date?: string;
-    cashAdded?: string;
-    cashError?: string;
-    removed?: string;
-    courtsUpdated?: string;
-    courtsError?: string;
-    waitlistNotified?: string;
-    waitlistRemoved?: string;
-    fillInSaved?: string;
-    fillInRemoved?: string;
-    fillInError?: string;
-    registration?: string;
-    miniGame?: string;
-  }>;
+  searchParams: Promise<{ date?: string; tab?: string }>;
 }) {
-  const { date: dateParam } = await searchParams;
-
-  const sessionKeys = process.env.POSTGRES_URL
-    ? await (async () => {
-        return listAllSessionDates();
-      })()
-    : [];
+  const { date: dateParam, tab: tabParam } = await searchParams;
+  const tab: Tab = tabParam === "waitlist" || tabParam === "attendance" ? tabParam : "roster";
+  const hasDb = Boolean(process.env.POSTGRES_URL);
+  const sessionKeys = hasDb ? await listAllSessionDates() : [];
 
   const { dateKey: todayKey } = getClubToday();
-  const defaultDate =
-    sessionKeys.find((key) => key >= todayKey) ?? sessionKeys[sessionKeys.length - 1];
-  const selectedDate =
-    dateParam && sessionKeys.includes(dateParam) ? dateParam : defaultDate;
+  const defaultDate = sessionKeys.find((key) => key >= todayKey) ?? sessionKeys[sessionKeys.length - 1];
+  const selectedDate = dateParam && sessionKeys.includes(dateParam) ? dateParam : defaultDate;
 
-  let roster: Awaited<ReturnType<typeof getRosterForDate>> = [];
-  let waitlist: Awaited<ReturnType<typeof getWaitlistForDate>> = [];
-  let casualSpotsRemaining: number | null = null;
-  let courts = 2;
-  let registrationLocked = false;
-  let miniGame = false;
-  let reconciliation = new Map<string, OfflineReconciliation>();
-  if (process.env.POSTGRES_URL && selectedDate) {
-    roster = await getRosterForDate(selectedDate);
-    waitlist = await getWaitlistForDate(selectedDate);
-    // Shown ignoring the lock, so the admin still sees real capacity.
-    casualSpotsRemaining = await getAvailableSpots(selectedDate, { ignoreLock: true });
-    courts = await getCourtsForDate(selectedDate);
-    registrationLocked = await isRegistrationLocked(selectedDate);
-    miniGame = await isMiniGameDay(selectedDate);
-    // Bank transfers show whether they've been matched to the statement.
-    const transferInvoices = roster
-      .filter((p) => p.method === "bank_transfer")
-      .map((p) => offlineInvoiceIdFromRef(p.paymentRef))
-      .filter((id): id is string => Boolean(id));
-    try {
-      reconciliation = await getOfflinePaymentReconciliation(transferInvoices);
-    } catch (err) {
-      console.error("Failed to load bank reconciliation for the roster", err);
-    }
+  const header = (
+    <PageHeader
+      title="Play days"
+      subtitle="One play day at a time: who's coming, who can sign up, the waitlist and who played."
+      actions={
+        selectedDate ? (
+          <PlayDayPicker
+            options={sessionKeys.map((key) => ({
+              key,
+              label: `${dayLabel(key, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}${key === todayKey ? " (today)" : key < todayKey ? " (past)" : ""}`,
+            }))}
+            selected={selectedDate}
+            prev={sessionKeys[sessionKeys.indexOf(selectedDate) - 1] ?? null}
+            next={sessionKeys[sessionKeys.indexOf(selectedDate) + 1] ?? null}
+          />
+        ) : undefined
+      }
+    />
+  );
+
+  if (!hasDb || !selectedDate) {
+    return (
+      <div className={adminStyles.page}>
+        {header}
+        <EmptyState>{hasDb ? "No play days yet. They appear here once they're in the club calendar." : "Database is not configured."}</EmptyState>
+      </div>
+    );
   }
+
+  const [roster, waitlist, casualSpotsRemaining, courts, registrationLocked, miniGame, [session]] = await Promise.all([
+    getRosterForDate(selectedDate),
+    getWaitlistForDate(selectedDate),
+    // Shown ignoring the lock, so the admin still sees real capacity.
+    getAvailableSpots(selectedDate, { ignoreLock: true }),
+    getCourtsForDate(selectedDate),
+    isRegistrationLocked(selectedDate),
+    isMiniGameDay(selectedDate),
+    listSessionsInRange(selectedDate, selectedDate),
+  ]);
+  // Bank transfers show whether they've been matched to the statement.
+  let reconciliation = new Map<string, OfflineReconciliation>();
+  const transferInvoices = roster
+    .filter((p) => p.method === "bank_transfer")
+    .map((p) => offlineInvoiceIdFromRef(p.paymentRef))
+    .filter((id): id is string => Boolean(id));
+  try {
+    reconciliation = await getOfflinePaymentReconciliation(transferInvoices);
+  } catch (err) {
+    console.error("Failed to load bank reconciliation for the roster", err);
+  }
+
   const maxPlayers = sessionMaxPlayers(courts, miniGame);
+  const mode: SignupMode = miniGame ? "mini" : registrationLocked ? "closed" : "open";
+  const waiting = waitlist.filter((w) => !w.notifiedAt).length;
+  const canNotify = mode === "open" && casualSpotsRemaining > 0 && waitlist.length > 0;
+  const tabHref = (t: Tab) => `/admin/play-days?date=${selectedDate}${t === "roster" ? "" : `&tab=${t}`}`;
+  const when = [session?.eventStartTime ? formatEventTimeRange(session.eventStartTime, session.eventEndTime) : null, session?.eventLocation]
+    .filter(Boolean)
+    .join(" · ");
+  const modeButtons: { mode: SignupMode; label: string; confirm?: string }[] = [
+    { mode: "open", label: "Open" },
+    { mode: "closed", label: "Closed", confirm: "Close sign-ups for this play day? Everyone already in keeps their place." },
+    {
+      mode: "mini",
+      label: "Mini game",
+      confirm: `Make this a mini game day? Casual sign-ups close and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. Members stay included.`,
+    },
+  ];
 
   return (
     <div className={adminStyles.page}>
-      <h1 className={adminStyles.title}>Play days</h1>
-      <p className={adminStyles.subtitle}>
-        Casual bookings and members with access to the selected play day. Auto-renewing
-        members count for play days past their current billing period too — their
-        subscription rolls over before the session, so they keep their spot.
-      </p>
-      <p className={adminStyles.note}>
-        Only Friday and Wednesday play days allow monthly/quarterly members — new sessions on
-        other days default to 1 court, casual bookings only.
-      </p>
+      {header}
 
-      {!process.env.POSTGRES_URL ? (
-        <p>Database is not configured.</p>
-      ) : sessionKeys.length === 0 ? (
-        <p>No sessions synced from the calendar yet.</p>
-      ) : (
-        <>
-          <form style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
-            <label htmlFor="date" style={{ fontSize: 13, color: "#666" }}>
-              Play day:
-            </label>
-            <select
-              id="date"
-              name="date"
-              defaultValue={selectedDate}
-              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
-            >
-              {sessionKeys.map((key) => {
-                const date = parseDateKey(key);
-                const suffix = key < todayKey ? " (past)" : key === todayKey ? " (today)" : "";
-                return (
-                  <option key={key} value={key}>
-                    {getDayName(date, "en")}, {formatDateLong(date, "en")}
-                    {suffix}
-                  </option>
-                );
-              })}
-            </select>
-            <PlainSubmitButton
-              loadingText="Loading…"
-              style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #1a2a4a",
-                background: "#1a2a4a",
-                color: "#fff",
-                fontSize: 13,
-              }}
-            >
-              View
-            </PlainSubmitButton>
-          </form>
+      <Section title={dayLabel(selectedDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} id="day">
+        {when && <p className={kit.muted} style={{ marginTop: -6, fontSize: 14 }}>{when}</p>}
+        <StatGrid>
+          <StatTile label="Signed up" value={roster.length} hint={`of ${maxPlayers} places`} />
+          <StatTile label="Casual spots left" value={casualSpotsRemaining} tone={casualSpotsRemaining <= 0 ? "warn" : undefined} hint={mode === "open" ? "open to sign-ups" : "not open to the public"} />
+          <StatTile label="Waitlist" value={waitlist.length} tone={canNotify ? "warn" : undefined} hint={canNotify ? "spots are free" : waiting ? `${waiting} not emailed yet` : "people waiting"} />
+          <StatTile label="Courts" value={courts} hint={miniGame ? `mini game: ${MINI_GAME_MAX_PLAYERS} max` : `up to ${maxPlayers} players`} />
+        </StatGrid>
 
-          <h2 style={{ fontSize: 16, marginBottom: 8 }}>Courts booked</h2>
-          <form
-            action={updateCourts.bind(null, selectedDate)}
-            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}
-          >
-            <label htmlFor="courts" style={{ fontSize: 13, color: "#666" }}>
-              Courts:
-            </label>
-            <select
-              id="courts"
-              name="courts"
-              defaultValue={courts}
-              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
-            >
-              {[1, 2, 3, 4].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-            <span style={{ fontSize: 12, color: "#666" }}>
-              {miniGame
-                ? `(mini game day — max ${MINI_GAME_MAX_PLAYERS} players whatever the courts)`
-                : `(max ${maxPlayers} players at ${courts} court${courts === 1 ? "" : "s"})`}
-            </span>
-            <SubmitButton
-              loadingText="Saving…"
-              style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #1a2a4a",
-                background: "#1a2a4a",
-                color: "#fff",
-                fontSize: 13,
-              }}
-            >
-              Confirm
-            </SubmitButton>
-          </form>
-
-          <h2 style={{ fontSize: 16, marginBottom: 8 }}>Mini game day</h2>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-              padding: "10px 12px",
-              marginBottom: 24,
-              borderRadius: 8,
-              border: `1px solid ${miniGame ? "#c9b8e8" : "#ddd"}`,
-              background: miniGame ? "#f5f0fd" : "#fafafa",
-            }}
-          >
-            <div style={{ fontSize: 13 }}>
-              <strong style={{ color: miniGame ? "#5a2ea6" : "#333" }}>
-                {miniGame ? "🏸 On" : "Off"}
-              </strong>
-              <span style={{ color: "#666" }}>
-                {miniGame
-                  ? ` — members are included automatically (they tap "Can't make it" if they can't come). Casual sign-ups are closed and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. Add players below.`
-                  : ` — turn on to close casual sign-ups and cap this play day at ${MINI_GAME_MAX_PLAYERS} players. Members stay included.`}
-              </span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "14px 28px", alignItems: "flex-start" }}>
+          <div style={{ flex: "1 1 320px" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Sign-ups</div>
+            <div className={kit.segmented} role="group" aria-label="Sign-ups">
+              {modeButtons.map((b) =>
+                mode === b.mode ? (
+                  <span key={b.mode} className={`${kit.segment} ${kit.segmentOn}`} aria-current="true">
+                    {b.label}
+                  </span>
+                ) : (
+                  <form key={b.mode} action={setSignupMode.bind(null, selectedDate, b.mode)}>
+                    <SubmitButton className={kit.segment} loadingText="Saving…" confirmMessage={b.confirm}>
+                      {b.label}
+                    </SubmitButton>
+                  </form>
+                ),
+              )}
             </div>
-            <form action={setMiniGame.bind(null, selectedDate, !miniGame)}>
-              <MiniGameToggle on={miniGame} />
-            </form>
+            <p className={kit.muted} style={{ fontSize: 13, margin: "8px 0 0", maxWidth: 560 }}>
+              {MODE_HELP[mode]}
+            </p>
           </div>
-
-          <h2 style={{ fontSize: 16, marginBottom: 8 }}>Registration</h2>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-              padding: "10px 12px",
-              marginBottom: 24,
-              borderRadius: 8,
-              border: `1px solid ${registrationLocked ? "#e0b4b2" : "#cfe3d4"}`,
-              background: registrationLocked ? "#fdf1f0" : "#f1f8f3",
-            }}
-          >
-            <div style={{ fontSize: 13 }}>
-              <strong style={{ color: registrationLocked ? "#a12622" : "#1e6b3a" }}>
-                {registrationLocked ? "🔒 Locked" : "Open"}
-              </strong>
-              <span style={{ color: "#666" }}>
-                {registrationLocked
-                  ? miniGame
-                    ? " — locked for the mini game day. Turn mini game day off to reopen. You can still add offline payment players below."
-                    : " — no new casual bookings or memberships can start on this play day, even with spots left. Existing players keep their places, and you can still add offline payment players below."
-                  : ` — players can sign up while spots remain (${casualSpotsRemaining ?? 0} left).`}
-              </span>
+          <form action={updateCourts.bind(null, selectedDate)} style={{ flex: "0 0 auto" }}>
+            <label htmlFor="courts" style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              Courts booked
+            </label>
+            <div style={{ display: "flex", gap: 6 }}>
+              <select id="courts" name="courts" defaultValue={courts} className={kit.select}>
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {n} court{n === 1 ? "" : "s"} · up to {maxPlayersForCourts(n)}
+                  </option>
+                ))}
+              </select>
+              <SubmitButton className={kit.btn} loadingText="Saving…">
+                Save
+              </SubmitButton>
             </div>
-            {!(miniGame && registrationLocked) && (
-            <form action={setRegistration.bind(null, selectedDate, !registrationLocked)}>
-              <SubmitButton
-                loadingText={registrationLocked ? "Unlocking…" : "Locking…"}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: `1px solid ${registrationLocked ? "#1a2a4a" : "#a12622"}`,
-                  background: registrationLocked ? "#1a2a4a" : "#a12622",
-                  color: "#fff",
-                  fontSize: 13,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {registrationLocked ? "Unlock registration" : "Lock registration"}
+          </form>
+        </div>
+      </Section>
+
+      <InfoDisclosure summary="How spots are counted">
+        <p>
+          Places = the courts&apos; capacity ({maxPlayersForCourts(courts)} at {courts} court{courts === 1 ? "" : "s"}), or {MINI_GAME_MAX_PLAYERS} on a mini game day.
+          Members whose membership covers this day take their places first; casual sign-ups get what&apos;s left.
+        </p>
+        <p>Auto-renewing members count for play days after their current billing period too: their membership renews before the play day.</p>
+        <p>Only Friday and Wednesday play days have members. Play days on other days start with 1 court, casual sign-ups only.</p>
+      </InfoDisclosure>
+
+      <Tabs
+        label="Play day"
+        current={tab}
+        items={[
+          { key: "roster", label: "Roster", href: tabHref("roster"), count: roster.length },
+          { key: "waitlist", label: "Waitlist", href: tabHref("waitlist"), count: waitlist.length },
+          { key: "attendance", label: "Attendance", href: tabHref("attendance") },
+        ]}
+      />
+
+      {tab === "roster" && (
+        <>
+          <FormPanel summary="＋ Add a player" title="Add a player who paid cash or by bank transfer" id="add">
+            <p className={kit.muted} style={{ fontSize: 13, margin: 0 }}>
+              Records the ${CASUAL_PRICE_CENTS / 100} payment and adds them to this play day, even when sign-ups are closed. A bank transfer is matched on the{" "}
+              <AdminLink href="/admin/financials/bank">Bank</AdminLink> page as soon as it shows up.
+            </p>
+            <form action={addOfflinePlayer.bind(null, selectedDate)} className={kit.formGrid}>
+              <label className={kit.field}>
+                First name
+                <input name="firstName" required className={kit.input} autoComplete="off" />
+              </label>
+              <label className={kit.field}>
+                Last name
+                <input name="lastName" required className={kit.input} autoComplete="off" />
+              </label>
+              <label className={kit.field}>
+                Email
+                <input type="email" name="email" required className={kit.input} autoComplete="off" />
+              </label>
+              <label className={kit.field}>
+                Phone (optional)
+                <input name="phone" className={kit.input} autoComplete="off" />
+              </label>
+              <OfflinePaymentMethodField />
+              <SubmitButton className={kit.btn} loadingText="Adding…">
+                Add player
               </SubmitButton>
             </form>
-            )}
-          </div>
+          </FormPanel>
 
-          <p style={{ fontWeight: 600, marginBottom: 4 }}>
-            {roster.length} player{roster.length === 1 ? "" : "s"} signed up for {selectedDate}
-          </p>
-          {casualSpotsRemaining !== null && (
-            <p style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>
-              {casualSpotsRemaining} casual spot{casualSpotsRemaining === 1 ? "" : "s"} remaining
-              (session capacity {maxPlayers}{miniGame ? " for the mini game day" : ""} minus active members — see{" "}
-              <AdminLink href="/admin/members">Members</AdminLink>)
-            </p>
-          )}
-          <div className={adminStyles.tableWrap}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-              <thead>
-                <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-                  <th style={{ padding: "6px 8px" }}>Name</th>
-                  <th style={{ padding: "6px 8px" }}>Email</th>
-                  <th style={{ padding: "6px 8px" }}>Phone</th>
-                  <th style={{ padding: "6px 8px" }}>Type</th>
-                  <th style={{ padding: "6px 8px" }}>Payment</th>
-                  <th style={{ padding: "6px 8px" }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {roster.length === 0 ? (
+          {roster.length === 0 ? (
+            <EmptyState>Nobody has signed up for this play day yet.</EmptyState>
+          ) : (
+            <div className={kit.tableWrap}>
+              <table className={kit.table}>
+                <caption className={kit.srOnly}>Players on {selectedDate}</caption>
+                <thead>
                   <tr>
-                    <td colSpan={6} style={{ padding: "10px 8px", color: "#888" }}>
-                      No signups yet.
-                    </td>
+                    <th scope="col">Player</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Payment</th>
+                    <th scope="col">
+                      <span className={kit.srOnly}>Actions</span>
+                    </th>
                   </tr>
-                ) : (
-                  roster.flatMap((p, i) => {
+                </thead>
+                <tbody>
+                  {roster.map((p, i) => {
                     // Exactly one of these is set on any roster entry, and
-                    // it's what a fill-in hangs off — see getRosterForDate.
-                    const target =
-                      p.membershipId !== null
-                        ? { membershipId: p.membershipId }
-                        : { bookingId: p.bookingId! };
-                    // A replaced player keeps their row — they paid for the
-                    // spot — but is struck through, with their stand-in shown
-                    // directly underneath.
-                    const struck = p.fillIn
-                      ? { textDecoration: "line-through" as const, color: "#999" }
-                      : undefined;
-                    return [
-                      <tr
-                        key={`${p.email}-${i}`}
-                        style={{
-                          borderBottom: p.fillIn ? "none" : "1px solid #eee",
-                        }}
-                      >
-                        <td style={{ padding: "6px 8px", ...struck }}>{p.name}</td>
-                        <td style={{ padding: "6px 8px", ...struck }}>{p.email}</td>
-                        <td style={{ padding: "6px 8px", ...struck }}>{p.phone ?? ""}</td>
-                        <td style={{ padding: "6px 8px", ...struck }}>
-                          {PLAN_LABEL[p.type]}
-                          {p.type !== "casual" && p.periodStart ? (
-                            <div style={{ fontSize: 12, color: "#666" }}>
-                              {p.periodStart} →{" "}
-                              {p.autoRenews ? "auto-renews" : (p.periodEnd ?? "")}
-                            </div>
-                          ) : null}
+                    // it's what a stand-in hangs off — see getRosterForDate.
+                    const target = p.membershipId !== null ? { membershipId: p.membershipId } : { bookingId: p.bookingId! };
+                    return (
+                      <tr key={`${p.email}-${i}`}>
+                        <td data-label="Player">
+                          <div>
+                            <span className={p.fillIn ? kit.strike : undefined}>{p.name}</span>
+                            <span className={kit.sub}>
+                              {p.email}
+                              {p.phone ? ` · ${p.phone}` : ""}
+                            </span>
+                            {p.fillIn && (
+                              <span className={kit.sub} style={{ color: "#1a2a4a", marginTop: 4 }}>
+                                ↳ Stand-in: <strong>{p.fillIn.name}</strong> ({p.fillIn.email}
+                                {p.fillIn.phone ? ` · ${p.fillIn.phone}` : ""})
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td style={{ padding: "6px 8px", ...struck }}>
-                          {PAYMENT_METHOD_LABEL[p.method]}
-                          {p.method === "bank_transfer" ? (
-                            <TransferStatus
-                              status={reconciliation.get(offlineInvoiceIdFromRef(p.paymentRef) ?? "")}
-                            />
-                          ) : null}
+                        <td data-label="Type">
+                          <div>
+                            {PLAN_LABEL[p.type]}
+                            {p.type !== "casual" && p.periodStart ? (
+                              <span className={kit.sub}>
+                                since {dayLabel(p.periodStart)} · {p.autoRenews ? "renews automatically" : p.periodEnd ? `ends ${dayLabel(p.periodEnd)}` : ""}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
-                        <td style={{ padding: "6px 8px" }}>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <td data-label="Payment">
+                          <div>
+                            {PAYMENT_METHOD_LABEL[p.method]}
+                            {p.method === "bank_transfer" ? <TransferStatus status={reconciliation.get(offlineInvoiceIdFromRef(p.paymentRef) ?? "")} /> : null}
+                          </div>
+                        </td>
+                        <td data-label="">
+                          <div className={kit.rowActions}>
                             <FillInButton
                               playerName={p.name}
                               existing={p.fillIn}
@@ -610,15 +548,9 @@ export default async function PlayDaysAdminPage({
                             {p.bookingId !== null ? (
                               <form action={removePlayer.bind(null, selectedDate, p.bookingId)}>
                                 <SubmitButton
+                                  className={kit.btnDanger}
                                   loadingText="Removing…"
-                                  style={{
-                                    padding: "4px 8px",
-                                    borderRadius: 6,
-                                    border: "1px solid #a12622",
-                                    background: "#fff",
-                                    color: "#a12622",
-                                    fontSize: 12,
-                                  }}
+                                  confirmMessage={`Remove ${p.name} from ${dayLabel(selectedDate)}? Their spot is offered to the waitlist. (No refund is made here.)`}
                                 >
                                   Remove
                                 </SubmitButton>
@@ -626,179 +558,75 @@ export default async function PlayDaysAdminPage({
                             ) : null}
                           </div>
                         </td>
-                      </tr>,
-                      ...(p.fillIn
-                        ? [
-                            <tr
-                              key={`${p.email}-${i}-fill-in`}
-                              style={{ borderBottom: "1px solid #eee" }}
-                            >
-                              <td style={{ padding: "2px 8px 6px" }}>
-                                ↳ {p.fillIn.name}
-                              </td>
-                              <td style={{ padding: "2px 8px 6px" }}>
-                                {p.fillIn.email}
-                              </td>
-                              <td style={{ padding: "2px 8px 6px" }}>
-                                {p.fillIn.phone ?? ""}
-                              </td>
-                              <td
-                                colSpan={3}
-                                style={{ padding: "2px 8px 6px", color: "#666", fontSize: 13 }}
-                              >
-                                Filling in for {p.name}
-                              </td>
-                            </tr>,
-                          ]
-                        : []),
-                    ];
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 32, marginBottom: 8 }}>
-            <h2 style={{ fontSize: 16 }}>
-              Waitlist ({waitlist.length})
-            </h2>
-            {!registrationLocked && casualSpotsRemaining !== null && casualSpotsRemaining > 0 && waitlist.length > 0 && (
+      {tab === "waitlist" && (
+        <>
+          <Toolbar>
+            <p className={kit.muted} style={{ fontSize: 13, margin: 0, flex: "1 1 320px" }}>
+              People waiting for a spot on this play day. They&apos;re emailed automatically when a spot opens (a player is removed, courts are added or
+              sign-ups reopen).
+            </p>
+            {canNotify && (
               <form action={notifyWaitlistNow.bind(null, selectedDate)}>
-                <SubmitButton
-                  loadingText="Notifying…"
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 6,
-                    border: "1px solid #1a2a4a",
-                    background: "#1a2a4a",
-                    color: "#fff",
-                    fontSize: 12,
-                  }}
-                >
-                  Notify waitlist now ({casualSpotsRemaining} spot{casualSpotsRemaining === 1 ? "" : "s"} open)
+                <SubmitButton className={kit.btn} loadingText="Emailing…">
+                  Email the waitlist now ({casualSpotsRemaining} spot{casualSpotsRemaining === 1 ? "" : "s"} free)
                 </SubmitButton>
               </form>
             )}
-          </div>
-          <p style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>
-            Anyone who joined the waitlist for this play day. They&apos;re emailed automatically when a
-            booking is removed or courts are added and a spot opens up.
-          </p>
-          <div className={adminStyles.tableWrap}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginBottom: 8 }}>
-              <thead>
-                <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-                  <th style={{ padding: "6px 8px" }}>Name</th>
-                  <th style={{ padding: "6px 8px" }}>Email</th>
-                  <th style={{ padding: "6px 8px" }}>Joined</th>
-                  <th style={{ padding: "6px 8px" }}>Status</th>
-                  <th style={{ padding: "6px 8px" }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {waitlist.length === 0 ? (
+          </Toolbar>
+          {waitlist.length === 0 ? (
+            <EmptyState>Nobody is on the waitlist for this play day.</EmptyState>
+          ) : (
+            <div className={kit.tableWrap}>
+              <table className={kit.table}>
+                <caption className={kit.srOnly}>Waitlist for {selectedDate}</caption>
+                <thead>
                   <tr>
-                    <td colSpan={5} style={{ padding: "10px 8px", color: "#888" }}>
-                      Nobody on the waitlist for this date.
-                    </td>
+                    <th scope="col">Person</th>
+                    <th scope="col">Joined</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">
+                      <span className={kit.srOnly}>Actions</span>
+                    </th>
                   </tr>
-                ) : (
-                  waitlist.map((w) => (
-                    <tr key={w.id} style={{ borderBottom: "1px solid #eee" }}>
-                      <td style={{ padding: "6px 8px" }}>{w.name}</td>
-                      <td style={{ padding: "6px 8px" }}>{w.email}</td>
-                      <td style={{ padding: "6px 8px" }}>
-                        {new Date(w.createdAt).toLocaleDateString("en-NZ")}
+                </thead>
+                <tbody>
+                  {waitlist.map((w) => (
+                    <tr key={w.id}>
+                      <td data-label="Person">
+                        <div>
+                          {w.name}
+                          <span className={kit.sub}>{w.email}</span>
+                        </div>
                       </td>
-                      <td style={{ padding: "6px 8px" }}>
-                        {w.notifiedAt ? "Notified" : "Waiting"}
-                      </td>
-                      <td style={{ padding: "6px 8px" }}>
+                      <td data-label="Joined">{dayLabel(new Date(w.createdAt).toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" }))}</td>
+                      <td data-label="Status">{w.notifiedAt ? <Badge tone="good">Emailed</Badge> : <Badge>Waiting</Badge>}</td>
+                      <td data-label="">
                         <form action={removeWaitlistEntry.bind(null, selectedDate, w.id)}>
-                          <SubmitButton
-                            loadingText="Removing…"
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              border: "1px solid #a12622",
-                              background: "#fff",
-                              color: "#a12622",
-                              fontSize: 12,
-                            }}
-                          >
+                          <SubmitButton className={kit.btnDanger} loadingText="Removing…" confirmMessage={`Take ${w.name} off the waitlist?`}>
                             Remove
                           </SubmitButton>
                         </form>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <h2 style={{ fontSize: 16, marginTop: 32, marginBottom: 8 }}>Add offline payment player</h2>
-          <p style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>
-            For a player who paid in cash or by bank transfer. Records a $10 invoice in Stripe marked
-            as paid out-of-band, then adds the player to this play day&apos;s roster. A bank transfer
-            is matched to its bank transaction automatically — straight away if it&apos;s already in
-            the bank feed, otherwise as soon as it arrives (see{" "}
-            <AdminLink href="/admin/financials/bank">Bank</AdminLink>).
-          </p>
-          <form
-            action={addOfflinePlayer.bind(null, selectedDate)}
-            style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-end" }}
-          >
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>First name</label>
-              <input
-                name="firstName"
-                required
-                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
-              />
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>Last name</label>
-              <input
-                name="lastName"
-                required
-                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>Email</label>
-              <input
-                type="email"
-                name="email"
-                required
-                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>Phone (optional)</label>
-              <input
-                name="phone"
-                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }}
-              />
-            </div>
-            <OfflinePaymentMethodField />
-            <SubmitButton
-              loadingText="Adding…"
-              style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #1a2a4a",
-                background: "#1a2a4a",
-                color: "#fff",
-                fontSize: 13,
-              }}
-            >
-              Add player
-            </SubmitButton>
-          </form>
-          <AttendanceSection date={selectedDate} roster={roster} />
+          )}
         </>
       )}
+
+      {tab === "attendance" && <AttendanceSection date={selectedDate} roster={roster} />}
     </div>
   );
 }

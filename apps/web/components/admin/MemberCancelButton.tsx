@@ -1,5 +1,6 @@
 "use client";
 
+import k from "@/components/admin/kit/kit.module.css";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingIcon } from "@/components/LoadingIcon";
@@ -26,8 +27,8 @@ export function MemberCancelButton({
   const onClick = async () => {
     const confirmMessage =
       mode === "remove"
-        ? `Remove ${memberName}'s membership? This takes effect immediately and frees their spot right away.`
-        : `Cancel ${memberName}'s membership at the end of their current billing period?`;
+        ? `End ${memberName}'s membership now? It ends today and their spot is freed straight away. No refund is made here.`
+        : `Stop ${memberName}'s membership from renewing? They keep playing until the end of the period they've paid for, then it ends.`;
     if (!window.confirm(confirmMessage)) {
       return;
     }
@@ -65,30 +66,18 @@ export function MemberCancelButton({
         type="button"
         onClick={onClick}
         disabled={busy}
-        style={{
-          padding: "5px 12px",
-          borderRadius: 6,
-          border: "1px solid #b00020",
-          background: "#fff",
-          color: "#b00020",
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: busy ? "default" : "pointer",
-          opacity: busy ? 0.6 : 1,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-        }}
+        className={k.btnDanger}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
       >
         {showBusy ? (
           <>
             <LoadingIcon size="sm" />
-            {mode === "remove" ? "Removing…" : "Canceling…"}
+            {mode === "remove" ? "Ending…" : "Stopping…"}
           </>
         ) : mode === "remove" ? (
-          "Remove"
+          "End now"
         ) : (
-          "Cancel"
+          "Stop renewing"
         )}
       </button>
       {error && <div style={{ color: "#b00020", fontSize: 11, marginTop: 4 }}>{error}</div>}

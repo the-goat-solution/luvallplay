@@ -447,6 +447,30 @@ CREATE TABLE club_members (
 );
 CREATE INDEX club_members_user_id_idx ON public.club_members USING btree (user_id);
 
+CREATE TABLE club_plans (
+  id integer DEFAULT nextval('club_plans_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  plan_id text NOT NULL,
+  status text DEFAULT 'active'::text NOT NULL,
+  starts_at timestamp with time zone DEFAULT now() NOT NULL,
+  ends_at timestamp with time zone,
+  note text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT club_plans_period_check CHECK (((ends_at IS NULL) OR (ends_at > starts_at))),
+  CONSTRAINT club_plans_status_check CHECK ((status = ANY (ARRAY['active'::text, 'trial'::text, 'past_due'::text, 'canceled'::text]))),
+  CONSTRAINT club_plans_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE RESTRICT,
+  CONSTRAINT club_plans_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT club_plans_created_at_not_null NOT NULL created_at,
+  CONSTRAINT club_plans_id_not_null NOT NULL id,
+  CONSTRAINT club_plans_plan_id_not_null NOT NULL plan_id,
+  CONSTRAINT club_plans_starts_at_not_null NOT NULL starts_at,
+  CONSTRAINT club_plans_status_not_null NOT NULL status,
+  CONSTRAINT club_plans_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT club_plans_pkey PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX club_plans_current_idx ON public.club_plans USING btree (tenant_id) WHERE (ends_at IS NULL);
+CREATE INDEX club_plans_plan_id_idx ON public.club_plans USING btree (plan_id);
+
 CREATE TABLE club_roles (
   player_id integer NOT NULL,
   role text NOT NULL,
@@ -805,6 +829,34 @@ CREATE TABLE mini_game_scores (
   CONSTRAINT mini_game_scores_score_a_not_null NOT NULL score_a,
   CONSTRAINT mini_game_scores_score_b_not_null NOT NULL score_b,
   CONSTRAINT mini_game_scores_pkey PRIMARY KEY (draw_id, match_id)
+);
+
+CREATE TABLE plans (
+  id text NOT NULL,
+  name text NOT NULL,
+  country text,
+  sport text,
+  tiers text[] DEFAULT ARRAY['free'::text] NOT NULL,
+  price_minor integer DEFAULT 0 NOT NULL,
+  currency text NOT NULL,
+  billing_interval text,
+  limits jsonb DEFAULT '{}'::jsonb NOT NULL,
+  active boolean DEFAULT true NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT plans_billing_interval_check CHECK ((billing_interval = ANY (ARRAY['month'::text, 'year'::text]))),
+  CONSTRAINT plans_country_check CHECK ((country ~ '^[A-Z]{2}$'::text)),
+  CONSTRAINT plans_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
+  CONSTRAINT plans_id_check CHECK ((id ~ '^[a-z][a-z0-9-]*$'::text)),
+  CONSTRAINT plans_price_minor_check CHECK ((price_minor >= 0)),
+  CONSTRAINT plans_active_not_null NOT NULL active,
+  CONSTRAINT plans_created_at_not_null NOT NULL created_at,
+  CONSTRAINT plans_currency_not_null NOT NULL currency,
+  CONSTRAINT plans_id_not_null NOT NULL id,
+  CONSTRAINT plans_limits_not_null NOT NULL limits,
+  CONSTRAINT plans_name_not_null NOT NULL name,
+  CONSTRAINT plans_price_minor_not_null NOT NULL price_minor,
+  CONSTRAINT plans_tiers_not_null NOT NULL tiers,
+  CONSTRAINT plans_pkey PRIMARY KEY (id)
 );
 
 CREATE TABLE platform_admins (
@@ -1499,6 +1551,24 @@ CREATE TABLE tenants (
   CONSTRAINT tenants_slug_key UNIQUE (slug)
 );
 
+CREATE TABLE usage_counters (
+  tenant_id integer NOT NULL,
+  metric text NOT NULL,
+  period date NOT NULL,
+  quantity bigint DEFAULT 0 NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT usage_counters_metric_check CHECK ((metric ~ '^[a-z][a-z0-9_.]*$'::text)),
+  CONSTRAINT usage_counters_period_check CHECK ((EXTRACT(day FROM period) = (1)::numeric)),
+  CONSTRAINT usage_counters_quantity_check CHECK ((quantity >= 0)),
+  CONSTRAINT usage_counters_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT usage_counters_metric_not_null NOT NULL metric,
+  CONSTRAINT usage_counters_period_not_null NOT NULL period,
+  CONSTRAINT usage_counters_quantity_not_null NOT NULL quantity,
+  CONSTRAINT usage_counters_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT usage_counters_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT usage_counters_pkey PRIMARY KEY (tenant_id, metric, period)
+);
+
 CREATE TABLE waitlist (
   id integer DEFAULT nextval('waitlist_id_seq'::regclass) NOT NULL,
   session_date date,
@@ -1653,6 +1723,7 @@ CREATE SEQUENCE bank_rules_id_seq AS integer OWNED BY bank_rules.id;
 CREATE SEQUENCE bank_transactions_id_seq AS integer OWNED BY bank_transactions.id;
 CREATE SEQUENCE bookings_id_seq AS integer OWNED BY bookings.id;
 CREATE SEQUENCE cancellation_feedback_id_seq AS integer OWNED BY cancellation_feedback.id;
+CREATE SEQUENCE club_plans_id_seq AS integer OWNED BY club_plans.id;
 CREATE SEQUENCE day_requests_id_seq AS integer OWNED BY day_requests.id;
 CREATE SEQUENCE donations_id_seq AS integer OWNED BY donations.id;
 CREATE SEQUENCE finance_entries_id_seq AS integer OWNED BY finance_entries.id;

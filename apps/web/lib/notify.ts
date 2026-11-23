@@ -1,3 +1,4 @@
+import { meteredResend } from "./usage-hooks";
 import { Resend } from "resend";
 import { capturingResend, sideEffectAllowed } from "./side-effects.ts";
 import { heading, paragraph, renderEmailLayout, withDisplayName } from "./email-layout";
@@ -11,7 +12,7 @@ export function getResend(): Resend {
   // Outside production every email is captured, never sent (lib/side-effects.ts).
   if (!sideEffectAllowed("email")) return capturingResend() as unknown as Resend;
   if (!resend) {
-    resend = new Resend(process.env.RESEND_API_KEY);
+    resend = meteredResend(new Resend(process.env.RESEND_API_KEY));
   }
   return resend;
 }

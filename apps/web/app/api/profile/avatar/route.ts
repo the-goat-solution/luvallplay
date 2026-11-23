@@ -3,6 +3,7 @@ import { getPlayerFromRequest } from "@/lib/player-auth";
 import { setPlayerAvatar } from "@/lib/player-db";
 import { deletePublicBlobs } from "@/lib/public-blob";
 import { publicStorage } from "@/lib/storage";
+import { countUpload } from "@/lib/usage-hooks";
 import { checkRateLimit } from "@/lib/security";
 import { revalidateTag } from "next/cache";
 
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "too_large" }, { status: 400 });
 
   const blob = await publicStorage().put(`avatars/${player.id}/avatar.${ext}`, Buffer.from(await file.arrayBuffer()), { contentType: file.type });
+  await countUpload(file.size);
   const old = await setPlayerAvatar(player.id, blob.url);
   await deletePublicBlobs([old]);
   refresh();

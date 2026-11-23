@@ -16,6 +16,7 @@
 import type { PaymentProvider } from "@luvallplay/core/payments";
 import { getStripe } from "../stripe.ts";
 import { stripeProvider } from "./stripe-provider.ts";
+import { meteredPayments } from "../usage-hooks.ts";
 
 export * from "@luvallplay/core/payments";
 
@@ -25,7 +26,8 @@ export function payments(): PaymentProvider {
   if (current) return current;
   const v = process.env.PAYMENTS_PROVIDER?.trim().toLowerCase();
   if (v && v !== "stripe") throw new Error(`PAYMENTS_PROVIDER is "${process.env.PAYMENTS_PROVIDER}": expected "stripe".`);
-  current = stripeProvider(getStripe, () => process.env.STRIPE_WEBHOOK_SECRET, () => Boolean(process.env.STRIPE_SECRET_KEY?.trim()));
+  // Each payment started is counted for the club (lib/usage-hooks.ts).
+  current = meteredPayments(stripeProvider(getStripe, () => process.env.STRIPE_WEBHOOK_SECRET, () => Boolean(process.env.STRIPE_SECRET_KEY?.trim())));
   return current;
 }
 

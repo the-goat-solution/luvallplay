@@ -1,3 +1,4 @@
+import { countSms } from "./usage-hooks";
 import { db, sql } from "./database";
 import { getPlayerSetting, setPlayerSetting } from "./player-db";
 import { sha256 } from "./player-auth";
@@ -237,6 +238,7 @@ export async function sendSmsCode(input: {
     return { ok: false, reason: "send_failed" };
   }
   if (usedAfter >= limit) await alertCapReachedOnce();
+  await countSms();
   return { ok: true, sessionInfo: data.sessionInfo };
 }
 

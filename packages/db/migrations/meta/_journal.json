@@ -43,6 +43,13 @@
       "when": 1795422481525,
       "tag": "0005_user_id_links",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795453000000,
+      "tag": "0006_entitlements",
+      "breakpoints": true
     }
   ]
 }

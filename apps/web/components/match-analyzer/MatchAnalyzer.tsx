@@ -546,8 +546,8 @@ export function MatchAnalyzer({
     const d = dims();
     if (!cam || !d) return;
     try {
+      // hasLastCourt re-reads the storage on the next render.
       localStorage.setItem(COURT_KEY, JSON.stringify({ taps, w: d.w, h: d.h, lens }));
-      setHasLastCourt(true);
     } catch {
       /* storage blocked */
     }

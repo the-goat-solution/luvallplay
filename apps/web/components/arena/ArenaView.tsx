@@ -634,7 +634,7 @@ function QrScanner({
   const { t } = useArenaT();
   const videoRef = useRef<HTMLVideoElement>(null);
   // Only mounted after a tap (never server-rendered), so navigator is there.
-  const [err, setErr] = useState(
+  const [err, setErr] = useState<boolean>(
     () => typeof navigator !== "undefined" && !navigator.mediaDevices,
   );
   useEffect(() => {

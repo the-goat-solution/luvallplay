@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { cronAuthorized } from "@/lib/cron";
 import { NextResponse } from "next/server";
 import { addDays, claimBookingReminder, claimMembershipReminder, getCasualBookingsForDate, getMembersWithPlayDayTomorrow, getRemainingSessionDatesInPeriod, listSessionsInRange, sessionExists } from "@/lib/db";
@@ -87,7 +88,7 @@ export async function GET(request: Request) {
   });
   console.log("Shop upkeep", shop, "webhook retries", webhookRetries, "roster attendance", rosterAttendance);
 
-  const tomorrow = addDays(getClubToday().dateKey, 1);
+  const tomorrow = addDays(getClubToday(new Date(), await clubClock()).dateKey, 1);
 
   const hasSession = await sessionExists(tomorrow);
   if (!hasSession) {

@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { sessionCapacityFor } from "@luvallplay/core/club-config";
 import { clubConfig } from "@/lib/club";
 import { CLUB_TIME_ZONE } from "@/lib/constants";
@@ -308,7 +309,7 @@ export default async function PlayDaysAdminPage({
   const hasDb = Boolean(process.env.POSTGRES_URL);
   const sessionKeys = hasDb ? await listAllSessionDates() : [];
 
-  const { dateKey: todayKey } = getClubToday();
+  const { dateKey: todayKey } = getClubToday(new Date(), await clubClock());
   const defaultDate = sessionKeys.find((key) => key >= todayKey) ?? sessionKeys[sessionKeys.length - 1];
   const selectedDate = dateParam && sessionKeys.includes(dateParam) ? dateParam : defaultDate;
 

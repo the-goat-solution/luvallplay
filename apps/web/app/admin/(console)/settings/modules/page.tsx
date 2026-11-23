@@ -6,7 +6,7 @@ import { Badge, Notice, PageHeader, Section, kit } from "@/components/admin/kit"
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { currentAdmin, db, requireAdminActor } from "@/lib/admin-access";
-import { listClubModules, setClubModule, type ModuleRow } from "@/lib/club-modules";
+import { listClubModules, setClubModule, setModuleLock, type ModuleRow } from "@/lib/club-modules";
 
 // Admin → Settings → Modules (build plan §6.2.3; Phase 3 step 5).
 //
@@ -17,6 +17,8 @@ import { listClubModules, setClubModule, type ModuleRow } from "@/lib/club-modul
 // module others depend on stays, and a platform lock holds for owners.
 // Switching a module off hides it and keeps its data. Every change is in the
 // audit log (the proxy records each admin action).
+// Luvallplay staff (platform admins) can also lock a module on or off for the
+// club, with a reason the owners see, and unlock it.
 // The setup wizard and presets are Phase 6.
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,8 @@ const GROUP_ORDER: ModuleGroup[] = ["core", "run", "money", "engage", "global"];
 
 function back(kind: "toast" | "toastError", message: string): never {
   revalidatePath(PATH);
+  // The site's sections, tabs and menus follow the switches: refresh every page.
+  revalidatePath("/", "layout");
   redirect(`${PATH}?${kind}=${encodeURIComponent(message)}`);
 }
 
@@ -57,6 +61,28 @@ async function switchModule(formData: FormData) {
   } catch (err) {
     if (err && typeof err === "object" && "digest" in err) throw err; // redirect()
     console.error("[admin] module switch failed:", err);
+    back("toastError", "Something went wrong. Nothing was changed.");
+  }
+  back("toast", message);
+}
+
+// Luvallplay staff only: lock a module on or off for the club, or unlock it.
+async function lockModule(formData: FormData) {
+  "use server";
+  const { ctx } = await requireAdminActor(PATH);
+  if (!ctx.access.platformAdmin) back("toastError", "Only Luvallplay staff can lock a module.");
+  const moduleId = String(formData.get("moduleId") ?? "");
+  const raw = String(formData.get("lock") ?? "");
+  const lock = raw === "on" || raw === "off" ? raw : null;
+  const name = MODULES.find((m) => m.id === moduleId)?.name.en ?? moduleId;
+  let message: string;
+  try {
+    const result = await setModuleLock(db, { moduleId, lock, reason: String(formData.get("reason") ?? ""), actor: "platform-admin", actorPlayerId: ctx.player.id });
+    if (!result.ok) back("toastError", result.reason);
+    message = !result.changed ? "No change." : lock ? `${name} is locked ${lock}.` : `${name} is unlocked.`;
+  } catch (err) {
+    if (err && typeof err === "object" && "digest" in err) throw err; // redirect()
+    console.error("[admin] module lock failed:", err);
     back("toastError", "Something went wrong. Nothing was changed.");
   }
   back("toast", message);
@@ -96,6 +122,25 @@ export default async function ModulesPage() {
                       {s?.locked && <Badge>locked by Luvallplay{s.lockReason ? `: ${s.lockReason}` : ""}</Badge>}
                       {m.requires?.length ? <small>needs {m.requires.map((d) => MODULES.find((x) => x.id === d)?.name.en ?? d).join(", ")}</small> : null}
                     </span>
+                    {rows && isStaff && !m.core && (
+                      <form action={lockModule} style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                        <input type="hidden" name="moduleId" value={m.id} />
+                        {s?.locked ? (
+                          <input type="hidden" name="lock" value="" />
+                        ) : (
+                          <>
+                            <select name="lock" defaultValue="off" aria-label={`Lock ${m.name.en}`} className={kit.input}>
+                              <option value="off">Lock off</option>
+                              <option value="on">Lock on</option>
+                            </select>
+                            <input name="reason" placeholder="Why (owners see this)" maxLength={200} required className={kit.input} />
+                          </>
+                        )}
+                        <SubmitButton loadingText="Saving…" className={kit.btn}>
+                          {s?.locked ? "Unlock" : "Lock"}
+                        </SubmitButton>
+                      </form>
+                    )}
                     {rows && canSwitch && !m.core && !lockedForMe && (
                       <form action={switchModule}>
                         <input type="hidden" name="moduleId" value={m.id} />

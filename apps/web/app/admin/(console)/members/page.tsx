@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { linkMemberAccount } from "@/lib/player-db";
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
@@ -135,7 +136,7 @@ async function addOfflineMember(formData: FormData) {
     }, "admin");
   }
   if (activated?.periodStart && activated.periodEnd) {
-    const { dateKey: clubToday } = getClubToday();
+    const { dateKey: clubToday } = getClubToday(new Date(), await clubClock());
     await sendMembershipConfirmationEmail(activated.email, {
       firstName: activated.name,
       plan: activated.plan,
@@ -301,7 +302,7 @@ export default async function MembersAdminPage({ searchParams }: { searchParams:
   const [memberships, activeMemberCount, recentlyEnded, feedback] = await Promise.all([
     listMemberships(),
     getTotalActiveMemberCount(),
-    listRecentlyEndedMemberships(addDays(getClubToday().dateKey, -60)),
+    listRecentlyEndedMemberships(addDays(getClubToday(new Date(), await clubClock()).dateKey, -60)),
     listRecentFeedback(30).catch(() => []),
   ]);
   // Bank-transfer members show whether the transfer has been matched yet.

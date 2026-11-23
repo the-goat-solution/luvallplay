@@ -894,6 +894,11 @@ Findings and changes recorded as the work goes:
   - **Permission matrix (test plan §3.6), from the database:** eight roles against six actions, each person's access resolved as the app's role for the club. It adds the rows Phase 3 brings: another club's admin (an admin there, nobody here), switching modules (owners and platform admins), and the platform's lock (holds for owners).
   - **Finding from journey S2:** the request proxy and the pages keep separate copies of the module switches, each remembered for a minute. So a switch takes effect at once on the instance that made it and within a minute everywhere else. `MODULES_CACHE_MS` sets the time (tests use 0).
   - **Journey S2:** an owner switches a module off; its pages and API answer 404, its data is kept, the rest of the club carries on; back on, everything returns; an admin who isn't an owner has no switch.
+- **Steps 4 and 5, second round:**
+  - The club's clock is passed at about 40 async call sites; 11 plain helpers are pinned in a test until their callers can pass it. **Finding:** `endOfClubDay` in the shop tries the two New Zealand UTC offsets by hand; it needs a time-zone-aware rewrite before a club outside New Zealand uses the shop.
+  - **Plan change: a club's terms are per language.** Vietnamese has its own wording for the points ("Điểm Sói"), so `tenants.terms` gains `localized.<lang>`; a language with no name of its own uses the club's single name and never borrows Three Wolves'. Migration `0008_terms_localized` stores Three Wolves' Vietnamese name.
+  - **Decision: the club's terms are set once per server process** (and per browser), because a deployment holds one club until step 11.
+  - Sections, navigation, tabs and Me-page cards follow the module switches. Luvallplay staff can lock a module on or off with a reason.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

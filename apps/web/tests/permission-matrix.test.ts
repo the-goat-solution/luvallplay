@@ -15,7 +15,7 @@ import { canManageAdmins, type Access } from "@luvallplay/auth";
 import { migrate } from "../scripts/db/migrate.mjs";
 import { decide, type AdminContext } from "../lib/admin-access.ts";
 import { getAccess } from "../lib/admin-roles.ts";
-import { resetClubModulesCache, setClubModule } from "../lib/club-modules.ts";
+import { resetClubModulesCache, setClubModule, setModuleLock } from "../lib/club-modules.ts";
 import { scopePool } from "../lib/tenant-scope.ts";
 
 type Expect = "allow" | "deny" | "sign-in";
@@ -137,6 +137,33 @@ describe("permission matrix, from the database", { skip: !BASE_URL && !REQUIRE_D
     assert.deepEqual(await getAccess(scopePool(pool, async () => club2), PLAYER.admin), { role: null, platformAdmin: false });
     // A platform admin is one in every club: platform_admins isn't a club's table.
     assert.deepEqual(await getAccess(scopePool(pool, async () => club2), PLAYER.platform), { role: null, platformAdmin: true });
+  });
+
+  test("the platform's lock: only staff set it, it needs a reason, it puts the module in that state, and owners can't undo it", async () => {
+    const db = { query: (t: string, p?: unknown[]) => pool.query(t, p) };
+    const state = async (id: string) => (await pool.query(`SELECT enabled, locked, lock_reason FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [id])).rows[0];
+    resetClubModulesCache();
+    // An owner can't lock.
+    assert.deepEqual(await setModuleLock(db, { moduleId: "donations", lock: "off", reason: "x", actor: "owner", actorPlayerId: PLAYER.owner }), { ok: false, reason: "Only Luvallplay staff can lock a module." });
+    // Staff need a reason, can't lock the core, and can't lock something that doesn't exist.
+    const staff = { actor: "platform-admin" as const, actorPlayerId: PLAYER.platform };
+    assert.equal((await setModuleLock(db, { moduleId: "donations", lock: "off", reason: " ", ...staff })).ok, false);
+    assert.equal((await setModuleLock(db, { moduleId: "play-days", lock: "off", reason: "x", ...staff })).ok, false);
+    assert.equal((await setModuleLock(db, { moduleId: "nope", lock: "off", reason: "x", ...staff })).ok, false);
+    assert.deepEqual(await state("donations"), { enabled: true, locked: null, lock_reason: null });
+    // Locked off: the module goes off, and the owner can't switch it back.
+    assert.deepEqual(await setModuleLock(db, { moduleId: "donations", lock: "off", reason: "Charity registration pending", ...staff }), { ok: true, changed: true });
+    assert.deepEqual(await state("donations"), { enabled: false, locked: "off", lock_reason: "Charity registration pending" });
+    const tryOwner = await setClubModule(db, { moduleId: "donations", on: true, actor: "owner", actorPlayerId: PLAYER.owner });
+    assert.equal(tryOwner.ok, false);
+    assert.equal((await state("donations")).enabled, false);
+    // The same lock again changes nothing.
+    assert.deepEqual(await setModuleLock(db, { moduleId: "donations", lock: "off", reason: "Charity registration pending", ...staff }), { ok: true, changed: false });
+    // Unlocked: the state stays, and the owner can switch again.
+    assert.deepEqual(await setModuleLock(db, { moduleId: "donations", lock: null, ...staff }), { ok: true, changed: true });
+    assert.deepEqual(await state("donations"), { enabled: false, locked: null, lock_reason: null });
+    assert.deepEqual(await setClubModule(db, { moduleId: "donations", on: true, actor: "owner", actorPlayerId: PLAYER.owner }), { ok: true, changed: true });
+    resetClubModulesCache();
   });
 
   test("the matrix has a row for every role and a cell for every action", () => {

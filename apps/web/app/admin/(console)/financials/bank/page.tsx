@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -365,7 +366,7 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
     );
   }
 
-  const { dateKey: today } = getClubToday();
+  const { dateKey: today } = getClubToday(new Date(), await clubClock());
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
   const [funds, akahuState, stripeBalance] = await Promise.all([
     getFundsSummary(),

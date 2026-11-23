@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { redirect } from "next/navigation";
 import { ExportButton } from "@/components/admin/finance/ExportButton";
 import { AdminLink } from "@/components/admin/AdminLink";
@@ -322,7 +323,7 @@ export default async function FinancialsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const { dateKey: today } = getClubToday();
+  const { dateKey: today } = getClubToday(new Date(), await clubClock());
   const filters = parseFinanceFilters(params, today);
   const returnTo = financeFiltersToSearchParams(filters).toString();
   const selfHref = returnTo ? `/admin/financials?${returnTo}` : "/admin/financials";

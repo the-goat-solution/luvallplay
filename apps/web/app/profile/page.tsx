@@ -1,3 +1,5 @@
+import { enabledModules } from "@/lib/club-modules";
+import { sql } from "@/lib/database";
 import { getCurrentPlayer } from "@/lib/player-auth";
 import { getPausedDays } from "@/lib/day-requests";
 import { CASUAL_PRICE_CENTS, MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
@@ -52,6 +54,9 @@ export default async function MePage() {
   const contact = { firstName: player.firstName, lastName: player.lastName, email: player.email, phone: player.phone ?? "" };
   const initials = `${player.firstName.trim()[0] ?? player.email[0] ?? "?"}${player.lastName.trim()[0] ?? ""}`.toUpperCase();
 
+  // A module that is off takes its card off the Me page (its data is kept).
+  const on = await enabledModules(sql);
+
   return (
     <>
       <MeHeader
@@ -65,7 +70,7 @@ export default async function MePage() {
       <div className={m.grid}>
         <div className={m.col}>
           <NextUpCard day={nextUp(calendar)} />
-          {membership ? (
+          {!on.has("memberships") ? null : membership ? (
             <MembershipCard
               membership={membership}
               daysLeft={daysLeft}
@@ -80,7 +85,7 @@ export default async function MePage() {
           <PlayCalendar days={calendar} player={contact} casualPriceNzd={clubMajor(CASUAL_PRICE_CENTS)} />
         </div>
         <div className={m.col}>
-          <ShopSection products={products} orders={orders} />
+          {on.has("shop") && <ShopSection products={products} orders={orders} />}
           <InboxPreview threads={threads} />
           {!player.welcomeCardDismissed && <WelcomeCard firstName={player.firstName} />}
         </div>

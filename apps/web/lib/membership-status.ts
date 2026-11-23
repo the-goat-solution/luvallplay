@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import Stripe from "stripe";
 import {
   addDays,
@@ -32,7 +33,7 @@ export type MembershipAuditResult = {
 };
 
 export async function auditMembershipStatuses(): Promise<MembershipAuditResult> {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const expired = await expireLapsedOneTimeMemberships(today);
 
   const stale = await getStaleRecurringMemberships(

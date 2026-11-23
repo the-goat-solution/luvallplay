@@ -206,9 +206,15 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 | 6 | The durable record of shadow reads (audit-log rows, a daily result from the roster cron, a report script) | Built |
 | 7 | The booking clock (time zone, booking window, cut-off hour): the date helpers take it; the booking rule and the Me page pass the club's | Built |
 | 8 | Membership cycle lengths in the renewal SQL, the Stripe sync and the free month | Built |
-| 9 | Client components read the club's public settings from a provider (capacity, mini-game cap, the booking clock) | Built |
+| 9 | Client components read the club's public settings from a provider (capacity, mini-game cap, the booking clock) | Live (#107) |
+| 10 | The club's clock passed at every async call site of the date helpers (about 40); 11 plain helpers stay on the built-in clock, pinned by a test | Built |
+| 11 | The club's own terms leave the shared dictionaries: "Wolf Points", "Wolf Vision" and the Vietnamese "Điểm Sói" are placeholders, filled per language from the club's settings. Migration `0008_terms_localized` adds the Vietnamese name to Three Wolves' row (one production data run) | Built and rehearsed |
 
 **Still to build in step 4:** the time zone, booking window and cut-off read from the settings at run time (server and client); membership days and cycle lengths; the "Wolf" terms in the translated strings; capacity in the admin pages and client components; and the crons, emails, webhooks and API becoming club-scoped.
+
+**A wording change you should know about.** Two Vietnamese sentences said "Wolf Points" where the rest of the Vietnamese text says "Điểm Sói" (the home page's leaderboard teaser and the Arena's line about ranks). They now say "Điểm Sói" like the rest. Every other string renders exactly as before; the snapshot test covers all of them.
+
+**Still built in, on purpose:** the rank titles "Alpha Wolf" and "Silver Wolf", the 🐺 in a few labels, and about 38 app files that type "Wolf Points" or "Wolf Vision" outside the dictionaries (admin screens, emails). They move with the brand work in Phase 6.
 
 ## 5. Step 5: module enforcement (no data run)
 
@@ -224,6 +230,19 @@ Step 5 changes no data: step 1 stored a row per module for Three Wolves, all on.
 **Tests (journey S2 for every module):** for each of the 16 optional modules, at route level (off stops exactly its own routes) and against a real database (off, on again, data kept).
 
 **Still to build in step 5:** the parts of a module that live inside another module's page (for example the membership card on Me, the Arena tab, site sections, payments-to-check), the emails each module sends, a confirmation when a module has live activity, and the platform console's lock and availability controls.
+
+**Part 2 (after step 10):**
+
+| What follows the switches now | How |
+|---|---|
+| Home page sections: gallery, leaderboard teaser, membership, donate | Rendered only when the module is on |
+| Navigation and footer links to those sections | Hidden with the section |
+| Profile tabs (Arena, Vision) and the menu's leaderboard link | Filtered by the route table |
+| Me page: membership card or Join panel, shop | Hidden with the module; the data is kept |
+| Cached pages | Refreshed when a module is switched |
+| **The platform's lock** | Luvallplay staff can lock a module on or off for the club, with a reason the owners see, and unlock it (Admin → Settings → Modules). Locking puts the module in that state by the same rules as any switch; an owner can't undo it |
+
+**Not done:** a switch for the parts of "payments to check" that sit inside Members and Shop (that module owns no screen of its own yet), and per-module emails beyond what route ownership already stops (a module that is off can't start the flows that send its emails, and its reminder cron answers 404).
 
 ## 6. Step 6: second database driver and region routing (no data run)
 

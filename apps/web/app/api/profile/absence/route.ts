@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getPlayerFromRequest } from "@/lib/player-auth";
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
-  if (body.date < getClubToday().dateKey) return NextResponse.json({ error: "past" }, { status: 400 });
+  if (body.date < getClubToday(new Date(), await clubClock()).dateKey) return NextResponse.json({ error: "past" }, { status: 400 });
   const m = await getCurrentMembership(player.email);
   if (!m) return NextResponse.json({ error: "no_membership" }, { status: 404 });
   await setAbsence(body.date, player.email, body.absent);

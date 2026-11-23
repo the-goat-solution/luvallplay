@@ -20,7 +20,7 @@ function covers(m: MemberView | null, date: string): boolean {
 
 /** The next five weeks of play days, as this player sees them. */
 export async function calendarFor(email: string, m: MemberView | null, pausedDays: Weekday[]): Promise<CalDay[]> {
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const sessions = await listSessionsInRange(today, addDays(today, CALENDAR_DAYS));
   if (sessions.length === 0) return [];
   const dates = sessions.map((s) => s.date);

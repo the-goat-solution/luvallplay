@@ -35,7 +35,7 @@ test("another club's rows give another club's settings, with nothing borrowed fr
   assert.deepEqual(problems, []);
   assert.deepEqual(config, {
     tenantId: 7, slug: "synthetic-club", name: "Synthetic Club", country: "VN", region: "han", timezone: "Asia/Ho_Chi_Minh", currency: "VND",
-    languages: ["vi", "en"], terms: { pointsName: "Luv Points", visionName: "Vision" },
+    languages: ["vi", "en"], terms: { pointsName: "Luv Points", visionName: "Vision", localized: {} },
     playDays: { courtsToMaxPlayers: { 1: 4, 2: 8 }, sessionCapacity: 8, casualOnlyDefaultCourts: 1, bookingWindowDays: 14, bookingCutoffHour: 20 },
     roundRobin: { miniGameMaxPlayers: 12 },
     memberships: { days: ["tuesday"], defaultCourts: { tuesday: 2 }, cycleDays: { monthly: 30, quarterly: 90 }, startSearchDays: 60, pendingHoldMinutes: 15 },
@@ -58,7 +58,8 @@ test("a missing or malformed value falls back for that field only, and is report
   assert.equal(config.name, "Synthetic Club", "valid fields are kept");
   assert.equal(config.timezone, D.timezone);
   assert.equal(config.currency, D.currency);
-  assert.deepEqual(config.terms, D.terms);
+  // The names fall back; a language's own wording is never borrowed from the defaults.
+  assert.deepEqual(config.terms, { pointsName: D.terms.pointsName, visionName: D.terms.visionName, localized: {} });
   assert.deepEqual(config.playDays, D.playDays);
   assert.deepEqual(config.roundRobin, D.roundRobin);
   assert.deepEqual(config.memberships, D.memberships);

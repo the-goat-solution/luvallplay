@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Providers } from "./providers";
 import { clubConfig } from "@/lib/club";
+import { enabledModules } from "@/lib/club-modules";
+import { sql } from "@/lib/database";
 import { publicClub } from "@/lib/club-public";
+import { applyClubTerms } from "@/lib/club-terms";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,7 +27,8 @@ export default async function RootLayout({
 }>) {
   // The club's public settings, for client components (useClub()). Never
   // throws: the built-in values answer when the database can't.
-  const club = publicClub(await clubConfig());
+  const club = publicClub(await clubConfig(), await enabledModules(sql));
+  applyClubTerms(club.terms);
   return (
     <html lang="en">
       <body>

@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { ExportButton } from "@/components/admin/finance/ExportButton";
 import { AutoSubmitSelect } from "@/components/admin/AutoSubmitSelect";
 import { PageHeader } from "@/components/admin/kit";
@@ -68,7 +69,7 @@ export default async function AnnualReportPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const { dateKey: today } = getClubToday();
+  const { dateKey: today } = getClubToday(new Date(), await clubClock());
   const currentFy = financialYearOf(today);
 
   if (!process.env.POSTGRES_URL) {

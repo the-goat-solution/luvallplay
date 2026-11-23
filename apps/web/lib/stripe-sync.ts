@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import Stripe from "stripe";
 import { offlineInvoiceIdFromRef, paymentMethodFromRef } from "./offline-payment";
 import { linkMemberAccount } from "./player-db";
@@ -82,7 +83,7 @@ export async function syncMembershipsWithStripe(): Promise<StripeSyncReport> {
   const { cycleDays } = (await clubConfig()).memberships;
   const spanDays: Record<MembershipTier, number> = { monthly: cycleDays.monthly - 1, quarterly: cycleDays.quarterly - 1 };
   const stripe = getStripe();
-  const today = getClubToday().dateKey;
+  const today = getClubToday(new Date(), await clubClock()).dateKey;
   const report: StripeSyncReport = { checked: 0, changed: [], issues: [], errors: 0 };
 
   const [rows, paidIntents, subscriptions] = await Promise.all([

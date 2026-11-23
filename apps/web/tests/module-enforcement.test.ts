@@ -185,3 +185,20 @@ describe("the club's module switches", { skip: !BASE_URL && !REQUIRE_DB ? "set D
     }
   });
 });
+
+test("links and sections follow the switches: a link to a module that is off isn't shown", async () => {
+  const { DEFAULT_PUBLIC_CLUB, linkShown, moduleOn, publicClub } = await import("../lib/club-public.ts");
+  const { DEFAULT_CLUB_CONFIG } = await import("../lib/club-config.ts");
+  // Everything is on by default (and when the switches can't be read).
+  for (const path of ["/profile", "/profile/arena", "/profile/wolf-vision", "/gallery", "/"]) assert.equal(linkShown(DEFAULT_PUBLIC_CLUB, path), true, path);
+  const club = publicClub(DEFAULT_CLUB_CONFIG, new Set(["home", "play-days", "people", "memberships"]));
+  assert.deepEqual([...club.modules], ["home", "memberships", "people", "play-days"]);
+  assert.equal(linkShown(club, "/profile"), true);
+  assert.equal(linkShown(club, "/profile/settings"), true);
+  assert.equal(linkShown(club, "/profile/arena"), false);
+  assert.equal(linkShown(club, "/profile/arena?tab=leaderboard"), false, "the query string doesn't hide the owner");
+  assert.equal(linkShown(club, "/profile/wolf-vision"), false);
+  assert.equal(linkShown(club, "/gallery#top"), false);
+  assert.equal(moduleOn(club, "memberships"), true);
+  assert.equal(moduleOn(club, "donations"), false);
+});

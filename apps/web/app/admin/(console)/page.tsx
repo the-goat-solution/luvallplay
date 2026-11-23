@@ -1,3 +1,4 @@
+import { clubClock } from "@/lib/club";
 import { redirect } from "next/navigation";
 import { AdminLink } from "@/components/admin/AdminLink";
 import adminStyles from "@/components/admin/admin.module.css";
@@ -73,7 +74,7 @@ export default async function TodayPage() {
   const ctx = await currentAdmin().catch(() => null);
   if (ctx?.kind === "player" && !canOpenAdminPage(ctx, "/admin/play-days")) redirect("/profile");
   const can = (href: string) => canOpenAdminPage(ctx, href);
-  const { dateKey: today } = getClubToday();
+  const { dateKey: today } = getClubToday(new Date(), await clubClock());
   const hasDb = Boolean(process.env.POSTGRES_URL);
 
   const [days, attention, stripe] = await Promise.all([

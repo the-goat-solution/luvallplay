@@ -1,5 +1,6 @@
 // Marketing-site text. The dictionaries live in @luvallplay/i18n (Phase 2);
 // this keeps the app's t() and its types.
+import "./club-terms.ts";
 import { translate, type Lang, type SiteKey, type Vars } from "@luvallplay/i18n";
 
 export type { Lang };

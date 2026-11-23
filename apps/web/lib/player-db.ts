@@ -3,7 +3,7 @@ import { sql } from "./database";
 import { getClubToday } from "./dates";
 import type { Lang } from "./i18n";
 import { toE164 } from "./phone";
-import { mirrorClubMember } from "./tenant-members";
+import { defaultTenantSlug, mirrorClubMember } from "./tenant-members";
 
 // Player accounts. Everything a player has done is already stored under
 // their email (memberships, bookings, jersey registrations, court board
@@ -409,10 +409,12 @@ export async function listPlayersForAdmin(search?: string): Promise<AdminPlayerR
        (SELECT max(s.last_seen_at) FROM player_sessions s WHERE s.player_id = p.id) AS last_seen_at
      FROM players p
      WHERE p.deleted_at IS NULL
+       -- Accounts are global; a club's directory is the people in that club.
+       AND EXISTS (SELECT 1 FROM club_members cm JOIN tenants t ON t.id = cm.tenant_id WHERE cm.user_id = p.id AND t.slug = $3)
        AND ($2::text IS NULL OR p.email LIKE $2 OR lower(p.first_name || ' ' || p.last_name) LIKE $2
             OR lower(coalesce(p.display_name, '')) LIKE $2)
      ORDER BY p.first_name, p.last_name, p.email;`,
-    [dateKey, q],
+    [dateKey, q, defaultTenantSlug()],
   );
   return rows.map((r) => ({
     ...mapPlayer(r as PlayerRow),

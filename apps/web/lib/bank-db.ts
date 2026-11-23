@@ -109,7 +109,7 @@ async function setSetting(key: string, value: unknown): Promise<void> {
   await sql`
     INSERT INTO finance_settings (key, value, updated_at)
     VALUES (${key}, ${JSON.stringify(value)}::jsonb, NOW())
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
+    ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
   `;
 }
 
@@ -397,7 +397,7 @@ export async function learnBankRule(
   await sql`
     INSERT INTO bank_rules (pattern, direction, action, status, category, name, method, person, hits, last_used_at)
     VALUES (${pattern}, ${direction}, ${action.action}, ${v.status}, ${v.category}, ${v.name}, ${v.method}, ${v.person}, 1, NOW())
-    ON CONFLICT (pattern, direction) DO UPDATE SET
+    ON CONFLICT (tenant_id, pattern, direction) DO UPDATE SET
       hits = CASE
         WHEN bank_rules.action = EXCLUDED.action
           AND COALESCE(bank_rules.status, '') = COALESCE(EXCLUDED.status, '')

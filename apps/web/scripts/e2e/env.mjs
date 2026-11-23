@@ -173,6 +173,8 @@ export async function startEnv({ log = console.log } = {}) {
   runNode(["scripts/grant-role.mjs", "--role", "owner", "--platform", "--email", PEOPLE.owner.email]);
   runNode(["scripts/grant-role.mjs", "--role", "admin", "--email", PEOPLE.admin.email]);
   runNode(["scripts/grant-role.mjs", "--role", "coach", "--email", PEOPLE.coach.email]);
+  // The seed wrote accounts straight into the table; give each its place in the club, as the app does.
+  runNode(["--import", "./tests/register.mjs", "scripts/tenants/verify.mjs", "--reconcile"]);
   log(`e2e: app at ${BASE}, database ${DB}`);
   const stop = () => {
     try {
@@ -182,7 +184,30 @@ export async function startEnv({ log = console.log } = {}) {
     }
     proxy.kill("SIGTERM");
   };
-  return { base: BASE, dbUrl: DB_URL, seeded, stop, serverLog };
+  return { base: BASE, dbUrl: DB_URL, seeded, stop, serverLog, serverEnv: env };
+}
+
+/**
+ * A second copy of the built app on its own port, with the first one's
+ * settings plus `extra`. For the tenant-isolation suite: the same database,
+ * served as another club. Returns its base URL and a stop().
+ */
+export async function startSecondServer(serverEnv, extra, port = PORT + 1) {
+  const base = `http://localhost:${port}`;
+  const env = { ...serverEnv, ...extra, PORT: String(port), NEXT_PUBLIC_SITE_URL: base };
+  const server = spawn("npx", ["next", "start", "-p", String(port)], { env, stdio: ["ignore", "pipe", "pipe"], detached: true });
+  const serverLog = [];
+  server.stdout.on("data", (d) => serverLog.push(String(d)));
+  server.stderr.on("data", (d) => serverLog.push(String(d)));
+  await waitFor(`${base}/login`);
+  const stop = () => {
+    try {
+      process.kill(-server.pid, "SIGTERM");
+    } catch {
+      server.kill("SIGTERM");
+    }
+  };
+  return { base, stop, serverLog };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

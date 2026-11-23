@@ -180,7 +180,7 @@ async function save(date: string, state: CasualPlayState, version: number | null
   if (version === null) {
     const { rows } = await sql`
       INSERT INTO casual_play_sessions (date, state) VALUES (${date}, ${json}::jsonb)
-      ON CONFLICT (date) DO NOTHING
+      ON CONFLICT (tenant_id, date) DO NOTHING
       RETURNING date;
     `;
     return rows.length > 0;
@@ -201,7 +201,7 @@ async function rememberProfile(email: string, change: Profile): Promise<void> {
   }
   await sql`
     INSERT INTO casual_play_profiles (email, tier) VALUES (${email}, ${change.tier})
-    ON CONFLICT (email) DO UPDATE SET tier = EXCLUDED.tier, updated_at = NOW();
+    ON CONFLICT (tenant_id, email) DO UPDATE SET tier = EXCLUDED.tier, updated_at = NOW();
   `;
 }
 

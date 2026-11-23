@@ -207,9 +207,9 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 | 7 | The booking clock (time zone, booking window, cut-off hour): the date helpers take it; the booking rule and the Me page pass the club's | Built |
 | 8 | Membership cycle lengths in the renewal SQL, the Stripe sync and the free month | Built |
 | 9 | Client components read the club's public settings from a provider (capacity, mini-game cap, the booking clock) | Live (#107) |
-| 10 | The club's clock passed at every call of the date helpers. The last 11 plain helpers now get it from their callers; the test's list of exceptions is empty | Live (#112), the last 11 built |
-| 12 | The shop's end-of-day helper works in any time zone (it used to try New Zealand's two UTC offsets) | Built |
-| 13 | The club's terms typed into app code (emails, admin screens, the analyzer's and the home page's copy tables): 44 lines in 16 files now read the settings. The rank titles "Alpha Wolf" and "Silver Wolf" ("Sói Đầu Đàn", "Sói Bạc") are club terms too. Migration `0009_terms_seats` adds them to Three Wolves' row (one production data run) | Built and rehearsed |
+| 10 | The club's clock passed at every call of the date helpers. The last 11 plain helpers now get it from their callers; the test's list of exceptions is empty | Merged (#112, #113) |
+| 12 | The shop's end-of-day helper works in any time zone (it used to try New Zealand's two UTC offsets) | Merged (#113) |
+| 13 | The club's terms typed into app code (emails, admin screens, the analyzer's and the home page's copy tables): 44 lines in 16 files now read the settings. The rank titles "Alpha Wolf" and "Silver Wolf" ("Sói Đầu Đàn", "Sói Bạc") are club terms too. Migration `0009_terms_seats` adds them to Three Wolves' row | **Done.** Production data run passed (23 Nov, 21:14 UTC): 18 accounts, 0 problems, no drift; restore point `rehearsal-phase-3`, reset just before. Merged (#113) |
 | 11 | The club's own terms leave the shared dictionaries: "Wolf Points", "Wolf Vision" and the Vietnamese "Điểm Sói" are placeholders, filled per language from the club's settings. Migration `0008_terms_localized` adds the Vietnamese name to Three Wolves' row | **Done.** Production data run passed (23 Nov, 20:23 UTC): 17 accounts, 0 problems, no drift. The restore point was `rehearsal-phase-3`, reset to a fresh copy of production just before, because the Neon branch limit left no room for a new one. Merged (#112) |
 
 **Still to build in step 4:** the time zone, booking window and cut-off read from the settings at run time (server and client); membership days and cycle lengths; the "Wolf" terms in the translated strings; capacity in the admin pages and client components; and the crons, emails, webhooks and API becoming club-scoped.
@@ -420,7 +420,37 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 1. `node --import ./tests/register.mjs scripts/shadow-report.mjs` on production: seven days with `clean` rows for `settings`, `routing` and `tenant-reads`, and no `differ` row.
 2. Set `CLUB_SETTINGS_SOURCE=database` and `TENANT_SCOPE=enforce` for Production, one at a time, a day apart, redeploying each time. Watch the error log for an hour after each.
 3. Rollback for either: set it back to `shadow` and redeploy.
-4. Still to build before or with the switch: natural keys widened with `tenant_id`, the `DEFAULT 1` dropped, a login for the app's role (so the app can't connect as the owner at all), and the route-level isolation suite, which needs requests for two clubs.
+
+### 11.1 Preparation, built ahead of the switch
+
+| Item | State |
+|---|---|
+| **Route-level isolation suite** | Built. End-to-end journey T1 starts a second, synthetic club on its own server with `TENANT_SCOPE=enforce` and requests every route (119, generated from the `app` directory, so a new route is covered when it is added) as a platform admin and as nobody. None of the first club's data may come back, no route may fail, and the first club's admin is refused on the second club's admin pages |
+| **Finding 1, fixed** | The admin Players page listed every account on the platform, because accounts are global. It now lists the club's members |
+| **Finding 2, fixed by migration `0010`** | Under `enforce`, a row written for a second club was refused: `tenant_id` defaulted to 1. The default now follows the club the transaction is scoped to (`COALESCE(app_tenant_id(), 1)`); for the owner's connection, as the app runs today, it is still 1 |
+| **Keys per club (expand)** | Migration `0010` adds a second unique index starting with `tenant_id` beside 20 natural keys (a play day's date, a setting's name, one role per person, one pending invite per email, and so on). The app's upserts now name the per-club keys |
+| **Keys per club (contract)** | Not done, on purpose: dropping the old keys is a separate step after the new version has run for a while, because the previous version names them. Until then a second club couldn't reuse, say, a play-day date; nothing can leak. Three of the old keys are primary keys that other tables point at (`sessions`, and through it `bookings` and `session_alert_state`), so their swap changes those foreign keys too |
+| **A login for the app's role** | Not created; see 11.2 |
+
+**Not changed:** `platform_admins`, `player_settings` and accounts are platform tables and keep their keys. The old preview copies of the Arena tables (`pv_…`) have no club column and keep theirs.
+
+**Rehearsal of `0010` (23 Nov), on `rehearsal-phase-3`, reset to a fresh copy of production:** data guard 18 accounts, 0 problems; 6.0 s; the version live today works on the migrated copy; the new version gives identical views, also through row-level security; no drift; verify consistent. Report: `docs/rehearsals/2026-11-phase3-tenant-keys.md`.
+
+**Production run of `0010`, done 23 Nov 2026, 22:40 UTC** (by the build session, approved in advance, after green CI and a clean rehearsal): the restore point was `rehearsal-phase-3`, reset to a fresh copy of production just before; the migration took 6.0 s; data guard 18 accounts, 0 problems; no drift; verify consistent. #114 merged afterwards.
+
+**How it was run:** the same commands as §10, with `--expect scripts/data-guard/expectations/2026-11-phase3-tenant-keys.production.json`. **Migrate first, then merge:** the new version's upserts name the new keys, and the rehearsal showed the calendar failing when the order is reversed.
+
+### 11.2 A login for the app's role (for you, after `enforce` has been quiet for a week)
+
+Today the app connects as the database owner and steps down to `luvallplay_app` in each transaction. That is enough for isolation as long as the code always steps down. A separate login removes the "as long as": a connection that can't be the owner.
+
+Not done by a migration, because it needs a password, and passwords don't go in the repository.
+
+1. In the Neon SQL editor, on a branch first: `CREATE ROLE luvallplay_web LOGIN PASSWORD '<generated>' NOBYPASSRLS; GRANT luvallplay_app TO luvallplay_web;` Create it with SQL, not in the Neon console: roles made in the console are given owner-like rights.
+2. Check on the branch: connecting as `luvallplay_web`, `SELECT count(*) FROM bookings` is 0 until `app.tenant_id` is set, and `ALTER TABLE` is refused.
+3. Give the app's `POSTGRES_URL` the new login. Keep the owner's connection string in a second setting used only by migrations, the cron heartbeat's cross-club checks and the operator scripts. **This split is not built yet**: the code reads one connection string. It is a small change, to be made with this step.
+
+**Before step 9's tables are relied on for add-ons** (a note from the planning session, decision AK): the Xero accounting sync will be a paid add-on that any club can hold, including one on the free plan. Today `club_plans` allows one current row per club. Add-ons need either a `kind` on `plans` (`base` or `addon`) with the one-current-row rule applied to base plans only, or a separate table. Nothing is built for this yet, and nothing built so far blocks it.
 
 ## 12. Housekeeping that needs you
 

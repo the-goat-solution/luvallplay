@@ -69,7 +69,7 @@ export async function recordAttendance(
   const { rowCount } = await sql.query(
     `INSERT INTO attendance (session_date, email, source, verified, removed)
      SELECT $1::date, e, $2, $3, FALSE FROM unnest($4::text[]) AS e
-     ON CONFLICT (session_date, email) DO UPDATE SET
+     ON CONFLICT (tenant_id, session_date, email) DO UPDATE SET
        verified = attendance.verified OR EXCLUDED.verified,
        source = CASE WHEN attendance.verified AND NOT attendance.removed THEN attendance.source ELSE EXCLUDED.source END,
        removed = CASE WHEN EXCLUDED.source = 'admin' THEN FALSE ELSE attendance.removed END
@@ -87,7 +87,7 @@ export async function removeAttendance(date: string, email: string): Promise<voi
   await sql`
     INSERT INTO attendance (session_date, email, source, verified, removed)
     VALUES (${date}, ${email.trim().toLowerCase()}, 'admin', TRUE, TRUE)
-    ON CONFLICT (session_date, email) DO UPDATE SET removed = TRUE, source = 'admin';
+    ON CONFLICT (tenant_id, session_date, email) DO UPDATE SET removed = TRUE, source = 'admin';
   `;
   refreshLeaderboard();
 }
@@ -297,7 +297,7 @@ export async function recordRosterAttendance(): Promise<number> {
     `${roster}
      INSERT INTO attendance (session_date, email, source, verified, removed)
      SELECT d, e, 'roster', TRUE, FALSE FROM signed_up
-     ON CONFLICT (session_date, email) DO UPDATE SET verified = TRUE
+     ON CONFLICT (tenant_id, session_date, email) DO UPDATE SET verified = TRUE
      WHERE NOT attendance.removed AND NOT attendance.verified;`,
     params,
   );

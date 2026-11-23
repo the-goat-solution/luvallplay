@@ -96,7 +96,7 @@ export async function ensureSession(date: string) {
   await sql`
     INSERT INTO sessions (date, max_spots, booked_spots, courts)
     VALUES (${date}, ${cfg.playDays.sessionCapacity}, 0, ${defaultCourtsForDate(date)})
-    ON CONFLICT (date) DO NOTHING;
+    ON CONFLICT (tenant_id, date) DO NOTHING;
   `;
 }
 
@@ -161,7 +161,7 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
     `INSERT INTO sessions (date, max_spots, booked_spots, courts)
      SELECT t.d, $2, 0, t.c
      FROM unnest($1::date[], $3::int[]) AS t(d, c)
-     ON CONFLICT (date) DO NOTHING;`,
+     ON CONFLICT (tenant_id, date) DO NOTHING;`,
     [dates, cfg.playDays.sessionCapacity, courtsDefaults],
   );
 
@@ -551,7 +551,7 @@ export async function upsertSessionFromCalendar(
   await sql`
     INSERT INTO sessions (date, max_spots, booked_spots, courts, google_event_id, calendar_summary, event_start_time, event_end_time, event_location, synced_at)
     VALUES (${date}, ${cfg.playDays.sessionCapacity}, 0, ${defaultCourtsForDate(date)}, ${event.id}, ${event.summary ?? null}, ${event.start}, ${event.end ?? null}, ${event.location ?? null}, NOW())
-    ON CONFLICT (date) DO UPDATE SET
+    ON CONFLICT (tenant_id, date) DO UPDATE SET
       google_event_id = EXCLUDED.google_event_id,
       calendar_summary = EXCLUDED.calendar_summary,
       event_start_time = EXCLUDED.event_start_time,
@@ -814,7 +814,7 @@ export async function upsertSessionAlertState(
   await sql`
     INSERT INTO session_alert_state (session_date, state, headcount, updated_at)
     VALUES (${date}, ${state}, ${headcount}, NOW())
-    ON CONFLICT (session_date) DO UPDATE SET
+    ON CONFLICT (tenant_id, session_date) DO UPDATE SET
       state = EXCLUDED.state,
       headcount = EXCLUDED.headcount,
       updated_at = NOW();

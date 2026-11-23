@@ -185,3 +185,10 @@ INSERT INTO cancellation_feedback (player_id, membership_id, action, reason, com
 INSERT INTO casual_play_profiles (email, tier, nickname) VALUES ('player9@golden.test', 2, 'Niner');
 INSERT INTO sms_sends (purpose, phone_hash, ip_hash) VALUES ('signin', md5('+64215550006'), md5('127.0.0.1'));
 INSERT INTO admin_audit_log (actor_player_id, actor_kind, action, target) VALUES (1, 'player', 'golden.seed', 'all');
+
+-- Each account's place in the club (the app writes this row whenever it
+-- creates an account; the fixture writes accounts directly).
+INSERT INTO club_members (tenant_id, user_id, role, status)
+SELECT 1, p.id, COALESCE((SELECT r.role FROM club_roles r WHERE r.player_id = p.id), 'member'), 'active'
+FROM players p WHERE p.deleted_at IS NULL
+ON CONFLICT (tenant_id, user_id) DO NOTHING;

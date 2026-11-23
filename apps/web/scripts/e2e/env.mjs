@@ -142,6 +142,8 @@ export async function startEnv({ log = console.log } = {}) {
     EMAIL_FROM: "Three Wolves <club@e2e.test>",
     E2E_OUTBOX: "1",
     PLAYER_SESSION_SECRET: "e2e-player-session-secret",
+    // The proxy and the pages keep separate copies of the module switches; no cache, so a switch shows at once.
+    MODULES_CACHE_MS: "0",
     ADMIN_PASSWORD: "e2e-break-glass",
     NEXT_PUBLIC_SITE_URL: BASE,
     PORT: String(PORT),

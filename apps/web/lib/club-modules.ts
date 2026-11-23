@@ -49,7 +49,13 @@ export async function listClubModules(db: Db, slug = defaultTenantSlug()): Promi
   });
 }
 
-const TTL_MS = 60_000;
+// How long an instance remembers the club's switches. A switch reaches every
+// server instance within this time (the instance that made it, at once).
+// MODULES_CACHE_MS overrides it (tests use 0).
+const ttlMs = () => {
+  const v = Number(process.env.MODULES_CACHE_MS);
+  return process.env.MODULES_CACHE_MS && Number.isFinite(v) && v >= 0 ? v : 60_000;
+};
 let cached: { at: number; enabled: Set<string> } | null = null;
 let lastError = "";
 
@@ -62,7 +68,7 @@ export function resetClubModulesCache(): void {
 /** The ids of the modules that are on for the club. Never throws. */
 export async function enabledModules(db: Db, now = Date.now()): Promise<Set<string>> {
   if (!moduleEnforcementOn()) return everyModule();
-  if (cached && now - cached.at < TTL_MS) return cached.enabled;
+  if (cached && now - cached.at < ttlMs()) return cached.enabled;
   let enabled: Set<string>;
   try {
     const rows = await listClubModules(db);

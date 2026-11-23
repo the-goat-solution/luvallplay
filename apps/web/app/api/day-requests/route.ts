@@ -15,7 +15,7 @@ const bodySchema = z.object({
 });
 
 // "Notify me when this day opens" — for a paused day coming back, or a day
-// the club doesn't run yet. Listed for admins at /admin/day-requests.
+// the club doesn't run yet. Listed for admins at /admin/play-days/schedule.
 export async function POST(request: Request) {
   const ip = getClientIp(request);
   if (!checkRateLimit(`dr:${ip}`, 15)) {

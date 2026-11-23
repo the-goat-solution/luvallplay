@@ -161,7 +161,7 @@ export const WEEKDAY_LABEL: Record<Weekday, string> = {
 };
 
 // Weekdays whose public sign-ups (memberships and casual bookings) start out
-// paused. The live setting is admin-controlled from /admin/day-requests and
+// paused. The live setting is admin-controlled from /admin/play-days/schedule and
 // stored in the day_signup_settings table (see lib/day-requests.ts); this
 // list only seeds that table and covers local dev without a database.
 export const DEFAULT_PAUSED_DAYS: Weekday[] = ["wednesday"];

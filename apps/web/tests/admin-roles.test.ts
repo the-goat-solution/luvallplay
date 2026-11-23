@@ -52,6 +52,7 @@ test("rules: who reaches which admin page", () => {
   assert.equal(adminPathAllowed(none, "/admin/members"), false);
   assert.equal(adminPathAllowed(A("coach"), "/admin/play-days"), true);
   assert.equal(adminPathAllowed(A("coach"), "/admin/challenges"), true);
+  assert.equal(adminPathAllowed(A("coach"), "/admin/play-days/schedule"), true, "coach: weekly schedule");
   assert.equal(adminPathAllowed(A("coach"), "/admin/members"), false, "coach: partial");
   assert.equal(adminPathAllowed(A("coach"), "/admin/financials"), false);
   assert.equal(adminPathAllowed(A("admin"), "/admin/financials"), true);

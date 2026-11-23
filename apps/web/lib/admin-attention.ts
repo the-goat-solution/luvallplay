@@ -34,7 +34,7 @@ export const ATTENTION: AttentionItem[] = [
   { key: "photos", href: "/admin/photos", sentence: (n) => `${s(n, "photo", "photos")} waiting for review`, action: "Review" },
   {
     key: "dayRequests",
-    href: "/admin/day-requests",
+    href: "/admin/play-days/schedule",
     sentence: (n) => `${s(n, "person is", "people are")} waiting for a paused day to reopen`,
     action: "See schedule",
   },

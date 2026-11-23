@@ -684,7 +684,7 @@ export async function sendDayRequestAdminAlertEmail(
   });
 }
 
-// Sent from /admin/day-requests when the club opens (or reopens) a weekday.
+// Sent from /admin/play-days/schedule when the club opens (or reopens) a weekday.
 export async function sendDayOpenEmail(
   to: string,
   name: string,

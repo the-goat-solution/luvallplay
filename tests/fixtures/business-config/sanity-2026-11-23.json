@@ -1,0 +1,211 @@
+{
+  "source": "Sanity project c0v5j4dz, dataset production, published documents, read 2026-11-23 (no drafts)",
+  "plans": [
+    {
+      "_id": "2fec8fb1-5b26-4f8d-927f-4d36c364f773",
+      "_updatedAt": "2026-06-03T09:05:32Z",
+      "description": {
+        "_type": "localeText",
+        "en": "Pay per session, no commitment",
+        "vi": "Trả tiền theo buổi, không cam kết"
+      },
+      "featured": null,
+      "features": [
+        {
+          "_key": "0e0d1a75c97e",
+          "_type": "localeString",
+          "en": "Single court access",
+          "vi": "Chơi cầu một buổi"
+        },
+        {
+          "_key": "debd0031f957",
+          "_type": "localeString",
+          "en": "Shuttlecocks provided",
+          "vi": "Có sẵn cầu"
+        },
+        {
+          "_key": "18cf1de31089",
+          "_type": "localeString",
+          "en": "Racquet loan available",
+          "vi": "Có thể mượn vợt"
+        }
+      ],
+      "name": {
+        "_type": "localeString",
+        "en": "CASUAL",
+        "vi": "ĐÁNH LẺ"
+      },
+      "order": 1,
+      "periodLabel": {
+        "_type": "localeString",
+        "en": "PER SESSION",
+        "vi": "MỖI BUỔI"
+      },
+      "planId": "casual",
+      "priceNzd": 10,
+      "stripePriceId": "price_1TeA0L2FaqyoK74qII5td5VM"
+    },
+    {
+      "_id": "1c6b9299-f1f8-4911-b5dd-3ab4834d11c9",
+      "_updatedAt": "2026-09-09T21:50:37Z",
+      "description": {
+        "_type": "localeText",
+        "en": "Popular monthly membership",
+        "vi": "Gói hội viên theo tháng (HOT)"
+      },
+      "featured": true,
+      "features": [
+        {
+          "_key": "0605f15e8957",
+          "_type": "localeString",
+          "en": "Weekly play",
+          "vi": "Chơi cầu hằng tuần"
+        },
+        {
+          "_key": "3e53188ee3aa",
+          "_type": "localeString",
+          "en": "Shuttle cocks provided",
+          "vi": "Cầu có sẵn"
+        },
+        {
+          "_key": "6927cf8c4a60",
+          "_type": "localeString",
+          "en": "Racquet loan available",
+          "vi": "Có thể mượn vợt"
+        },
+        {
+          "_key": "71d3cd4c8919",
+          "_type": "localeString",
+          "en": "Club community & social events",
+          "vi": "Sự kiện cộng đồng và của CLB"
+        },
+        {
+          "_key": "794d5075f5e1",
+          "_type": "localeString",
+          "en": "Cancel anytime",
+          "vi": "Huỷ bất kỳ lúc nào"
+        }
+      ],
+      "name": {
+        "_type": "localeString",
+        "en": "MONTHLY (FRIDAY)",
+        "vi": "HÀNG THÁNG (THỨ SÁU)"
+      },
+      "order": 2,
+      "periodLabel": {
+        "_type": "localeString",
+        "en": "MONTHLY",
+        "vi": "HẰNG THÁNG"
+      },
+      "planId": "fridayMonthly",
+      "priceNzd": 33,
+      "stripePriceId": "price_1Te8Jl2FaqyoK74qKA2xCahN"
+    },
+    {
+      "_id": "4599f54b-e96e-4c31-94dc-9117431ddabb",
+      "_updatedAt": "2026-09-09T21:50:37Z",
+      "description": {
+        "_type": "localeText",
+        "en": "Quarterly membership — save ~15%",
+        "vi": "Hội viên theo quý – Tiết kiệm ~15% "
+      },
+      "featured": null,
+      "features": [
+        {
+          "_key": "9d33c1b8a82c",
+          "_type": "localeString",
+          "en": "Weekly play",
+          "vi": "Chơi cầu hằng tuần"
+        },
+        {
+          "_key": "3f7210c50439",
+          "_type": "localeString",
+          "en": "Shuttle cocks provided",
+          "vi": "Cầu có sẵn"
+        },
+        {
+          "_key": "04176ce2ea96",
+          "_type": "localeString",
+          "en": "Racquet loan available",
+          "vi": "Có thể mượn vợt"
+        },
+        {
+          "_key": "80339c3a36cd",
+          "_type": "localeString",
+          "en": "Club community & social events",
+          "vi": "Sự kiện cộng đồng và của CLB"
+        },
+        {
+          "_key": "e03da0bd58e0",
+          "_type": "localeString",
+          "en": "Cancel anytime",
+          "vi": "Huỷ bất kỳ lúc nào"
+        },
+        {
+          "_key": "e012503cf2c6",
+          "_type": "localeString",
+          "en": "The best saving membership – Saves ~15% compared to monthly ($99/quarter)",
+          "vi": "Gói hội viên tiết kiệm nhất – Tiết kiệm ~15% so với gói hàng tháng ($99/quý)"
+        }
+      ],
+      "name": {
+        "_type": "localeString",
+        "en": "QUARTERLY (FRIDAY)",
+        "vi": "HÀNG QUÝ (THỨ SÁU)"
+      },
+      "order": 3,
+      "periodLabel": {
+        "_type": "localeString",
+        "en": "EVERY 3 MONTHS",
+        "vi": "MỖI 3 THÁNG"
+      },
+      "planId": "fridayQuarterly",
+      "priceNzd": 85,
+      "stripePriceId": "price_1Te8Jl2FaqyoK74qc6UThmLu"
+    },
+    {
+      "_id": "3de47bec-c5a7-481c-aa97-5ade8c8fbb9a",
+      "_updatedAt": "2026-09-09T21:50:37Z",
+      "description": null,
+      "featured": null,
+      "features": null,
+      "name": {
+        "_type": "localeString",
+        "en": "MONTHLY (WEDNESDAY)",
+        "vi": "HÀNG THÁNG (THỨ TƯ)"
+      },
+      "order": 4,
+      "periodLabel": null,
+      "planId": "wednesdayMonthly",
+      "priceNzd": 33,
+      "stripePriceId": "price_1UDt2pETzBGat4YgPHdnXMKt"
+    },
+    {
+      "_id": "6a7dedad-1800-412f-8687-c1bd754932bf",
+      "_updatedAt": "2026-09-09T21:50:37Z",
+      "description": null,
+      "featured": null,
+      "features": null,
+      "name": {
+        "_type": "localeString",
+        "en": "QUARTERLY (WEDNESDAY)",
+        "vi": "HÀNG QUÝ (THỨ TƯ)"
+      },
+      "order": 5,
+      "periodLabel": null,
+      "planId": "wednesdayQuarterly",
+      "priceNzd": 85,
+      "stripePriceId": "price_1UDt34ETzBGat4YgxSIFQZZv"
+    }
+  ],
+  "schedule": [
+    {
+      "_id": "3fd7cf86-3de5-4b0e-ac21-413a57e838ed",
+      "_updatedAt": "2026-06-03T09:30:02Z",
+      "bookingLockDays": 14,
+      "maxCasualSpots": null,
+      "timeLabel": null,
+      "venueName": null
+    }
+  ]
+}

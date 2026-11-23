@@ -19,6 +19,7 @@ const TABS = [
   { href: "/admin/day-requests", label: "Day requests" },
   { href: "/admin/jersey", label: "Jersey" },
   { href: "/admin/financials", label: "Financials" },
+  { href: "/admin/settings", label: "Settings" },
   { href: "/admin/people/admins", label: "Admins" },
   { href: "/admin/platform/admins", label: "Platform" },
 ] as const;
@@ -34,6 +35,7 @@ export type AdminTab =
   | "day-requests"
   | "jersey"
   | "financials"
+  | "settings"
   | "people/admins"
   | "platform/admins";
 

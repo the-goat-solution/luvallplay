@@ -409,6 +409,16 @@ CREATE TABLE club_roles (
   CONSTRAINT club_roles_pkey PRIMARY KEY (player_id)
 );
 
+CREATE TABLE club_settings (
+  key text NOT NULL,
+  value jsonb,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_by integer,
+  CONSTRAINT club_settings_key_not_null NOT NULL key,
+  CONSTRAINT club_settings_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT club_settings_pkey PRIMARY KEY (key)
+);
+
 CREATE TABLE day_requests (
   id integer DEFAULT nextval('day_requests_id_seq'::regclass) NOT NULL,
   day text NOT NULL,
@@ -815,6 +825,30 @@ CREATE TABLE players (
 );
 CREATE UNIQUE INDEX players_minigame_name_idx ON public.players USING btree (lower(minigame_name)) WHERE (minigame_name IS NOT NULL);
 CREATE UNIQUE INDEX players_phone_verified_idx ON public.players USING btree (phone_e164) WHERE ((phone_verified_at IS NOT NULL) AND (deleted_at IS NULL));
+
+CREATE TABLE pricing_plans (
+  plan_id text NOT NULL,
+  name jsonb DEFAULT '{}'::jsonb NOT NULL,
+  description jsonb DEFAULT '{}'::jsonb NOT NULL,
+  price_nzd numeric(10,2),
+  period_label jsonb DEFAULT '{}'::jsonb NOT NULL,
+  featured boolean DEFAULT false NOT NULL,
+  features jsonb DEFAULT '[]'::jsonb NOT NULL,
+  stripe_price_id text,
+  sort integer NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_by integer,
+  CONSTRAINT pricing_plans_plan_id_check CHECK ((plan_id = ANY (ARRAY['casual'::text, 'fridayMonthly'::text, 'fridayQuarterly'::text, 'wednesdayMonthly'::text, 'wednesdayQuarterly'::text]))),
+  CONSTRAINT pricing_plans_description_not_null NOT NULL description,
+  CONSTRAINT pricing_plans_featured_not_null NOT NULL featured,
+  CONSTRAINT pricing_plans_features_not_null NOT NULL features,
+  CONSTRAINT pricing_plans_name_not_null NOT NULL name,
+  CONSTRAINT pricing_plans_period_label_not_null NOT NULL period_label,
+  CONSTRAINT pricing_plans_plan_id_not_null NOT NULL plan_id,
+  CONSTRAINT pricing_plans_sort_not_null NOT NULL sort,
+  CONSTRAINT pricing_plans_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT pricing_plans_pkey PRIMARY KEY (plan_id)
+);
 
 CREATE TABLE pv_arena_after_game (
   challenge_id integer NOT NULL,

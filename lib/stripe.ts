@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { fetchPricingPlans } from "@/lib/sanity-queries";
+import { getPricingPlans } from "@/lib/business-config";
 import { combinePlanId } from "@/lib/pricing-plans";
 import {
   MONTHLY_PRICE_CENTS,
@@ -74,7 +74,7 @@ export async function resolvePriceId(
   if (fromEnv) return fromEnv;
 
   const planId = combinePlanId(day, plan);
-  const plans = await fetchPricingPlans();
+  const plans = await getPricingPlans();
   const fromCms = plans
     ?.find((p) => p.planId === planId)
     ?.stripePriceId?.trim();

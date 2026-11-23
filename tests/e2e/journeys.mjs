@@ -275,6 +275,43 @@ describe("A · accounts and admin", () => {
     await fc.context.close();
   });
 
+  test("A7 · Admin → Settings: the business config from the database; a price change reaches the home page; coaches can't open it", async () => {
+    const owner = await signedIn(PEOPLE.owner.email, DESKTOP);
+    const page = await owner.context.newPage();
+    assert.equal((await page.goto("/admin/settings")).status(), 200);
+    // The five plans came from the migration (copied from Sanity).
+    for (const plan of ["Casual", "Monthly (Friday)", "Quarterly (Friday)", "Monthly (Wednesday)", "Quarterly (Wednesday)"]) {
+      await page.getByRole("heading", { name: plan, exact: true }).waitFor();
+    }
+    const casual = page.locator("form", { has: page.locator("input[name=planId][value=casual]") });
+    assert.equal(await casual.locator("input[name=price]").inputValue(), "10");
+    assert.match(await casual.locator("input[name=stripePriceId]").inputValue(), /^price_/);
+    await page.screenshot({ path: `${SHOTS}/admin-settings-1200.png`, fullPage: true });
+    // Change the casual price; the home page shows it.
+    await casual.locator("input[name=price]").fill("11");
+    await casual.getByRole("button", { name: /Save Casual/ }).click();
+    await page.getByText("Casual saved.").waitFor();
+    const { rows } = await db.query(`SELECT price_nzd::text AS p, updated_by FROM pricing_plans WHERE plan_id = 'casual'`);
+    assert.equal(rows[0].p, "11.00");
+    assert.ok(rows[0].updated_by, "who changed it is recorded");
+    const home = await (await fetch(`${base()}/`)).text();
+    assert.match(home, /\$11\b/, "the new casual price is on the home page");
+    // A bad Stripe price id is refused.
+    await casual.locator("input[name=stripePriceId]").fill("not-a-price");
+    await casual.getByRole("button", { name: /Save Casual/ }).click();
+    await page.getByText(/Stripe price ids look like price_/).waitFor();
+    // Put it back.
+    await casual.locator("input[name=price]").fill("10");
+    await casual.locator("input[name=stripePriceId]").fill(rows.length ? (await db.query(`SELECT stripe_price_id FROM pricing_plans WHERE plan_id = 'casual'`)).rows[0].stripe_price_id : "");
+    await casual.getByRole("button", { name: /Save Casual/ }).click();
+    await page.getByText("Casual saved.").waitFor();
+    // A coach can't open it.
+    const coach = await signedIn(PEOPLE.coach.email);
+    const cp = await coach.context.newPage();
+    const r = await cp.goto("/admin/settings");
+    assert.ok(r.status() === 403 || !cp.url().includes("/admin/settings"), "coaches are kept out of Settings");
+  });
+
   test("A6 · the last owner can't delete their account", async () => {
     const owner = await signedIn(PEOPLE.owner.email);
     const r = await fetch(`${base()}/api/profile/delete`, {

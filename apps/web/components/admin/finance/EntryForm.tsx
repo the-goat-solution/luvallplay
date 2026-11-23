@@ -322,11 +322,9 @@ export function EntryForm({
             {receiptsEnabled ? (
               <div className={styles.receiptBox}>
                 {preview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={preview} alt="Receipt preview" className={styles.receiptPreview} />
                 ) : initial?.hasReceipt && !removeReceipt ? (
                   initial.receiptIsImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={`/api/admin/finance/receipts/${initial.id}`}
                       alt="Current receipt"

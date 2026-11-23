@@ -817,7 +817,6 @@ function TeamUp({
       {mode === "qr" && qr ? (
         <>
           <p className={s.hint}>{t("invite_ready")}</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={qr.img}
             alt={t("invite_btn")}

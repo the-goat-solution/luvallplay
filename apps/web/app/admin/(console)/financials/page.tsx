@@ -618,7 +618,6 @@ export default async function FinancialsPage({
                           title="Open receipt"
                         >
                           {e.receiptContentType?.startsWith("image/") && !e.receiptContentType.includes("hei") ? (
-                            // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={`/api/admin/finance/receipts/${e.id}`}
                               alt={`Receipt for ${e.name}`}

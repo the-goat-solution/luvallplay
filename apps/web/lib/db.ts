@@ -1,11 +1,10 @@
 import { db, sql } from "./database";
+import { getClubConfig } from "./club-config";
 // DATE columns come back as plain 'YYYY-MM-DD' strings (lib/database.ts).
 import {
   MEMBERSHIP_CYCLE_DAYS,
   MEMBERSHIP_DAYS,
   MEMBERSHIP_DAY_TO_DOW,
-  MEMBERSHIP_START_SEARCH_DAYS,
-  PENDING_MEMBERSHIP_HOLD_MINUTES,
   MINI_GAME_MAX_PLAYERS,
   SESSION_CAPACITY,
   sessionMaxPlayers,
@@ -349,6 +348,10 @@ export async function assignAndReserveMembershipAccessStart(
   // it ends (or the usual nearest day, if it has already ended).
   renewalOf?: { membershipId: number; periodEnd: string },
 ): Promise<MembershipAssignment> {
+  // The club's settings (Phase 3 step 4): how far ahead to look for a start
+  // day, and how long an unpaid checkout holds a spot. Read before the lock
+  // is taken, so the locked section makes no extra round trip.
+  const { startSearchDays, pendingHoldMinutes } = (await getClubConfig(sql)).memberships;
   const { dateKey: clubToday, cutoffPassed } = getClubToday();
   const earliestStart = (() => {
     const fromToday = addDays(clubToday, cutoffPassed ? 1 : 0);
@@ -387,7 +390,7 @@ export async function assignAndReserveMembershipAccessStart(
         member.email,
         day,
         clubToday,
-        PENDING_MEMBERSHIP_HOLD_MINUTES,
+        pendingHoldMinutes,
         renewalOf?.membershipId ?? 0,
       ],
     );
@@ -414,7 +417,7 @@ export async function assignAndReserveMembershipAccessStart(
              AND date >= $1::date
              AND date <= ($1::date + $3::int)
            ORDER BY date;`,
-          [earliestStart, dow, MEMBERSHIP_START_SEARCH_DAYS],
+          [earliestStart, dow, startSearchDays],
         );
 
     if (preferredDate && candidates.length === 0) {
@@ -446,7 +449,7 @@ export async function assignAndReserveMembershipAccessStart(
                status = 'active'
                OR (status = 'pending' AND created_at > NOW() - ($2 * INTERVAL '1 minute'))
              );`,
-          [date, PENDING_MEMBERSHIP_HOLD_MINUTES, day],
+          [date, pendingHoldMinutes, day],
         );
         const activeMembers = (memberCountRows[0] as { count: number }).count;
 

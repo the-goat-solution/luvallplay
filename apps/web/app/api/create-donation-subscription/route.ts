@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { insertMonthlyDonation } from "@/lib/repos/donations";
-import { DONATION_MIN_CENTS, DONATION_MAX_CENTS } from "@/lib/constants";
+import { clubConfig } from "@/lib/club";
 import { getStripe, getDonationProductId, getInvoicePaymentIntent } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
@@ -22,10 +22,12 @@ export async function POST(request: Request) {
   try {
     const body = bodySchema.parse(await request.json());
     const amountCents = Math.round(body.amount * 100);
-    if (amountCents < DONATION_MIN_CENTS || amountCents > DONATION_MAX_CENTS) {
+    // The club's donation limits (Phase 3 step 4: settings, not constants).
+    const { minAmount, maxAmount } = (await clubConfig()).donations;
+    if (amountCents < minAmount || amountCents > maxAmount) {
       return NextResponse.json(
         {
-          error: `Amount must be between $${DONATION_MIN_CENTS / 100} and $${DONATION_MAX_CENTS / 100} NZD`,
+          error: `Amount must be between $${minAmount / 100} and $${maxAmount / 100} NZD`,
         },
         { status: 400 },
       );

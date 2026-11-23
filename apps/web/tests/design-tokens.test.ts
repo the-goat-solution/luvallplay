@@ -43,22 +43,33 @@ const ratio = (a: string, b: string) => {
   return (x + 0.05) / (y + 0.05);
 };
 
-test("12 colour schemes, each passing the plan's contrast floors (build plan §6.3.1)", () => {
+test("12 colour schemes, each passing the generator's contrast floors against the brand's real grounds (build plan §6.3.1)", () => {
   assert.equal(COLOR_SCHEMES.length, 12);
   assert.equal(new Set(COLOR_SCHEMES.map((s) => s.id)).size, 12);
-  // The floors club-color-schemes.py checks: text on fills 4.5:1 in both modes,
-  // primary as link text on the light ground 4.5:1, fills against the dark ground 3:1.
-  const LIGHT_BG = "#fafaf7";
-  const DARK_BG = "#0e1419";
+  // The floors docs/plans/assets/club-color-schemes.py checks: text on fills
+  // ≥ 4.5:1 in both modes; primary on the light surface and raised surface
+  // ≥ 4.5:1 (it's also link text); fills ≥ 3:1 against BOTH dark grounds.
   for (const s of COLOR_SCHEMES) {
-    for (const mode of ["light", "dark"] as const) {
-      const t = schemeTheme(s.id, mode);
-      assert.ok(ratio(t["on-primary"], t.primary) >= 4.5, `${s.id} ${mode}: on-primary`);
-      assert.ok(ratio(t["on-accent"], t.accent) >= 4.5, `${s.id} ${mode}: on-accent`);
+    const light = schemeTheme(s.id, "light");
+    const dark = schemeTheme(s.id, "dark");
+    for (const t of [light, dark]) {
+      assert.ok(ratio(t["on-primary"], t.primary) >= 4.5, `${s.id}: on-primary`);
+      assert.ok(ratio(t["on-accent"], t.accent) >= 4.5, `${s.id}: on-accent`);
     }
-    assert.ok(ratio(s.light.primary, LIGHT_BG) >= 4.5, `${s.id}: primary as text on light`);
-    assert.ok(ratio(s.dark.primary, DARK_BG) >= 3, `${s.id}: dark primary vs dark ground`);
-    assert.ok(ratio(s.dark.accent, DARK_BG) >= 3, `${s.id}: accent vs dark ground`);
+    assert.ok(ratio(light.primary, light.surface) >= 4.5, `${s.id}: primary on light surface`);
+    assert.ok(ratio(light.primary, light["surface-raised"]) >= 4.5, `${s.id}: primary on light raised surface`);
+    for (const ground of [dark.surface, dark["surface-raised"]]) {
+      assert.ok(ratio(dark.primary, ground) >= 3, `${s.id}: dark primary vs ${ground}`);
+      assert.ok(ratio(dark.accent, ground) >= 3, `${s.id}: dark accent vs ${ground}`);
+    }
+  }
+});
+
+test("Court Green, the default scheme, is the brand's court-green and smash-lime in both modes", () => {
+  for (const mode of luvallplay.themes) {
+    const t = schemeTheme("court-green", mode);
+    assert.equal(t.primary, luvallplay.color["court-green"][mode], mode);
+    assert.equal(t.accent, luvallplay.color["smash-lime"][mode], mode);
   }
 });
 
@@ -76,6 +87,8 @@ test("brand colours: text pairs meet WCAG AA in both themes (as the brand book s
     ["danger", "surface-raised"],
   ];
   const nonText: [keyof typeof C, keyof typeof C][] = [
+    ["court-green", "surface"],
+    ["court-green", "surface-raised"],
     ["control-border", "surface"],
     ["control-border", "surface-raised"],
     ["focus", "surface"],

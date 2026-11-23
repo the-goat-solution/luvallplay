@@ -11,7 +11,7 @@ export const luvallplay = {
   tagline: "Love all, play.",
   themes: ["light", "dark"] as const,
   color: {
-    "court-green": { light: "#0e6b4f", dark: "#157a5a" },
+    "court-green": { light: "#0e6b4f", dark: "#2b7d64" },
     "on-court-green": { light: "#fafaf7", dark: "#fafaf7" },
     "smash-lime": { light: "#d4f23c", dark: "#d4f23c" },
     "on-smash-lime": { light: "#0b1b2b", dark: "#0b1b2b" },

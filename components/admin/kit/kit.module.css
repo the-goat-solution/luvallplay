@@ -518,3 +518,14 @@ span.btnSecondary {
 .inlineEdit[open] > summary {
   margin-bottom: 6px;
 }
+
+/* A select sizes itself to its longest option; never let it push the page
+   wider than the screen. */
+.select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+.field {
+  min-width: 0;
+  max-width: 100%;
+}

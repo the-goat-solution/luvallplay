@@ -394,7 +394,7 @@ export function financeFiltersToSearchParams(
 export function describeNonDateFilters(filters: FinanceFilters): string[] {
   const parts: string[] = [];
   if (filters.kind) parts.push(`Type: ${filters.kind === "received" ? "Received" : "Spent"}`);
-  if (filters.category) parts.push(`Source: ${categoryLabel(filters.category)}`);
+  if (filters.category) parts.push(`Category: ${categoryLabel(filters.category)}`);
   if (filters.method) parts.push(`Method: ${methodLabel(filters.method)}`);
   if (filters.q) parts.push(`Search: "${filters.q}"`);
   return parts;

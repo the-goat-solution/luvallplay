@@ -268,7 +268,7 @@ export function EntryForm({
           </label>
 
           <label className={styles.field}>
-            <span className={styles.label}>Source *</span>
+            <span className={styles.label}>Category *</span>
             <select
               name="category"
               required
@@ -288,7 +288,7 @@ export function EntryForm({
           </label>
 
           <label className={styles.field}>
-            <span className={styles.label}>Associated person</span>
+            <span className={styles.label}>Person</span>
             <input
               name="person"
               maxLength={200}

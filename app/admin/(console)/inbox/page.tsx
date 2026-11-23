@@ -26,8 +26,8 @@ async function startConversation(formData: FormData) {
   redirect(`/admin/inbox/${id}?toast=` + encodeURIComponent("Message sent."));
 }
 
-export default async function InboxPage({ searchParams }: { searchParams: Promise<{ filter?: string; to?: string }> }) {
-  const { filter: rawFilter, to } = await searchParams;
+export default async function InboxPage({ searchParams }: { searchParams: Promise<{ filter?: string; to?: string; subject?: string }> }) {
+  const { filter: rawFilter, to, subject } = await searchParams;
   const filter = rawFilter === "closed" || rawFilter === "all" ? rawFilter : "open";
   const hasDb = Boolean(process.env.POSTGRES_URL);
   const threads = hasDb ? await listThreadsForAdmin(filter) : [];
@@ -51,7 +51,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
           </label>
           <label className={kit.field}>
             Subject
-            <input name="subject" maxLength={120} required className={kit.input} />
+            <input name="subject" maxLength={120} required className={kit.input} defaultValue={subject ?? ""} />
           </label>
           <label className={kit.field}>
             Message

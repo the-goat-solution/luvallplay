@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureFinanceTables, getEntryReceipt } from "@/lib/finance-db";
+import { getEntryReceipt } from "@/lib/finance-db";
 import { fetchReceipt } from "@/lib/finance-receipts";
 import { isAdminRequest } from "@/lib/security";
 
@@ -25,7 +25,6 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  await ensureFinanceTables();
   const receipt = await getEntryReceipt(id);
   if (!receipt) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

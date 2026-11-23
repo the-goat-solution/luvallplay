@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { addToWaitlist } from "@/lib/repos/waitlist";
-import { ensureTables } from "@/lib/db";
 import { isSessionDatePaused } from "@/lib/day-requests";
 import { sendWaitlistAdminAlertEmail, sendWaitlistConfirmationEmail } from "@/lib/email";
 import { checkRateLimit, getClientIp } from "@/lib/security";
@@ -32,7 +31,6 @@ export async function POST(request: Request) {
     }
 
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
       await addToWaitlist({ sessionDate: body.sessionDate ?? null, name: body.name, email: body.email });
     }
 

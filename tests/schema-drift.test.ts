@@ -12,15 +12,13 @@
 // 3. The runner is safe: idempotent, refuses a database with tables and no
 //    history, refuses to baseline a database that has drifted, and refuses an
 //    applied migration that was edited.
-// 4. (Until ensureTables() is removed) the request-time DDL changes nothing
-//    on a database at the latest migration.
 
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, mkdtempSync, cpSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import pg from "pg";
 import { dumpSchema, schemaDiff } from "../scripts/db/dump-schema.mjs";
 import { loadMigrations, migrate, markBaseline, plan, BASELINE_DUMP, EXPECTED_DUMP, MIGRATIONS_DIR } from "../scripts/db/migrate.mjs";
@@ -182,28 +180,56 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
     });
   });
 
-  // Transitional: removed together with ensureTables() (Phase 2, PR 3).
-  test("request-time DDL (ensureTables) changes nothing on a migrated database", async () => {
-    const url = await freshDb("runtime_ddl");
+  test("preview builds migrate the preview's own database, and never production", async () => {
+    const run = (extra: Record<string, string | undefined>) =>
+      spawnSync(process.execPath, ["scripts/db/preview-migrate.mjs"], {
+        encoding: "utf8",
+        env: { ...process.env, VERCEL_ENV: undefined, DATABASE_URL_VAR: undefined, POSTGRES_URL_NON_POOLING: undefined, ...extra },
+      });
+    // A branch of production made before production had a migration history.
+    const branch = await freshDb("preview_branch");
+    const [base] = loadMigrations();
+    await withClient(branch, async (c) => {
+      for (const s of base.statements) await c.query(s);
+    });
+    const host = new URL(branch).hostname;
+
+    // Not a preview: nothing happens.
+    let r = run({ POSTGRES_URL: branch });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(await withClient(branch, async (c) => (await c.query(`SELECT to_regclass('drizzle.__drizzle_migrations') AS r`)).rows[0].r), null);
+
+    // A preview pointed at production: refused by the guard, nothing happens.
+    r = run({ VERCEL_ENV: "preview", POSTGRES_URL: branch, PRODUCTION_DATABASE_HOSTS: host });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /skipped: this preview is connected to the production database/);
+    assert.equal(await withClient(branch, async (c) => (await c.query(`SELECT to_regclass('drizzle.__drizzle_migrations') AS r`)).rows[0].r), null);
+
+    // Its own branch: baselined (schema checked) and migrated.
+    r = run({ VERCEL_ENV: "preview", POSTGRES_URL: branch, PRODUCTION_DATABASE_HOSTS: "ep-prod-1234.example.neon.tech" });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /Marked 0000_baseline as applied/);
+    assertNoDrift(EXPECTED_DUMP, await dumpOf(branch), "the preview branch after preview-migrate");
+    r = run({ VERCEL_ENV: "preview", POSTGRES_URL: branch, PRODUCTION_DATABASE_HOSTS: "ep-prod-1234.example.neon.tech" });
+    assert.match(r.stdout, /Nothing to migrate/);
+  });
+
+  test("default seed matches the app's defaults and is safe to run twice", async () => {
+    const { DEFAULT_PAUSED_DAYS } = await import("../lib/constants.ts");
+    const { SIZES, FITS } = await import("../lib/shop-db.ts");
+    const url = await freshDb("seed");
     await withClient(url, (c) => migrate(c, { log: quiet }));
-    const before = await dumpOf(url);
-    const pgPort = new URL(BASE_URL!).port || "5432";
-    const wsPort = String(await (await import("./golden/free-port.ts")).freePort());
-    const proxy = spawn(process.execPath, ["scripts/e2e/ws-proxy.mjs", wsPort, pgPort], { stdio: "ignore" });
-    try {
-      await new Promise((r) => setTimeout(r, 500));
-      const run = spawnSync(
-        process.execPath,
-        ["--experimental-transform-types", "--no-warnings", "--import", "./tests/register.mjs", "scripts/db/run-runtime-ddl.ts"],
-        { encoding: "utf8", env: { ...process.env, POSTGRES_URL: url, NEON_LOCAL_WS_PROXY: `localhost:${wsPort}`, VERCEL_ENV: "", NODE_ENV: "test" } },
-      );
-      assert.equal(run.status, 0, run.stdout + run.stderr);
-      assert.match(run.stdout, /ran integrations/);
-    } finally {
-      proxy.kill("SIGTERM");
-    }
-    const after = await dumpOf(url);
-    assert.deepEqual(schemaDiff(before, after), [], "the request-time DDL altered a database at the latest migration");
+    const seed = readFileSync("db/seed/defaults.sql", "utf8");
+    await withClient(url, async (c) => {
+      await c.query(seed);
+      await c.query(`UPDATE day_signup_settings SET paused = FALSE WHERE day = 'wednesday'`);
+      await c.query(seed);
+      const days = (await c.query(`SELECT day, paused FROM day_signup_settings ORDER BY day`)).rows;
+      assert.deepEqual(days.map((d) => d.day).sort(), [...DEFAULT_PAUSED_DAYS].sort());
+      assert.ok(days.every((d) => d.paused === false), "an admin's choice is never undone");
+      const variants = (await c.query(`SELECT fit, size FROM shop_variants ORDER BY id`)).rows;
+      assert.deepEqual(variants.map((v) => `${v.fit}:${v.size}`), FITS.flatMap((f) => SIZES.map((sz) => `${f}:${sz}`)));
+    });
   });
 
   test("the drift checker itself notices a changed default, a missing index and reordered columns", () => {

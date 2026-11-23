@@ -15,7 +15,6 @@ import {
   setDayPaused,
   type DayRequest,
 } from "@/lib/day-requests";
-import { ensureTables } from "@/lib/db";
 import { sendDayOpenEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +52,6 @@ function emailSummary(day: Weekday, sent: number, failed: number): string {
 // when it's back.
 async function resumeAndNotify(day: Weekday) {
   "use server";
-  await ensureTables();
   await setDayPaused(day, false);
   revalidatePath("/");
   const { sent, failed } = await emailPending(day);
@@ -64,7 +62,6 @@ async function resumeAndNotify(day: Weekday) {
 
 async function resumeQuietly(day: Weekday) {
   "use server";
-  await ensureTables();
   await setDayPaused(day, false);
   revalidatePath("/");
   revalidatePath("/admin/day-requests");
@@ -73,7 +70,6 @@ async function resumeQuietly(day: Weekday) {
 
 async function notifyDay(day: Weekday) {
   "use server";
-  await ensureTables();
   const { sent, failed } = await emailPending(day);
   revalidatePath("/admin/day-requests");
   back(failed > 0 ? "toastError" : "toast", emailSummary(day, sent, failed));
@@ -83,7 +79,6 @@ async function pauseDay(formData: FormData) {
   "use server";
   const day = formData.get("day");
   if (!isWeekday(day)) back("toastError", "Pick a day to pause.");
-  await ensureTables();
   await setDayPaused(day, true);
   revalidatePath("/");
   revalidatePath("/admin/day-requests");
@@ -95,7 +90,6 @@ async function pauseDay(formData: FormData) {
 
 async function removeRequest(id: number) {
   "use server";
-  await ensureTables();
   await deleteDayRequest(id);
   revalidatePath("/admin/day-requests");
   back("toast", "Request removed.");
@@ -276,7 +270,6 @@ export default async function DayRequestsAdminPage() {
   const hasDb = Boolean(process.env.POSTGRES_URL);
   const [pausedDays, requests] = hasDb
     ? await (async () => {
-        await ensureTables();
         return Promise.all([getPausedDays(), listDayRequests()]);
       })()
     : [[] as Weekday[], [] as DayRequest[]];

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureTables, listSessionsInRange } from "@/lib/db";
+import { listSessionsInRange } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 
 export async function GET(request: Request) {
@@ -17,7 +17,6 @@ export async function GET(request: Request) {
 
   try {
     if (process.env.POSTGRES_URL) {
-      await ensureTables();
       const sessions = await listSessionsInRange(from, to);
       return NextResponse.json({ sessions });
     }

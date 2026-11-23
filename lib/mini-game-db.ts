@@ -10,49 +10,6 @@ import {
 } from "./mini-game";
 import { PLAYER_NAMES, drawTeams } from "./mini-game-roster";
 import { storeDrawResults } from "./stats-db";
-import { onceThisDeploy } from "./schema-gate";
-
-// Same memoised, idempotent DDL approach as ensureTables() in lib/db.ts.
-let ensurePromise: Promise<void> | null = null;
-
-export function ensureMiniGameTables(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = onceThisDeploy("mini_game", ensureImpl).catch((err) => {
-      ensurePromise = null;
-      throw err;
-    });
-  }
-  return ensurePromise;
-}
-
-async function ensureImpl() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS mini_game_draws (
-      id SERIAL PRIMARY KEY,
-      teams JSONB NOT NULL,
-      matches JSONB NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      locked_until TIMESTAMPTZ NOT NULL,
-      archived_at TIMESTAMPTZ
-    );
-  `;
-  // At most one live draw at a time, so two people pressing "Draw" at once
-  // can't both win: the second insert hits this index and gets the first draw.
-  await sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS mini_game_draws_one_active
-      ON mini_game_draws ((true)) WHERE archived_at IS NULL;
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS mini_game_scores (
-      draw_id INT NOT NULL REFERENCES mini_game_draws(id),
-      match_id TEXT NOT NULL,
-      score_a INT NOT NULL,
-      score_b INT NOT NULL,
-      locked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (draw_id, match_id)
-    );
-  `;
-}
 
 type DrawRow = {
   id: number;

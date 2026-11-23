@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { ensureTables } from "@/lib/db";
 import { auditMembershipStatuses } from "@/lib/membership-status";
 import { syncMembershipsWithStripe } from "@/lib/stripe-sync";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
@@ -22,7 +21,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    await ensureTables();
     const report = await syncMembershipsWithStripe();
     // Then expire anything the corrected dates show has ended.
     await auditMembershipStatuses();

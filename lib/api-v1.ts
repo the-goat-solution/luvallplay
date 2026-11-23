@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "./database";
-import { addDays, ensureTables, getSpotsAndHeadcountForDates, listSessionsInRange } from "./db";
+import { addDays, getSpotsAndHeadcountForDates, listSessionsInRange } from "./db";
 import { getClubToday, getMembershipDayForDate } from "./dates";
 import { getPlayerById } from "./player-db";
 import { getCurrentMembership } from "./membership-self-service";
@@ -121,7 +121,6 @@ export async function leaderboardData(metricRaw: string | null | undefined, peri
 }
 
 export async function upcomingSessionsData(days = 30) {
-  await ensureTables();
   const today = getClubToday().dateKey;
   const sessions = await listSessionsInRange(today, addDays(today, Math.min(60, Math.max(1, days))));
   const { spots } = await getSpotsAndHeadcountForDates(sessions.map((s) => s.date));

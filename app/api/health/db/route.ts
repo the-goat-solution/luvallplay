@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ping } from "@/lib/repos/health";
 import { isAdminRequest } from "@/lib/security";
-import { ensureArenaTables, loadWorld } from "@/lib/arena-db";
+import { loadWorld } from "@/lib/arena-db";
 import { buildArenaState } from "@/lib/arena-state";
 
 // Speed check: where the function and the database run, how long one
@@ -44,7 +44,6 @@ export async function GET(request: Request) {
     },
   };
   let t = performance.now();
-  await ensureArenaTables();
   out.startupTableChecksMs = ms(t);
   const pings: number[] = [];
   for (let i = 0; i < 5; i++) {

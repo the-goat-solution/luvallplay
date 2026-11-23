@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  assignAndReserveMembershipAccessStart,
-  attachStripeIdToMembership,
-  ensureTables,
-  getActiveRenewalOf,
-  getMembershipByRenewalToken,
-} from "@/lib/db";
+import { assignAndReserveMembershipAccessStart, attachStripeIdToMembership, getActiveRenewalOf, getMembershipByRenewalToken } from "@/lib/db";
 import {
   createOneTimeMembershipPaymentIntent,
   oneTimeMembershipPriceCents,
@@ -33,7 +27,6 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await request.json());
-    await ensureTables();
 
     const current = await getMembershipByRenewalToken(body.token);
     if (!current || current.recurring || !current.periodEnd) {

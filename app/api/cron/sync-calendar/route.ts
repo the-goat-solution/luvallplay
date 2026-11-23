@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureTables, upsertSessionFromCalendar } from "@/lib/db";
+import { upsertSessionFromCalendar } from "@/lib/db";
 import { listUpcomingCalendarEvents } from "@/lib/google-calendar";
 import { calendarEventDateKey } from "@/lib/dates";
 
@@ -14,8 +14,6 @@ export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL) {
     return NextResponse.json({ skipped: true });
   }
-
-  await ensureTables();
 
   let events;
   try {

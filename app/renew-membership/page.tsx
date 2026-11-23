@@ -2,11 +2,7 @@ import Link from "next/link";
 import { Navigation } from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
 import { RenewMembershipForm } from "@/components/renew/RenewMembershipForm";
-import {
-  ensureTables,
-  getActiveRenewalOf,
-  getMembershipByRenewalToken,
-} from "@/lib/db";
+import { getActiveRenewalOf, getMembershipByRenewalToken } from "@/lib/db";
 import { formatEmailDate } from "@/lib/email-layout";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +25,6 @@ export default async function RenewMembershipPage({
   let renewal = null;
   if (token && process.env.POSTGRES_URL) {
     try {
-      await ensureTables();
       membership = await getMembershipByRenewalToken(token);
       if (membership) renewal = await getActiveRenewalOf(membership.id);
     } catch (err) {

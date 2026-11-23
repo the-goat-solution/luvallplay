@@ -247,7 +247,8 @@ describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? 
     await c.query(`INSERT INTO players (id, email) VALUES (7, 'only-member@x.test')`);
     await mirrorClubMember(c, 7);
     await assert.rejects(c.query(`DELETE FROM players WHERE id = 7`), /club_members_user_id_fkey/);
-    await assert.rejects(c.query(`DELETE FROM tenants`), /violates foreign key/);
+    // Postgres 18 words this "violates RESTRICT setting of foreign key constraint".
+    await assert.rejects(c.query(`DELETE FROM tenants`), /foreign key constraint/);
   });
 
   test("the database refuses a malformed club", async () => {

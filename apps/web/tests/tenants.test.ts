@@ -86,8 +86,10 @@ describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? 
     const rolesBefore = (await c.query(`SELECT * FROM club_roles ORDER BY player_id`)).rows;
     const platformBefore = (await c.query(`SELECT * FROM platform_admins ORDER BY player_id`)).rows;
     const snapBefore = await takeSnapshot(urlFor(NAME));
-    const applied = await migrate(c, { log: quiet });
-    assert.deepEqual(applied, loadMigrations().slice(loadMigrations().findIndex((m) => m.tag === "0003_tenants")).map((m) => m.tag));
+    // This step only: later migrations have their own tests.
+    const upTo = loadMigrations().findIndex((m) => m.tag === "0003_tenants") + 1;
+    const applied = await migrate(c, { migrations: loadMigrations().slice(0, upTo), log: quiet });
+    assert.deepEqual(applied, ["0003_tenants"]);
     const snapAfter = await takeSnapshot(urlFor(NAME));
 
     const expectations = ExpectationsSchema.parse(JSON.parse(readFileSync(EXPECT, "utf8")));

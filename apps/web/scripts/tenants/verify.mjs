@@ -9,12 +9,15 @@
 // Checks: exactly one club (no other club may exist in production while the
 // readiness gates are open, build plan §11.3); one module row per module in
 // the registry; one club_members row per account; every club_roles role
-// mirrored; at least one live owner. Prints counts only, never an email.
+// mirrored; at least one live owner; and, once migration 0004 has run, every
+// row of every club-owned table belongs to the club (no NULL tenant_id).
+// Prints counts only, never an email.
 //
 // POSTGRES_URL chooses the database. DB_DRIVER=neon-ws works as in the other
 // operator scripts.
 import { dbClient } from "../db-client.mjs";
 import { MODULES } from "@luvallplay/modules";
+import { CLUB_OWNED_TABLES } from "@luvallplay/db/tenancy";
 import { clubMemberDrift, defaultTenantSlug, reconcileClubMembers } from "../../lib/tenant-members.ts";
 
 const url = process.env.POSTGRES_URL;
@@ -59,6 +62,26 @@ try {
   console.log(`club_roles rows: ${counts.roles}. Platform admins: ${counts.platform_admins}. Live owners in club_members: ${counts.live_owners}.`);
   if (counts.accounts !== counts.members) problems.push(`${counts.accounts} accounts but ${counts.members} club members`);
   if (counts.live_owners < 1) problems.push("no live owner in club_members");
+
+  // Step 2: tenant_id on every club-owned table (skipped before migration 0004).
+  const withColumn = new Set(
+    (await db.query(`SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'tenant_id'`)).rows.map((r) => r.table_name),
+  );
+  if (withColumn.has("bookings") && clubs[0]) {
+    let rows = 0;
+    for (const t of CLUB_OWNED_TABLES) {
+      if (!withColumn.has(t)) {
+        problems.push(`${t} has no tenant_id column`);
+        continue;
+      }
+      const r = (await db.query(`SELECT count(*)::int AS n, count(*) FILTER (WHERE tenant_id IS DISTINCT FROM $1)::int AS bad FROM ${t}`, [clubs[0].id])).rows[0];
+      rows += r.n;
+      if (r.bad) problems.push(`${t}: ${r.bad} row(s) without the club's tenant_id`);
+    }
+    console.log(`tenant_id: ${CLUB_OWNED_TABLES.length} club-owned tables, ${rows} rows checked.`);
+  } else {
+    console.log("tenant_id: columns not added yet (migration 0004 pending).");
+  }
 
   const drift = await clubMemberDrift(db, slug);
   console.log(`Mirror drift: ${drift.length} row(s).`);

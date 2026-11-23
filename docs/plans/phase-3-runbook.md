@@ -9,8 +9,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | Step | What | State |
 |---|---|---|
 | 0 | Plan documents to `main` (#100, docs only) | Done: merged 23 Nov |
-| 1 | Tenants schema, Three Wolves as club #1 (#101) | **Production data run done and passed** (23 Nov, 07:36 UTC). **Needs you: merge #101** |
-| 2 | `tenant_id` columns, nullable, backfilled in batches | Not started |
+| 1 | Tenants schema, Three Wolves as club #1 (#101) | **Done.** Production data run passed (23 Nov, 07:36 UTC); merged and live (07:48 UTC) |
+| 2 | `tenant_id` on every club-owned table (#102) | Built. Rehearsal passed (0 problems, characterisation identical). **Needs you: the OK to merge, then the OK for the production run** (§2) |
 | 3 | Email links → `user_id` | Not started. Precondition met today: no `ACTIVE_MEMBERSHIP_WITHOUT_ACCOUNT` on the 23 Nov branch |
 | 4 | Settings replace constants (behind flags) | Not started |
 | 5 | Module enforcement | Not started |
@@ -39,7 +39,7 @@ The updated plans (decisions L to AF, §6.2.1 to §6.9, §11, test plan §3.16 t
 - Diff against `2026-11-phase3-tenants.production.json`: **passed**. 17 accounts checked, 0 problems; the only changes are the five new tables.
 - Drift: none. `verify.mjs`: 1 club, 22 modules on, 19 accounts and 19 club members (2 owners, 17 members), 2 `club_roles` rows and 2 platform admins unchanged, mirror drift 0.
 - The live site answers (`/`, `/login`). It runs the previous app version until #101 is merged, which ignores the new tables.
-- **Still to do:** merge #101, then the smoke test below. Roles changed between now and that deploy aren't mirrored; run `verify.mjs --reconcile` after the deploy if any were.
+- #101 merged and deployed at 07:48 UTC. After the deploy: `/` and `/login` answer, and `verify.mjs` still reports 19 accounts, 19 club members and mirror drift 0.
 
 What follows is the record of how the run was prepared.
 
@@ -79,10 +79,50 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 **Rollback of the app:** Vercel Instant Rollback. The previous version ignores the new tables. If it runs for a while, role changes made meanwhile aren't mirrored; `node --import ./tests/register.mjs scripts/tenants/verify.mjs --reconcile` brings `club_members` back in line.
 
-## 2. Housekeeping that needs you
+## 2. Step 2: `tenant_id` columns (#102), one production data run
 
-- **Stale rehearsal branches hold real data.** `rehearsal-phase-2` (23 Nov, 00:54 UTC) is still in the Neon project, and this phase adds `rehearsal-phase-3-tenants`. The test plan says to delete rehearsal branches after use. Say the word and the session deletes both once #101 has run on production, or delete them in the Neon console.
-- **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 6 (main, `pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, and the two rehearsal branches). Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.
+**What runs:** migration `0004_tenant_id_columns`. Additive: a nullable `tenant_id` on the 54 club-owned tables, with a constant default of Three Wolves' id. Postgres keeps the default in the catalog, so no row is rewritten, every existing row reads as Three Wolves' at once, and rows written by either app version get it. The site doesn't read the column yet.
+
+**Order matters this time: merge and deploy #102 first, then run the migration.** The rehearsal's characterisation check found that "Download my data" would show a new `tenant_id` field for members who have played in a pair. #102 fixes that query. Deployed first, nobody sees the field.
+
+**Already done (23 Nov), on a fresh Neon branch of production (`rehearsal-phase-3-tenant-id`):**
+- Data guard rehearsal: **17 accounts checked, 0 problems**. The migration took 1.5 s.
+- 57 club-owned tables, 1,441 rows: every row has the club's `tenant_id`.
+- Characterisation: **identical** for 17 accounts (12 views each) and 6 club views, after the export fix.
+- Schema drift: none.
+- Report: `docs/rehearsals/2026-11-phase3-tenant-id.md`.
+
+**Production run (T0)**, at a quiet time. Say **"merge #102 and run step 2 on production"** and the session does both in that order, or:
+
+```bash
+# 0. Merge #102. Wait for the production deployment to be Ready.
+# 1. Restore point: Neon console → three-wolves-sydney → Branches → New branch from main, now.
+#    Name: pre-phase-3-tenant-id
+
+cd apps/web
+export POSTGRES_URL='<production direct connection string>'
+export PRODUCTION_DATABASE_HOSTS='ep-shiny-rain-a76n3kg6.ap-southeast-2.aws.neon.tech'
+
+pnpm data-guard snapshot --out .data-guard/prod-before.json
+pnpm db:migrate --production                                      # 0004, one statement (lock_timeout 3s)
+pnpm data-guard snapshot --out .data-guard/prod-after.json
+pnpm data-guard diff .data-guard/prod-before.json .data-guard/prod-after.json \
+  --expect scripts/data-guard/expectations/2026-11-phase3-tenant-id.production.json
+pnpm db:drift                                                     # must say: No schema drift
+node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: tenants tables are consistent
+```
+
+**Done when:** the diff passes with 0 errors, drift is empty, and `verify.mjs` reports every row of every club-owned table with the club's `tenant_id`. Smoke test: sign in → Me, Arena, book or cancel a play day on a test account, `/admin`.
+
+**If the migration fails:** it changes nothing (one transaction). A `lock timeout` means a long query was in the way; run it again.
+
+**Rollback of the app:** Vercel Instant Rollback. The previous version ignores the column, and its writes still get the club from the default. One visible effect: the data export shows the `tenant_id` field again for members with a pair, until the fix is redeployed.
+
+## 3. Housekeeping that needs you
+
+- **Rehearsal branches.** `rehearsal-phase-2` and `rehearsal-phase-3-tenants` were deleted on 23 Nov, at the owner's request. From now on the session deletes each rehearsal branch once its step has run on production.
+- **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 6 (main, `pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants` and `rehearsal-phase-3-tenant-id`). Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.
 - **Point-in-time restore covers 6 hours, not 7 days.** The project's history retention is 21,600 seconds (the free plan's limit). Test plan §4.4 asks for a window that covers the next 7 days. Until the plan changes, the named `pre-<step>` branch is the restore point for each step, and it's kept until the step's watch period ends.
 - **Each new Neon branch has a new host**, and the build session's network only allows named hosts. Expect one approval card per rehearsal (two hosts: direct and pooled).
-- **One branch per step.** The build session may only push to `claude/luvallplay-phase-3`. Small, separately revertable pull requests need a branch each. Until you allow more branches (for example `claude/luvallplay-phase-3-*`), each step waits for the previous pull request to merge.
+- **One branch, one step at a time.** The build session pushes only to `claude/luvallplay-phase-3`, so each step's pull request opens after the previous one is merged.
+- **Previews build again.** The nine stale `preview/claude/*` branches in the old US Neon project were deleted on 23 Nov. That project fills up again after about nine more previews; option A in the Phase 2 runbook §1 stops it recurring.

@@ -1170,7 +1170,13 @@ export async function endPlayerArena(playerId: number): Promise<void> {
 
 export async function arenaExport(playerId: number): Promise<Record<string, unknown>> {
   const [pairs, challenges] = await Promise.all([
-    sql.query(`SELECT p.* FROM ${T.pairs} p WHERE player_low = $1 OR player_high = $1 ORDER BY id;`, [playerId]),
+    // Named columns, so "Download my data" doesn't change shape when the
+    // table gains an internal column (Phase 3: tenant_id).
+    sql.query(
+      `SELECT id, player_low, player_high, name, formed_at, ended_at, ended_reason
+       FROM ${T.pairs} WHERE player_low = $1 OR player_high = $1 ORDER BY id;`,
+      [playerId],
+    ),
     sql.query(
       `SELECT id, status, posted_at, accepted_at, checked_in_at, played_on, score_posting, score_accepting, retired_by, completed_at
        FROM ${T.challenges} WHERE p1 = $1 OR p2 = $1 OR a1 = $1 OR a2 = $1 ORDER BY id;`,

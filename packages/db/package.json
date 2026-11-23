@@ -7,6 +7,7 @@
   "exports": {
     "./schema": "./schema.ts",
     "./relations": "./relations.ts",
+    "./tenancy": "./tenancy.ts",
     "./migrations/meta/_journal.json": "./migrations/meta/_journal.json",
     "./package.json": "./package.json"
   },

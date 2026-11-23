@@ -21,6 +21,7 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **L: free-play clubs.** Some clubs charge nothing at all. Every club picks a **payment mode**: *Free play* (no payments anywhere, no Stripe), *Cash or bank transfer*, or *Online payments*. A free-play club gets the full product without a single price on screen (§6.2.1).
 - **M: 12 ready-made colour schemes** for new clubs, each tested for contrast in light and dark mode (§6.3.1, preview in `docs/plans/assets/club-color-schemes.png`).
 - **N: bring your own brand.** Clubs can import their own logo, font and colour palette, or pull them from their existing website (§6.3.2).
+- **O: online payments only for incorporated clubs with their own Stripe account.** Setup asks both questions; every other paying club is set up for cash and bank transfer only, with an admin area built for that (§6.2.2). Three Wolves never collects or passes on money for other clubs (Stripe forbids it, and it would make the collector a regulated money-transfer business under NZ's AML/CFT Act).
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
 
@@ -342,7 +343,8 @@ Playwright visual snapshots run at each window class on every pull request. Real
 
 ```
 tenants            id, slug, name, status, country, timezone, currency, languages[], location (PostGIS point),
-                   payment_mode (free | offline | online), theme jsonb (preset id or imported brand),
+                   payment_mode (free | offline | online), incorporated (yes | no | unsure),
+                   stripe_status (none | connecting | connected), bank_details jsonb, theme jsonb (preset id or imported brand),
                    terms jsonb (e.g. points_name: "Wolf Points"), custom_domain, created_at
 club_brand_assets  tenant_id, kind (logo | logo_dark | font_display | font_text), file, checked_at, licence_confirmed_by
 tenant_modules     tenant_id, module_id, enabled, settings jsonb, enabled_at        ← what the wizard writes
@@ -403,7 +405,7 @@ Some clubs offer free play to everyone, so **payments are never required**. Ever
 |---|---|---|
 | **Free play** | "Free to play" on the club site and in the app. Play days are **free sign-ups** (RSVP) with the same capacity, waitlist, "I can't make it" and attendance as paid ones. Joining the club is a free membership: tap Join and you're in | Every price, checkout, Stripe, invoices, the Money admin group, membership renewals and payment reminders. Stripe Connect onboarding is never shown |
 | **Cash or bank transfer** | Prices, with "Pay at the hall" or bank details. Admins mark payments received (the cash and bank-transfer recording Three Wolves already uses) | Card checkout and Stripe Connect |
-| **Online payments** | Card checkout through the club's Stripe connected account, plus cash/transfer if the club allows | Nothing |
+| **Online payments** | Card checkout through the club's own Stripe account (connected to Luvallplay), plus cash/transfer if the club allows. **Only for incorporated clubs with their own Stripe account** (§6.2.2) | Nothing |
 
 - Free play is a first-class mode, not "paid with a price of 0": no "$0.00", no checkout step, no receipts, and no "payment pending" states anywhere.
 - Mixed clubs work too. A paid club can mark individual play days or membership plans as **free** (e.g. a free open night), and those skip checkout.
@@ -413,6 +415,49 @@ Some clubs offer free play to everyone, so **payments are never required**. Ever
   - Paid → free: blocked while active paid subscriptions exist, until the admin chooses to let them run to the end of their period or cancel and refund them.
   - Players get a notice either way.
 - Module manifests declare `payments: "none" | "optional" | "required"`. The wizard and Admin hide anything that needs payments when the club is on Free play, and the API refuses payment calls for a free club (tested, test plan §3.8 journey S3).
+
+#### 6.2.2 Deciding the payment mode at setup
+
+Many NZ clubs aren't incorporated, so they can't open a Stripe account in the club's name. Setup therefore asks three plain questions and sets the mode itself (wizard step ④):
+
+```
+Do you charge players to play?
+ ├─ No ───────────────────────────────────────────────→ Free play
+ └─ Yes → Is your club incorporated?
+           (an incorporated society, charitable trust or company)
+           ├─ No / Not sure ──────────────────────────→ Cash and bank transfer only
+           └─ Yes → Does the club have its own Stripe account?
+                     ├─ Yes → connect it now ─────────→ Online payments (+ cash/transfer if wanted)
+                     └─ No ───────────────────────────→ Cash and bank transfer only
+```
+
+- The answers are stored (`tenants.incorporated`: yes | no | unsure; `tenants.stripe_status`: none | connecting | connected).
+- **Online payments are offered only when both answers are yes**, and only go live once the club's Stripe account is connected and verified. If connecting fails or is abandoned, the club stays on cash and bank transfer, and Admin shows "Finish connecting Stripe".
+- Luvallplay **never** takes card payments on a club's behalf through another club's or the platform's account, and never holds club money. Each club's money goes straight to its own bank account (cash/transfer) or its own Stripe account (cards).
+- **For cash and bank transfer, setup also asks for:**
+  - the club's bank account name and number (NZ format checked);
+  - whether players can pay cash at the hall;
+  - whether a spot is confirmed straight away or only once the payment arrives (default: confirmed, with payment due before the play day);
+  - optionally, connecting the club's bank account read-only through Akahu, so incoming transfers are matched to bookings automatically (as Three Wolves does today).
+- **Moving up later:** when a club incorporates and opens a Stripe account, **Admin → Payments → Turn on card payments** asks the same two questions and connects Stripe. Prices and history carry over; cash and bank transfer can stay on alongside cards.
+- **Help for unincorporated clubs:** a short "Getting incorporated" guide, linked from setup and Admin → Payments. It covers the Incorporated Societies Act 2022 basics (minimum 10 members, about $88.89 + GST application fee), a constitution template and a checklist, plus why it helps: card payments, a club bank account, protection from personal liability for committee members and eligibility for many grants.
+
+**What Admin shows for each mode** (driven by the mode, not by separate switches):
+
+| Admin area | Free play | Cash and bank transfer | Online payments |
+|---|---|---|---|
+| **Payments to check:** unpaid bookings and memberships, each with its payment reference; mark paid (cash or transfer) | – | ✔ | ✔ (for cash/transfer payments) |
+| **Bank matching** (Akahu, optional) | – | ✔ | ✔ |
+| **Finance & reports** (income, expenses, receipts, AGM report) | optional (for donations or expenses) | ✔ | ✔ |
+| **Membership renewals:** reminder emails with bank details and the member's reference, no automatic charging | – | ✔ | ✔ (cash/transfer members) |
+| **Card payments:** Stripe payouts, card refunds, failed-payment retries, Stripe sync, auto-renewing subscriptions | – | – | ✔ |
+| **Payments settings:** bank details, cash at the hall, confirm-before-paid, Akahu, "Turn on card payments" | – | ✔ | ✔ (+ Stripe account status) |
+
+**What players see in cash and bank transfer mode:**
+- A booking or membership shows **"Pay by bank transfer"** with the club's account, the amount and a unique reference (e.g. `TW-4821`) with a copy button, and **"Pay cash at the hall"** if allowed.
+- The item stays "Awaiting payment" until it's matched or marked paid, then shows "Paid".
+- Reminders go out before the play day if still unpaid.
+- No card form, saved card, "manage card" or auto-renew option appears anywhere, and the API refuses card-payment calls for these clubs.
 
 **Settings replacing constants:**
 - `MEMBERSHIP_ACCESS_DAYS` → `memberships.settings.days`
@@ -551,7 +596,7 @@ All palettes are validated for WCAG AA in light and dark. Clubs choose from 12 t
 |---|---|---|
 | ② Your club | Name, URL slug (live availability check), city/venue (map pin, used by Find a club), languages | Autosave every field; live preview of the club page on the right (desktop) or a "Preview" toggle (mobile) |
 | ③ Look & feel | Pick one of the **12 colour schemes** (§6.3.1), shown live on the club's own name, a play-day card and a button in light and dark. Or **Use our own branding**: upload logo, font and colours, or import them from the club's website (§6.3.2) | One tap picks a scheme; the custom path has its own short sub-steps with previews; automatic contrast fixes explained in plain words |
-| ④ How you charge | Three cards: **Free play** (no payments at all) · **Cash or bank transfer** · **Online payments** (Stripe Connect, which can also be connected later) (§6.2.1) | Free play is a full, first-class choice, not a fallback. Choosing it hides every money module and step that follows |
+| ④ How you charge | Up to three questions (§6.2.2): *Do you charge players?* → *Is your club incorporated?* → *Does it have its own Stripe account?* The answers set the mode: **Free play**, **Cash and bank transfer only**, or **Online payments** (connect the club's Stripe account right there). Cash and bank transfer clubs then enter bank details and choose cash-at-the-hall, confirm-before-paid and Akahu matching | One question per screen, plain words with an "Not sure?" explainer. Free play is a full, first-class choice. Cards are only offered to incorporated clubs with Stripe; everyone else gets a working cash and bank-transfer setup plus the "Getting incorporated" guide. Admin is configured from the answers |
 | ⑤ Pick modules | Starter **presets**: *Free social club*, *Social club*, *Competitive club*, *Coaching academy*. Then grouped cards (Run your club · Money · Engage players) with on/off toggles. Money cards are hidden for Free play | Dependencies selected automatically with a note ("Memberships needs Play days"); 3–4 sensible defaults pre-selected; never more than one decision per card |
 | ⑥ Go global? | Four plain toggles: list in **Find a club** · players can appear on **global leaderboards** · **social** · **marketplace**, each with a one-line privacy explanation | Opt-in, off by default except the directory listing; changeable any time |
 | ⑦ Invite & import | Invite co-admins by email; import members from CSV or a spreadsheet paste | Skippable |
@@ -559,7 +604,7 @@ All palettes are validated for WCAG AA in light and dark. Clubs choose from 12 t
 
 - A progress bar and Back / Next on every step.
 - Everything after step ② is skippable.
-- Every choice can be changed later: **Admin → Look & feel** reuses step ③, **Admin → Payments** step ④ (with the mode-switch guards in §6.2.1), and **Admin → Modules** steps ⑤ and ⑥.
+- Every choice can be changed later: **Admin → Look & feel** reuses step ③, **Admin → Payments** step ④ (with the mode-switch guards in §6.2.1 and "Turn on card payments" in §6.2.2), and **Admin → Modules** steps ⑤ and ⑥.
 
 ### 7.3 Club landing pages
 

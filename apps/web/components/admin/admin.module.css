@@ -1,6 +1,6 @@
-/* Shared admin layout: every admin tab (and its loading screen) uses the
-   same container, header and nav, so switching tabs never shifts the page
-   and every tab behaves the same on a phone. */
+/* Shared admin page container: every admin page (and its loading screen)
+   uses it, so switching pages never shifts the layout. The menu is in
+   components/admin/shell; page parts are in components/admin/kit. */
 
 .page {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -29,67 +29,6 @@
   margin: -12px 0 20px;
 }
 
-/* ── Nav ───────────────────────────────────────────────── */
-
-.nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0 8px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid #ddd;
-}
-
-/* Tabs scroll sideways on a narrow screen instead of wrapping into
-   two-line labels or pushing the whole page wider than the phone. */
-.tabs {
-  display: flex;
-  gap: 4px;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.tab {
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #888;
-  border-bottom: 2px solid transparent;
-  text-decoration: none;
-  white-space: nowrap;
-  flex: none;
-}
-
-.tabActive {
-  color: #1a2a4a;
-  border-bottom-color: #1a2a4a;
-}
-
-.extras {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  padding-bottom: 6px;
-  flex: none;
-}
-
-.extraLink {
-  padding: 5px 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #888;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
 /* Wide tables scroll inside their own box rather than the whole page. */
 .tableWrap {
   width: 100%;
@@ -105,21 +44,6 @@
   .page {
     margin: 20px auto;
     padding: 0 14px;
-  }
-
-  /* Court board / Log out sit above the tabs, right-aligned, so the tab
-     strip gets the full width. */
-  .extras {
-    order: -1;
-    width: 100%;
-    justify-content: flex-end;
-    padding-bottom: 4px;
-  }
-
-  /* All four tabs fit across a 375px phone. */
-  .tab {
-    padding: 10px 8px;
-    font-size: 13px;
   }
 
   /* iOS Safari zooms the page into any field under 16px when it's

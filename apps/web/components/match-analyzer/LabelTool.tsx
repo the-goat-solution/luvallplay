@@ -6,6 +6,7 @@
 // Backspace removes the last hit, ←/→ step a frame, Shift+←/→ half a second,
 // Space plays/pauses. Labels are saved to the labelling set (signed in) and
 // can be downloaded as JSON for offline training.
+import { visionName } from "@/lib/club-terms";
 import { useCallback, useEffect, useRef, useState } from "react";
 import s from "./analyzer.module.css";
 
@@ -108,7 +109,7 @@ export function LabelTool() {
           ← Back
         </a>
         <h1>
-          Wolf Vision<small>Labelling set</small>
+          {visionName()}<small>Labelling set</small>
         </h1>
       </header>
       <main className={s.body}>

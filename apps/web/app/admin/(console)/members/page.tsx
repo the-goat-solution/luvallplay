@@ -194,8 +194,7 @@ function statusOf(m: MembershipRow, today: string): { label: string; tone: Badge
   return { label: m.status.replace(/_/g, " "), tone: "default", urgent: false };
 }
 
-function MembersTable({ members, reconciliation }: { members: MembershipRow[]; reconciliation: Map<string, OfflineReconciliation> }) {
-  const { dateKey: today } = getClubToday();
+function MembersTable({ members, reconciliation, today }: { members: MembershipRow[]; reconciliation: Map<string, OfflineReconciliation>; today: string }) {
   // Problems first, then by name.
   const rows = [...members].sort((a, b) => Number(statusOf(b, today).urgent) - Number(statusOf(a, today).urgent) || a.name.localeCompare(b.name));
   return (
@@ -409,7 +408,7 @@ export default async function MembersAdminPage({ searchParams }: { searchParams:
             ))}
           </nav>
 
-          {shown.length === 0 ? <EmptyState>No members on this plan yet.</EmptyState> : <MembersTable members={shown} reconciliation={reconciliation} />}
+          {shown.length === 0 ? <EmptyState>No members on this plan yet.</EmptyState> : <MembersTable members={shown} reconciliation={reconciliation} today={getClubToday(new Date(), await clubClock()).dateKey} />}
 
           <InfoDisclosure summary="What the actions do">
             <p>

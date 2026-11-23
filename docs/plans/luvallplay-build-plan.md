@@ -899,6 +899,10 @@ Findings and changes recorded as the work goes:
   - **Plan change: a club's terms are per language.** Vietnamese has its own wording for the points ("Điểm Sói"), so `tenants.terms` gains `localized.<lang>`; a language with no name of its own uses the club's single name and never borrows Three Wolves'. Migration `0008_terms_localized` stores Three Wolves' Vietnamese name.
   - **Decision: the club's terms are set once per server process** (and per browser), because a deployment holds one club until step 11.
   - Sections, navigation, tabs and Me-page cards follow the module switches. Luvallplay staff can lock a module on or off with a reason.
+- **Steps 4 and 5, third round:**
+  - Every call of the date helpers passes the club's clock; the scan's list of exceptions is empty. The shop's end-of-day helper is time-zone-aware (tested in five zones and on the days the clocks change).
+  - No club term is typed outside `lib/constants.ts`: app code uses `pointsName()`, `visionName()`, `alphaName()`, `silverName()` or `withTerms()`, and module-level copy tables are wrapped so the terms are filled as each entry is read. Migration `0009_terms_seats` stores the seat titles.
+  - **Decision: switching a module off never strands money.** New "pay later" reservations stop; ones already waiting can still be marked as paid, and emails about payments already taken are still sent.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

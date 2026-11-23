@@ -1,3 +1,4 @@
+import { visionName } from "@/lib/club-terms";
 import { NextResponse } from "next/server";
 import { clubCurrencyLower } from "@/lib/money";
 import { z } from "zod";
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
           currency: clubCurrencyLower(),
           unit_amount: PASS_PRICE_CENTS[kind],
           product_data: {
-            name: kind === "live" ? "Wolf Vision AI tracker: live match" : "Wolf Vision AI tracker: video analysis",
+            name: kind === "live" ? `${visionName()} AI tracker: live match` : `${visionName()} AI tracker: video analysis`,
             description: kind === "live" ? "AI-enhanced tracking of one live doubles match on your phone." : "AI-enhanced analysis of one uploaded match video.",
           },
         },

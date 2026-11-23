@@ -1,3 +1,4 @@
+import { visionName } from "./club-terms.ts";
 // "Your match stats" email from Wolf Vision: sent after a free (non-Arena)
 // session to the players who were added by email (not registered yet).
 // Wolf Vision's own look, the "night court": deep navy, floodlight yellow,
@@ -48,7 +49,7 @@ function clock(seconds: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
 
-export const statsEmailSubject = (recordedBy: string) => `Your match stats from Wolf Vision 🐺 (recorded by ${recordedBy})`;
+export const statsEmailSubject = (recordedBy: string) => `Your match stats from ${visionName()} 🐺 (recorded by ${recordedBy})`;
 
 export function renderStatsEmail(input: StatsEmailInput): { subject: string; html: string; text: string } {
   const site = input.siteUrl.replace(/\/$/, "");
@@ -106,14 +107,14 @@ export function renderStatsEmail(input: StatsEmailInput): { subject: string; htm
       <tr><td style="padding:22px 26px;background:${NIGHT};border-bottom:3px solid ${FLOOD}">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
           <td valign="middle"><img src="${logoUrl}" width="44" alt="Three Wolves" style="display:block;border:0;height:auto"></td>
-          <td valign="middle" align="right" style="font-family:${SANS};font-size:20px;font-weight:800;letter-spacing:3px;color:${BRONZE};text-transform:uppercase">Wolf Vision <span style="display:inline-block;vertical-align:middle;background:${BRONZE};color:${NIGHT};font-size:9px;letter-spacing:1.5px;padding:3px 6px;border-radius:5px">BETA</span></td>
+          <td valign="middle" align="right" style="font-family:${SANS};font-size:20px;font-weight:800;letter-spacing:3px;color:${BRONZE};text-transform:uppercase">${visionName()} <span style="display:inline-block;vertical-align:middle;background:${BRONZE};color:${NIGHT};font-size:9px;letter-spacing:1.5px;padding:3px 6px;border-radius:5px">BETA</span></td>
         </tr></table>
       </td></tr>
       <tr><td style="padding:28px 26px 6px">
         <div style="font-family:${SANS};font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:${TEAL}">✦ AI match stats</div>
         <h1 style="margin:8px 0 14px;font-family:${SANS};font-size:26px;line-height:1.2;font-weight:900;font-style:italic;text-transform:uppercase;color:${CREAM}">Your match, by the numbers</h1>
         <p style="margin:0 0 10px;font-family:${SANS};font-size:15px;line-height:1.6;color:${STEEL}">${greeting}</p>
-        <p style="margin:0 0 6px;font-family:${SANS};font-size:15px;line-height:1.6;color:${STEEL}"><b style="color:${CREAM}">${esc(input.recordedBy)}</b> filmed your doubles game with Wolf Vision, the Three Wolves AI tracker. It followed all four players and counted every hit. Here's how it went.</p>
+        <p style="margin:0 0 6px;font-family:${SANS};font-size:15px;line-height:1.6;color:${STEEL}"><b style="color:${CREAM}">${esc(input.recordedBy)}</b> filmed your doubles game with ${visionName()}, the Three Wolves AI tracker. It followed all four players and counted every hit. Here's how it went.</p>
         <p style="margin:0;font-family:${SANS};font-size:13px;color:${STEEL};opacity:0.85">${esc(input.playedAt)}</p>
       </td></tr>
       <tr><td style="padding:18px 20px 6px">
@@ -142,7 +143,7 @@ export function renderStatsEmail(input: StatsEmailInput): { subject: string; htm
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NIGHT_3};border:1px solid rgba(255,213,74,0.35);border-radius:14px">
           <tr><td style="padding:20px">
             <div style="font-family:${SANS};font-size:16px;font-weight:900;font-style:italic;text-transform:uppercase;color:${CREAM}">Track your own matches</div>
-            <p style="margin:8px 0 16px;font-family:${SANS};font-size:14px;line-height:1.55;color:${STEEL}">Join Three Wolves to keep your stats, take on other pairs in the Arena and film your games with Wolf Vision.${input.freeUntil ? ` It's free to try until ${esc(input.freeUntil)}.` : ""}</p>
+            <p style="margin:8px 0 16px;font-family:${SANS};font-size:14px;line-height:1.55;color:${STEEL}">Join Three Wolves to keep your stats, take on other pairs in the Arena and film your games with ${visionName()}.${input.freeUntil ? ` It's free to try until ${esc(input.freeUntil)}.` : ""}</p>
             <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:10px;background:${FLOOD}">
               <a href="${joinUrl}" style="display:inline-block;padding:13px 22px;font-family:${SANS};font-size:14px;font-weight:900;font-style:italic;letter-spacing:1px;text-transform:uppercase;color:${NIGHT};text-decoration:none">Join the pack →</a>
             </td></tr></table>
@@ -150,7 +151,7 @@ export function renderStatsEmail(input: StatsEmailInput): { subject: string; htm
         </table>
       </td></tr>
       <tr><td style="padding:16px 26px 22px;border-top:1px solid rgba(255,255,255,0.07);font-family:${SANS};font-size:11px;line-height:1.6;color:${STEEL};opacity:0.75">
-        You got this email because ${esc(input.recordedBy)} added you to a Wolf Vision session at Three Wolves Badminton Club. The video stayed on their phone: only these numbers were sent. Questions? Email <a href="mailto:threewolvesbadminton@gmail.com" style="color:${BRONZE}">threewolvesbadminton@gmail.com</a>.
+        You got this email because ${esc(input.recordedBy)} added you to a ${visionName()} session at Three Wolves Badminton Club. The video stayed on their phone: only these numbers were sent. Questions? Email <a href="mailto:threewolvesbadminton@gmail.com" style="color:${BRONZE}">threewolvesbadminton@gmail.com</a>.
       </td></tr>
     </table>
   </td></tr>
@@ -161,7 +162,7 @@ export function renderStatsEmail(input: StatsEmailInput): { subject: string; htm
   const text = [
     `${first ? `Kia ora ${first},` : "Kia ora,"}`,
     "",
-    `${input.recordedBy} filmed your doubles game with Wolf Vision (${input.playedAt}).`,
+    `${input.recordedBy} filmed your doubles game with ${visionName()} (${input.playedAt}).`,
     `${input.teams[0]} vs ${input.teams[1]}`,
     "",
     `Duration ${clock(input.duration)} · ${input.rallies} rallies · longest rally ${input.longestRally} · ${input.avgRallyShots} shots a rally · fastest shot ${fastest}`,

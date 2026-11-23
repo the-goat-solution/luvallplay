@@ -35,10 +35,9 @@ export type BoardSelection = {
 };
 
 /** Reads ?source, ?metric (old links), ?period and ?key. */
-export function selectBoard(q: BoardQuery): BoardSelection {
+export function selectBoard(q: BoardQuery, today: string): BoardSelection {
   const source: PointsSource = SOURCES.includes(q.source as PointsSource) ? (q.source as PointsSource) : (FROM_METRIC[q.metric ?? ""] ?? "all");
   const period: Period = (PERIODS as string[]).includes(q.period ?? "") ? (q.period as Period) : "month";
-  const today = getClubToday().dateKey;
   const current = periodRange(period, today);
   const range = periodFromKey(period, q.key) ?? current;
   const prev = period === "lifetime" ? null : periodRange(period, range.start!, -1);

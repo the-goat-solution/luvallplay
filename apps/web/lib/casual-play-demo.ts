@@ -1,3 +1,4 @@
+import type { ClubClock } from "./dates";
 import type { RosterEntry } from "./db";
 import { addDays } from "./db";
 import { getClubToday } from "./dates";
@@ -37,8 +38,8 @@ export function demoRoster(): RosterEntry[] {
 }
 
 /** Last Friday, the next Friday (or today, if it is one) and the one after. */
-export function demoDates(): string[] {
-  const today = getClubToday().dateKey;
+export function demoDates(clock: ClubClock): string[] {
+  const today = getClubToday(new Date(), clock).dateKey;
   const [y, m, d] = today.split("-").map(Number);
   const toFriday = (5 - new Date(y, m - 1, d).getDay() + 7) % 7;
   const next = addDays(today, toFriday);

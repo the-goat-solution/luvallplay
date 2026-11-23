@@ -1,3 +1,4 @@
+import { clubClock } from "./club";
 import type Stripe from "stripe";
 import { clubCurrencyLower } from "./money";
 import { getStripe } from "./stripe";
@@ -58,8 +59,8 @@ function dashboardBase(): string {
   return `https://dashboard.stripe.com/${test ? "test/" : ""}`;
 }
 
-function dateKeyFromUnix(seconds: number): string {
-  return clubDateKeyForInstant(new Date(seconds * 1000));
+function dateKeyFromUnix(seconds: number, timezone: string): string {
+  return clubDateKeyForInstant(new Date(seconds * 1000), timezone);
 }
 
 const TIER_LABEL: Record<string, string> = { monthly: "Monthly", quarterly: "Quarterly" };
@@ -188,10 +189,11 @@ async function linesForBalanceTransaction(
   stripe: Stripe,
   bt: Stripe.BalanceTransaction,
   cache: Map<string, Described>,
+  timezone: string,
 ): Promise<StripeLedgerLine[]> {
   if (!INCLUDED_TYPES.has(bt.type)) return [];
 
-  const entryDate = dateKeyFromUnix(bt.created);
+  const entryDate = dateKeyFromUnix(bt.created, timezone);
   const source = bt.source && typeof bt.source === "object" ? bt.source : null;
   const lines: StripeLedgerLine[] = [];
 
@@ -269,7 +271,7 @@ async function linesForBalanceTransaction(
 // invoice paid out of band. The method decides how bank reconciliation
 // treats it: a transfer is matched to its own bank line, cash to the
 // deposit that banked it.
-export function lineForOfflineInvoice(invoice: Stripe.Invoice): StripeLedgerLine | null {
+export function lineForOfflineInvoice(invoice: Stripe.Invoice, timezone: string): StripeLedgerLine | null {
   const method = offlineMethodFromSource(invoice.metadata?.source);
   if (invoice.status !== "paid" || !method || !invoice.id) return null;
   const described = describeFromMetadata(invoice.metadata);
@@ -281,7 +283,7 @@ export function lineForOfflineInvoice(invoice: Stripe.Invoice): StripeLedgerLine
     category: described?.category ?? "other_income",
     method,
     person: personFrom(invoice.metadata, invoice.customer_name || invoice.customer_email),
-    entryDate: dateKeyFromUnix(paidAt),
+    entryDate: dateKeyFromUnix(paidAt, timezone),
     amountCents: invoice.total,
     externalUrl: `${dashboardBase()}invoices/${invoice.id}`,
   };
@@ -292,6 +294,7 @@ export type StripeSyncResult = { imported: number; scanned: number };
 export async function syncStripeFinance({ full = false } = {}): Promise<StripeSyncResult> {
   const stripe = getStripe();
   const startedAt = new Date();
+  const { timezone } = await clubClock();
   const state = await getSyncState(SYNC_KEY);
   const since =
     !full && state.lastStartedAt
@@ -311,7 +314,7 @@ export async function syncStripeFinance({ full = false } = {}): Promise<StripeSy
       expand: ["data.source"],
     })) {
       scanned++;
-      lines.push(...(await linesForBalanceTransaction(stripe, bt, cache)));
+      lines.push(...(await linesForBalanceTransaction(stripe, bt, cache, timezone)));
       // Payouts aren't income or expense, but bank reconciliation needs
       // them to recognise the matching credit on the bank statement.
       const source = bt.source && typeof bt.source === "object" ? bt.source : null;
@@ -320,8 +323,8 @@ export async function syncStripeFinance({ full = false } = {}): Promise<StripeSy
         payouts.push({
           id: payout.id,
           amountCents: Math.abs(bt.amount),
-          createdDate: dateKeyFromUnix(bt.created),
-          arrivalDate: dateKeyFromUnix(payout.arrival_date),
+          createdDate: dateKeyFromUnix(bt.created, timezone),
+          arrivalDate: dateKeyFromUnix(payout.arrival_date, timezone),
           status: payout.status,
         });
       }
@@ -334,7 +337,7 @@ export async function syncStripeFinance({ full = false } = {}): Promise<StripeSy
       ...(created ? { created } : {}),
     })) {
       scanned++;
-      const line = lineForOfflineInvoice(invoice);
+      const line = lineForOfflineInvoice(invoice, timezone);
       if (line) lines.push(line);
     }
 

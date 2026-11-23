@@ -200,6 +200,8 @@ export type ResultWithRank = ReplayPlayerResult & { rankBefore: number; rankAfte
 
 export type World = {
   today: string;
+  /** The club's time zone: the day an instant falls on is the club's day. */
+  timezone: string;
   players: Map<number, ArenaPlayer>;
   ranks: Map<number, PlayerRank>;
   events: Map<number, WpEvent[]>;
@@ -334,7 +336,8 @@ export async function recalculateAllPoints(): Promise<{ attendance: number; roun
 export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<World> {
   if (!opts.skipSync) syncPointsLater();
   await tick();
-  const today = getClubToday(new Date(), await clubClock()).dateKey;
+  const clock = await clubClock();
+  const today = getClubToday(new Date(), clock).dateKey;
   const [pl, att, rr, pairs, members, ch, peaks, club, stats] = await Promise.all([
     // Every list is ordered so the world (and any tie-break in it) is the same
     // on every load; without ORDER BY, Postgres returns rows in storage order,
@@ -490,6 +493,7 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
 
   return {
     today,
+    timezone: clock.timezone,
     players,
     ranks,
     events,
@@ -786,7 +790,7 @@ export function acceptBlocker(world: World, c: ChallengeRow, playerId: number): 
   // Revenge rematches are welcome; only the same four trading wins over and
   // over is capped (lib/ranks.ts CAPS). A player's own daily total isn't.
   return repeatMatchupBlocker(
-    sameFour.map((x) => clubDateKeyForInstant(new Date(x.acceptedAt!))),
+    sameFour.map((x) => clubDateKeyForInstant(new Date(x.acceptedAt!), world.timezone)),
     world.today,
   );
 }

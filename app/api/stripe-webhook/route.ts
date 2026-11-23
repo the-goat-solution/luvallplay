@@ -13,6 +13,7 @@ import {
   activateMembershipBySubscriptionId,
   applyMembershipRenewal,
   ensureTables,
+  listMemberMiniGameDates,
   listSessionsInRange,
   reserveBookingSlot,
 } from "@/lib/db";
@@ -154,6 +155,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
           renewal: pi.metadata.renewal === "true",
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
@@ -279,6 +285,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
         );
@@ -319,6 +330,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
         );

@@ -48,6 +48,8 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
   // month has no available dates just because the request hasn't returned.
   const [sessionDates, setSessionDates] = useState<Record<string, true> | null>(null);
   const [spotsByDate, setSpotsByDate] = useState<Record<string, number>>({});
+  // Mini game days report 0 casual spots, but members are always included.
+  const [miniGameByDate, setMiniGameByDate] = useState<Record<string, boolean>>({});
   const [spotsLoading, setSpotsLoading] = useState(false);
 
   // A date picked while on "friday" is never valid once switched to
@@ -99,11 +101,15 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
     setSpotsLoading(true);
     fetch(`/api/spots?dates=${keys.join(",")}`)
       .then((r) => r.json())
-      .then((data: { spots?: Record<string, number> }) => {
-        if (!cancelled) setSpotsByDate(data.spots ?? {});
+      .then((data: { spots?: Record<string, number>; miniGame?: Record<string, boolean> }) => {
+        if (cancelled) return;
+        setSpotsByDate(data.spots ?? {});
+        setMiniGameByDate(data.miniGame ?? {});
       })
       .catch(() => {
-        if (!cancelled) setSpotsByDate({});
+        if (cancelled) return;
+        setSpotsByDate({});
+        setMiniGameByDate({});
       })
       .finally(() => {
         if (!cancelled) setSpotsLoading(false);
@@ -139,7 +145,7 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
     const isSessionDay = Boolean(sessionDates?.[key]);
     const isPast = dateMs < todayMs;
     const spots = isSessionDay ? (spotsByDate[key] ?? 0) : 0;
-    const isFull = isSessionDay && spots <= 0;
+    const isFull = isSessionDay && spots <= 0 && !miniGameByDate[key];
     const isOpen = isSessionDay && !isPast && !isFull && !loading;
     const isSel = key === selected;
 

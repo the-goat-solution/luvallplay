@@ -8,6 +8,7 @@ import {
   attachStripeIdToMembership,
   ensureTables,
   getTotalActiveMemberCount,
+  listMemberMiniGameDates,
   listMemberships,
   listRecentlyEndedMemberships,
   addDays,
@@ -155,6 +156,11 @@ async function addOfflineMember(formData: FormData) {
       periodStart: activated.periodStart,
       periodEnd: activated.periodEnd,
       delayed: activated.periodStart > clubToday,
+      miniGameDates: await listMemberMiniGameDates(
+        activated.day,
+        activated.periodStart,
+        activated.periodEnd,
+      ).catch(() => []),
     }).catch((err) =>
       console.error("Failed to send membership confirmation email", err),
     );

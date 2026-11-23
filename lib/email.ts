@@ -240,12 +240,19 @@ export async function sendMembershipConfirmationEmail(
     delayed: boolean;
     /** A paid renewal of an earlier one-time membership. */
     renewal?: boolean;
+    /** Mini game days in this period: members are always included. */
+    miniGameDates?: string[];
   },
 ): Promise<void> {
   const from = process.env.EMAIL_FROM;
   if (!from) {
     throw new Error("EMAIL_FROM is not configured");
   }
+
+  const miniGameDays = (input.miniGameDates ?? []).map(formatEmailDate);
+  const miniGameLine = miniGameDays.length
+    ? `Your membership includes the mini game on ${miniGameDays.join(", ")} — you're in automatically. Can't make it? Tap "Can't make it" for that day in the app so we can plan the games.`
+    : "";
 
   const planName = PLAN_NAME[input.plan];
   const dayName = DAY_LABEL[input.day];
@@ -280,6 +287,7 @@ export async function sendMembershipConfirmationEmail(
     ${paragraph(intro)}
     ${accessParagraph}
     ${paragraph(`Membership window: <strong>${escapeHtml(displayStart)}</strong> to <strong>${escapeHtml(displayEnd)}</strong>. You can show up to any ${dayName} session in that window — no need to book individual sessions. See you on court!`)}
+    ${miniGameLine ? paragraph(escapeHtml(miniGameLine)) : ""}
     ${contactFooterNote()}
   `;
   const text = [
@@ -295,6 +303,7 @@ export async function sendMembershipConfirmationEmail(
     "",
     `Membership window: ${displayStart} to ${displayEnd}. See you on court!`,
     "",
+    ...(miniGameLine ? [miniGameLine, ""] : []),
     contactFooterNoteText(),
   ].join("\n");
 

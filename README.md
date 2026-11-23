@@ -9,6 +9,7 @@ pnpm workspaces + Turborepo:
 | Path | What |
 |---|---|
 | `apps/web` | The Next.js site, app, admin and API (Vercel Root Directory) |
+| `apps/studio` | Sanity Studio for the site's content, hosted by Sanity at https://threewolves.sanity.studio (`/studio` redirects there) |
 | `packages/db` | Drizzle schema, versioned migrations, default seed (`@luvallplay/db`) |
 | `packages/core` | Pure club logic: play periods, ranks and points, phone numbers, safe redirects, names (`@luvallplay/core`) |
 | `packages/auth` | Pure access rules: club roles, which admin pages each role opens, step-up (`@luvallplay/auth`) |
@@ -23,7 +24,7 @@ Run things from the root with `pnpm --filter web <script>` (or `cd apps/web`). P
 
 - **Next.js 16** (App Router, Turbopack) on Vercel
 - **Neon Postgres** through `@neondatabase/serverless` + **Drizzle** (`apps/web/lib/database.ts`)
-- **Sanity CMS** — content at `/studio`
+- **Sanity CMS** — content edited in the Studio at https://threewolves.sanity.studio (`apps/studio`)
 - **Stripe** — casual ($10), monthly ($33), quarterly ($85 / 3 months), donations (custom amount, one-time or monthly)
 - **Vercel Postgres** — sessions, bookings, waitlist, memberships
 - **Google Calendar** — source of truth for bookable session dates (synced daily via cron)

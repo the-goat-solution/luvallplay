@@ -1,7 +1,7 @@
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { btn, btnSecondary, input, pill, td, th } from "@/components/admin/ui";
-import { addAttendanceByEmail, markAttended, markNotAttended } from "@/app/admin/play-days/attendance-actions";
+import { addAttendanceByEmail, markAttended, markNotAttended } from "@/app/admin/(console)/play-days/attendance-actions";
 import { listAttendanceForDate } from "@/lib/stats-db";
 import type { RosterEntry } from "@/lib/db";
 

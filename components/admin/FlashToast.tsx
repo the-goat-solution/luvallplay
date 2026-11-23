@@ -3,8 +3,8 @@
 import { useFlashToast, type FlashRules } from "@/hooks/useFlashToast";
 import { MINI_GAME_MAX_PLAYERS } from "@/lib/constants";
 
-// The messages each admin page's server actions redirect back with. Pages
-// render <FlashToast rules="…" />; the hook does the rest.
+// The messages each admin page's server actions redirect back with. The
+// admin frame renders <FlashToast />; the hook does the rest.
 
 const ok = (text: string) => ({ text, kind: "success" as const });
 const err = (text: string) => ({ text, kind: "error" as const });
@@ -66,9 +66,26 @@ const financials: FlashRules = {
   financeError: (v) => (v ? err(v) : null),
 };
 
-export const FLASH_RULES = { generic, playDays, members, financials } as const;
+const membersAll: FlashRules = { ...generic, ...members };
+const financialsAll: FlashRules = { ...generic, ...financials };
 
-export function FlashToast({ rules = "generic" }: { rules?: keyof typeof FLASH_RULES }) {
-  useFlashToast(FLASH_RULES[rules]);
+export const FLASH_RULES = { generic, playDays, members: membersAll, financials: financialsAll } as const;
+
+/** The messages a page's server actions can redirect back with. */
+export function flashRulesFor(pathname: string): FlashRules {
+  if (pathname.startsWith("/admin/play-days")) return playDays;
+  if (pathname.startsWith("/admin/members")) return membersAll;
+  if (pathname.startsWith("/admin/financials")) return financialsAll;
+  return generic;
+}
+
+/**
+ * Rendered once by the admin frame (AdminShell), not by each page: the frame
+ * stays mounted across navigations, so it always sees the ?toast=… a server
+ * action redirects back with. (Inside a page it could miss one when the
+ * action's redirect re-rendered the page.)
+ */
+export function FlashToast({ pathname }: { pathname: string }) {
+  useFlashToast(flashRulesFor(pathname));
   return null;
 }

@@ -22,7 +22,7 @@ export function MiniGameToggle({ on }: { on: boolean }) {
           if (
             !on &&
             !window.confirm(
-              `Make this a mini game day? Registration will be locked and the day capped at ${MINI_GAME_MAX_PLAYERS} players.`,
+              `Make this a mini game day? Casual sign-ups close and the day is capped at ${MINI_GAME_MAX_PLAYERS} players. Members stay included.`,
             )
           ) {
             e.preventDefault();

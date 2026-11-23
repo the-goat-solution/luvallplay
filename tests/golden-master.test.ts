@@ -218,6 +218,7 @@ function cases(): Case[] {
     { mod: "db", fn: "getSpotsAndHeadcountForDates", args: () => [[fx.nextFri, fx.nextWed, fx.lastFri]] },
     { mod: "db", fn: "sessionExists", args: () => [fx.nextFri] },
     { mod: "db", fn: "listSessionsInRange", args: () => [fx.lastWed, fx.nextFri] },
+    { mod: "db", fn: "listMemberMiniGameDates", args: () => ["friday", fx.lastWed, fx.nextFri] },
     { mod: "db", fn: "getUpcomingSessionDates", args: [30] },
     { mod: "db", fn: "listAllSessionDates" },
     { mod: "db", fn: "getActiveMemberCountForDate", args: () => [fx.nextFri] },

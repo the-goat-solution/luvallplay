@@ -146,7 +146,7 @@ export const dayRequests = defineModule({
   payments: "none",
   plan: "free",
   name: { en: "Day requests", vi: "Yêu cầu ngày chơi" },
-  admin: { nav: [{ group: "Play", href: "/admin/day-requests" }] },
+  admin: { nav: [{ group: "Play", href: "/admin/play-days/schedule" }], pages: ["/admin/day-requests"] },
 });
 
 // ── Money (all optional; a free-play club leaves the group off, §6.2.1) ──────

@@ -10,12 +10,12 @@ import {
 import { audit, resolveAdmin } from "@/lib/admin-access";
 import { summarizeAdminRequest } from "@/lib/admin-roles";
 
-// Node runtime (stable since Next.js 15.5): the admin check reads the
-// player's session and role from the database, and it has to happen here,
-// because admin Server Actions post straight to the page URL.
+// The proxy (Next.js 16's name for middleware) runs on the Node runtime: the
+// admin check reads the player's session and role from the database, and it
+// has to happen here, because admin Server Actions post straight to the page
+// URL.
 export const config = {
   matcher: ["/admin", "/admin/:path*", "/api/admin/:path*", "/profile", "/profile/:path*"],
-  runtime: "nodejs",
 };
 
 // Player profile pages: only checks a session cookie is present, so signed-
@@ -130,7 +130,7 @@ async function guardAdmin(request: NextRequest): Promise<NextResponse> {
   return response;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/profile" || request.nextUrl.pathname.startsWith("/profile/")) {
     return guardProfile(request);
   }

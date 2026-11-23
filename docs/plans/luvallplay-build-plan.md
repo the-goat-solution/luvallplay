@@ -213,6 +213,12 @@ Findings and changes recorded as the work goes:
   - Preview builds migrate their own Neon branch (`prebuild` → `scripts/db/preview-migrate.mjs`). The preview guard decides first, and a branch made before production had a migration history is baselined only after its schema matches the frozen dump. Production builds never migrate.
   - Admin → Setup check now reports migration status ("Database schema") instead of creating tables.
   - The `schema_runs` table is now unused. It's left in place, because dropping it is a destructive change for a later release (test plan §0 rule 3).
+- **PR 5, Next.js 16** (16.4.6, Turbopack builds):
+  - `middleware.ts` is now `proxy.ts` (`export function proxy`), on the Node runtime, which is fixed in 16, so the `runtime` setting is gone.
+  - `revalidateTag(tag)` is now `revalidateTag(tag, { expire: 0 })`. That keeps today's behaviour (the next request reads fresh data), not the stale-while-revalidate `"max"` profile.
+  - ESLint uses `eslint-config-next` 16's own flat config. Its five new React Compiler rules (`react-hooks/set-state-in-effect`, `refs`, `immutability`, `purity`, `static-components`) flag about 74 existing spots that work today. They're **warnings for now**. **Follow-up:** fix them before turning on the React Compiler.
+  - `next-sanity` 9 (Studio at `/studio`, webhook signature check) only declares Next 14–15. An npm `overrides` entry (`next: $next`) holds it on 16 until the Studio leaves the web app. Checked: the Studio mounts, and the webhook rejects a bad signature and accepts the manual trigger.
+- **Plan change: the Studio move needs Three Wolves' Sanity project.** The site's Sanity project (`c0v5j4dz`) isn't in the Sanity account connected to the build session, so the session can't deploy a hosted Studio or read the business config through the API. The Studio move and the business-config move stay in Phase 2 and need one step from Timba (Phase 2 runbook §7).
 - **Vercel previews ("Resource provisioning failed")**: the Vercel project's Neon integration still creates preview branches in the *old US* Neon project (`neon-almond-button`). That project is at the free plan's 10-branch limit (main + 9 stale `preview/claude/*` branches), so every preview fails before building. The fix is a dashboard action (see the Phase 2 runbook).
 
 ---

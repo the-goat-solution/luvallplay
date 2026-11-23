@@ -40,3 +40,7 @@ Production already has every table, because the baseline migration is production
 - Smoke test: sign in, Me, Arena, `/admin/play-days`, the shop, casual play.
 
 Rollback: Vercel Instant Rollback. The previous version still creates tables only if they're missing, and they all exist.
+
+## 6. Phase 2 PR 5 (Next.js 16): nothing to do
+
+After the deploy, smoke test: `/login`, sign in → Me, **`/admin` as an owner** (the admin check now runs in `proxy.ts`), `/studio` loads, and Arena works. Rollback: Vercel Instant Rollback.

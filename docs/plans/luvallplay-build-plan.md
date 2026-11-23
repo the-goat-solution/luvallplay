@@ -735,7 +735,7 @@ A public website that introduces Luvallplay to clubs, organisers and players. It
   - team sports: volleyball, futsal, basketball, netball;
   - social sport generally.
 - Badminton is described as where Luvallplay started (Three Wolves), not as the limit.
-- Voice from the brand book: warm, direct, short sentences, sentence case, no emoji in headings. The brand book's "badminton words" rule is relaxed here; the brand book's Voice section should be updated to say so.
+- Voice from the brand book: warm, direct, short sentences, sentence case, no emoji in headings, and sport-neutral words wherever Luvallplay speaks for itself (the brand book now says so).
 
 **Brand (strictly from the design system):**
 - Logo files as provided: the side-by-side lockup in the header, the stacked lockup in the footer, and the dark versions on Net Navy sections.

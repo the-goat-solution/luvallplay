@@ -158,6 +158,16 @@ export function parseClubConfig(tenant: TenantRow, modules: ModuleSettingsRow[],
   return { config, problems };
 }
 
+/**
+ * How many players one play day takes: the court-derived maximum, the
+ * club's general capacity when the courts count isn't in its table, or the
+ * mini-game field on a mini game day.
+ */
+export function sessionCapacityFor(config: ClubConfig, courts: number, miniGame = false): number {
+  if (miniGame) return config.roundRobin.miniGameMaxPlayers;
+  return config.playDays.courtsToMaxPlayers[courts] ?? config.playDays.sessionCapacity;
+}
+
 function canonical(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
   if (isObj(v)) return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`;

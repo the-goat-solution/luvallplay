@@ -4,6 +4,7 @@
 // (app/layout.tsx) and handed to client components through ClubProvider
 // (context/ClubContext.tsx → useClub()).
 import type { ClubConfig } from "@luvallplay/core/club-config";
+import { MODULES, blockedByModule } from "@luvallplay/modules";
 import { CLUB_CURRENCY, CLUB_TERMS, MINI_GAME_MAX_PLAYERS, SESSION_CAPACITY } from "./constants.ts";
 import { DEFAULT_CLUB_CLOCK, type ClubClock } from "./dates.ts";
 
@@ -14,6 +15,8 @@ export type PublicClub = {
   terms: { pointsName: string; visionName: string; localized: Record<string, { pointsName?: string; visionName?: string }> };
   sessionCapacity: number;
   miniGameMaxPlayers: number;
+  /** The modules switched on for the club (every module when that can't be read). */
+  modules: readonly string[];
 };
 
 /** The built-in values: what a client component sees outside a provider (tests, stories). */
@@ -23,6 +26,7 @@ export const DEFAULT_PUBLIC_CLUB: PublicClub = {
   terms: { pointsName: CLUB_TERMS.pointsName, visionName: CLUB_TERMS.visionName, localized: { vi: { ...CLUB_TERMS.localized.vi } } },
   sessionCapacity: SESSION_CAPACITY,
   miniGameMaxPlayers: MINI_GAME_MAX_PLAYERS,
+  modules: MODULES.map((m) => m.id),
 };
 
 export function clockOf(config: ClubConfig): ClubClock {
@@ -33,13 +37,14 @@ export function clockOf(config: ClubConfig): ClubClock {
   };
 }
 
-export function publicClub(config: ClubConfig): PublicClub {
+export function publicClub(config: ClubConfig, enabled?: ReadonlySet<string>): PublicClub {
   return {
     clock: clockOf(config),
     currency: config.currency,
     terms: config.terms,
     sessionCapacity: config.playDays.sessionCapacity,
     miniGameMaxPlayers: config.roundRobin.miniGameMaxPlayers,
+    modules: enabled ? [...enabled].sort() : MODULES.map((m) => m.id),
   };
 }
 
@@ -47,4 +52,14 @@ export function publicClub(config: ClubConfig): PublicClub {
 export function hourLabel(hour: number): string {
   const h = ((hour % 24) + 24) % 24;
   return `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? "AM" : "PM"}`;
+}
+
+/** Whether a link to `path` should be shown: false when its module is off for the club. */
+export function linkShown(club: Pick<PublicClub, "modules">, path: string): boolean {
+  return blockedByModule(path.split(/[?#]/)[0], new Set(club.modules)) === null;
+}
+
+/** Whether a module is on for the club. */
+export function moduleOn(club: Pick<PublicClub, "modules">, moduleId: string): boolean {
+  return club.modules.includes(moduleId);
 }

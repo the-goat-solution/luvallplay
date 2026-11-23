@@ -134,3 +134,39 @@ export async function setClubModule(
   resetClubModulesCache();
   return { ok: true, changed: true };
 }
+
+/**
+ * A platform admin's lock on a module for the club (build plan §6.2.3: "an
+ * owner can switch modules unless Luvallplay has locked one"). Locking a
+ * module "on" or "off" first puts it in that state, by the same rules as any
+ * switch; if those refuse (a core module, something depends on it), nothing
+ * is locked. `lock: null` unlocks and leaves the state as it is.
+ */
+export async function setModuleLock(
+  db: Db,
+  input: { moduleId: string; lock: "on" | "off" | null; reason?: string; actor: "owner" | "platform-admin"; actorPlayerId: number | null },
+  slug = defaultTenantSlug(),
+): Promise<SwitchOutcome> {
+  if (input.actor !== "platform-admin") return { ok: false, reason: "Only Luvallplay staff can lock a module." };
+  const mod = MODULES.find((m) => m.id === input.moduleId);
+  if (!mod) return { ok: false, reason: `There's no module "${input.moduleId}".` };
+  if (mod.core) return { ok: false, reason: `${mod.name.en} is part of the core: it is always on and can't be locked.` };
+  const reason = (input.reason ?? "").trim().slice(0, 200);
+  if (input.lock && !reason) return { ok: false, reason: "Say why it is locked: the club's owners will see it." };
+  const tenant = (await db.query(`SELECT id FROM tenants WHERE slug = $1`, [slug])).rows[0];
+  if (!tenant) return { ok: false, reason: "This club has no settings yet." };
+  const before = (await listClubModules(db, slug)).find((r) => r.id === input.moduleId);
+  if (input.lock) {
+    const switched = await setClubModule(db, { moduleId: input.moduleId, on: input.lock === "on", actor: "platform-admin", actorPlayerId: input.actorPlayerId }, slug);
+    if (!switched.ok) return switched;
+  }
+  if ((before?.locked ?? null) === input.lock && (before?.lockReason ?? "") === (input.lock ? reason : "")) return { ok: true, changed: false };
+  await db.query(
+    `INSERT INTO tenant_modules (tenant_id, module_id, enabled, locked, lock_reason, updated_at, updated_by)
+     VALUES ($1, $2, $3, $4, $5, now(), $6)
+     ON CONFLICT (tenant_id, module_id) DO UPDATE SET locked = EXCLUDED.locked, lock_reason = EXCLUDED.lock_reason, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+    [tenant.id, input.moduleId, input.lock === "on", input.lock, input.lock ? reason : null, input.actorPlayerId],
+  );
+  resetClubModulesCache();
+  return { ok: true, changed: true };
+}

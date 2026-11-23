@@ -528,6 +528,11 @@ describe("S · modules", () => {
       assert.equal(await status("/gallery"), 404);
       assert.equal(await status("/api/profile/photos"), 404);
       assert.equal((await page.goto("/admin/photos")).status(), 404);
+      // Its section of the site and the link to it are gone too.
+      const homeOff = await (await fetch(`${base()}/`)).text();
+      assert.ok(!homeOff.includes('id="gallery"'), "the gallery section is still on the home page");
+      assert.ok(!homeOff.includes('href="/#gallery"'), "the navigation still links to the gallery");
+      assert.ok(homeOff.includes('id="schedule"'), "the rest of the home page is there");
       // The rest of the club carries on.
       assert.equal(await status("/"), 200);
       assert.equal(await status("/casual-play"), 200);
@@ -549,6 +554,8 @@ describe("S · modules", () => {
       await page.getByText(/is now on\./).waitFor();
       assert.equal(await status("/gallery"), 200);
       assert.equal((await page.goto("/admin/photos")).status(), 200);
+      const homeOn = await (await fetch(`${base()}/`)).text();
+      assert.ok(homeOn.includes('id="gallery"') && homeOn.includes('href="/#gallery"'), "the gallery section is back");
     } finally {
       // Whatever happened above, leave the module on for the journeys that follow.
       await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE module_id = 'gallery'`);

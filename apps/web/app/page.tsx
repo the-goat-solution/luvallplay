@@ -22,6 +22,8 @@ import { getMaxCasualSpots, getPricingPlans } from "@/lib/business-config";
 import { buildGalleryPool } from "@/lib/gallery-pool";
 import { LeaderboardTeaser } from "@/components/leaderboard/LeaderboardTeaser";
 import { teaserBoard } from "@/lib/leaderboard-data";
+import { enabledModules } from "@/lib/club-modules";
+import { sql } from "@/lib/database";
 
 export const revalidate = 60;
 
@@ -62,6 +64,9 @@ export default async function HomePage() {
   // Club photos plus approved player photos (see lib/gallery-pool.ts).
   const galleryPool = await buildGalleryPool(gallery);
 
+  // A module that is off takes its section of the site with it (build plan §6.2.3).
+  const on = await enabledModules(sql);
+
   return (
     <SignupPauseProvider pausedDays={pausedDays}>
       <Navigation />
@@ -74,12 +79,12 @@ export default async function HomePage() {
         scheduleSettings={schedule}
         calendarSubscribe={calendarSubscribe}
       />
-      <Gallery images={galleryPool} />
+      {on.has("gallery") && <Gallery images={galleryPool} />}
       <AppFeatures />
-      <LeaderboardTeaser rows={teaser} />
-      <Membership pricingPlans={pricingPlans ?? undefined} />
+      {on.has("arena") && <LeaderboardTeaser rows={teaser} />}
+      {on.has("memberships") && <Membership pricingPlans={pricingPlans ?? undefined} />}
       <Reviews googleReviewUrl={siteSettings?.googleReviewUrl} />
-      <Donate />
+      {on.has("donations") && <Donate />}
       <Footer />
       <ClientShell
         galleryImages={galleryPool}

@@ -3,6 +3,8 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useClub } from "@/context/ClubContext";
+import { moduleOn } from "@/lib/club-public";
 import { Trans } from "@/components/Trans";
 import type { Lang } from "@/lib/i18n";
 
@@ -14,6 +16,8 @@ const readSignedInCookie = () => document.cookie.split(";").some((c) => c.trim()
 
 export function Navigation() {
   const { lang, setLang } = useLanguage();
+  // Links to sections whose module is off aren't offered.
+  const club = useClub();
   const [mobileOpen, setMobileOpen] = useState(false);
   // A readable hint cookie (no secret) set at sign-in, so the header can say
   // "My profile" without asking the server.
@@ -60,22 +64,28 @@ export function Navigation() {
                   <Trans k="nav_schedule" />
                 </a>
               </li>
-              <li>
-                <a href="/#gallery">
+              {moduleOn(club, "gallery") && (
+                <li>
+                  <a href="/#gallery">
                   <Trans k="nav_gallery" />
                 </a>
-              </li>
-              <li>
-                <a href="/#membership">
+                </li>
+              )}
+              {moduleOn(club, "memberships") && (
+                <li>
+                  <a href="/#membership">
                   <Trans k="nav_membership" />
                 </a>
-              </li>
+                </li>
+              )}
               <li>
                 <a href="/#reviews">Reviews</a>
               </li>
-              <li>
-                <a href="/#leaderboard">{lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}</a>
-              </li>
+              {moduleOn(club, "arena") && (
+                <li>
+                  <a href="/#leaderboard">{lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}</a>
+                </li>
+              )}
             </ul>
             <div className="nav-actions">
               <div className="lang-toggle">
@@ -139,15 +149,21 @@ export function Navigation() {
         <a href="/#schedule" onClick={closeMobile}>
           <Trans k="nav_schedule" />
         </a>
-        <a href="/#gallery" onClick={closeMobile}>
+        {moduleOn(club, "gallery") && (
+          <a href="/#gallery" onClick={closeMobile}>
           <Trans k="nav_gallery" />
         </a>
-        <a href="/#membership" onClick={closeMobile}>
+        )}
+        {moduleOn(club, "memberships") && (
+          <a href="/#membership" onClick={closeMobile}>
           <Trans k="nav_membership" />
         </a>
-        <a href="/#leaderboard" onClick={closeMobile}>
+        )}
+        {moduleOn(club, "arena") && (
+          <a href="/#leaderboard" onClick={closeMobile}>
           {lang === "vi" ? "Bảng xếp hạng" : "Leaderboard"}
         </a>
+        )}
         <a href={accountHref} className="mobile-menu-join" onClick={closeMobile}>
           {accountLabel}
         </a>

@@ -133,3 +133,12 @@ export function readCookie(request: Request, name: string): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * Whether this admin sees a page in the menu and on the Today page. The
+ * break-glass password sees the club pages, not the role pages.
+ */
+export function canOpenAdminPage(ctx: AdminContext | null, href: string): boolean {
+  if (ctx?.kind === "player") return adminPathAllowed(ctx.access, href);
+  return !href.startsWith("/admin/people") && !href.startsWith("/admin/platform");
+}

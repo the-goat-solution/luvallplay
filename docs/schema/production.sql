@@ -8,7 +8,7 @@ CREATE TABLE admin_audit_log (
   action text NOT NULL,
   target text,
   meta jsonb DEFAULT '{}'::jsonb NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT admin_audit_log_actor_kind_check CHECK ((actor_kind = ANY (ARRAY['player'::text, 'break-glass'::text, 'script'::text, 'system'::text]))),
   CONSTRAINT admin_audit_log_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT admin_audit_log_action_not_null NOT NULL action,
@@ -47,7 +47,7 @@ CREATE TABLE admin_invites (
   accepted_at timestamp with time zone,
   accepted_player_id integer,
   revoked_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT admin_invites_role_check CHECK ((role = ANY (ARRAY['owner'::text, 'admin'::text, 'coach'::text]))),
   CONSTRAINT admin_invites_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT admin_invites_created_at_not_null NOT NULL created_at,
@@ -58,6 +58,7 @@ CREATE TABLE admin_invites (
   CONSTRAINT admin_invites_pkey PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX admin_invites_one_pending ON public.admin_invites USING btree (email) WHERE ((accepted_at IS NULL) AND (revoked_at IS NULL));
+CREATE UNIQUE INDEX admin_invites_one_pending_tenant ON public.admin_invites USING btree (tenant_id, email) WHERE ((accepted_at IS NULL) AND (revoked_at IS NULL));
 
 CREATE TABLE api_tokens (
   id integer DEFAULT nextval('api_tokens_id_seq'::regclass) NOT NULL,
@@ -69,7 +70,7 @@ CREATE TABLE api_tokens (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   last_used_at timestamp with time zone,
   revoked_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT api_tokens_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT api_tokens_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT api_tokens_created_at_not_null NOT NULL created_at,
@@ -90,7 +91,7 @@ CREATE TABLE arena_after_game (
   keep_pair boolean,
   again boolean,
   answered_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT arena_after_game_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT arena_after_game_answered_at_not_null NOT NULL answered_at,
   CONSTRAINT arena_after_game_challenge_id_not_null NOT NULL challenge_id,
@@ -130,7 +131,7 @@ CREATE TABLE arena_challenges (
   resolved_by_admin boolean DEFAULT false NOT NULL,
   completed_at timestamp with time zone,
   void_reason text,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT arena_challenges_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT arena_challenges_auto_confirmed_not_null NOT NULL auto_confirmed,
   CONSTRAINT arena_challenges_available_until_not_null NOT NULL available_until,
@@ -151,7 +152,7 @@ CREATE INDEX arena_challenges_status ON public.arena_challenges USING btree (sta
 CREATE TABLE arena_code_attempts (
   player_id integer NOT NULL,
   at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT arena_code_attempts_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT arena_code_attempts_at_not_null NOT NULL at,
   CONSTRAINT arena_code_attempts_player_id_not_null NOT NULL player_id,
@@ -169,7 +170,7 @@ CREATE TABLE arena_codes (
   consumed_by integer,
   consumed_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT arena_codes_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT arena_codes_code_hash_not_null NOT NULL code_hash,
   CONSTRAINT arena_codes_created_at_not_null NOT NULL created_at,
@@ -192,7 +193,7 @@ CREATE TABLE arena_match_stats (
   status text DEFAULT 'final'::text NOT NULL,
   live jsonb,
   live_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT arena_match_stats_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT arena_match_stats_challenge_id_not_null NOT NULL challenge_id,
   CONSTRAINT arena_match_stats_created_at_not_null NOT NULL created_at,
@@ -208,7 +209,7 @@ CREATE TABLE arena_pair_members (
   pair_id integer NOT NULL,
   player_id integer NOT NULL,
   active boolean DEFAULT true NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT arena_pair_members_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT arena_pair_members_active_not_null NOT NULL active,
   CONSTRAINT arena_pair_members_pair_id_not_null NOT NULL pair_id,
@@ -217,6 +218,7 @@ CREATE TABLE arena_pair_members (
   CONSTRAINT arena_pair_members_pkey PRIMARY KEY (pair_id, player_id)
 );
 CREATE UNIQUE INDEX arena_pair_members_one_active ON public.arena_pair_members USING btree (player_id) WHERE active;
+CREATE UNIQUE INDEX arena_pair_members_one_active_tenant ON public.arena_pair_members USING btree (tenant_id, player_id) WHERE active;
 
 CREATE TABLE arena_pairs (
   id integer DEFAULT nextval('arena_pairs_id_seq'::regclass) NOT NULL,
@@ -226,7 +228,7 @@ CREATE TABLE arena_pairs (
   formed_at timestamp with time zone DEFAULT now() NOT NULL,
   ended_at timestamp with time zone,
   ended_reason text,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT arena_pairs_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT arena_pairs_formed_at_not_null NOT NULL formed_at,
   CONSTRAINT arena_pairs_id_not_null NOT NULL id,
@@ -243,7 +245,7 @@ CREATE TABLE arena_player_ranks (
   was_tarnished boolean DEFAULT false NOT NULL,
   polished_at timestamp with time zone,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT arena_player_ranks_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT arena_player_ranks_peak_index_not_null NOT NULL peak_index,
   CONSTRAINT arena_player_ranks_player_id_not_null NOT NULL player_id,
@@ -253,6 +255,7 @@ CREATE TABLE arena_player_ranks (
   CONSTRAINT arena_player_ranks_was_tarnished_not_null NOT NULL was_tarnished,
   CONSTRAINT arena_player_ranks_pkey PRIMARY KEY (player_id)
 );
+CREATE UNIQUE INDEX arena_player_ranks_tenant_key ON public.arena_player_ranks USING btree (tenant_id, player_id);
 
 CREATE TABLE attendance (
   session_date date NOT NULL,
@@ -261,7 +264,7 @@ CREATE TABLE attendance (
   verified boolean DEFAULT true NOT NULL,
   removed boolean DEFAULT false NOT NULL,
   recorded_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT attendance_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT attendance_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
@@ -275,6 +278,7 @@ CREATE TABLE attendance (
   CONSTRAINT attendance_pkey PRIMARY KEY (session_date, email)
 );
 CREATE INDEX attendance_email_idx ON public.attendance USING btree (email, session_date);
+CREATE UNIQUE INDEX attendance_tenant_key ON public.attendance USING btree (tenant_id, session_date, email);
 CREATE INDEX attendance_user_id_idx ON public.attendance USING btree (user_id);
 
 CREATE TABLE auth_codes (
@@ -303,7 +307,7 @@ CREATE TABLE bank_matches (
   bank_txn_id integer NOT NULL,
   entry_id integer NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT bank_matches_bank_txn_id_fkey FOREIGN KEY (bank_txn_id) REFERENCES bank_transactions(id) ON DELETE CASCADE,
   CONSTRAINT bank_matches_entry_id_fkey FOREIGN KEY (entry_id) REFERENCES finance_entries(id) ON DELETE CASCADE,
   CONSTRAINT bank_matches_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -329,7 +333,7 @@ CREATE TABLE bank_rules (
   hits integer DEFAULT 0 NOT NULL,
   last_used_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT bank_rules_action_check CHECK ((action = ANY (ARRAY['create'::text, 'classify'::text]))),
   CONSTRAINT bank_rules_direction_check CHECK ((direction = ANY (ARRAY['in'::text, 'out'::text]))),
   CONSTRAINT bank_rules_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -344,6 +348,7 @@ CREATE TABLE bank_rules (
   CONSTRAINT bank_rules_pkey PRIMARY KEY (id),
   CONSTRAINT bank_rules_pattern_direction_key UNIQUE (pattern, direction)
 );
+CREATE UNIQUE INDEX bank_rules_tenant_key ON public.bank_rules USING btree (tenant_id, pattern, direction);
 
 CREATE TABLE bank_transactions (
   id integer DEFAULT nextval('bank_transactions_id_seq'::regclass) NOT NULL,
@@ -361,7 +366,7 @@ CREATE TABLE bank_transactions (
   auto_matched boolean DEFAULT false NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   match_reason text,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT bank_transactions_status_check CHECK ((status = ANY (ARRAY['unmatched'::text, 'matched'::text, 'stripe_payout'::text, 'cash_deposit'::text, 'cash_withdrawal'::text, 'internal'::text, 'ignored'::text]))),
   CONSTRAINT bank_transactions_entry_id_fkey FOREIGN KEY (entry_id) REFERENCES finance_entries(id) ON DELETE SET NULL,
   CONSTRAINT bank_transactions_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -392,7 +397,7 @@ CREATE TABLE bookings (
   status text DEFAULT 'pending'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   reminder_sent_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT bookings_session_date_fkey FOREIGN KEY (session_date) REFERENCES sessions(date),
   CONSTRAINT bookings_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -418,7 +423,7 @@ CREATE TABLE cancellation_feedback (
   reason text NOT NULL,
   comment text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT cancellation_feedback_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT cancellation_feedback_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT cancellation_feedback_action_not_null NOT NULL action,
@@ -434,7 +439,7 @@ CREATE TABLE casual_play_profiles (
   tier smallint,
   nickname text,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT casual_play_profiles_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT casual_play_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
@@ -443,6 +448,7 @@ CREATE TABLE casual_play_profiles (
   CONSTRAINT casual_play_profiles_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT casual_play_profiles_pkey PRIMARY KEY (email)
 );
+CREATE UNIQUE INDEX casual_play_profiles_tenant_key ON public.casual_play_profiles USING btree (tenant_id, email);
 CREATE INDEX casual_play_profiles_user_id_idx ON public.casual_play_profiles USING btree (user_id);
 
 CREATE TABLE casual_play_sessions (
@@ -450,7 +456,7 @@ CREATE TABLE casual_play_sessions (
   state jsonb NOT NULL,
   version integer DEFAULT 1 NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT casual_play_sessions_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT casual_play_sessions_date_not_null NOT NULL date,
   CONSTRAINT casual_play_sessions_state_not_null NOT NULL state,
@@ -459,6 +465,7 @@ CREATE TABLE casual_play_sessions (
   CONSTRAINT casual_play_sessions_version_not_null NOT NULL version,
   CONSTRAINT casual_play_sessions_pkey PRIMARY KEY (date)
 );
+CREATE UNIQUE INDEX casual_play_sessions_tenant_key ON public.casual_play_sessions USING btree (tenant_id, date);
 
 CREATE TABLE club_members (
   tenant_id integer NOT NULL,
@@ -515,7 +522,7 @@ CREATE TABLE club_roles (
   granted_by integer,
   granted_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT club_roles_role_check CHECK ((role = ANY (ARRAY['owner'::text, 'admin'::text, 'coach'::text]))),
   CONSTRAINT club_roles_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT club_roles_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -526,19 +533,21 @@ CREATE TABLE club_roles (
   CONSTRAINT club_roles_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT club_roles_pkey PRIMARY KEY (player_id)
 );
+CREATE UNIQUE INDEX club_roles_tenant_key ON public.club_roles USING btree (tenant_id, player_id);
 
 CREATE TABLE club_settings (
   key text NOT NULL,
   value jsonb,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_by integer,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT club_settings_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT club_settings_key_not_null NOT NULL key,
   CONSTRAINT club_settings_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT club_settings_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT club_settings_pkey PRIMARY KEY (key)
 );
+CREATE UNIQUE INDEX club_settings_tenant_key ON public.club_settings USING btree (tenant_id, key);
 
 CREATE TABLE day_requests (
   id integer DEFAULT nextval('day_requests_id_seq'::regclass) NOT NULL,
@@ -547,7 +556,7 @@ CREATE TABLE day_requests (
   email text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   notified_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT day_requests_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT day_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
@@ -560,13 +569,14 @@ CREATE TABLE day_requests (
   CONSTRAINT day_requests_pkey PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX day_requests_pending_idx ON public.day_requests USING btree (day, lower(email)) WHERE (notified_at IS NULL);
+CREATE UNIQUE INDEX day_requests_pending_tenant_idx ON public.day_requests USING btree (tenant_id, day, lower(email)) WHERE (notified_at IS NULL);
 CREATE INDEX day_requests_user_id_idx ON public.day_requests USING btree (user_id);
 
 CREATE TABLE day_signup_settings (
   day text NOT NULL,
   paused boolean DEFAULT false NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT day_signup_settings_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT day_signup_settings_day_not_null NOT NULL day,
   CONSTRAINT day_signup_settings_paused_not_null NOT NULL paused,
@@ -574,6 +584,7 @@ CREATE TABLE day_signup_settings (
   CONSTRAINT day_signup_settings_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT day_signup_settings_pkey PRIMARY KEY (day)
 );
+CREATE UNIQUE INDEX day_signup_settings_tenant_key ON public.day_signup_settings USING btree (tenant_id, day);
 
 CREATE TABLE donations (
   id integer DEFAULT nextval('donations_id_seq'::regclass) NOT NULL,
@@ -586,7 +597,7 @@ CREATE TABLE donations (
   stripe_subscription_id text,
   status text DEFAULT 'pending'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT donations_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT donations_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
@@ -623,7 +634,7 @@ CREATE TABLE finance_entries (
   receipt_content_type text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT finance_entries_amount_cents_check CHECK ((amount_cents > 0)),
   CONSTRAINT finance_entries_kind_check CHECK ((kind = ANY (ARRAY['received'::text, 'spent'::text]))),
   CONSTRAINT finance_entries_origin_check CHECK ((origin = ANY (ARRAY['manual'::text, 'stripe'::text]))),
@@ -647,7 +658,7 @@ CREATE TABLE finance_settings (
   key text NOT NULL,
   value jsonb NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT finance_settings_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT finance_settings_key_not_null NOT NULL key,
   CONSTRAINT finance_settings_tenant_id_not_null NOT NULL tenant_id,
@@ -655,18 +666,20 @@ CREATE TABLE finance_settings (
   CONSTRAINT finance_settings_value_not_null NOT NULL value,
   CONSTRAINT finance_settings_pkey PRIMARY KEY (key)
 );
+CREATE UNIQUE INDEX finance_settings_tenant_key ON public.finance_settings USING btree (tenant_id, key);
 
 CREATE TABLE finance_sync_state (
   key text NOT NULL,
   last_started_at timestamp with time zone,
   last_finished_at timestamp with time zone,
   last_error text,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT finance_sync_state_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT finance_sync_state_key_not_null NOT NULL key,
   CONSTRAINT finance_sync_state_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT finance_sync_state_pkey PRIMARY KEY (key)
 );
+CREATE UNIQUE INDEX finance_sync_state_tenant_key ON public.finance_sync_state USING btree (tenant_id, key);
 
 CREATE TABLE guardianships (
   guardian_user_id integer NOT NULL,
@@ -712,7 +725,7 @@ CREATE TABLE jersey_registrations (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   lang text DEFAULT 'en'::text NOT NULL,
   print_country text,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT jersey_registrations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'paid'::text, 'released'::text, 'cancelled'::text]))),
   CONSTRAINT jersey_registrations_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -737,6 +750,7 @@ CREATE TABLE jersey_registrations (
   CONSTRAINT jersey_registrations_ref_code_key UNIQUE (ref_code)
 );
 CREATE UNIQUE INDEX jersey_one_per_email ON public.jersey_registrations USING btree (email_normalized) WHERE (status = ANY (ARRAY['pending'::text, 'paid'::text]));
+CREATE UNIQUE INDEX jersey_one_per_email_tenant ON public.jersey_registrations USING btree (tenant_id, email_normalized) WHERE (status = ANY (ARRAY['pending'::text, 'paid'::text]));
 CREATE INDEX jersey_registrations_user_id_idx ON public.jersey_registrations USING btree (user_id);
 
 CREATE TABLE junior_profiles (
@@ -763,7 +777,7 @@ CREATE TABLE membership_reminders_sent (
   membership_id integer NOT NULL,
   session_date date NOT NULL,
   sent_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT membership_reminders_sent_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT membership_reminders_sent_membership_id_not_null NOT NULL membership_id,
   CONSTRAINT membership_reminders_sent_sent_at_not_null NOT NULL sent_at,
@@ -793,7 +807,7 @@ CREATE TABLE memberships (
   renewal_reminder_sent_at timestamp with time zone,
   renewal_of integer,
   free_days_granted integer DEFAULT 0 NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT memberships_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
@@ -824,7 +838,7 @@ CREATE TABLE message_threads (
   unread_for_admin boolean DEFAULT false NOT NULL,
   unread_for_player boolean DEFAULT false NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT message_threads_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text]))),
   CONSTRAINT message_threads_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT message_threads_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -848,7 +862,7 @@ CREATE TABLE messages (
   sender text NOT NULL,
   body text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT messages_sender_check CHECK ((sender = ANY (ARRAY['player'::text, 'admin'::text]))),
   CONSTRAINT messages_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES message_threads(id) ON DELETE CASCADE,
@@ -869,7 +883,7 @@ CREATE TABLE mini_game_draws (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   locked_until timestamp with time zone NOT NULL,
   archived_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT mini_game_draws_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT mini_game_draws_created_at_not_null NOT NULL created_at,
   CONSTRAINT mini_game_draws_id_not_null NOT NULL id,
@@ -880,6 +894,7 @@ CREATE TABLE mini_game_draws (
   CONSTRAINT mini_game_draws_pkey PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX mini_game_draws_one_active ON public.mini_game_draws USING btree ((true)) WHERE (archived_at IS NULL);
+CREATE UNIQUE INDEX mini_game_draws_one_active_tenant ON public.mini_game_draws USING btree (tenant_id) WHERE (archived_at IS NULL);
 
 CREATE TABLE mini_game_scores (
   draw_id integer NOT NULL,
@@ -887,7 +902,7 @@ CREATE TABLE mini_game_scores (
   score_a integer NOT NULL,
   score_b integer NOT NULL,
   locked_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT mini_game_scores_draw_id_fkey FOREIGN KEY (draw_id) REFERENCES mini_game_draws(id),
   CONSTRAINT mini_game_scores_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT mini_game_scores_draw_id_not_null NOT NULL draw_id,
@@ -941,7 +956,7 @@ CREATE TABLE player_absences (
   session_date date NOT NULL,
   email text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT player_absences_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT player_absences_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
@@ -951,6 +966,7 @@ CREATE TABLE player_absences (
   CONSTRAINT player_absences_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT player_absences_pkey PRIMARY KEY (session_date, email)
 );
+CREATE UNIQUE INDEX player_absences_tenant_key ON public.player_absences USING btree (tenant_id, session_date, email);
 CREATE INDEX player_absences_user_id_idx ON public.player_absences USING btree (user_id);
 
 CREATE TABLE player_events (
@@ -984,7 +1000,7 @@ CREATE TABLE player_photos (
   reviewed_by text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   deleted_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT player_photos_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'needs_review'::text, 'rejected'::text, 'hidden'::text]))),
   CONSTRAINT player_photos_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT player_photos_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -1083,7 +1099,7 @@ CREATE TABLE pricing_plans (
   sort integer NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_by integer,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT pricing_plans_plan_id_check CHECK ((plan_id = ANY (ARRAY['casual'::text, 'fridayMonthly'::text, 'fridayQuarterly'::text, 'wednesdayMonthly'::text, 'wednesdayQuarterly'::text]))),
   CONSTRAINT pricing_plans_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT pricing_plans_description_not_null NOT NULL description,
@@ -1097,6 +1113,7 @@ CREATE TABLE pricing_plans (
   CONSTRAINT pricing_plans_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT pricing_plans_pkey PRIMARY KEY (plan_id)
 );
+CREATE UNIQUE INDEX pricing_plans_tenant_key ON public.pricing_plans USING btree (tenant_id, plan_id);
 
 CREATE TABLE pv_arena_after_game (
   challenge_id integer NOT NULL,
@@ -1310,7 +1327,7 @@ CREATE TABLE rr_results (
   rr_points integer NOT NULL,
   finish_place integer NOT NULL,
   teams_count integer NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT rr_results_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT rr_results_draw_id_not_null NOT NULL draw_id,
   CONSTRAINT rr_results_finish_place_not_null NOT NULL finish_place,
@@ -1343,7 +1360,7 @@ CREATE TABLE session_alert_state (
   state text DEFAULT 'ok'::text NOT NULL,
   headcount integer DEFAULT 0 NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT session_alert_state_session_date_fkey FOREIGN KEY (session_date) REFERENCES sessions(date),
   CONSTRAINT session_alert_state_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT session_alert_state_headcount_not_null NOT NULL headcount,
@@ -1353,6 +1370,7 @@ CREATE TABLE session_alert_state (
   CONSTRAINT session_alert_state_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT session_alert_state_pkey PRIMARY KEY (session_date)
 );
+CREATE UNIQUE INDEX session_alert_state_tenant_key ON public.session_alert_state USING btree (tenant_id, session_date);
 
 CREATE TABLE session_fill_ins (
   id integer DEFAULT nextval('session_fill_ins_id_seq'::regclass) NOT NULL,
@@ -1364,7 +1382,7 @@ CREATE TABLE session_fill_ins (
   email text NOT NULL,
   phone text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT session_fill_ins_one_target CHECK (((membership_id IS NULL) <> (booking_id IS NULL))),
   CONSTRAINT session_fill_ins_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -1395,7 +1413,7 @@ CREATE TABLE sessions (
   courts integer DEFAULT 2 NOT NULL,
   registration_locked boolean DEFAULT false NOT NULL,
   mini_game boolean DEFAULT false NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT sessions_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT sessions_booked_spots_not_null NOT NULL booked_spots,
   CONSTRAINT sessions_courts_not_null NOT NULL courts,
@@ -1406,6 +1424,7 @@ CREATE TABLE sessions (
   CONSTRAINT sessions_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT sessions_pkey PRIMARY KEY (date)
 );
+CREATE UNIQUE INDEX sessions_tenant_key ON public.sessions USING btree (tenant_id, date);
 
 CREATE TABLE shop_order_items (
   id integer DEFAULT nextval('shop_order_items_id_seq'::regclass) NOT NULL,
@@ -1415,7 +1434,7 @@ CREATE TABLE shop_order_items (
   qty integer NOT NULL,
   unit_price_cents integer NOT NULL,
   label text NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT shop_order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES shop_orders(id) ON DELETE CASCADE,
   CONSTRAINT shop_order_items_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT shop_order_items_id_not_null NOT NULL id,
@@ -1445,7 +1464,7 @@ CREATE TABLE shop_orders (
   collected_at timestamp with time zone,
   cancelled_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT shop_orders_payment_method_check CHECK ((payment_method = ANY (ARRAY['card'::text, 'cash'::text]))),
   CONSTRAINT shop_orders_status_check CHECK ((status = ANY (ARRAY['pending_payment'::text, 'reserved_cash'::text, 'paid'::text, 'collected'::text, 'cancelled'::text, 'expired'::text, 'refunded'::text]))),
   CONSTRAINT shop_orders_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
@@ -1479,7 +1498,7 @@ CREATE TABLE shop_products (
   active boolean DEFAULT true NOT NULL,
   sort integer DEFAULT 0 NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT shop_products_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT shop_products_active_not_null NOT NULL active,
   CONSTRAINT shop_products_created_at_not_null NOT NULL created_at,
@@ -1499,6 +1518,7 @@ CREATE TABLE shop_products (
   CONSTRAINT shop_products_pkey PRIMARY KEY (id),
   CONSTRAINT shop_products_slug_key UNIQUE (slug)
 );
+CREATE UNIQUE INDEX shop_products_tenant_key ON public.shop_products USING btree (tenant_id, slug);
 
 CREATE TABLE shop_stock_log (
   id integer DEFAULT nextval('shop_stock_log_id_seq'::regclass) NOT NULL,
@@ -1507,7 +1527,7 @@ CREATE TABLE shop_stock_log (
   stock_after integer NOT NULL,
   by_whom text DEFAULT 'admin'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT shop_stock_log_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT shop_stock_log_by_whom_not_null NOT NULL by_whom,
   CONSTRAINT shop_stock_log_change_not_null NOT NULL change,
@@ -1527,7 +1547,7 @@ CREATE TABLE shop_variants (
   stock integer DEFAULT 0 NOT NULL,
   reserved integer DEFAULT 0 NOT NULL,
   sold integer DEFAULT 0 NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT shop_variants_reserved_check CHECK ((reserved >= 0)),
   CONSTRAINT shop_variants_stock_check CHECK ((stock >= 0)),
   CONSTRAINT shop_variants_product_id_fkey FOREIGN KEY (product_id) REFERENCES shop_products(id) ON DELETE CASCADE,
@@ -1564,7 +1584,7 @@ CREATE TABLE stripe_payouts (
   created_date date NOT NULL,
   arrival_date date NOT NULL,
   status text,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT stripe_payouts_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT stripe_payouts_amount_cents_not_null NOT NULL amount_cents,
   CONSTRAINT stripe_payouts_arrival_date_not_null NOT NULL arrival_date,
@@ -1670,7 +1690,7 @@ CREATE TABLE waitlist (
   email text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   notified_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   user_id integer,
   CONSTRAINT waitlist_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT waitlist_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
@@ -1694,7 +1714,7 @@ CREATE TABLE webhook_deliveries (
   next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
   delivered_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT webhook_deliveries_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'delivered'::text, 'failed'::text]))),
   CONSTRAINT webhook_deliveries_endpoint_id_fkey FOREIGN KEY (endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
   CONSTRAINT webhook_deliveries_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -1720,7 +1740,7 @@ CREATE TABLE webhook_endpoints (
   active boolean DEFAULT true NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   last_status text,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT webhook_endpoints_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT webhook_endpoints_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT webhook_endpoints_active_not_null NOT NULL active,
@@ -1741,7 +1761,7 @@ CREATE TABLE wv_labels (
   duration real,
   hits jsonb NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT wv_labels_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT wv_labels_created_at_not_null NOT NULL created_at,
   CONSTRAINT wv_labels_hits_not_null NOT NULL hits,
@@ -1758,7 +1778,7 @@ CREATE TABLE wv_models (
   n integer NOT NULL,
   sessions integer DEFAULT 0 NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT wv_models_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT wv_models_created_at_not_null NOT NULL created_at,
   CONSTRAINT wv_models_id_not_null NOT NULL id,
@@ -1782,7 +1802,7 @@ CREATE TABLE wv_passes (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   paid_at timestamp with time zone,
   used_at timestamp with time zone,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT wv_passes_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT wv_passes_amount_cents_not_null NOT NULL amount_cents,
   CONSTRAINT wv_passes_created_at_not_null NOT NULL created_at,
@@ -1806,7 +1826,7 @@ CREATE TABLE wv_updates (
   meta jsonb,
   merged boolean DEFAULT false NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_id integer DEFAULT 1 NOT NULL,
+  tenant_id integer DEFAULT COALESCE(app_tenant_id(), 1) NOT NULL,
   CONSTRAINT wv_updates_tenant_id_tenants_id_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT wv_updates_created_at_not_null NOT NULL created_at,
   CONSTRAINT wv_updates_id_not_null NOT NULL id,

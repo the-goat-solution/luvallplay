@@ -889,7 +889,14 @@ Findings and changes recorded as the work goes:
   - **Plan change: natural keys are widened in step 11, not step 10** (runbook §10).
   - The golden master has a fourth copy that runs through row-level security; it found three orderings without a tie-breaker, now fixed.
   - **Decision: the account-linking trigger runs as its owner**, because accounts are global and must link rows in every club.
-  - **Not done yet:** the route-level isolation suite (it needs requests for two clubs, which arrives with step 11) and a login for the app's role.
+  - **Not done yet:** a login for the app's role (runbook §11.2).
+- **Step 11, preparation (migration `0010_tenant_keys`, no row changes):**
+  - **The route-level isolation suite** is an end-to-end journey: a second, synthetic club runs on its own server under `TENANT_SCOPE=enforce`, and every route, generated from the `app` directory, is requested as a platform admin and as nobody.
+  - **Finding: the admin Players page listed every account on the platform.** Row-level security can't catch this, because accounts are global by design; the page now joins to the club's members. Lesson for later phases: every query on a platform table needs its own club condition, and only the route-level suite checks that.
+  - **Finding: `DEFAULT 1` made every write for a second club fail under `enforce`.** The default now follows the transaction's club.
+  - **Decision: keys are widened by expand and contract.** `0010` adds per-club unique indexes beside 20 natural keys and the app's upserts name them; the old keys are dropped in a later step.
+  - **Finding: the new version fails against a database without `0010`** (the calendar's upsert). Migrate first, then merge.
+  - **Finding about the tests:** the check "Drizzle Kit sees nothing to migrate" has not been comparing anything since migration `0006`: the journal has no snapshots after `0005`, and Drizzle Kit, given the temporary directory's absolute path, writes nothing. The other half of that test, a database built from `schema.ts` equals the reference dump, does work and covers the same ground. Left as is; to be repaired or removed in Phase 4.
 - **Tests added after step 10:**
   - **Permission matrix (test plan §3.6), from the database:** eight roles against six actions, each person's access resolved as the app's role for the club. It adds the rows Phase 3 brings: another club's admin (an admin there, nobody here), switching modules (owners and platform admins), and the platform's lock (holds for owners).
   - **Finding from journey S2:** the request proxy and the pages keep separate copies of the module switches, each remembered for a minute. So a switch takes effect at once on the instance that made it and within a minute everywhere else. `MODULES_CACHE_MS` sets the time (tests use 0).

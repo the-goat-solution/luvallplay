@@ -11,8 +11,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 0 | Plan documents to `main` (#100, docs only) | Done: merged 23 Nov |
 | 1 | Tenants schema, Three Wolves as club #1 (#101) | **Done.** Production data run passed (23 Nov, 07:36 UTC); merged and live (07:48 UTC) |
 | 2 | `tenant_id` on every club-owned table (#102) | **Done.** Production data run passed (23 Nov, 08:25 UTC); live (08:28 UTC) |
-| 3 | Email links → `user_id` (#103) | Built. Rehearsal passed (0 problems, characterisation identical). Production run approved in advance (§3) |
-| 4 | Settings replace constants (behind flags) | Not started |
+| 3 | Email links → `user_id` (#103) | **Production data run done and passed** (23 Nov, 09:09 UTC). Merged 09:11 UTC |
+| 4 | Settings replace constants (behind flags) | In progress. First part built: the settings loader and the shadow comparison (§4) |
 | 5 | Module enforcement | Not started |
 | 6 | Second database driver, region routing | Not started |
 | 7 | Money audit (minor units, VND) | Not started |
@@ -133,6 +133,14 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 **What runs:** migration `0005_user_id_links`. Ten email-keyed tables gain a nullable `user_id` (foreign key to the account, `ON DELETE RESTRICT`, indexed), filled with the live account whose email matches. Two trigger functions keep the link in step for every writer. The email stays as the contact field, and the site doesn't read `user_id` yet.
 
+**Done (23 Nov 2026, 09:09 UTC), run by the build session; approved in advance by the owner, after green CI and a clean rehearsal:**
+- Restore point: `pre-phase-3-user-id-links` (`br-mute-pine-a71jdjeh`, 09:09 UTC).
+- `0005_user_id_links` applied in 4.4 s.
+- Diff against `2026-11-phase3-user-id-links.production.json`: **passed**. 17 accounts checked, 0 problems.
+- Drift: none. `verify.mjs`: 453 rows in the ten tables, 287 linked to an account, 166 for people without one, no disagreement with the email; all triggers present.
+- #103 merged at 09:11 UTC. The rehearsal branch was deleted.
+- CI failed once before the run, on a test that sorted mixed-case emails without fixing the sort rules (CI's database sorts them differently). The test was fixed; nothing in the migration changed.
+
 **Order: migrate first, then merge #103** (the rule from step 2).
 
 **Already done (23 Nov), on a fresh Neon branch of production (`rehearsal-phase-3-user-id-links`):**
@@ -168,10 +176,28 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 **Rollback of the app:** Vercel Instant Rollback. The previous version ignores the column, and the triggers keep linking its writes.
 
-## 4. Housekeeping that needs you
+## 4. Step 4: settings replace constants (no data run)
+
+Step 4 changes no data: the settings were stored by step 1. It ships in parts.
+
+**Part 1 (built):** `lib/club-config.ts` is the one place the app asks for the club's settings. The environment variable `CLUB_SETTINGS_SOURCE` decides which copy answers:
+
+| Value | What answers | Use |
+|---|---|---|
+| `constants` (default, also when unset) | The values built into the code, as today | Until shadow reads start |
+| `shadow` | The built-in values, with the stored ones read beside them and any difference logged as `[shadow] club settings …` | The 7-day shadow period |
+| `database` | The stored values. A missing or malformed one falls back to the built-in value for that field, with a warning | After 7 clean days |
+
+**Admin → Setup check → Club settings** shows the comparison at any time, whatever the source.
+
+**Needs you, once part 1 is deployed:** set `CLUB_SETTINGS_SOURCE=shadow` for Production in Vercel → Settings → Environment Variables, and redeploy. That starts the 7-day clock for settings. Rollback is deleting the variable.
+
+**Still to build in step 4:** the app's code reading its settings through this loader instead of the constants (time zone, courts → players, booking window and cut-off, membership days and cycles, donation limits, the "Wolf" terms), and the crons, emails, webhooks and API becoming club-scoped.
+
+## 5. Housekeeping that needs you
 
 - **Rehearsal branches.** `rehearsal-phase-2` and `rehearsal-phase-3-tenants` were deleted on 23 Nov, at the owner's request. From now on the session deletes each rehearsal branch once its step has run on production.
-- **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7 (main, `pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id` and the current rehearsal branch). Step 3 adds an eighth. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.
+- **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.
 - **Point-in-time restore covers 6 hours, not 7 days.** The project's history retention is 21,600 seconds (the free plan's limit). Test plan §4.4 asks for a window that covers the next 7 days. Until the plan changes, the named `pre-<step>` branch is the restore point for each step, and it's kept until the step's watch period ends.
 - **Each new Neon branch has a new host**, and the build session's network only allows named hosts. Expect one approval card per rehearsal (two hosts: direct and pooled).
 - **One branch, one step at a time.** The build session pushes only to `claude/luvallplay-phase-3`, so each step's pull request opens after the previous one is merged.

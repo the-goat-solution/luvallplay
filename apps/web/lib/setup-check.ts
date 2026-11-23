@@ -6,6 +6,7 @@ import { PUBLIC_BLOB_SETUP_HINT, publicBlobAuth } from "./public-blob";
 import { getSiteUrl } from "./email-layout";
 import { sql } from "./database";
 import journal from "@luvallplay/db/migrations/meta/_journal.json";
+import { compareClubConfig } from "./club-config";
 
 // Live checks behind Admin → Setup check: each piece the player accounts
 // rely on, tested for real (no secrets are shown), with what to do if it
@@ -62,6 +63,26 @@ export async function runSetupChecks(): Promise<Check[]> {
         return { area: "Basics", name: "Database schema", status: "fail", detail: `Migrations waiting to run; this build expects ${latest.tag}.`, fix: "Run the pending migrations after their rehearsal (db/README.md, test plan §4.4)." };
       }
       return { area: "Basics", name: "Database schema", status: "ok", detail: `Up to date (${latest.tag}).` };
+    }),
+  );
+  checks.push(
+    await safe("Basics", "Club settings", async () => {
+      // Phase 3 step 4: the settings stored for the club beside the values
+      // built into the code (the shadow read).
+      const r = await compareClubConfig(sql);
+      const using = r.source === "database" ? "The stored settings are in use." : r.source === "shadow" ? "The built-in values are in use; the stored ones are compared on every read." : "The built-in values are in use.";
+      if (!r.stored) return { area: "Basics", name: "Club settings", status: "warn", detail: `The club has no stored settings yet. ${using}`, fix: "Run the pending migrations (0003_tenants)." };
+      if (r.problems.length) return { area: "Basics", name: "Club settings", status: "fail", detail: `Stored values that can't be used: ${r.problems.join("; ")}`.slice(0, 600), fix: "Correct the value in tenants or tenant_modules.settings; the built-in value is used for that field meanwhile." };
+      if (r.differences.length) {
+        return {
+          area: "Basics",
+          name: "Club settings",
+          status: r.source === "database" ? "ok" : "warn",
+          detail: `${r.differences.length} stored setting(s) differ from the built-in values: ${r.differences.join("; ")}. ${using}`.slice(0, 600),
+          ...(r.source === "database" ? {} : { fix: "Expected only after a deliberate change to the stored settings. Otherwise make the two agree before switching CLUB_SETTINGS_SOURCE to database." }),
+        };
+      }
+      return { area: "Basics", name: "Club settings", status: "ok", detail: `Stored settings match the built-in values. ${using}` };
     }),
   );
   checks.push(

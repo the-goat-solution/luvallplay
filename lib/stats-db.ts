@@ -25,7 +25,7 @@ import { after } from "next/server";
 /** Refreshes the cached public leaderboard (no-op outside a request). */
 function refreshLeaderboard(): void {
   try {
-    revalidateTag("leaderboard");
+    revalidateTag("leaderboard", { expire: 0 });
   } catch {
     // called outside a request (scripts/tests): nothing cached to refresh
   }

@@ -219,12 +219,18 @@ Findings and changes recorded as the work goes:
   - Rehearsed on a fresh branch of production: 15 accounts, 0 problems, drift empty afterwards, and a hard delete of an account with data is refused.
 - **PR 6, business config → database:**
   - New tables `pricing_plans` and `club_settings` (migration `0002_business_config`), filled with the published Sanity values read on 23 Nov 2026: 5 plans with their Stripe price ids, capacity unset, booking lock 14 days (`bookingLockDays` isn't read by the app today; it's kept).
-  - `lib/business-config.ts` reads the database first and falls back to Sanity while the tables don't exist yet (expand). Edits happen in **Admin → Settings** (club admins; audited).
+  - `lib/business-config.ts` reads the database first and falls back to Sanity while the tables don't exist yet (expand). Edits happen in **Admin → Money → Pricing & settings** (club admins; audited).
   - Checked three ways:
     - `tests/business-config.test.ts`: every field equals the committed Sanity snapshot, and the plans render identically in English and Vietnamese;
     - `scripts/verify-business-config.mjs`: a live database against live Sanity (catches a tampered price id);
     - a combined rehearsal (PR 4 + PR 6) on a branch of production: 0 problems, drift empty, values match.
   - **Contract later:** remove the Sanity fallback and the Sanity pricing fields once production has run 0002 and a quiet week has passed.
+- **PR 5, Next.js 16** (16.4.6, Turbopack builds):
+  - `middleware.ts` is now `proxy.ts` (`export function proxy`), on the Node runtime, which is fixed in 16, so the `runtime` setting is gone.
+  - `revalidateTag(tag)` is now `revalidateTag(tag, { expire: 0 })`. That keeps today's behaviour (the next request reads fresh data), not the stale-while-revalidate `"max"` profile.
+  - ESLint uses `eslint-config-next` 16's own flat config. Its five new React Compiler rules (`react-hooks/set-state-in-effect`, `refs`, `immutability`, `purity`, `static-components`) flag about 74 existing spots that work today. They're **warnings for now**. **Follow-up:** fix them before turning on the React Compiler.
+  - `next-sanity` 9 (Studio at `/studio`, webhook signature check) only declares Next 14–15. An npm `overrides` entry (`next: $next`) holds it on 16 until the Studio leaves the web app. Checked: the Studio mounts, and the webhook rejects a bad signature and accepts the manual trigger.
+- **Plan change: the Studio move needs Three Wolves' Sanity project.** The site's Sanity project (`c0v5j4dz`) isn't in the Sanity account connected to the build session, so the session can't deploy a hosted Studio. (The business config was read through Sanity's public read API.) The Studio move stays in Phase 2 and needs one step from Timba (Phase 2 runbook §7).
 - **Vercel previews ("Resource provisioning failed")**: the Vercel project's Neon integration still creates preview branches in the *old US* Neon project (`neon-almond-button`). That project is at the free plan's 10-branch limit (main + 9 stale `preview/claude/*` branches), so every preview fails before building. The fix is a dashboard action (see the Phase 2 runbook).
 
 ---

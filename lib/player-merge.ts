@@ -135,7 +135,7 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
       const list = (rows: Record<string, unknown>[]) => rows.map((r) => `${r.ref} (${r.status})`).join(", ");
       notes.push(
         `Both emails have an open jersey order: ${list(kept)} and ${list(both)}. Both are kept under ${keepEmail}; ` +
-          `if one is a double order, cancel it in Admin → Jersey.`,
+          `if one is a double order, ask the developer to cancel it (the jersey admin pages are archived).`,
       );
     }
   }

@@ -9,7 +9,7 @@ import type Stripe from "stripe";
 import { insertOneTimeDonation, setDonationStatusBySubscription } from "@/lib/repos/donations";
 import { setMembershipStatusBySubscription } from "@/lib/repos/memberships";
 import { getStripe } from "@/lib/stripe";
-import { activateMembershipByPaymentIntentId, activateMembershipBySubscriptionId, applyMembershipRenewal, listSessionsInRange, reserveBookingSlot } from "@/lib/db";
+import { activateMembershipByPaymentIntentId, activateMembershipBySubscriptionId, applyMembershipRenewal, listMemberMiniGameDates, listSessionsInRange, reserveBookingSlot } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import {
   sendAdminBookingRaceAlertEmail,
@@ -139,6 +139,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
           renewal: pi.metadata.renewal === "true",
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
@@ -242,6 +247,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
         );
@@ -282,6 +292,11 @@ export async function POST(request: Request) {
           periodStart: activated.periodStart,
           periodEnd: activated.periodEnd,
           delayed: activated.periodStart > clubToday,
+          miniGameDates: await listMemberMiniGameDates(
+            activated.day,
+            activated.periodStart,
+            activated.periodEnd,
+          ).catch(() => []),
         }).catch((err) =>
           console.error("Failed to send membership confirmation email", err),
         );

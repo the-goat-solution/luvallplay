@@ -81,4 +81,17 @@ node scripts/verify-business-config.mjs          # must say: matches Sanity exac
 
 **If anything fails:** stop. Each migration is one transaction, so a failure leaves nothing half-done. Undoing a completed run is schema-only: swap the constraints back, or drop the two new tables. `pre-phase-2-data` holds the exact state from before.
 
-**After the run:** edit prices and plans in **Admin → Settings**, not in Sanity.
+**After the run:** edit prices and plans in **Admin → Money → Pricing & settings**, not in Sanity.
+
+## 6. Phase 2 PR 5 (Next.js 16): nothing to do
+
+After the deploy, smoke test: `/login`, sign in → Me, **`/admin` as an owner** (the admin check now runs in `proxy.ts`), `/studio` loads, and Arena works. Rollback: Vercel Instant Rollback.
+
+## 7. Moving Sanity Studio out of the web app (needs you, once)
+
+The build plan moves the Studio out of the web app into its own deploy (`apps/studio`). The club's Sanity project (`c0v5j4dz`) isn't in the Sanity account connected to the build session, so one step needs you. Pick one:
+
+- **A (simplest):** on your computer, in a checkout of the branch that adds `apps/studio`, run `npx sanity login`, then `npx sanity deploy` from `apps/studio`, and choose the hostname `threewolves`. The Studio is then at `https://threewolves.sanity.studio` (Sanity handles CORS for its own hosts). Tell the build session it's done.
+- **B:** Sanity → manage → project `c0v5j4dz` → API → Tokens → add a token with **Deploy Studio** permission, and save it when the build session asks for it (a secure form; you never paste it in chat). The session then deploys it.
+
+Then `/studio` on the site redirects to the hosted Studio, and `next-sanity` and the npm `overrides` entry can leave the web app.

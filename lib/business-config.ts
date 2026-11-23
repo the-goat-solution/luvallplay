@@ -1,6 +1,6 @@
 // Business config: pricing plans (incl. Stripe price ids) and club settings
 // (session capacity, booking lock days). Moved out of Sanity into the
-// database (Phase 2 PR 6, build plan §5); edited in Admin → Settings.
+// database (Phase 2 PR 6, build plan §5); edited in Admin → Money → Pricing & settings.
 //
 // Expand/contract: until migration 0002 has run on a database, its tables
 // don't exist, and these readers fall back to Sanity, exactly as before. Once
@@ -38,7 +38,7 @@ export async function loadPricingPlansFromDb(): Promise<CmsPricingPlan[] | null>
   }) : null;
 }
 
-/** As loadPricingPlansFromDb, plus each plan's display order (Admin → Settings). */
+/** As loadPricingPlansFromDb, plus each plan's display order (Admin → Money → Pricing & settings). */
 export async function listPricingPlansForAdmin(): Promise<(CmsPricingPlan & { sort: number })[] | null> {
   if (!process.env.POSTGRES_URL) return null;
   try {

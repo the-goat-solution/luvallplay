@@ -1,3 +1,5 @@
+// First: choose the database before any import below can connect.
+import "@/lib/db-env";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   ADMIN_COOKIE,

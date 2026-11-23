@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase2-account-fks-restrict",
+  "description": "Phase 2 PR 4 (test plan §4.2): the eight foreign keys from account-owned tables to players change from ON DELETE CASCADE / SET NULL to ON DELETE RESTRICT, so an accidental hard delete of an account fails instead of wiping or detaching that person's data. Schema-only: no table, column, row, account, email, phone, session or role may change. On a branch of production the run also records the baseline as applied (a new drizzle schema, outside public). Rehearsal on a Neon branch of production, so nothing is volatile."
+}

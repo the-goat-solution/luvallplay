@@ -41,6 +41,40 @@ Production already has every table, because the baseline migration is production
 
 Rollback: Vercel Instant Rollback. The previous version still creates tables only if they're missing, and they all exist.
 
+## 5. Phase 2 PR 4: account foreign keys CASCADE / SET NULL → RESTRICT (production data change)
+
+**What:** the eight foreign keys from account-owned tables (sessions, photos, messages, events, API keys, webhooks, shop orders, cancellation feedback) to `players` change to `ON DELETE RESTRICT`. Schema only, no rows change. In the same run, production is marked as at the baseline migration (additive: a `drizzle` schema with one table and one row).
+
+**Already done (T−5, T−4):** rehearsal on a fresh Neon branch of production (`rehearsal-phase-2`, reset from production at 02:30 UTC on 23 Nov):
+- `data-guard rehearse`: **15 accounts checked, 0 problems** (report in the PR);
+- drift afterwards empty;
+- a hard delete of an account with data is now refused (checked in a rolled-back transaction).
+
+**Second sign-off (T−3):** Kelcee (or Timba) reads the PR's rehearsal report and says OK on the PR.
+
+**Production run (T0), at a quiet time, not a play-day evening.** From a checkout of the PR branch, after `npm ci`:
+
+```bash
+# 1. Restore point (instant): Neon console → Branches → New branch from main, now → name pre-phase-2-pr4
+#    (or ask the build session to create it through the Neon API).
+
+export POSTGRES_URL='<production direct connection string>'      # SYD_POSTGRES_URL_NON_POOLING
+export PRODUCTION_DATABASE_HOSTS='<production host(s)>'           # the runner refuses without --production
+
+# 2. Snapshot, migrate, snapshot, diff
+npm run data-guard -- snapshot --out .data-guard/pr4-before.json                  # read-only
+npm run db:migrate -- --baseline --production    # checks production's schema = the frozen dump, then records the baseline
+npm run db:migrate -- --production               # applies 0001_account_fks_restrict (one transaction, lock_timeout 3s)
+npm run data-guard -- snapshot --out .data-guard/pr4-after.json
+npm run data-guard -- diff .data-guard/pr4-before.json .data-guard/pr4-after.json \
+  --expect scripts/data-guard/expectations/2026-11-phase2-account-fks-restrict.production.json
+npm run db:drift                                 # must say: No schema drift
+```
+
+**Done when:** the diff passes with 0 errors and the drift check is empty. Then merge PR 4 (the code doesn't depend on the new constraints, so the order doesn't matter for the app).
+
+**If anything fails:** stop. The migration runs in one transaction, so a failure leaves nothing half-done. To undo a completed run, swap the constraints back. That's a schema-only change and no data is involved. `pre-phase-2-pr4` holds the exact state from before.
+
 ## 6. Phase 2 PR 5 (Next.js 16): nothing to do
 
 After the deploy, smoke test: `/login`, sign in → Me, **`/admin` as an owner** (the admin check now runs in `proxy.ts`), `/studio` loads, and Arena works. Rollback: Vercel Instant Rollback.

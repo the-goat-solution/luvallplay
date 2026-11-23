@@ -22,7 +22,7 @@ export function weekdayKey(day: Weekday): I18nKey {
 
 // "Notify me when this day opens" — used both for a paused day (e.g.
 // Wednesday) coming back and for requesting a day the club doesn't run yet.
-// Requests show up for admins at /admin/day-requests.
+// Requests show up for admins at /admin/play-days/schedule.
 export function DayRequestModal() {
   const { tr } = useLanguage();
   const { openModal, setOpenModal, dayRequestDay } = useApp();

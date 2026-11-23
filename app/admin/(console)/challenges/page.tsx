@@ -1,28 +1,30 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import adminStyles from "@/components/admin/admin.module.css";
-import { btn, btnDanger, btnSecondary, card, formatNz, pill } from "@/components/admin/ui";
+import { formatNz } from "@/components/admin/ui";
+import { SubmitButton } from "@/components/admin/SubmitButton";
+import { Badge, EmptyState, InfoDisclosure, Notice, PageHeader, Section, Tabs, kit, type BadgeTone } from "@/components/admin/kit";
 import { ARENA_SANDBOX, adminResolve, loadWorld, type ChallengeRow, type World } from "@/lib/arena-db";
 import { LADDER, LEAGUES, rankName } from "@/lib/ranks";
 
 export const dynamic = "force-dynamic";
 
-async function resolve(id: number, outcome: "posting" | "accepting" | "void" | "as_entered", formData: FormData) {
+async function resolve(id: number, outcome: "posting" | "accepting" | "void" | "as_entered", tab: string, formData: FormData) {
   "use server";
   await adminResolve(id, outcome, String(formData.get("reason") ?? ""));
   revalidatePath("/admin/challenges");
   const label = outcome === "void" ? "Voided: no points for anyone." : outcome === "as_entered" ? "Confirmed as entered." : "Winner set. Points updated.";
-  redirect(`/admin/challenges?toast=${encodeURIComponent(label)}`);
+  redirect(`/admin/challenges?${tab === "disputes" ? "" : `tab=${tab}&`}toast=${encodeURIComponent(label)}`);
 }
 
-const STATUS_STYLE: Record<string, [string, string]> = {
-  completed: ["#e6f4ea", "#1e6b34"],
-  disputed: ["#fdecea", "#a12a2a"],
-  live: ["#fff4e5", "#8a4b00"],
-  awaiting: ["#fff4e5", "#8a4b00"],
-  accepted: ["#e8f0fe", "#1a4fa0"],
-  open: ["#eef", "#334"],
-  void: ["#eee", "#555"],
+const STATUS: Record<string, { label: string; tone: BadgeTone }> = {
+  completed: { label: "Result confirmed", tone: "good" },
+  disputed: { label: "Disputed", tone: "bad" },
+  live: { label: "Being played", tone: "warn" },
+  awaiting: { label: "Score to confirm", tone: "warn" },
+  accepted: { label: "Accepted, not played yet", tone: "default" },
+  open: { label: "Open challenge", tone: "default" },
+  void: { label: "Voided", tone: "default" },
 };
 
 function names(world: World, ids: [number, number] | null): string {
@@ -30,18 +32,22 @@ function names(world: World, ids: [number, number] | null): string {
   return ids.map((id) => world.players.get(id)?.name ?? `#${id}`).join(" & ");
 }
 
-function score(c: ChallengeRow): string {
-  if (c.retiredBy) return `${c.retiredBy === "posting" ? "Posting" : "Accepting"} pair retired`;
+function score(world: World, c: ChallengeRow): string {
+  if (c.retiredBy) return `${names(world, c.retiredBy === "posting" ? c.postingPlayers : c.acceptingPlayers)} retired`;
   if (c.scorePosting === null || c.scoreAccepting === null) return "—";
   return `${c.scorePosting}–${c.scoreAccepting}`;
 }
 
-export default async function ChallengesAdminPage() {
+type Tab = "disputes" | "results" | "ladder";
+
+export default async function ChallengesAdminPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab: tabParam } = await searchParams;
+  const tab: Tab = tabParam === "results" || tabParam === "ladder" ? tabParam : "disputes";
   if (!process.env.POSTGRES_URL) {
     return (
       <div className={adminStyles.page}>
-        <h1 className={adminStyles.title}>Arena</h1>
-        <p>Database is not configured.</p>
+        <PageHeader title="Arena" />
+        <EmptyState>Database is not configured.</EmptyState>
       </div>
     );
   }
@@ -49,102 +55,144 @@ export default async function ChallengesAdminPage() {
   const disputes = world.challenges.filter((c) => c.status === "disputed");
   const recent = [...world.challenges].filter((c) => !["open", "expired", "cancelled"].includes(c.status)).reverse().slice(0, 60);
 
-  // Ladder dry run: where every player with points lands today.
+  // Where every player with points lands on the ladder today.
   const counts = new Map<number, number>();
   const withPoints = [...world.ranks.entries()].filter(([, r]) => r.wpTotal > 0);
   for (const [, r] of withPoints) counts.set(r.earned, (counts.get(r.earned) ?? 0) + 1);
   const top = withPoints.sort((a, b) => b[1].wpTotal - a[1].wpTotal).slice(0, 25);
+  const tabHref = (t: Tab) => (t === "disputes" ? "/admin/challenges" : `/admin/challenges?tab=${t}`);
 
   return (
     <div className={adminStyles.page}>
-      <h1 className={adminStyles.title}>Arena</h1>
-      <p className={adminStyles.subtitle}>
-        Pair challenges in The Arena (<a href="/profile/arena">Profile → Arena</a>). Disputed scores wait here; you can also void any result. Ranks and points
-        recalculate straight away.
-      </p>
+      <PageHeader
+        title="Arena"
+        subtitle={
+          <>
+            Pairs challenge each other in the Arena (<a href="/profile/arena">Profile → Arena</a>). Settle disputed scores here, void a result if needed, and see
+            the ladder. Points and ranks update straight away.
+          </>
+        }
+      />
       {ARENA_SANDBOX && (
-        <p style={{ ...card, background: "#fff8e1", borderColor: "#f0d48a" }}>
-          <strong>Preview sandbox.</strong> On this deployment the Arena uses its own <code>pv_</code> tables: test pairs and games never reach the real
-          Arena. Play days and round robin results are the real ones (read only).
-        </p>
+        <Notice>
+          <strong>Preview sandbox.</strong> On this preview the Arena uses its own test tables: test pairs and games never reach the real Arena. Play days and
+          round robin results are the real ones (read only).
+        </Notice>
       )}
 
-      <section style={card}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>Disputes ({disputes.length})</h2>
-        {disputes.length === 0 ? (
-          <p style={{ color: "#888", margin: 0 }}>Nothing to sort out.</p>
-        ) : (
-          disputes.map((c) => (
-            <div key={c.id} style={{ borderTop: "1px solid #eee", padding: "12px 0" }}>
-              <div style={{ fontSize: 14 }}>
-                <strong>{names(world, c.postingPlayers)}</strong> (posted) vs <strong>{names(world, c.acceptingPlayers)}</strong>
-              </div>
-              <div style={{ fontSize: 13, color: "#555", margin: "4px 0" }}>
-                Entered: <strong>{score(c)}</strong> by {world.players.get(c.enteredBy ?? 0)?.name ?? "?"} · disputed by{" "}
-                {world.players.get(c.disputedBy ?? 0)?.name ?? "?"} {c.playedOn ? `· played ${c.playedOn}` : ""}
-              </div>
-              {c.disputeNote && <div style={{ fontSize: 13, color: "#333", fontStyle: "italic" }}>“{c.disputeNote}”</div>}
-              <form style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                <input name="reason" placeholder="Note (for a void)" style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }} />
-                {c.scorePosting !== null || c.retiredBy ? (
-                  <button formAction={resolve.bind(null, c.id, "as_entered")} style={btn}>
-                    Score is right
-                  </button>
-                ) : null}
-                <button formAction={resolve.bind(null, c.id, "posting")} style={btnSecondary}>
-                  Posting pair won
-                </button>
-                <button formAction={resolve.bind(null, c.id, "accepting")} style={btnSecondary}>
-                  Accepting pair won
-                </button>
-                <button formAction={resolve.bind(null, c.id, "void")} style={btnDanger}>
-                  Void
-                </button>
-              </form>
-            </div>
-          ))
-        )}
-      </section>
+      <Tabs
+        label="Arena"
+        current={tab}
+        items={[
+          { key: "disputes", label: "Disputes", href: tabHref("disputes"), count: disputes.length },
+          { key: "results", label: "Results", href: tabHref("results") },
+          { key: "ladder", label: "Ladder", href: tabHref("ladder") },
+        ]}
+      />
 
-      <section style={card}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>Recent challenges</h2>
-        {recent.length === 0 ? (
-          <p style={{ color: "#888", margin: 0 }}>No challenges yet.</p>
+      {tab === "disputes" &&
+        (disputes.length === 0 ? (
+          <EmptyState>No disputed scores. Nothing to settle.</EmptyState>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          disputes.map((c) => {
+            const a = names(world, c.postingPlayers);
+            const b = names(world, c.acceptingPlayers);
+            const hasScore = c.scorePosting !== null || Boolean(c.retiredBy);
+            return (
+              <Section key={c.id} title={`${a} vs ${b}`}>
+                <p style={{ margin: "0 0 4px", fontSize: 14 }}>
+                  Score entered: <strong>{score(world, c)}</strong> by {world.players.get(c.enteredBy ?? 0)?.name ?? "someone"}
+                  {c.playedOn ? `, played ${formatNz(c.playedOn)}` : ""}.
+                </p>
+                <p style={{ margin: "0 0 10px", fontSize: 14 }}>
+                  Disputed by {world.players.get(c.disputedBy ?? 0)?.name ?? "someone"}
+                  {c.disputeNote ? (
+                    <>
+                      : <em>“{c.disputeNote}”</em>
+                    </>
+                  ) : (
+                    "."
+                  )}
+                </p>
+                <div className={kit.rowActions}>
+                  {hasScore && (
+                    <form action={resolve.bind(null, c.id, "as_entered", "disputes")}>
+                      <SubmitButton className={kit.btn} loadingText="Saving…" confirmMessage={`Keep ${score(world, c)} as the result?`}>
+                        Keep the score as entered
+                      </SubmitButton>
+                    </form>
+                  )}
+                  <form action={resolve.bind(null, c.id, "posting", "disputes")}>
+                    <SubmitButton className={kit.btnSecondary} loadingText="Saving…" confirmMessage={`Make ${a} the winners?`}>
+                      {a} won
+                    </SubmitButton>
+                  </form>
+                  <form action={resolve.bind(null, c.id, "accepting", "disputes")}>
+                    <SubmitButton className={kit.btnSecondary} loadingText="Saving…" confirmMessage={`Make ${b} the winners?`}>
+                      {b} won
+                    </SubmitButton>
+                  </form>
+                </div>
+                <form action={resolve.bind(null, c.id, "void", "disputes")} className={kit.toolbar} style={{ marginTop: 12, marginBottom: 0 }}>
+                  <label className={kit.field} style={{ flex: "1 1 260px" }}>
+                    Or void the match (no points for anyone): why?
+                    <input name="reason" required placeholder="e.g. couldn't agree on the score" className={kit.input} />
+                  </label>
+                  <SubmitButton className={kit.btnDanger} loadingText="Voiding…" confirmMessage="Void this match? Nobody gets points for it.">
+                    Void match
+                  </SubmitButton>
+                </form>
+              </Section>
+            );
+          })
+        ))}
+
+      {tab === "results" &&
+        (recent.length === 0 ? (
+          <EmptyState>No challenges played yet.</EmptyState>
+        ) : (
+          <div className={kit.tableWrap}>
+            <table className={kit.table}>
+              <caption className={kit.srOnly}>Recent challenges</caption>
               <thead>
-                <tr style={{ textAlign: "left", color: "#666" }}>
-                  <th style={{ padding: 6 }}>#</th>
-                  <th style={{ padding: 6 }}>Posted</th>
-                  <th style={{ padding: 6 }}>Pairs</th>
-                  <th style={{ padding: 6 }}>Score</th>
-                  <th style={{ padding: 6 }}>Status</th>
-                  <th style={{ padding: 6 }} />
+                <tr>
+                  <th scope="col">Posted</th>
+                  <th scope="col">Pairs</th>
+                  <th scope="col">Score</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">
+                    <span className={kit.srOnly}>Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {recent.map((c) => {
-                  const [bg, fg] = STATUS_STYLE[c.status] ?? ["#eee", "#333"];
+                  const st = STATUS[c.status] ?? { label: c.status, tone: "default" as BadgeTone };
                   return (
-                    <tr key={c.id} style={{ borderTop: "1px solid #eee" }}>
-                      <td style={{ padding: 6 }}>{c.id}</td>
-                      <td style={{ padding: 6, whiteSpace: "nowrap" }}>{formatNz(c.postedAt, true)}</td>
-                      <td style={{ padding: 6 }}>
-                        {names(world, c.postingPlayers)} <span style={{ color: "#999" }}>vs</span> {names(world, c.acceptingPlayers)}
+                    <tr key={c.id}>
+                      <td data-label="Posted" style={{ whiteSpace: "nowrap" }}>
+                        {formatNz(c.postedAt, true)}
                       </td>
-                      <td style={{ padding: 6 }}>{score(c)}{c.autoConfirmed ? " (auto)" : ""}</td>
-                      <td style={{ padding: 6 }}>
-                        <span style={pill(bg, fg)}>{c.status}</span>
-                        {c.voidReason ? <div style={{ color: "#888", fontSize: 12 }}>{c.voidReason}</div> : null}
+                      <td data-label="Pairs">
+                        {names(world, c.postingPlayers)} <span className={kit.muted}>vs</span> {names(world, c.acceptingPlayers)}
                       </td>
-                      <td style={{ padding: 6 }}>
+                      <td data-label="Score">
+                        {score(world, c)}
+                        {c.autoConfirmed ? <span className={kit.sub}>confirmed automatically</span> : null}
+                      </td>
+                      <td data-label="Status">
+                        <div>
+                          <Badge tone={st.tone}>{st.label}</Badge>
+                          {c.voidReason ? <span className={kit.sub}>{c.voidReason}</span> : null}
+                        </div>
+                      </td>
+                      <td data-label="">
                         {c.status === "completed" && (
-                          <form>
+                          <form action={resolve.bind(null, c.id, "void", "results")}>
                             <input type="hidden" name="reason" value="Voided by an admin" />
-                            <button formAction={resolve.bind(null, c.id, "void")} style={btnDanger}>
+                            <SubmitButton className={kit.btnDanger} loadingText="Voiding…" confirmMessage="Void this result? Both pairs lose the points it gave.">
                               Void
-                            </button>
+                            </SubmitButton>
                           </form>
                         )}
                       </td>
@@ -154,41 +202,51 @@ export default async function ChallengesAdminPage() {
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+        ))}
 
-      <section style={card}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>Ladder dry run</h2>
-        <p style={{ fontSize: 13, color: "#555", marginTop: 0 }}>
-          Where everyone with Wolf Points lands today ({withPoints.length} players): 1 WP per play day, 2 per round robin win, 2 per challenge win plus
-          bonuses. Thresholds live in <code>lib/ranks.ts</code>; the aim at launch is regulars in the Racket league and nobody in Diamond.
-        </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 6, fontSize: 13 }}>
-          {LADDER.map((r) => (
-            <div key={r.index} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "4px 8px", borderRadius: 6, background: counts.get(r.index) ? "#eef4f8" : "#fafafa" }}>
-              <span>
-                <span style={{ color: "#999" }}>{LEAGUES[r.league].en} · </span>
-                {rankName(r, "en")} <span style={{ color: "#999" }}>({r.wp})</span>
-              </span>
-              <strong>{counts.get(r.index) ?? 0}</strong>
+      {tab === "ladder" && (
+        <>
+          <InfoDisclosure summary="How Wolf Points and ranks work">
+            <p>Players earn Wolf Points (WP): 1 per play day, 2 per round robin win, and 2 per challenge win plus bonuses. Their points set their rank.</p>
+            <p>Seats go by Wolf Points in the last 90 days: the top player is the Alpha Wolf, the next three are Silver Wolves.</p>
+            <p>The top ranks need regular play: without enough points in the last 60 days the rank &ldquo;tarnishes&rdquo; and slips one rank per 30 days (never below the start of its league). Points are never taken away, so playing again restores it.</p>
+          </InfoDisclosure>
+          <Section title={`Players per rank (${withPoints.length} with points)`}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 6, fontSize: 13 }}>
+              {LADDER.map((r) => (
+                <div
+                  key={r.index}
+                  style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 10px", borderRadius: 8, background: counts.get(r.index) ? "#eef4f8" : "#fafafa" }}
+                >
+                  <span>
+                    <span className={kit.muted}>{LEAGUES[r.league].en} · </span>
+                    {rankName(r, "en")} <span className={kit.muted}>({r.wp} WP)</span>
+                  </span>
+                  <strong>{counts.get(r.index) ?? 0}</strong>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <h3 style={{ fontSize: 15, marginBottom: 6 }}>Top 25 by Wolf Points</h3>
-        <ol style={{ fontSize: 13, margin: 0, paddingLeft: 22 }}>
-          {top.map(([id, r]) => (
-            <li key={id}>
-              {world.players.get(id)?.name}: <strong>{r.wpTotal} WP</strong> → {rankName(LADDER[r.earned], "en")}
-              <span style={{ color: "#888" }}>
-                {" "}
-                (play days {r.wpPlayDays}, round robin {r.wpRoundRobin}, challenges {r.wpChallenges + r.wpBonuses})
-                {r.seat ? ` · ${r.seat === "alpha" ? "Alpha Wolf" : "Silver Wolf"}` : ""}
-                {r.tarnishing ? " · tarnishing" : ""}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
+          </Section>
+          <Section title="Top 25 by Wolf Points">
+            {top.length === 0 ? (
+              <EmptyState>Nobody has Wolf Points yet.</EmptyState>
+            ) : (
+              <ol style={{ fontSize: 14, margin: 0, paddingLeft: 22, lineHeight: 1.7 }}>
+                {top.map(([id, r]) => (
+                  <li key={id}>
+                    {world.players.get(id)?.name}: <strong>{r.wpTotal} WP</strong>, {rankName(LADDER[r.earned], "en")}
+                    {r.seat ? ` · ${r.seat === "alpha" ? "Alpha Wolf" : "Silver Wolf"}` : ""}
+                    {r.tarnishing ? " · tarnishing" : ""}
+                    <span className={kit.sub}>
+                      play days {r.wpPlayDays} · round robin {r.wpRoundRobin} · challenges {r.wpChallenges + r.wpBonuses}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Section>
+        </>
+      )}
     </div>
   );
 }

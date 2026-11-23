@@ -28,7 +28,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Play",
     items: [
       { href: "/admin/play-days", label: "Play days" },
-      { href: "/admin/day-requests", label: "Schedule", badge: "dayRequests" },
+      { href: "/admin/play-days/schedule", label: "Schedule", badge: "dayRequests", match: ["/admin/day-requests"] },
       { href: "/admin/challenges", label: "Arena", badge: "disputes" },
     ],
   },

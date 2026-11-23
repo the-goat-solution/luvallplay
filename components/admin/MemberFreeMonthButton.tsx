@@ -1,5 +1,6 @@
 "use client";
 
+import k from "@/components/admin/kit/kit.module.css";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingIcon } from "@/components/LoadingIcon";
@@ -78,20 +79,8 @@ export function MemberFreeMonthButton({
         type="button"
         onClick={onClick}
         disabled={busy}
-        style={{
-          padding: "5px 12px",
-          borderRadius: 6,
-          border: "1px solid #1a7a3c",
-          background: "#fff",
-          color: "#1a7a3c",
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: busy ? "default" : "pointer",
-          opacity: busy ? 0.6 : 1,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-        }}
+        className={k.btnSecondary}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
       >
         {showBusy ? (
           <>

@@ -19,6 +19,9 @@ import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMeth
 import { sendMembershipConfirmationEmail } from "@/lib/email";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import adminStyles from "@/components/admin/admin.module.css";
+import { Badge, EmptyState, FormPanel, InfoDisclosure, Notice, PageHeader, StatGrid, StatTile, Tabs, kit, type BadgeTone } from "@/components/admin/kit";
+import { listRecentFeedback } from "@/lib/membership-self-service";
+import { formatNz } from "@/components/admin/ui";
 import { CashMemberDayAndDateFields } from "@/components/admin/CashMemberDayAndDateFields";
 import { MemberCancelButton } from "@/components/admin/MemberCancelButton";
 import { MemberRetryButton } from "@/components/admin/MemberRetryButton";
@@ -163,440 +166,350 @@ async function addOfflineMember(formData: FormData) {
 // completed. Each one has an outstanding invoice the admin can re-attempt.
 const OVERDUE_STATUSES = new Set(["past_due", "unpaid", "incomplete"]);
 
+const day = (key: string | null | undefined) =>
+  key ? new Date(`${key}T00:00:00Z`).toLocaleDateString("en-NZ", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }) : "—";
+
 function TransferStatus({ status }: { status: OfflineReconciliation | undefined }) {
   return status?.reconciled ? (
-    <div style={{ fontSize: 12, color: "#1a7a3c" }}>
-      ✓ Matched to bank{status.bankDate ? ` (${status.bankDate})` : ""}
-    </div>
+    <span className={kit.sub} style={{ color: "#1a7a3c" }}>
+      ✓ Matched to the bank{status.bankDate ? ` (${day(status.bankDate)})` : ""}
+    </span>
   ) : (
-    <div style={{ fontSize: 12, color: "#8a4b00" }}>Awaiting bank transaction</div>
+    <span className={kit.sub} style={{ color: "#8a4b00" }}>
+      Waiting for the bank transfer
+    </span>
   );
 }
 
-function MembersTable({
-  title,
-  members,
-  reconciliation,
-}: {
-  title: string;
-  members: MembershipRow[];
-  reconciliation: Map<string, OfflineReconciliation>;
-}) {
+function statusOf(m: MembershipRow, today: string): { label: string; tone: BadgeTone; urgent: boolean } {
+  if (m.status === "past_due") return { label: "Payment failed", tone: "bad", urgent: true };
+  if (m.status === "unpaid") return { label: "Payment failed, Stripe stopped retrying", tone: "bad", urgent: true };
+  if (m.status === "incomplete") return { label: "First payment not finished", tone: "bad", urgent: true };
+  if (m.cancelAtPeriodEnd) return { label: `Stops ${day(m.periodEnd)}`, tone: "warn", urgent: false };
+  if (!m.recurring && m.periodEnd && m.periodEnd < today) return { label: "Ended", tone: "default", urgent: false };
+  if (m.status === "trialing") return { label: "Trial", tone: "good", urgent: false };
+  if (m.status === "active") return { label: "Active", tone: "good", urgent: false };
+  return { label: m.status.replace(/_/g, " "), tone: "default", urgent: false };
+}
+
+function MembersTable({ members, reconciliation }: { members: MembershipRow[]; reconciliation: Map<string, OfflineReconciliation> }) {
   const { dateKey: today } = getClubToday();
+  // Problems first, then by name.
+  const rows = [...members].sort((a, b) => Number(statusOf(b, today).urgent) - Number(statusOf(a, today).urgent) || a.name.localeCompare(b.name));
   return (
-    <div style={{ marginBottom: 36 }}>
-      <p style={{ fontWeight: 600, marginBottom: 8 }}>
-        {title} ({members.length})
-      </p>
-      <div className={adminStyles.tableWrap}>
-        <table
-          style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
-        >
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-              <th style={{ padding: "6px 8px" }}>Name</th>
-              <th style={{ padding: "6px 8px" }}>Email</th>
-              <th style={{ padding: "6px 8px" }}>Phone</th>
-              <th style={{ padding: "6px 8px" }}>Day</th>
-              <th style={{ padding: "6px 8px" }}>Started</th>
-              <th style={{ padding: "6px 8px" }}>Renews / ends</th>
-              <th style={{ padding: "6px 8px" }}>Billing</th>
-              <th style={{ padding: "6px 8px" }}>Payment</th>
-              <th style={{ padding: "6px 8px" }}>Status</th>
-              <th style={{ padding: "6px 8px" }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.length === 0 ? (
-              <tr>
-                <td colSpan={10} style={{ padding: "10px 8px", color: "#888" }}>
-                  No {title.toLowerCase()}.
+    <div className={kit.tableWrap}>
+      <table className={kit.table}>
+        <caption className={kit.srOnly}>Members</caption>
+        <thead>
+          <tr>
+            <th scope="col">Member</th>
+            <th scope="col">Plan</th>
+            <th scope="col">Period</th>
+            <th scope="col">Payment</th>
+            <th scope="col">Status</th>
+            <th scope="col">
+              <span className={kit.srOnly}>Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((m) => {
+            const st = statusOf(m, today);
+            return (
+              <tr key={m.id}>
+                <td data-label="Member">
+                  <div>
+                    <strong>{m.name}</strong>
+                    <span className={kit.sub}>
+                      {m.email}
+                      {m.phone ? ` · ${m.phone}` : ""}
+                    </span>
+                  </div>
                 </td>
-              </tr>
-            ) : (
-              members.map((m) => (
-                <tr key={m.id} style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ padding: "6px 8px" }}>{m.name}</td>
-                  <td style={{ padding: "6px 8px" }}>{m.email}</td>
-                  <td style={{ padding: "6px 8px" }}>{m.phone ?? ""}</td>
-                  <td style={{ padding: "6px 8px" }}>
-                    {m.day === "wednesday" ? "Wed" : "Fri"}
-                  </td>
-                  <td style={{ padding: "6px 8px" }}>{m.periodStart ?? ""}</td>
-                  <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
-                  <td style={{ padding: "6px 8px" }}>
-                    {m.recurring ? "Auto-renews" : "One-time"}
+                <td data-label="Plan">
+                  <div>
+                    {m.plan === "quarterly" ? "Quarterly" : "Monthly"} · {m.day === "wednesday" ? "Wednesdays" : "Fridays"}
+                    <span className={kit.sub}>{m.recurring ? "Renews automatically" : "One-time payment"}</span>
                     {m.freeDaysGranted ? (
-                      <div style={{ fontSize: 12, color: "#1a7a3c" }}>
-                        +{Math.round(m.freeDaysGranted / 7)} wks free given
-                      </div>
+                      <span className={kit.sub} style={{ color: "#1a7a3c" }}>
+                        +{Math.round(m.freeDaysGranted / 7)} free weeks given
+                      </span>
                     ) : null}
-                    {!m.recurring && m.renewalReminderSentAt ? (
-                      <div style={{ fontSize: 12, color: "#666" }}>
-                        Renewal email sent{" "}
-                        {new Date(m.renewalReminderSentAt).toLocaleDateString("en-NZ", {
-                          timeZone: "Pacific/Auckland",
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td style={{ padding: "6px 8px" }}>
+                  </div>
+                </td>
+                <td data-label="Period">
+                  <div>
+                    {day(m.periodStart)} → {day(m.periodEnd)}
+                    {!m.recurring && m.renewalReminderSentAt ? <span className={kit.sub}>Renewal reminder sent {formatNz(m.renewalReminderSentAt)}</span> : null}
+                  </div>
+                </td>
+                <td data-label="Payment">
+                  <div>
                     {PAYMENT_METHOD_LABEL[m.method]}
-                    {m.method === "bank_transfer" ? (
-                      <TransferStatus
-                        status={reconciliation.get(
-                          offlineInvoiceIdFromRef(m.stripePaymentIntentId) ?? "",
-                        )}
-                      />
+                    {m.method === "bank_transfer" ? <TransferStatus status={reconciliation.get(offlineInvoiceIdFromRef(m.stripePaymentIntentId) ?? "")} /> : null}
+                  </div>
+                </td>
+                <td data-label="Status">
+                  <Badge tone={st.tone}>{st.label}</Badge>
+                </td>
+                <td data-label="">
+                  <div className={kit.rowActions}>
+                    {OVERDUE_STATUSES.has(m.status) && m.stripeSubscriptionId ? <MemberRetryButton membershipId={m.id} memberName={m.name} /> : null}
+                    {m.status === "active" && (m.recurring ? !m.cancelAtPeriodEnd && m.stripeSubscriptionId : m.periodEnd && m.periodEnd >= today) ? (
+                      <MemberFreeMonthButton membershipId={m.id} memberName={m.name} periodEnd={m.periodEnd} plan={m.plan} recurring={m.recurring} />
                     ) : null}
-                  </td>
-                  <td style={{ padding: "6px 8px" }}>
-                    {m.cancelAtPeriodEnd ? (
-                      <span style={{ color: "#b00020" }}>
-                        Cancels {m.periodEnd ?? "at period end"}
-                      </span>
-                    ) : !m.recurring && m.periodEnd && m.periodEnd < today ? (
-                      <span style={{ color: "#b00020" }}>Expired</span>
-                    ) : (
-                      <span
-                        style={{
-                          color: OVERDUE_STATUSES.has(m.status)
-                            ? "#b00020"
-                            : "#1a7a3c",
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {m.status.replace("_", " ")}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: "6px 8px" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 6,
-                        alignItems: "flex-start",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      {OVERDUE_STATUSES.has(m.status) && m.stripeSubscriptionId ? (
-                        <MemberRetryButton
-                          membershipId={m.id}
-                          memberName={m.name}
-                        />
-                      ) : null}
-                      {m.status === "active" &&
-                      (m.recurring
-                        ? !m.cancelAtPeriodEnd && m.stripeSubscriptionId
-                        : m.periodEnd && m.periodEnd >= today) ? (
-                        <MemberFreeMonthButton
-                          membershipId={m.id}
-                          memberName={m.name}
-                          periodEnd={m.periodEnd}
-                          plan={m.plan}
-                          recurring={m.recurring}
-                        />
-                      ) : null}
-                      {m.recurring && !m.cancelAtPeriodEnd ? (
-                        <MemberCancelButton
-                          membershipId={m.id}
-                          memberName={m.name}
-                          mode="cancel"
-                        />
-                      ) : !m.recurring ? (
-                        <MemberCancelButton
-                          membershipId={m.id}
-                          memberName={m.name}
-                          mode="remove"
-                        />
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// Memberships that ended in the last 60 days — kept visible so it's easy to
-// see who lapsed (and who to nudge to rejoin).
-function RecentlyEndedTable({ members }: { members: MembershipRow[] }) {
-  return (
-    <div style={{ marginBottom: 36 }}>
-      <p style={{ fontWeight: 600, marginBottom: 8 }}>
-        Ended in the last 60 days ({members.length})
-      </p>
-      <div className={adminStyles.tableWrap}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-              <th style={{ padding: "6px 8px" }}>Name</th>
-              <th style={{ padding: "6px 8px" }}>Email</th>
-              <th style={{ padding: "6px 8px" }}>Plan</th>
-              <th style={{ padding: "6px 8px" }}>Day</th>
-              <th style={{ padding: "6px 8px" }}>Started</th>
-              <th style={{ padding: "6px 8px" }}>Ended</th>
-              <th style={{ padding: "6px 8px" }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: "10px 8px", color: "#888" }}>
-                  No memberships ended recently.
+                    {m.recurring && !m.cancelAtPeriodEnd ? (
+                      <MemberCancelButton membershipId={m.id} memberName={m.name} mode="cancel" />
+                    ) : !m.recurring ? (
+                      <MemberCancelButton membershipId={m.id} memberName={m.name} mode="remove" />
+                    ) : null}
+                  </div>
                 </td>
               </tr>
-            ) : (
-              members.map((m) => (
-                <tr key={m.id} style={{ borderBottom: "1px solid #eee", color: "#666" }}>
-                  <td style={{ padding: "6px 8px" }}>{m.name}</td>
-                  <td style={{ padding: "6px 8px" }}>{m.email}</td>
-                  <td style={{ padding: "6px 8px", textTransform: "capitalize" }}>
-                    {m.plan} · {m.recurring ? "auto-renew" : "one-time"}
-                  </td>
-                  <td style={{ padding: "6px 8px" }}>
-                    {m.day === "wednesday" ? "Wed" : "Fri"}
-                  </td>
-                  <td style={{ padding: "6px 8px" }}>{m.periodStart ?? ""}</td>
-                  <td style={{ padding: "6px 8px" }}>{m.periodEnd ?? ""}</td>
-                  <td style={{ padding: "6px 8px", textTransform: "capitalize" }}>
-                    {m.status}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-export default async function MembersAdminPage() {
-  const { memberships, activeMemberCount, recentlyEnded, audit, reconciliation } = process.env.POSTGRES_URL
-    ? await (async () => {
-        // Same upkeep the daily cron runs, so the list below never shows a
-        // membership that has already ended as active.
-        let audit: MembershipAuditResult | null = null;
-        try {
-          audit = await auditMembershipStatuses();
-        } catch (err) {
-          console.error("Membership status audit failed", err);
-        }
-        const [memberships, activeMemberCount, recentlyEnded] = await Promise.all([
-          listMemberships(),
-          getTotalActiveMemberCount(),
-          listRecentlyEndedMemberships(addDays(getClubToday().dateKey, -60)),
-        ]);
-        // Bank-transfer members show whether the transfer has been matched
-        // to the bank statement yet.
-        let reconciliation = new Map<string, OfflineReconciliation>();
-        try {
-          reconciliation = await getOfflinePaymentReconciliation(
-            memberships
-              .filter((m) => m.method === "bank_transfer")
-              .map((m) => offlineInvoiceIdFromRef(m.stripePaymentIntentId))
-              .filter((id): id is string => Boolean(id)),
-          );
-        } catch (err) {
-          console.error("Failed to load bank reconciliation for members", err);
-        }
-        return { memberships, activeMemberCount, recentlyEnded, audit, reconciliation };
-      })()
-    : {
-        memberships: [],
-        activeMemberCount: 0,
-        recentlyEnded: [],
-        audit: null,
-        reconciliation: new Map<string, OfflineReconciliation>(),
-      };
+type Tab = "active" | "ended" | "leaving";
+type PlanFilter = "all" | "monthly" | "quarterly";
 
-  const monthly = memberships.filter((m) => m.plan === "monthly");
-  const quarterly = memberships.filter((m) => m.plan === "quarterly");
+export default async function MembersAdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; plan?: string }> }) {
+  const { tab: tabParam, plan: planParam } = await searchParams;
+  const tab: Tab = tabParam === "ended" || tabParam === "leaving" ? tabParam : "active";
+  const plan: PlanFilter = planParam === "monthly" || planParam === "quarterly" ? planParam : "all";
+  if (!process.env.POSTGRES_URL) {
+    return (
+      <div className={adminStyles.page}>
+        <PageHeader title="Members" />
+        <EmptyState>Database is not configured.</EmptyState>
+      </div>
+    );
+  }
+  // Same upkeep the daily cron runs, so the list never shows a membership
+  // that has already ended as active.
+  let audit: MembershipAuditResult | null = null;
+  try {
+    audit = await auditMembershipStatuses();
+  } catch (err) {
+    console.error("Membership status audit failed", err);
+  }
+  const [memberships, activeMemberCount, recentlyEnded, feedback] = await Promise.all([
+    listMemberships(),
+    getTotalActiveMemberCount(),
+    listRecentlyEndedMemberships(addDays(getClubToday().dateKey, -60)),
+    listRecentFeedback(30).catch(() => []),
+  ]);
+  // Bank-transfer members show whether the transfer has been matched yet.
+  let reconciliation = new Map<string, OfflineReconciliation>();
+  try {
+    reconciliation = await getOfflinePaymentReconciliation(
+      memberships
+        .filter((m) => m.method === "bank_transfer")
+        .map((m) => offlineInvoiceIdFromRef(m.stripePaymentIntentId))
+        .filter((id): id is string => Boolean(id)),
+    );
+  } catch (err) {
+    console.error("Failed to load bank reconciliation for members", err);
+  }
+
+  const failing = memberships.filter((m) => OVERDUE_STATUSES.has(m.status)).length;
+  const shown = plan === "all" ? memberships : memberships.filter((m) => m.plan === plan);
+  const tabHref = (t: Tab) => (t === "active" ? "/admin/members" : `/admin/members?tab=${t}`);
+  const planHref = (p: PlanFilter) => (p === "all" ? "/admin/members" : `/admin/members?plan=${p}`);
 
   return (
     <div className={adminStyles.page}>
-      <h1 className={adminStyles.title}>Members</h1>
-      <p className={adminStyles.subtitle}>
-        Monthly and quarterly members with an active subscription.
-      </p>
+      <PageHeader title="Members" subtitle="Everyone with a monthly or quarterly membership, paid by card, cash or bank transfer." actions={<StripeSyncButton />} />
 
-      {!process.env.POSTGRES_URL ? (
-        <p>Database is not configured.</p>
-      ) : (
+      <StatGrid>
+        <StatTile label="Active members" value={activeMemberCount} hint={<AdminLink href="/admin/play-days">places per play day →</AdminLink>} />
+        <StatTile label="Monthly" value={memberships.filter((m) => m.plan === "monthly").length} />
+        <StatTile label="Quarterly" value={memberships.filter((m) => m.plan === "quarterly").length} />
+        <StatTile label="Payment problems" value={failing} tone={failing ? "bad" : undefined} hint={failing ? "listed first below" : "none"} />
+      </StatGrid>
+
+      {audit && audit.changed.length > 0 ? (
+        <Notice>
+          Marked {audit.changed.length} membership{audit.changed.length === 1 ? "" : "s"} as ended: they were past their end date but still showed as active (
+          {audit.changed.map((c) => `${c.name}, ended ${day(c.periodEnd)}`).join("; ")}).
+        </Notice>
+      ) : null}
+      {audit && audit.errors > 0 ? (
+        <Notice tone="error">
+          {audit.errors} membership{audit.errors === 1 ? "" : "s"} couldn&apos;t be checked with Stripe just now. They&apos;re retried automatically.
+        </Notice>
+      ) : null}
+
+      <Tabs
+        label="Members"
+        current={tab}
+        items={[
+          { key: "active", label: "Members", href: tabHref("active"), count: memberships.length },
+          { key: "ended", label: "Ended recently", href: tabHref("ended"), count: recentlyEnded.length },
+          { key: "leaving", label: "Why people leave", href: tabHref("leaving"), count: feedback.length },
+        ]}
+      />
+
+      {tab === "active" && (
         <>
-          <p
-            style={{
-              background: "#eef2f7",
-              color: "#1a2a4a",
-              padding: "10px 14px",
-              borderRadius: 6,
-              marginBottom: 20,
-              fontSize: 13,
-            }}
-          >
-            {activeMemberCount} active member
-            {activeMemberCount === 1 ? "" : "s"} total — capacity varies per
-            play day and per member&apos;s active period, see the{" "}
-            <AdminLink href="/admin/play-days">Play days</AdminLink> page for a specific date.
-          </p>
-          <StripeSyncButton />
-          {audit && audit.changed.length > 0 ? (
-            <div
-              role="status"
-              style={{
-                background: "#fff4e5",
-                color: "#8a4b00",
-                padding: "10px 14px",
-                borderRadius: 6,
-                marginBottom: 20,
-                fontSize: 13,
-              }}
-            >
-              Marked {audit.changed.length} membership
-              {audit.changed.length === 1 ? "" : "s"} as ended — they were
-              past their end date but still showed as active:{" "}
-              {audit.changed
-                .map((c) => `${c.name} (${c.status}, ended ${c.periodEnd ?? "?"})`)
-                .join(", ")}
-              .
-            </div>
-          ) : null}
-          {audit && audit.errors > 0 ? (
-            <p style={{ color: "#b00020", fontSize: 13, marginBottom: 20 }}>
-              {audit.errors} membership{audit.errors === 1 ? "" : "s"} couldn&apos;t
-              be checked against Stripe just now — they&apos;ll be retried
-              automatically.
-            </p>
-          ) : null}
-          <MembersTable title="Monthly members" members={monthly} reconciliation={reconciliation} />
-          <MembersTable title="Quarterly members" members={quarterly} reconciliation={reconciliation} />
-          <RecentlyEndedTable members={recentlyEnded} />
+          <div className={kit.toolbar}>
+            <FormPanel summary="＋ Add a member" title="Add a member who paid cash or by bank transfer" id="add">
+              <p className={kit.muted} style={{ fontSize: 13, margin: 0 }}>
+                They get the same welcome email as a card sign-up and start on the next play day with room on their day (or the date you pick). A bank transfer
+                is matched on the <AdminLink href="/admin/financials/bank">Bank</AdminLink> page as soon as it shows up.
+              </p>
+              <form action={addOfflineMember} className={kit.formGrid}>
+                <label className={kit.field}>
+                  First name
+                  <input name="firstName" required className={kit.input} autoComplete="off" />
+                </label>
+                <label className={kit.field}>
+                  Last name
+                  <input name="lastName" required className={kit.input} autoComplete="off" />
+                </label>
+                <label className={kit.field}>
+                  Email
+                  <input type="email" name="email" required className={kit.input} autoComplete="off" />
+                </label>
+                <label className={kit.field}>
+                  Phone (optional)
+                  <input name="phone" className={kit.input} autoComplete="off" />
+                </label>
+                <label className={kit.field}>
+                  Plan
+                  <select name="plan" defaultValue="monthly" className={kit.select}>
+                    <option value="monthly">Monthly (${MONTHLY_PRICE_CENTS / 100})</option>
+                    <option value="quarterly">Quarterly (${QUARTERLY_PRICE_CENTS / 100})</option>
+                  </select>
+                </label>
+                <OfflinePaymentMethodField />
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <CashMemberDayAndDateFields />
+                </div>
+                <div>
+                  <SubmitButton className={kit.btn} loadingText="Adding…">
+                    Add member
+                  </SubmitButton>
+                </div>
+              </form>
+            </FormPanel>
+          </div>
 
-          <h2 style={{ fontSize: 16, marginTop: 32, marginBottom: 8 }}>
-            Add offline payment member
-          </h2>
-          <p style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>
-            For a member who paid in cash or by bank transfer. Records a Stripe
-            customer and invoice marked as paid out-of-band, assigns them the
-            next session with room on the chosen day, and sends the same
-            welcome email a card signup would get. A bank transfer is matched to
-            its bank transaction automatically — straight away if it&apos;s
-            already in the bank feed, otherwise as soon as it arrives (see{" "}
-            <AdminLink href="/admin/financials/bank">Bank</AdminLink>).
-          </p>
-          <form
-            action={addOfflineMember}
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              alignItems: "flex-end",
-            }}
-          >
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
-                First name
-              </label>
-              <input
-                name="firstName"
-                required
-                style={{
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #ccc",
-                  fontSize: 13,
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
-                Last name
-              </label>
-              <input
-                name="lastName"
-                required
-                style={{
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #ccc",
-                  fontSize: 13,
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                required
-                style={{
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #ccc",
-                  fontSize: 13,
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
-                Phone (optional)
-              </label>
-              <input
-                name="phone"
-                style={{
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #ccc",
-                  fontSize: 13,
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#666" }}>
-                Plan
-              </label>
-              <select
-                name="plan"
-                defaultValue="monthly"
-                style={{
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #ccc",
-                  fontSize: 13,
-                }}
-              >
-                <option value="monthly">Monthly ($33)</option>
-                <option value="quarterly">Quarterly ($85)</option>
-              </select>
-            </div>
-            <OfflinePaymentMethodField />
-            <CashMemberDayAndDateFields />
-            <SubmitButton
-              loadingText="Adding…"
-              style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #1a2a4a",
-                background: "#1a2a4a",
-                color: "#fff",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
-              Add member
-            </SubmitButton>
-          </form>
+          <nav className={kit.rowActions} aria-label="Plan" style={{ marginBottom: 10 }}>
+            {(["all", "monthly", "quarterly"] as const).map((p) => (
+              <AdminLink key={p} href={planHref(p)} current={p === plan} className={p === plan ? kit.btn : kit.btnSecondary}>
+                {p === "all" ? "All plans" : p === "monthly" ? "Monthly" : "Quarterly"}
+              </AdminLink>
+            ))}
+          </nav>
+
+          {shown.length === 0 ? <EmptyState>No members on this plan yet.</EmptyState> : <MembersTable members={shown} reconciliation={reconciliation} />}
+
+          <InfoDisclosure summary="What the actions do">
+            <p>
+              <strong>Retry payment</strong> charges the card on file for a failed renewal. <strong>Give free month</strong> adds 4 free weeks.
+            </p>
+            <p>
+              <strong>Stop renewing</strong> (card members): they keep playing until the end of the period they&apos;ve paid for. <strong>End now</strong>{" "}
+              (one-time members): the membership ends today and the spot is freed. Neither refunds anything.
+            </p>
+          </InfoDisclosure>
         </>
       )}
+
+      {tab === "ended" &&
+        (recentlyEnded.length === 0 ? (
+          <EmptyState>No memberships ended in the last 60 days.</EmptyState>
+        ) : (
+          <>
+            <p className={kit.muted} style={{ fontSize: 13, marginTop: 0 }}>
+              Memberships that ended in the last 60 days: people you might invite back.
+            </p>
+            <div className={kit.tableWrap}>
+              <table className={kit.table}>
+                <caption className={kit.srOnly}>Ended recently</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Member</th>
+                    <th scope="col">Plan</th>
+                    <th scope="col">Period</th>
+                    <th scope="col">Ended</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentlyEnded.map((m) => (
+                    <tr key={m.id}>
+                      <td data-label="Member">
+                        <div>
+                          {m.name}
+                          <span className={kit.sub}>{m.email}</span>
+                        </div>
+                      </td>
+                      <td data-label="Plan">
+                        {m.plan === "quarterly" ? "Quarterly" : "Monthly"} · {m.day === "wednesday" ? "Wednesdays" : "Fridays"} ·{" "}
+                        {m.recurring ? "auto-renew" : "one-time"}
+                      </td>
+                      <td data-label="Period">
+                        {day(m.periodStart)} → {day(m.periodEnd)}
+                      </td>
+                      <td data-label="Ended">
+                        <div className={kit.rowActions}>
+                          <Badge>{m.status === "canceled" ? "Cancelled" : "Ended"}</Badge>
+                          <AdminLink href={`/admin/inbox?to=${encodeURIComponent(m.email)}#new`} className={kit.btnSecondary}>
+                            Message
+                          </AdminLink>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ))}
+
+      {tab === "leaving" &&
+        (feedback.length === 0 ? (
+          <EmptyState>No feedback yet. Members are asked why when they turn off auto-renew or switch plans.</EmptyState>
+        ) : (
+          <div className={kit.tableWrap}>
+            <table className={kit.table}>
+              <caption className={kit.srOnly}>Why people leave</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Member</th>
+                  <th scope="col">What they did</th>
+                  <th scope="col">Why</th>
+                  <th scope="col">When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feedback.map((f, i) => (
+                  <tr key={i}>
+                    <td data-label="Member">
+                      <div>
+                        {f.name || f.email}
+                        {f.name && <span className={kit.sub}>{f.email}</span>}
+                      </div>
+                    </td>
+                    <td data-label="What they did">{f.action === "cancel" ? "Turned off auto-renew" : "Switched to Monthly"}</td>
+                    <td data-label="Why">
+                      <div>
+                        {f.reason}
+                        {f.comment ? <span className={kit.sub}>&ldquo;{f.comment}&rdquo;</span> : null}
+                      </div>
+                    </td>
+                    <td data-label="When">{formatNz(f.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
     </div>
   );
 }

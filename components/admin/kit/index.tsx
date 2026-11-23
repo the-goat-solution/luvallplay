@@ -169,9 +169,21 @@ export function InfoDisclosure({ summary, children }: { summary: string; childre
 }
 
 /** A form that opens in place from a button (no JavaScript needed). */
-export function FormPanel({ summary, title, children, id }: { summary: string; title: string; children: ReactNode; id?: string }) {
+export function FormPanel({
+  summary,
+  title,
+  children,
+  id,
+  defaultOpen,
+}: {
+  summary: string;
+  title: string;
+  children: ReactNode;
+  id?: string;
+  defaultOpen?: boolean;
+}) {
   return (
-    <details className={k.panel} id={id}>
+    <details className={k.panel} id={id} open={defaultOpen}>
       <summary className={k.btn}>{summary}</summary>
       <div className={k.panelBody}>
         <h3 className={k.panelTitle}>{title}</h3>

@@ -35,6 +35,12 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **X: Vietnam launch scope.** Club tools with VietQR bank transfer, local online payments, and Zalo support. **Social and marketplace are in Vietnam's roadmap, but gated by Z.** A discovery round with 5 to 10 Vietnamese clubs starts now, with no engineering needed (§11.4).
 - **Y: region-aware from the start.** Every club has a region and the platform can run separate regional deployments. Sydney is live first; where Vietnam's data lives is decided with Vietnamese counsel (§6.9).
 - **Z: social and marketplace are gated** by real thresholds and each country's legal checks. **Find a club** and per-sport ratings come first (§8).
+- **AA: Kelcee** is President of Three Wolves, unpaid, with no equity or fee. Kelcee stays a platform admin, but only after signing a confidentiality and data-handling agreement with the NZ company (§11.1).
+- **AB: Timba is the NZ company's resident director**, while also TGS's CEO and Three Wolves' Treasurer. Rules to manage the three roles are in §11.1.
+- **AC: Vietnam's online payments use MoMo**, with **each club connecting its own MoMo merchant account** (Luvallplay never holds club money). VietQR bank transfer is the default for clubs that can't. MoMo's own rules are **unverified** (§6.5, §11.4).
+- **AD: Zalo support means chat and booking.** **One Luvallplay Official Account** messages members for all clubs, and one Luvallplay mini app offers booking, with club pages. Zalo's rules are **unverified** (§11.4).
+- **AE: the Vietnam region is hosted in Hanoi**, on a Vietnamese cloud with managed services, run by TGS engineers. That means a second hosting stack, because Vercel and Neon have no Hanoi region (§6.9).
+- **AF: Vision is a platform product, and its revenue goes to TGS** (§11.2).
 - **First outside feedback:** the current order stays (outside clubs join after the setup wizard). Recruiting and interviews, which need no engineering, still start now.
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
@@ -59,7 +65,7 @@ The work runs in **8 phases (0–7) over roughly 23–29 weeks** of focused buil
 | 3b | **Junior accounts** | Guardian-managed junior profiles, safeguarding rules and forms (§6.8) | 2–3 wks |
 | 7 | **Global modules** | Find a club nearby, then per-sport leaderboards. Social and marketplace only when the gate passes (§8, §11.6). Each module is opt-in per club | 3–5 wks each |
 | B | **Business foundations (track)** | NZ company, legal pack, company-owned accounts, trademark, IP audit, cost model and metering: the hard gates in §11.3. Runs from week 0 beside Phase 2 | weeks 0–8 |
-| V | **Vietnam launch pack (track)** | Discovery now; then VietQR and local payments, Zalo, Vietnamese localisation, region (§11.4). Social and marketplace stay gated | 4–6 wks build |
+| V | **Vietnam launch pack (track)** | Discovery now; then VietQR and local payments, Zalo, Vietnamese localisation, region (§11.4). Social and marketplace stay gated | 8–12 wks build |
 
 **My biggest recommendations (detail in each section):**
 
@@ -677,7 +683,9 @@ The three payment modes (§6.2.1: free, cash or bank transfer, online) stay the 
 | Country | Online payments | Bank transfer | Bank-feed matching |
 |---|---|---|---|
 | **NZ, Australia** | **Stripe Connect**, with the **NZ company** as the platform account (Accounts v2, direct charges, application fee 0%) | NZ bank account details and a unique reference | Akahu (NZ). Australia needs another provider |
-| **Vietnam** | A Vietnamese gateway (VNPay, MoMo, ZaloPay, PayOS or similar, **chosen after discovery**, §11.4). Wallet payouts can take 1 to 7 working days. **Stripe isn't a realistic option there** | **VietQR** code with amount and reference, from the club's own bank account | A Vietnamese bank-feed matching provider (to choose) |
+| **Vietnam** | **MoMo** (decision AC), with **each club connecting its own MoMo merchant account**. **Stripe isn't a realistic option there** | **VietQR** code with amount and reference, from the club's own bank account. This is the default, and the only option for clubs that can't get a MoMo merchant account | A Vietnamese bank-feed matching provider (to choose) |
+
+*Unverified for MoMo:* I couldn't read MoMo's developer documentation from the planning environment. These points need confirming at developers.momo.vn or with MoMo before the Vietnam build: whether clubs and informal groups can become merchants (and with which documents), whether MoMo has a platform or partner programme for many sub-merchants, whether recurring or auto-debit payments exist, settlement timing (general sources say wallet payouts can take 1 to 7 working days), refunds, and webhooks (IPN). **Why each club has its own account:** collecting money for other businesses and paying it on can need a State Bank payment-intermediary licence in Vietnam (Decree 52/2024, with high capital requirements reported for collection and payment support services; **Check** with Vietnamese counsel).
 
 - **One Payments interface, several providers.** Every provider implements the same operations (create payment, refund, recurring billing, verify webhook, reconcile, payout status) and declares its **capabilities**, so screens adapt: for example, auto-renewing subscriptions only appear where the provider supports recurring charges, otherwise members get renewal reminders with a QR code. Stripe is the first provider; adding a provider is a module, not a rewrite.
 - **Money is stored as integer minor units plus a currency**, and each currency has its own exponent (NZD and AUD have 2, **VND has 0**: amounts are whole dong). Today's `*_cents` columns and every divide-by-100 in the code must be audited in Phase 3, with tests that use VND amounts.
@@ -748,10 +756,34 @@ Decision V: no longer 16+ only. **Juniors (under 16) never get their own login.*
 ### 6.9 Regions and country packs
 
 **Regions (decision Y).** A region is a complete deployment: its own database, storage and compute. Every club lives in exactly one region (`tenants.region`).
-- **Sydney** is the first region and serves NZ and Australia. A **Vietnam region** is added when the Vietnam launch needs it. Where it's hosted (for example Singapore or inside Vietnam) is decided with Vietnamese counsel, because Vietnam's personal data law (in force since 1 Jan 2026) has rules, assessments and penalties for moving data collected in Vietnam abroad (**Check**, including how it applies to NZ and Australian players' data held by a Vietnamese company).
+- **Sydney** is the first region and serves NZ and Australia. The **Vietnam region is hosted in Hanoi** (decision AE), added when the Vietnam launch needs it. The reason is Vietnam's personal data law (in force since 1 Jan 2026), which has rules, assessments and penalties for moving data collected in Vietnam abroad (**Check** with Vietnamese counsel, including how it applies to NZ and Australian players' data held by a Vietnamese company).
 - Host routing looks up the club's region and sends the request there (§6.4). A player's account lives in the region where they joined. **Cross-region identity isn't promised.** Global features (Find a club, ratings, later social and marketplace) work **within a region** at first.
 - Migrations, the data guard, backups and restore drills run **per region**. The platform console shows all regions.
 - Only Sydney runs in Phase 3, but the schema, routing and tooling are region-aware from the start. That's cheap now and very expensive to retrofit.
+
+**The Hanoi stack (decision AE).** Vercel and Neon have no Hanoi region (I found none; **Check** their region lists). The Vietnam region therefore runs on a **Vietnamese cloud with managed Kubernetes and managed Postgres, run by TGS engineers**. Candidates are Viettel IDC, FPT Cloud, VNPT, CMC and VNG/GreenNode; all offer cloud services and some list managed Postgres and Kubernetes, but I haven't verified versions, point-in-time recovery, residency terms or prices. The choice is made after a comparison on those points.
+
+**The code has to be portable.** What differs by region:
+
+| Piece | Sydney region | Hanoi region |
+|---|---|---|
+| Runtime | Vercel | Containers (a Next.js standalone build) on managed Kubernetes |
+| Database driver | Neon serverless driver | A standard Postgres driver. `lib/database.ts` supports **both**, behind one interface (the Neon driver only works through Neon's proxy). Drizzle and the golden-master tests cover both |
+| Previews and rehearsals | Neon branches | **No branches.** Rehearse by restoring the latest backup into a scratch Postgres in Hanoi, then run the data guard there (slower, same guarantees) |
+| Object storage (photos, uploads) | Vercel Blob | S3-compatible storage at the provider, behind one storage interface |
+| Scheduled jobs | Vercel Cron | Kubernetes CronJobs calling the same routes with a secret |
+| Email | Resend | A provider whose data handling is acceptable to counsel |
+| Sign-in texts | Google Identity Platform (free allowance) | A Vietnamese SMS provider or Zalo notifications (**Check**) |
+| Push notifications | FCM | FCM sends device tokens abroad (**Check** with counsel) |
+| Photo moderation | Google Vision SafeSearch | A local or self-hosted classifier, because photos are personal data |
+| Error tracking, analytics | Hosted services | Self-hosted, or only with consent and counsel's agreement |
+| CDN, WAF, secrets | Vercel | The provider's, or Cloudflare (**Check**) |
+
+- **Rule:** anything that sends personal data **out of the Vietnam region needs a written decision** (who, what, why, and counsel's view). A **regional services matrix** lists every provider per region and is enforced in CI (test plan §3.16).
+- **Operations TGS must own:** a named ops owner, backups with point-in-time recovery and a restore drill, patching, monitoring and on-call, deployment from the same CI to Kubernetes, and a plan for a second Vietnamese site (**Check**).
+- **Cost and time:** this adds a second stack to run. The Vietnam launch pack estimate rises accordingly (§9).
+- **Fallback, only with counsel's agreement:** if running Hanoi proves too heavy, a Singapore region on Vercel and Neon with the required transfer assessments.
+
 
 **Country packs.** Everything that differs by country lives in data and small adapters, not in the core:
 - country, **currency and its exponent** (NZD 2, VND 0), tax rules (GST in NZ and Australia; VAT in Vietnam, **Check**), invoice rules (**Vietnam's e-invoice rules, Check**), time zone, public holidays;
@@ -971,7 +1003,7 @@ Wk 13–17  Phase 5  Capacitor, native features, compliance, TestFlight / Play t
 Wk  3–7   Track R  Luvallplay introduction website (EN + VI, "coming soon" + waitlist) on luvallplay.org (§7.4)
 Wk 16–20  Phase 6  Platform site in launch mode, club templates, wizard, Admin → Modules (onboard 1–2 pilot clubs)
 Wk 20+    Phase 7  Find a club → per-sport leaderboards; social and marketplace only when the gate passes
-Wk 20–26  Track V  Vietnam launch pack: VietQR, local payments, Zalo, Vietnamese region and legal pack (§11.4)
+Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat and booking, Vietnamese legal pack (§11.4)
 ```
 
 **Treat the week numbers as a best case.** They don't include waiting on lawyers, the NZ company, app-store review or Vietnamese counsel. Phase 2 has already found surprises, so **re-baseline the whole schedule after Phase 2 and again after Phase 3** using real progress. Phases overlap where they don't depend on each other. Start the Apple and Google organization accounts and the D-U-N-S number **in week 1**, because approval can take 1–3 weeks.
@@ -990,6 +1022,10 @@ Wk 20–26  Track V  Vietnam launch pack: VietQR, local payments, Zalo, Vietname
 | **A Vietnamese entity can't be the Stripe platform for NZ clubs** | The NZ company holds the Stripe platform account (§6.5, §11.1) |
 | **Vietnam's rules** (social licensing, e-commerce law, data law) | Discovery and Vietnamese counsel first, region-aware platform, social and marketplace gated (§6.9, §8, §11.4) |
 | **Payments don't fit Vietnam** (no Stripe, wallets with payout delays, VND has no minor unit) | One Payments interface with several providers, VietQR first, minor-unit audit (§6.5) |
+| **Hanoi is a second hosting stack** (no Vercel or Neon there) | Portable code (two database drivers, storage, cron), a regional services matrix, a named ops owner, restore drills in Hanoi (§6.9) |
+| **MoMo and Zalo rules are unverified** | Read both developer documents and ask both companies in writing before the Vietnam build; VietQR works without MoMo |
+| **Platform admins see every club's personal data** | Signed confidentiality and data-handling agreement, logged access, least privilege (§11.1) |
+| **Vision revenue and training footage cross Three Wolves and TGS** | Written cutover, committee notice, fresh consent for training footage (§11.2, §11.3 gate 3) |
 | **Active Vietnamese competitors** (pickleball and court-booking apps) | Discovery before building; position on club nights and community, not court rental (§11.4) |
 | **"Luvallplay" isn't protected anywhere** (Vietnam awards trademarks to whoever files first) | Conflict search, then file in NZ, Australia and Vietnam early (§11.3) |
 | **Free forever for NZ badminton can't pay its own way** | Fair-use limits, metering and a cost model (§11.2, §11.3); revenue comes from the paid markets |
@@ -1024,10 +1060,15 @@ Wk 20–26  Track V  Vietnam launch pack: VietQR, local payments, Zalo, Vietname
 | Entity | Role |
 |---|---|
 | **The GOAT Solution (TGS), Vietnam** | Owns the Luvallplay IP and brand. Runs development. Runs the **Vietnam** business: contracts with Vietnamese clubs, Vietnamese payments and tax. Licenses the platform to the NZ company. Holds the Apple and Google developer accounts (decision K). |
-| **NZ company, owned by TGS** (e.g. Luvallplay Ltd) | Runs the platform for **NZ and Australia**. Contracts with every club there, including Three Wolves and the free-for-feedback partner clubs. Holds the **Stripe Connect platform account**. Accountable under NZ privacy law. Needs a **NZ-resident director** (**Check** the Companies Office rules) and a NZ bank account. |
+| **NZ company, owned by TGS** (e.g. Luvallplay Ltd) | Runs the platform for **NZ and Australia**. Contracts with every club there, including Three Wolves and the free-for-feedback partner clubs. Holds the **Stripe Connect platform account**. Accountable under NZ privacy law. Its **NZ-resident director is Timba** (decision AB; **Check** the Companies Office rules). It has its own NZ bank account, books and accountant, separate from Three Wolves. |
 | **Three Wolves** | A club and a licensee, not a party to anyone else's contract. Gets a **free licence** with data-export and exit rights. Its name, logo, wolf artwork and "Wolf" terms stay Three Wolves' own. |
-| **Kelcee (Three Wolves)** | Helps recruit NZ clubs. Role in writing: volunteer ambassador, TGS agent or contractor, and whether any equity or fee is involved. Has no authority to sign for TGS or the NZ company unless appointed. |
+| **Kelcee (President of Three Wolves)** | Unpaid, **no equity or fee** (decision AA). Helps recruit NZ clubs **as a Three Wolves officer**, with the Three Wolves committee's recorded approval (an officer of a not-for-profit promoting a related for-profit's product is a related-party matter, **Check**). **Signs for Three Wolves** on the licence, so Timba isn't on both sides. **Platform admin only after signing a confidentiality and data-handling agreement with the NZ company** (every club's personal data is visible to a platform admin); access is logged and used only for support and partner onboarding. No authority to sign for TGS or the NZ company. |
 
+- **Timba wears three hats** (TGS CEO, NZ company director, Three Wolves Treasurer). To keep that clean:
+  - Timba records the interests in the NZ company's interests register and in the Three Wolves committee minutes (**Check** the Companies Act rules on interested directors).
+  - Timba takes no part in Three Wolves decisions about the licence, Vision revenue or fees, and signs nothing for Three Wolves.
+  - The NZ company has its own bank account, books and accountant, and a named **privacy officer** (**Check** the NZ Privacy Act requirement).
+  - **Check** with an accountant: running TGS and the NZ company from NZ can affect where TGS is tax-resident or whether it has a permanent establishment in NZ. **Check** director duties and personal liability, and whether directors-and-officers insurance is worth having.
 - **The chain of rights is written down:** anyone who contributed to the existing code assigns their rights to TGS; TGS licenses the NZ company (an intercompany licence, with tax advice on royalties and transfer pricing, **Check**); the NZ company licenses clubs.
 - **Conflict of interest:** Timba is TGS's CEO and Three Wolves' Treasurer. The Three Wolves licence is in writing, the committee minutes the declared conflict, and someone other than Timba signs for Three Wolves. If Three Wolves is a registered charity or incorporated society, its own rules on related-party benefit apply (**Check**).
 - **Every other club contracts with the NZ company (or TGS in Vietnam), never with Three Wolves**, even when Kelcee recruited them.
@@ -1038,6 +1079,12 @@ Wk 20–26  Track V  Vietnam launch pack: VietQR, local payments, Zalo, Vietname
 - **NZ badminton clubs are free for good.** That is today's partner clubs and Three Wolves, and every NZ badminton club that joins later. The agreement says so, with 90 days' notice for any change.
 - **Other sports and other markets pay.** The first paid market is **Vietnam**, then other sports in NZ (through the NZ company). Plans depend on **country and sport** (§6.5), and prices are set **per country in local currency** (VND for Vietnam) after the discovery round.
 - **Paid plans become real before the first paid club.** Billing, invoices (**Check** Vietnam's e-invoice rules), and the country's way of paying TGS (VietQR bank transfer or a local gateway in Vietnam) are built and tested, not just hidden behind a switch.
+- **Vision is a platform product, and its revenue goes to TGS** (decision AF).
+  - It's renamed **Vision** on the platform (Wolf Vision stays Three Wolves' own term, set in its brand). It's badminton-only for now (§6.7).
+  - **Players pay for passes, not clubs.** The free-for-good promise covers club tools, not Vision passes. *(An assumption: tell me if you intended passes to be free for NZ badminton too.)*
+  - **Where the money goes:** NZ and Australia web purchases go through the **NZ company's own Stripe account** (a normal account, not Connect), with GST on NZ sales (**Check**), and the NZ company pays TGS under the intercompany licence or a service agreement (**Check** withholding and transfer pricing). In-app purchases pay the developer-account holder, which is TGS. In Vietnam, passes are paid to TGS through MoMo.
+  - **Cutover from Three Wolves:** today Three Wolves' Stripe account takes Vision payments (NZ$5 and NZ$2). Pick a cutover date, honour passes already bought, leave revenue to that date with Three Wolves, and tell the Three Wolves committee in writing (it's a related-party arrangement).
+  - **Training footage:** footage collected by Three Wolves for club purposes now helps improve a TGS product. That is a change of purpose under privacy law (**Check**), so get fresh, specific consent from the people filmed, or retrain only from consenting sources. The consent wording, retention limits and an opt-out are part of gate 3 (§11.3).
 - **Free forever needs guardrails.** The free tier has **fair-use limits** set from the cost model (§11.3 gate 4). Examples: email sign-in codes by default with a monthly SMS cap per club; photo and Vision storage caps; an email-volume cap. Going over a limit shows a warning and a conversation, and **never stops a club running its sessions**.
 - **The free-for-feedback partner programme (NZ badminton):**
   - 5 to 10 clubs at first, with a written agreement: feedback and idea licence, confidentiality, testimonial and case-study permission, best-effort support with no uptime promise, and notice before any change.
@@ -1059,8 +1106,13 @@ Wk 20–26  Track V  Vietnam launch pack: VietQR, local payments, Zalo, Vietname
 
 **Launch scope (decision X):**
 - **Club tools with VietQR bank transfer:** sessions, sign-ups, memberships; payment by bank transfer with a VietQR code carrying the amount and a payment reference, matched manually or by a bank-feed provider (§6.5).
-- **Local online payments** through a Vietnamese gateway (chosen after discovery).
-- **Zalo support:** sharing and invites first; notifications or a mini app later, depending on discovery.
+- **Local online payments through MoMo** (decision AC), each club with its own merchant account; VietQR for everyone else (§6.5).
+- **Zalo support: chat and booking (decision AD).**
+  - **Chat:** club-to-member messages and notifications through Zalo. **One Luvallplay Official Account (OA)**, verified by TGS, sends them under each club's name. Inbound replies arrive in the club's inbox as threads linked to the member.
+  - **Booking:** one **Luvallplay Zalo mini app** with club pages, where members sign up for sessions, join the waitlist, see the calendar and pay by VietQR or MoMo. It's another client of the Phase 4 API, not a second product.
+  - **Linking a Zalo user to an account:** by phone-number verification, or by Zalo Login. If Zalo Login is offered in the store app, Apple's rule 4.8 means Sign in with Apple (already planned) must be offered too.
+  - **Architecture:** the Messages module gets **channels** (email, push, SMS and Zalo), so a club's announcement goes out on the channels each member chose.
+  - *Unverified:* I couldn't read Zalo's developer documentation from the planning environment. Confirm at developers.zalo.me: OA verification requirements, the rules for chat messages (the time window after a member last wrote, limits, which messages cost money), Zalo notification (ZNS) template approval and per-message prices, who may publish a mini app and what review it needs, what Zalo Login returns (for example the phone number), and whether **one OA may serve many organisations**. General sources say an OA is free to create, needs a personal Zalo account and a Vietnamese number, and must be verified.
 - **Social and marketplace:** in the Vietnam roadmap, **shipped only when the gate in §8 passes for Vietnam**.
 - **Localisation:** Vietnamese-quality copy (not machine-translated), accent-insensitive search, family-name-first names, +84 phone formats, the Asia/Ho_Chi_Minh time zone, **VND with no minor unit**, Vietnamese sport vocabulary, a `.vn` home and Zalo/Facebook share cards (§6.9).
 
@@ -1070,10 +1122,13 @@ Wk 20–26  Track V  Vietnam launch pack: VietQR, local payments, Zalo, Vietname
 - A comparison with the local apps. Vietnam already has several (PickoNow, Padel Hub VN, the national pickleball association's app, ThePickleHub), and most look like **court-rental booking**, not club-night management. Luvallplay's position is club nights, community and ratings, and discovery should confirm that gap exists.
 - Results decide the launch scope, the price points, the payment gateway and whether Vietnam is really the right first paid market.
 
+**Hosting:** **Hanoi, on a Vietnamese cloud, run by TGS engineers** (decision AE, §6.9).
+
 **Checks with Vietnamese counsel (all marked Check):**
 - **Decree 147/2024 (internet services):** licence or notification thresholds for social networks (one summary cites 10,000 monthly visits for six months or 1,000 regular users a month), obligations for livestream and revenue-generating features, and what applies to foreign providers.
 - **E-commerce Law (from 1 July 2026):** whether the shop or marketplace makes Luvallplay a regulated platform, seller identification through VNeID, and a legal representative or entity.
 - **Personal data law and Decree 356/2025 (from 1 Jan 2026):** consent, the data-transfer assessment filed within 60 days of processing or transfer, penalties for cross-border transfer violations (one source says up to 5% of revenue), children's data, and where the Vietnam region is hosted (§6.9).
+- **Payment intermediary rules (Decree 52/2024):** confirm that each club using its own MoMo merchant account keeps Luvallplay outside the licensing rules, and what applies to TGS collecting its own fees.
 - **E-invoices and tax** for fees TGS charges and for clubs that sell to members; **advertising and sports-event rules**; **trademark** (§11.3).
 
 ### 11.5 Support, operations and security (before commercial launch)

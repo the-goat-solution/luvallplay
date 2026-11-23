@@ -221,6 +221,14 @@ Watch database CPU, connection count and p95 latency.
 - **Per-region operations:** migrations, the data guard, backups and the restore drill each run for every region before a release, with the report per region.
 - **Country packs:** every pack passes the same checklist (currency exponent, tax, phone format, time zone, search collation, legal documents present, payment provider capabilities). A pack without the full checklist can't be selected in the wizard.
 - **Payments interface:** every provider passes one shared contract suite (create, refund, webhook verification, **replay twice and out of order**, reconcile, capability flags). VietQR reference generation and matching, wallet payout delays and recurring-billing absence have their own cases.
+- **Hanoi region:**
+  - The **same migration and golden-master suites run on plain Postgres** with the standard driver, and must match the Neon driver's results.
+  - The **rehearsal protocol without branches** (restore the latest backup into a scratch Postgres, run the data guard there) is drilled before the first Vietnamese club, with the report attached.
+  - The **regional services matrix is enforced in CI**: a build for a region fails if it imports a provider that isn't approved for that region.
+  - Storage and cron adapters pass the same contract tests as the Sydney ones.
+- **MoMo:** contract tests against MoMo's sandbox: payment notifications (IPN) replayed twice and out of order, refunds, a settlement delay, a failed payment, and signature verification. Each club's own merchant credentials are isolated (the tenant suite covers them).
+- **Zalo:** tests for webhook verification, the chat-window and template rules once confirmed, inbound chat becoming a linked inbox thread, member channel opt-out, account linking by phone, and a booking made from the mini app appearing in the club's admin. The mini app runs the same API contract tests as the PWA.
+- **Vision revenue and consent:** a ledger test splits every pass sale by channel (web, in-app, MoMo) with GST where it applies; a cutover test proves Three Wolves' account stops taking new passes while existing passes still work; a consent test proves training footage without consent is excluded and an opt-out removes it.
 - **Vietnamese quality:** an automated check finds no missing or machine-flagged Vietnamese strings, diacritics render in every font, and a Vietnamese speaker reviews the key journeys before launch.
 
 ### 3.17 Juniors and safeguarding
@@ -415,7 +423,7 @@ On every pull request, and required before merging to `main`:
 | 6 Brand, sites, wizard | S1–S6, the payment-mode × admin-area table in build plan §6.2.2 as an automated test, every colour scheme passes contrast and visual checks, brand upload security tests, Lighthouse ≥ 95, accessibility clean, custom-domain tests |
 | 3b Junior accounts | J1, the junior permission matrix (§3.17), the data guard per account for guardian export and deletion, store-policy review, a safeguarding review with someone experienced in junior sport |
 | B Business foundations | All four hard gates ticked with evidence (§3.18). Gate checks pass |
-| V Vietnam launch | V1, R1, the Vietnam region isolation and restore drill, payments contract suite for the Vietnamese providers, Vietnamese quality review, **Vietnamese counsel sign-off**, Vietnam trademark filed |
+| V Vietnam launch | V1, R1, the Vietnam region isolation, **the Hanoi restore drill and the no-branch rehearsal**, the regional services matrix check, MoMo and Zalo contract tests, payments contract suite for the Vietnamese providers, Vietnamese quality review, **Vietnamese counsel sign-off**, Vietnam trademark filed |
 | 7 Global modules | Opt-in/out tests, **the §8 gate evidence** (thresholds, moderation owner, the country's legal checks), moderation and safeguarding flows (adults only), marketplace X1, abuse reports |
 
 ---

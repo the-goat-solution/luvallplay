@@ -197,11 +197,28 @@ Where I found a fact in the repo or the accounts, I say so. Where I'm relying on
 - I treated **social and marketplace in Vietnam** as "in the roadmap but gated", because the same answers also chose to gate them.
 - The **proposed thresholds** in §8 and §11.6 (15 clubs and 500 weekly players; 5 partner clubs for 8 weeks) are my placeholders to confirm after the first partner period.
 
+### Open points, answered (23 Nov, later)
+
+| Point | Answer | What it changed |
+|---|---|---|
+| Kelcee's role and any equity or fee | **President of Three Wolves, no equity or fee** | Kelcee signs for Three Wolves and stays a platform admin only after signing a confidentiality and data-handling agreement with the NZ company; the committee approves Kelcee's recruiting role (§11.1). |
+| NZ company's resident director | **Timba** | Timba then holds three roles (TGS CEO, NZ company director, Three Wolves Treasurer), so the plan adds interest registers, abstaining from Three Wolves decisions on the licence, separate books, and tax and liability checks (§11.1). |
+| Vietnamese payment gateway | **MoMo** | Each club connects its own merchant account, VietQR is the default, and MoMo's rules are unverified (§6.5). |
+| What Zalo support means | **Chat and booking integration** | One Luvallplay Official Account for chat, one mini app for booking, channels in the Messages module (§11.4). |
+| Where Vietnam is hosted | **Hanoi** | A second hosting stack on a Vietnamese cloud, portable code, a regional services matrix, and rehearsals without Neon branches (§6.9). |
+| Vision | **Platform product, revenue to TGS** | Rename to Vision, players pay, NZ company's own Stripe account in NZ and Australia, written cutover from Three Wolves, fresh consent for training footage (§11.2). |
+
+### What I couldn't verify (check before building)
+
+- **MoMo and Zalo:** the planning environment blocks developers.momo.vn and developers.zalo.me, so I couldn't read merchant onboarding, platform programmes, recurring payments, settlement, OA verification, chat-message rules, ZNS pricing or mini-app publishing. If you want me to check them, add those two hosts under Allowed domains in this environment's network settings (the cloud environment menu in the session title bar, then Edit). Otherwise someone should read both and ask each company in writing.
+- **Hanoi providers:** managed Postgres versions, point-in-time recovery, residency terms and prices at Viettel IDC, FPT, VNPT, CMC and VNG/GreenNode.
+- **Vercel and Neon regions:** I found no Hanoi region but didn't confirm from their own region lists.
+
 ### Still open
 
-- Kelcee's role and any equity or fee (build plan §11.1).
-- Who the NZ company's resident director will be.
-- Which Vietnamese payment gateway and bank-feed provider (after discovery).
-- Whether Zalo means share links, notifications or a mini app.
-- Where the Vietnam region is hosted (with counsel).
-- Vision: platform product, Three Wolves product or licensed add-on, and who receives its revenue.
+- Which Hanoi provider, and who the named ops owner at TGS is.
+- Who drafts Kelcee's access agreement and the Three Wolves committee approvals.
+- Whether Vision passes should be free for NZ badminton clubs' players (I assumed players always pay).
+- The tax questions: intercompany licence and royalties, GST on NZ Vision sales, tax residency of TGS, Vietnamese VAT and e-invoices.
+- Vision training footage: the consent wording and what to do about footage already collected.
+- The proposed thresholds in §8 and §11.6.

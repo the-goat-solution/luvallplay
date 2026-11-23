@@ -116,6 +116,16 @@ export async function getOpeningBalances(): Promise<OpeningBalances | null> {
   return getSetting<OpeningBalances>("opening");
 }
 
+/** Bank lines still to reconcile since the opening balances (admin menu badge). */
+export async function countBankToReconcile(): Promise<number> {
+  const from = (await getOpeningBalances())?.date ?? null;
+  const { rows } = await sql`
+    SELECT COUNT(*)::int AS count FROM bank_transactions
+    WHERE status = 'unmatched' AND (${from}::date IS NULL OR txn_date >= ${from}::date);
+  `;
+  return (rows[0] as { count: number })?.count ?? 0;
+}
+
 export async function setOpeningBalances(value: OpeningBalances): Promise<void> {
   await setSetting("opening", value);
 }

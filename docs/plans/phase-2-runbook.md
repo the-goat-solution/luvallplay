@@ -74,3 +74,7 @@ npm run db:drift                                 # must say: No schema drift
 **Done when:** the diff passes with 0 errors and the drift check is empty. Then merge PR 4 (the code doesn't depend on the new constraints, so the order doesn't matter for the app).
 
 **If anything fails:** stop. The migration runs in one transaction, so a failure leaves nothing half-done. To undo a completed run, swap the constraints back. That's a schema-only change and no data is involved. `pre-phase-2-pr4` holds the exact state from before.
+
+## 6. Phase 2 PR 5 (Next.js 16): nothing to do
+
+After the deploy, smoke test: `/login`, sign in → Me, **`/admin` as an owner** (the admin check now runs in `proxy.ts`), `/studio` loads, and Arena works. Rollback: Vercel Instant Rollback.

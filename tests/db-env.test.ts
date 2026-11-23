@@ -25,8 +25,8 @@ function firstImport(file: string): string | undefined {
   return src.match(/^import\s[^;]*;/m)?.[0];
 }
 
-test("db-env: middleware imports it before anything else", () => {
-  assert.equal(firstImport("middleware.ts"), 'import "@/lib/db-env";');
+test("db-env: the proxy (formerly middleware) imports it before anything else", () => {
+  assert.equal(firstImport("proxy.ts"), 'import "@/lib/db-env";');
 });
 
 test("db-env: the admin access module imports it first too", () => {

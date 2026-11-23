@@ -5,7 +5,7 @@ import { SANITY_CACHE_TAG } from "@/lib/sanity";
 
 function purgeHome() {
   revalidatePath("/");
-  revalidateTag(SANITY_CACHE_TAG);
+  revalidateTag(SANITY_CACHE_TAG, { expire: 0 });
 }
 
 export async function POST(req: NextRequest) {

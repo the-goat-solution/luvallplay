@@ -16,6 +16,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
   await setLeaderboardVisible(player.id, body.leaderboardVisible);
-  revalidateTag("leaderboard");
+  revalidateTag("leaderboard", { expire: 0 });
   return NextResponse.json({ ok: true });
 }

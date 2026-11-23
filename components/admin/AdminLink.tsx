@@ -38,7 +38,7 @@ export function AdminLink({
   title?: string;
   scroll?: boolean;
   current?: boolean;
-  // Prefetch just the admin loading screen (app/admin/loading.tsx) so it
+  // Prefetch just the admin loading screen (app/admin/(console)/loading.tsx) so it
   // appears the instant the link is clicked. For a dynamic page Next only
   // prefetches down to the nearest loading boundary — the page itself, and
   // any server work it does, still runs only on the real visit.

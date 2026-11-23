@@ -76,7 +76,7 @@ export class ArenaError extends Error {
 
 function refresh(): void {
   try {
-    revalidateTag("leaderboard");
+    revalidateTag("leaderboard", { expire: 0 });
   } catch {
     // outside a request
   }

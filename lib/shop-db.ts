@@ -176,6 +176,14 @@ export async function listOrdersForAdmin(filter: "open" | "collected" | "all"): 
   return loadOrders(where, []);
 }
 
+/** Orders waiting to be handed over: cash reserved or paid by card (admin menu badge). */
+export async function countShopOrdersToHandOver(): Promise<number> {
+  const { rows } = await sql`
+    SELECT COUNT(*)::int AS count FROM shop_orders WHERE status IN ('reserved_cash', 'paid');
+  `;
+  return (rows[0] as { count: number })?.count ?? 0;
+}
+
 export async function getOrder(id: number): Promise<Order | null> {
   return (await loadOrders(`WHERE id = $1`, [id]))[0] ?? null;
 }

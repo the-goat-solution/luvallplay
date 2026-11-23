@@ -95,7 +95,7 @@ test("permission matrix: step-up — a sign-in older than 12 hours asks for a fr
 
 test("permission matrix: every admin page in the nav has a column", async () => {
   const { readFileSync } = await import("node:fs");
-  const nav = readFileSync(new URL("../components/admin/AdminNav.tsx", import.meta.url), "utf8");
+  const nav = readFileSync(new URL("../components/admin/nav-config.ts", import.meta.url), "utf8");
   const hrefs = [...nav.matchAll(/href: "(\/admin\/[^"]+)"/g)].map((m) => m[1]);
   // Every nav page answers like one of the matrix pages for each role.
   for (const href of hrefs) {

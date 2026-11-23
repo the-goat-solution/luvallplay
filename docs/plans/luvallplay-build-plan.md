@@ -217,6 +217,12 @@ Findings and changes recorded as the work goes:
   - All **eight** foreign keys to `players` change, not only the six `CASCADE` ones. The two `SET NULL` ones (`shop_orders`, `cancellation_feedback`) would detach a person's orders on a hard delete, and accounts are only ever soft-deleted (test plan §4.2), so RESTRICT is right for them too.
   - Migration `0001_account_fks_restrict.sql`: same constraint names, `NOT VALID` then `VALIDATE`, one transaction.
   - Rehearsed on a fresh branch of production: 15 accounts, 0 problems, drift empty afterwards, and a hard delete of an account with data is refused.
+- **PR 5, Next.js 16** (16.4.6, Turbopack builds):
+  - `middleware.ts` is now `proxy.ts` (`export function proxy`), on the Node runtime, which is fixed in 16, so the `runtime` setting is gone.
+  - `revalidateTag(tag)` is now `revalidateTag(tag, { expire: 0 })`. That keeps today's behaviour (the next request reads fresh data), not the stale-while-revalidate `"max"` profile.
+  - ESLint uses `eslint-config-next` 16's own flat config. Its five new React Compiler rules (`react-hooks/set-state-in-effect`, `refs`, `immutability`, `purity`, `static-components`) flag about 74 existing spots that work today. They're **warnings for now**. **Follow-up:** fix them before turning on the React Compiler.
+  - `next-sanity` 9 (Studio at `/studio`, webhook signature check) only declares Next 14–15. An npm `overrides` entry (`next: $next`) holds it on 16 until the Studio leaves the web app. Checked: the Studio mounts, and the webhook rejects a bad signature and accepts the manual trigger.
+- **Plan change: the Studio move needs Three Wolves' Sanity project.** The site's Sanity project (`c0v5j4dz`) isn't in the Sanity account connected to the build session, so the session can't deploy a hosted Studio. (The business config was read through Sanity's public read API.) The Studio move stays in Phase 2 and needs one step from Timba (Phase 2 runbook §7).
 - **Vercel previews ("Resource provisioning failed")**: the Vercel project's Neon integration still creates preview branches in the *old US* Neon project (`neon-almond-button`). That project is at the free plan's 10-branch limit (main + 9 stale `preview/claude/*` branches), so every preview fails before building. The fix is a dashboard action (see the Phase 2 runbook).
 
 ---

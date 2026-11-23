@@ -890,6 +890,9 @@ Findings and changes recorded as the work goes:
   - The golden master has a fourth copy that runs through row-level security; it found three orderings without a tie-breaker, now fixed.
   - **Decision: the account-linking trigger runs as its owner**, because accounts are global and must link rows in every club.
   - **Not done yet:** the route-level isolation suite (it needs requests for two clubs, which arrives with step 11) and a login for the app's role.
+- **Tests added after step 10:**
+  - **Permission matrix (test plan §3.6), from the database:** eight roles against six actions, each person's access resolved as the app's role for the club. It adds the rows Phase 3 brings: another club's admin (an admin there, nobody here), switching modules (owners and platform admins), and the platform's lock (holds for owners).
+  - **Journey S2:** an owner switches a module off; its pages and API answer 404, its data is kept, the rest of the club carries on; back on, everything returns; an admin who isn't an owner has no switch.
 - **Findings about the environment:**
   - Neon's free plan keeps **6 hours** of history, not the 7 days the test plan's runbook asks for (§4.4). Each step's named `pre-<step>` branch is its restore point until that changes.
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.

@@ -13,7 +13,7 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 2 | `tenant_id` on every club-owned table (#102) | **Done.** Production data run passed (23 Nov, 08:25 UTC); live (08:28 UTC) |
 | 3 | Email links → `user_id` (#103) | **Production data run done and passed** (23 Nov, 09:09 UTC). Merged 09:11 UTC |
 | 4 | Settings replace constants (behind flags) | In progress. Parts 1 to 5 merged (#104, #105); **shadow reads for settings started 23 Nov, 09:50 UTC** (§4) |
-| 5 | Module enforcement | Part 1 merged and live (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5) |
+| 5 | Module enforcement | Part 1 live (#106): route ownership, the proxy and admin menu checks, the owner's switch page (§5). The end-to-end journey S2 and the permission matrix rows for switching and locks are added |
 | 6 | Second database driver, region routing | Built: the standard-Postgres driver, host routing (off until switched on), storage and scheduled-job interfaces (§6) |
 | 7 | Money audit (minor units, VND) | Built: currency helpers, every conversion moved onto them, VND tests, two CI scans (§7) |
 | 8 | Payments interface | Built: the interface, Stripe as the first provider, a shared contract suite; one-off payments and the webhook signature check use it (§8) |

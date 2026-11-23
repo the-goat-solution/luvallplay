@@ -55,6 +55,7 @@
 .btn,
 .btnSecondary,
 .btnDanger {
+  font-family: inherit;
   padding: 7px 13px;
   border-radius: 6px;
   font-size: 13px;
@@ -428,6 +429,7 @@
   display: contents;
 }
 .segment {
+  font-family: inherit;
   min-height: 38px;
   padding: 0 14px;
   border: 0;
@@ -493,4 +495,26 @@ span.btnSecondary {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+/* A FormPanel inside a Toolbar takes the full width once opened. */
+.toolbar > .panel {
+  margin-bottom: 0;
+}
+.toolbar > .panel[open] {
+  flex-basis: 100%;
+  order: 2;
+}
+
+/* A small "Change …" disclosure inside a table row. */
+.inlineEdit > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+}
+.inlineEdit > summary::-webkit-details-marker {
+  display: none;
+}
+.inlineEdit[open] > summary {
+  margin-bottom: 6px;
 }

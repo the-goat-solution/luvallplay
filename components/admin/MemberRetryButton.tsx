@@ -1,5 +1,6 @@
 "use client";
 
+import k from "@/components/admin/kit/kit.module.css";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingIcon } from "@/components/LoadingIcon";
@@ -93,20 +94,8 @@ export function MemberRetryButton({
         type="button"
         onClick={onClick}
         disabled={busy}
-        style={{
-          padding: "5px 12px",
-          borderRadius: 6,
-          border: "1px solid #184467",
-          background: "#fff",
-          color: "#184467",
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: busy ? "default" : "pointer",
-          opacity: busy ? 0.6 : 1,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-        }}
+        className={k.btn}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
       >
         {showBusy ? (
           <>
@@ -114,7 +103,7 @@ export function MemberRetryButton({
             Retrying…
           </>
         ) : (
-          "Retry"
+          "Retry payment"
         )}
       </button>
 

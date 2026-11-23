@@ -87,6 +87,10 @@ node scripts/verify-business-config.mjs          # must say: matches Sanity exac
 
 After the deploy, smoke test: `/login`, sign in → Me, **`/admin` as an owner** (the admin check now runs in `proxy.ts`), `/studio` loads, and Arena works. Rollback: Vercel Instant Rollback.
 
+## 6b. Phase 2 PR 8 (shared packages, module registry, design tokens, i18n): nothing to do
+
+No behaviour or data changes: code moves into `packages/core`, `auth`, `i18n`, `ui` and `modules`, and every string renders exactly as before (tested). Smoke test after the deploy: `/` in English and Tiếng Việt, Me, Arena, `/jersey`, `/admin` as an owner. Rollback: Vercel Instant Rollback.
+
 ## 7. Moving Sanity Studio out of the web app (needs you, once)
 
 The build plan moves the Studio out of the web app into its own deploy (`apps/studio`). The club's Sanity project (`c0v5j4dz`) isn't in the Sanity account connected to the build session, so one step needs you. Pick one:
@@ -101,7 +105,7 @@ Then `/studio` on the site redirects to the hosted Studio, and `next-sanity` and
 PR 7 moves the app into `apps/web` and the schema into `packages/db` (pnpm workspaces + Turborepo). Vercel must then build from `apps/web`. Production keeps serving its current deployment throughout: a deployment that fails to build never replaces the live one.
 
 **Order:**
-1. PR 4 and PR 6 are merged (after the production data run, §5), then PR 7 is merged.
+1. PR 4 and PR 6 are merged (after the production data run, §5), then PR 7 is merged, then PR 8 (shared packages; no behaviour change, so it can follow in the same sitting or any time later).
 2. **Vercel → Project `three-wolves-badminton` → Settings → Build and Deployment:**
    - **Root Directory:** `apps/web` → **Save**.
    - Leave **"Include files outside the root directory in the Build Step"** on (the default). The app imports `packages/db`.

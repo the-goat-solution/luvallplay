@@ -119,7 +119,7 @@ describe("schema drift", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST
       // latest dump.
       // Tables, indexes and sequences: a Drizzle schema can't describe the
       // functions and triggers, which the migrations test above covers.
-      const drift = schemaDiff(tablesOnly(readFileSync(EXPECTED_DUMP, "utf8")), await dumpOf(url));
+      const drift = schemaDiff(tablesOnly(readFileSync(EXPECTED_DUMP, "utf8")), tablesOnly(await dumpOf(url)));
       assert.deepEqual(drift, [], `a database built from db/schema.ts differs from ${EXPECTED_DUMP} (- expected, + actual):\n${drift.join("\n")}`);
 
       // Against the committed migrations: nothing new.

@@ -38,7 +38,7 @@ export const DEFAULT_CLUB_CONFIG: ClubConfig = {
   name: "Three Wolves Badminton Club",
   country: "NZ",
   region: "syd",
-  timezone: "Pacific/Auckland",
+  timezone: C.CLUB_TIME_ZONE,
   currency: "NZD",
   languages: ["en", "vi"],
   terms: { pointsName: "Wolf Points", visionName: "Wolf Vision" },

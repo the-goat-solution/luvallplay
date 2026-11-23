@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { getClubToday } from "@/lib/dates";
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
   }`;
   const filterText = describeNonDateFilters(filters).join(" · ") || "None";
   const generatedText = new Intl.DateTimeFormat("en-NZ", {
-    timeZone: "Pacific/Auckland",
+    timeZone: CLUB_TIME_ZONE,
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date());

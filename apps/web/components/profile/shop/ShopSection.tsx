@@ -1,5 +1,6 @@
 "use client";
 
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { useEffect, useRef, useState } from "react";
 import { useProfileT } from "@/lib/profile-i18n";
 import { StripeCardForm } from "../LazyStripeCardForm";
@@ -16,7 +17,7 @@ const SIZE_ORDER = ["S", "M", "L", "XL", "2XL", "3XL"];
 function fmtDateTime(iso: string | null, lang: string): string {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-NZ", {
-    timeZone: "Pacific/Auckland",
+    timeZone: CLUB_TIME_ZONE,
     weekday: "short",
     day: "numeric",
     month: "short",

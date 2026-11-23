@@ -13,7 +13,8 @@ import {
 } from "./casual-play";
 import { getCourtsForDate, getRosterForDate, setCourtsForDate } from "./db";
 import { notifyWaitlistIfSpotOpened } from "./waitlist-notify";
-import { maxPlayersForCourts } from "./constants";
+import { sessionCapacityFor } from "@luvallplay/core/club-config";
+import { clubConfig } from "./club";
 import { demoRoster, demoStore, isCasualPlayDemo } from "./casual-play-demo";
 import { recordBoardAttendance } from "./stats-db";
 
@@ -218,7 +219,8 @@ async function setRosterCourts(date: string, courts: number): Promise<void> {
   if (before === courts) return;
   const result = await setCourtsForDate(date, courts);
   if (!result.ok) throw new ActionError(result.reason);
-  if (maxPlayersForCourts(courts) > maxPlayersForCourts(before)) await notifyWaitlistIfSpotOpened(date);
+  const cfg = await clubConfig();
+  if (sessionCapacityFor(cfg, courts) > sessionCapacityFor(cfg, before)) await notifyWaitlistIfSpotOpened(date);
 }
 
 /**

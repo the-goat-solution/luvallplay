@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "./constants";
 import { sendAdminAlertEmail, sendPlayerNoticeEmail } from "./player-email";
 import { cashOrdersExpiringSoon, markReminderSent, releaseExpiredHolds, type Order } from "./shop-db";
 import { getPlayerByEmail } from "./player-db";
@@ -10,7 +11,7 @@ function money(cents: number): string {
 
 function nzDate(iso: string | null): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-NZ", { timeZone: "Pacific/Auckland", weekday: "short", day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString("en-NZ", { timeZone: CLUB_TIME_ZONE, weekday: "short", day: "numeric", month: "short" });
 }
 
 async function langFor(email: string): Promise<"en" | "vi"> {

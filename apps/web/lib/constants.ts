@@ -1,3 +1,8 @@
+// The club's IANA time zone: its days, cut-offs and printed times are counted
+// in it. The one place the literal lives (a test fails on any other); it is
+// the built-in value of the club's `timezone` setting (lib/club-config.ts).
+export const CLUB_TIME_ZONE = "Pacific/Auckland";
+
 // Days of the week that grant recurring-membership access. Every other day
 // is casual-bookings-only. See lib/dates.ts's getMembershipDayForDate for the
 // date -> MembershipDay mapping used everywhere capacity/roster logic needs

@@ -10,7 +10,8 @@
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
-import { diffClubConfig, parseClubConfig, type ClubConfig, type TenantRow } from "@luvallplay/core/club-config";
+import { diffClubConfig, parseClubConfig, sessionCapacityFor, type ClubConfig, type TenantRow } from "@luvallplay/core/club-config";
+import { maxPlayersForCourts, sessionMaxPlayers } from "../lib/constants.ts";
 import { migrate } from "../scripts/db/migrate.mjs";
 import { DEFAULT_CLUB_CONFIG, compareClubConfig, getClubConfig, loadClubConfigFromDb, resetClubConfigCache, settingsSource } from "../lib/club-config.ts";
 
@@ -85,6 +86,18 @@ test("the comparison names each setting that differs, and ignores key order", ()
   // The same values with keys in another order aren't a difference.
   b.playDays.courtsToMaxPlayers = { 4: 22, 2: 12, 1: 6, 3: 18 };
   assert.equal(diffClubConfig(a, b).length, 2);
+});
+
+test("capacity: the club's courts table, its general capacity for other counts, the mini-game field", () => {
+  // Three Wolves' settings give exactly what the constants' helpers give today.
+  for (const courts of [0, 1, 2, 3, 4, 5, 9]) {
+    assert.equal(sessionCapacityFor(DEFAULT_CLUB_CONFIG, courts), maxPlayersForCourts(courts), `${courts} courts`);
+    assert.equal(sessionCapacityFor(DEFAULT_CLUB_CONFIG, courts, true), sessionMaxPlayers(courts, true), `${courts} courts, mini game`);
+  }
+  // Another club's table is its own.
+  const { config } = parseClubConfig(TENANT, MODULES, DEFAULT_CLUB_CONFIG);
+  assert.deepEqual([1, 2, 3].map((n) => sessionCapacityFor(config, n)), [4, 8, 8]);
+  assert.equal(sessionCapacityFor(config, 2, true), 12);
 });
 
 describe("club settings from the database", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST_URL" : false }, () => {

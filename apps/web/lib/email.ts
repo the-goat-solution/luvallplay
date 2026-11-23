@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "./constants";
 import { Resend } from "resend";
 import { capturingResend, sideEffectAllowed } from "./side-effects.ts";
 import type { RosterEntry } from "./db";
@@ -793,7 +794,7 @@ export async function sendJerseyRegistrationEmail(input: {
   const price = `$${(input.priceCents / 100).toFixed(2)}`;
   const deadline = input.deadline
     ? new Intl.DateTimeFormat(vi ? "vi-VN" : "en-NZ", {
-        timeZone: "Pacific/Auckland",
+        timeZone: CLUB_TIME_ZONE,
         dateStyle: "full",
         timeStyle: "short",
       }).format(input.deadline)

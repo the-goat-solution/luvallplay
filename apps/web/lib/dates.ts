@@ -1,4 +1,5 @@
 import {
+  CLUB_TIME_ZONE,
   BOOKING_CUTOFF_HOUR,
   BOOKING_WINDOW_DAYS,
   CASUAL_ONLY_DEFAULT_COURTS,
@@ -17,7 +18,6 @@ for (const [day, dow] of Object.entries(MEMBERSHIP_DAY_TO_DOW) as [
   DOW_TO_MEMBERSHIP_DAY[dow] = day;
 }
 
-const CLUB_TIME_ZONE = "Pacific/Auckland";
 
 export function startOfDay(d: Date): Date {
   const x = new Date(d);

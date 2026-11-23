@@ -1,3 +1,4 @@
+import { CLUB_TIME_ZONE } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { isAdminRequest } from "@/lib/security";
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
     { header: "Collected", key: "collected", width: 18 },
   ];
   const nz = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleString("en-NZ", { timeZone: "Pacific/Auckland", dateStyle: "medium", timeStyle: "short" }) : "";
+    iso ? new Date(iso).toLocaleString("en-NZ", { timeZone: CLUB_TIME_ZONE, dateStyle: "medium", timeStyle: "short" }) : "";
   for (const o of orders) {
     sheet.addRow({
       id: o.id,

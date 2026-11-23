@@ -18,8 +18,8 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 7 | Money audit (minor units, VND) | Built: currency helpers, every conversion moved onto them, VND tests, two CI scans (§7) |
 | 8 | Payments interface | Built: the interface, Stripe as the first provider, a shared contract suite; one-off payments and the webhook signature check use it (§8) |
 | 9 | Entitlements and metering | **Done.** Production data run passed (23 Nov, 17:09 UTC); merged (#109) |
-| 10 | `NOT NULL`, foreign keys, row-level security | Built and rehearsed (17 accounts, 0 problems; identical views through row-level security). Production data run: see §10 |
-| 11 | Reads switched to tenant-aware queries | After **7 clean days of shadow reads** |
+| 10 | `NOT NULL`, foreign keys, row-level security | **Done.** Production data run passed (23 Nov, 18:17 UTC); merged (#110). **Shadow reads through row-level security started 23 Nov, 19:06 UTC** |
+| 11 | Reads switched to tenant-aware queries | After **7 clean days of shadow reads**: not before **1 Dec 2026** (§11) |
 | 12 | Old email joins dropped | A later release, after a quiet week |
 
 **Timeline.** Step 11 can't happen sooner than 7 days after shadow reads start (they start with step 4, once steps 2 and 3 have run on production). Step 12 follows at least a week after step 11. So Phase 3 finishes about two to three weeks after step 3 reaches production, however fast the code is written.
@@ -384,6 +384,10 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 # 3. Set TENANT_SCOPE=shadow for Production and redeploy: the 7-day shadow period for step 11 starts.
 ```
 
+**Production run, done 23 Nov 2026, 18:17 UTC** (by the build session, approved in advance, after green CI and a clean rehearsal): restore point `pre-phase-3-tenant-rls`; the migration took 2.2 s; the data guard diff passed with 17 accounts and 0 problems; no drift; verify consistent, including row-level security on all 59 tables. The live site answered normally before and after. #110 merged afterwards.
+
+**Shadow settings, set for Production on 23 Nov (19:05 UTC) and deployed:** `TENANT_SCOPE=shadow`, `TENANT_ROUTING=shadow`, `REGION=syd`. `CLUB_SETTINGS_SOURCE=shadow` was already set. The first daily heartbeat row is written by the roster cron at 03:00 UTC.
+
 **Rollback:** in the rehearsal report. The quick one is deleting `TENANT_SCOPE` and redeploying: the app is back on the owner's connection and the policies don't apply to it.
 
 ## 11. Step 11: the switch (after 7 clean days)
@@ -396,7 +400,7 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 ## 12. Housekeeping that needs you
 
 - **Rehearsal branch.** One reusable branch, `rehearsal-phase-3`, is kept for the rest of the phase and reset to a fresh copy of production before each rehearsal, so its host needs approving only once. It holds real data: delete it when Phase 3 is done.
-- **Branch limit.** The Neon free plan allows 10 branches per project. Today there are 7: main and six restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`). The three from Phase 1 and 2 can go once you're happy with those phases; say the word. Each Phase 3 data step adds a restore point and a rehearsal branch. The older `pre-phase-*` restore points can go once you're happy with Phase 1 and 2.
+- **Branch limit: reached.** The Neon free plan allows 10 branches per project, and there are 10: main, the reusable `rehearsal-phase-3`, and eight restore points (`pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`, `pre-phase-3-tenants`, `pre-phase-3-tenant-id`, `pre-phase-3-user-id-links`, `pre-phase-3-entitlements`, `pre-phase-3-tenant-rls`). Before the next data step (step 11's key changes), delete the oldest restore points you no longer need; the Phase 1 and Phase 2 ones are the candidates. I haven't deleted any: they are your backups.
 - **Point-in-time restore covers 6 hours, not 7 days.** The project's history retention is 21,600 seconds (the free plan's limit). Test plan §4.4 asks for a window that covers the next 7 days. Until the plan changes, the named `pre-<step>` branch is the restore point for each step, and it's kept until the step's watch period ends.
 - **Each new Neon branch has a new host**, and the build session's network only allows named hosts. Expect one approval card per rehearsal (two hosts: direct and pooled).
 - **One branch, one step at a time.** The build session pushes only to `claude/luvallplay-phase-3`, so each step's pull request opens after the previous one is merged.

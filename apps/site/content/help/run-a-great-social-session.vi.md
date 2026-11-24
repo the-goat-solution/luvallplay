@@ -77,4 +77,4 @@ Ghi lại ai đã đến, ai mới và ai lâu rồi chưa gặp. Một tin nh�
 
 ## Luvallplay góp phần ở đâu
 
-Đăng ký, danh sách chờ, nút "Tôi không đến được" và điểm danh là phần việc hậu trường của tất cả những điều trên. Thành viên Three Wolves đang dùng chúng mỗi tuần. Xem cách hoạt động ở bài [đặt chỗ, danh sách chờ và "Tôi không đến được"](/help/bookings-waitlists-and-cant-make-it). Muốn CLB của bạn cũng có? [Vào danh sách chờ](/help/start-your-club-waitlist).
+Đăng ký, danh sách chờ, nút "Tôi không đến được" và điểm danh là phần việc hậu trường của tất cả những điều trên. Thành viên của câu lạc bộ đầu tiên trên Luvallplay đang dùng chúng mỗi tuần. Xem cách hoạt động ở bài [đặt chỗ, danh sách chờ và "Tôi không đến được"](/help/bookings-waitlists-and-cant-make-it). Muốn CLB của bạn cũng có? [Vào danh sách chờ](/help/start-your-club-waitlist).

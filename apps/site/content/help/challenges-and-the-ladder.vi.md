@@ -1,6 +1,6 @@
 ---
 title: "Thách đấu và bảng xếp hạng"
-summary: "Arena ở Three Wolves hoạt động thế nào: ghép cặp, tung lời thách đấu, xác nhận tỉ số và leo hạng trong CLB."
+summary: "Arena hoạt động thế nào: ghép cặp, tung lời thách đấu, xác nhận tỉ số và leo hạng trong CLB."
 audience: players
 order: 12
 updated: 2026-11-24
@@ -12,7 +12,7 @@ Chơi giao lưu thì vui rồi. Nhưng đôi khi bạn muốn một ván có tí
 
 Arena là nơi dành cho việc đó. Bạn ghép cặp, thách đấu một cặp khác, chơi, rồi hai bên cùng xác nhận tỉ số. Thắng thì được điểm, có điểm thì lên hạng trong CLB, và bảng xếp hạng cho thấy ai đang đứng ở đâu.
 
-Arena đang chạy ở Three Wolves Badminton Club, nên bài này nói về đánh đôi cầu lông. Bảng xếp hạng được tính riêng cho từng CLB và từng môn. Xếp hạng cho các môn khác sắp ra mắt.
+Arena đang chạy ở câu lạc bộ đầu tiên trên Luvallplay, một CLB cầu lông, nên bài này nói về đánh đôi cầu lông. Bảng xếp hạng được tính riêng cho từng CLB và từng môn. Xếp hạng cho các môn khác sắp ra mắt.
 
 ## Một trận thách đấu diễn ra thế nào
 
@@ -47,10 +47,10 @@ Nếu thấy tỉ số sai, cứ nói. Việc đó sẽ được chuyển cho qu
 
 ## Điểm và hạng
 
-- **Thắng thì được điểm.** Ở Three Wolves, điểm này gọi là Wolf Points. Bạn còn được điểm khi đến các ngày chơi và khi thắng trận đấu vòng tròn.
+- **Thắng thì được điểm.** Ở câu lạc bộ đầu tiên trên Luvallplay, điểm này gọi là Wolf Points. Bạn còn được điểm khi đến các ngày chơi và khi thắng trận đấu vòng tròn.
 - **Thua không bao giờ mất điểm.** Nên chẳng có lý do gì để né một trận khó.
 - **Có những trận thắng được thưởng thêm.** Thắng một cặp hạng cao hơn, gặp một cặp chưa đấu bao giờ, và thắng liền nhiều trận đều được cộng điểm.
-- **Có điểm thì lên hạng.** Ở Three Wolves, thang hạng đi từ Cầu Nhựa ở dưới cùng lên Vợt Kim Cương trên đỉnh.
+- **Có điểm thì lên hạng.** Ở CLB đầu tiên này, thang hạng đi từ Cầu Nhựa ở dưới cùng lên Vợt Kim Cương trên đỉnh.
 - **Hạng cao phải được giữ gìn.** Nghỉ chơi 60 ngày là hạng bắt đầu xỉn màu. Chơi lại để đánh bóng nó lên.
 
 Còn có một chiếc vương miện. Một cặp đang giữ nó, và thắng được họ thì có thưởng.
@@ -74,7 +74,7 @@ Bảng xếp hạng nằm trong Arena. Bảng cho thấy những người chơi 
 
 **Có bắt buộc tham gia không?** Không. Arena là tuỳ chọn. Rất nhiều thành viên chỉ chơi giao lưu.
 
-**Tôi đánh đơn được không?** Arena ở Three Wolves dành cho các cặp.
+**Tôi đánh đơn được không?** Hiện Arena dành cho các cặp.
 
 **Chúng tôi không đánh hết được ván.** Bạn có thể ghi nhận một cặp bỏ cuộc thay vì nhập tỉ số.
 

@@ -4,7 +4,7 @@ import { Finder, type FinderClub } from "./Finder";
 import { Icon } from "./icons";
 import { ScoreDemo } from "./ScoreDemo";
 import { t } from "@/lib/messages";
-import { ctaTarget, href } from "@/lib/site";
+import { ctaTarget, href, logoSrc } from "@/lib/site";
 import type { Content, Lang } from "@/lib/types";
 
 type P = { lang: Lang; content: Content };
@@ -338,6 +338,8 @@ export function finderProps(lang: Lang, content: Content) {
     schedule: c.schedule[lang],
     meta: c.audience[lang],
     url: c.url,
+    logo: c.logo?.url ? logoSrc(c.logo.url) : undefined,
+    logoAlt: c.logo?.alt?.[lang] ?? "",
   }));
   return {
     clubs,
@@ -363,7 +365,9 @@ export function FinderSection({ lang, content }: P) {
 
 export function Story({ lang, content }: P) {
   const s = content.home.story;
+  const m = t(lang);
   const quote = content.testimonials[0];
+  const club = content.clubs.find((x) => x.slug === "three-wolves") ?? content.clubs[0];
   return (
     <section className="wrap story">
       <div className="collage" role="img" aria-label={s.caption[lang]}>
@@ -382,6 +386,12 @@ export function Story({ lang, content }: P) {
           <span className="quote-mark" aria-hidden="true"><img src="/brand/luvallplay-mark.svg" alt="" width={40} height={39} /></span>
           <h2>{s.title[lang]}</h2>
           <p className="lead-sm">{s.body[lang]}</p>
+          {club ? (
+            <a className="card first-club" href={club.url} rel="noopener">
+              {club.logo?.url ? <span className="club-logo club-logo-lg"><img src={logoSrc(club.logo.url, 240)} alt={club.logo.alt?.[lang] ?? ""} width={94} height={80} loading="lazy" /></span> : null}
+              <span><span className="label muted">{m.mock.firstClub}</span><b>{club.name}</b><span className="muted">{m.mock.visitClub}</span></span>
+            </a>
+          ) : null}
           <p className="note">{s.caption[lang]}</p>
         </div>
       )}
@@ -412,8 +422,12 @@ export function ForClubs({ lang, content }: P) {
           {club ? (
             <div className="tw-card">
               <div className="tw-head">
-                <span className="tw-logo btn-dark" aria-hidden="true">{club.name.split(" ").slice(0, 2).map((w) => w[0]).join("")}</span>
-                <span><b>{club.name}</b><small>{club.city} · {club.schedule[lang]}</small></span>
+                {club.logo?.url ? (
+                  <span className="club-logo"><img src={logoSrc(club.logo.url)} alt={club.logo.alt?.[lang] ?? ""} width={56} height={48} loading="lazy" /></span>
+                ) : (
+                  <span className="tw-logo btn-dark" aria-hidden="true">{club.name.split(" ").slice(0, 2).map((w) => w[0]).join("")}</span>
+                )}
+                <span><small className="label">{m.mock.firstClub}</small><b><a href={club.url} rel="noopener">{club.name}</a></b><small>{club.city} · {club.schedule[lang]}</small></span>
               </div>
               <div className="tw-stats">
                 <div><b>2</b><span>{m.mock.sessionsWeek}</span></div>

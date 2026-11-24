@@ -327,6 +327,9 @@ footer{background:var(--navy-dark);color:#fff;padding:80px 0 36px}
 .footer-links button:hover{color:#fff}
 .footer-contact-row{display:flex;align-items:flex-start;gap:10px;color:rgba(255,255,255,.55);font-size:14px;margin-bottom:12px;line-height:1.55}
 .footer-contact-row svg{flex-shrink:0;margin-top:3px;opacity:.55}
+.footer-platform{display:inline-flex;align-items:center;gap:12px;margin-top:8px;padding:10px 0;min-height:44px;color:rgba(255,255,255,.7);font-size:14px;text-decoration:none}
+.footer-platform:hover{color:#fff}
+.footer-platform img{height:24px;width:auto;display:block}
 .footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:28px;gap:16px;flex-wrap:wrap}
 .footer-copy{color:rgba(255,255,255,.3);font-size:13px}
 @media(max-width:920px){.footer-grid{grid-template-columns:1fr 1fr;gap:36px}.footer-brand-col{grid-column:span 2}}

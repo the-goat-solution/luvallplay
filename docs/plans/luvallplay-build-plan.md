@@ -1103,6 +1103,8 @@ Gate R results (local production build, CI job "Website"):
 
 Still open for Stage A: the Sanity organisation (owner is creating one), the forms database (owner creates it from Vercel, runbook §4), Resend DNS, DNS for the four domains, company details for Privacy and Terms, and a Vietnamese speaker's review of the Vietnamese copy. An ignored-build step for the Three Wolves project (so website-only changes don't rebuild it) is written (`scripts/vercel-ignore.sh web`) but not switched on: it changes how Three Wolves deploys, so it waits for the owner's go-ahead.
 
+**Three Wolves on the site, Luvallplay on Three Wolves (24 Nov, owner's request).** The website now names Three Wolves Badminton Club only as the first club that uses Luvallplay, with its logo and a link to its site (home page, For clubs card, Find a club). The origin-story wording is gone from pages, help articles and the FAQ. The Three Wolves site's footer says "Our club runs on" with the Luvallplay logo, linking to the website (the vercel.app address until luvallplay.com's DNS is live: one constant in `apps/web/components/Footer.tsx`).
+
 **Stage B** (setup wizard, club websites and editor, Admin → Modules, Look & feel, Payments, Stripe Connect in test mode, the readiness-gate lock) has not started: it needs Phase 3 finished (§6.10).
 
 ---

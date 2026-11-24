@@ -13,7 +13,7 @@ import type { Doc, HelpArticle, LegalPage, PtBlock } from "../lib/types.ts";
 const docs = JSON.parse(readFileSync(new URL("../content/generated/seed.json", import.meta.url), "utf8")) as Doc[];
 
 // Words that are the same in both languages on purpose (names, numbers).
-const SAME_OK = /^(Luvallplay( Vision)?|Vision|Arena|Email|Menu|Pickleball|Futsal|Three Wolves( Badminton Club)?( · Christchurch)?|Love all, play\.|\d+|–)$/;
+const SAME_OK = /^(Luvallplay( Vision)?|Vision|Arena|Email|Menu|Pickleball|Futsal|Three Wolves( Badminton Club)?|Love all, play\.|\d+|–)$/;
 
 function walk(node: unknown, path: string, problems: string[]) {
   if (Array.isArray(node)) return node.forEach((n, i) => walk(n, `${path}[${i}]`, problems));

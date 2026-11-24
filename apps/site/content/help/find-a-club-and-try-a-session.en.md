@@ -1,6 +1,6 @@
 ---
 title: "Find a club and try a session"
-summary: "The club finder is a short, hand-picked list for now. Here's how to try a casual session at Three Wolves in Christchurch."
+summary: "The club finder is a short, hand-picked list for now. Here's how to try a casual session at the one club listed today, in Christchurch."
 audience: players
 order: 9
 updated: 2026-11-24
@@ -8,13 +8,13 @@ updated: 2026-11-24
 
 ## Where the finder is today
 
-The [club finder](/find-a-club) is a short, hand-picked list for now. We only show clubs we know are real and running, and today that means one: Three Wolves Badminton Club in Christchurch, New Zealand.
+The [club finder](/find-a-club) is a short, hand-picked list for now. We only show clubs we know are real and running, and today that means one: Three Wolves Badminton Club in Christchurch, New Zealand, the first club on Luvallplay.
 
 A wider finder, with more clubs and more sports, is coming soon. We'd rather show you one real club than a map full of guesses.
 
 ## If you're in Christchurch
 
-Three Wolves plays badminton twice a week, on Wednesday and Friday evenings. Visitors are welcome to book a casual session, which is a single visit with no membership needed.
+The club plays badminton twice a week, on Wednesday and Friday evenings. Visitors are welcome to book a casual session, which is a single visit with no membership needed.
 
 ### How to book a casual session
 
@@ -67,9 +67,9 @@ Luvallplay is free for players. A club may charge for its own sessions or member
 
 ## Common questions
 
-**Do I need an account to book a casual session?** At Three Wolves, a casual booking only needs your name, email and phone number. Members sign in to manage their bookings. See [signing in with an email code](/help/signing-in-with-an-email-code).
+**Do I need an account to book a casual session?** At this club, a casual booking only needs your name, email and phone number. Members sign in to manage their bookings. See [signing in with an email code](/help/signing-in-with-an-email-code).
 
-**Is there an app to download?** Store apps are coming soon. Today Three Wolves works in your phone's browser.
+**Is there an app to download?** Store apps are coming soon. Today the club's site works in your phone's browser.
 
 **Other sports?** Badminton is the live sport today. Other sports are coming soon.
 

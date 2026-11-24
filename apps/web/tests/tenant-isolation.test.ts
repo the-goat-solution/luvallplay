@@ -16,6 +16,7 @@ import fs from "node:fs";
 import pg from "pg";
 import { CLUB_OWNED_TABLES, PLATFORM_TABLES } from "@luvallplay/db/tenancy";
 import { migrate } from "../scripts/db/migrate.mjs";
+import { appLoginSql, checkAppLogin } from "../lib/app-login.ts";
 
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
@@ -226,6 +227,46 @@ describe("tenant isolation at the database", { skip: !BASE_URL && !REQUIRE_DB ? 
       await c.query(`DELETE FROM sessions WHERE date = '2031-01-03'`);
       await assert.rejects(c.query(`INSERT INTO bookings (session_date, first_name, last_name, email, phone, payment_intent_id) VALUES ('2031-01-03', 'A', 'B', 'a@x.test', '1', 'pi_isolation')`), /bookings_session_date_fkey/);
     });
+  });
+
+  test("the app's own login: no rights of its own, the club's rows once stepped down; a login made like the owner is refused", async () => {
+    const good = `luvallplay_web_t${process.pid}`;
+    const bad = `luvallplay_bad_t${process.pid}`;
+    const as = async (role: string) => {
+      const u = new URL(urlFor(NAME));
+      u.username = role;
+      u.password = "test-only";
+      const conn = new pg.Client({ connectionString: u.toString() });
+      await conn.connect();
+      return conn;
+    };
+    try {
+      // Created exactly as the runbook says, with a throwaway password.
+      await c.query(appLoginSql(good).replace("<generated>", "test-only"));
+      await c.query(`CREATE ROLE ${bad} LOGIN PASSWORD 'test-only' BYPASSRLS; GRANT luvallplay_app TO ${bad}`);
+
+      const web = await as(good);
+      try {
+        assert.deepEqual(await checkAppLogin(web, "three-wolves"), []);
+        await assert.rejects(web.query(`SELECT 1 FROM players LIMIT 1`), /permission denied/, "nothing without stepping down");
+        await assert.rejects(web.query(`SET ROLE ${(await c.query("SELECT current_user AS u")).rows[0].u}`), /permission denied/, "and it can't become the owner");
+        await assert.rejects(web.query(`CREATE TABLE sneaky (id int)`), /permission denied/);
+      } finally {
+        await web.end();
+      }
+
+      const other = await as(bad);
+      try {
+        const problems = await checkAppLogin(other, "three-wolves");
+        assert.ok(problems.some((p) => p.includes("bypass row-level security")), problems.join("; "));
+        assert.ok(problems.some((p) => p.includes("without stepping down")), problems.join("; "));
+      } finally {
+        await other.end();
+      }
+    } finally {
+      await c.query(`DROP ROLE IF EXISTS ${good}`);
+      await c.query(`DROP ROLE IF EXISTS ${bad}`);
+    }
   });
 
   test("the club setting ends with the transaction: the next one starts with no club", async () => {

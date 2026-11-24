@@ -210,6 +210,20 @@ describe("the database client's modes (standard-Postgres driver)", { skip: !BASE
     }
   });
 
+  test("with the app's own login, every mode is enforce: that login can't read as the owner", () => {
+    process.env.APP_DATABASE_URL = "postgres://luvallplay_web:x@db.example/app";
+    try {
+      for (const v of [undefined, "off", "shadow", "enforce"]) {
+        if (v === undefined) delete process.env.TENANT_SCOPE;
+        else process.env.TENANT_SCOPE = v;
+        assert.equal(database.tenantScopeMode(), "enforce", String(v));
+      }
+    } finally {
+      delete process.env.APP_DATABASE_URL;
+    }
+    assert.equal(database.appLogin(), null);
+  });
+
   test("off: queries run as the connection's own role", async () => {
     process.env.TENANT_SCOPE = "off";
     const r = (await database.sql.query(who)).rows[0];

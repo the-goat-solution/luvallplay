@@ -45,6 +45,8 @@ const CONNECTION_VARS = [
   "POSTGRES_PRISMA_URL",
   "DATABASE_URL",
   "DATABASE_URL_UNPOOLED",
+  // The app's own login (lib/database.ts appLogin).
+  "APP_DATABASE_URL",
 ];
 
 /** Neon endpoint id from a host: the pooled and direct hosts are the same database. */
@@ -76,7 +78,8 @@ export function previewDatabaseVerdict(env: Record<string, string | undefined> =
   if (production.length === 0) {
     return { blocked: true, reason: "PRODUCTION_DATABASE_HOSTS is not set, so this preview can't prove it has its own database" };
   }
-  if (production.includes(databaseEndpoint(host))) {
+  const appHost = hostOf(env.APP_DATABASE_URL);
+  if (production.includes(databaseEndpoint(host)) || (appHost && production.includes(databaseEndpoint(appHost)))) {
     return { blocked: true, reason: "this preview is connected to the production database" };
   }
   return { blocked: false };

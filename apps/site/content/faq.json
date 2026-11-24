@@ -1,0 +1,146 @@
+[
+  {
+    "id": "cost-for-players",
+    "topic": "players",
+    "q": {
+      "en": "Does Luvallplay cost anything for players?",
+      "vi": "Người chơi có phải trả tiền cho Luvallplay không?"
+    },
+    "a": {
+      "en": "No. Luvallplay is free for players. A club may charge for its own sessions or memberships, and you'll always see the club's price before you pay.",
+      "vi": "Không. Luvallplay miễn phí cho người chơi. CLB có thể thu phí buổi chơi hoặc phí hội viên của riêng mình, và bạn luôn thấy giá của CLB trước khi trả."
+    }
+  },
+  {
+    "id": "cost-for-clubs",
+    "topic": "clubs",
+    "q": {
+      "en": "What does Luvallplay cost for clubs?",
+      "vi": "CLB dùng Luvallplay tốn bao nhiêu?"
+    },
+    "a": {
+      "en": "Luvallplay is free for founding clubs. Paid plans come later, and clubs get notice before anything changes.",
+      "vi": "Luvallplay miễn phí cho các CLB sáng lập. Các gói trả phí sẽ có sau, và CLB luôn được báo trước khi có bất kỳ thay đổi nào."
+    }
+  },
+  {
+    "id": "when-can-my-club-start",
+    "topic": "clubs",
+    "q": {
+      "en": "When can my club start?",
+      "vi": "Khi nào CLB của tôi bắt đầu được?"
+    },
+    "a": {
+      "en": "Luvallplay isn't open for new clubs yet, and we haven't set a date. Choose Start your club to join the waitlist, confirm your email, and we'll invite you when clubs can be set up.",
+      "vi": "Luvallplay chưa mở cho CLB mới, và chúng tôi chưa chốt ngày. Hãy chọn Mở CLB của bạn để vào danh sách chờ, xác nhận email, và chúng tôi sẽ mời bạn khi các CLB có thể được thiết lập."
+    }
+  },
+  {
+    "id": "which-sports",
+    "topic": "general",
+    "q": {
+      "en": "Which sports does Luvallplay support?",
+      "vi": "Luvallplay hỗ trợ những môn thể thao nào?"
+    },
+    "a": {
+      "en": "Badminton is the live sport today. Luvallplay is built for any club that runs regular sessions, and other sports are coming soon.",
+      "vi": "Hiện cầu lông là môn đang hoạt động. Luvallplay được làm cho mọi CLB có buổi chơi đều đặn, và các môn khác sắp ra mắt."
+    }
+  },
+  {
+    "id": "languages",
+    "topic": "general",
+    "q": {
+      "en": "Which languages does Luvallplay support?",
+      "vi": "Luvallplay hỗ trợ những ngôn ngữ nào?"
+    },
+    "a": {
+      "en": "English and Vietnamese. Use the language switch at the top of any page and we'll remember your choice.",
+      "vi": "Tiếng Anh và tiếng Việt. Bạn bấm nút đổi ngôn ngữ ở đầu trang, chúng tôi sẽ nhớ lựa chọn của bạn."
+    }
+  },
+  {
+    "id": "payments-and-stripe",
+    "topic": "clubs",
+    "q": {
+      "en": "How will payments work? Do we need Stripe?",
+      "vi": "Thanh toán sẽ hoạt động thế nào? CLB có cần Stripe không?"
+    },
+    "a": {
+      "en": "When you set up your club, you'll be able to choose free play, cash or bank transfer, or online payments. Only online payments need Stripe: they're planned for incorporated clubs with their own Stripe account, so the money goes straight to your club. Luvallplay never holds your club's money.",
+      "vi": "Khi thiết lập CLB, bạn sẽ chọn được chơi miễn phí, tiền mặt hoặc chuyển khoản, hay thanh toán trực tuyến. Chỉ thanh toán trực tuyến mới cần Stripe: cách này dự kiến dành cho CLB có tư cách pháp nhân và có tài khoản Stripe riêng, để tiền vào thẳng CLB. Luvallplay không bao giờ giữ tiền của CLB."
+    }
+  },
+  {
+    "id": "what-is-vision",
+    "topic": "players",
+    "q": {
+      "en": "What is Vision, and who can use it?",
+      "vi": "Vision là gì, và ai dùng được?"
+    },
+    "a": {
+      "en": "Vision analyses a game from a phone video filmed behind the court and gives you your rallies and stats. It's badminton only, and for now it's only for Three Wolves members.",
+      "vi": "Vision phân tích trận đấu từ video quay bằng điện thoại đặt phía sau sân, rồi đưa cho bạn số liệu về các pha cầu. Vision chỉ dành cho cầu lông, và hiện chỉ thành viên Three Wolves dùng được."
+    }
+  },
+  {
+    "id": "app-in-the-stores",
+    "topic": "players",
+    "q": {
+      "en": "Is there an app in the App Store or Google Play?",
+      "vi": "Đã có ứng dụng trên App Store hay Google Play chưa?"
+    },
+    "a": {
+      "en": "Not yet. Store apps are coming soon. Today Three Wolves members use Luvallplay in their browser, on the club's own site.",
+      "vi": "Chưa có. Ứng dụng trên kho sắp ra mắt. Hiện thành viên Three Wolves dùng Luvallplay ngay trên trình duyệt, tại trang riêng của CLB."
+    }
+  },
+  {
+    "id": "who-owns-club-data",
+    "topic": "clubs",
+    "q": {
+      "en": "Who owns our club's data?",
+      "vi": "Dữ liệu của CLB thuộc về ai?"
+    },
+    "a": {
+      "en": "Your club's data is your club's. That's our intent, and an export of your club's data is planned. The details will be in the terms we publish before clubs go live.",
+      "vi": "Dữ liệu của CLB là của CLB. Đó là ý định của chúng tôi, và tính năng xuất dữ liệu của CLB đang nằm trong kế hoạch. Chi tiết sẽ có trong các điều khoản chúng tôi công bố trước khi các CLB đi vào hoạt động."
+    }
+  },
+  {
+    "id": "juniors",
+    "topic": "clubs",
+    "q": {
+      "en": "Can juniors play at clubs on Luvallplay?",
+      "vi": "Các em nhỏ tuổi có chơi được ở các CLB trên Luvallplay không?"
+    },
+    "a": {
+      "en": "That's the plan. Juniors under 16 are planned to play through a profile managed by a parent or guardian, and they won't have their own sign-in. This isn't available yet.",
+      "vi": "Đó là kế hoạch. Các em dưới 16 tuổi dự kiến sẽ chơi qua một hồ sơ do cha mẹ hoặc người giám hộ quản lý, và không có tài khoản đăng nhập riêng. Tính năng này hiện chưa có."
+    }
+  },
+  {
+    "id": "where-is-luvallplay-based",
+    "topic": "general",
+    "q": {
+      "en": "Where is Luvallplay based?",
+      "vi": "Luvallplay đến từ đâu?"
+    },
+    "a": {
+      "en": "Luvallplay started at Three Wolves Badminton Club in Christchurch, New Zealand. It's a product of The GOAT Solution.",
+      "vi": "Luvallplay bắt đầu từ Three Wolves Badminton Club ở Christchurch, New Zealand. Đây là sản phẩm của The GOAT Solution."
+    }
+  },
+  {
+    "id": "remove-my-details",
+    "topic": "general",
+    "q": {
+      "en": "How do I get my details removed?",
+      "vi": "Làm sao để xoá thông tin của tôi?"
+    },
+    "a": {
+      "en": "Use the one-click remove my details link in any email from us, or ask us through the contact page. Sign-ups that are never confirmed are deleted after 30 days.",
+      "vi": "Bấm link xoá thông tin của tôi trong bất kỳ email nào chúng tôi gửi, hoặc yêu cầu qua trang liên hệ. Những đăng ký không được xác nhận sẽ bị xoá sau 30 ngày."
+    }
+  }
+]

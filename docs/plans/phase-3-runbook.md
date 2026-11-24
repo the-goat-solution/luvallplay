@@ -430,7 +430,7 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 | **Finding 2, fixed by migration `0010`** | Under `enforce`, a row written for a second club was refused: `tenant_id` defaulted to 1. The default now follows the club the transaction is scoped to (`COALESCE(app_tenant_id(), 1)`); for the owner's connection, as the app runs today, it is still 1 |
 | **Keys per club (expand)** | Migration `0010` adds a second unique index starting with `tenant_id` beside 20 natural keys (a play day's date, a setting's name, one role per person, one pending invite per email, and so on). The app's upserts now name the per-club keys |
 | **Keys per club (contract)** | Migration `0011`: the old keys are dropped and the per-club keys take their names (5 unique indexes, 2 unique constraints, 13 primary keys), so the names the app checks are unchanged. The foreign keys from `bookings` and `session_alert_state` to a play day carry the club: a booking can only point at its own club's day. A second club can now have its own play days, settings and roles. **The app version before #114 can't run on this schema**; rolling back past #114 needs `0011` rolled back first |
-| **A login for the app's role** | Not created; see 11.2 |
+| **A login for the app's role** | The code is built and tested (`APP_DATABASE_URL`). The login itself is not created: it needs a password, so it is yours; see 11.2 |
 
 **Not changed:** `platform_admins`, `player_settings` and accounts are platform tables and keep their keys. The old preview copies of the Arena tables (`pv_…`) have no club column and keep theirs.
 
@@ -446,13 +446,39 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 ### 11.2 A login for the app's role (for you, after `enforce` has been quiet for a week)
 
-Today the app connects as the database owner and steps down to `luvallplay_app` in each transaction. That is enough for isolation as long as the code always steps down. A separate login removes the "as long as": a connection that can't be the owner.
+Today the app connects as the database owner and steps down to `luvallplay_app` in each transaction. That is enough for isolation as long as the code always steps down. A separate login removes the "as long as": a connection that can't be the owner, and that has no rights at all until it steps down.
 
-Not done by a migration, because it needs a password, and passwords don't go in the repository.
+**The code for it is built.** When `APP_DATABASE_URL` is set, the app connects with it and nothing else:
 
-1. In the Neon SQL editor, on a branch first: `CREATE ROLE luvallplay_web LOGIN PASSWORD '<generated>' NOBYPASSRLS; GRANT luvallplay_app TO luvallplay_web;` Create it with SQL, not in the Neon console: roles made in the console are given owner-like rights.
-2. Check on the branch: connecting as `luvallplay_web`, `SELECT count(*) FROM bookings` is 0 until `app.tenant_id` is set, and `ALTER TABLE` is refused.
-3. Give the app's `POSTGRES_URL` the new login. Keep the owner's connection string in a second setting used only by migrations, the cron heartbeat's cross-club checks and the operator scripts. **This split is not built yet**: the code reads one connection string. It is a small change, to be made with this step.
+| | |
+|---|---|
+| `APP_DATABASE_URL` | The app's own login. Not set today, so nothing changes until you set it |
+| `POSTGRES_URL` (through `DATABASE_URL_VAR`) | Stays the owner's connection string. With `APP_DATABASE_URL` set, the running app never uses it; migrations and the operator scripts (data guard, verify, shadow report) still do |
+| `TENANT_SCOPE` | Ignored once the login is set: every statement is scoped, whatever it says. The login can't read as the owner, so there is no `off` or `shadow` to fall back to |
+| Previews | The preview guard covers the new variable: a preview whose login points at production has its database switched off |
+
+**Creating the login is yours**, because it needs a password, and passwords don't go in the repository or through this session.
+
+1. In the Neon SQL editor, on a branch of production first, run what this prints, with a generated password in place of `<generated>`:
+   ```bash
+   node --import ./tests/register.mjs scripts/tenants/app-login.mjs --sql
+   ```
+   Create it with SQL, not in the Neon console: roles made in the console are given owner-like rights. The role is `NOINHERIT` and the app's role is granted `WITH INHERIT FALSE`, so the login can do nothing but step down.
+2. Check it, with the login's connection string (the pooled host works):
+   ```bash
+   APP_DATABASE_URL='<the login's connection string>' node --import ./tests/register.mjs scripts/tenants/app-login.mjs
+   ```
+   It must say `the login is safe to give to the app`. It refuses a login that is a superuser, can bypass row-level security, owns tables, can create tables, reads anything without stepping down, or sees another club's rows.
+3. Repeat 1 and 2 on the main branch. Roles are per branch on Neon, so the one made on the test branch doesn't exist in production.
+4. Add `APP_DATABASE_URL` to Vercel for **Production only** (sensitive), and redeploy. Watch the error log for an hour.
+5. Rollback: delete `APP_DATABASE_URL` and redeploy. The app is back on the owner's connection with `TENANT_SCOPE` as it was.
+
+**Evidence (24 Nov):**
+- All 24 end-to-end journeys pass with the app on such a login (a run with the main server on it), and the two-club sweep of every route now always runs the second club's server on it.
+- On the rehearsal copy of production, a login made this way passed the check through Neon's pooled host, and every account's views through it (18 accounts, 12 views each, 6 club views) are identical to the owner's.
+- A unit test makes the login as written above and proves it reads nothing by itself, can't become the owner and can't create tables; and that a login made like the owner is refused by the check.
+
+**One thing to know before `enforce`:** a scoped statement is a small transaction of its own (begin, step down, name the club, the statement, commit). Inside the same region that is a few milliseconds; it was slow only from the build session's sandbox. If the switch shows slower pages, the setup can be sent as one message instead of three; not done yet because nothing has shown the need.
 
 **Before step 9's tables are relied on for add-ons** (a note from the planning session, decision AK): the Xero accounting sync will be a paid add-on that any club can hold, including one on the free plan. Today `club_plans` allows one current row per club. Add-ons need either a `kind` on `plans` (`base` or `addon`) with the one-current-row rule applied to base plans only, or a separate table. Nothing is built for this yet, and nothing built so far blocks it.
 

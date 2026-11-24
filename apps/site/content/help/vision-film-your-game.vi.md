@@ -23,7 +23,7 @@ Sau trận, bạn nhận được các con số của trận mình, như:
 Có hai giới hạn, xin nói thật:
 
 - **Chỉ cho cầu lông.** Vision được huấn luyện với cầu lông. Các môn khác có thể có sau, nhưng chúng tôi chưa hứa ngày nào.
-- **Hiện chỉ dành cho thành viên của câu lạc bộ đầu tiên trên Luvallplay.** Ở đó, tính năng này có tên Wolf Vision và được dùng cho các trận thách đấu trong Arena.
+- **Hiện chỉ dành cho thành viên của câu lạc bộ đầu tiên trên Luvallplay.** Ở đó, tính năng này được dùng cho các trận thách đấu trong Arena.
 
 Mỗi trận cần một lượt dùng. Thành viên xem được thông tin lượt dùng hiện hành trong ứng dụng trước khi bắt đầu.
 

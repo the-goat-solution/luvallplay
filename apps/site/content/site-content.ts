@@ -18,9 +18,10 @@ export const settings: SiteSettings = {
   appStoreUrl: "",
   playStoreUrl: "",
   bookingUrl: "",
-  contactEmail: "",
+  contactEmail: "support@thegoatsolution.com",
   companyName: "The GOAT Solution",
-  companyAddress: "",
+  // As published on thegoatsolution.com (read 24 Nov 2026).
+  companyAddress: "No. 11, lane 17, Huong Vien street, Dong Mac ward, Hai Ba Trung district, Hanoi, Vietnam 10000",
 };
 
 export const sports: Sport[] = [

@@ -100,8 +100,7 @@ export function Features({ lang, content }: P) {
           <div className="rows" role="img" aria-label={`${m.badge.illustration}: ${f.sessionRows.map((r) => `${r.name[lang]}, ${r.meta[lang]}`).join("; ")}`}>
             {f.sessionRows.map((r, i) => (
               <div key={r._key} className="row" aria-hidden="true">
-                <b>{r.name[lang]}</b>
-                <span className="meta">{r.meta[lang]}</span>
+                <span><b>{r.name[lang]}</b><span className="meta">{r.meta[lang]}</span></span>
                 <span className={`pill-mock ${i === 0 ? "btn-primary" : "btn-secondary"}`}>{r.action[lang]}</span>
               </div>
             ))}
@@ -139,7 +138,7 @@ export function Features({ lang, content }: P) {
         </div>
 
         {(["social", "marketplace"] as const).map((k) => (
-          <div key={k} className="tile card lift rise">
+          <div key={k} className={`tile card lift rise${k === "marketplace" ? " tile-wide" : ""}`}>
             <span className="ic-box"><Icon name={FEATURE_ICON[k]} size={26} />{k === "social" ? <span className="ic-dot" /> : null}</span>
             <h3 className="h-card">{by[k].title[lang]}</h3>
             <p className="card-p">{by[k].body[lang]}</p>
@@ -389,7 +388,7 @@ export function Story({ lang, content }: P) {
           {club ? (
             <a className="card first-club" href={club.url} rel="noopener">
               {club.logo?.url ? <span className="club-logo club-logo-lg"><img src={logoSrc(club.logo.url, 240)} alt={club.logo.alt?.[lang] ?? ""} width={94} height={80} loading="lazy" /></span> : null}
-              <span><span className="label muted">{m.mock.firstClub}</span><b>{club.name}</b><span className="muted">{m.mock.visitClub}</span></span>
+              <span><span className="label muted">{m.mock.firstClub}</span><b>{club.name}</b><span className="go">{m.mock.visitClub}</span></span>
             </a>
           ) : null}
           <p className="note">{s.caption[lang]}</p>

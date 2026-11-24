@@ -23,7 +23,7 @@ Afterwards you get the numbers for your game, such as:
 Two honest limits:
 
 - **Badminton only.** Vision is trained on badminton. Other sports may follow, but we're not promising dates.
-- **Members of the first club on Luvallplay only, for now.** There it's called Wolf Vision, and it's used for Arena challenges.
+- **Members of the first club on Luvallplay only, for now.** There it's used for Arena challenges.
 
 A match needs a pass. Members can see the current pass details in the app before they start.
 

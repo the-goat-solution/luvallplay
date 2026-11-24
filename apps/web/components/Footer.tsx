@@ -7,9 +7,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import { Trans } from "@/components/Trans";
 import type { Lang } from "@/lib/i18n";
 
-// The platform's public site. Its own domain (luvallplay.com) takes over once
-// its DNS is live: change this one line then.
-const LUVALLPLAY_URL = "https://luvallplay-site.vercel.app";
+// The platform's public site.
+const LUVALLPLAY_URL = "https://luvallplay.com";
 const FB_URL = "https://www.facebook.com/profile.php?id=61575583556969";
 
 export function Footer() {

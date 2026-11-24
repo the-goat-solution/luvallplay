@@ -1105,6 +1105,8 @@ Still open for Stage A: the Sanity organisation (owner is creating one), the for
 
 **Three Wolves on the site, Luvallplay on Three Wolves (24 Nov, owner's request).** The website now names Three Wolves Badminton Club only as the first club that uses Luvallplay, with its logo and a link to its site (home page, For clubs card, Find a club). The origin-story wording is gone from pages, help articles and the FAQ. The Three Wolves site's footer says "Our club runs on" with the Luvallplay logo, linking to the website (the vercel.app address until luvallplay.com's DNS is live: one constant in `apps/web/components/Footer.tsx`).
 
+**Visual review fixes and go-live of luvallplay.com (24 Nov, owner's request).** luvallplay.com is live on Vercel, so `SITE_ORIGIN` is now `https://luvallplay.com` and the Three Wolves footer badge links there. Fixed on the website: the phone mock's "next play day" card and active tab were unreadable; the Vision sample's chips collided and its play icon was stretched; court lines ran through text on phones; the ladder illustration read 2, 1, 3 on phones (now 1, 2, 3); dark buttons and one illustration block vanished in the dark theme; the seventh tool tile sat alone; the floating labels covered the phone screen; placeholder text was too faint. The club card's button is now "View club". Help articles no longer use club-specific names for points, ranks or Vision. Company address and contact email on Privacy and Terms come from thegoatsolution.com.
+
 **Stage B** (setup wizard, club websites and editor, Admin → Modules, Look & feel, Payments, Stripe Connect in test mode, the readiness-gate lock) has not started: it needs Phase 3 finished (§6.10).
 
 ---

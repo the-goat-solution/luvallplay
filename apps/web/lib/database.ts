@@ -51,8 +51,19 @@ type Primitive = string | number | boolean | bigint | null | undefined | Date;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRow = any;
 
+/**
+ * The app's own login (runbook §11.2), when it has one: a role that is not
+ * the database owner and can do nothing until it steps down to the app's
+ * role. APP_DATABASE_URL holds its connection string; POSTGRES_URL stays the
+ * owner's, for migrations and operator scripts, which the app then never uses.
+ */
+export function appLogin(): string | null {
+  const v = process.env.APP_DATABASE_URL?.trim();
+  return v && v !== "undefined" ? v : null;
+}
+
 function connectionString(): string {
-  const url = process.env.POSTGRES_URL;
+  const url = appLogin() ?? process.env.POSTGRES_URL;
   if (!url || url === "undefined") {
     throw new Error(
       process.env.PREVIEW_DATABASE_BLOCKED
@@ -97,6 +108,9 @@ function viaPg(): PgDatabase | null {
 export type TenantScopeMode = "off" | "shadow" | "enforce";
 
 export function tenantScopeMode(): TenantScopeMode {
+  // The app's own login can't read as the owner, so there is nothing to
+  // compare with and nothing to fall back to: every statement is scoped.
+  if (appLogin()) return "enforce";
   const v = process.env.TENANT_SCOPE?.trim().toLowerCase();
   if (!v || v === "off") return "off";
   if (v === "shadow") return "shadow";
@@ -154,13 +168,16 @@ function rawPool(): PoolLike {
   return (viaPg()?.pool() ?? getPool()) as unknown as PoolLike;
 }
 
-// The club this deployment serves, looked up once as the owner.
+// The club this deployment serves, looked up once: as the connection's own
+// role, or, with the app's own login (which has no rights of its own), as
+// the app's role with no club named. The clubs table is a platform table.
 let tenantIdPromise: Promise<number> | null = null;
 function scopeTenantId(): Promise<number> {
   if (!tenantIdPromise) {
     const slug = defaultTenantSlug();
-    const lookup = rawPool()
-      .query(`SELECT id FROM tenants WHERE slug = $1`, [slug])
+    const text = `SELECT id FROM tenants WHERE slug = $1`;
+    const found = (appLogin() ? readScoped(rawPool(), null, text, [slug]) : rawPool().query(text, [slug])) as Promise<{ rows: { id: number }[] }>;
+    const lookup = found
       .then((r: { rows: { id: number }[] }) => {
         if (!r.rows[0]) throw new Error(`No club "${slug}" in tenants.`);
         return r.rows[0].id;

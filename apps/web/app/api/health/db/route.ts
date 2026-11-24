@@ -16,7 +16,7 @@ let served = 0;
 
 function dbRegion(): string {
   try {
-    const host = new URL(process.env.POSTGRES_URL ?? "").hostname;
+    const host = new URL(process.env.APP_DATABASE_URL || process.env.POSTGRES_URL || "").hostname;
     const m = host.match(/(?:aws|gcp|azure)?-?((?:us|eu|ap|sa|ca|me|af|il)-[a-z]+-\d)/);
     return m ? m[1] : host.split(".").slice(1, 3).join(".") || "unknown";
   } catch {

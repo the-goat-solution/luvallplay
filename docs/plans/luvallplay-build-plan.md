@@ -889,7 +889,7 @@ Findings and changes recorded as the work goes:
   - **Plan change: natural keys are widened in step 11, not step 10** (runbook §10).
   - The golden master has a fourth copy that runs through row-level security; it found three orderings without a tie-breaker, now fixed.
   - **Decision: the account-linking trigger runs as its owner**, because accounts are global and must link rows in every club.
-  - **Not done yet:** a login for the app's role (runbook §11.2).
+  - **The app's own login** (`APP_DATABASE_URL`, runbook §11.2): the code is built. With it set, the app connects as a role that has no rights until it steps down to the app's role, every statement is scoped whatever `TENANT_SCOPE` says, and the owner's connection string is left to migrations and operator scripts. **Decision: a second variable, not a new meaning for `POSTGRES_URL`**, so no script changes and the Neon integration keeps managing the owner's string. Creating the login is the owner's step (it needs a password); `scripts/tenants/app-login.mjs` checks it.
 - **Step 11, preparation (migration `0010_tenant_keys`, no row changes):**
   - **The route-level isolation suite** is an end-to-end journey: a second, synthetic club runs on its own server under `TENANT_SCOPE=enforce`, and every route, generated from the `app` directory, is requested as a platform admin and as nobody.
   - **Finding: the admin Players page listed every account on the platform.** Row-level security can't catch this, because accounts are global by design; the page now joins to the club's members. Lesson for later phases: every query on a platform table needs its own club condition, and only the route-level suite checks that.

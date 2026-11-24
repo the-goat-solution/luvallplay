@@ -192,6 +192,29 @@ export async function startEnv({ log = console.log } = {}) {
  * settings plus `extra`. For the tenant-isolation suite: the same database,
  * served as another club. Returns its base URL and a stop().
  */
+/**
+ * The app's own database login (runbook §11.2), on the local cluster: made
+ * the way the runbook says, with a password that exists only here. Returns
+ * its connection string.
+ */
+export async function ensureAppLogin() {
+  const role = "luvallplay_web_e2e";
+  const c = new pg.Client({ connectionString: DB_URL });
+  await c.connect();
+  try {
+    if (!(await c.query(`SELECT 1 FROM pg_roles WHERE rolname = $1`, [role])).rows[0]) {
+      await c.query(`CREATE ROLE ${role} LOGIN PASSWORD 'e2e-only' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT`);
+    }
+    await c.query(`GRANT luvallplay_app TO ${role} WITH SET TRUE, INHERIT FALSE`);
+  } finally {
+    await c.end();
+  }
+  const u = new URL(DB_URL);
+  u.username = role;
+  u.password = "e2e-only";
+  return u.toString();
+}
+
 export async function startSecondServer(serverEnv, extra, port = PORT + 1) {
   const base = `http://localhost:${port}`;
   const env = { ...serverEnv, ...extra, PORT: String(port), NEXT_PUBLIC_SITE_URL: base };

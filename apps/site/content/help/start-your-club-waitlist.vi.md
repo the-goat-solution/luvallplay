@@ -8,7 +8,7 @@ updated: 2026-11-24
 
 ## Tình hình hiện tại
 
-Luvallplay chưa mở cho CLB mới. Hiện mới có một CLB đang chạy trên nền tảng: Three Wolves Badminton Club ở Christchurch. Chúng tôi đang làm bộ công cụ để CLB nào cũng tự thiết lập được, và muốn làm cho tử tế trước khi trao tận tay bạn.
+Luvallplay chưa mở cho CLB mới. Hiện mới có một CLB đang chạy trên nền tảng, một CLB cầu lông ở Christchurch. Chúng tôi đang làm bộ công cụ để CLB nào cũng tự thiết lập được, và muốn làm cho tử tế trước khi trao tận tay bạn.
 
 Vì vậy lúc này, "Mở CLB của bạn" nghĩa là "vào danh sách chờ". Chỉ mất khoảng một phút.
 

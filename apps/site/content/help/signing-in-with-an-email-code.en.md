@@ -12,7 +12,7 @@ You never set a password. When you sign in, we send a 6-digit code to your email
 
 Why? Passwords get forgotten, reused and stolen. A fresh code each time is simpler for you and safer for your club.
 
-This article describes how sign-in works for Three Wolves members today. Other clubs will sign in the same way when they join.
+This article describes how sign-in works today for members of the first club on Luvallplay. Other clubs will sign in the same way when they join.
 
 ## How to sign in
 
@@ -35,7 +35,7 @@ The first time, you'll be asked for your name so the club knows who you are.
 
 ## Signing in with a text instead
 
-At Three Wolves you can sometimes choose **Text me a code** and get the code by text message. It works for New Zealand mobile numbers only, and it isn't always available. If you don't see the option, or it isn't working, use your email. Email always works.
+At the first club you can sometimes choose **Text me a code** and get the code by text message. It works for New Zealand mobile numbers only, and it isn't always available. If you don't see the option, or it isn't working, use your email. Email always works.
 
 ## The code hasn't arrived
 

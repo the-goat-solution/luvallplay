@@ -14,13 +14,13 @@ The name comes from "Love all, play." It's the call that starts a game in badmin
 
 ## What's live today
 
-Luvallplay grew out of the web app built for Three Wolves Badminton Club in Christchurch, New Zealand. The club plays twice a week, on Wednesday and Friday evenings, and its members use these tools right now:
+Three Wolves Badminton Club, in Christchurch, New Zealand, is the first club that uses Luvallplay. Its members use these tools right now:
 
 - **Sessions and sign-ups.** See the upcoming play days, book a casual session and get a confirmation by email.
 - **Waitlists.** If a session is full, join the waitlist and get an email if a spot opens.
 - **Memberships.** Join the club, manage your membership and tell the club when you can't make your day.
 - **Challenges and the ladder.** Pair up, challenge another pair, confirm the score and climb the club ranks.
-- **Vision.** Film a game on a phone and get your rallies and stats back. Vision is badminton only, and for now it's only for Three Wolves members.
+- **Vision.** Film a game on a phone and get your rallies and stats back. Vision is badminton only, and for now it is only open to members of the first club on Luvallplay.
 - **An admin area** where organisers run play days, members and attendance.
 
 Badminton is the live sport today. You can see the club at [threewolvesbadminton.org](https://threewolvesbadminton.org).
@@ -31,7 +31,7 @@ We'd rather tell you plainly what isn't here yet:
 
 - **New clubs.** Luvallplay isn't open for new clubs yet. You can [join the waitlist](/help/start-your-club-waitlist) and we'll invite you when it is.
 - **Other sports.** Luvallplay is built for any club that runs regular sessions. Sports beyond badminton are coming soon.
-- **Store apps.** Apps for the App Store and Google Play are coming soon. Today Three Wolves members use the club's site in their browser.
+- **Store apps.** Apps for the App Store and Google Play are coming soon. Today members use Luvallplay in their browser, on their club's own site.
 - **A wider club finder, social and marketplace.** All coming soon. The [club finder](/find-a-club) is a short, hand-picked list for now.
 - **Rankings for other sports.** Coming soon, kept separately for each sport.
 
@@ -44,13 +44,13 @@ There's more on the [pricing page](/pricing).
 
 ## Two languages
 
-Luvallplay supports English and Vietnamese. This website, the help centre and the Three Wolves app all work in both. Use the language switch at the top of any page, and we'll remember your choice.
+Luvallplay supports English and Vietnamese. This website, the help centre and the club's app all work in both. Use the language switch at the top of any page, and we'll remember your choice.
 
 When clubs can sign up, each club will be able to choose which of the two languages it offers its members. More languages may follow later, but we're not promising any yet.
 
 ## Who's behind it
 
-Luvallplay started at Three Wolves in Christchurch. It's a product of The GOAT Solution.
+Luvallplay is a product of The GOAT Solution.
 
 ## What to do next
 

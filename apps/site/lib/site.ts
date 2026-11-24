@@ -87,3 +87,8 @@ export function fold(s: string): string {
     .toLowerCase()
     .trim();
 }
+
+/** A club logo: sized by Sanity's CDN when it lives there, as is when local. */
+export function logoSrc(url: string, width = 160): string {
+  return url.startsWith("https://cdn.sanity.io/") ? `${url}?w=${width}&fit=max&auto=format` : url;
+}

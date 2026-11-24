@@ -53,10 +53,11 @@ export const clubs: Club[] = [
     schedule: l("Wednesday and Friday evenings", "Tối thứ Tư và thứ Sáu"),
     audience: l("Social play", "Chơi giao lưu"),
     description: l(
-      "The club where Luvallplay started. Social badminton twice a week in Christchurch.",
-      "Câu lạc bộ nơi Luvallplay bắt đầu. Cầu lông giao lưu hai buổi mỗi tuần tại Christchurch.",
+      "The first club on Luvallplay. Social badminton twice a week in Christchurch.",
+      "Câu lạc bộ đầu tiên trên Luvallplay. Cầu lông giao lưu hai buổi mỗi tuần tại Christchurch.",
     ),
     url: "https://threewolvesbadminton.org",
+    logo: { url: "/clubs/three-wolves.png", alt: l("Three Wolves Badminton Club logo", "Logo Three Wolves Badminton Club") },
   },
 ];
 
@@ -72,7 +73,7 @@ export const home: HomePage = {
     label: l("On Luvallplay", "Trên Luvallplay"),
     linkLabel: l("Find a club", "Tìm câu lạc bộ"),
     items: [
-      { _key: "t1", strong: l("Three Wolves Badminton Club", "Three Wolves Badminton Club"), rest: l("Christchurch · Wednesday and Friday evenings", "Christchurch · tối thứ Tư và thứ Sáu") },
+      { _key: "t1", strong: l("First club on Luvallplay", "Câu lạc bộ đầu tiên trên Luvallplay"), rest: l("Three Wolves Badminton Club", "Three Wolves Badminton Club") },
       { _key: "t2", strong: l("Badminton", "Cầu lông"), rest: l("live now", "đã hoạt động") },
       { _key: "t3", strong: l("Pickleball, tennis, futsal and more", "Pickleball, quần vợt, futsal và nhiều môn khác"), rest: l("coming soon", "sắp ra mắt") },
       { _key: "t4", strong: l("English and Vietnamese", "Tiếng Việt và tiếng Anh"), rest: l("in every screen", "trên mọi màn hình") },
@@ -125,7 +126,7 @@ export const home: HomePage = {
       { _key: "r2", name: l("Fri · Social play", "Thứ Sáu · Chơi giao lưu"), meta: l("Evening · full", "Buổi tối · đã đầy"), action: l("Waitlist", "Vào danh sách chờ") },
     ],
     finderCta: l("Find a club", "Tìm câu lạc bộ"),
-    mapChip: l("Three Wolves · Christchurch", "Three Wolves · Christchurch"),
+    mapChip: l("A club near you", "Một câu lạc bộ gần bạn"),
   },
   vision: {
     eyebrow: l("Luvallplay Vision", "Luvallplay Vision"),
@@ -137,8 +138,8 @@ export const home: HomePage = {
     primaryCta: l("Read about Vision", "Tìm hiểu Vision"),
     secondaryCta: l("See how it works", "Xem cách hoạt động"),
     note: l(
-      "Vision works for badminton today and is open to Three Wolves members first. More sports and clubs are coming soon.",
-      "Hiện Vision dùng cho cầu lông và mở trước cho hội viên Three Wolves. Các môn và câu lạc bộ khác sắp có.",
+      "Vision works for badminton today, at the first club on Luvallplay. More sports and clubs are coming soon.",
+      "Hiện Vision dùng cho cầu lông, tại câu lạc bộ đầu tiên trên Luvallplay. Các môn và câu lạc bộ khác sắp có.",
     ),
     figureCaption: l("Illustration: a sample analysis, not a real game", "Minh hoạ: bản phân tích mẫu, không phải trận đấu thật"),
     benefits: [
@@ -178,10 +179,13 @@ export const home: HomePage = {
     lead: l("Pick a sport, type your city. Try a casual session before you join.", "Chọn môn, nhập thành phố. Chơi thử một buổi trước khi tham gia."),
   },
   story: {
-    title: l("Started at a club, for clubs.", "Bắt đầu từ một câu lạc bộ, dành cho các câu lạc bộ."),
+    title: l(
+      "Our first club is on court.",
+      "Câu lạc bộ đầu tiên đã ra sân.",
+    ),
     body: l(
-      "Luvallplay grew out of the app that runs Three Wolves Badminton Club in Christchurch, New Zealand. Twice a week the club books courts, fills them and keeps score with it. Now we’re opening the same tools to every club that plays regularly.",
-      "Luvallplay lớn lên từ ứng dụng đang vận hành Three Wolves Badminton Club ở Christchurch, New Zealand. Mỗi tuần hai buổi, câu lạc bộ dùng nó để đặt sân, xếp người và ghi điểm. Giờ chúng tôi mở những công cụ ấy cho mọi câu lạc bộ chơi đều đặn.",
+      "Three Wolves Badminton Club is the first club that uses Luvallplay. The same tools are opening to every club that plays regularly.",
+      "Three Wolves Badminton Club là câu lạc bộ đầu tiên dùng Luvallplay. Những công cụ ấy đang được mở cho mọi câu lạc bộ chơi đều đặn.",
     ),
     caption: l("Illustration. Real photos arrive with our founding clubs.", "Hình minh hoạ. Ảnh thật sẽ có cùng các câu lạc bộ sáng lập."),
   },
@@ -239,12 +243,12 @@ export const pages: Page[] = [
     "vision",
     l("Vision: film your game, see every rally", "Vision: quay trận đấu, xem lại từng pha bóng"),
     l(
-      "Vision turns a phone video of your game into stats and highlights. It works for badminton today and is open to Three Wolves members first.",
-      "Vision biến video quay bằng điện thoại thành số liệu và những pha bóng hay. Hiện Vision dùng cho cầu lông và mở trước cho hội viên Three Wolves.",
+      "Vision turns a phone video of your game into stats and highlights. It works for badminton today, at the first club on Luvallplay.",
+      "Vision biến video quay bằng điện thoại thành số liệu và những pha bóng hay. Hiện Vision dùng cho cầu lông, tại câu lạc bộ đầu tiên trên Luvallplay.",
     ),
     l(
-      "Luvallplay Vision analyses a phone video of your badminton game: players, shots, rallies and highlights. Open to Three Wolves members first.",
-      "Luvallplay Vision phân tích video cầu lông quay bằng điện thoại: người chơi, cú đánh, pha bóng và khoảnh khắc đẹp. Mở trước cho hội viên Three Wolves.",
+      "Luvallplay Vision analyses a phone video of your badminton game: players, shots, rallies and highlights. More sports are coming soon.",
+      "Luvallplay Vision phân tích video cầu lông quay bằng điện thoại: người chơi, cú đánh, pha bóng và khoảnh khắc đẹp. Các môn khác sắp có.",
     ),
     [
       [
@@ -275,9 +279,9 @@ export const pages: Page[] = [
       [
         l("Who can use it today", "Hiện ai dùng được"),
         l(
-          "Vision is real and in use, but it is early. Today it analyses badminton only, and it is available to members of Three Wolves Badminton Club. Other sports and other clubs are coming soon. Leave your email and we’ll tell you when it opens up.",
-          "Vision là thật và đang được dùng, nhưng mới ở giai đoạn đầu. Hiện Vision chỉ phân tích cầu lông và dành cho hội viên Three Wolves Badminton Club. Các môn và câu lạc bộ khác sắp có. Để lại email, chúng tôi sẽ báo khi Vision mở rộng.",
-        ),
+      "Vision is real and in use, but it is early. Today it analyses badminton only, and it is open to members of the first club on Luvallplay. Other sports and other clubs are coming soon. Leave your email and we’ll tell you when it opens up.",
+      "Vision là thật và đang được dùng, nhưng mới ở giai đoạn đầu. Hiện Vision chỉ phân tích cầu lông và dành cho hội viên của câu lạc bộ đầu tiên trên Luvallplay. Các môn và câu lạc bộ khác sắp có. Để lại email, chúng tôi sẽ báo khi Vision mở rộng.",
+    ),
       ],
       [
         l("Your video stays yours", "Video vẫn là của bạn"),
@@ -303,9 +307,9 @@ export const pages: Page[] = [
       [
         l("What’s running today", "Những gì đang chạy"),
         l(
-          "Three Wolves Badminton Club in Christchurch runs on Luvallplay twice a week. These tools are in daily use there.",
-          "Three Wolves Badminton Club ở Christchurch dùng Luvallplay hai buổi mỗi tuần. Những công cụ sau đang được dùng hằng ngày ở đó.",
-        ),
+      "These tools are in use every week at the first club on Luvallplay.",
+      "Những công cụ sau đang được dùng hằng tuần tại câu lạc bộ đầu tiên trên Luvallplay.",
+    ),
         [
           l("Sessions, sign-ups and waitlists that move up on their own.", "Lịch chơi, đăng ký và danh sách chờ tự đôn lên."),
           l("Memberships and casual sessions, paid online or recorded by hand.", "Hội viên và buổi chơi lẻ, trả trực tuyến hoặc ghi nhận thủ công."),
@@ -412,16 +416,19 @@ export const pages: Page[] = [
       "“Love all, play.” là tiếng hô mở đầu một trận đấu: 0–0, bắt đầu. Ai cũng ngang nhau, ai cũng được chào đón.",
     ),
     l(
-      "Luvallplay is a platform for sports clubs and their players, started at Three Wolves Badminton Club in Christchurch, New Zealand.",
-      "Luvallplay là nền tảng cho câu lạc bộ thể thao và người chơi, bắt đầu từ Three Wolves Badminton Club ở Christchurch, New Zealand.",
+      "Luvallplay is a platform for sports clubs and their players: sessions, sign-ups, memberships, challenges and rankings, in English and Vietnamese.",
+      "Luvallplay là nền tảng cho câu lạc bộ thể thao và người chơi: lịch chơi, đăng ký, hội viên, thách đấu và xếp hạng, bằng tiếng Việt và tiếng Anh.",
     ),
     [
       [
-        l("Where it started", "Khởi đầu"),
         l(
-          "Luvallplay began as the app behind Three Wolves Badminton Club, a social club that plays on Wednesday and Friday evenings in Christchurch. It handled the weekly question every organiser knows: who’s in, who has paid, and who’s on which court.",
-          "Luvallplay khởi đầu là ứng dụng của Three Wolves Badminton Club, một câu lạc bộ giao lưu chơi vào tối thứ Tư và thứ Sáu ở Christchurch. Nó giải quyết câu hỏi hằng tuần mà người tổ chức nào cũng quen: ai đi, ai đã đóng tiền, ai đánh sân nào.",
-        ),
+      "What it does",
+      "Luvallplay làm gì",
+    ),
+        l(
+      "Luvallplay answers the weekly question every organiser knows: who’s in, who has paid, and who’s on which court. Players book a spot, clubs fill their sessions, and everyone keeps score.",
+      "Luvallplay trả lời câu hỏi hằng tuần mà người tổ chức nào cũng quen: ai đi, ai đã đóng tiền, ai đánh sân nào. Người chơi giữ chỗ, câu lạc bộ xếp đủ người, và ai cũng ghi được điểm.",
+    ),
       ],
       [
         l("Where it’s going", "Hướng đi"),
@@ -443,9 +450,9 @@ export const pages: Page[] = [
       [
         l("Who’s behind it", "Ai đứng sau"),
         l(
-          "Luvallplay is a product of The GOAT Solution. Three Wolves Badminton Club is its first club and keeps its own name and look.",
-          "Luvallplay là sản phẩm của The GOAT Solution. Three Wolves Badminton Club là câu lạc bộ đầu tiên và vẫn giữ tên cùng diện mạo riêng.",
-        ),
+      "Luvallplay is a product of The GOAT Solution. Its first club is Three Wolves Badminton Club.",
+      "Luvallplay là sản phẩm của The GOAT Solution. Câu lạc bộ đầu tiên là Three Wolves Badminton Club.",
+    ),
       ],
     ],
   ),

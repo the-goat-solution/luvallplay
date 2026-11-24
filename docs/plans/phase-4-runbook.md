@@ -188,9 +188,17 @@ pnpm --filter app build && pnpm --filter app budget
 
 The app shell (the entry script and what it preloads) must stay at or under **150 KB gzipped JavaScript**; `scripts/check-budget.mjs` fails the build over that. Today it is about 109 KB. The client carries no zod: it uses a generated route table (`packages/api/src/routes.gen.ts`), and the schemas stay on the server.
 
+**Vercel project and domain (24 Nov 2026)**
+
+- Project **`luvallplay-app`** (`prj_ZjHXLpD1IUVPgpWsED5bkKXdeuk9`), root `apps/app`, framework Vite, connected to this repository, with the §1 ignore rule as its Ignored Build Step and in `apps/app/vercel.json`.
+- **`app.luvallplay.com`** is attached to it and verified. luvallplay.com's DNS is on Vercel's name servers, so Vercel created the record itself: **no DNS step is needed**. If the DNS ever moves away from Vercel, the records are: CNAME `app` → `0614f58185a129ba.vercel-dns-017.com.` (older value `cname.vercel-dns.com.`), or A `216.198.79.1` and `64.29.17.1`.
+- Nothing is deployed there yet: the first production build happens when `apps/app` reaches `main`. Until then the address answers with Vercel's "not found" page.
+- **Before the app can sign anyone in on that address**, two settings are needed (ask before changing production settings):
+  1. On `luvallplay-app`: `VITE_API_BASE` = the host that serves the API (today the Three Wolves web host), for Production and Preview.
+  2. On `three-wolves-badminton`: nothing for the real address (`https://app.luvallplay.com` is in the API's built-in allow-list). Only if a `*.vercel.app` preview of the app should be able to sign in, add that exact origin to `APP_ORIGINS`.
+
 **Not yet**
 
-- The Vercel project and `app.luvallplay.com` (created with the next step, with the §1 ignore rule already in `apps/app/vercel.json`).
 - Offline, the service worker and the PWA manifest (step 7).
 - Text-message sign-in in the app (the API has it; the screen is an extension point in `SignIn.tsx`).
 - The club's and Luvallplay's web fonts in the app (system fallbacks for now; part of the visual-parity pass).

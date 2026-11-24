@@ -422,6 +422,16 @@ On 24 Nov the idea of a second store app, **"Luvallplay Manage"** (the Three Wol
 - **Revisit if** real organisers say they need to run sessions from the hall on their phones (for example ticking attendance or cancelling a day) often enough to justify a second app. The first thing to try then is **admin-role alerts inside the Luvallplay app** (push for a new message, a join request or a photo to review, opening the right admin page), not a second app.
 - **Nothing in the architecture blocks it later:** Phase 4's typed API, bearer sign-in and roles are the same pieces a future admin app would use.
 
+### 4.7 Phase 4 delivery log and plan changes
+
+Built on branch `claude/luvallplay-phase-4`; the runbook is `docs/plans/phase-4-runbook.md`.
+
+| Step | What landed | Plan change |
+|---|---|---|
+| 0. Preview policy (24 Nov 2026) | Vercel builds a preview only when asked (`[preview]` in the first line of the commit message, or a `preview/...` branch); production from `main` unchanged; the changed-files rule now covers three projects and treats the lockfile and `packages/*` as shared. Set in each `vercel.json` and as each project's Ignored Build Step. The script's checks run in CI | New: §4.5 said nothing about previews. CI stays the merge gate; a preview is an opt-in look, not a check |
+
+---
+
 ## 5. Request 4: clean-up of all pages
 
 | Area | Clean-up |

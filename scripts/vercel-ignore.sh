@@ -11,9 +11,11 @@
 # 1. Previews build only when asked. Production (the main branch) always goes
 #    on to rule 2. Any other branch is skipped unless
 #      - the branch is named preview/..., or
-#      - the newest commit message contains [preview] (every project), or
-#        [preview web], [preview site], [preview app] (only the named ones;
-#        several names may be listed: [preview web app]).
+#      - the first line of the newest commit message contains [preview]
+#        (every project), or [preview web], [preview site], [preview app]
+#        (only the named ones; several may be listed: [preview web app]).
+#    Only the first line counts, so a message that merely talks about the tag
+#    further down does not start a build.
 #
 # 2. A project builds only when files that matter to it changed since its last
 #    successful deployment on the branch. The lockfile, the workspace files and
@@ -40,6 +42,7 @@ msg="${VERCEL_GIT_COMMIT_MESSAGE:-}"
 if [ -z "$msg" ]; then
   msg="$(git log -1 --pretty=%B 2>/dev/null || true)"
 fi
+subject="$(printf '%s\n' "$msg" | head -n 1)"
 
 # --- Rule 1: previews only when asked -------------------------------------
 production=0
@@ -54,7 +57,7 @@ if [ "$production" -eq 0 ]; then
   esac
   if [ "$asked" -eq 0 ]; then
     # [preview] or [preview <names>], names from web, site, app.
-    tag="$(printf '%s' "$msg" | grep -oiE '\[preview( +(web|site|app))*\]' | head -n 1 | tr 'A-Z' 'a-z')"
+    tag="$(printf '%s' "$subject" | grep -oiE '\[preview( +(web|site|app))*\]' | head -n 1 | tr 'A-Z' 'a-z')"
     if [ -n "$tag" ]; then
       names="$(printf '%s' "$tag" | sed -E 's/^\[preview//; s/\]$//')"
       if [ -z "$(printf '%s' "$names" | tr -d ' ')" ]; then
@@ -68,7 +71,7 @@ if [ "$production" -eq 0 ]; then
     fi
   fi
   if [ "$asked" -eq 0 ]; then
-    echo "Preview not asked for (no [preview] in the commit message, branch is not preview/...): skipping."
+    echo "Preview not asked for (no [preview] in the first line of the commit message, branch is not preview/...): skipping."
     exit 0
   fi
   echo "Preview asked for."

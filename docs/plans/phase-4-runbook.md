@@ -12,8 +12,8 @@ Working notes for Phase 4 of the build plan (§4). Kept up to date as the work l
 |---|---|
 | `main` | Production build of each project **whose files changed** (as before). |
 | a branch named `preview/...` | Preview of each project whose files changed. |
-| any other branch, newest commit message contains `[preview]` | Preview of each project whose files changed. |
-| any other branch, newest commit message contains `[preview web]`, `[preview site]` or `[preview app]` (names can be combined: `[preview web app]`) | Preview of the named projects only. |
+| any other branch, **first line** of the newest commit message contains `[preview]` | Preview of each project whose files changed. |
+| any other branch, first line of the newest commit message contains `[preview web]`, `[preview site]` or `[preview app]` (names can be combined: `[preview web app]`) | Preview of the named projects only. |
 | anything else | **Skipped.** The deployment shows as "Canceled" with the reason in its build log. No build minutes are used. |
 
 "Files changed" compares with the project's last successful deployment on that branch. The lockfile, `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `.npmrc`, the ignore script itself and everything in `packages/*` count for every project. Docs and CI changes build nothing. On the first asked-for preview of a branch there is nothing to compare with, so the projects asked for all build.
@@ -29,14 +29,14 @@ Working notes for Phase 4 of the build plan (§4). Kept up to date as the work l
 The `vercel.json` value wins where it exists. The project-level setting is a backstop for older branches whose `vercel.json` has no `ignoreCommand`; it applies the "only when asked" rule itself before calling the script:
 
 ```
-case "$VERCEL_GIT_COMMIT_REF" in main|preview/*);;*) git log -1 --pretty=%B|grep -qiF '[preview'||exit 0;;esac; bash ../../scripts/vercel-ignore.sh <mode>
+case "$VERCEL_GIT_COMMIT_REF" in main|preview/*);;*) git log -1 --pretty=%s|grep -qiF '[preview'||exit 0;;esac; bash ../../scripts/vercel-ignore.sh <mode>
 ```
 
 Older branches that already carry the previous `apps/site/vercel.json` keep the old behaviour for the site project (build when site files change) until they merge `main`.
 
 **How to get a preview when you want one:**
 
-1. Put `[preview]` (or `[preview app]` and so on) in the message of a commit that has real changes. Only the newest commit of a push is read.
+1. Put `[preview]` (or `[preview app]` and so on) in the **first line** of the message of a commit that has real changes. Only the newest commit of a push is read, and only its first line, so a message that just mentions the tag further down doesn't start a build.
 2. Or work on a branch named `preview/<anything>`.
 3. Or redeploy a skipped deployment: Vercel dashboard → the project → Deployments → the canceled one → ⋯ → Redeploy. An agent can do the same with its deployment tool.
 

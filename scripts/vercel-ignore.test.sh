@@ -86,7 +86,8 @@ CASE="claude/*, [preview], docs only";      commit_change "work [preview]" docs/
 CASE="claude/*, [preview], lockfile";       commit_change "work [preview]" pnpm-lock.yaml; all preview claude/x build build build
 CASE="claude/*, [preview], shared package"; commit_change "work [preview]" packages/ui/a;  all preview claude/x build build build
 CASE="claude/*, [PREVIEW] upper case";      commit_change "work [PREVIEW]" apps/app/a;     all preview claude/x skip skip build
-CASE="claude/*, tag in the body";           commit_change "$(printf 'Title\n\nBody text.\n[preview]\n')" apps/web/a; all preview claude/x build skip skip
+CASE="claude/*, tag only in the body does not count"; commit_change "$(printf 'Title\n\nBody that mentions [preview].\n[preview]\n')" apps/web/a; all preview claude/x skip skip skip
+CASE="claude/*, tag in the first line, long body"; commit_change "$(printf 'Title [preview app]\n\nBody text.\n')" apps/app/a; all preview claude/x skip skip build
 CASE="claude/*, [preview], first deployment of the branch"; commit_change "work [preview]" docs/a
 for a in web site app; do expect build "$a" preview claude/x none; done
 
@@ -113,6 +114,10 @@ count=$((count + 1))
 (cd apps/app && VERCEL_ENV=preview VERCEL_GIT_COMMIT_REF=claude/x VERCEL_GIT_PREVIOUS_SHA="$base" \
   VERCEL_GIT_COMMIT_MESSAGE="tagged [preview]" bash "$script" app >/dev/null 2>&1)
 [ $? -eq 1 ] || { fail=$((fail + 1)); echo "FAIL [$CASE]"; }
+count=$((count + 1))
+(cd apps/app && VERCEL_ENV=preview VERCEL_GIT_COMMIT_REF=claude/x VERCEL_GIT_PREVIOUS_SHA="$base" \
+  VERCEL_GIT_COMMIT_MESSAGE="$(printf 'Title\n\nabout [preview]')" bash "$script" app >/dev/null 2>&1)
+[ $? -eq 0 ] || { fail=$((fail + 1)); echo "FAIL [$CASE, body only]"; }
 
 # VERCEL_ENV missing: main counts as production, anything else as a preview.
 CASE="no VERCEL_ENV"; commit_change "change" apps/web/a

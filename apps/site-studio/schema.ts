@@ -2,7 +2,7 @@
 // falls back to its seeded content for anything missing here.
 import { defineArrayMember, defineField, defineType, type FieldDefinition } from "sanity";
 
-export const SINGLETONS = ["siteSettings", "homePage"];
+export const SINGLETONS = ["siteSettings", "homePage", "availability"];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const both = (rule: any) => rule.required();
@@ -114,6 +114,42 @@ const siteSettings = defineType({
   preview: { prepare: () => ({ title: "Site settings" }) },
 });
 
+const availability = defineType({
+  name: "availability",
+  title: "Availability",
+  type: "document",
+  description: "What is available today. Every “coming soon” badge and every sentence about who can use a feature reads from this list. Change a line here when a feature ships.",
+  fields: [
+    defineField({ name: "updated", title: "Last updated (change it whenever a line changes)", type: "date", validation: both }),
+    defineField({
+      name: "items",
+      title: "Features",
+      type: "array",
+      of: [
+        defineArrayMember({
+          type: "object",
+          fields: [
+            defineField({ name: "key", title: "Key (don't change)", type: "string", readOnly: true, validation: both }),
+            defineField({ name: "group", title: "Group", type: "string", options: { list: [{ title: "For players", value: "players" }, { title: "For clubs", value: "clubs" }, { title: "Sports and languages", value: "platform" }] }, validation: both }),
+            defineField({
+              name: "status",
+              title: "Status",
+              description: "Live: open to everyone it is meant for. Early access: real, but only for some (say who in the note). Coming soon: not available yet.",
+              type: "string",
+              options: { list: [{ title: "Live", value: "live" }, { title: "Early access", value: "limited" }, { title: "Coming soon", value: "soon" }], layout: "radio" },
+              validation: both,
+            }),
+            s("name", "Name"),
+            t("note", "One sentence: who can use it today"),
+          ],
+          preview: { select: { title: "name.en", subtitle: "status" } },
+        }),
+      ],
+    }),
+  ],
+  preview: { prepare: () => ({ title: "Availability" }) },
+});
+
 const titled = [s("title", "Title"), t("body", "Text")];
 
 const homePage = defineType({
@@ -151,7 +187,6 @@ const homePage = defineType({
         defineField({ name: "key", title: "Key (don't change)", type: "string", readOnly: true }),
         s("title", "Title"),
         t("body", "Text"),
-        defineField({ name: "status", title: "Status", type: "string", options: { list: [{ title: "Live", value: "live" }, { title: "Coming soon", value: "soon" }] } }),
       ]),
       list("sessionRows", "Sample session rows (illustration)", [s("name", "Name"), s("meta", "Details"), s("action", "Button")], "name.en"),
       s("finderCta", "Club finder button"),
@@ -163,11 +198,10 @@ const homePage = defineType({
       t("lead", "Lead"),
       s("primaryCta", "Main button"),
       s("secondaryCta", "Second button"),
-      t("note", "Who can use it today"),
       s("figureCaption", "Caption of the sample analysis"),
       list("benefits", "Benefits", titled),
     ]),
-    group("how", "How it works", [s("title", "Heading"), list("steps", "Steps", titled), t("storeNote", "Note under the store badges")]),
+    group("how", "How it works", [s("title", "Heading"), list("steps", "Steps", titled)]),
     group("rankings", "Rankings", [s("eyebrow", "Eyebrow"), s("title", "Heading"), t("lead", "Lead"), t("note", "Note under the illustration"), s("cta", "Link")]),
     group("finder", "Find a club", [s("title", "Heading"), t("lead", "Lead")]),
     group("story", "Story (shown until there is a quote)", [s("title", "Heading"), t("body", "Text"), s("caption", "Caption")]),
@@ -262,6 +296,7 @@ const helpArticle = defineType({
     defineField({ name: "audience", title: "For", type: "string", options: { list: [{ title: "Organisers", value: "organisers" }, { title: "Players", value: "players" }, { title: "Everyone", value: "everyone" }], layout: "radio" }, validation: both }),
     defineField({ name: "order", title: "Order", type: "number", validation: both }),
     defineField({ name: "updated", title: "Last updated", type: "date", validation: both }),
+    defineField({ name: "features", title: "Features this article is about", description: "Their current status (from the Availability document) shows at the top of the article. Use the keys from Availability, e.g. vision, storeApps.", type: "array", of: [defineArrayMember({ type: "string" })] }),
     defineField({ name: "body", title: "Article", type: "localeBlocks", validation: both }),
   ],
   orderings: [{ title: "Order", name: "order", by: [{ field: "order", direction: "asc" }] }],
@@ -306,6 +341,7 @@ export const schemaTypes = [
   localeBlocks,
   imageSlot,
   siteSettings,
+  availability,
   homePage,
   page,
   sport,

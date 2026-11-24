@@ -8,7 +8,7 @@ const en = {
   skip: "Skip to content",
   home: "Luvallplay home",
   nav: { main: "Main", footer: "Footer", menu: "Menu", findClub: "Find a club", inside: "What’s inside", vision: "Vision", forClubs: "For clubs", pricing: "Pricing", about: "About", help: "Help", contact: "Contact", privacy: "Privacy", terms: "Terms", getApp: "Get the app" },
-  badge: { new: "New", soon: "Coming soon", live: "Live", demo: "Demo", illustration: "Illustration", sample: "Sample" },
+  badge: { new: "New", soon: "Coming soon", live: "Live", limited: "Early access", demo: "Demo", illustration: "Illustration", sample: "Sample" },
   switchLang: "Language",
   switchTo: "Tiếng Việt",
   theme: { label: "Theme", light: "Light", dark: "Dark", auto: "Auto" },
@@ -38,6 +38,7 @@ const en = {
   },
   help: { organisers: "For organisers", players: "For players", everyone: "For everyone", updated: "Last updated", back: "All help articles", more: "More help", faq: "Common questions", stillStuck: "Still stuck?", contactUs: "Contact us" },
   legal: { updated: "Last updated" },
+  availability: { nav: "What’s live", players: "For players", clubs: "For clubs", platform: "Sports and languages", updated: "Last updated", today: "Where this stands today", all: "See everything that’s live" },
   form: {
     email: "Email",
     name: "Your name",
@@ -96,7 +97,7 @@ const vi: Messages = {
   skip: "Chuyển đến nội dung",
   home: "Trang chủ Luvallplay",
   nav: { main: "Chính", footer: "Chân trang", menu: "Menu", findClub: "Tìm câu lạc bộ", inside: "Có gì bên trong", vision: "Vision", forClubs: "Cho câu lạc bộ", pricing: "Chi phí", about: "Giới thiệu", help: "Trợ giúp", contact: "Liên hệ", privacy: "Quyền riêng tư", terms: "Điều khoản", getApp: "Tải ứng dụng" },
-  badge: { new: "Mới", soon: "Sắp ra mắt", live: "Đã có", demo: "Mẫu", illustration: "Minh hoạ", sample: "Ví dụ" },
+  badge: { new: "Mới", soon: "Sắp ra mắt", live: "Đã có", limited: "Dùng thử sớm", demo: "Mẫu", illustration: "Minh hoạ", sample: "Ví dụ" },
   switchLang: "Ngôn ngữ",
   switchTo: "English",
   theme: { label: "Giao diện", light: "Sáng", dark: "Tối", auto: "Tự động" },
@@ -126,6 +127,7 @@ const vi: Messages = {
   },
   help: { organisers: "Cho người tổ chức", players: "Cho người chơi", everyone: "Cho mọi người", updated: "Cập nhật lần cuối", back: "Tất cả bài trợ giúp", more: "Trợ giúp khác", faq: "Câu hỏi thường gặp", stillStuck: "Vẫn chưa xong?", contactUs: "Liên hệ với chúng tôi" },
   legal: { updated: "Cập nhật lần cuối" },
+  availability: { nav: "Đã có gì", players: "Cho người chơi", clubs: "Cho câu lạc bộ", platform: "Môn thể thao và ngôn ngữ", updated: "Cập nhật lần cuối", today: "Tình trạng hiện tại", all: "Xem mọi thứ đã có" },
   form: {
     email: "Email",
     name: "Tên của bạn",

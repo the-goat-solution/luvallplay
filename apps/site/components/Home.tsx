@@ -4,7 +4,7 @@ import { Finder, type FinderClub } from "./Finder";
 import { Icon } from "./icons";
 import { ScoreDemo } from "./ScoreDemo";
 import { t } from "@/lib/messages";
-import { ctaTarget, href, logoSrc } from "@/lib/site";
+import { availabilityOf, ctaTarget, href, logoSrc } from "@/lib/site";
 import type { Content, Lang } from "@/lib/types";
 
 type P = { lang: Lang; content: Content };
@@ -81,7 +81,8 @@ export function Features({ lang, content }: P) {
   const m = t(lang);
   const f = content.home.features;
   const by = Object.fromEntries(f.items.map((i) => [i.key, i]));
-  const soon = (key: string) => (by[key]?.status === "soon" ? <span className="chip chip-soft">{m.badge.soon}</span> : null);
+  // "Coming soon" comes from the availability list, never from the tile itself.
+  const soon = (key: string) => (availabilityOf(content, key)?.status === "soon" ? <span className="chip chip-soft">{m.badge.soon}</span> : null);
   return (
     <section id="features" className="wrap sec">
       <div className="sec-head-center">
@@ -226,7 +227,7 @@ export function Vision({ lang, content, page = false }: P & { page?: boolean }) 
           </div>
         </div>
         <VisionFigure lang={lang} content={content} />
-        <p className="vnote">{v.figureCaption[lang]}. {v.note[lang]}</p>
+        <p className="vnote">{v.figureCaption[lang]}. {availabilityOf(content, "vision")?.note[lang]}</p>
         <div id="vision-how" className="benefits">
           {v.benefits.map((b, i) => (
             <div key={b._key} className="glass-dark benefit">
@@ -246,7 +247,6 @@ export function How({ lang, content }: P) {
   const h = content.home.how;
   const hero = content.home.hero;
   const s = content.settings;
-  const live = s.launchMode === "live";
   const stores: ["appStore" | "playStore", string][] = [["appStore", m.mock.appStore], ["playStore", m.mock.playStore]];
   return (
     <section className="wrap how">
@@ -291,7 +291,7 @@ export function How({ lang, content }: P) {
             );
           })}
         </div>
-        {live ? null : <p>{h.storeNote[lang]}</p>}
+        {availabilityOf(content, "storeApps")?.status === "live" ? null : <p>{availabilityOf(content, "storeApps")?.note[lang]}</p>}
       </div>
     </section>
   );

@@ -4,6 +4,7 @@ summary: "Luvallplay helps sports clubs run their sessions and helps players fin
 audience: everyone
 order: 1
 updated: 2026-11-24
+features: sessions, newClubs, storeApps, otherSports
 ---
 
 ## The short version

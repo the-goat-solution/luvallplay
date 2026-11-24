@@ -4,6 +4,7 @@ summary: "Arena hoạt động thế nào: ghép cặp, tung lời thách đấu
 audience: players
 order: 12
 updated: 2026-11-24
+features: challenges, rankings
 ---
 
 ## Một lý do để chơi thêm một ván

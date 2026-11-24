@@ -3,7 +3,7 @@
 // every page; publishing in the Studio calls /api/revalidate, which clears it.
 import { draftMode } from "next/headers";
 import seed from "@/content/generated/seed.json" with { type: "json" };
-import type { Club, Content, Doc, FaqItem, HelpArticle, LegalPage, Page, Sport, Testimonial, HomePage, SiteSettings } from "./types";
+import type { Availability, Club, Content, Doc, FaqItem, HelpArticle, LegalPage, Page, Sport, Testimonial, HomePage, SiteSettings } from "./types";
 
 export const CONTENT_TAG = "content";
 
@@ -13,7 +13,7 @@ export function sanityConfig(env: Record<string, string | undefined> = process.e
   return { projectId, dataset: env.SANITY_DATASET || "production", token: env.SANITY_API_READ_TOKEN };
 }
 
-const QUERY = `*[_type in ["siteSettings","homePage","page","sport","club","faqItem","helpArticle","legalPage","testimonial"]]{
+const QUERY = `*[_type in ["siteSettings","availability","homePage","page","sport","club","faqItem","helpArticle","legalPage","testimonial"]]{
   ...,
   "logo": logo{"url": asset->url, alt},
   _type == "homePage" => { hero{..., photos[]{..., "image": image{"url": asset->url, alt}}} }
@@ -54,6 +54,7 @@ export function assemble(seedDocs: Doc[], live: Doc[] | null): Content {
   const order = <T extends { order: number }>(xs: T[]) => xs.sort((a, b) => a.order - b.order);
   return {
     settings: of<SiteSettings>("siteSettings")[0],
+    availability: mergeAvailability(seedDocs, of<Availability>("availability")[0]),
     home: of<HomePage>("homePage")[0],
     pages: Object.fromEntries(of<Page>("page").map((p) => [p.key, p])),
     sports: order(of<Sport>("sport")),
@@ -63,6 +64,17 @@ export function assemble(seedDocs: Doc[], live: Doc[] | null): Content {
     legal: Object.fromEntries(of<LegalPage>("legalPage").map((p) => [p.slug, p])),
     testimonials: of<Testimonial>("testimonial").filter((t) => t.consent === true),
   };
+}
+
+/**
+ * The availability list: Sanity's lines win, and a line Sanity doesn't have
+ * yet (a feature added in code since the last seed) comes from the repo.
+ */
+function mergeAvailability(seedDocs: Doc[], current: Availability): Availability {
+  const seeded = seedDocs.find((d): d is Availability => d._type === "availability");
+  if (!seeded || !current?.items) return seeded ?? current;
+  const have = new Set(current.items.map((i) => i.key));
+  return { ...current, items: [...current.items, ...seeded.items.filter((i) => !have.has(i.key))] };
 }
 
 export async function getContent(): Promise<Content> {

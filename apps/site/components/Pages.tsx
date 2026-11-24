@@ -9,8 +9,8 @@ import { SiteForm } from "./SiteForm";
 import type { Kind } from "@/lib/forms-shared";
 import { jsonLd } from "@/lib/meta";
 import { t } from "@/lib/messages";
-import { ctaTarget, href, originFor } from "@/lib/site";
-import type { Content, Lang, Page } from "@/lib/types";
+import { availabilityOf, ctaTarget, href, originFor } from "@/lib/site";
+import type { AvailabilityItem, Content, Lang, Page } from "@/lib/types";
 
 type P = { lang: Lang; content: Content };
 
@@ -71,6 +71,54 @@ export function Faq({ lang, content, topics }: P & { topics?: string[] }) {
   );
 }
 
+function StatusChip({ item, lang }: { item: AvailabilityItem; lang: Lang }) {
+  const m = t(lang).badge;
+  if (item.status === "live") return <span className="chip lime">{m.live}</span>;
+  if (item.status === "limited") return <span className="chip chip-outline">{m.limited}</span>;
+  return <span className="chip chip-soft">{m.soon}</span>;
+}
+
+/** The current status of the features a page is about, straight from the availability list. */
+export function StatusNote({ lang, content, keys }: P & { keys: string[] }) {
+  const items = keys.map((k) => availabilityOf(content, k)).filter((i): i is AvailabilityItem => !!i);
+  if (!items.length) return null;
+  const m = t(lang).availability;
+  return (
+    <aside className="card status-note" aria-label={m.today}>
+      <p className="label muted">{m.today}</p>
+      <ul>
+        {items.map((i) => (
+          <li key={i.key}><StatusChip item={i} lang={lang} /><span><b>{i.name[lang]}.</b> {i.note[lang]}</span></li>
+        ))}
+      </ul>
+      <a href={href(lang, "/availability")}>{m.all}</a>
+    </aside>
+  );
+}
+
+function AvailabilityList({ lang, content }: P) {
+  const m = t(lang).availability;
+  const groups: [AvailabilityItem["group"], string][] = [["players", m.players], ["clubs", m.clubs], ["platform", m.platform]];
+  return (
+    <>
+      <p className="meta-line">{m.updated}: <time dateTime={content.availability.updated}>{fmtDate(content.availability.updated, lang)}</time></p>
+      {groups.map(([g, label]) => (
+        <section key={g} className="help-group">
+          <h2>{label}</h2>
+          <ul className="avail">
+            {content.availability.items.filter((i) => i.group === g).map((i) => (
+              <li key={i.key} className="card">
+                <StatusChip item={i} lang={lang} />
+                <div><h3 className="h-small">{i.name[lang]}</h3><p>{i.note[lang]}</p></div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
+  );
+}
+
 export function InfoPage({ lang, content, pageKey }: P & { pageKey: string }) {
   const page = content.pages[pageKey];
   const m = t(lang);
@@ -80,6 +128,7 @@ export function InfoPage({ lang, content, pageKey }: P & { pageKey: string }) {
         <Vision lang={lang} content={content} page />
         <div className="wrap page" style={{ paddingTop: 0 }}>
           <p className="lead">{page.lead[lang]}</p>
+          <StatusNote lang={lang} content={content} keys={["vision"]} />
           <Sections page={page} lang={lang} />
         </div>
       </>
@@ -88,6 +137,7 @@ export function InfoPage({ lang, content, pageKey }: P & { pageKey: string }) {
   return (
     <div className="wrap page">
       <Head page={page} lang={lang} />
+      {pageKey === "availability" ? <AvailabilityList lang={lang} content={content} /> : null}
       {pageKey === "find-a-club" ? <Finder {...finderProps(lang, content)} heading="h2" /> : null}
       {pageKey === "pricing" ? <div style={{ margin: "0 -24px -64px" }}><Pricing lang={lang} content={content} heading="h2" /></div> : null}
       <Sections page={page} lang={lang} />
@@ -182,8 +232,9 @@ export function HelpIndex({ lang, content }: P) {
   );
 }
 
-const fmtDate = (iso: string, lang: Lang) =>
-  new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : "en-NZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
+function fmtDate(iso: string, lang: Lang): string {
+  return new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : "en-NZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
+}
 
 export function docVars(content: Content, lang: Lang): Record<string, string> {
   const s = content.settings;
@@ -207,6 +258,7 @@ export function HelpArticlePage({ lang, content, slug }: P & { slug: string }) {
           <p className="lead">{a.summary[lang]}</p>
           <p className="meta-line"><span className="chip chip-soft">{m.help[a.audience]}</span><span>{m.help.updated}: <time dateTime={a.updated}>{fmtDate(a.updated, lang)}</time></span></p>
         </div>
+        {a.features?.length ? <StatusNote lang={lang} content={content} keys={a.features} /> : null}
         <Blocks blocks={a.body[lang]} lang={lang} vars={docVars(content, lang)} />
       </article>
       {more.length ? (

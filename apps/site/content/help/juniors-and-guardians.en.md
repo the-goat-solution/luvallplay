@@ -4,6 +4,7 @@ summary: "How junior players are planned to work on Luvallplay: a guardian manag
 audience: organisers
 order: 8
 updated: 2026-11-24
+features: juniors
 ---
 
 ## The idea in one line

@@ -114,13 +114,13 @@ export const home: HomePage = {
       "Bảy công cụ, một ứng dụng, không cần bảng tính. Câu lạc bộ giữ nguyên màu sắc và cách gọi riêng.",
     ),
     items: [
-      { key: "sessions", status: "live", title: l("Sessions and sign-ups", "Lịch chơi và đăng ký"), body: l("Book a spot in two taps. Waitlists move up on their own.", "Giữ chỗ chỉ với hai lần chạm. Danh sách chờ tự động đôn lên.") },
-      { key: "rankings", status: "live", title: l("Rankings", "Xếp hạng"), body: l("A fair ladder for every level, updated after each game.", "Bảng xếp hạng công bằng cho mọi trình độ, cập nhật sau mỗi trận.") },
-      { key: "challenges", status: "live", title: l("Challenges", "Thách đấu"), body: l("Post one in the Arena and see who’s up for it.", "Đăng một lời thách đấu trong Arena và xem ai nhận lời.") },
-      { key: "memberships", status: "live", title: l("Memberships", "Hội viên"), body: l("Fees paid, renewals reminded. Clubs that play for free never see a price.", "Phí đã đóng, gia hạn được nhắc. Câu lạc bộ chơi miễn phí thì không thấy giá nào cả.") },
-      { key: "finder", status: "live", title: l("Club finder", "Tìm câu lạc bộ"), body: l("Clubs on Luvallplay, by sport and city. More join as we open up.", "Các câu lạc bộ trên Luvallplay theo môn và thành phố. Sẽ có thêm khi chúng tôi mở rộng.") },
-      { key: "social", status: "soon", title: l("Social", "Kết nối"), body: l("Kudos, follows and the people you play with.", "Lời khen, theo dõi và những người bạn chơi cùng.") },
-      { key: "marketplace", status: "soon", title: l("Marketplace", "Chợ đồ thể thao"), body: l("Swap rackets, sell shoes, buy club kit.", "Đổi vợt, bán giày, mua đồ câu lạc bộ.") },
+      { key: "sessions", title: l("Sessions and sign-ups", "Lịch chơi và đăng ký"), body: l("Book a spot in two taps. Waitlists move up on their own.", "Giữ chỗ chỉ với hai lần chạm. Danh sách chờ tự động đôn lên.") },
+      { key: "rankings", title: l("Rankings", "Xếp hạng"), body: l("A fair ladder for every level, updated after each game.", "Bảng xếp hạng công bằng cho mọi trình độ, cập nhật sau mỗi trận.") },
+      { key: "challenges", title: l("Challenges", "Thách đấu"), body: l("Post one in the Arena and see who’s up for it.", "Đăng một lời thách đấu trong Arena và xem ai nhận lời.") },
+      { key: "memberships", title: l("Memberships", "Hội viên"), body: l("Fees paid, renewals reminded. Clubs that play for free never see a price.", "Phí đã đóng, gia hạn được nhắc. Câu lạc bộ chơi miễn phí thì không thấy giá nào cả.") },
+      { key: "finder", title: l("Club finder", "Tìm câu lạc bộ"), body: l("Clubs on Luvallplay, by sport and city. More join as we open up.", "Các câu lạc bộ trên Luvallplay theo môn và thành phố. Sẽ có thêm khi chúng tôi mở rộng.") },
+      { key: "social", title: l("Social", "Kết nối"), body: l("Kudos, follows and the people you play with.", "Lời khen, theo dõi và những người bạn chơi cùng.") },
+      { key: "marketplace", title: l("Marketplace", "Chợ đồ thể thao"), body: l("Swap rackets, sell shoes, buy club kit.", "Đổi vợt, bán giày, mua đồ câu lạc bộ.") },
     ],
     sessionRows: [
       { _key: "r1", name: l("Wed · Social play", "Thứ Tư · Chơi giao lưu"), meta: l("Evening · spots open", "Buổi tối · còn chỗ"), action: l("Book", "Giữ chỗ") },
@@ -138,10 +138,6 @@ export const home: HomePage = {
     ),
     primaryCta: l("Read about Vision", "Tìm hiểu Vision"),
     secondaryCta: l("See how it works", "Xem cách hoạt động"),
-    note: l(
-      "Vision works for badminton today, at the first club on Luvallplay. More sports and clubs are coming soon.",
-      "Hiện Vision dùng cho cầu lông, tại câu lạc bộ đầu tiên trên Luvallplay. Các môn và câu lạc bộ khác sắp có.",
-    ),
     figureCaption: l("Illustration: a sample analysis, not a real game", "Minh hoạ: bản phân tích mẫu, không phải trận đấu thật"),
     benefits: [
       { _key: "b1", title: l("One phone, no kit", "Một chiếc điện thoại, không cần thiết bị"), body: l("Film in the app or upload a video you already have.", "Quay ngay trong ứng dụng hoặc tải lên video bạn đã có.") },
@@ -157,10 +153,6 @@ export const home: HomePage = {
       { _key: "s2", title: l("Book a casual session", "Đặt một buổi chơi thử"), body: l("Try it once. Join when it feels like your place.", "Chơi thử một buổi. Thấy hợp thì tham gia.") },
       { _key: "s3", title: l("Play, score, cheer", "Chơi, ghi điểm, cổ vũ"), body: l("Log the score, climb the ladder, cheer each other on.", "Ghi lại tỉ số, leo bảng xếp hạng, cổ vũ nhau.") },
     ],
-    storeNote: l(
-      "The store apps are coming soon. Today Luvallplay runs in your phone’s browser.",
-      "Ứng dụng trên các kho sắp ra mắt. Hiện Luvallplay chạy ngay trên trình duyệt điện thoại.",
-    ),
   },
   rankings: {
     eyebrow: l("Rankings", "Xếp hạng"),
@@ -456,6 +448,19 @@ export const pages: Page[] = [
     ),
       ],
     ],
+  ),
+  page(
+    "availability",
+    l("What’s live today", "Hôm nay đã có gì"),
+    l(
+      "A plain list of what you can use on Luvallplay now, what is in early use, and what is still coming. We keep it current as features ship.",
+      "Danh sách rõ ràng về những gì dùng được trên Luvallplay hôm nay, những gì đang dùng thử và những gì sắp có. Chúng tôi cập nhật mỗi khi có tính năng mới.",
+    ),
+    l(
+      "What is available on Luvallplay today, what is in early use, and what is coming soon, kept current as features ship.",
+      "Những gì đã có trên Luvallplay hôm nay, những gì đang dùng thử và những gì sắp ra mắt, được cập nhật khi có tính năng mới.",
+    ),
+    [],
   ),
   page(
     "help",

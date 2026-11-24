@@ -4,6 +4,7 @@ summary: "Cách đặt một buổi chơi, chuyện gì xảy ra khi đã đầy
 audience: players
 order: 11
 updated: 2026-11-24
+features: sessions
 ---
 
 ## Vì sao cần đăng ký

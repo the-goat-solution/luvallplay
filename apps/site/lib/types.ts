@@ -48,7 +48,12 @@ export type SiteSettings = {
   companyAddress?: string;
 };
 
-export type Feature = { key: string; title: L; body: L; status: "live" | "soon" };
+export type Feature = { key: string; title: L; body: L };
+
+/** One line of the availability list (content/availability.ts). */
+export type AvailabilityStatus = "live" | "limited" | "soon";
+export type AvailabilityItem = { _key: string; key: string; group: "players" | "clubs" | "platform"; status: AvailabilityStatus; name: L; note: L };
+export type Availability = { _id: "availability"; _type: "availability"; updated: string; items: AvailabilityItem[] };
 export type TitledText = { _key: string; title: L; body: L };
 
 export type HomePage = {
@@ -74,8 +79,8 @@ export type HomePage = {
   };
   sports: { intro: L };
   features: { title: L; lead: L; items: Feature[]; sessionRows: { _key: string; name: L; meta: L; action: L }[]; finderCta: L; mapChip: L };
-  vision: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; note: L; figureCaption: L; benefits: TitledText[] };
-  how: { title: L; steps: TitledText[]; storeNote: L };
+  vision: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; figureCaption: L; benefits: TitledText[] };
+  how: { title: L; steps: TitledText[] };
   rankings: { eyebrow: L; title: L; lead: L; note: L; cta: L };
   finder: { title: L; lead: L };
   story: { title: L; body: L; caption: L };
@@ -128,6 +133,8 @@ export type HelpArticle = {
   audience: "organisers" | "players" | "everyone";
   order: number;
   updated: string;
+  /** Availability keys this article is about: their current status shows at the top. */
+  features?: string[];
   body: LBlocks;
 };
 
@@ -152,10 +159,11 @@ export type Testimonial = {
   consent: boolean;
 };
 
-export type Doc = SiteSettings | HomePage | Page | Sport | Club | FaqItem | HelpArticle | LegalPage | Testimonial;
+export type Doc = SiteSettings | Availability | HomePage | Page | Sport | Club | FaqItem | HelpArticle | LegalPage | Testimonial;
 
 export type Content = {
   settings: SiteSettings;
+  availability: Availability;
   home: HomePage;
   pages: Record<string, Page>;
   sports: Sport[];

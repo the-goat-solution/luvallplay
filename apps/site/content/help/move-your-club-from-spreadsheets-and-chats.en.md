@@ -4,6 +4,7 @@ summary: "What to gather now so your club is ready to move when Luvallplay opens
 audience: organisers
 order: 3
 updated: 2026-11-24
+features: newClubs, setupWizard
 ---
 
 ## Why bother before you can sign up?

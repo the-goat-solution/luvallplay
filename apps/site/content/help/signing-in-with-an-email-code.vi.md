@@ -4,6 +4,7 @@ summary: "Không cần nhớ mật khẩu. Nhập email, nhận mã 6 chữ số
 audience: players
 order: 10
 updated: 2026-11-24
+features: sessions, storeApps
 ---
 
 ## Không cần mật khẩu

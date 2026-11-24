@@ -4,6 +4,7 @@ summary: "Đặt điện thoại phía sau sân, Vision sẽ biến trận đấ
 audience: players
 order: 13
 updated: 2026-11-24
+features: vision
 ---
 
 ## Vision làm được gì

@@ -4,6 +4,7 @@ summary: "Luvallplay isn't open for new clubs yet. Here's how the waitlist and f
 audience: organisers
 order: 2
 updated: 2026-11-24
+features: newClubs, setupWizard
 ---
 
 ## Where things stand

@@ -4,6 +4,7 @@ summary: "How to book a session, what happens when it's full, and why telling yo
 audience: players
 order: 11
 updated: 2026-11-24
+features: sessions
 ---
 
 ## Why sign-ups matter

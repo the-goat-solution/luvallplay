@@ -69,6 +69,21 @@ You chose to create a separate Sanity organisation for the company.
 - **Scheduling link**: paste a booking link and *Book a walkthrough* opens it; empty, it is a request form.
 - **Company name, postal address, contact email**: shown in Privacy and Terms.
 
+## 3a. Keeping "what's live" right as features ship
+
+The website never decides by itself what is available. One list does: **Availability**.
+
+- In the code: `apps/site/content/availability.ts`. In the Studio (once connected): the **Availability** document. The Studio's version wins; a feature added in code that the Studio doesn't have yet still shows, from the code.
+- Each line has a status: **Live** (open to everyone it is meant for), **Early access** (real, but only for some: the note says who), or **Coming soon**.
+- What reads from it: the "Coming soon" chips on the home page tools, the Vision note, the store-apps note, the footer's store line, the status box at the top of help articles (each article lists the features it is about), and the page **What's live today** (`/en/availability`, `/vi/availability`).
+
+**When a feature ships** (this is part of the work, not a follow-up):
+1. In the same pull request, change its line in `content/availability.ts`: status, the one-sentence note in English and Vietnamese, and the `updated` date. The pull request template has a tick box for it.
+2. Run `pnpm --filter site test`. It fails if a page, help article or FAQ answer still says "coming soon" about something now marked live, and names the sentence. Fix the wording.
+3. After the merge, make the same change in the Studio's Availability document (or re-seed it), so the live site and the code agree.
+
+Sports have their own switch (Studio → Sports → status), and the store badges also need their links (Site settings).
+
 ## 4. Database for the forms (about two minutes)
 
 The forms store submissions in a small database of the site's own, not the Three Wolves database. Your Neon account is managed through Vercel, so it has to be created from Vercel:

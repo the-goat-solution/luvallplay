@@ -4,6 +4,7 @@ summary: "Set a phone behind the court and Vision turns your game into rallies a
 audience: players
 order: 13
 updated: 2026-11-24
+features: vision
 ---
 
 ## What Vision does

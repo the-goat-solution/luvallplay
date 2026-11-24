@@ -4,6 +4,7 @@ summary: "Những thứ nên gom sẵn để CLB sẵn sàng chuyển khi Luvall
 audience: organisers
 order: 3
 updated: 2026-11-24
+features: newClubs, setupWizard
 ---
 
 ## Chưa đăng ký được thì chuẩn bị làm gì?

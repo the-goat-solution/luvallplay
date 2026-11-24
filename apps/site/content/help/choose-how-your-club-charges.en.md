@@ -4,6 +4,7 @@ summary: "Free play, cash or bank transfer, or online payments: the 3 planned pa
 audience: organisers
 order: 4
 updated: 2026-11-24
+features: paymentModes
 ---
 
 ## Three ways to run the money

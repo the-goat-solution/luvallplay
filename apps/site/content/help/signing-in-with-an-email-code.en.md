@@ -4,6 +4,7 @@ summary: "There's no password to remember. Enter your email, get a 6-digit code 
 audience: players
 order: 10
 updated: 2026-11-24
+features: sessions, storeApps
 ---
 
 ## No password needed

@@ -4,6 +4,7 @@ summary: "Kế hoạch dành cho người chơi nhỏ tuổi trên Luvallplay: n
 audience: organisers
 order: 8
 updated: 2026-11-24
+features: juniors
 ---
 
 ## Ý tưởng gói trong một câu

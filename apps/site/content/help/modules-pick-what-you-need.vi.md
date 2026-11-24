@@ -4,6 +4,7 @@ summary: "Một phần lõi gọn mà CLB nào cũng có, cùng các mô-đun tu
 audience: organisers
 order: 6
 updated: 2026-11-24
+features: modules
 ---
 
 ## Mặc định là gọn

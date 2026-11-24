@@ -572,6 +572,19 @@ export const pages: Page[] = [
     ],
   ),
   page(
+    "availability",
+    l("What’s live today", "Hôm nay đã có gì"),
+    l(
+      "A plain list of what you can use on Luvallplay now, what is in early use, and what is still coming. We keep it current as features ship.",
+      "Danh sách rõ ràng về những gì dùng được trên Luvallplay hôm nay, những gì đang dùng thử và những gì sắp có. Chúng tôi cập nhật mỗi khi có tính năng mới.",
+    ),
+    l(
+      "What is available on Luvallplay today, what is in early use, and what is coming soon, kept current as features ship.",
+      "Những gì đã có trên Luvallplay hôm nay, những gì đang dùng thử và những gì sắp ra mắt, được cập nhật khi có tính năng mới.",
+    ),
+    [],
+  ),
+  page(
     "help",
     l("Help centre", "Trung tâm trợ giúp"),
     l(

@@ -1,5 +1,5 @@
 // Where the site lives, its routes, and where each call to action leads.
-import type { Lang, SiteSettings } from "./types";
+import type { Availability, AvailabilityItem, Lang, SiteSettings } from "./types";
 
 type Env = Record<string, string | undefined>;
 
@@ -32,6 +32,7 @@ export function indexingAllowed(settings: Pick<SiteSettings, "searchIndexing">, 
 /** Every static page, as a path without the language prefix. "" is home. */
 export const STATIC_PATHS = [
   "",
+  "/availability",
   "/vision",
   "/for-clubs",
   "/find-a-club",
@@ -76,6 +77,15 @@ export function ctaTarget(kind: CtaKind, lang: Lang, s: SiteSettings): CtaTarget
     case "walkthrough":
       return s.bookingUrl ? external(s.bookingUrl) : internal("/walkthrough");
   }
+}
+
+/** The current state of one feature (content/availability.ts, or Sanity). */
+export function availabilityOf(content: { availability: Availability }, key: string): AvailabilityItem | undefined {
+  return content.availability.items.find((i) => i.key === key);
+}
+/** True unless the feature is fully live. An unknown key counts as not yet available. */
+export function notYetLive(content: { availability: Availability }, key: string): boolean {
+  return availabilityOf(content, key)?.status !== "live";
 }
 
 /** Accent-insensitive, case-insensitive text for search (Vietnamese aware). */

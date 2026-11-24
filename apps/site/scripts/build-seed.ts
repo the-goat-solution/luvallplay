@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 
 import path from "node:path";
 import { markdownToBlocks, parseFrontmatter } from "../lib/markdown.ts";
 import { clubs, home, pages, settings, sports } from "../content/site-content.ts";
+import { availability } from "../content/availability.ts";
 import type { Doc, FaqItem, HelpArticle, LegalPage } from "../lib/types.ts";
 
 const root = path.join(import.meta.dirname, "..", "content");
@@ -28,6 +29,7 @@ if (existsSync(helpDir)) {
       audience: en.data.audience as HelpArticle["audience"],
       order: Number(en.data.order),
       updated: en.data.updated,
+      ...(en.data.features ? { features: en.data.features.split(",").map((f) => f.trim()).filter(Boolean) } : {}),
       body: { en: markdownToBlocks(en.body), vi: markdownToBlocks(vi.body) },
     });
   }
@@ -56,7 +58,7 @@ if (existsSync(path.join(root, "faq.json"))) {
   faq = raw.map((f, i) => ({ _id: `faq.${f.id}`, _type: "faqItem", topic: f.topic, order: i + 1, q: f.q, a: f.a }));
 }
 
-const docs: Doc[] = [settings, home, ...pages, ...sports, ...clubs, ...faq, ...help, ...legal];
+const docs: Doc[] = [settings, availability, home, ...pages, ...sports, ...clubs, ...faq, ...help, ...legal];
 mkdirSync(path.join(root, "generated"), { recursive: true });
 writeFileSync(path.join(root, "generated", "seed.json"), JSON.stringify(docs, null, 1));
 console.log(`seed: ${docs.length} documents (${help.length} help articles, ${legal.length} legal pages, ${faq.length} FAQ items)`);

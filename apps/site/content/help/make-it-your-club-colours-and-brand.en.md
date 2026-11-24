@@ -4,6 +4,7 @@ summary: "Pick one of 12 ready-made colour schemes or bring your own logo, fonts
 audience: organisers
 order: 5
 updated: 2026-11-24
+features: brand
 ---
 
 ## Your club, not ours

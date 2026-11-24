@@ -4,6 +4,7 @@ summary: "Trang tìm CLB hiện là một danh sách ngắn do chúng tôi tự 
 audience: players
 order: 9
 updated: 2026-11-24
+features: finder
 ---
 
 ## Trang tìm CLB hiện đến đâu

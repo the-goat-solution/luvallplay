@@ -4,6 +4,7 @@ summary: "Luvallplay chưa mở cho CLB mới. Đây là cách danh sách chờ 
 audience: organisers
 order: 2
 updated: 2026-11-24
+features: newClubs, setupWizard
 ---
 
 ## Tình hình hiện tại

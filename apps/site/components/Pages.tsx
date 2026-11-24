@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Blocks } from "./Blocks";
 import { Finder } from "./Finder";
+import { AdminMock } from "./AdminMock";
 import { finderProps, Pricing, Vision } from "./Home";
 import { Shell } from "./Shell";
 import { SiteForm } from "./SiteForm";
@@ -89,6 +90,7 @@ export function InfoPage({ lang, content, pageKey }: P & { pageKey: string }) {
     <div className="wrap page">
       <Head page={page} lang={lang} />
       {pageKey === "find-a-club" ? <Finder {...finderProps(lang, content)} heading="h2" /> : null}
+      {pageKey === "for-clubs" ? <AdminMock lang={lang} /> : null}
       {pageKey === "pricing" ? <div style={{ margin: "0 -24px -64px" }}><Pricing lang={lang} content={content} heading="h2" /></div> : null}
       <Sections page={page} lang={lang} />
       {pageKey === "pricing" || pageKey === "for-clubs" ? (

@@ -1,5 +1,6 @@
 // The home page, design D ("Rally"), section by section. Anything that isn't
 // a real fact is drawn as an illustration and labelled as one.
+import { AdminMock } from "./AdminMock";
 import { Finder, type FinderClub } from "./Finder";
 import { Icon } from "./icons";
 import { ScoreDemo } from "./ScoreDemo";
@@ -99,6 +100,7 @@ export function Features({ lang, content }: P) {
         <h2 className="h-sec">{f.title[lang]}</h2>
         <p className="lead-sm">{f.lead[lang]}</p>
       </div>
+      <AdminMock lang={lang} />
       <div className="bento">
         {by.sessions ? (
           <div className="tile tile-green green span2 on-green rise">

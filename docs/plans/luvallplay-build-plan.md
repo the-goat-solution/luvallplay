@@ -753,6 +753,14 @@ Decision V: no longer 16+ only. **Juniors (under 16) never get their own login.*
 - **Testing:** journey J1 and permission-matrix rows for guardian, junior, junior-programme coach and other clubs' admins (test plan §3.17).
 - **When:** Phase 3b, after the multi-tenant core and before the first paid market. The guardianship tables are part of Phase 3 itself.
 
+#### 6.8.1 Phase 3b delivery log
+
+Runbook: `docs/plans/phase-3b-runbook.md`. Shipped dark: the module is off and no real child's profile exists in production.
+
+- **Plan change: a junior's activity lives in tables of its own**, not in the existing booking and attendance tables with a column naming the child. Those tables are keyed by an account's email and every reader assumes an adult who can be emailed and shown; separate tables make "can't sign in, never emailed, never public" true by construction, leave adults' queries untouched, and keep Phase 3b out of the read paths under shadow comparison. Juniors as non-login rows in the accounts table was rejected: it breaks what that table means everywhere.
+- **Step 1 (migration `0012_junior_activity`, additive):** `junior_bookings` and `junior_attendance`, club-owned with row-level security from the first day; the database refuses a child's row written under another club. Rehearsed on a copy of production: 18 accounts, 0 problems, adults' views identical. Production step waits for the owner's go-ahead.
+- **The data guard counts junior profiles as people** (`junior:<id>`): per-child data checks, and new findings for a profile that disappears and for a child left with no guardian.
+
 ### 6.9 Regions and country packs
 
 **Regions (decision Y).** A region is a complete deployment: its own database, storage and compute. Every club lives in exactly one region (`tenants.region`).

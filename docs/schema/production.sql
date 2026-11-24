@@ -739,6 +739,62 @@ CREATE TABLE jersey_registrations (
 CREATE UNIQUE INDEX jersey_one_per_email ON public.jersey_registrations USING btree (tenant_id, email_normalized) WHERE (status = ANY (ARRAY['pending'::text, 'paid'::text]));
 CREATE INDEX jersey_registrations_user_id_idx ON public.jersey_registrations USING btree (user_id);
 
+CREATE TABLE junior_attendance (
+  tenant_id integer NOT NULL,
+  session_date date NOT NULL,
+  junior_profile_id integer NOT NULL,
+  source text NOT NULL,
+  removed boolean DEFAULT false NOT NULL,
+  recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+  recorded_by_user_id integer,
+  CONSTRAINT junior_attendance_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT junior_attendance_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_attendance_recorded_by_user_id_fkey FOREIGN KEY (recorded_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_attendance_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_attendance_junior_profile_id_not_null NOT NULL junior_profile_id,
+  CONSTRAINT junior_attendance_recorded_at_not_null NOT NULL recorded_at,
+  CONSTRAINT junior_attendance_removed_not_null NOT NULL removed,
+  CONSTRAINT junior_attendance_session_date_not_null NOT NULL session_date,
+  CONSTRAINT junior_attendance_source_not_null NOT NULL source,
+  CONSTRAINT junior_attendance_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_attendance_pkey PRIMARY KEY (tenant_id, session_date, junior_profile_id)
+);
+CREATE INDEX junior_attendance_junior_profile_id_idx ON public.junior_attendance USING btree (junior_profile_id);
+
+CREATE TABLE junior_bookings (
+  id integer DEFAULT nextval('junior_bookings_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  junior_profile_id integer NOT NULL,
+  session_date date NOT NULL,
+  booked_by_user_id integer NOT NULL,
+  payment_intent_id text,
+  amount_minor integer,
+  currency text,
+  status text DEFAULT 'pending'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  cancelled_at timestamp with time zone,
+  CONSTRAINT junior_bookings_amount_check CHECK ((((amount_minor IS NULL) AND (currency IS NULL)) OR ((amount_minor >= 0) AND (currency ~ '^[A-Z]{3}$'::text)))),
+  CONSTRAINT junior_bookings_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'refunded'::text]))),
+  CONSTRAINT junior_bookings_booked_by_user_id_fkey FOREIGN KEY (booked_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_bookings_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT junior_bookings_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_bookings_session_date_fkey FOREIGN KEY (tenant_id, session_date) REFERENCES sessions(tenant_id, date) ON DELETE RESTRICT,
+  CONSTRAINT junior_bookings_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_bookings_booked_by_user_id_not_null NOT NULL booked_by_user_id,
+  CONSTRAINT junior_bookings_created_at_not_null NOT NULL created_at,
+  CONSTRAINT junior_bookings_id_not_null NOT NULL id,
+  CONSTRAINT junior_bookings_junior_profile_id_not_null NOT NULL junior_profile_id,
+  CONSTRAINT junior_bookings_session_date_not_null NOT NULL session_date,
+  CONSTRAINT junior_bookings_status_not_null NOT NULL status,
+  CONSTRAINT junior_bookings_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_bookings_pkey PRIMARY KEY (id),
+  CONSTRAINT junior_bookings_payment_intent_id_key UNIQUE (payment_intent_id)
+);
+CREATE INDEX junior_bookings_booked_by_user_id_idx ON public.junior_bookings USING btree (booked_by_user_id);
+CREATE INDEX junior_bookings_junior_profile_id_idx ON public.junior_bookings USING btree (junior_profile_id);
+CREATE UNIQUE INDEX junior_bookings_one_live ON public.junior_bookings USING btree (tenant_id, junior_profile_id, session_date) WHERE (status = ANY (ARRAY['pending'::text, 'confirmed'::text]));
+CREATE INDEX junior_bookings_session_idx ON public.junior_bookings USING btree (tenant_id, session_date);
+
 CREATE TABLE junior_profiles (
   id integer DEFAULT nextval('junior_profiles_id_seq'::regclass) NOT NULL,
   tenant_id integer NOT NULL,
@@ -754,7 +810,8 @@ CREATE TABLE junior_profiles (
   CONSTRAINT junior_profiles_id_not_null NOT NULL id,
   CONSTRAINT junior_profiles_name_not_null NOT NULL name,
   CONSTRAINT junior_profiles_tenant_id_not_null NOT NULL tenant_id,
-  CONSTRAINT junior_profiles_pkey PRIMARY KEY (id)
+  CONSTRAINT junior_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT junior_profiles_tenant_id_id_key UNIQUE (tenant_id, id)
 );
 CREATE INDEX junior_profiles_guardian_user_id_idx ON public.junior_profiles USING btree (guardian_user_id);
 CREATE INDEX junior_profiles_tenant_id_idx ON public.junior_profiles USING btree (tenant_id, id);
@@ -1836,6 +1893,7 @@ CREATE SEQUENCE day_requests_id_seq AS integer OWNED BY day_requests.id;
 CREATE SEQUENCE donations_id_seq AS integer OWNED BY donations.id;
 CREATE SEQUENCE finance_entries_id_seq AS integer OWNED BY finance_entries.id;
 CREATE SEQUENCE jersey_registrations_id_seq AS integer OWNED BY jersey_registrations.id;
+CREATE SEQUENCE junior_bookings_id_seq AS integer OWNED BY junior_bookings.id;
 CREATE SEQUENCE junior_profiles_id_seq AS integer OWNED BY junior_profiles.id;
 CREATE SEQUENCE memberships_id_seq AS integer OWNED BY memberships.id;
 CREATE SEQUENCE message_threads_id_seq AS integer OWNED BY message_threads.id;
@@ -1965,6 +2023,8 @@ ALTER TABLE finance_entries ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE finance_settings ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE finance_sync_state ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE jersey_registrations ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE junior_attendance ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE junior_bookings ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_profiles ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE membership_reminders_sent ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE memberships ENABLE AND FORCE ROW LEVEL SECURITY;
@@ -2024,6 +2084,8 @@ POLICY tenant_isolation ON finance_entries (PERMISSIVE) FOR ALL TO {public} USIN
 POLICY tenant_isolation ON finance_settings (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON finance_sync_state (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON jersey_registrations (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON junior_attendance (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON junior_bookings (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_profiles (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON membership_reminders_sent (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON memberships (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));

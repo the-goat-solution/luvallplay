@@ -269,6 +269,33 @@ describe("tenant isolation at the database", { skip: !BASE_URL && !REQUIRE_DB ? 
     }
   });
 
+  test("juniors: a child's booking or attendance can't be written into another club, and the other club can't see the child", async () => {
+    await c.query("BEGIN");
+    try {
+      const guardian = (await c.query(`SELECT id FROM players WHERE deleted_at IS NULL ORDER BY id LIMIT 1`)).rows[0].id as number;
+      const child = (await c.query(`INSERT INTO junior_profiles (tenant_id, guardian_user_id, name, birth_year) VALUES (1, $1, 'Isolation Child', 2015) RETURNING id`, [guardian])).rows[0].id as number;
+      await c.query(`INSERT INTO sessions (tenant_id, date, max_spots, booked_spots) VALUES (1, '2031-02-07', 10, 0), ($1, '2031-02-07', 10, 0)`, [club2]);
+      // In the child's own club: fine.
+      await c.query(`INSERT INTO junior_bookings (tenant_id, junior_profile_id, session_date, booked_by_user_id, status) VALUES (1, $1, '2031-02-07', $2, 'confirmed')`, [child, guardian]);
+      // The same child, written under the other club: refused, even by the owner.
+      await c.query("SAVEPOINT s");
+      await assert.rejects(c.query(`INSERT INTO junior_bookings (tenant_id, junior_profile_id, session_date, booked_by_user_id) VALUES ($1, $2, '2031-02-07', $3)`, [club2, child, guardian]), /junior_bookings_junior_in_club_fkey/);
+      await c.query("ROLLBACK TO SAVEPOINT s");
+      await assert.rejects(c.query(`INSERT INTO junior_attendance (tenant_id, session_date, junior_profile_id, source) VALUES ($1, '2031-02-07', $2, 'coach')`, [club2, child]), /junior_attendance_junior_in_club_fkey/);
+      await c.query("ROLLBACK TO SAVEPOINT s");
+      // One live booking per child per day.
+      await assert.rejects(c.query(`INSERT INTO junior_bookings (tenant_id, junior_profile_id, session_date, booked_by_user_id) VALUES (1, $1, '2031-02-07', $2)`, [child, guardian]), /junior_bookings_one_live/);
+      await c.query("ROLLBACK TO SAVEPOINT s");
+      // As the app's role for the other club: no child, no booking.
+      await c.query("SET LOCAL ROLE luvallplay_app");
+      await c.query("SELECT set_config('app.tenant_id', $1, true)", [String(club2)]);
+      assert.equal(await count("junior_profiles"), 0);
+      assert.equal(await count("junior_bookings"), 0);
+    } finally {
+      await c.query("ROLLBACK");
+    }
+  });
+
   test("the club setting ends with the transaction: the next one starts with no club", async () => {
     await c.query("BEGIN");
     await c.query("SET LOCAL ROLE luvallplay_app");

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Features, FinderSection, ForClubs, Hero, How, Pricing, Rankings, Sports, Story, Vision } from "@/components/Home";
+import { Features, FinderSection, ForClubs, Hero, How, Pricing, Vision } from "@/components/Home";
 import { render } from "@/components/Pages";
 import { getContent } from "@/lib/content";
 import { jsonLd, pageMeta } from "@/lib/meta";
@@ -43,13 +43,10 @@ export default async function HomePage({ params }: Props) {
   return render(lang, "", content, (
     <>
       <Hero {...p} />
-      <Sports {...p} />
       <Features {...p} />
       <Vision {...p} />
       <How {...p} />
-      <Rankings {...p} />
       <FinderSection {...p} />
-      <Story {...p} />
       <ForClubs {...p} />
       <Pricing {...p} />
       <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(ld)} />

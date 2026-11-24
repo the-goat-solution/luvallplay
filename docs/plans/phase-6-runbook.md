@@ -2,7 +2,7 @@
 
 How the public website is put together, and the steps only a person can do. Written for the owner; no coding needed.
 
-Status on 24 Nov 2026: **Stage A (the public website) is built and tested.** Stage B (setup wizard, club websites, admin settings) waits for Phase 3 to finish.
+Status on 24 Nov 2026: **Stage A (the public website) is built, tested and live on https://luvallplay.com** (`SITE_ORIGIN` already points there; luvallplay.vn, .org and .nz still need their DNS records). Stage B (setup wizard, club websites, admin settings) waits for Phase 3 to finish.
 
 ## 1. What exists
 

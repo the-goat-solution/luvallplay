@@ -47,10 +47,10 @@ If the score looks wrong, say so. It goes to the club's admins, who sort it out.
 
 ## Points and ranks
 
-- **Wins earn points.** At the first club on Luvallplay they're called Wolf Points. You also earn them for turning up to play days and for round robin wins.
+- **Wins earn points.** Each club can give its points its own name. You also earn them for turning up to play days and for round robin wins.
 - **Losses never cost points.** So there's no reason to dodge a hard game.
 - **Some wins earn a bonus.** Beating a higher-ranked pair, playing a pair you haven't faced before and winning several in a row all earn extra.
-- **Points move you up the ranks.** At the first club the ladder runs from Plastic Shuttle at the bottom to Diamond Racket at the top.
+- **Points move you up the ranks.** The ladder runs through named ranks from the bottom to the top, and each club can name its own.
 - **The top ranks need looking after.** Stop playing for 60 days and they start to tarnish. Play again to polish them back up.
 
 There's also a crown. One pair holds it, and beating them earns a bonus.

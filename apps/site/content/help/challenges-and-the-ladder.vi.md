@@ -47,10 +47,10 @@ Nếu thấy tỉ số sai, cứ nói. Việc đó sẽ được chuyển cho qu
 
 ## Điểm và hạng
 
-- **Thắng thì được điểm.** Ở câu lạc bộ đầu tiên trên Luvallplay, điểm này gọi là Wolf Points. Bạn còn được điểm khi đến các ngày chơi và khi thắng trận đấu vòng tròn.
+- **Thắng thì được điểm.** Mỗi câu lạc bộ có thể đặt tên riêng cho điểm của mình. Bạn còn được điểm khi đến các ngày chơi và khi thắng trận đấu vòng tròn.
 - **Thua không bao giờ mất điểm.** Nên chẳng có lý do gì để né một trận khó.
 - **Có những trận thắng được thưởng thêm.** Thắng một cặp hạng cao hơn, gặp một cặp chưa đấu bao giờ, và thắng liền nhiều trận đều được cộng điểm.
-- **Có điểm thì lên hạng.** Ở CLB đầu tiên này, thang hạng đi từ Cầu Nhựa ở dưới cùng lên Vợt Kim Cương trên đỉnh.
+- **Có điểm thì lên hạng.** Thang hạng gồm nhiều bậc có tên, đi từ dưới lên đỉnh, và mỗi câu lạc bộ có thể đặt tên riêng cho các bậc.
 - **Hạng cao phải được giữ gìn.** Nghỉ chơi 60 ngày là hạng bắt đầu xỉn màu. Chơi lại để đánh bóng nó lên.
 
 Còn có một chiếc vương miện. Một cặp đang giữ nó, và thắng được họ thì có thưởng.

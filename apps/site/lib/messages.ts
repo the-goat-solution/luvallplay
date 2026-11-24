@@ -28,7 +28,7 @@ const en = {
     opensClub: "opens the club’s own site",
   },
   mock: {
-    home: "Home", rank: "Your rank", up: "Up 2", arena: "Arena", challenge: "A clubmate challenged you to a best of 3", accept: "Accept", decline: "Not this week",
+    home: "Home", next: "Next play day", youreIn: "Evening · You’re in", rank: "Your rank", up: "Up 2", arena: "Arena", challenge: "A clubmate challenged you to a best of 3", accept: "Accept", decline: "Not this week",
     tabs: ["Home", "Play", "Vision", "Club"], booked: "Spot booked", final: "Final", finalScore: "21–19, you won", caption: "Illustration of the app’s home screen",
     you: "You", player: "Player", shots: "Your shots this game", clear: "Clear", drop: "Drop", smash: "Smash", net: "Net", avgRally: "Avg rally length", longest: "Longest rally",
     where: "Where you played", rally: "Rally 14 · 23 shots", winner: "Winner", youSmash: "You · smash", highlights: "Highlights · 4",
@@ -116,7 +116,7 @@ const vi: Messages = {
     opensClub: "mở trang riêng của câu lạc bộ",
   },
   mock: {
-    home: "Trang chủ", rank: "Hạng của bạn", up: "Lên 2", arena: "Arena", challenge: "Một bạn chơi thách bạn đấu 3 ván thắng 2", accept: "Nhận lời", decline: "Tuần này chưa",
+    home: "Trang chủ", next: "Buổi chơi tới", youreIn: "Buổi tối · Bạn đã có chỗ", rank: "Hạng của bạn", up: "Lên 2", arena: "Arena", challenge: "Một bạn chơi thách bạn đấu 3 ván thắng 2", accept: "Nhận lời", decline: "Tuần này chưa",
     tabs: ["Trang chủ", "Chơi", "Vision", "CLB"], booked: "Đã giữ chỗ", final: "Chung cuộc", finalScore: "21–19, bạn thắng", caption: "Minh hoạ màn hình chính của ứng dụng",
     you: "Bạn", player: "Người chơi", shots: "Các cú đánh của bạn trong trận", clear: "Phông", drop: "Bỏ nhỏ", smash: "Đập", net: "Lưới", avgRally: "Độ dài pha bóng trung bình", longest: "Pha bóng dài nhất",
     where: "Vị trí bạn đã đánh", rally: "Pha 14 · 23 cú đánh", winner: "Ăn điểm", youSmash: "Bạn · đập cầu", highlights: "Pha hay · 4",

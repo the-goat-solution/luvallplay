@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "regions": ["syd1"],
+  "ignoreCommand": "bash ../../scripts/vercel-ignore.sh site",
+  "crons": [{ "path": "/api/cron/purge", "schedule": "17 15 * * *" }]
+}

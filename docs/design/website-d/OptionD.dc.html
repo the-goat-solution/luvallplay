@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Luvallplay — Rally</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&amp;family=Be+Vietnam+Pro:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0e6b4f}a:hover{color:#0b1b2b}
+.d-wrap *{box-sizing:border-box}
+.d-wrap a:focus-visible,.d-wrap button:focus-visible,.d-wrap input:focus-visible{outline:2px solid #157a5a;outline-offset:2px}
+.d-dark a:focus-visible,.d-dark button:focus-visible{outline-color:#d4f23c}
+
+/* Elevation scale: soft, layered, navy-tinted */
+.e1{box-shadow:0 1px 2px rgba(11,27,43,.06),0 2px 6px rgba(11,27,43,.05)}
+.e2{box-shadow:0 1px 2px rgba(11,27,43,.05),0 6px 14px rgba(11,27,43,.07),0 9px 18px rgba(11,27,43,0.039)}
+.e3{box-shadow:0 2px 4px rgba(11,27,43,.06),0 7px 14px rgba(11,27,43,0.061),0 20px 40px rgba(11,27,43,0.088)}
+.e4{box-shadow:0 4px 8px rgba(11,27,43,.08),0 12px 24px rgba(11,27,43,0.088),0 32px 60px rgba(11,27,43,0.132)}
+
+/* Raised white surface with a lit top edge */
+.d-card{background:#ffffff;border:1px solid #e3e7e4;box-shadow:inset 0 1px 0 #ffffff,0 1px 2px rgba(11,27,43,.05),0 6px 14px rgba(11,27,43,.07),0 9px 18px rgba(11,27,43,0.039);transition:transform .25s cubic-bezier(.3,1.4,.5,1),box-shadow .25s}
+.d-card:hover{transform:translateY(-6px);box-shadow:inset 0 1px 0 #ffffff,0 2px 4px rgba(11,27,43,.06),0 7px 14px rgba(11,27,43,0.061),0 20px 40px rgba(11,27,43,0.088)}
+
+/* Frosted glass, only for short labels over colour or photos */
+.d-glass{background:rgba(255,255,255,.78);-webkit-backdrop-filter:blur(18px) saturate(170%);backdrop-filter:blur(18px) saturate(170%);border:1px solid rgba(255,255,255,.85);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(11,27,43,.04),0 7px 14px rgba(11,27,43,0.077),0 20px 40px rgba(11,27,43,0.099)}
+.d-glass-dark{background:rgba(11,27,43,.62);-webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%);border:1px solid rgba(250,250,247,.16);box-shadow:inset 0 1px 0 rgba(250,250,247,.18),0 7px 14px rgba(0,0,0,0.138)}
+
+/* Glossy controls */
+.d-btn{background:linear-gradient(180deg,#178563 0%,#0e6b4f 55%,#0c5f46 100%);color:#fafaf7;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 -2px 0 rgba(11,27,43,.18),0 1px 2px rgba(11,27,43,.2),0 5px 12px rgba(14,107,79,0.193);transition:transform .2s cubic-bezier(.3,1.5,.5,1),box-shadow .2s}
+.d-btn:hover{color:#fafaf7;transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -2px 0 rgba(11,27,43,.18),0 2px 4px rgba(11,27,43,.2),0 8px 16px rgba(14,107,79,0.231)}
+.d-btn2{background:linear-gradient(180deg,#ffffff,#f3f5f2);color:#0b1b2b;border:1px solid #7b8a85;box-shadow:inset 0 1px 0 #ffffff,0 1px 2px rgba(11,27,43,.08),0 6px 14px rgba(11,27,43,.08);transition:transform .2s cubic-bezier(.3,1.5,.5,1)}
+.d-btn2:hover{color:#0b1b2b;transform:translateY(-2px)}
+.d-btn-dark{background:linear-gradient(180deg,#1b3550,#0b1b2b);color:#fafaf7;box-shadow:inset 0 1px 0 rgba(250,250,247,.18),0 1px 2px rgba(11,27,43,.3),0 5px 12px rgba(11,27,43,0.165);transition:transform .2s cubic-bezier(.3,1.5,.5,1)}
+.d-btn-dark:hover{color:#fafaf7;transform:translateY(-2px)}
+.d-lime{background:linear-gradient(180deg,#e4fb73 0%,#d4f23c 60%,#c6e52e 100%);color:#0b1b2b;box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 1px 2px rgba(11,27,43,.15),0 6px 14px rgba(160,190,20,.35)}
+.d-green{background:linear-gradient(160deg,#13785a 0%,#0e6b4f 45%,#0b5c44 100%)}
+.d-navy{background:linear-gradient(160deg,#16304a 0%,#0b1b2b 60%)}
+
+/* The one ambient motion: the live score */
+.d-tick{display:inline-block;animation:d-tick .35s cubic-bezier(.3,1.8,.5,1)}
+@keyframes d-tick{0%{transform:translateY(-25%) scale(1.12)}100%{transform:none}}
+.d-dot{animation:d-dot 1.8s ease-out infinite}
+@keyframes d-dot{0%{box-shadow:0 0 0 0 rgba(11,27,43,.45)}100%{box-shadow:0 0 0 8px rgba(11,27,43,0)}}
+
+/* The live ticker in the header */
+.d-track{display:flex;align-items:center;width:max-content;animation:d-scroll 40s linear infinite}
+.d-marquee:hover .d-track{animation-play-state:paused}
+@keyframes d-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.d-marquee{-webkit-mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent)}
+
+.d-vhead{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:48px}
+.d-vgrid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:20px}
+.d-bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
+.d-span2{grid-column:span 2}
+@media (max-width:900px){.d-vhead,.d-vgrid{grid-template-columns:1fr;gap:28px}.d-bento{grid-template-columns:1fr}.d-span2{grid-column:auto}.d-hidesm{display:none}.d-score{left:12px!important;bottom:-32px!important}}
+@media (prefers-reduced-motion:reduce){.d-tick,.d-dot,.d-track{animation:none}.d-card,.d-btn,.d-btn2,.d-btn-dark{transition:none}}
+</style>
+</helmet>
+<div class="d-wrap" style="background: #fafaf7; color: #0b1b2b; font-family: 'Be Vietnam Pro', system-ui, sans-serif; font-size: 16px; line-height: 24px; min-height: 100vh; overflow: hidden">
+
+  <!-- Header: glass bar with nav on top and the live ticker docked underneath -->
+  <div style="padding: 20px 24px 0; position: relative; z-index: 3">
+    <header class="d-glass" style="max-width: 1280px; margin: 0 auto; border-radius: 28px; display: flex; flex-direction: column; overflow: hidden">
+    <div style="padding: 10px 10px 10px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+      <a href="#top" aria-label="Luvallplay home"><img src="/_blob/921958dc52112ea1f829e2daaa8b4f4e" alt="Luvallplay" style="height: 30px; width: auto; display: block"></a>
+      <nav aria-label="Main" style="display: flex; flex-wrap: wrap; gap: 4px; font-weight: 600; font-size: 15px">
+        <a href="#finder" style="text-decoration: none; color: #0b1b2b; padding: 10px 14px; border-radius: 999px">Find a club</a>
+        <a href="#features" style="text-decoration: none; color: #0b1b2b; padding: 10px 14px; border-radius: 999px">What's inside</a>
+        <a href="#vision" style="text-decoration: none; color: #0b1b2b; padding: 10px 14px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px">Vision<span class="d-lime" style="font-size: 11px; line-height: 14px; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 6px">NEW</span></a>
+        <a href="#clubs" style="text-decoration: none; color: #0b1b2b; padding: 10px 14px; border-radius: 999px">For clubs</a>
+        <a href="#lang" style="text-decoration: none; color: #4a5a55; padding: 10px 14px; border-radius: 999px">EN · VI</a>
+      </nav>
+      <a class="d-btn" href="#get" style="text-decoration: none; font-weight: 600; padding: 12px 22px; border-radius: 999px; min-height: 44px; display: inline-flex; align-items: center">Get the app</a>
+    </div>
+    <div style="border-top: 1px solid rgba(11,27,43,0.08); background: rgba(250,250,247,0.55); padding: 8px 10px 8px 12px; display: flex; align-items: center; gap: 12px; min-width: 0">
+      <span class="d-lime" style="flex: none; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; padding: 6px 12px; border-radius: 999px"><span class="d-dot" style="width: 7px; height: 7px; border-radius: 999px; background: #0b1b2b"></span>LIVE NOW</span>
+      <div class="d-marquee" style="flex: 1; min-width: 0; overflow: hidden">
+        <div class="d-track" style="font-size: 14px; color: #4a5a55; white-space: nowrap">
+          <span style="padding: 0 20px"><b style="color: #0b1b2b; font-weight: 600">Friday social</b> · badminton · 14 going</span><span aria-hidden="true" style="color: #7b8a85">•</span>
+          <span style="padding: 0 20px"><b style="color: #0b1b2b; font-weight: 600">Open play</b> · pickleball · 4 spots left</span><span aria-hidden="true" style="color: #7b8a85">•</span>
+          <span style="padding: 0 20px"><b style="color: #0b1b2b; font-weight: 600">Five-a-side</b> · futsal · 8:00 pm</span><span aria-hidden="true" style="color: #7b8a85">•</span>
+          <span style="padding: 0 20px"><b style="color: #0b1b2b; font-weight: 600">Ladder night</b> · tennis · 21–19 final</span><span aria-hidden="true" style="color: #7b8a85">•</span>
+          <span aria-hidden="true" style="padding: 0 20px"><b style="color: #0b1b2b; font-weight: 600">Friday social</b> · badminton · 14 going</span><span aria-hidden="true" style="color: #7b8a85">•</span>
+          <span aria-hidden="true" style="padding: 0 20px"><b style="color: #0b1b2b; font-weight: 600">Open play</b> · pickleball · 4 spots left</span><span aria-hidden="true" style="color: #7b8a85">•</span>
+          <span aria-hidden="true" style="padding: 0 20px"><b style="color: #0b1b2b; font-weight: 600">Five-a-side</b> · futsal · 8:00 pm</span><span aria-hidden="true" style="color: #7b8a85">•</span>
+          <span aria-hidden="true" style="padding: 0 20px"><b style="color: #0b1b2b; font-weight: 600">Ladder night</b> · tennis · 21–19 final</span><span aria-hidden="true" style="color: #7b8a85">•</span>
+        </div>
+      </div>
+      <a class="d-hidesm" href="#finder" style="flex: none; text-decoration: none; font-size: 14px; font-weight: 600; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px">All sessions
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+    </div>
+    </header>
+  </div>
+
+  <!-- Hero -->
+  <section id="top" style="max-width: 1280px; margin: 0 auto; padding: 72px 24px 112px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 64px; align-items: center">
+    <div style="display: flex; flex-direction: column; gap: 28px">
+      <a href="#vision" class="d-card" style="align-self: flex-start; text-decoration: none; color: #0b1b2b; display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; padding: 6px 14px 6px 6px; border-radius: 999px">
+        <span class="d-lime" style="font-size: 12px; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 999px">NEW</span>
+        Meet Vision: your game, on film, in numbers
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+      </a>
+      <h1 style="margin: 0; font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 700; font-size: clamp(72px, 9.5vw, 140px); line-height: 0.88; letter-spacing: -0.01em">Your club’s<br>favourite<br>night of the <span style="color: #0e6b4f">week.</span></h1>
+      <p style="margin: 0; font-size: 20px; line-height: 32px; color: #4a5a55; max-width: 500px">Luvallplay brings your sessions, sign-ups, ladder and the people you play with into one friendly app. Everyone starts at 0–0.</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+        <a class="d-btn" href="#finder" style="text-decoration: none; font-weight: 600; padding: 16px 28px; border-radius: 999px; min-height: 56px; display: inline-flex; align-items: center; gap: 10px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle></svg>
+          Find a club near you</a>
+        <a class="d-btn2" href="#clubs" style="text-decoration: none; font-weight: 600; padding: 16px 28px; border-radius: 999px; min-height: 56px; display: inline-flex; align-items: center">Bring your club</a>
+      </div>
+    </div>
+
+    <!-- Court stage with petals and layered glass cards -->
+    <div class="d-green e4" style="position: relative; border-radius: 32px; padding: 40px; width: 100%; max-width: 600px; justify-self: center">
+      <div aria-hidden="true" style="position: absolute; inset: 20px; border: 2px solid rgba(250,250,247,0.22); border-radius: 14px"></div>
+      <div aria-hidden="true" style="position: absolute; left: 20px; right: 20px; top: 50%; border-top: 2px solid rgba(250,250,247,0.22)"></div>
+      <div aria-hidden="true" style="position: absolute; left: 50%; top: 20px; bottom: 20px; border-left: 2px solid rgba(250,250,247,0.22)"></div>
+      <div style="position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div role="img" aria-label="Photo placeholder: badminton doubles at the net" class="e2" style="aspect-ratio: 1; border-radius: 999px 999px 20px 999px; background: repeating-linear-gradient(135deg, #e3e7e4 0 14px, #eef1ee 14px 28px); display: flex; align-items: flex-end; justify-content: flex-end; padding: 22px; color: #4a5a55; font-size: 13px; text-align: right">Photo: badminton doubles at the net</div>
+        <div role="img" aria-label="Photo placeholder: pickleball rally in a park" class="e2" style="aspect-ratio: 1; border-radius: 999px 999px 999px 20px; background: repeating-linear-gradient(135deg, #e3e7e4 0 14px, #eef1ee 14px 28px); display: flex; align-items: flex-end; padding: 22px; color: #4a5a55; font-size: 13px">Photo: pickleball rally in a park</div>
+        <div role="img" aria-label="Photo placeholder: netball team huddle" class="e2" style="aspect-ratio: 1; border-radius: 999px 20px 999px 999px; background: repeating-linear-gradient(135deg, #e3e7e4 0 14px, #eef1ee 14px 28px); display: flex; align-items: flex-start; justify-content: flex-end; padding: 22px; color: #4a5a55; font-size: 13px; text-align: right">Photo: netball team huddle</div>
+        <div role="img" aria-label="Photo placeholder: volleyball high-fives" class="e2" style="aspect-ratio: 1; border-radius: 20px 999px 999px 999px; background: repeating-linear-gradient(135deg, #e3e7e4 0 14px, #eef1ee 14px 28px); display: flex; align-items: flex-start; padding: 22px; color: #4a5a55; font-size: 13px">Photo: volleyball high-fives</div>
+        <div class="e3" style="position: absolute; left: 50%; top: 50%; width: 104px; height: 104px; margin: -52px 0 0 -52px; border-radius: 999px; background: #fafaf7; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 #ffffff, 0 7px 14px rgba(11,27,43,0.11)">
+          <img src="/_blob/8be4a8ea38bcc64bbdbd51e9db0b53dc" alt="" style="width: 52px; height: auto">
+        </div>
+      </div>
+
+      <!-- Layer 3: live score (glass) -->
+      <div class="d-glass d-score" style="position: absolute; left: -36px; bottom: -40px; width: 260px; border-radius: 22px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; transform: rotate(-2deg)">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #4a5a55">COURT 2</span>
+          <span class="d-lime" style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 9px; border-radius: 6px"><span class="d-dot" style="width: 6px; height: 6px; border-radius: 999px; background: #0b1b2b"></span>LIVE</span>
+        </div>
+        <div style="font-family: 'Barlow Condensed', sans-serif; font-size: 60px; line-height: 60px; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; gap: 8px; align-items: baseline">
+          <span class="{{tickA}}">{{scoreA}}</span><span style="color: #7b8a85">–</span><span class="{{tickB}}">{{scoreB}}</span>
+        </div>
+        <div style="font-size: 13px; color: #4a5a55">You and Mai · {{rallyNote}}</div>
+      </div>
+
+      <!-- Layer 3: next play day (glass) -->
+      <div class="d-glass d-hidesm" style="position: absolute; right: -40px; top: -32px; width: 236px; border-radius: 22px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; transform: rotate(2deg)">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #0e6b4f">NEXT PLAY DAY</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; line-height: 30px; font-weight: 600">Friday social</span>
+        <span style="font-size: 13px; color: #4a5a55">7:00 pm · 3 courts · You're in</span>
+      </div>
+
+      <!-- Layer 4: kudos chip -->
+      <div class="d-hidesm d-navy" style="position: absolute; right: -24px; bottom: 22%; color: #fafaf7; border-radius: 999px; padding: 8px 16px 8px 8px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; box-shadow: inset 0 1px 0 rgba(250,250,247,.18), 0 7px 14px rgba(11,27,43,0.165)">
+        <span style="width: 30px; height: 30px; border-radius: 999px; background: #ff6b4a; color: #0b1b2b; display: inline-flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.45)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"></path></svg></span>
+        Linh sent you kudos
+      </div>
+    </div>
+  </section>
+
+  <!-- Sports row: raised chips -->
+  <section aria-label="Sports" style="max-width: 1280px; margin: 0 auto; padding: 8px 24px 0; display: flex; flex-direction: column; align-items: center; gap: 20px">
+    <p style="margin: 0; font-size: 14px; color: #4a5a55">Started with badminton. Open to every club that plays regularly.</p>
+    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; font-weight: 600; font-size: 15px">
+      <span class="d-card" style="padding: 10px 20px; border-radius: 999px">Badminton</span>
+      <span class="d-card" style="padding: 10px 20px; border-radius: 999px">Pickleball</span>
+      <span class="d-card" style="padding: 10px 20px; border-radius: 999px">Tennis</span>
+      <span class="d-card" style="padding: 10px 20px; border-radius: 999px">Futsal</span>
+      <span class="d-card" style="padding: 10px 20px; border-radius: 999px">Netball</span>
+      <span class="d-card" style="padding: 10px 20px; border-radius: 999px">Volleyball</span>
+      <span class="d-card" style="padding: 10px 20px; border-radius: 999px">Squash</span>
+      <span class="d-card" style="padding: 10px 20px; border-radius: 999px">Table tennis</span>
+    </div>
+  </section>
+
+  <!-- Features bento -->
+  <section id="features" style="max-width: 1280px; margin: 0 auto; padding: 112px 24px; display: flex; flex-direction: column; gap: 56px">
+    <div style="display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center">
+      <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: clamp(52px, 6.5vw, 96px); line-height: 0.92; max-width: 860px">Everything in your kit bag.</h2>
+      <p style="margin: 0; color: #4a5a55; max-width: 520px; font-size: 18px; line-height: 28px">Seven tools, one app, zero spreadsheets. Your club keeps its own colours and words.</p>
+    </div>
+
+    <div class="d-bento">
+      <!-- Sessions: green tile with raised white rows -->
+      <div class="d-span2 d-green e3" style="color: #fafaf7; border-radius: 28px; padding: 32px; display: flex; flex-direction: column; gap: 20px; box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 7px 14px rgba(11,27,43,0.061), 0 20px 40px rgba(14,107,79,0.121)">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 36px; line-height: 36px">Sessions and sign-ups</h3>
+            <p style="margin: 0; font-size: 15px">Book a spot in two taps. Waitlists move up on their own.</p>
+          </div>
+          <span style="flex: none; width: 52px; height: 52px; border-radius: 16px; background: rgba(250,250,247,.14); border: 1px solid rgba(250,250,247,.22); box-shadow: inset 0 1px 0 rgba(250,250,247,.25); display: inline-flex; align-items: center; justify-content: center"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div class="e2" style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; color: #0b1b2b; border-radius: 16px; padding: 12px 12px 12px 18px; gap: 12px">
+            <span style="font-weight: 600">Tue · Social play</span><span style="font-size: 14px; color: #4a5a55">7:00 pm · 12 of 16</span>
+            <a class="d-btn" href="#book" style="text-decoration: none; font-size: 14px; font-weight: 600; padding: 8px 18px; border-radius: 999px; min-height: 40px; display: inline-flex; align-items: center">Book</a>
+          </div>
+          <div class="e1" style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; color: #0b1b2b; border-radius: 16px; padding: 12px 12px 12px 18px; gap: 12px; margin: 0 12px; opacity: 0.96">
+            <span style="font-weight: 600">Sat · Casual session</span><span style="font-size: 14px; color: #4a5a55">10:00 am · Full</span>
+            <a class="d-btn2" href="#wait" style="text-decoration: none; font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 999px; min-height: 40px; display: inline-flex; align-items: center">Waitlist</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rankings mini -->
+      <div class="d-navy e3" style="color: #f2f5f1; border-radius: 28px; padding: 32px; display: flex; flex-direction: column; gap: 14px; box-shadow: inset 0 1px 0 rgba(250,250,247,.12), 0 7px 14px rgba(11,27,43,0.077), 0 20px 40px rgba(11,27,43,0.11)">
+        <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 32px; line-height: 34px">Rankings</h3>
+        <p style="margin: 0; color: #a9b8b2; font-size: 15px">A fair ladder for every level, updated after each game.</p>
+        <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 15px">
+          <li style="display: flex; gap: 12px; align-items: center; padding: 0 8px"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; width: 20px">1</span><span style="flex: 1">Linh</span><span style="font-variant-numeric: tabular-nums; color: #a9b8b2">1,482</span></li>
+          <li class="d-lime" style="display: flex; gap: 12px; align-items: center; border-radius: 12px; padding: 6px 10px; margin: 0 -4px; transform: scale(1.04)"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; width: 20px">2</span><span style="flex: 1; font-weight: 600">You</span><span style="font-variant-numeric: tabular-nums">1,455</span></li>
+          <li style="display: flex; gap: 12px; align-items: center; padding: 0 8px"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; width: 20px">3</span><span style="flex: 1">Sam</span><span style="font-variant-numeric: tabular-nums; color: #a9b8b2">1,430</span></li>
+        </ol>
+      </div>
+
+      <!-- Challenges -->
+      <div class="d-card" style="border-radius: 28px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+        <span class="e1" style="width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(180deg,#eef6f2,#e0eee7); color: #0e6b4f; display: inline-flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 #ffffff, 0 2px 6px rgba(14,107,79,.12)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"></path></svg></span>
+        <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 32px; line-height: 34px">Challenges</h3>
+        <p style="margin: 0; font-size: 15px; color: #4a5a55">Post one in the Arena and see who's up for it.</p>
+      </div>
+
+      <!-- Memberships -->
+      <div class="d-card" style="border-radius: 28px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+        <span style="width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(180deg,#eef6f2,#e0eee7); color: #0e6b4f; display: inline-flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 #ffffff, 0 2px 6px rgba(14,107,79,.12)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"></rect><path d="M3 10.5h18M7 15h4"></path></svg></span>
+        <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 32px; line-height: 34px">Memberships</h3>
+        <p style="margin: 0; font-size: 15px; color: #4a5a55">Fees paid, renewals reminded. "Your membership renews on 12 Dec."</p>
+      </div>
+
+      <!-- Club finder map tile -->
+      <div class="d-span2 d-card" style="border-radius: 28px; padding: 32px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 36px; line-height: 36px">Club finder</h3>
+          <p style="margin: 0; font-size: 15px; color: #4a5a55">Every club near you, by sport, level and night.</p>
+          <a class="d-btn" href="#finder" style="align-self: flex-start; text-decoration: none; font-weight: 600; padding: 10px 20px; border-radius: 999px; min-height: 44px; display: inline-flex; align-items: center">Open the map</a>
+        </div>
+        <div aria-hidden="true" style="position: relative; height: 200px; border-radius: 20px; background: #e6ede9; overflow: hidden; box-shadow: inset 0 2px 8px rgba(11,27,43,.08)">
+          <div style="position: absolute; left: -10%; top: 42%; width: 120%; border-top: 14px solid #ffffff; transform: rotate(-12deg)"></div>
+          <div style="position: absolute; left: 32%; top: -10%; height: 130%; border-left: 10px solid #ffffff; transform: rotate(18deg)"></div>
+          <span class="e2" style="position: absolute; left: 20%; top: 26%; width: 18px; height: 18px; border-radius: 999px; background: #0e6b4f; border: 4px solid #ffffff"></span>
+          <span class="e2" style="position: absolute; left: 78%; top: 22%; width: 18px; height: 18px; border-radius: 999px; background: #0e6b4f; border: 4px solid #ffffff"></span>
+          <div class="d-glass" style="position: absolute; left: 44%; top: 44%; border-radius: 14px; padding: 8px 12px; font-size: 12px; line-height: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #ff6b4a"></span>Three Wolves · tonight 7:00</div>
+        </div>
+      </div>
+
+      <!-- Social -->
+      <div class="d-card" style="border-radius: 28px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+        <span style="width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(180deg,#eef6f2,#e0eee7); color: #0e6b4f; display: inline-flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 #ffffff, 0 2px 6px rgba(14,107,79,.12); position: relative"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"></path></svg><span style="position: absolute; right: -3px; top: -3px; width: 14px; height: 14px; border-radius: 999px; background: #ff6b4a; border: 2px solid #ffffff"></span></span>
+        <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 32px; line-height: 34px">Social</h3>
+        <p style="margin: 0; font-size: 15px; color: #4a5a55">Kudos, follows and the people you play with.</p>
+      </div>
+
+      <!-- Marketplace -->
+      <div class="d-card" style="border-radius: 28px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+        <span style="width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(180deg,#eef6f2,#e0eee7); color: #0e6b4f; display: inline-flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 #ffffff, 0 2px 6px rgba(14,107,79,.12)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg></span>
+        <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 32px; line-height: 34px">Marketplace</h3>
+        <p style="margin: 0; font-size: 15px; color: #4a5a55">Swap rackets, sell shoes, buy club kit.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISION -->
+  <section id="vision" style="padding: 0 24px 112px">
+    <div class="d-navy d-dark" style="max-width: 1280px; margin: 0 auto; border-radius: 40px; color: #f2f5f1; padding: clamp(32px, 6vw, 80px); display: flex; flex-direction: column; gap: 56px; position: relative; overflow: hidden; box-shadow: inset 0 1px 0 rgba(250,250,247,.14), 0 12px 24px rgba(11,27,43,0.099), 0 32px 60px rgba(11,27,43,0.143)">
+      <div aria-hidden="true" style="position: absolute; right: -120px; top: -120px; width: 480px; height: 480px; border-radius: 999px; background: radial-gradient(circle, rgba(43,125,100,.55), rgba(43,125,100,0) 70%)"></div>
+
+      <div class="d-vhead" style="position: relative; align-items: end">
+        <div style="display: flex; flex-direction: column; gap: 20px">
+          <span style="display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #a9b8b2"><span class="d-lime" style="padding: 4px 10px; border-radius: 6px">NEW</span>LUVALLPLAY VISION</span>
+          <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: clamp(56px, 7vw, 112px); line-height: 0.88">Film your game.<br>See every rally.</h2>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 20px; max-width: 480px">
+          <p style="margin: 0; font-size: 18px; line-height: 28px; color: #a9b8b2; max-width: 480px">Prop your phone behind the court and play. Vision follows the players and every shot, cuts out the waiting between rallies, and hands you stats and highlights before you’ve packed your bag.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 12px">
+            <a class="d-lime" href="#vision-try" style="text-decoration: none; font-weight: 600; padding: 16px 28px; border-radius: 999px; min-height: 56px; display: inline-flex; align-items: center; gap: 10px">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2.5"></rect><path d="M16 10.5l5-3v9l-5-3"></path></svg>
+              Try Vision</a>
+            <a href="#vision-how" style="text-decoration: none; color: #f2f5f1; font-weight: 600; padding: 16px 24px; border-radius: 999px; min-height: 56px; display: inline-flex; align-items: center; border: 1px solid rgba(250,250,247,.28); box-shadow: inset 0 1px 0 rgba(250,250,247,.12)">See how it works</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analysis mock: video + glass HUD -->
+      <div class="d-vgrid" style="position: relative; align-items: stretch">
+        <figure style="margin: 0; min-width: 0; position: relative; border-radius: 28px; overflow: hidden; min-height: 440px; background: repeating-linear-gradient(135deg, #12263a 0 14px, #152d45 14px 28px); border: 1px solid rgba(250,250,247,.1); box-shadow: 0 12px 24px rgba(0,0,0,0.193)">
+          <figcaption style="position: absolute; left: 20px; bottom: 76px; font-size: 13px; color: #a9b8b2">Video still: a doubles rally filmed from behind the baseline</figcaption>
+          <svg viewBox="0 0 800 440" preserveAspectRatio="none" role="img" aria-label="Court lines detected, two players tracked and the shot path drawn over the video" style="position: absolute; inset: 0; width: 100%; height: 100%">
+            <polygon points="250,70 550,70 720,420 80,420" fill="rgba(43,125,100,.18)" stroke="rgba(250,250,247,.55)" stroke-width="2"></polygon>
+            <line x1="400" y1="70" x2="400" y2="420" stroke="rgba(250,250,247,.35)" stroke-width="2"></line>
+            <line x1="183" y1="210" x2="617" y2="210" stroke="rgba(250,250,247,.8)" stroke-width="3"></line>
+            <path d="M300 360 C 360 120, 470 90, 520 150" fill="none" stroke="#d4f23c" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 10"></path>
+            <circle cx="520" cy="150" r="9" fill="#d4f23c" stroke="#0b1b2b" stroke-width="3"></circle>
+            <rect x="262" y="300" width="80" height="120" rx="10" fill="none" stroke="#d4f23c" stroke-width="2.5"></rect>
+            <rect x="470" y="120" width="56" height="84" rx="8" fill="none" stroke="rgba(250,250,247,.8)" stroke-width="2"></rect>
+          </svg>
+          <div class="d-glass-dark" style="position: absolute; left: 20px; top: 20px; border-radius: 14px; padding: 8px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: #f2f5f1"><span style="width: 8px; height: 8px; border-radius: 999px; background: #ff6b4a"></span>Rally 14 · 23 shots</div>
+          <div class="d-glass" style="position: absolute; left: 33%; top: 70%; border-radius: 14px; padding: 8px 12px; color: #0b1b2b; display: flex; flex-direction: column"><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #4a5a55">YOU · SMASH</span><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; line-height: 26px">Winner</span></div>
+          <!-- timeline -->
+          <div class="d-glass-dark" style="position: absolute; left: 16px; right: 16px; bottom: 16px; border-radius: 18px; padding: 12px 16px; display: flex; align-items: center; gap: 14px">
+            <span style="width: 36px; height: 36px; flex: none; border-radius: 999px; background: #fafaf7; color: #0b1b2b; display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg></span>
+            <div style="position: relative; flex: 1; height: 6px; border-radius: 999px; background: rgba(250,250,247,.18)">
+              <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 58%; border-radius: 999px; background: #fafaf7"></span>
+              <span style="position: absolute; left: 12%; top: -5px; width: 4px; height: 16px; border-radius: 2px; background: #d4f23c"></span>
+              <span style="position: absolute; left: 31%; top: -5px; width: 4px; height: 16px; border-radius: 2px; background: #d4f23c"></span>
+              <span style="position: absolute; left: 57%; top: -5px; width: 4px; height: 16px; border-radius: 2px; background: #d4f23c"></span>
+              <span style="position: absolute; left: 78%; top: -5px; width: 4px; height: 16px; border-radius: 2px; background: #d4f23c"></span>
+            </div>
+            <span style="font-size: 13px; color: #a9b8b2; font-variant-numeric: tabular-nums">Highlights · 4</span>
+          </div>
+        </figure>
+
+        <!-- Stats panel -->
+        <div style="display: flex; flex-direction: column; gap: 16px; min-width: 0">
+          <div style="background: #fafaf7; color: #0b1b2b; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: inset 0 1px 0 #ffffff, 0 7px 14px rgba(0,0,0,0.138)">
+            <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #4a5a55">YOUR SHOTS THIS GAME</span>
+            <div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+              <div style="display: grid; grid-template-columns: 64px 1fr 28px; gap: 10px; align-items: center"><span>Clear</span><span style="height: 10px; border-radius: 999px; background: #e3e7e4; overflow: hidden"><span style="display: block; width: 82%; height: 100%; border-radius: 999px; background: linear-gradient(180deg,#178563,#0e6b4f)"></span></span><span style="text-align: right; font-variant-numeric: tabular-nums">41</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr 28px; gap: 10px; align-items: center"><span>Drop</span><span style="height: 10px; border-radius: 999px; background: #e3e7e4; overflow: hidden"><span style="display: block; width: 56%; height: 100%; border-radius: 999px; background: linear-gradient(180deg,#178563,#0e6b4f)"></span></span><span style="text-align: right; font-variant-numeric: tabular-nums">28</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr 28px; gap: 10px; align-items: center"><span>Smash</span><span style="height: 10px; border-radius: 999px; background: #e3e7e4; overflow: hidden"><span style="display: block; width: 38%; height: 100%; border-radius: 999px; background: linear-gradient(180deg,#178563,#0e6b4f)"></span></span><span style="text-align: right; font-variant-numeric: tabular-nums">19</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr 28px; gap: 10px; align-items: center"><span>Net</span><span style="height: 10px; border-radius: 999px; background: #e3e7e4; overflow: hidden"><span style="display: block; width: 30%; height: 100%; border-radius: 999px; background: linear-gradient(180deg,#178563,#0e6b4f)"></span></span><span style="text-align: right; font-variant-numeric: tabular-nums">15</span></div>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+            <div class="d-glass-dark" style="border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 44px; line-height: 44px">9.4</span><span style="font-size: 13px; color: #a9b8b2">Avg rally length</span></div>
+            <div class="d-glass-dark" style="border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 44px; line-height: 44px">38</span><span style="font-size: 13px; color: #a9b8b2">Longest rally</span></div>
+          </div>
+          <div class="d-glass-dark" style="border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 10px; flex: 1">
+            <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #a9b8b2">WHERE YOU PLAYED</span>
+            <div aria-hidden="true" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; flex: 1; min-height: 72px">
+              <span style="border-radius: 6px; background: rgba(212,242,60,.18)"></span><span style="border-radius: 6px; background: rgba(212,242,60,.5)"></span><span style="border-radius: 6px; background: rgba(212,242,60,.85)"></span><span style="border-radius: 6px; background: rgba(212,242,60,.3)"></span>
+              <span style="border-radius: 6px; background: rgba(212,242,60,.3)"></span><span style="border-radius: 6px; background: rgba(212,242,60,.65)"></span><span style="border-radius: 6px; background: rgba(212,242,60,.45)"></span><span style="border-radius: 6px; background: rgba(212,242,60,.12)"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vision benefits -->
+      <div id="vision-how" style="position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px">
+        <div class="d-glass-dark" style="border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#d4f23c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="3"></rect><path d="M11 18.5h2"></path></svg><h3 style="margin: 0; font-size: 18px; line-height: 26px; font-weight: 600">One phone, no kit</h3><p style="margin: 0; font-size: 14px; line-height: 20px; color: #a9b8b2">Film in the app or upload a video you already have.</p></div>
+        <div class="d-glass-dark" style="border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#d4f23c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18c4-10 10-12 16-12"></path><circle cx="20" cy="6" r="1.5"></circle></svg><h3 style="margin: 0; font-size: 18px; line-height: 26px; font-weight: 600">Every shot tracked</h3><p style="margin: 0; font-size: 14px; line-height: 20px; color: #a9b8b2">Shot types, placement and rally length, player by player.</p></div>
+        <div class="d-glass-dark" style="border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#d4f23c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l12 16M6 20L18 4"></path></svg><h3 style="margin: 0; font-size: 18px; line-height: 26px; font-weight: 600">Rallies, no waiting</h3><p style="margin: 0; font-size: 14px; line-height: 20px; color: #a9b8b2">The breaks between points are cut for you.</p></div>
+        <div class="d-glass-dark" style="border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#d4f23c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"></path></svg><h3 style="margin: 0; font-size: 18px; line-height: 26px; font-weight: 600">Highlights to share</h3><p style="margin: 0; font-size: 14px; line-height: 20px; color: #a9b8b2">Your best points, ready to post to your club’s feed.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Phone + steps -->
+  <section style="max-width: 1280px; margin: 0 auto; padding: 0 24px 112px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 96px; align-items: center">
+    <div style="position: relative; justify-self: center; width: 340px; max-width: 100%">
+      <div aria-hidden="true" style="position: absolute; inset: -48px -64px; border-radius: 999px 999px 999px 80px; background: #e3efe9; box-shadow: inset 0 2px 12px rgba(14,107,79,.08)"></div>
+      <div class="e4" style="position: relative; background: linear-gradient(160deg,#22384c,#0b1b2b 40%); border-radius: 52px; padding: 12px; box-shadow: inset 0 1px 0 rgba(250,250,247,.25), inset 0 0 0 1px rgba(250,250,247,.08), 0 4px 8px rgba(11,27,43,.08), 0 12px 24px rgba(11,27,43,0.099), 0 32px 60px rgba(11,27,43,0.143)">
+        <div style="background: #fafaf7; border-radius: 42px; padding: 28px 18px 18px; display: flex; flex-direction: column; gap: 14px; min-height: 640px">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 40px; line-height: 40px">Home</span>
+            <span class="e1" style="position: relative; width: 40px; height: 40px; border-radius: 999px; background: #ffffff; display: inline-flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0b1b2b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16zM10 20h4"></path></svg><span style="position: absolute; right: 6px; top: 6px; width: 9px; height: 9px; border-radius: 999px; background: #ff6b4a"></span></span>
+          </div>
+          <div class="d-green" style="color: #fafaf7; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 6px; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 5px 10px rgba(14,107,79,0.154)">
+            <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em">NEXT PLAY DAY</span>
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; line-height: 30px; font-weight: 600">Friday social</span>
+            <span style="font-size: 14px">7:00 pm · 3 courts · You're in</span>
+          </div>
+          <div class="e2" style="background: #ffffff; border-radius: 20px; padding: 16px; display: flex; justify-content: space-between; align-items: center">
+            <div style="display: flex; flex-direction: column"><span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #4a5a55">YOUR RANK</span><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 44px; line-height: 44px; font-weight: 700">#4</span></div>
+            <span class="d-lime" style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 6px">UP 2</span>
+          </div>
+          <div class="e2" style="background: #ffffff; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 6px">
+            <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #4a5a55">ARENA</span>
+            <span style="font-weight: 600">Mai challenged you to a best of 3</span>
+            <span style="display: flex; gap: 8px; margin-top: 6px"><span class="d-btn" style="font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 999px">Accept</span><span class="d-btn2" style="font-size: 14px; font-weight: 600; padding: 7px 14px; border-radius: 999px">Not this week</span></span>
+          </div>
+          <div class="e2" style="margin-top: auto; display: flex; justify-content: space-around; background: #ffffff; border-radius: 999px; padding: 8px; font-size: 12px; font-weight: 600">
+            <span class="d-btn" style="padding: 8px 14px; border-radius: 999px">HOME</span><span style="padding: 8px 6px; color: #4a5a55">PLAY</span><span style="padding: 8px 6px; color: #4a5a55">VISION</span><span style="padding: 8px 6px; color: #4a5a55">CLUB</span>
+          </div>
+        </div>
+      </div>
+      <div class="d-glass d-hidesm" style="position: absolute; right: -84px; top: 96px; border-radius: 18px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; transform: rotate(3deg)">
+        <span class="d-btn" style="width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>Spot booked
+      </div>
+      <div class="d-glass d-hidesm" style="position: absolute; left: -76px; bottom: 132px; border-radius: 18px; padding: 12px 16px; display: flex; flex-direction: column; transform: rotate(-3deg)">
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #4a5a55">FINAL</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 30px; line-height: 30px; font-variant-numeric: tabular-nums">21–19, you won</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 32px">
+      <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: clamp(52px, 6.5vw, 96px); line-height: 0.92">From “who’s in?” to game on.</h2>
+      <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px">
+        <li class="d-card" style="display: flex; gap: 18px; align-items: center; border-radius: 24px; padding: 16px 20px"><span class="d-btn" style="flex: none; width: 56px; height: 56px; border-radius: 999px 999px 999px 12px; display: inline-flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px">1</span><div><h3 style="margin: 0; font-size: 18px; line-height: 26px; font-weight: 600">Find your people</h3><p style="margin: 2px 0 0; color: #4a5a55">Search clubs by sport, suburb and level.</p></div></li>
+        <li class="d-card" style="display: flex; gap: 18px; align-items: center; border-radius: 24px; padding: 16px 20px"><span class="d-btn-dark" style="flex: none; width: 56px; height: 56px; border-radius: 999px 999px 12px 999px; display: inline-flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px">2</span><div><h3 style="margin: 0; font-size: 18px; line-height: 26px; font-weight: 600">Book a casual session</h3><p style="margin: 2px 0 0; color: #4a5a55">Try it once. Join when it feels like your place.</p></div></li>
+        <li class="d-card" style="display: flex; gap: 18px; align-items: center; border-radius: 24px; padding: 16px 20px"><span class="d-btn" style="flex: none; width: 56px; height: 56px; border-radius: 12px 999px 999px 999px; display: inline-flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px">3</span><div><h3 style="margin: 0; font-size: 18px; line-height: 26px; font-weight: 600">Play, score, cheer</h3><p style="margin: 2px 0 0; color: #4a5a55">Log the score, climb the ladder, send some kudos.</p></div></li>
+      </ol>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px">
+        <a class="d-btn-dark" href="#ios" style="text-decoration: none; font-weight: 600; padding: 12px 20px; border-radius: 14px; min-height: 52px; display: inline-flex; align-items: center">Download on the App Store</a>
+        <a class="d-btn-dark" href="#android" style="text-decoration: none; font-weight: 600; padding: 12px 20px; border-radius: 14px; min-height: 52px; display: inline-flex; align-items: center">Get it on Google Play</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Rankings: podium in literal elevation -->
+  <section id="rankings" style="background: linear-gradient(180deg, #fafaf7 0%, #eef3f0 100%); border-top: 1px solid #e3e7e4; border-bottom: 1px solid #e3e7e4">
+    <div style="max-width: 1280px; margin: 0 auto; padding: 112px 24px; display: flex; flex-direction: column; gap: 56px">
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 24px">
+        <div style="display: flex; flex-direction: column; gap: 16px">
+          <span class="d-lime" style="align-self: flex-start; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; padding: 6px 12px; border-radius: 6px">THIS WEEK'S MOVERS</span>
+          <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: clamp(52px, 6.5vw, 96px); line-height: 0.9">Climb the ladder at your level.</h2>
+        </div>
+        <p style="margin: 0; color: #4a5a55; max-width: 380px">Rankings are per club and per sport, so a beginner's win counts as much as anyone's.</p>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; align-items: end">
+        <div class="d-card" style="border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 10px; min-height: 260px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 64px; line-height: 60px; color: #7b8a85">2</span>
+          <span style="font-weight: 600; font-size: 18px">Aroha T.</span><span style="font-size: 14px; color: #4a5a55">Pickleball · 1,455</span>
+          <span class="d-lime" style="align-self: flex-start; margin-top: auto; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 6px">UP 3</span>
+        </div>
+        <div class="d-green" style="color: #fafaf7; border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 10px; min-height: 340px; box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 4px 8px rgba(11,27,43,.08), 0 12px 24px rgba(14,107,79,0.138), 0 32px 60px rgba(11,27,43,0.11); transform: translateY(-12px)">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 88px; line-height: 80px">1</span>
+          <span style="font-weight: 600; font-size: 20px">Linh N.</span><span style="font-size: 14px">Badminton · 1,482</span>
+          <span style="margin-top: auto; font-size: 14px; display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 999px; background: #ff6b4a"></span>12 kudos this week</span>
+        </div>
+        <div class="d-card" style="border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 10px; min-height: 220px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 64px; line-height: 60px; color: #7b8a85">3</span>
+          <span style="font-weight: 600; font-size: 18px">Sam K.</span><span style="font-size: 14px; color: #4a5a55">Tennis · 1,430</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div class="d-card" style="border-radius: 20px; padding: 14px 18px; display: flex; align-items: center; gap: 14px"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px; color: #7b8a85">4</span><span style="flex: 1; font-weight: 600">Minh P.</span><span style="font-size: 14px; color: #4a5a55; font-variant-numeric: tabular-nums">1,402</span></div>
+          <div class="d-card" style="border-radius: 20px; padding: 14px 18px; display: flex; align-items: center; gap: 14px"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px; color: #7b8a85">5</span><span style="flex: 1; font-weight: 600">Jess W.</span><span style="font-size: 14px; color: #4a5a55; font-variant-numeric: tabular-nums">1,377</span></div>
+          <a href="#ladder" style="font-weight: 600; text-decoration: none; padding: 8px 4px">See the full ladder</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Club finder -->
+  <section id="finder" style="max-width: 1280px; margin: 0 auto; padding: 112px 24px; display: flex; flex-direction: column; gap: 32px">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 24px">
+      <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: clamp(52px, 6.5vw, 96px); line-height: 0.92">Who’s playing tonight?</h2>
+      <p style="margin: 0; color: #4a5a55; max-width: 380px">Pick a sport, pick a night. Try a casual session before you join.</p>
+    </div>
+    <div role="search" class="e3" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; background: #ffffff; border: 1px solid #e3e7e4; border-radius: 32px; padding: 16px">
+      <label style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 300px; font-size: 14px; color: #4a5a55; padding-left: 8px">Suburb or city
+        <input type="text" placeholder="e.g. Christchurch" style="height: 52px; border-radius: 999px; border: 1.5px solid #7b8a85; background: #fafaf7; color: #0b1b2b; padding: 0 22px; font: inherit; font-size: 16px; box-shadow: inset 0 2px 4px rgba(11,27,43,.06)">
+      </label>
+      <a class="d-btn" href="#search" style="text-decoration: none; font-weight: 600; padding: 0 32px; height: 52px; border-radius: 999px; display: inline-flex; align-items: center">Search clubs</a>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px; font-weight: 600">
+      <sc-for list="{{sports}}" as="s" hint-placeholder-count="7">
+        <sc-if value="{{s.on}}" hint-placeholder-val="{{ false }}">
+          <button class="d-btn-dark" type="button" onClick="{{s.pick}}" aria-pressed="true" style="border-radius: 999px; padding: 10px 18px; min-height: 44px; font: inherit; font-weight: 600; cursor: pointer; border: none">{{s.label}}</button>
+        </sc-if>
+        <sc-if value="{{s.off}}" hint-placeholder-val="{{ true }}">
+          <button class="d-btn2" type="button" onClick="{{s.pick}}" aria-pressed="false" style="border-radius: 999px; padding: 10px 18px; min-height: 44px; font: inherit; font-weight: 600; cursor: pointer">{{s.label}}</button>
+        </sc-if>
+      </sc-for>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px">
+      <sc-for list="{{clubs}}" as="c" hint-placeholder-count="3">
+        <div class="d-card" style="border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; background: linear-gradient(180deg,#eef6f2,#e0eee7); color: #0e6b4f; padding: 4px 10px; border-radius: 6px; box-shadow: inset 0 1px 0 #ffffff">{{c.sport}}</span><span style="font-size: 14px; color: #4a5a55">{{c.when}}</span></div>
+          <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 30px; line-height: 32px">{{c.name}}</h3>
+          <p style="margin: 0; font-size: 14px; color: #4a5a55">{{c.meta}}</p>
+          <a class="d-btn" href="#book" style="margin-top: 4px; align-self: flex-start; font-weight: 600; text-decoration: none; padding: 10px 18px; border-radius: 999px; min-height: 44px; display: inline-flex; align-items: center">Book a casual session</a>
+        </div>
+      </sc-for>
+    </div>
+    <sc-if value="{{noClubs}}" hint-placeholder-val="{{ false }}">
+      <p style="margin: 0; padding: 24px; border: 2px dashed #7b8a85; border-radius: 24px; color: #4a5a55; text-align: center">No clubs for that sport yet. Know one? Invite them to Luvallplay.</p>
+    </sc-if>
+  </section>
+
+  <!-- Photos + quote -->
+  <section style="max-width: 1280px; margin: 0 auto; padding: 0 24px 112px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 64px; align-items: center">
+    <div style="position: relative; height: 460px">
+      <div role="img" aria-label="Photo placeholder: mixed doubles mid-rally in a community hall" class="e2" style="position: absolute; left: 0; top: 0; width: 70%; height: 62%; border-radius: 28px 28px 28px 999px; background: repeating-linear-gradient(135deg, #e3e7e4 0 12px, #eef1ee 12px 24px); display: flex; align-items: flex-start; justify-content: flex-end; padding: 20px; font-size: 13px; color: #4a5a55; text-align: right">Photo: mixed doubles mid-rally</div>
+      <div role="img" aria-label="Photo placeholder: pickleball players laughing between games" class="e3" style="position: absolute; right: 0; top: 18%; width: 52%; height: 52%; border-radius: 999px 999px 28px 28px; background: repeating-linear-gradient(135deg, #e3e7e4 0 12px, #eef1ee 12px 24px); border: 6px solid #fafaf7; display: flex; align-items: flex-end; padding: 18px; font-size: 13px; color: #4a5a55">Photo: laughing between games</div>
+      <div role="img" aria-label="Photo placeholder: futsal five-a-side under hall lights" class="e4" style="position: absolute; left: 14%; bottom: 0; width: 50%; height: 44%; border-radius: 28px 999px 28px 28px; background: repeating-linear-gradient(135deg, #e3e7e4 0 12px, #eef1ee 12px 24px); border: 6px solid #fafaf7; display: flex; align-items: flex-end; padding: 18px; font-size: 13px; color: #4a5a55">Photo: futsal under hall lights</div>
+    </div>
+    <figure style="margin: 0; display: flex; flex-direction: column; gap: 24px">
+      <span aria-hidden="true" style="width: 72px; height: 72px; border-radius: 999px 999px 999px 12px; background: linear-gradient(180deg,#ff8466,#ff6b4a); color: #0b1b2b; display: inline-flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 72px; line-height: 1; padding-top: 24px; box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 6px 12px rgba(255,107,74,0.165)">“</span>
+      <blockquote style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: clamp(34px, 4vw, 52px); line-height: 1.05">[Quote from a founding club organiser about what changed for their club.]</blockquote>
+      <figcaption style="font-size: 14px; color: #4a5a55">[Name], [Role] · [Club name]</figcaption>
+    </figure>
+  </section>
+
+  <!-- For clubs -->
+  <section id="clubs" style="padding: 0 24px 112px">
+    <div class="d-green" style="max-width: 1280px; margin: 0 auto; position: relative; overflow: hidden; color: #fafaf7; border-radius: 40px; padding: clamp(32px, 6vw, 80px); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 48px; align-items: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 12px 24px rgba(14,107,79,0.121), 0 32px 60px rgba(11,27,43,0.11)">
+      <div aria-hidden="true" style="position: absolute; inset: 28px; border: 2px solid rgba(250,250,247,0.2); border-radius: 16px"></div>
+      <div aria-hidden="true" style="position: absolute; left: 50%; top: 28px; bottom: 28px; border-left: 2px solid rgba(250,250,247,0.2)"></div>
+      <div style="position: relative; display: flex; flex-direction: column; gap: 24px">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em">FOR CLUB ORGANISERS</span>
+        <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: clamp(52px, 6.5vw, 96px); line-height: 0.9">Bring your club. Keep your colours.</h2>
+        <p style="margin: 0; font-size: 18px; line-height: 28px; max-width: 520px">Your club's name, logo and words lead inside the app. We take care of sign-ups, fees and the ladder, in English and Vietnamese.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px">
+          <a class="d-btn2" href="#start" style="text-decoration: none; font-weight: 600; padding: 16px 28px; border-radius: 999px; min-height: 56px; display: inline-flex; align-items: center; border: none">Start your club</a>
+          <a href="#demo" style="text-decoration: none; color: #fafaf7; font-weight: 600; padding: 16px 28px; border-radius: 999px; min-height: 56px; display: inline-flex; align-items: center; border: 1.5px solid rgba(250,250,247,.7); box-shadow: inset 0 1px 0 rgba(250,250,247,.15)">Book a walkthrough</a>
+        </div>
+      </div>
+      <div style="position: relative; display: flex; flex-direction: column; gap: 16px">
+        <div class="d-glass" style="color: #0b1b2b; border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span class="d-btn-dark" style="width: 48px; height: 48px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 20px">TW</span>
+            <div style="display: flex; flex-direction: column"><span style="font-weight: 600">Three Wolves Badminton Club</span><span style="font-size: 14px; color: #4a5a55">Christchurch · Social play twice a week</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+            <div class="e1" style="background: #ffffff; border-radius: 16px; padding: 14px"><div style="font-family: 'Barlow Condensed', sans-serif; font-size: 40px; line-height: 40px; font-weight: 700">[#]</div><div style="font-size: 13px; color: #4a5a55">Members</div></div>
+            <div class="e1" style="background: #ffffff; border-radius: 16px; padding: 14px"><div style="font-family: 'Barlow Condensed', sans-serif; font-size: 40px; line-height: 40px; font-weight: 700">2</div><div style="font-size: 13px; color: #4a5a55">Sessions a week</div></div>
+          </div>
+          <div style="font-size: 13px; color: #4a5a55; display: flex; align-items: center; gap: 8px; border-top: 1px solid #e3e7e4; padding-top: 12px"><img src="/_blob/8be4a8ea38bcc64bbdbd51e9db0b53dc" alt="" style="height: 18px; width: auto">on Luvallplay</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+          <div class="d-navy" style="border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: inset 0 1px 0 rgba(250,250,247,.14), 0 5px 10px rgba(11,27,43,0.138)"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 40px; line-height: 40px">[#]</span><span style="font-size: 13px; color: #a9b8b2">Clubs playing</span></div>
+          <div class="d-navy" style="border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: inset 0 1px 0 rgba(250,250,247,.14), 0 5px 10px rgba(11,27,43,0.138)"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 40px; line-height: 40px">8</span><span style="font-size: 13px; color: #a9b8b2">Sports and counting</span></div>
+          <div class="d-navy" style="border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: inset 0 1px 0 rgba(250,250,247,.14), 0 5px 10px rgba(11,27,43,0.138)"><span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 40px; line-height: 40px">2</span><span style="font-size: 13px; color: #a9b8b2">Languages</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" style="max-width: 1280px; margin: 0 auto; padding: 0 24px 112px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 20px; align-items: center">
+    <div class="d-card" style="border-radius: 32px; padding: 40px; display: flex; flex-direction: column; gap: 14px">
+      <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #4a5a55">FOR PLAYERS</span>
+      <div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 72px; line-height: 72px">Free</div>
+      <p style="margin: 0; color: #4a5a55">Find clubs, book sessions, track your games. Your club sets its own fees.</p>
+      <a class="d-btn-dark" href="#get" style="align-self: flex-start; margin-top: 8px; text-decoration: none; font-weight: 600; padding: 14px 24px; border-radius: 999px; min-height: 52px; display: inline-flex; align-items: center">Get the app</a>
+    </div>
+    <div class="d-green" style="color: #fafaf7; border-radius: 32px; padding: 48px 40px; display: flex; flex-direction: column; gap: 14px; position: relative; box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 4px 8px rgba(11,27,43,.08), 0 12px 24px rgba(14,107,79,0.154), 0 32px 60px rgba(11,27,43,0.121)">
+      <span class="d-lime" style="position: absolute; right: 28px; top: -16px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; padding: 8px 14px; border-radius: 999px">EVERYTHING INCLUDED</span>
+      <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em">FOR CLUBS</span>
+      <div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 72px; line-height: 72px">[YOUR PRICE]<span style="font-size: 26px"> / month</span></div>
+      <p style="margin: 0">Every tool for your club, with members and organisers included.</p>
+      <a class="d-btn2" href="#start" style="align-self: flex-start; margin-top: 8px; text-decoration: none; font-weight: 600; padding: 14px 24px; border-radius: 999px; min-height: 52px; display: inline-flex; align-items: center; border: none">Start your club</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="d-navy d-dark" style="color: #a9b8b2">
+    <div style="max-width: 1280px; margin: 0 auto; padding: 72px 24px 40px; display: flex; flex-direction: column; gap: 40px">
+      <div aria-hidden="true" style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: clamp(72px, 14vw, 200px); line-height: 0.85; color: #fafaf7">Love all, <span style="color: #d4f23c">play.</span></div>
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; align-items: center; font-size: 14px; border-top: 1px solid #22384c; padding-top: 28px">
+        <img src="/_blob/05c2b6c09463248ae562489ef2a24350" alt="Luvallplay" style="height: 32px; width: auto">
+        <nav aria-label="Footer" style="display: flex; flex-wrap: wrap; gap: 20px">
+          <a href="#about" style="color: #a9b8b2">About</a><a href="#help" style="color: #a9b8b2">Help</a><a href="#privacy" style="color: #a9b8b2">Privacy</a><a href="#terms" style="color: #a9b8b2">Terms</a>
+        </nav>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":7800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { a: 0, b: 0, last: '', sport: 'All sports', hold: 0 };
+  }
+  componentDidMount() {
+    var reduce = false;
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    if (reduce) { this.setState({ a: 21, b: 19 }); return; }
+    this.timer = setInterval(() => {
+      var s = this.state;
+      if (s.hold > 0) {
+        if (s.hold === 1) { this.setState({ a: 0, b: 0, last: '', hold: 0 }); }
+        else { this.setState({ hold: s.hold - 1 }); }
+        return;
+      }
+      var youWin = Math.random() < 0.55;
+      var a = s.a + (youWin ? 1 : 0);
+      var b = s.b + (youWin ? 0 : 1);
+      var done = (a >= 21 || b >= 21) && Math.abs(a - b) >= 2;
+      this.setState({ a: a, b: b, last: youWin ? 'a' : 'b', hold: done ? 4 : 0 });
+    }, 1100);
+  }
+  componentWillUnmount() { if (this.timer) clearInterval(this.timer); }
+  renderVals() {
+    var s = this.state;
+    var list = ['All sports', 'Badminton', 'Pickleball', 'Tennis', 'Futsal', 'Netball', 'Volleyball'];
+    var sports = list.map((l) => {
+      var on = s.sport === l;
+      return { label: l, on: on, off: !on, pick: () => this.setState({ sport: l }) };
+    });
+    var all = [
+      { sport: 'BADMINTON', key: 'Badminton', when: 'Tonight 7:00 pm', name: 'Three Wolves Badminton Club', meta: 'Social play · all levels · 18+' },
+      { sport: 'PICKLEBALL', key: 'Pickleball', when: 'Sat 9:00 am', name: '[Club name]', meta: 'Open play · beginners welcome' },
+      { sport: 'FUTSAL', key: 'Futsal', when: 'Wed 8:00 pm', name: '[Club name]', meta: 'Mixed five-a-side · intermediate' },
+      { sport: 'TENNIS', key: 'Tennis', when: 'Sun 4:00 pm', name: '[Club name]', meta: 'Ladder night · all levels' }
+    ];
+    var clubs = s.sport === 'All sports' ? all.slice(0, 3) : all.filter((c) => c.key === s.sport);
+    var done = s.hold > 0;
+    var note = done ? (s.a > s.b ? 'game, you won' : 'game to them') : (s.a === 0 && s.b === 0 ? 'love all, play' : (s.last === 'a' ? 'your point' : 'their point'));
+    return {
+      scoreA: s.a, scoreB: s.b,
+      tickA: s.last === 'a' ? 'd-tick' : '',
+      tickB: s.last === 'b' ? 'd-tick' : '',
+      rallyNote: note,
+      sports: sports, clubs: clubs, noClubs: clubs.length === 0
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -50,6 +50,10 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   ["/api/auth", "account"],
   ["/api/profile", "account"],
   ["/api/admin/handoff", "account"],
+  // The players' app API (packages/api). Each endpoint names its own module
+  // in the contract; the wrapper (lib/app-api.ts) answers 404 when it is off.
+  ["/api/v1/app", "core"],
+  ["/api/v1/app/auth", "account"],
   ["/api/sessions", "core"],
   ["/api/spots", "core"],
   ["/api/waitlist", "core"],

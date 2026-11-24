@@ -9,7 +9,8 @@
 import { DEFAULT_SCHEME, schemeTheme, themeCss } from "./semantic.ts";
 
 export { luvallplay, type BrandColor, type BrandTheme } from "./luvallplay.ts";
-export { threeWolves, threeWolvesCssVars } from "./three-wolves.ts";
+export { threeWolves, threeWolvesCssVars, threeWolvesTheme } from "./three-wolves.ts";
+export { resolveClubTheme, type ResolvedClubTheme } from "./club-theme.ts";
 export {
   COLOR_SCHEMES,
   DEFAULT_SCHEME,

@@ -11,8 +11,10 @@ handlers (build plan §3.2). Typed Drizzle queries on `orm()` from
 | `players.ts` | `players` (app-install flags, leaderboard opt-out, picker list) | `/api/profile/event`, `/api/profile/leaderboard-optout`, `/api/wolf-vision/players` |
 | `waitlist.ts` | `waitlist` | `/api/waitlist` |
 | `health.ts` | none (round trip) | `/api/health/db` |
+| `clubs.ts` | `tenants`, `club_members` (a person's clubs; a club's look and payment mode) | `/api/v1/app/clubs`, `/api/v1/app/clubs/[club]/config` |
+| `sessions.ts` | `player_sessions` (slide the expiry; read it) | `lib/app-api.ts`, `/api/v1/app/auth/*` |
 
-Each function is checked against the SQL it replaced by the golden master
+The first five replaced SQL that lived in routes; each of those is checked against the SQL it replaced by the golden master
 tests (`tests/golden-master.test.ts`, "routes → repositories"). With the
 monorepo (Phase 2 PR 7) and modules (§6.2) these move to
 `packages/modules/<module>/server/repo.ts`.

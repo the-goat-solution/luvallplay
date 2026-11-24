@@ -1076,6 +1076,37 @@ Each is reviewed with you before build.
 
 ---
 
+### 7.5 Phase 6 delivery log and plan changes
+
+**Stage A, the public website (24 Nov 2026).** Built on branch `claude/luvallplay-phase-6`; the runbook is `docs/plans/phase-6-runbook.md`.
+
+Plan changes (they supersede §7.4 where they differ):
+
+| Change | Why |
+|---|---|
+| **The website is its own app, `apps/site`, and its own Vercel project (`luvallplay-site`)**, not a host inside `apps/web` | A marketing change can't touch Three Wolves, and the reverse. The product parts (wizard, club sites on `{club}.luvallplay.com`, custom domains) stay in `apps/web` (Stage B); the wildcard goes to the platform project, the apex to this one |
+| **luvallplay.com is the primary domain** (not .org); .org and .nz redirect to it; **luvallplay.vn is the Vietnamese home** | Owner's decision. All four are attached to the Vercel project and wait only for DNS |
+| **Design D ("Rally")** is the approved design (`docs/design/website-d`), so its page order replaces the section table in §7.4, and its layered cards, glass header and soft shadows replace the "flat, no glass" guardrail in §7.4.1 | Owner chose design D |
+| **Sanity: a separate project and Studio (`apps/site-studio`)**, with the content also **seeded in the repo** | The site is complete before Sanity is connected and stays up if Sanity is unreachable. The seed is what gets pushed to Sanity |
+| **The site has its own small Postgres** for form submissions (`pg`, three tables, created at build) | Nothing about the public site reads or writes the Three Wolves database |
+| **Only true facts.** Every sample person, quote, ranking and number in the design is replaced by a real fact, an illustration labelled as one, or a slot that stays empty until real content exists | Owner's rule. `tests/completeness.test.ts` fails on design placeholders, price numbers and missing translations |
+| **Nothing loops:** the hero score plays one demo game and rests (with a replay button); the ticker glides across twice and rests, and says "On Luvallplay", not "Live now" | Gate R's motion rules, with design D's two animations kept |
+| **Two launch switches in the Studio:** `launchMode` (waitlist or wizard and stores) and "search indexing" (noindex until go-live) | Both flip without a deploy |
+| **Home-page JavaScript is about 135 KB gzipped, over the 80 KB target** | Nearly all of it is the Next.js and React runtime; the site's own interactive code (score demo, finder, theme switch) is a few KB. The pages are pre-rendered and work without JavaScript, Lighthouse performance is 98 to 99 and LCP about 1 s on the throttled mobile profile. Meeting 80 KB would mean leaving Next.js for this app; left as an open decision |
+
+Gate R results (local production build, CI job "Website"):
+
+- 17 unit tests and 10 end-to-end checks pass: 58 pages crawled, every link and anchor resolves, each page has a twin in the other language, title, description, canonical, hreflang, Open Graph and exactly one h1; axe finds no violations on 12 page types in both languages, light and dark, phone and desktop; no sideways scroll at 320, 375, 600, 840 and 1200 px; no animation under reduced motion, none infinite, complete without JavaScript; the only cookie is `lang`.
+- Forms: honeypot, consent recorded with its wording, double opt-in (the emailed link shows a button, so mail scanners can't confirm), duplicates update one row, "Remove my details", rate limit with hashed buckets, nothing sent outside production.
+- Lighthouse (mobile, throttled): performance 98 (en) and 99 (vi), best practices 100, accessibility 100 after the fix below, SEO 69 only because the site is deliberately `noindex` before go-live.
+- Found and fixed by the checks: a menu link with a stray slash; contrast lost while a card was fading in on scroll (the fade is gone, the rise stays); heading order on two pages; the 404 page losing its language.
+
+Still open for Stage A: the Sanity organisation (owner is creating one), the forms database (owner creates it from Vercel, runbook §4), Resend DNS, DNS for the four domains, company details for Privacy and Terms, and a Vietnamese speaker's review of the Vietnamese copy. An ignored-build step for the Three Wolves project (so website-only changes don't rebuild it) is written (`scripts/vercel-ignore.sh web`) but not switched on: it changes how Three Wolves deploys, so it waits for the owner's go-ahead.
+
+**Stage B** (setup wizard, club websites and editor, Admin → Modules, Look & feel, Payments, Stripe Connect in test mode, the readiness-gate lock) has not started: it needs Phase 3 finished (§6.10).
+
+---
+
 ## 8. Phase 7: global modules (opt-in per club)
 
 Build them in this order, each one releasable on its own. **Decision Z: social and marketplace are gated.** Items 1 and 2 are built first. Items 3 and 4 start only when the **gate** passes:

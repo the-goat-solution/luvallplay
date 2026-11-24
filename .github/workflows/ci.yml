@@ -58,6 +58,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Vercel ignored-build-step rules (preview policy)
+        run: bash scripts/vercel-ignore.test.sh
       - name: Types
         run: pnpm --filter web typecheck
       - name: Types (shared packages)

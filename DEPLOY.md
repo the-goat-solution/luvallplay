@@ -46,3 +46,7 @@ npm run db:migrate
 - Click next Friday on calendar → left card updates (view-only if within 14 days)
 - Book a session 14+ days out with test card `4242 4242 4242 4242`
 - Join Monthly / Quarterly subscriptions
+
+## Previews
+
+Vercel builds a preview only when asked: put `[preview]` in the first line of a commit message (or `[preview web]`, `[preview site]`, `[preview app]` for one project), or use a branch named `preview/...`. Other pushes are skipped. Details and the other ways to get a preview: `docs/plans/phase-4-runbook.md` §1.

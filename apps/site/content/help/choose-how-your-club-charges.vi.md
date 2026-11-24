@@ -4,7 +4,7 @@ summary: "Chơi miễn phí, tiền mặt hoặc chuyển khoản, hay thanh to�
 audience: organisers
 order: 4
 updated: 2026-11-24
-features: paymentModes
+features: fees
 ---
 
 ## Ba cách lo chuyện tiền nong

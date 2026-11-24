@@ -65,10 +65,10 @@ export const clubs: Club[] = [
 export const home: HomePage = {
   _id: "homePage",
   _type: "homePage",
-  seoTitle: l("Luvallplay: the app for sports clubs and their players", "Luvallplay: ứng dụng cho câu lạc bộ thể thao và người chơi"),
+  seoTitle: l("Luvallplay: run your sports club in one app", "Luvallplay: quản lý câu lạc bộ thể thao trong một ứng dụng"),
   seoDescription: l(
-    "Sessions, sign-ups, memberships, challenges and rankings for clubs that play regularly. Started with badminton. Free for players, free for founding clubs.",
-    "Lịch chơi, đăng ký, hội viên, thách đấu và bảng xếp hạng cho các câu lạc bộ chơi đều đặn. Bắt đầu từ cầu lông. Miễn phí cho người chơi và cho các câu lạc bộ sáng lập.",
+    "Sign-ups, waitlists, memberships and fees for clubs that play every week, in your club’s own colours. Free for founding clubs and for players.",
+    "Đăng ký, danh sách chờ, hội viên và thu phí cho các câu lạc bộ chơi hằng tuần, mang màu sắc riêng của câu lạc bộ. Miễn phí cho câu lạc bộ sáng lập và người chơi.",
   ),
   ticker: {
     label: l("On Luvallplay", "Trên Luvallplay"),
@@ -80,15 +80,17 @@ export const home: HomePage = {
     ],
   },
   hero: {
-    badge: l("Meet Vision: your game, on film, in numbers", "Làm quen với Vision: trận đấu của bạn qua video và con số"),
-    title: l("Your club’s favourite night of the", "Buổi tối cả câu lạc bộ mong nhất trong"),
-    titleAccent: l("week.", "tuần."),
+    badge: l("Founding clubs use Luvallplay free", "Câu lạc bộ sáng lập dùng Luvallplay miễn phí"),
+    title: l("Less admin. More", "Bớt việc sổ sách. Thêm giờ"),
+    titleAccent: l("play.", "ra sân."),
     lead: l(
-      "Sessions, sign-ups, ladders and your people, in one friendly app. Everyone starts at 0–0.",
-      "Lịch chơi, đăng ký, bảng xếp hạng và hội bạn chơi cùng, gói gọn trong một ứng dụng thân thiện. Ai cũng bắt đầu từ 0–0.",
+      "Sign-ups, waitlists, memberships and fees for clubs that play every week. One place to run it all, in your club’s own name and colours.",
+      "Đăng ký, danh sách chờ, hội viên và thu phí cho các câu lạc bộ chơi hằng tuần. Một nơi để lo mọi việc, mang tên và màu sắc của chính câu lạc bộ bạn.",
     ),
-    primaryCta: l("Find a club near you", "Tìm câu lạc bộ gần bạn"),
-    secondaryCta: l("Bring your club", "Đưa câu lạc bộ của bạn lên"),
+    primaryCta: l("Start your club", "Mở câu lạc bộ của bạn"),
+    secondaryCta: l("Book a walkthrough", "Hẹn buổi giới thiệu"),
+    playerLine: l("Looking for a game?", "Bạn đang tìm chỗ chơi?"),
+    playerCta: l("Find a club near you", "Tìm câu lạc bộ gần bạn"),
     photos: [
       { _key: "p1", fallbackAlt: l("Illustration: a shuttle in flight", "Minh hoạ: quả cầu lông đang bay") },
       { _key: "p2", fallbackAlt: l("Illustration: a paddle and ball", "Minh hoạ: vợt và bóng") },
@@ -97,34 +99,86 @@ export const home: HomePage = {
     ],
     scoreLabel: l("Demo game", "Trận mẫu"),
     scoreCaption: l("You and a partner", "Bạn và đồng đội"),
-    nextLabel: l("Next play day", "Buổi chơi tới"),
-    nextTitle: l("Friday social", "Giao lưu thứ Sáu"),
-    nextMeta: l("Evening · You’re in", "Buổi tối · Bạn đã có chỗ"),
-    kudos: l("A clubmate sent you kudos", "Một bạn chơi vừa gửi lời khen"),
+    nextLabel: l("Friday social", "Giao lưu thứ Sáu"),
+    nextTitle: l("Full", "Đã đủ người"),
+    nextMeta: l("The waitlist moves up on its own", "Danh sách chờ tự đôn lên"),
+    paidChip: l("Payment recorded", "Đã ghi nhận thanh toán"),
   },
   sports: {
     intro: l("Started with badminton. Open to every club that plays regularly.", "Bắt đầu từ cầu lông. Chào đón mọi câu lạc bộ chơi đều đặn."),
   },
   features: {
-    title: l("Everything in your kit bag.", "Đủ đồ trong túi của bạn."),
+    title: l("Built for the people who run the club.", "Làm ra cho những người điều hành câu lạc bộ."),
     lead: l(
-      "One app, zero spreadsheets. Your club keeps its own colours and words.",
-      "Một ứng dụng, không bảng tính. Câu lạc bộ giữ nguyên màu sắc và cách gọi riêng.",
+      "Fewer spreadsheets, fewer reminders in the group chat, less chasing payments. Switch on what your club needs.",
+      "Bớt bảng tính, bớt nhắc nhở trong nhóm chat, bớt đi đòi tiền. Bật đúng những gì câu lạc bộ cần.",
     ),
     items: [
-      { key: "sessions", title: l("Sessions and sign-ups", "Lịch chơi và đăng ký"), body: l("Grab a spot in two taps. Waitlists sort themselves out.", "Giữ chỗ chỉ với hai lần chạm. Danh sách chờ tự động đôn lên.") },
-      { key: "rankings", title: l("Rankings", "Xếp hạng"), body: l("A fair ladder for every level, updated after each game.", "Bảng xếp hạng công bằng cho mọi trình độ, cập nhật sau mỗi trận.") },
-      { key: "challenges", title: l("Challenges", "Thách đấu"), body: l("Post one in the Arena and see who’s up for it.", "Đăng một lời thách đấu trong Arena và xem ai nhận lời.") },
-      { key: "memberships", title: l("Memberships", "Hội viên"), body: l("Fees paid, renewals reminded. Clubs that play for free never see a price.", "Phí đã đóng, gia hạn được nhắc. Câu lạc bộ chơi miễn phí thì không thấy giá nào cả.") },
-      { key: "finder", title: l("Club finder", "Tìm câu lạc bộ"), body: l("Clubs on Luvallplay, by sport and city. More join as we open up.", "Các câu lạc bộ trên Luvallplay theo môn và thành phố. Sẽ có thêm khi chúng tôi mở rộng.") },
-      { key: "social", title: l("Social and kit swap", "Kết nối và chợ đồ"), body: l("Kudos, follows, and rackets that find new homes.", "Lời khen, theo dõi, và những cây vợt tìm được chủ mới.") },
+      {
+        key: "sessions",
+        status: "live",
+        title: l("Sessions that fill themselves", "Buổi chơi tự kín chỗ"),
+        body: l(
+          "Set the spots once. Members sign up, the waitlist moves up when someone can’t make it, and you know who’s coming.",
+          "Đặt số chỗ một lần. Hội viên tự đăng ký, danh sách chờ tự đôn lên khi có người báo bận, và bạn biết ai sẽ đến.",
+        ),
+      },
+      {
+        key: "fees",
+        status: "live",
+        title: l("Fees, your way", "Thu phí theo cách của bạn"),
+        body: l(
+          "Free play, cash or bank transfer, or online payments to your club’s own Stripe account. You can change it later.",
+          "Chơi miễn phí, tiền mặt hoặc chuyển khoản, hay thanh toán trực tuyến vào tài khoản Stripe riêng của câu lạc bộ. Sau này vẫn đổi được.",
+        ),
+      },
+      {
+        key: "memberships",
+        status: "live",
+        title: l("Memberships, no chasing", "Hội viên, không phải đi nhắc"),
+        body: l(
+          "Members join and renew in the app. Renewals are reminded for you, and you see who has paid at a glance.",
+          "Hội viên tham gia và gia hạn ngay trong ứng dụng. Việc gia hạn được nhắc thay bạn, và bạn biết ngay ai đã đóng.",
+        ),
+      },
+      {
+        key: "brand",
+        status: "live",
+        title: l("Your club’s name, not ours", "Tên câu lạc bộ, không phải tên chúng tôi"),
+        body: l(
+          "Your name, logo and words lead. Pick a tested colour scheme or bring your own, checked for contrast in light and dark.",
+          "Tên, logo và cách gọi của bạn luôn đứng trước. Chọn một bộ màu đã kiểm thử hoặc dùng màu riêng, được kiểm tra độ tương phản cả giao diện sáng lẫn tối.",
+        ),
+      },
+      {
+        key: "admin",
+        status: "live",
+        title: l("One admin area", "Một khu quản trị"),
+        body: l(
+          "Sessions, members, payments and messages for everyone who helps run the club, in English and Vietnamese.",
+          "Lịch chơi, hội viên, thanh toán và tin nhắn cho mọi người cùng điều hành câu lạc bộ, bằng tiếng Việt và tiếng Anh.",
+        ),
+      },
+      {
+        key: "modules",
+        status: "live",
+        title: l("Add what you need", "Thêm thứ bạn cần"),
+        body: l(
+          "Sessions, members and messages are always on. Switch on challenges, rankings or a shop when you’re ready.",
+          "Lịch chơi, hội viên và tin nhắn luôn có sẵn. Bật thách đấu, xếp hạng hay cửa hàng khi bạn sẵn sàng.",
+        ),
+      },
     ],
     sessionRows: [
-      { _key: "r1", name: l("Wed · Social play", "Thứ Tư · Chơi giao lưu"), meta: l("Evening · spots open", "Buổi tối · còn chỗ"), action: l("Book", "Giữ chỗ") },
-      { _key: "r2", name: l("Fri · Social play", "Thứ Sáu · Chơi giao lưu"), meta: l("Evening · full", "Buổi tối · đã đầy"), action: l("Waitlist", "Vào danh sách chờ") },
+      { _key: "r1", name: l("Wed · Social play", "Thứ Tư · Chơi giao lưu"), meta: l("Evening · spots open", "Buổi tối · còn chỗ"), action: l("Open", "Còn chỗ") },
+      { _key: "r2", name: l("Fri · Social play", "Thứ Sáu · Chơi giao lưu"), meta: l("Evening · waitlist on", "Buổi tối · có danh sách chờ"), action: l("Full", "Đã đủ") },
     ],
-    finderCta: l("Find a club", "Tìm câu lạc bộ"),
-    mapChip: l("A club near you", "Một câu lạc bộ gần bạn"),
+    feeModes: [
+      l("Free play", "Chơi miễn phí"),
+      l("Cash or bank transfer", "Tiền mặt hoặc chuyển khoản"),
+      l("Online, through Stripe", "Trực tuyến qua Stripe"),
+    ],
+    schemesCaption: l("12 tested colour schemes", "12 bộ màu đã kiểm thử"),
   },
   vision: {
     eyebrow: l("Luvallplay Vision", "Luvallplay Vision"),
@@ -135,6 +189,10 @@ export const home: HomePage = {
     ),
     primaryCta: l("Read about Vision", "Tìm hiểu Vision"),
     secondaryCta: l("See how it works", "Xem cách hoạt động"),
+    note: l(
+      "Vision works for badminton today, at the first club on Luvallplay. More sports and clubs are coming soon.",
+      "Hiện Vision dùng cho cầu lông, tại câu lạc bộ đầu tiên trên Luvallplay. Các môn và câu lạc bộ khác sắp có.",
+    ),
     figureCaption: l("Illustration: a sample analysis, not a real game", "Minh hoạ: bản phân tích mẫu, không phải trận đấu thật"),
     benefits: [
       { _key: "b1", title: l("One phone, no kit", "Một chiếc điện thoại, không cần thiết bị"), body: l("Film in the app or upload a video you already have.", "Quay ngay trong ứng dụng hoặc tải lên video bạn đã có.") },
@@ -144,12 +202,21 @@ export const home: HomePage = {
     ],
   },
   how: {
-    title: l("From “who’s in?” to game on.", "Từ “ai đi không?” đến lúc vào sân."),
+    eyebrow: l("For your members", "Cho hội viên của bạn"),
+    title: l("An app members open every week.", "Ứng dụng hội viên mở mỗi tuần."),
+    lead: l(
+      "Players use Luvallplay free. They see the next game, book a spot and follow their ranking, so you answer fewer messages.",
+      "Người chơi dùng Luvallplay miễn phí. Họ xem buổi chơi tới, giữ chỗ và theo dõi thứ hạng, nên bạn bớt phải trả lời tin nhắn.",
+    ),
     steps: [
-      { _key: "s1", title: l("Find your people", "Tìm đúng hội của bạn"), body: l("Search clubs by sport and city.", "Tìm câu lạc bộ theo môn và thành phố.") },
-      { _key: "s2", title: l("Book a casual session", "Đặt một buổi chơi thử"), body: l("Try it once. Join when it feels like your place.", "Chơi thử một buổi. Thấy hợp thì tham gia.") },
-      { _key: "s3", title: l("Play, score, cheer", "Chơi, ghi điểm, cổ vũ"), body: l("Log the score, climb the ladder, cheer each other on.", "Ghi lại tỉ số, leo bảng xếp hạng, cổ vũ nhau.") },
+      { _key: "s1", title: l("Book in two taps", "Giữ chỗ với hai lần chạm"), body: l("Grab a spot, join the waitlist or say they can’t make it.", "Giữ chỗ, vào danh sách chờ hoặc báo không đến được.") },
+      { _key: "s2", title: l("Play, score, climb", "Chơi, ghi điểm, leo hạng"), body: l("A ladder per club and per sport, and challenges in the Arena.", "Bảng xếp hạng theo từng câu lạc bộ và từng môn, cùng thách đấu trong Arena.") },
+      { _key: "s3", title: l("Bring new players in", "Đón thêm người chơi mới"), body: l("Your club can appear in the club finder, so new players can try a casual session.", "Câu lạc bộ có thể xuất hiện trong mục tìm câu lạc bộ, để người mới chơi thử một buổi.") },
     ],
+    storeNote: l(
+      "The store apps are coming soon. Today Luvallplay runs in your phone’s browser.",
+      "Ứng dụng trên các kho sắp ra mắt. Hiện Luvallplay chạy ngay trên trình duyệt điện thoại.",
+    ),
   },
   rankings: {
     eyebrow: l("Rankings", "Xếp hạng"),
@@ -165,8 +232,8 @@ export const home: HomePage = {
     cta: l("How the ladder works", "Bảng xếp hạng hoạt động thế nào"),
   },
   finder: {
-    title: l("Who’s playing this week?", "Tuần này ai ra sân?"),
-    lead: l("Pick a sport, type your city, try a session first. Our first club is here.", "Chọn môn, nhập thành phố, chơi thử một buổi trước. Câu lạc bộ đầu tiên của chúng tôi đang ở đây."),
+    title: l("Looking for a game?", "Bạn đang tìm chỗ chơi?"),
+    lead: l("Pick a sport, type your city and try a casual session first.", "Chọn môn, nhập thành phố và chơi thử một buổi trước."),
   },
   story: {
     title: l(
@@ -180,18 +247,18 @@ export const home: HomePage = {
     caption: l("Illustration. Real photos arrive with our founding clubs.", "Hình minh hoạ. Ảnh thật sẽ có cùng các câu lạc bộ sáng lập."),
   },
   clubs: {
-    eyebrow: l("For club organisers", "Dành cho người tổ chức"),
-    title: l("Bring your club. Keep your colours.", "Đưa câu lạc bộ lên. Giữ nguyên màu áo."),
+    eyebrow: l("Founding clubs", "Câu lạc bộ sáng lập"),
+    title: l("Start free as a founding club.", "Bắt đầu miễn phí cùng các câu lạc bộ sáng lập."),
     lead: l(
-      "Your name, logo and words lead. We handle sign-ups, fees and the ladder, in English and Vietnamese.",
-      "Tên, logo và cách gọi của bạn luôn đứng trước. Chúng tôi lo đăng ký, thu phí và bảng xếp hạng, song ngữ Việt – Anh.",
+      "We’re inviting clubs from the waitlist in small groups, starting in New Zealand. Founding clubs get every tool at no charge, and notice before anything changes.",
+      "Chúng tôi mời các câu lạc bộ từ danh sách chờ theo từng nhóm nhỏ, bắt đầu ở New Zealand. Câu lạc bộ sáng lập có đủ mọi công cụ mà không mất phí, và được báo trước khi có bất kỳ thay đổi nào.",
     ),
     primaryCta: l("Start your club", "Mở câu lạc bộ của bạn"),
     secondaryCta: l("Book a walkthrough", "Hẹn buổi giới thiệu"),
-    stats: [
-      { _key: "c1", value: l("1", "1"), label: l("Sport live, more coming", "Môn đã có, sắp thêm") },
-      { _key: "c2", value: l("12", "12"), label: l("Club colour schemes", "Bộ màu cho câu lạc bộ") },
-      { _key: "c3", value: l("2", "2"), label: l("Languages", "Ngôn ngữ") },
+    steps: [
+      { _key: "c1", title: l("Join the waitlist", "Vào danh sách chờ"), body: l("Tell us your sport, your city and how your club plays.", "Cho chúng tôi biết môn, thành phố và cách câu lạc bộ đang chơi.") },
+      { _key: "c2", title: l("Set up together", "Cùng thiết lập"), body: l("Your colours, your sessions, and members moved across from spreadsheets and chats.", "Màu sắc, lịch chơi, và hội viên được chuyển sang từ bảng tính và nhóm chat.") },
+      { _key: "c3", title: l("Run your first session", "Chạy buổi chơi đầu tiên"), body: l("Members sign up in the app. You watch the list fill.", "Hội viên đăng ký trong ứng dụng. Bạn chỉ việc xem danh sách kín dần.") },
     ],
   },
   pricing: {

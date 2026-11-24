@@ -25,11 +25,11 @@ export function Shell({ lang, path, content, children, mainId = "main" }: Props)
   const { ticker } = content.home;
   const getApp = ctaTarget("getApp", lang, content.settings);
   const links: [string, string, boolean?][] = [
-    ["/find-a-club", m.nav.findClub],
-    ["/#features", m.nav.inside],
-    ["/vision", m.nav.vision, true],
     ["/for-clubs", m.nav.forClubs],
+    ["/#features", m.nav.inside],
     ["/pricing", m.nav.pricing],
+    ["/vision", m.nav.vision, true],
+    ["/find-a-club", m.nav.findClub],
     ["/help", m.nav.help],
   ];
   const nav = (id: string) => (

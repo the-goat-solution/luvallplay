@@ -30,9 +30,10 @@ const rows: Row[] = [
   // For clubs
   ["newClubs", "clubs", "soon", l("Starting a new club", "Lập câu lạc bộ mới"), l("Not open yet. The waitlist is open, and founding clubs are invited in small groups.", "Chưa mở. Danh sách chờ đang mở, và các câu lạc bộ sáng lập được mời theo từng nhóm nhỏ.")],
   ["setupWizard", "clubs", "soon", l("Set-up in about 5 minutes", "Thiết lập trong khoảng 5 phút"), WITH_CLUBS],
-  ["brand", "clubs", "soon", l("12 colour schemes, or your own brand", "12 bộ màu, hoặc thương hiệu riêng"), WITH_CLUBS],
-  ["paymentModes", "clubs", "soon", l("Free play, cash or bank transfer, or online payments", "Chơi miễn phí, tiền mặt hoặc chuyển khoản, hoặc thanh toán trực tuyến"), l("Planned for when clubs can set themselves up. Online payments start in New Zealand and Australia.", "Dự kiến có khi các câu lạc bộ tự lập được trang của mình. Thanh toán trực tuyến bắt đầu ở New Zealand và Úc.")],
-  ["modules", "clubs", "soon", l("Modules you switch on", "Mô-đun bật khi cần"), WITH_CLUBS],
+  ["brand", "clubs", "limited", l("Your club’s own name, logo and colours", "Tên, logo và màu sắc riêng của câu lạc bộ"), l("The first club on Luvallplay keeps its own look. Choosing from 12 colour schemes or bringing your own brand comes with club set-up.", "Câu lạc bộ đầu tiên trên Luvallplay giữ diện mạo riêng. Việc chọn trong 12 bộ màu hoặc dùng thương hiệu riêng sẽ có cùng bước thiết lập câu lạc bộ.")],
+  ["fees", "clubs", "limited", l("Fees: free play, cash or bank transfer, or online payments", "Thu phí: chơi miễn phí, tiền mặt hoặc chuyển khoản, hoặc thanh toán trực tuyến"), l("In use at the first club on Luvallplay. Choosing how your club charges comes with club set-up; online payments start in New Zealand and Australia.", "Đang dùng tại câu lạc bộ đầu tiên trên Luvallplay. Việc chọn cách thu phí sẽ có cùng bước thiết lập câu lạc bộ; thanh toán trực tuyến bắt đầu ở New Zealand và Úc.")],
+  ["modules", "clubs", "limited", l("Modules you switch on", "Mô-đun bật khi cần"), l("In use at the first club on Luvallplay. Choosing your own modules comes with club set-up.", "Đang dùng tại câu lạc bộ đầu tiên trên Luvallplay. Việc tự chọn mô-đun sẽ có cùng bước thiết lập câu lạc bộ.")],
+  ["admin", "clubs", "limited", l("Admin area for the people who run the club", "Khu quản trị cho người điều hành câu lạc bộ"), FIRST_CLUB],
   ["clubWebsites", "clubs", "soon", l("Club websites and your own domain", "Trang web câu lạc bộ và tên miền riêng"), WITH_CLUBS],
   ["juniors", "clubs", "soon", l("Junior accounts managed by a guardian", "Tài khoản thiếu niên do người giám hộ quản lý"), l("Coming soon.", "Sắp có.")],
   // The platform

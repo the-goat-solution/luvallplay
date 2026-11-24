@@ -48,9 +48,9 @@ export type SiteSettings = {
   companyAddress?: string;
 };
 
-export type Feature = { key: string; title: L; body: L };
+export type Feature = { key: string; title: L; body: L; status: "live" | "soon" };
 
-/** One line of the availability list (content/availability.ts). */
+/** One line of the availability list (content/availability.ts). It wins over a tile's own status. */
 export type AvailabilityStatus = "live" | "limited" | "soon";
 export type AvailabilityItem = { _key: string; key: string; group: "players" | "clubs" | "platform"; status: AvailabilityStatus; name: L; note: L };
 export type Availability = { _id: "availability"; _type: "availability"; updated: string; items: AvailabilityItem[] };
@@ -69,22 +69,25 @@ export type HomePage = {
     lead: L;
     primaryCta: L;
     secondaryCta: L;
+    /** The quieter line under the buttons, for players. */
+    playerLine: L;
+    playerCta: L;
     photos: { _key: string; image?: ImageSlot; fallbackAlt: L }[];
     scoreLabel: L;
     scoreCaption: L;
     nextLabel: L;
     nextTitle: L;
     nextMeta: L;
-    kudos: L;
+    paidChip: L;
   };
   sports: { intro: L };
-  features: { title: L; lead: L; items: Feature[]; sessionRows: { _key: string; name: L; meta: L; action: L }[]; finderCta: L; mapChip: L };
-  vision: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; figureCaption: L; benefits: TitledText[] };
-  how: { title: L; steps: TitledText[] };
+  features: { title: L; lead: L; items: Feature[]; sessionRows: { _key: string; name: L; meta: L; action: L }[]; feeModes: L[]; schemesCaption: L };
+  vision: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; note: L; figureCaption: L; benefits: TitledText[] };
+  how: { eyebrow: L; title: L; lead: L; steps: TitledText[]; storeNote: L };
   rankings: { eyebrow: L; title: L; lead: L; note: L; cta: L };
   finder: { title: L; lead: L };
   story: { title: L; body: L; caption: L };
-  clubs: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; stats: { _key: string; value: L; label: L }[] };
+  clubs: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; steps: TitledText[] };
   pricing: {
     players: { eyebrow: L; price: L; body: L; cta: L };
     clubs: { eyebrow: L; badge: L; price: L; body: L; note: L; cta: L };

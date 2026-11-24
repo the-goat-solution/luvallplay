@@ -656,6 +656,26 @@ html:lang(en) .only-vi, html:lang(vi) .only-en { display: none; }
 .float-final { left: -56px; bottom: -44px; }
 @media (max-width: 1320px) { .float { display: none; } }
 
+/* --- Home page for clubs first (B2B) --------------------------------------- */
+.hero-player { font-size: 15px; color: var(--ink-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -8px; }
+.hero-player a { display: inline-flex; align-items: center; gap: 4px; color: var(--link); font-weight: 600; text-underline-offset: 3px; min-height: 44px; }
+.kudos-ok { background: #d4f23c; }
+.fee-modes { display: flex; flex-direction: column; gap: 8px; margin-top: auto; font-size: 15px; font-weight: 600; }
+.fee-modes li { display: flex; align-items: center; gap: 10px; border-radius: 12px; padding: 8px 12px; background: rgba(250, 250, 247, 0.08); border: 1px solid rgba(250, 250, 247, 0.12); }
+.tile-brand { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; align-items: center; }
+.tile-brand > div { display: flex; flex-direction: column; gap: 12px; }
+.swatches { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.swatches ul { display: grid; grid-template-columns: repeat(4, 44px); gap: 10px; }
+.swatches li { position: relative; width: 44px; height: 44px; border-radius: 999px; box-shadow: var(--e2); }
+.swatches li i { position: absolute; right: -2px; bottom: -2px; width: 18px; height: 18px; border-radius: 999px; border: 3px solid var(--surface-raised); }
+.how-head { display: flex; flex-direction: column; gap: 16px; }
+.how-head .lead-sm { color: var(--ink-muted); }
+.club-steps { position: relative; display: flex; flex-direction: column; gap: 12px; }
+.club-steps li { display: flex; gap: 16px; align-items: center; border-radius: 22px; padding: 16px 20px; box-shadow: inset 0 1px 0 rgba(250, 250, 247, 0.14), 0 5px 10px rgba(11, 27, 43, 0.138); }
+.club-steps .num { width: 48px; height: 48px; font-size: 24px; border-radius: 999px; color: #0b1b2b; }
+.club-steps p { font-size: 15px; color: #a9b8b2; margin-top: 2px; }
+.club-steps h3 { color: #fafaf7; }
+
 /* Availability: the list page and the status note on articles. */
 .avail { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .avail li { padding: 20px; border-radius: 22px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }

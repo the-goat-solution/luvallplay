@@ -44,11 +44,11 @@ export default async function HomePage({ params }: Props) {
     <>
       <Hero {...p} />
       <Features {...p} />
-      <Vision {...p} />
-      <How {...p} />
-      <FinderSection {...p} />
       <ForClubs {...p} />
+      <How {...p} />
+      <Vision {...p} />
       <Pricing {...p} />
+      <FinderSection {...p} />
       <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(ld)} />
     </>
   ));

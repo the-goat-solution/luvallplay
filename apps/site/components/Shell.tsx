@@ -23,7 +23,7 @@ export function Shell({ lang, path, content, children, mainId = "main" }: Props)
   const m = t(lang);
   const other: Lang = lang === "en" ? "vi" : "en";
   const { ticker } = content.home;
-  const getApp = ctaTarget("getApp", lang, content.settings);
+  const startClub = ctaTarget("startClub", lang, content.settings);
   const links: [string, string, boolean?][] = [
     ["/for-clubs", m.nav.forClubs],
     ["/#features", m.nav.inside],
@@ -59,12 +59,12 @@ export function Shell({ lang, path, content, children, mainId = "main" }: Props)
             <a href={href(lang, "/")} aria-label={m.home}><Logo /></a>
             <div className="nav-desktop">{nav("d")}</div>
             <div className="hdr-cta">
-              <a className="btn btn-primary btn-getapp" href={getApp.href}>{m.nav.getApp}</a>
+              <a className="btn btn-primary btn-getapp" href={startClub.href}>{m.nav.startClub}</a>
               <details className="menu">
                 <summary><Icon name="menu" size={20} />{m.nav.menu}</summary>
                 <div className="menu-panel">
                   {nav("m")}
-                  <a className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} href={getApp.href}>{m.nav.getApp}</a>
+                  <a className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} href={startClub.href}>{m.nav.startClub}</a>
                 </div>
               </details>
             </div>

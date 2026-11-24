@@ -676,6 +676,26 @@ html:lang(en) .only-vi, html:lang(vi) .only-en { display: none; }
 .club-steps p { font-size: 15px; color: #a9b8b2; margin-top: 2px; }
 .club-steps h3 { color: #fafaf7; }
 
+/* Vector art for the club pages (components/ClubArt.tsx) */
+.admin-fig { margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.admin-fig .phone-cap { margin-top: 0; }
+.admin-art { display: block; width: 100%; height: auto; filter: drop-shadow(0 12px 24px rgba(var(--shadow-rgb), 0.1)) drop-shadow(0 32px 50px rgba(var(--shadow-rgb), 0.12)); }
+.sec .admin-fig { max-width: 980px; width: 100%; margin: 0 auto; }
+.fart { display: block; border-radius: 20px; background: var(--tint); overflow: hidden; }
+.fart svg { display: block; width: 100%; height: auto; }
+.fart-tile { margin-bottom: 6px; }
+.tile-navy .fart, .tile-green .fart { background: rgba(250, 250, 247, 0.1); }
+.fart-card { margin: -12px -12px 8px; border-radius: 20px; background: linear-gradient(160deg, var(--tint), var(--surface-sunk)); }
+.art-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.art-grid .psec { padding: 24px 24px 30px; transition: transform 0.25s var(--spring), box-shadow 0.25s; }
+.art-grid .psec:hover { transform: translateY(-4px); box-shadow: var(--e3); }
+.art-grid .psec h2 { font-size: 30px; line-height: 34px; }
+.fc-hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 56px; align-items: center; }
+.fc-hero .page-head { gap: 22px; }
+.clubs .sticker { position: absolute; z-index: 1; top: 22px; right: 26px; padding: 14px 20px; border-radius: 999px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1; transform: rotate(8deg); box-shadow: 0 8px 18px rgba(11, 27, 43, 0.25); }
+@media (max-width: 900px) { .clubs .sticker { top: 14px; right: 14px; font-size: 22px; padding: 10px 14px; } }
+@media (prefers-reduced-motion: reduce) { .art-grid .psec:hover { transform: none; } }
+
 /* Availability: the list page and the status note on articles. */
 .avail { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .avail li { padding: 20px; border-radius: 22px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }

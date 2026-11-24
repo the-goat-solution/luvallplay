@@ -284,7 +284,7 @@ export const home: HomePage = {
 
 // --- Inner pages -------------------------------------------------------------
 
-const page = (key: string, title: L, lead: L, seoDescription: L, sections: [L, L, L[]?][]): Page => ({
+const page = (key: string, title: L, lead: L, seoDescription: L, sections: [L, L, L[]?, string?][]): Page => ({
   _id: `page.${key}`,
   _type: "page",
   key,
@@ -292,7 +292,7 @@ const page = (key: string, title: L, lead: L, seoDescription: L, sections: [L, L
   lead,
   seoTitle: l(`${title.en} · Luvallplay`, `${title.vi} · Luvallplay`),
   seoDescription,
-  sections: sections.map(([heading, body, bullets], i) => ({ _key: `s${i + 1}`, heading, body, ...(bullets ? { bullets } : {}) })),
+  sections: sections.map(([heading, body, bullets, art], i) => ({ _key: `s${i + 1}`, heading, body, ...(bullets ? { bullets } : {}), ...(art ? { art } : {}) })),
 });
 
 export const pages: Page[] = [
@@ -351,28 +351,53 @@ export const pages: Page[] = [
   ),
   page(
     "for-clubs",
-    l("For clubs: run your sessions, keep your colours", "Cho câu lạc bộ: lo buổi chơi, giữ màu áo"),
+    l("For clubs: less admin, more play", "Cho câu lạc bộ: bớt sổ sách, thêm giờ ra sân"),
     l(
-      "Luvallplay gives your club sign-ups, waitlists, memberships, challenges and a ladder in one place. It is free for founding clubs, and the waitlist is open.",
-      "Luvallplay đem đăng ký, danh sách chờ, hội viên, thách đấu và bảng xếp hạng của câu lạc bộ về một nơi. Miễn phí cho các câu lạc bộ sáng lập, và danh sách chờ đang mở.",
+      "Luvallplay is one place to run your club: sessions and waitlists, members, fees, messages and your own brand. These tools already run every week at the first club on Luvallplay. Founding clubs use them free, and the waitlist is open.",
+      "Luvallplay là một nơi để điều hành câu lạc bộ: buổi chơi và danh sách chờ, hội viên, thu phí, tin nhắn và thương hiệu riêng. Những công cụ này đã chạy hằng tuần tại câu lạc bộ đầu tiên trên Luvallplay. Câu lạc bộ sáng lập dùng miễn phí, và danh sách chờ đang mở.",
     ),
     l(
-      "What Luvallplay does for club organisers: sessions and sign-ups, memberships, three ways to handle fees, your own colours and brand, in English and Vietnamese.",
-      "Luvallplay giúp gì cho người tổ chức: lịch chơi và đăng ký, hội viên, ba cách thu phí, màu sắc và thương hiệu riêng, bằng tiếng Việt và tiếng Anh.",
+      "What Luvallplay does for club organisers: an admin home, sessions and waitlists, members and roles, three ways to handle fees, your own brand and modules.",
+      "Luvallplay giúp gì cho người tổ chức: trang quản trị, buổi chơi và danh sách chờ, hội viên và vai trò, ba cách thu phí, thương hiệu riêng và mô-đun.",
     ),
     [
       [
-        l("What’s running today", "Những gì đang chạy"),
+        l("Your admin home", "Trang quản trị của bạn"),
         l(
-      "These tools are in use every week at the first club on Luvallplay.",
-      "Những công cụ sau đang được dùng hằng tuần tại câu lạc bộ đầu tiên trên Luvallplay.",
-    ),
+          "The first page an organiser sees answers three questions: what’s next, what needs me, and what do I usually do.",
+          "Trang đầu tiên người tổ chức nhìn thấy trả lời ba câu hỏi: buổi tới là gì, việc gì cần tôi, và tôi hay làm gì.",
+        ),
         [
-          l("Sessions, sign-ups and waitlists that move up on their own.", "Lịch chơi, đăng ký và danh sách chờ tự đôn lên."),
-          l("Memberships and casual sessions, paid online or recorded by hand.", "Hội viên và buổi chơi lẻ, trả trực tuyến hoặc ghi nhận thủ công."),
-          l("Challenges in the Arena and a club ladder.", "Thách đấu trong Arena và bảng xếp hạng của câu lạc bộ."),
-          l("An admin area for the people who run the club.", "Khu quản trị cho những người điều hành câu lạc bộ."),
+          l("Next play day: who’s signed up, spots left and the waitlist.", "Buổi chơi tới: ai đã đăng ký, còn bao nhiêu chỗ và danh sách chờ."),
+          l("Needs attention: unread messages, failed payments, disputed scores, shop orders and photos to check.", "Cần xử lý: tin nhắn chưa đọc, thanh toán lỗi, tỉ số bị khiếu nại, đơn hàng và ảnh cần duyệt."),
+          l("Quick actions: add a player to a day, add a member, message a player, record an expense.", "Lối tắt: thêm người chơi vào một buổi, thêm hội viên, nhắn cho người chơi, ghi một khoản chi."),
         ],
+        "admin",
+      ],
+      [
+        l("Sessions and sign-ups", "Buổi chơi và đăng ký"),
+        l(
+          "Set your regular days once. Capacity follows the courts you’ve booked, and the list looks after itself.",
+          "Đặt lịch chơi cố định một lần. Số chỗ theo số sân bạn đã đặt, và danh sách tự vận hành.",
+        ),
+        [
+          l("A waitlist that moves up when someone says they can’t make it.", "Danh sách chờ tự đôn lên khi có người báo không đến được."),
+          l("Open or close sign-ups, pause a weekday, or add a one-off day.", "Mở hoặc đóng đăng ký, tạm dừng một ngày trong tuần, hoặc thêm một buổi riêng."),
+          l("A roster for each day, with attendance.", "Danh sách từng buổi, kèm điểm danh."),
+        ],
+        "sessions",
+      ],
+      [
+        l("Members and organisers", "Hội viên và người tổ chức"),
+        l(
+          "Your club decides who plays. Approve people who ask to join, keep details up to date, and message members from one inbox.",
+          "Câu lạc bộ quyết định ai được chơi. Duyệt người xin tham gia, cập nhật thông tin, và nhắn cho hội viên từ một hộp thư.",
+        ),
+        [
+          l("Each organiser sees what their role needs. A coach sees the play pages, not the money.", "Mỗi người tổ chức thấy đúng phần vai trò của mình. Huấn luyện viên thấy các trang buổi chơi, không thấy phần tiền."),
+          l("Members sign in with an email code. No passwords to forget.", "Hội viên đăng nhập bằng mã gửi qua email. Không có mật khẩu để quên."),
+        ],
+        "members",
       ],
       [
         l("Three ways to handle fees", "Ba cách xử lý phí"),
@@ -385,20 +410,51 @@ export const pages: Page[] = [
           l("Cash or bank transfer: you record who has paid.", "Tiền mặt hoặc chuyển khoản: bạn ghi nhận ai đã đóng."),
           l("Online payments: for incorporated clubs with their own Stripe account. Planned for New Zealand and Australia first.", "Thanh toán trực tuyến: cho câu lạc bộ có tư cách pháp nhân và tài khoản Stripe riêng. Dự kiến mở trước ở New Zealand và Úc."),
         ],
+        "fees",
+      ],
+      [
+        l("Money, kept tidy", "Tiền bạc, gọn gàng"),
+        l(
+          "For clubs that charge, the treasurer gets a ledger instead of a spreadsheet. Your club’s money stays with your club.",
+          "Với câu lạc bộ có thu phí, thủ quỹ có sổ thu chi thay cho bảng tính. Tiền của câu lạc bộ vẫn ở lại với câu lạc bộ.",
+        ),
+        [
+          l("Income and expenses in one ledger, with receipts.", "Thu và chi trong một sổ, kèm biên lai."),
+          l("Bank lines matched to payments.", "Các dòng sao kê ngân hàng được đối chiếu với khoản thanh toán."),
+          l("A report ready for your annual meeting.", "Báo cáo sẵn sàng cho cuộc họp thường niên."),
+        ],
+        "money",
       ],
       [
         l("Make it yours", "Mang dấu ấn riêng"),
         l(
-          "Your club’s name, logo and words lead. Pick one of 12 tested colour schemes, or bring your own logo, fonts and colours. Luvallplay checks the contrast so everyone can read it, in light and dark.",
-          "Tên, logo và cách gọi của câu lạc bộ luôn đứng trước. Chọn một trong 12 bộ màu đã kiểm thử, hoặc dùng logo, phông chữ và màu riêng. Luvallplay kiểm tra độ tương phản để ai cũng đọc được, cả giao diện sáng lẫn tối.",
+          "Your club’s name, logo and words lead. Pick one of 12 tested colour schemes, or bring your own logo, fonts and colours. Luvallplay checks the contrast so everyone can read it, in light and dark. Everything works in English and Vietnamese.",
+          "Tên, logo và cách gọi của câu lạc bộ luôn đứng trước. Chọn một trong 12 bộ màu đã kiểm thử, hoặc dùng logo, phông chữ và màu riêng. Luvallplay kiểm tra độ tương phản để ai cũng đọc được, cả giao diện sáng lẫn tối. Mọi thứ đều có tiếng Việt và tiếng Anh.",
         ),
+        undefined,
+        "brand",
       ],
       [
         l("Add what you need", "Thêm thứ bạn cần"),
         l(
-          "Sessions, members and messages are always included. Everything else is a module you switch on when your club is ready for it: memberships, challenges and rankings, a shop, and more over time.",
-          "Lịch chơi, hội viên và tin nhắn luôn có sẵn. Mọi thứ khác là mô-đun bạn bật khi câu lạc bộ sẵn sàng: hội viên trả phí, thách đấu và xếp hạng, cửa hàng, và thêm nữa theo thời gian.",
+          "Play days, members, messages, a simple club page and settings are always included. Everything else is a module you switch on when your club is ready, and switching one off hides it without deleting anything.",
+          "Buổi chơi, hội viên, tin nhắn, một trang câu lạc bộ đơn giản và phần cài đặt luôn có sẵn. Mọi thứ khác là mô-đun bạn bật khi câu lạc bộ sẵn sàng, và tắt một mô-đun chỉ ẩn nó đi chứ không xoá gì cả.",
         ),
+        [
+          l("For sessions: casual play, a court board and round robins.", "Cho buổi chơi: chơi lẻ, bảng xoay sân và thi đấu vòng tròn."),
+          l("For money: memberships, payments to check, finance reports and a shop.", "Cho tài chính: hội viên trả phí, thanh toán cần kiểm tra, báo cáo tài chính và cửa hàng."),
+          l("For players: the Arena with challenges and a ladder, and a photo gallery.", "Cho người chơi: Arena với thách đấu và bảng xếp hạng, cùng thư viện ảnh."),
+        ],
+        "modules",
+      ],
+      [
+        l("Getting started", "Bắt đầu thế nào"),
+        l(
+          "Founding clubs set up with us. The plan is a short setup: your club and sport, your look, how you charge, which modules you want, then inviting your organisers and bringing your members across from a spreadsheet.",
+          "Câu lạc bộ sáng lập được chúng tôi cùng thiết lập. Dự kiến việc thiết lập rất ngắn: câu lạc bộ và môn chơi, giao diện, cách thu phí, các mô-đun bạn muốn, rồi mời người tổ chức và chuyển hội viên sang từ bảng tính.",
+        ),
+        undefined,
+        "start",
       ],
       [
         l("Where we are", "Chúng tôi đang ở đâu"),
@@ -406,6 +462,8 @@ export const pages: Page[] = [
           "Luvallplay isn’t open to new clubs yet. Join the waitlist and we’ll invite founding clubs in small groups, starting in New Zealand. Founding clubs use Luvallplay free. Paid plans come later, and you’ll get notice before anything changes.",
           "Luvallplay chưa mở cho câu lạc bộ mới. Hãy vào danh sách chờ, chúng tôi sẽ mời các câu lạc bộ sáng lập theo từng nhóm nhỏ, bắt đầu ở New Zealand. Câu lạc bộ sáng lập dùng Luvallplay miễn phí. Các gói trả phí sẽ có sau, và bạn được báo trước khi có thay đổi.",
         ),
+        undefined,
+        "where",
       ],
     ],
   ),

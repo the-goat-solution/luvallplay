@@ -89,7 +89,7 @@ export type HomePage = {
   };
 };
 
-export type PageSection = { _key: string; heading: L; body: L; bullets?: L[] };
+export type PageSection = { _key: string; heading: L; body: L; bullets?: L[]; /** A FeatureArt drawing name (components/ClubArt.tsx). */ art?: string };
 export type Page = {
   _id: string;
   _type: "page";

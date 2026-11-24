@@ -199,7 +199,17 @@ const page = defineType({
     t("lead", "Lead"),
     s("seoTitle", "Title for search engines"),
     t("seoDescription", "Description for search engines"),
-    list("sections", "Sections", [s("heading", "Heading"), t("body", "Text"), defineField({ name: "bullets", title: "Bullet points", type: "array", of: [defineArrayMember({ type: "localeString" })] })], "heading.en"),
+    list("sections", "Sections", [
+      s("heading", "Heading"),
+      t("body", "Text"),
+      defineField({ name: "bullets", title: "Bullet points", type: "array", of: [defineArrayMember({ type: "localeString" })] }),
+      defineField({
+        name: "art",
+        title: "Drawing (optional)",
+        type: "string",
+        options: { list: ["admin", "sessions", "members", "fees", "money", "brand", "modules", "start", "where", "memberships"] },
+      }),
+    ], "heading.en"),
   ],
   preview: { select: { title: "title.en", subtitle: "key" } },
 });

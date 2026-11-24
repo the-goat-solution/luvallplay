@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Blocks } from "./Blocks";
 import { Finder } from "./Finder";
-import { AdminMock } from "./AdminMock";
+import { AdminFigure, FeatureArt } from "./ClubArt";
 import { finderProps, Pricing, Vision } from "./Home";
 import { Shell } from "./Shell";
 import { SiteForm } from "./SiteForm";
@@ -19,6 +19,28 @@ export function render(lang: Lang, path: string, content: Content, children: Rea
   return <Shell lang={lang} path={path} content={content}>{children}</Shell>;
 }
 
+// The For clubs page opens with its message on one side and the admin
+// drawing on the other, with the two buttons a club needs.
+function ClubsHead({ page, lang, content }: P & { page: Page }) {
+  const m = t(lang);
+  const c = content.home.clubs;
+  const walk = ctaTarget("walkthrough", lang, content.settings);
+  return (
+    <div className="fc-hero">
+      <div className="page-head">
+        <span className="label accent">{c.eyebrow[lang]}</span>
+        <h1 className="h-page">{page.title[lang]}</h1>
+        <p className="lead">{page.lead[lang]}</p>
+        <div className="cta-row">
+          <a className="btn btn-primary btn-lg" href={ctaTarget("startClub", lang, content.settings).href}>{c.primaryCta[lang]}</a>
+          <a className="btn btn-secondary btn-lg" href={walk.href} rel={walk.external ? "noopener" : undefined}>{c.secondaryCta[lang]}</a>
+        </div>
+      </div>
+      <AdminFigure caption={m.admin.caption} />
+    </div>
+  );
+}
+
 function Head({ page, lang, as = "h1" }: { page: Page; lang: Lang; as?: "h1" | "h2" }) {
   const H = as;
   return (
@@ -32,9 +54,10 @@ function Head({ page, lang, as = "h1" }: { page: Page; lang: Lang; as?: "h1" | "
 function Sections({ page, lang }: { page: Page; lang: Lang }) {
   if (!page.sections?.length) return null;
   return (
-    <div className="page-grid">
+    <div className={page.sections.some((s) => s.art) ? "page-grid art-grid" : "page-grid"}>
       {page.sections.map((s) => (
         <section key={s._key} className="card psec">
+          {s.art ? <FeatureArt name={s.art} className="fart-card" /> : null}
           <h2>{s.heading[lang]}</h2>
           <p>{s.body[lang]}</p>
           {s.bullets?.length ? <ul className="ticks">{s.bullets.map((b, i) => <li key={i}>{b[lang]}</li>)}</ul> : null}
@@ -88,9 +111,8 @@ export function InfoPage({ lang, content, pageKey }: P & { pageKey: string }) {
   }
   return (
     <div className="wrap page">
-      <Head page={page} lang={lang} />
+      {pageKey === "for-clubs" ? <ClubsHead page={page} lang={lang} content={content} /> : <Head page={page} lang={lang} />}
       {pageKey === "find-a-club" ? <Finder {...finderProps(lang, content)} heading="h2" /> : null}
-      {pageKey === "for-clubs" ? <AdminMock lang={lang} /> : null}
       {pageKey === "pricing" ? <div style={{ margin: "0 -24px -64px" }}><Pricing lang={lang} content={content} heading="h2" /></div> : null}
       <Sections page={page} lang={lang} />
       {pageKey === "pricing" || pageKey === "for-clubs" ? (

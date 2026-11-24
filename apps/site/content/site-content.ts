@@ -284,7 +284,7 @@ export const home: HomePage = {
 
 // --- Inner pages -------------------------------------------------------------
 
-const page = (key: string, title: L, lead: L, seoDescription: L, sections: [L, L, L[]?][]): Page => ({
+const page = (key: string, title: L, lead: L, seoDescription: L, sections: [L, L, L[]?, string?][]): Page => ({
   _id: `page.${key}`,
   _type: "page",
   key,
@@ -292,7 +292,7 @@ const page = (key: string, title: L, lead: L, seoDescription: L, sections: [L, L
   lead,
   seoTitle: l(`${title.en} · Luvallplay`, `${title.vi} · Luvallplay`),
   seoDescription,
-  sections: sections.map(([heading, body, bullets], i) => ({ _key: `s${i + 1}`, heading, body, ...(bullets ? { bullets } : {}) })),
+  sections: sections.map(([heading, body, bullets, art], i) => ({ _key: `s${i + 1}`, heading, body, ...(bullets ? { bullets } : {}), ...(art ? { art } : {}) })),
 });
 
 export const pages: Page[] = [
@@ -372,6 +372,7 @@ export const pages: Page[] = [
           l("Needs attention: unread messages, failed payments, disputed scores, shop orders and photos to check.", "Cần xử lý: tin nhắn chưa đọc, thanh toán lỗi, tỉ số bị khiếu nại, đơn hàng và ảnh cần duyệt."),
           l("Quick actions: add a player to a day, add a member, message a player, record an expense.", "Lối tắt: thêm người chơi vào một buổi, thêm hội viên, nhắn cho người chơi, ghi một khoản chi."),
         ],
+        "admin",
       ],
       [
         l("Sessions and sign-ups", "Buổi chơi và đăng ký"),
@@ -384,6 +385,7 @@ export const pages: Page[] = [
           l("Open or close sign-ups, pause a weekday, or add a one-off day.", "Mở hoặc đóng đăng ký, tạm dừng một ngày trong tuần, hoặc thêm một buổi riêng."),
           l("A roster for each day, with attendance.", "Danh sách từng buổi, kèm điểm danh."),
         ],
+        "sessions",
       ],
       [
         l("Members and organisers", "Hội viên và người tổ chức"),
@@ -395,6 +397,7 @@ export const pages: Page[] = [
           l("Each organiser sees what their role needs. A coach sees the play pages, not the money.", "Mỗi người tổ chức thấy đúng phần vai trò của mình. Huấn luyện viên thấy các trang buổi chơi, không thấy phần tiền."),
           l("Members sign in with an email code. No passwords to forget.", "Hội viên đăng nhập bằng mã gửi qua email. Không có mật khẩu để quên."),
         ],
+        "members",
       ],
       [
         l("Three ways to handle fees", "Ba cách xử lý phí"),
@@ -407,6 +410,7 @@ export const pages: Page[] = [
           l("Cash or bank transfer: you record who has paid.", "Tiền mặt hoặc chuyển khoản: bạn ghi nhận ai đã đóng."),
           l("Online payments: for incorporated clubs with their own Stripe account. Planned for New Zealand and Australia first.", "Thanh toán trực tuyến: cho câu lạc bộ có tư cách pháp nhân và tài khoản Stripe riêng. Dự kiến mở trước ở New Zealand và Úc."),
         ],
+        "fees",
       ],
       [
         l("Money, kept tidy", "Tiền bạc, gọn gàng"),
@@ -419,6 +423,7 @@ export const pages: Page[] = [
           l("Bank lines matched to payments.", "Các dòng sao kê ngân hàng được đối chiếu với khoản thanh toán."),
           l("A report ready for your annual meeting.", "Báo cáo sẵn sàng cho cuộc họp thường niên."),
         ],
+        "money",
       ],
       [
         l("Make it yours", "Mang dấu ấn riêng"),
@@ -426,6 +431,8 @@ export const pages: Page[] = [
           "Your club’s name, logo and words lead. Pick one of 12 tested colour schemes, or bring your own logo, fonts and colours. Luvallplay checks the contrast so everyone can read it, in light and dark. Everything works in English and Vietnamese.",
           "Tên, logo và cách gọi của câu lạc bộ luôn đứng trước. Chọn một trong 12 bộ màu đã kiểm thử, hoặc dùng logo, phông chữ và màu riêng. Luvallplay kiểm tra độ tương phản để ai cũng đọc được, cả giao diện sáng lẫn tối. Mọi thứ đều có tiếng Việt và tiếng Anh.",
         ),
+        undefined,
+        "brand",
       ],
       [
         l("Add what you need", "Thêm thứ bạn cần"),
@@ -438,6 +445,7 @@ export const pages: Page[] = [
           l("For money: memberships, payments to check, finance reports and a shop.", "Cho tài chính: hội viên trả phí, thanh toán cần kiểm tra, báo cáo tài chính và cửa hàng."),
           l("For players: the Arena with challenges and a ladder, and a photo gallery.", "Cho người chơi: Arena với thách đấu và bảng xếp hạng, cùng thư viện ảnh."),
         ],
+        "modules",
       ],
       [
         l("Getting started", "Bắt đầu thế nào"),
@@ -445,6 +453,8 @@ export const pages: Page[] = [
           "Founding clubs set up with us. The plan is a short setup: your club and sport, your look, how you charge, which modules you want, then inviting your organisers and bringing your members across from a spreadsheet.",
           "Câu lạc bộ sáng lập được chúng tôi cùng thiết lập. Dự kiến việc thiết lập rất ngắn: câu lạc bộ và môn chơi, giao diện, cách thu phí, các mô-đun bạn muốn, rồi mời người tổ chức và chuyển hội viên sang từ bảng tính.",
         ),
+        undefined,
+        "start",
       ],
       [
         l("Where we are", "Chúng tôi đang ở đâu"),
@@ -452,6 +462,8 @@ export const pages: Page[] = [
           "Luvallplay isn’t open to new clubs yet. Join the waitlist and we’ll invite founding clubs in small groups, starting in New Zealand. Founding clubs use Luvallplay free. Paid plans come later, and you’ll get notice before anything changes.",
           "Luvallplay chưa mở cho câu lạc bộ mới. Hãy vào danh sách chờ, chúng tôi sẽ mời các câu lạc bộ sáng lập theo từng nhóm nhỏ, bắt đầu ở New Zealand. Câu lạc bộ sáng lập dùng Luvallplay miễn phí. Các gói trả phí sẽ có sau, và bạn được báo trước khi có thay đổi.",
         ),
+        undefined,
+        "where",
       ],
     ],
   ),

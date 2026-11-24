@@ -1,6 +1,6 @@
 // The home page, design D ("Rally"), section by section. Anything that isn't
 // a real fact is drawn as an illustration and labelled as one.
-import { AdminMock } from "./AdminMock";
+import { AdminFigure, FeatureArt } from "./ClubArt";
 import { Finder, type FinderClub } from "./Finder";
 import { Icon } from "./icons";
 import { ScoreDemo } from "./ScoreDemo";
@@ -69,8 +69,6 @@ export function Hero({ lang, content }: P) {
   );
 }
 
-const FEATURE_ICON: Record<string, string> = { memberships: "card", admin: "bell", modules: "flag" };
-
 // The light primary and accent of each of the 12 club colour schemes
 // (packages/ui/src/color-schemes.json), shown as swatches.
 const SCHEMES: [string, string, string][] = [
@@ -88,7 +86,7 @@ export function Features({ lang, content }: P) {
   const small = (k: string) =>
     by[k] ? (
       <div key={k} className="tile card lift rise">
-        <span className="ic-box"><Icon name={FEATURE_ICON[k] ?? "check"} size={26} /></span>
+        <FeatureArt name={k} className="fart-tile" />
         <h3 className="h-card">{by[k].title[lang]}</h3>
         <p className="card-p">{by[k].body[lang]}</p>
         {soon(k)}
@@ -100,7 +98,7 @@ export function Features({ lang, content }: P) {
         <h2 className="h-sec">{f.title[lang]}</h2>
         <p className="lead-sm">{f.lead[lang]}</p>
       </div>
-      <AdminMock lang={lang} />
+      <AdminFigure caption={m.admin.caption} />
       <div className="bento">
         {by.sessions ? (
           <div className="tile tile-green green span2 on-green rise">
@@ -359,6 +357,7 @@ export function ForClubs({ lang, content }: P) {
   return (
     <section id="clubs" className="clubs-outer">
       <div className="clubs green court-lines on-green">
+        <span className="sticker lime" aria-hidden="true">{content.home.pricing.players.price[lang]}</span>
         <div>
           <span className="label">{c.eyebrow[lang]}</span>
           <h2 className="h-sec">{c.title[lang]}</h2>

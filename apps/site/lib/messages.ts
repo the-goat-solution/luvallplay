@@ -7,7 +7,7 @@ const en = {
   langName: "English",
   skip: "Skip to content",
   home: "Luvallplay home",
-  nav: { main: "Main", footer: "Footer", menu: "Menu", findClub: "Find a club", inside: "What’s inside", vision: "Vision", forClubs: "For clubs", pricing: "Pricing", about: "About", help: "Help", contact: "Contact", privacy: "Privacy", terms: "Terms", getApp: "Get the app" },
+  nav: { main: "Main", footer: "Footer", menu: "Menu", findClub: "Find a club", inside: "What’s inside", vision: "Vision", forClubs: "For clubs", pricing: "Pricing", about: "About", help: "Help", contact: "Contact", privacy: "Privacy", terms: "Terms", getApp: "Get the app", startClub: "Start your club" },
   badge: { new: "New", soon: "Coming soon", live: "Live", limited: "Early access", demo: "Demo", illustration: "Illustration", sample: "Sample" },
   switchLang: "Language",
   switchTo: "Tiếng Việt",
@@ -27,6 +27,7 @@ const en = {
     invite: "Invite a club",
     opensClub: "opens the club’s own site",
   },
+  admin: { caption: "Illustration: a simplified club admin area, on a computer and on a phone. Sample numbers." },
   mock: {
     home: "Home", next: "Next play day", youreIn: "Evening · You’re in", rank: "Your rank", up: "Up 2", arena: "Arena", challenge: "A clubmate challenged you to a best of 3", accept: "Accept", decline: "Not this week",
     tabs: ["Home", "Play", "Vision", "Club"], booked: "Spot booked", final: "Final", finalScore: "21–19, you won", caption: "Illustration of the app’s home screen",
@@ -96,7 +97,7 @@ const vi: Messages = {
   langName: "Tiếng Việt",
   skip: "Chuyển đến nội dung",
   home: "Trang chủ Luvallplay",
-  nav: { main: "Chính", footer: "Chân trang", menu: "Menu", findClub: "Tìm câu lạc bộ", inside: "Có gì bên trong", vision: "Vision", forClubs: "Cho câu lạc bộ", pricing: "Chi phí", about: "Giới thiệu", help: "Trợ giúp", contact: "Liên hệ", privacy: "Quyền riêng tư", terms: "Điều khoản", getApp: "Tải ứng dụng" },
+  nav: { main: "Chính", footer: "Chân trang", menu: "Menu", findClub: "Tìm câu lạc bộ", inside: "Có gì bên trong", vision: "Vision", forClubs: "Cho câu lạc bộ", pricing: "Chi phí", about: "Giới thiệu", help: "Trợ giúp", contact: "Liên hệ", privacy: "Quyền riêng tư", terms: "Điều khoản", getApp: "Tải ứng dụng", startClub: "Mở câu lạc bộ" },
   badge: { new: "Mới", soon: "Sắp ra mắt", live: "Đã có", limited: "Dùng thử sớm", demo: "Mẫu", illustration: "Minh hoạ", sample: "Ví dụ" },
   switchLang: "Ngôn ngữ",
   switchTo: "English",
@@ -116,6 +117,7 @@ const vi: Messages = {
     invite: "Mời một câu lạc bộ",
     opensClub: "mở trang riêng của câu lạc bộ",
   },
+  admin: { caption: "Minh hoạ: khu quản trị câu lạc bộ ở dạng giản lược, trên máy tính và trên điện thoại. Số liệu mẫu." },
   mock: {
     home: "Trang chủ", next: "Buổi chơi tới", youreIn: "Buổi tối · Bạn đã có chỗ", rank: "Hạng của bạn", up: "Lên 2", arena: "Arena", challenge: "Một bạn chơi thách bạn đấu 3 ván thắng 2", accept: "Nhận lời", decline: "Tuần này chưa",
     tabs: ["Trang chủ", "Chơi", "Vision", "CLB"], booked: "Đã giữ chỗ", final: "Chung cuộc", finalScore: "21–19, bạn thắng", caption: "Minh hoạ màn hình chính của ứng dụng",

@@ -353,8 +353,8 @@ export const pages: Page[] = [
     "for-clubs",
     l("For clubs: less admin, more play", "Cho câu lạc bộ: bớt sổ sách, thêm giờ ra sân"),
     l(
-      "Luvallplay is one place to run your club: sessions and waitlists, members, fees, messages and your own brand. These tools run every week at Three Wolves Badminton Club, our first club. Founding clubs use them free, and the waitlist is open.",
-      "Luvallplay là một nơi để điều hành câu lạc bộ: buổi chơi và danh sách chờ, hội viên, thu phí, tin nhắn và thương hiệu riêng. Những công cụ này chạy hằng tuần tại Three Wolves Badminton Club, câu lạc bộ đầu tiên của chúng tôi. Câu lạc bộ sáng lập dùng miễn phí, và danh sách chờ đang mở.",
+      "Luvallplay is one place to run your club: sessions and waitlists, members, fees, messages and your own brand. These tools already run every week at the first club on Luvallplay. Founding clubs use them free, and the waitlist is open.",
+      "Luvallplay là một nơi để điều hành câu lạc bộ: buổi chơi và danh sách chờ, hội viên, thu phí, tin nhắn và thương hiệu riêng. Những công cụ này đã chạy hằng tuần tại câu lạc bộ đầu tiên trên Luvallplay. Câu lạc bộ sáng lập dùng miễn phí, và danh sách chờ đang mở.",
     ),
     l(
       "What Luvallplay does for club organisers: an admin home, sessions and waitlists, members and roles, three ways to handle fees, your own brand and modules.",

@@ -1,0 +1,560 @@
+{
+  "version": "v1",
+  "endpoints": {
+    "auth.emailStart": {
+      "method": "POST",
+      "path": "/auth/email/start",
+      "auth": "public",
+      "body": {
+        "t": "object",
+        "fields": {
+          "email": {
+            "t": "string"
+          },
+          "lang": {
+            "t": "enum",
+            "values": [
+              "en",
+              "vi"
+            ],
+            "nullable": true,
+            "optional": true
+          },
+          "turnstileToken": {
+            "t": "string",
+            "nullable": true,
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "auth.emailVerify": {
+      "method": "POST",
+      "path": "/auth/email/verify",
+      "auth": "public",
+      "body": {
+        "t": "object",
+        "fields": {
+          "code": {
+            "t": "string"
+          },
+          "email": {
+            "t": "string"
+          },
+          "phoneProof": {
+            "t": "string",
+            "nullable": true,
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "expiresAt": {
+            "t": "string"
+          },
+          "needsDetails": {
+            "t": "boolean"
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "phoneTaken": {
+            "t": "boolean"
+          },
+          "token": {
+            "t": "string"
+          }
+        }
+      }
+    },
+    "auth.logout": {
+      "method": "POST",
+      "path": "/auth/logout",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "all": {
+            "t": "boolean",
+            "nullable": true,
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "auth.session": {
+      "method": "GET",
+      "path": "/auth/session",
+      "auth": "session",
+      "response": {
+        "t": "object",
+        "fields": {
+          "player": {
+            "t": "object",
+            "fields": {
+              "avatarUrl": {
+                "t": "string",
+                "nullable": true
+              },
+              "displayName": {
+                "t": "string"
+              },
+              "email": {
+                "t": "string"
+              },
+              "firstName": {
+                "t": "string"
+              },
+              "id": {
+                "t": "number"
+              },
+              "lang": {
+                "t": "enum",
+                "values": [
+                  "en",
+                  "vi"
+                ]
+              },
+              "lastName": {
+                "t": "string"
+              },
+              "phoneVerified": {
+                "t": "boolean"
+              }
+            }
+          },
+          "signedInAt": {
+            "t": "string"
+          }
+        }
+      }
+    },
+    "auth.smsStart": {
+      "method": "POST",
+      "path": "/auth/sms/start",
+      "auth": "public",
+      "body": {
+        "t": "object",
+        "fields": {
+          "phone": {
+            "t": "string"
+          },
+          "purpose": {
+            "t": "enum",
+            "values": [
+              "login",
+              "phone_confirm"
+            ],
+            "nullable": true,
+            "optional": true
+          },
+          "recaptchaToken": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "phone": {
+            "t": "string"
+          },
+          "sessionInfo": {
+            "t": "string"
+          }
+        }
+      }
+    },
+    "auth.smsVerify": {
+      "method": "POST",
+      "path": "/auth/sms/verify",
+      "auth": "public",
+      "body": {
+        "t": "object",
+        "fields": {
+          "code": {
+            "t": "string"
+          },
+          "purpose": {
+            "t": "enum",
+            "values": [
+              "login",
+              "phone_confirm"
+            ],
+            "nullable": true,
+            "optional": true
+          },
+          "sessionInfo": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "expiresAt": {
+            "t": "string",
+            "optional": true
+          },
+          "needsDetails": {
+            "t": "boolean",
+            "optional": true
+          },
+          "needsEmail": {
+            "t": "boolean",
+            "optional": true
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "phoneProof": {
+            "t": "string",
+            "optional": true
+          },
+          "token": {
+            "t": "string",
+            "optional": true
+          }
+        }
+      }
+    },
+    "clubs.config": {
+      "method": "GET",
+      "path": "/clubs/{club}/config",
+      "auth": "public",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "apiBase": {
+            "t": "string"
+          },
+          "club": {
+            "t": "object",
+            "fields": {
+              "country": {
+                "t": "string"
+              },
+              "currency": {
+                "t": "string"
+              },
+              "currencyExponent": {
+                "t": "number"
+              },
+              "languages": {
+                "t": "array",
+                "of": {
+                  "t": "string"
+                }
+              },
+              "name": {
+                "t": "string"
+              },
+              "paymentMode": {
+                "t": "enum",
+                "values": [
+                  "free",
+                  "offline",
+                  "online"
+                ]
+              },
+              "region": {
+                "t": "string"
+              },
+              "slug": {
+                "t": "string"
+              },
+              "sports": {
+                "t": "array",
+                "of": {
+                  "t": "string"
+                }
+              },
+              "timezone": {
+                "t": "string"
+              }
+            }
+          },
+          "modules": {
+            "t": "array",
+            "of": {
+              "t": "string"
+            }
+          },
+          "settings": {
+            "t": "object",
+            "fields": {
+              "donations": {
+                "t": "object",
+                "fields": {
+                  "maxAmount": {
+                    "t": "number"
+                  },
+                  "minAmount": {
+                    "t": "number"
+                  }
+                }
+              },
+              "memberships": {
+                "t": "object",
+                "fields": {
+                  "days": {
+                    "t": "array",
+                    "of": {
+                      "t": "string"
+                    }
+                  }
+                }
+              },
+              "playDays": {
+                "t": "object",
+                "fields": {
+                  "bookingCutoffHour": {
+                    "t": "number"
+                  },
+                  "bookingWindowDays": {
+                    "t": "number"
+                  }
+                }
+              }
+            }
+          },
+          "terms": {
+            "t": "object",
+            "fields": {
+              "alphaName": {
+                "t": "string"
+              },
+              "localized": {
+                "t": "record",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "alphaName": {
+                      "t": "string",
+                      "optional": true
+                    },
+                    "pointsName": {
+                      "t": "string",
+                      "optional": true
+                    },
+                    "silverName": {
+                      "t": "string",
+                      "optional": true
+                    },
+                    "visionName": {
+                      "t": "string",
+                      "optional": true
+                    }
+                  }
+                }
+              },
+              "pointsName": {
+                "t": "string"
+              },
+              "silverName": {
+                "t": "string"
+              },
+              "visionName": {
+                "t": "string"
+              }
+            }
+          },
+          "theme": {
+            "t": "object",
+            "fields": {
+              "artSet": {
+                "t": "string"
+              },
+              "dark": {
+                "t": "object",
+                "fields": {
+                  "accent": {
+                    "t": "string"
+                  },
+                  "control-border": {
+                    "t": "string"
+                  },
+                  "danger": {
+                    "t": "string"
+                  },
+                  "focus": {
+                    "t": "string"
+                  },
+                  "font-display": {
+                    "t": "string"
+                  },
+                  "font-text": {
+                    "t": "string"
+                  },
+                  "ink": {
+                    "t": "string"
+                  },
+                  "ink-muted": {
+                    "t": "string"
+                  },
+                  "line": {
+                    "t": "string"
+                  },
+                  "on-accent": {
+                    "t": "string"
+                  },
+                  "on-primary": {
+                    "t": "string"
+                  },
+                  "primary": {
+                    "t": "string"
+                  },
+                  "surface": {
+                    "t": "string"
+                  },
+                  "surface-raised": {
+                    "t": "string"
+                  }
+                }
+              },
+              "light": {
+                "t": "object",
+                "fields": {
+                  "accent": {
+                    "t": "string"
+                  },
+                  "control-border": {
+                    "t": "string"
+                  },
+                  "danger": {
+                    "t": "string"
+                  },
+                  "focus": {
+                    "t": "string"
+                  },
+                  "font-display": {
+                    "t": "string"
+                  },
+                  "font-text": {
+                    "t": "string"
+                  },
+                  "ink": {
+                    "t": "string"
+                  },
+                  "ink-muted": {
+                    "t": "string"
+                  },
+                  "line": {
+                    "t": "string"
+                  },
+                  "on-accent": {
+                    "t": "string"
+                  },
+                  "on-primary": {
+                    "t": "string"
+                  },
+                  "primary": {
+                    "t": "string"
+                  },
+                  "surface": {
+                    "t": "string"
+                  },
+                  "surface-raised": {
+                    "t": "string"
+                  }
+                }
+              },
+              "logoUrl": {
+                "t": "string",
+                "nullable": true
+              },
+              "scheme": {
+                "t": "string",
+                "nullable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "clubs.list": {
+      "method": "GET",
+      "path": "/clubs",
+      "auth": "session",
+      "response": {
+        "t": "object",
+        "fields": {
+          "clubs": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "apiBase": {
+                  "t": "string"
+                },
+                "canOpenAdmin": {
+                  "t": "boolean"
+                },
+                "name": {
+                  "t": "string"
+                },
+                "region": {
+                  "t": "string"
+                },
+                "role": {
+                  "t": "enum",
+                  "values": [
+                    "owner",
+                    "admin",
+                    "coach",
+                    "member",
+                    "guest"
+                  ]
+                },
+                "slug": {
+                  "t": "string"
+                },
+                "status": {
+                  "t": "enum",
+                  "values": [
+                    "active",
+                    "disabled"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@luvallplay/api": "workspace:*",
     "@luvallplay/auth": "workspace:*",
     "@luvallplay/core": "workspace:*",
     "@luvallplay/db": "workspace:*",

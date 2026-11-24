@@ -521,7 +521,7 @@ describe("G · Arena", () => {
 /** Every page and GET route in app/, as a URL path with made-up values for [params]. */
 function allRoutes() {
   const out = [];
-  const fill = { date: "2026-01-02", id: "1", token: "no-such-token", slug: "x", draw: "1", code: "000000" };
+  const fill = { date: "2026-01-02", id: "1", token: "no-such-token", slug: "x", draw: "1", code: "000000", club: "three-wolves" };
   const walk = (dir, url) => {
     for (const name of readdirSync(dir)) {
       const full = `${dir}/${name}`;
@@ -579,6 +579,15 @@ describe("T · tenant isolation at the routes", () => {
       assert.deepEqual(leaks, [], `the first club's data came back from the second club's site:\n${leaks.join("\n")}`);
       assert.deepEqual(broken, [], `routes that fail when run through row-level security:\n${broken.join("\n")}\n${second.serverLog.join("").slice(-3000)}`);
       assert.ok(controlHits >= 5, `the markers appear on only ${controlHits} routes of the first club: the check proves nothing`);
+      // The players' app API: the first club doesn't exist on the second club's
+      // deployment, and the second club's own config is its own (VND has no cents).
+      assert.equal((await get(second.base, "/api/v1/app/clubs/three-wolves/config", owner.token)).status, 404);
+      const cfg2 = JSON.parse((await get(second.base, "/api/v1/app/clubs/hanoi-smash/config", null)).body);
+      assert.equal(cfg2.club.slug, "hanoi-smash");
+      assert.equal(cfg2.club.currency, "VND");
+      assert.equal(cfg2.club.currencyExponent, 0);
+      const clubs2 = JSON.parse((await get(second.base, "/api/v1/app/clubs", clubAdmin.token)).body).clubs;
+      assert.deepEqual(clubs2.map((c) => [c.slug, c.role, c.canOpenAdmin]), [["hanoi-smash", "member", false]], "the first club's admin is a plain member here, and sees no other club");
       // The first club's admin is nobody at the second club.
       assert.equal((await get(second.base, "/admin", clubAdmin.token)).status, 403);
       assert.equal((await get(second.base, "/api/admin/finance/export", clubAdmin.token)).status, 403);
@@ -595,6 +604,229 @@ describe("T · tenant isolation at the routes", () => {
       await db.query(`DELETE FROM tenant_modules WHERE tenant_id = $1`, [club2]);
       await db.query(`DELETE FROM tenants WHERE id = $1`, [club2]);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// API · the players' app API (/api/v1/app, build plan §4.1; Phase 4 gate)
+// ---------------------------------------------------------------------------
+
+const APP_API = "/api/v1/app";
+// Kept in step with packages/api/src/contract.ts by the last test of this group.
+const SESSION_ENDPOINTS = [["GET", "/auth/session"], ["POST", "/auth/logout"], ["GET", "/clubs"]];
+const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
+
+async function appApi(method, path, { token, body, headers = {}, raw } = {}) {
+  const r = await fetch(`${base()}${APP_API}${path}`, {
+    method,
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body !== undefined || raw !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
+    body: raw !== undefined ? raw : body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const text = await r.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {}
+  return { status: r.status, json, headers: r.headers };
+}
+
+describe("API · the players' app API", () => {
+  test("API1 · email code → bearer token → session, clubs and config; the web session is untouched; sign out ends only that token", async () => {
+    const web = await signedIn(PEOPLE.member.email); // the same person, already signed in on the web
+    await clearOutbox();
+    const started = await appApi("POST", "/auth/email/start", { body: { email: "  Mia.Member@E2E.test ", lang: null, turnstileToken: null } });
+    assert.deepEqual([started.status, started.json], [200, { ok: true }]);
+    const code = await outboxCode(PEOPLE.member.email);
+
+    const wrong = await appApi("POST", "/auth/email/verify", { body: { email: PEOPLE.member.email, code: code === "000000" ? "111111" : "000000" } });
+    assert.equal(wrong.status, 400);
+    assert.equal(typeof wrong.json.error, "string");
+
+    const verified = await appApi("POST", "/auth/email/verify", { body: { email: PEOPLE.member.email, code, phoneProof: null } });
+    assert.equal(verified.status, 200);
+    assert.deepEqual(Object.keys(verified.json).sort(), ["expiresAt", "needsDetails", "ok", "phoneTaken", "token"]);
+    assert.equal(verified.json.needsDetails, false);
+    assert.equal(verified.headers.get("set-cookie"), null, "the app gets a token, not a cookie");
+    const token = verified.json.token;
+    const days = (new Date(verified.json.expiresAt) - Date.now()) / 86_400_000;
+    assert.ok(days > 89 && days < 91, `expires in ${days} days`);
+    // Only the hash is stored, in the same table as the web's sessions.
+    const hash = createHash("sha256").update(token).digest("hex");
+    assert.equal((await db.query(`SELECT 1 FROM player_sessions WHERE token_hash = $1`, [hash])).rowCount, 1);
+    assert.equal((await db.query(`SELECT 1 FROM player_sessions WHERE token_hash = $1`, [token])).rowCount, 0);
+
+    const me = await appApi("GET", "/auth/session", { token });
+    assert.equal(me.status, 200);
+    assert.equal(me.json.player.email, PEOPLE.member.email);
+    assert.equal(me.json.player.firstName, "Mia");
+    assert.deepEqual(Object.keys(me.json.player).sort(), ["avatarUrl", "displayName", "email", "firstName", "id", "lang", "lastName", "phoneVerified"]);
+    assert.equal(me.headers.get("cache-control"), "no-store");
+
+    const clubs = await appApi("GET", "/clubs", { token });
+    assert.equal(clubs.status, 200);
+    assert.deepEqual(clubs.json.clubs.map((c) => [c.slug, c.role, c.status, c.canOpenAdmin]), [["three-wolves", "member", "active", false]]);
+    assert.equal(clubs.json.clubs[0].apiBase, `${base()}${APP_API}`);
+
+    // The same session answers on the web too (one player_sessions row, two ways to send it).
+    const viaCookie = await fetch(`${base()}${APP_API}/auth/session`, { headers: { Cookie: `tw_player=${token}` } });
+    assert.equal(viaCookie.status, 200);
+
+    // Signing in on the app signed nobody out: the web session still works.
+    const page = await web.context.newPage();
+    await page.goto("/profile");
+    await page.waitForSelector("text=Mia");
+    await page.close();
+
+    const out = await appApi("POST", "/auth/logout", { token, body: {} });
+    assert.deepEqual([out.status, out.json], [200, { ok: true }]);
+    assert.equal((await appApi("GET", "/auth/session", { token })).status, 401);
+    assert.equal((await fetch(`${base()}${APP_API}/auth/session`, { headers: { Cookie: `tw_player=${web.token}` } })).status, 200, "the web session survives the app's sign-out");
+    await web.context.close();
+  });
+
+  test("API2 · sign out everywhere ends every session of that person and nobody else's", async () => {
+    const a = await signedIn(PEOPLE.player.email);
+    const b = await signedIn(PEOPLE.player.email);
+    const other = await signedIn(PEOPLE.coach.email);
+    assert.equal((await appApi("POST", "/auth/logout", { token: a.token, body: { all: true } })).status, 200);
+    assert.equal((await appApi("GET", "/auth/session", { token: a.token })).status, 401);
+    assert.equal((await appApi("GET", "/auth/session", { token: b.token })).status, 401);
+    assert.equal((await appApi("GET", "/auth/session", { token: other.token })).status, 200);
+    for (const s of [a, b, other]) await s.context.close();
+  });
+
+  test("API3 · the club's config is public and carries the club's look, modules, terms and money", async () => {
+    const r = await appApi("GET", "/clubs/three-wolves/config");
+    assert.equal(r.status, 200);
+    const c = r.json;
+    assert.deepEqual(Object.keys(c).sort(), ["apiBase", "club", "modules", "settings", "terms", "theme"]);
+    assert.equal(c.club.name, "Three Wolves Badminton Club");
+    assert.deepEqual([c.club.currency, c.club.currencyExponent, c.club.country, c.club.region], ["NZD", 2, "NZ", "syd"]);
+    // Three Wolves wears its own navy and bronze, as semantic tokens.
+    assert.equal(c.theme.light.primary, "#184467");
+    assert.equal(c.theme.light.accent, "#C4892A");
+    assert.equal(c.theme.light.surface, "#fcfbf2");
+    assert.match(c.theme.light["font-display"], /Copperplate/);
+    assert.equal(c.theme.artSet, "three-wolves");
+    assert.deepEqual(Object.keys(c.theme.light).sort(), Object.keys(c.theme.dark).sort());
+    assert.equal(Object.keys(c.theme.light).length, 14);
+    assert.equal(c.terms.pointsName, "Wolf Points");
+    for (const m of ["arena", "vision", "memberships"]) assert.ok(c.modules.includes(m), m);
+    // A club this deployment doesn't serve doesn't exist, whoever asks.
+    for (const slug of ["hanoi-smash", "no-such-club"]) assert.deepEqual([(await appApi("GET", `/clubs/${slug}/config`)).status], [404], slug);
+    for (const slug of ["Three-Wolves", "a%20b", "..%2F..", "x".repeat(80)]) assert.equal((await appApi("GET", `/clubs/${slug}/config`)).status, 404, slug);
+  });
+
+  test("API3 · a module switched off leaves the config's module list", async () => {
+    await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'gallery'`);
+    try {
+      await new Promise((r) => setTimeout(r, 1200)); // MODULES_CACHE_MS in the test environment
+      let modules;
+      for (let i = 0; i < 20; i++) {
+        modules = (await appApi("GET", "/clubs/three-wolves/config")).json.modules;
+        if (!modules.includes("gallery")) break;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      assert.ok(!modules.includes("gallery"), "gallery is off");
+      assert.ok(modules.includes("arena"));
+    } finally {
+      await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'gallery'`);
+      for (let i = 0; i < 20; i++) {
+        if ((await appApi("GET", "/clubs/three-wolves/config")).json.modules.includes("gallery")) break;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  });
+
+  test("API4 · permissions: who sees the Club admin button; a disabled or deleted account; no session, a dead one, an access key", async () => {
+    const expectations = [["owner", "owner", true], ["admin", "admin", true], ["coach", "coach", true], ["member", "member", false], ["hidden", "member", false]];
+    for (const [who, role, canOpenAdmin] of expectations) {
+      const s = await signedIn(PEOPLE[who].email);
+      const clubs = (await appApi("GET", "/clubs", { token: s.token })).json.clubs;
+      assert.deepEqual([clubs.length, clubs[0].role, clubs[0].canOpenAdmin], [1, role, canOpenAdmin], who);
+      await s.context.close();
+    }
+    for (const [method, path] of SESSION_ENDPOINTS) {
+      for (const [what, headers] of [
+        ["nobody", {}],
+        ["a made-up token", { Authorization: `Bearer ${randomBytes(32).toString("base64url")}` }],
+        ["an access key", { Authorization: "Bearer tw_0123456789abcdef0123456789abcdef" }],
+        ["an oversized token", { Authorization: `Bearer ${"a".repeat(5000)}` }],
+        ["a made-up cookie", { Cookie: "tw_player=nope" }],
+      ]) {
+        const r = await appApi(method, path, { headers, body: method === "POST" ? {} : undefined });
+        assert.deepEqual([r.status, r.json], [401, { error: "unauthorized" }], `${method} ${path} as ${what}`);
+      }
+    }
+    // An expired session is nobody.
+    const expired = await signedIn(PEOPLE.member.email);
+    await db.query(`UPDATE player_sessions SET expires_at = NOW() - INTERVAL '1 minute' WHERE token_hash = $1`, [createHash("sha256").update(expired.token).digest("hex")]);
+    assert.equal((await appApi("GET", "/auth/session", { token: expired.token })).status, 401);
+    await expired.context.close();
+  });
+
+  test("API5 · bad input is a 400 with a code, never a 500", async () => {
+    const bodies = ["", "{", "null", "[]", '"x"', "12", '{"email":5}', '{"email":"not-an-email"}', '{"email":["a@b.co"],"code":{"$gt":""}}', '{"phone":"x","recaptchaToken":1}', `{"email":"${"a".repeat(5000)}@b.co"}`, '{"sessionInfo":"short","code":"1"}'];
+    for (const path of POST_ENDPOINTS) {
+      for (const raw of bodies) {
+        const r = await appApi("POST", path, { raw, headers: { "x-forwarded-for": `10.9.${POST_ENDPOINTS.indexOf(path)}.${bodies.indexOf(raw)}` } });
+        assert.equal(r.status, 400, `${path} with ${raw.slice(0, 40)} → ${r.status} ${JSON.stringify(r.json)}`);
+        assert.equal(typeof r.json?.error, "string", path);
+      }
+    }
+    const s = await signedIn(PEOPLE.member.email);
+    for (const raw of ["{", "[]", '{"all":"yes"}', '"x"']) {
+      const r = await appApi("POST", "/auth/logout", { token: s.token, raw });
+      assert.deepEqual([r.status, r.json], [400, { error: "bad_request" }], raw);
+    }
+    assert.equal((await appApi("GET", "/auth/session", { token: s.token })).status, 200, "a refused sign-out leaves the session alone");
+    await s.context.close();
+  });
+
+  test("API6 · CORS allow-list, preflight, and cookie requests from another site", async () => {
+    for (const origin of ["https://app.luvallplay.com", "capacitor://localhost", "https://localhost"]) {
+      const pre = await fetch(`${base()}${APP_API}/clubs`, { method: "OPTIONS", headers: { Origin: origin, "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization" } });
+      assert.equal(pre.status, 204, origin);
+      assert.equal(pre.headers.get("access-control-allow-origin"), origin);
+      assert.match(pre.headers.get("access-control-allow-headers"), /Authorization/);
+      const r = await appApi("GET", "/clubs/three-wolves/config", { headers: { Origin: origin } });
+      assert.equal(r.headers.get("access-control-allow-origin"), origin);
+      assert.match(r.headers.get("vary"), /Origin/);
+    }
+    for (const origin of ["https://evil.example", "https://app.luvallplay.com.evil.example", "null"]) {
+      const pre = await fetch(`${base()}${APP_API}/clubs`, { method: "OPTIONS", headers: { Origin: origin, "Access-Control-Request-Method": "GET" } });
+      assert.equal(pre.headers.get("access-control-allow-origin"), null, origin);
+      const r = await appApi("GET", "/clubs/three-wolves/config", { headers: { Origin: origin } });
+      assert.equal(r.headers.get("access-control-allow-origin"), null, origin);
+    }
+    // A cookie rides along on its own, so a write from another site is refused; a bearer token is fine from anywhere.
+    const s = await signedIn(PEOPLE.member.email);
+    const cross = await appApi("POST", "/auth/logout", { headers: { Cookie: `tw_player=${s.token}`, Origin: "https://evil.example" }, body: {} });
+    assert.deepEqual([cross.status, cross.json], [403, { error: "bad_origin" }]);
+    assert.equal((await appApi("GET", "/auth/session", { token: s.token })).status, 200, "still signed in");
+    const fromApp = await appApi("POST", "/auth/logout", { headers: { Cookie: `tw_player=${s.token}`, Origin: "https://app.luvallplay.com" }, body: {} });
+    assert.equal(fromApp.status, 200);
+    await s.context.close();
+  });
+
+  test("API7 · the older access-key API and its shapes are untouched by the app API", async () => {
+    const lb = await fetch(`${base()}/api/v1/leaderboard`);
+    assert.equal(lb.status, 200);
+    assert.equal(lb.headers.get("access-control-allow-origin"), "*");
+    const me = await fetch(`${base()}/api/v1/me`);
+    assert.equal(me.status, 401);
+    assert.equal((await me.json()).error, "unauthorized");
+    // A session token is not an access key.
+    const s = await signedIn(PEOPLE.member.email);
+    assert.equal((await fetch(`${base()}/api/v1/me`, { headers: { Authorization: `Bearer ${s.token}` } })).status, 401);
+    await s.context.close();
+  });
+
+  test("API · this group's endpoint lists match the contract", async () => {
+    const { ENDPOINTS } = await import("../../../../packages/api/src/contract.ts");
+    const all = Object.values(ENDPOINTS);
+    assert.deepEqual(all.filter((e) => e.auth === "session").map((e) => `${e.method} ${e.path}`).sort(), SESSION_ENDPOINTS.map(([m, p]) => `${m} ${p}`).sort(), "add the new signed-in endpoint to SESSION_ENDPOINTS (API4)");
+    assert.deepEqual(all.filter((e) => e.auth === "public" && e.method === "POST").map((e) => e.path).sort(), [...POST_ENDPOINTS].sort(), "add the new public POST endpoint to POST_ENDPOINTS (API5)");
   });
 });
 

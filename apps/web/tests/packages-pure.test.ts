@@ -12,6 +12,8 @@ const ALLOWED: Record<string, string[]> = {
   ui: [],
   modules: [],
   i18n: ["@luvallplay/core/"],
+  // The API contract: zod schemas and a fetch client, nothing else.
+  api: ["zod"],
 };
 
 for (const [pkg, allowed] of Object.entries(ALLOWED)) {

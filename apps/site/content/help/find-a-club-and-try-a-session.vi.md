@@ -1,20 +1,21 @@
 ---
 title: "Tìm CLB và chơi thử một buổi"
-summary: "Trang tìm CLB hiện là một danh sách ngắn do chúng tôi tự chọn. Đây là cách chơi thử một buổi lẻ ở Three Wolves, Christchurch."
+summary: "Trang tìm CLB hiện là một danh sách ngắn do chúng tôi tự chọn. Đây là cách chơi thử một buổi lẻ ở CLB đang có trên danh sách, tại Christchurch."
 audience: players
 order: 9
 updated: 2026-11-24
+features: finder
 ---
 
 ## Trang tìm CLB hiện đến đâu
 
-Trang [tìm CLB](/find-a-club) hiện là một danh sách ngắn do chúng tôi tự chọn. Chúng tôi chỉ đưa lên những CLB mình biết chắc là có thật và đang hoạt động, và hôm nay mới có một: Three Wolves Badminton Club ở Christchurch, New Zealand.
+Trang [tìm CLB](/find-a-club) hiện là một danh sách ngắn do chúng tôi tự chọn. Chúng tôi chỉ đưa lên những CLB mình biết chắc là có thật và đang hoạt động, và hôm nay mới có một: Three Wolves Badminton Club ở Christchurch, New Zealand, câu lạc bộ đầu tiên trên Luvallplay.
 
 Một trang tìm kiếm rộng hơn, nhiều CLB hơn và nhiều môn hơn, sắp ra mắt. Thà cho bạn xem một CLB thật còn hơn một tấm bản đồ đầy phỏng đoán.
 
 ## Nếu bạn ở Christchurch
 
-Three Wolves chơi cầu lông 2 buổi mỗi tuần, vào tối thứ Tư và tối thứ Sáu. Khách đến chơi có thể đặt một buổi chơi lẻ, tức là đến một lần, không cần làm hội viên.
+CLB chơi cầu lông 2 buổi mỗi tuần, vào tối thứ Tư và tối thứ Sáu. Khách đến chơi có thể đặt một buổi chơi lẻ, tức là đến một lần, không cần làm hội viên.
 
 ### Cách đặt một buổi chơi lẻ
 
@@ -67,9 +68,9 @@ Luvallplay miễn phí cho người chơi. CLB có thể thu phí buổi chơi h
 
 ## Câu hỏi thường gặp
 
-**Đặt một buổi chơi lẻ có cần tài khoản không?** Ở Three Wolves, đặt buổi lẻ chỉ cần tên, email và số điện thoại. Hội viên thì đăng nhập để quản lý các buổi của mình. Xem [đăng nhập bằng mã gửi qua email](/help/signing-in-with-an-email-code).
+**Đặt một buổi chơi lẻ có cần tài khoản không?** Ở CLB này, đặt buổi lẻ chỉ cần tên, email và số điện thoại. Hội viên thì đăng nhập để quản lý các buổi của mình. Xem [đăng nhập bằng mã gửi qua email](/help/signing-in-with-an-email-code).
 
-**Có ứng dụng để tải không?** Ứng dụng trên kho sắp ra mắt. Hiện Three Wolves chạy ngay trên trình duyệt điện thoại của bạn.
+**Có ứng dụng để tải không?** Ứng dụng trên kho sắp ra mắt. Hiện trang của CLB chạy ngay trên trình duyệt điện thoại của bạn.
 
 **Còn các môn khác?** Hiện cầu lông là môn đang hoạt động. Các môn khác sắp ra mắt.
 

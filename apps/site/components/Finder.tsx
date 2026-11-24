@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { fold } from "@/lib/site";
 
-export type FinderClub = { id: string; name: string; sportKey: string; sport: string; place: string; schedule: string; meta: string; url: string };
+export type FinderClub = { id: string; name: string; sportKey: string; sport: string; place: string; schedule: string; meta: string; url: string; logo?: string; logoAlt?: string };
 type Words = { all: string; input: string; placeholder: string; search: string; sportsLabel: string; book: string; empty: string; emptyPlace: string; invite: string; opensClub: string; soon: string; count: [string, string] };
 
 export function Finder({ clubs, sports, words, inviteHref, heading: H = "h3" }: { heading?: "h2" | "h3"; clubs: FinderClub[]; sports: { key: string; name: string; live: boolean }[]; words: Words; inviteHref: string }) {
@@ -37,6 +37,7 @@ export function Finder({ clubs, sports, words, inviteHref, heading: H = "h3" }: 
           {shown.map((c) => (
             <li key={c.id} className="card club">
               <div className="club-top"><span className="chip chip-soft">{c.sport}</span><span>{c.schedule}</span></div>
+              {c.logo ? <span className="club-logo"><img src={c.logo} alt={c.logoAlt ?? ""} width={56} height={48} loading="lazy" /></span> : null}
               <H className="h-card">{c.name}</H>
               <p>{c.place} · {c.meta}</p>
               <a className="btn btn-primary btn-sm" href={c.url} rel="noopener">{words.book}<span className="vh"> ({c.name}, {words.opensClub})</span></a>

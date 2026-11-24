@@ -4,13 +4,14 @@ summary: "How to book a session, what happens when it's full, and why telling yo
 audience: players
 order: 11
 updated: 2026-11-24
+features: sessions
 ---
 
 ## Why sign-ups matter
 
 A hall has only so many courts. A field fits only so many teams. When your club knows who's coming, everybody gets more games and less standing around.
 
-This article describes how it works for Three Wolves members today. Clubs that join Luvallplay later will get the same tools, though each club sets its own rules.
+This article describes how it works today for members of the first club on Luvallplay. Clubs that join Luvallplay later will get the same tools, though each club sets its own rules.
 
 ## Two ways to play
 

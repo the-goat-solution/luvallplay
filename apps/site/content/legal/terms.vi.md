@@ -56,7 +56,7 @@ Chúng tôi có thể bỏ qua hoặc xoá những nội dung gửi vi phạm c�
 
 Tên và logo Luvallplay, cùng phần chữ, thiết kế và hình ảnh trên trang web này, thuộc về chúng tôi hoặc những bên đã cấp phép cho chúng tôi. Bạn cứ thoải mái xem trang web, chia sẻ link và trích những đoạn ngắn có ghi nguồn. Xin đừng sao chép hàng loạt, hoặc dùng tên hay logo của chúng tôi theo cách khiến người khác hiểu rằng chúng tôi bảo trợ cho bạn, khi chưa hỏi trước.
 
-Three Wolves Badminton Club được nêu tên trên trang web này, với sự cho phép của CLB, với tư cách là CLB đầu tiên. Tên và logo của CLB thuộc về CLB.
+Three Wolves Badminton Club được nêu tên trên trang web này, với sự cho phép của CLB, với tư cách là CLB đầu tiên dùng Luvallplay. Tên và logo của CLB thuộc về CLB.
 
 Những tên khác được nhắc đến trên trang web này thuộc về chủ sở hữu của chúng.
 

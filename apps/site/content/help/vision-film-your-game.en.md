@@ -1,9 +1,10 @@
 ---
 title: "Vision: film your game"
-summary: "Set a phone behind the court and Vision turns your game into rallies and stats. Badminton only, and for Three Wolves members for now."
+summary: "Set a phone behind the court and Vision turns your game into rallies and stats. Badminton only, and for members of the first club on Luvallplay for now."
 audience: players
 order: 13
 updated: 2026-11-24
+features: vision
 ---
 
 ## What Vision does
@@ -23,13 +24,13 @@ Afterwards you get the numbers for your game, such as:
 Two honest limits:
 
 - **Badminton only.** Vision is trained on badminton. Other sports may follow, but we're not promising dates.
-- **Three Wolves members only, for now.** At Three Wolves it's called Wolf Vision, and it's used for Arena challenges.
+- **Members of the first club on Luvallplay only, for now.** There it's used for Arena challenges.
 
-A match needs a pass. Three Wolves members can see the current pass details in the app before they start.
+A match needs a pass. Members can see the current pass details in the app before they start.
 
 ## What you need
 
-- **A recent phone.** For live tracking, Three Wolves asks for an iPhone 14 or newer.
+- **A recent phone.** For live tracking, the club asks for an iPhone 14 or newer.
 - **A tripod or a secure mount.** The phone has to stay completely still.
 - **Space behind the court.** A few steps back from the baseline.
 
@@ -85,7 +86,7 @@ A camera on a court films everyone on it, and sometimes the people on the next c
 
 ## Where your video goes
 
-At Three Wolves, the video stays on your phone. Only the final numbers are saved, and only for challenges where a phone was set up.
+At the first club, the video stays on your phone. Only the final numbers are saved, and only for challenges where a phone was set up.
 
 ## The numbers are a guide
 

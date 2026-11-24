@@ -1,9 +1,10 @@
 ---
 title: "Challenges and the ladder"
-summary: "How Arena works at Three Wolves: pair up, throw down a challenge, confirm the score and climb your club's ladder."
+summary: "How Arena works: pair up, throw down a challenge, confirm the score and climb your club's ladder."
 audience: players
 order: 12
 updated: 2026-11-24
+features: challenges, rankings
 ---
 
 ## A reason to play one more game
@@ -12,7 +13,7 @@ Social play is great. Sometimes you want a game that counts.
 
 Arena is where that happens. You pair up, challenge another pair, play, and both sides confirm the score. Wins earn points, points move you up your club's ranks, and the leaderboard shows where everyone stands.
 
-Arena is live at Three Wolves Badminton Club today, so this article describes badminton doubles. Ladders are kept per club and per sport. Rankings for other sports are coming soon.
+Arena is live today at the first club on Luvallplay, a badminton club, so this article describes badminton doubles. Ladders are kept per club and per sport. Rankings for other sports are coming soon.
 
 ## How a challenge works
 
@@ -47,10 +48,10 @@ If the score looks wrong, say so. It goes to the club's admins, who sort it out.
 
 ## Points and ranks
 
-- **Wins earn points.** At Three Wolves they're called Wolf Points. You also earn them for turning up to play days and for round robin wins.
+- **Wins earn points.** Each club can give its points its own name. You also earn them for turning up to play days and for round robin wins.
 - **Losses never cost points.** So there's no reason to dodge a hard game.
 - **Some wins earn a bonus.** Beating a higher-ranked pair, playing a pair you haven't faced before and winning several in a row all earn extra.
-- **Points move you up the ranks.** At Three Wolves the ladder runs from Plastic Shuttle at the bottom to Diamond Racket at the top.
+- **Points move you up the ranks.** The ladder runs through named ranks from the bottom to the top, and each club can name its own.
 - **The top ranks need looking after.** Stop playing for 60 days and they start to tarnish. Play again to polish them back up.
 
 There's also a crown. One pair holds it, and beating them earns a bonus.
@@ -74,7 +75,7 @@ The leaderboard lives in Arena. It shows your club's players and where they stan
 
 **Do I have to take part?** No. Arena is optional. Plenty of members just play socially.
 
-**Can I play singles?** Arena at Three Wolves is for pairs.
+**Can I play singles?** For now, Arena is for pairs.
 
 **We couldn't finish the game.** You can record that a pair retired instead of entering a score.
 

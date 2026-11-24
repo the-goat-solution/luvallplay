@@ -4,6 +4,7 @@ summary: "Một phần lõi gọn mà CLB nào cũng có, cùng các mô-đun tu
 audience: organisers
 order: 6
 updated: 2026-11-24
+features: modules
 ---
 
 ## Mặc định là gọn
@@ -48,7 +49,7 @@ Những mô-đun này chỉ hiện nếu CLB có thu phí. Xem [chọn cách CLB
 
 - **Arena.** Thách đấu và bảng xếp hạng của CLB. Xem [thách đấu và bảng xếp hạng](/help/challenges-and-the-ladder).
 - **Thư viện ảnh.** Ảnh từ các buổi chơi, được người tổ chức duyệt trước khi hiện lên.
-- **Vision.** Phân tích trận đấu từ video quay bằng điện thoại. Chỉ dành cho cầu lông, và hiện chỉ thành viên Three Wolves dùng được. Xem [Vision](/vision).
+- **Vision.** Phân tích trận đấu từ video quay bằng điện thoại. Chỉ dành cho cầu lông, và hiện chỉ mở cho thành viên của câu lạc bộ đầu tiên trên Luvallplay. Xem [Vision](/vision).
 - **Thành viên nhỏ tuổi.** Danh sách các em kèm liên hệ của người giám hộ. Xem [thành viên nhỏ tuổi và người giám hộ](/help/juniors-and-guardians).
 
 ## Gói gợi ý: bắt đầu cho nhanh

@@ -4,6 +4,7 @@ summary: "Không cần nhớ mật khẩu. Nhập email, nhận mã 6 chữ số
 audience: players
 order: 10
 updated: 2026-11-24
+features: sessions, storeApps
 ---
 
 ## Không cần mật khẩu
@@ -12,7 +13,7 @@ Bạn không bao giờ phải đặt mật khẩu. Mỗi lần đăng nhập, ch
 
 Vì sao? Mật khẩu hay bị quên, bị dùng lại và bị đánh cắp. Mỗi lần một mã mới thì đơn giản hơn cho bạn và an toàn hơn cho CLB.
 
-Bài này mô tả cách đăng nhập của thành viên Three Wolves hiện nay. Khi các CLB khác tham gia, họ cũng sẽ đăng nhập theo cách này.
+Bài này mô tả cách đăng nhập hiện nay của thành viên câu lạc bộ đầu tiên trên Luvallplay. Khi các CLB khác tham gia, họ cũng sẽ đăng nhập theo cách này.
 
 ## Cách đăng nhập
 
@@ -35,7 +36,7 @@ Lần đầu tiên, bạn sẽ được hỏi tên để CLB biết bạn là ai
 
 ## Đăng nhập bằng tin nhắn
 
-Ở Three Wolves, đôi khi bạn có thể chọn **Gửi mã qua tin nhắn** để nhận mã qua SMS. Cách này chỉ dùng được với số di động New Zealand, và không phải lúc nào cũng có. Nếu không thấy lựa chọn đó, hoặc nó không chạy, hãy dùng email. Email thì lúc nào cũng dùng được.
+Ở CLB đầu tiên này, đôi khi bạn có thể chọn **Gửi mã qua tin nhắn** để nhận mã qua SMS. Cách này chỉ dùng được với số di động New Zealand, và không phải lúc nào cũng có. Nếu không thấy lựa chọn đó, hoặc nó không chạy, hãy dùng email. Email thì lúc nào cũng dùng được.
 
 ## Mã chưa đến
 

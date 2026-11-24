@@ -1,9 +1,10 @@
 ---
 title: "Vision: quay lại trận đấu của bạn"
-summary: "Đặt điện thoại phía sau sân, Vision sẽ biến trận đấu thành số liệu. Chỉ cho cầu lông, và hiện chỉ dành cho thành viên Three Wolves."
+summary: "Đặt điện thoại phía sau sân, Vision sẽ biến trận đấu thành số liệu. Chỉ cho cầu lông, hiện chỉ mở cho thành viên CLB đầu tiên trên Luvallplay."
 audience: players
 order: 13
 updated: 2026-11-24
+features: vision
 ---
 
 ## Vision làm được gì
@@ -23,13 +24,13 @@ Sau trận, bạn nhận được các con số của trận mình, như:
 Có hai giới hạn, xin nói thật:
 
 - **Chỉ cho cầu lông.** Vision được huấn luyện với cầu lông. Các môn khác có thể có sau, nhưng chúng tôi chưa hứa ngày nào.
-- **Hiện chỉ dành cho thành viên Three Wolves.** Ở Three Wolves, tính năng này có tên Wolf Vision và được dùng cho các trận thách đấu trong Arena.
+- **Hiện chỉ dành cho thành viên của câu lạc bộ đầu tiên trên Luvallplay.** Ở đó, tính năng này được dùng cho các trận thách đấu trong Arena.
 
-Mỗi trận cần một lượt dùng. Thành viên Three Wolves xem được thông tin lượt dùng hiện hành trong ứng dụng trước khi bắt đầu.
+Mỗi trận cần một lượt dùng. Thành viên xem được thông tin lượt dùng hiện hành trong ứng dụng trước khi bắt đầu.
 
 ## Bạn cần gì
 
-- **Một chiếc điện thoại đời mới.** Để theo dõi trực tiếp, Three Wolves yêu cầu iPhone 14 trở lên.
+- **Một chiếc điện thoại đời mới.** Để theo dõi trực tiếp, CLB yêu cầu iPhone 14 trở lên.
 - **Chân máy hoặc giá kẹp chắc chắn.** Điện thoại phải đứng yên hoàn toàn.
 - **Khoảng trống phía sau sân.** Lùi vài bước tính từ vạch cuối sân.
 
@@ -85,7 +86,7 @@ Máy quay đặt ở sân sẽ ghi hình mọi người trên sân, đôi khi c�
 
 ## Video của bạn đi đâu
 
-Ở Three Wolves, video nằm lại trên điện thoại của bạn. Chỉ các con số cuối cùng được lưu, và chỉ với những trận thách đấu có đặt điện thoại.
+Ở CLB đầu tiên, video nằm lại trên điện thoại của bạn. Chỉ các con số cuối cùng được lưu, và chỉ với những trận thách đấu có đặt điện thoại.
 
 ## Con số chỉ để tham khảo
 

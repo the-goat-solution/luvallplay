@@ -4,6 +4,7 @@ summary: "A small core every club gets, plus optional modules you switch on when
 audience: organisers
 order: 6
 updated: 2026-11-24
+features: modules
 ---
 
 ## Small by default
@@ -48,7 +49,7 @@ These only appear if your club charges. See [choose how your club charges](/help
 
 - **Arena.** Challenges and a club ladder. See [challenges and the ladder](/help/challenges-and-the-ladder).
 - **Gallery.** Photos from your sessions, checked by an organiser before they appear.
-- **Vision.** Game analysis from a phone video. Badminton only, and for now only for Three Wolves members. See [Vision](/vision).
+- **Vision.** Game analysis from a phone video. Badminton only, and for now it is only open to members of the first club on Luvallplay. See [Vision](/vision).
 - **Juniors.** A junior roster with guardian contacts. See [juniors and guardians](/help/juniors-and-guardians).
 
 ## Presets: a quick start

@@ -77,4 +77,4 @@ Note who came, who was new and who you haven't seen for a while. A short "missed
 
 ## Where Luvallplay fits
 
-Sign-ups, waitlists, "I can't make it" and attendance are the admin behind all of this. Three Wolves members use them today. See how they work in [bookings, waitlists and can't make it](/help/bookings-waitlists-and-cant-make-it). Want them for your club? [Join the waitlist](/help/start-your-club-waitlist).
+Sign-ups, waitlists, "I can't make it" and attendance are the admin behind all of this. Members of the first club on Luvallplay use them today. See how they work in [bookings, waitlists and can't make it](/help/bookings-waitlists-and-cant-make-it). Want them for your club? [Join the waitlist](/help/start-your-club-waitlist).

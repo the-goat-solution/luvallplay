@@ -18,9 +18,10 @@ export const settings: SiteSettings = {
   appStoreUrl: "",
   playStoreUrl: "",
   bookingUrl: "",
-  contactEmail: "",
+  contactEmail: "support@thegoatsolution.com",
   companyName: "The GOAT Solution",
-  companyAddress: "",
+  // As published on thegoatsolution.com (read 24 Nov 2026).
+  companyAddress: "No. 11, lane 17, Huong Vien street, Dong Mac ward, Hai Ba Trung district, Hanoi, Vietnam 10000",
 };
 
 export const sports: Sport[] = [
@@ -53,42 +54,43 @@ export const clubs: Club[] = [
     schedule: l("Wednesday and Friday evenings", "Tối thứ Tư và thứ Sáu"),
     audience: l("Social play", "Chơi giao lưu"),
     description: l(
-      "The club where Luvallplay started. Social badminton twice a week in Christchurch.",
-      "Câu lạc bộ nơi Luvallplay bắt đầu. Cầu lông giao lưu hai buổi mỗi tuần tại Christchurch.",
+      "The first club on Luvallplay. Social badminton twice a week in Christchurch.",
+      "Câu lạc bộ đầu tiên trên Luvallplay. Cầu lông giao lưu hai buổi mỗi tuần tại Christchurch.",
     ),
     url: "https://threewolvesbadminton.org",
+    logo: { url: "/clubs/three-wolves.png", alt: l("Three Wolves Badminton Club logo", "Logo Three Wolves Badminton Club") },
   },
 ];
 
 export const home: HomePage = {
   _id: "homePage",
   _type: "homePage",
-  seoTitle: l("Luvallplay: the app for sports clubs and their players", "Luvallplay: ứng dụng cho câu lạc bộ thể thao và người chơi"),
+  seoTitle: l("Luvallplay: run your sports club in one app", "Luvallplay: quản lý câu lạc bộ thể thao trong một ứng dụng"),
   seoDescription: l(
-    "Sessions, sign-ups, memberships, challenges and rankings for clubs that play regularly. Started with badminton. Free for players, free for founding clubs.",
-    "Lịch chơi, đăng ký, hội viên, thách đấu và bảng xếp hạng cho các câu lạc bộ chơi đều đặn. Bắt đầu từ cầu lông. Miễn phí cho người chơi và cho các câu lạc bộ sáng lập.",
+    "Sign-ups, waitlists, memberships and fees for clubs that play every week, in your club’s own colours. Free for founding clubs and for players.",
+    "Đăng ký, danh sách chờ, hội viên và thu phí cho các câu lạc bộ chơi hằng tuần, mang màu sắc riêng của câu lạc bộ. Miễn phí cho câu lạc bộ sáng lập và người chơi.",
   ),
   ticker: {
     label: l("On Luvallplay", "Trên Luvallplay"),
     linkLabel: l("Find a club", "Tìm câu lạc bộ"),
     items: [
-      { _key: "t1", strong: l("Three Wolves Badminton Club", "Three Wolves Badminton Club"), rest: l("Christchurch · Wednesday and Friday evenings", "Christchurch · tối thứ Tư và thứ Sáu") },
       { _key: "t2", strong: l("Badminton", "Cầu lông"), rest: l("live now", "đã hoạt động") },
       { _key: "t3", strong: l("Pickleball, tennis, futsal and more", "Pickleball, quần vợt, futsal và nhiều môn khác"), rest: l("coming soon", "sắp ra mắt") },
-      { _key: "t4", strong: l("English and Vietnamese", "Tiếng Việt và tiếng Anh"), rest: l("in every screen", "trên mọi màn hình") },
       { _key: "t5", strong: l("Founding clubs", "Câu lạc bộ sáng lập"), rest: l("the waitlist is open", "đang mở danh sách chờ") },
     ],
   },
   hero: {
-    badge: l("Meet Vision: your game, on film, in numbers", "Làm quen với Vision: trận đấu của bạn qua video và con số"),
-    title: l("Your club’s favourite night of the", "Buổi tối cả câu lạc bộ mong nhất trong"),
-    titleAccent: l("week.", "tuần."),
+    badge: l("Founding clubs use Luvallplay free", "Câu lạc bộ sáng lập dùng Luvallplay miễn phí"),
+    title: l("Less admin. More", "Bớt việc sổ sách. Thêm giờ"),
+    titleAccent: l("play.", "ra sân."),
     lead: l(
-      "Luvallplay brings your sessions, sign-ups, ladder and the people you play with into one friendly app. Everyone starts at 0–0.",
-      "Luvallplay gom lịch chơi, đăng ký, bảng xếp hạng và những người bạn chơi cùng vào một ứng dụng thân thiện. Ai cũng bắt đầu từ 0–0.",
+      "Sign-ups, waitlists, memberships and fees for clubs that play every week. One place to run it all, in your club’s own name and colours.",
+      "Đăng ký, danh sách chờ, hội viên và thu phí cho các câu lạc bộ chơi hằng tuần. Một nơi để lo mọi việc, mang tên và màu sắc của chính câu lạc bộ bạn.",
     ),
-    primaryCta: l("Find a club near you", "Tìm câu lạc bộ gần bạn"),
-    secondaryCta: l("Bring your club", "Đưa câu lạc bộ của bạn lên"),
+    primaryCta: l("Start your club", "Mở câu lạc bộ của bạn"),
+    secondaryCta: l("Book a walkthrough", "Hẹn buổi giới thiệu"),
+    playerLine: l("Looking for a game?", "Bạn đang tìm chỗ chơi?"),
+    playerCta: l("Find a club near you", "Tìm câu lạc bộ gần bạn"),
     photos: [
       { _key: "p1", fallbackAlt: l("Illustration: a shuttle in flight", "Minh hoạ: quả cầu lông đang bay") },
       { _key: "p2", fallbackAlt: l("Illustration: a paddle and ball", "Minh hoạ: vợt và bóng") },
@@ -97,48 +99,99 @@ export const home: HomePage = {
     ],
     scoreLabel: l("Demo game", "Trận mẫu"),
     scoreCaption: l("You and a partner", "Bạn và đồng đội"),
-    nextLabel: l("Next play day", "Buổi chơi tới"),
-    nextTitle: l("Friday social", "Giao lưu thứ Sáu"),
-    nextMeta: l("Evening · You’re in", "Buổi tối · Bạn đã có chỗ"),
-    kudos: l("A clubmate sent you kudos", "Một bạn chơi vừa gửi lời khen"),
+    nextLabel: l("Friday social", "Giao lưu thứ Sáu"),
+    nextTitle: l("Full", "Đã đủ người"),
+    nextMeta: l("The waitlist moves up on its own", "Danh sách chờ tự đôn lên"),
+    paidChip: l("Payment recorded", "Đã ghi nhận thanh toán"),
   },
   sports: {
     intro: l("Started with badminton. Open to every club that plays regularly.", "Bắt đầu từ cầu lông. Chào đón mọi câu lạc bộ chơi đều đặn."),
   },
   features: {
-    title: l("Everything in your kit bag.", "Đủ đồ trong túi của bạn."),
+    title: l("Built for the people who run the club.", "Làm ra cho những người điều hành câu lạc bộ."),
     lead: l(
-      "Seven tools, one app, zero spreadsheets. Your club keeps its own colours and words.",
-      "Bảy công cụ, một ứng dụng, không cần bảng tính. Câu lạc bộ giữ nguyên màu sắc và cách gọi riêng.",
+      "Fewer spreadsheets, fewer reminders in the group chat, less chasing payments. Switch on what your club needs.",
+      "Bớt bảng tính, bớt nhắc nhở trong nhóm chat, bớt đi đòi tiền. Bật đúng những gì câu lạc bộ cần.",
     ),
     items: [
-      { key: "sessions", status: "live", title: l("Sessions and sign-ups", "Lịch chơi và đăng ký"), body: l("Book a spot in two taps. Waitlists move up on their own.", "Giữ chỗ chỉ với hai lần chạm. Danh sách chờ tự động đôn lên.") },
-      { key: "rankings", status: "live", title: l("Rankings", "Xếp hạng"), body: l("A fair ladder for every level, updated after each game.", "Bảng xếp hạng công bằng cho mọi trình độ, cập nhật sau mỗi trận.") },
-      { key: "challenges", status: "live", title: l("Challenges", "Thách đấu"), body: l("Post one in the Arena and see who’s up for it.", "Đăng một lời thách đấu trong Arena và xem ai nhận lời.") },
-      { key: "memberships", status: "live", title: l("Memberships", "Hội viên"), body: l("Fees paid, renewals reminded. Clubs that play for free never see a price.", "Phí đã đóng, gia hạn được nhắc. Câu lạc bộ chơi miễn phí thì không thấy giá nào cả.") },
-      { key: "finder", status: "live", title: l("Club finder", "Tìm câu lạc bộ"), body: l("Clubs on Luvallplay, by sport and city. More join as we open up.", "Các câu lạc bộ trên Luvallplay theo môn và thành phố. Sẽ có thêm khi chúng tôi mở rộng.") },
-      { key: "social", status: "soon", title: l("Social", "Kết nối"), body: l("Kudos, follows and the people you play with.", "Lời khen, theo dõi và những người bạn chơi cùng.") },
-      { key: "marketplace", status: "soon", title: l("Marketplace", "Chợ đồ thể thao"), body: l("Swap rackets, sell shoes, buy club kit.", "Đổi vợt, bán giày, mua đồ câu lạc bộ.") },
+      {
+        key: "sessions",
+        status: "live",
+        title: l("Sessions that fill themselves", "Buổi chơi tự kín chỗ"),
+        body: l(
+          "Set the spots once. Members sign up, the waitlist moves up when someone can’t make it, and you know who’s coming.",
+          "Đặt số chỗ một lần. Hội viên tự đăng ký, danh sách chờ tự đôn lên khi có người báo bận, và bạn biết ai sẽ đến.",
+        ),
+      },
+      {
+        key: "fees",
+        status: "live",
+        title: l("Fees, your way", "Thu phí theo cách của bạn"),
+        body: l(
+          "Free play, cash or bank transfer, or online payments to your club’s own Stripe account. You can change it later.",
+          "Chơi miễn phí, tiền mặt hoặc chuyển khoản, hay thanh toán trực tuyến vào tài khoản Stripe riêng của câu lạc bộ. Sau này vẫn đổi được.",
+        ),
+      },
+      {
+        key: "memberships",
+        status: "live",
+        title: l("Memberships, no chasing", "Hội viên, không phải đi nhắc"),
+        body: l(
+          "Members join and renew in the app. Renewals are reminded for you, and you see who has paid at a glance.",
+          "Hội viên tham gia và gia hạn ngay trong ứng dụng. Việc gia hạn được nhắc thay bạn, và bạn biết ngay ai đã đóng.",
+        ),
+      },
+      {
+        key: "brand",
+        status: "live",
+        title: l("Your club’s name, not ours", "Tên câu lạc bộ, không phải tên chúng tôi"),
+        body: l(
+          "Your name, logo and words lead. Pick a tested colour scheme or bring your own, checked for contrast in light and dark.",
+          "Tên, logo và cách gọi của bạn luôn đứng trước. Chọn một bộ màu đã kiểm thử hoặc dùng màu riêng, được kiểm tra độ tương phản cả giao diện sáng lẫn tối.",
+        ),
+      },
+      {
+        key: "admin",
+        status: "live",
+        title: l("One admin area", "Một khu quản trị"),
+        body: l(
+          "Sessions, members, payments and messages for everyone who helps run the club, in English and Vietnamese.",
+          "Lịch chơi, hội viên, thanh toán và tin nhắn cho mọi người cùng điều hành câu lạc bộ, bằng tiếng Việt và tiếng Anh.",
+        ),
+      },
+      {
+        key: "modules",
+        status: "live",
+        title: l("Add what you need", "Thêm thứ bạn cần"),
+        body: l(
+          "Sessions, members and messages are always on. Switch on challenges, rankings or a shop when you’re ready.",
+          "Lịch chơi, hội viên và tin nhắn luôn có sẵn. Bật thách đấu, xếp hạng hay cửa hàng khi bạn sẵn sàng.",
+        ),
+      },
     ],
     sessionRows: [
-      { _key: "r1", name: l("Wed · Social play", "Thứ Tư · Chơi giao lưu"), meta: l("Evening · spots open", "Buổi tối · còn chỗ"), action: l("Book", "Giữ chỗ") },
-      { _key: "r2", name: l("Fri · Social play", "Thứ Sáu · Chơi giao lưu"), meta: l("Evening · full", "Buổi tối · đã đầy"), action: l("Waitlist", "Vào danh sách chờ") },
+      { _key: "r1", name: l("Wed · Social play", "Thứ Tư · Chơi giao lưu"), meta: l("Evening · spots open", "Buổi tối · còn chỗ"), action: l("Open", "Còn chỗ") },
+      { _key: "r2", name: l("Fri · Social play", "Thứ Sáu · Chơi giao lưu"), meta: l("Evening · waitlist on", "Buổi tối · có danh sách chờ"), action: l("Full", "Đã đủ") },
     ],
-    finderCta: l("Find a club", "Tìm câu lạc bộ"),
-    mapChip: l("Three Wolves · Christchurch", "Three Wolves · Christchurch"),
+    feeModes: [
+      l("Free play", "Chơi miễn phí"),
+      l("Cash or bank transfer", "Tiền mặt hoặc chuyển khoản"),
+      l("Online, through Stripe", "Trực tuyến qua Stripe"),
+    ],
+    schemesCaption: l("12 tested colour schemes", "12 bộ màu đã kiểm thử"),
   },
   vision: {
     eyebrow: l("Luvallplay Vision", "Luvallplay Vision"),
     title: l("Film your game. See every rally.", "Quay trận đấu. Xem lại từng pha bóng."),
     lead: l(
-      "Prop your phone behind the court and play. Vision follows the players and the shots, cuts out the waiting between rallies, and gives you stats and highlights to look back on.",
-      "Dựng điện thoại sau sân rồi cứ chơi. Vision theo dõi người chơi và từng cú đánh, cắt bỏ thời gian chờ giữa các pha bóng, rồi đưa cho bạn số liệu và những pha hay để xem lại.",
+      "Prop your phone behind the court and play. Vision tracks every shot, trims the waiting, and hands you stats and highlights.",
+      "Dựng điện thoại sau sân rồi cứ chơi. Vision theo dõi từng cú đánh, cắt bỏ thời gian chờ, rồi gửi bạn số liệu và những pha hay.",
     ),
     primaryCta: l("Read about Vision", "Tìm hiểu Vision"),
     secondaryCta: l("See how it works", "Xem cách hoạt động"),
     note: l(
-      "Vision works for badminton today and is open to Three Wolves members first. More sports and clubs are coming soon.",
-      "Hiện Vision dùng cho cầu lông và mở trước cho hội viên Three Wolves. Các môn và câu lạc bộ khác sắp có.",
+      "Vision works for badminton today, at the first club on Luvallplay. More sports and clubs are coming soon.",
+      "Hiện Vision dùng cho cầu lông, tại câu lạc bộ đầu tiên trên Luvallplay. Các môn và câu lạc bộ khác sắp có.",
     ),
     figureCaption: l("Illustration: a sample analysis, not a real game", "Minh hoạ: bản phân tích mẫu, không phải trận đấu thật"),
     benefits: [
@@ -149,11 +202,16 @@ export const home: HomePage = {
     ],
   },
   how: {
-    title: l("From “who’s in?” to game on.", "Từ “ai đi không?” đến lúc vào sân."),
+    eyebrow: l("For your members", "Cho hội viên của bạn"),
+    title: l("An app members open every week.", "Ứng dụng hội viên mở mỗi tuần."),
+    lead: l(
+      "Players use Luvallplay free. They see the next game, book a spot and follow their ranking, so you answer fewer messages.",
+      "Người chơi dùng Luvallplay miễn phí. Họ xem buổi chơi tới, giữ chỗ và theo dõi thứ hạng, nên bạn bớt phải trả lời tin nhắn.",
+    ),
     steps: [
-      { _key: "s1", title: l("Find your people", "Tìm đúng hội của bạn"), body: l("Search clubs by sport and city.", "Tìm câu lạc bộ theo môn và thành phố.") },
-      { _key: "s2", title: l("Book a casual session", "Đặt một buổi chơi thử"), body: l("Try it once. Join when it feels like your place.", "Chơi thử một buổi. Thấy hợp thì tham gia.") },
-      { _key: "s3", title: l("Play, score, cheer", "Chơi, ghi điểm, cổ vũ"), body: l("Log the score, climb the ladder, cheer each other on.", "Ghi lại tỉ số, leo bảng xếp hạng, cổ vũ nhau.") },
+      { _key: "s1", title: l("Book in two taps", "Giữ chỗ với hai lần chạm"), body: l("Grab a spot, join the waitlist or say they can’t make it.", "Giữ chỗ, vào danh sách chờ hoặc báo không đến được.") },
+      { _key: "s2", title: l("Play, score, climb", "Chơi, ghi điểm, leo hạng"), body: l("A ladder per club and per sport, and challenges in the Arena.", "Bảng xếp hạng theo từng câu lạc bộ và từng môn, cùng thách đấu trong Arena.") },
+      { _key: "s3", title: l("Bring new players in", "Đón thêm người chơi mới"), body: l("Your club can appear in the club finder, so new players can try a casual session.", "Câu lạc bộ có thể xuất hiện trong mục tìm câu lạc bộ, để người mới chơi thử một buổi.") },
     ],
     storeNote: l(
       "The store apps are coming soon. Today Luvallplay runs in your phone’s browser.",
@@ -174,30 +232,33 @@ export const home: HomePage = {
     cta: l("How the ladder works", "Bảng xếp hạng hoạt động thế nào"),
   },
   finder: {
-    title: l("Who’s playing this week?", "Tuần này ai ra sân?"),
-    lead: l("Pick a sport, type your city. Try a casual session before you join.", "Chọn môn, nhập thành phố. Chơi thử một buổi trước khi tham gia."),
+    title: l("Looking for a game?", "Bạn đang tìm chỗ chơi?"),
+    lead: l("Pick a sport, type your city and try a casual session first.", "Chọn môn, nhập thành phố và chơi thử một buổi trước."),
   },
   story: {
-    title: l("Started at a club, for clubs.", "Bắt đầu từ một câu lạc bộ, dành cho các câu lạc bộ."),
+    title: l(
+      "Our first club is on court.",
+      "Câu lạc bộ đầu tiên đã ra sân.",
+    ),
     body: l(
-      "Luvallplay grew out of the app that runs Three Wolves Badminton Club in Christchurch, New Zealand. Twice a week the club books courts, fills them and keeps score with it. Now we’re opening the same tools to every club that plays regularly.",
-      "Luvallplay lớn lên từ ứng dụng đang vận hành Three Wolves Badminton Club ở Christchurch, New Zealand. Mỗi tuần hai buổi, câu lạc bộ dùng nó để đặt sân, xếp người và ghi điểm. Giờ chúng tôi mở những công cụ ấy cho mọi câu lạc bộ chơi đều đặn.",
+      "Three Wolves Badminton Club is the first club that uses Luvallplay. The same tools are opening to every club that plays regularly.",
+      "Three Wolves Badminton Club là câu lạc bộ đầu tiên dùng Luvallplay. Những công cụ ấy đang được mở cho mọi câu lạc bộ chơi đều đặn.",
     ),
     caption: l("Illustration. Real photos arrive with our founding clubs.", "Hình minh hoạ. Ảnh thật sẽ có cùng các câu lạc bộ sáng lập."),
   },
   clubs: {
-    eyebrow: l("For club organisers", "Dành cho người tổ chức"),
-    title: l("Bring your club. Keep your colours.", "Đưa câu lạc bộ lên. Giữ nguyên màu áo."),
+    eyebrow: l("Founding clubs", "Câu lạc bộ sáng lập"),
+    title: l("Start free as a founding club.", "Bắt đầu miễn phí cùng các câu lạc bộ sáng lập."),
     lead: l(
-      "Your club’s name, logo and words lead inside the app. Luvallplay takes care of sign-ups, fees and the ladder, in English and Vietnamese.",
-      "Tên, logo và cách gọi của câu lạc bộ luôn đứng trước trong ứng dụng. Luvallplay lo phần đăng ký, thu phí và bảng xếp hạng, bằng tiếng Việt và tiếng Anh.",
+      "We’re inviting clubs from the waitlist in small groups, starting in New Zealand. Founding clubs get every tool at no charge, and notice before anything changes.",
+      "Chúng tôi mời các câu lạc bộ từ danh sách chờ theo từng nhóm nhỏ, bắt đầu ở New Zealand. Câu lạc bộ sáng lập có đủ mọi công cụ mà không mất phí, và được báo trước khi có bất kỳ thay đổi nào.",
     ),
     primaryCta: l("Start your club", "Mở câu lạc bộ của bạn"),
     secondaryCta: l("Book a walkthrough", "Hẹn buổi giới thiệu"),
-    stats: [
-      { _key: "c1", value: l("1", "1"), label: l("Sport live, more coming", "Môn đã có, sắp thêm") },
-      { _key: "c2", value: l("12", "12"), label: l("Club colour schemes", "Bộ màu cho câu lạc bộ") },
-      { _key: "c3", value: l("2", "2"), label: l("Languages", "Ngôn ngữ") },
+    steps: [
+      { _key: "c1", title: l("Join the waitlist", "Vào danh sách chờ"), body: l("Tell us your sport, your city and how your club plays.", "Cho chúng tôi biết môn, thành phố và cách câu lạc bộ đang chơi.") },
+      { _key: "c2", title: l("Set up together", "Cùng thiết lập"), body: l("Your colours, your sessions, and members moved across from spreadsheets and chats.", "Màu sắc, lịch chơi, và hội viên được chuyển sang từ bảng tính và nhóm chat.") },
+      { _key: "c3", title: l("Run your first session", "Chạy buổi chơi đầu tiên"), body: l("Members sign up in the app. You watch the list fill.", "Hội viên đăng ký trong ứng dụng. Bạn chỉ việc xem danh sách kín dần.") },
     ],
   },
   pricing: {
@@ -239,12 +300,12 @@ export const pages: Page[] = [
     "vision",
     l("Vision: film your game, see every rally", "Vision: quay trận đấu, xem lại từng pha bóng"),
     l(
-      "Vision turns a phone video of your game into stats and highlights. It works for badminton today and is open to Three Wolves members first.",
-      "Vision biến video quay bằng điện thoại thành số liệu và những pha bóng hay. Hiện Vision dùng cho cầu lông và mở trước cho hội viên Three Wolves.",
+      "Vision turns a phone video of your game into stats and highlights. It works for badminton today, at the first club on Luvallplay.",
+      "Vision biến video quay bằng điện thoại thành số liệu và những pha bóng hay. Hiện Vision dùng cho cầu lông, tại câu lạc bộ đầu tiên trên Luvallplay.",
     ),
     l(
-      "Luvallplay Vision analyses a phone video of your badminton game: players, shots, rallies and highlights. Open to Three Wolves members first.",
-      "Luvallplay Vision phân tích video cầu lông quay bằng điện thoại: người chơi, cú đánh, pha bóng và khoảnh khắc đẹp. Mở trước cho hội viên Three Wolves.",
+      "Luvallplay Vision analyses a phone video of your badminton game: players, shots, rallies and highlights. More sports are coming soon.",
+      "Luvallplay Vision phân tích video cầu lông quay bằng điện thoại: người chơi, cú đánh, pha bóng và khoảnh khắc đẹp. Các môn khác sắp có.",
     ),
     [
       [
@@ -275,9 +336,9 @@ export const pages: Page[] = [
       [
         l("Who can use it today", "Hiện ai dùng được"),
         l(
-          "Vision is real and in use, but it is early. Today it analyses badminton only, and it is available to members of Three Wolves Badminton Club. Other sports and other clubs are coming soon. Leave your email and we’ll tell you when it opens up.",
-          "Vision là thật và đang được dùng, nhưng mới ở giai đoạn đầu. Hiện Vision chỉ phân tích cầu lông và dành cho hội viên Three Wolves Badminton Club. Các môn và câu lạc bộ khác sắp có. Để lại email, chúng tôi sẽ báo khi Vision mở rộng.",
-        ),
+      "Vision is real and in use, but it is early. Today it analyses badminton only, and it is open to members of the first club on Luvallplay. Other sports and other clubs are coming soon. Leave your email and we’ll tell you when it opens up.",
+      "Vision là thật và đang được dùng, nhưng mới ở giai đoạn đầu. Hiện Vision chỉ phân tích cầu lông và dành cho hội viên của câu lạc bộ đầu tiên trên Luvallplay. Các môn và câu lạc bộ khác sắp có. Để lại email, chúng tôi sẽ báo khi Vision mở rộng.",
+    ),
       ],
       [
         l("Your video stays yours", "Video vẫn là của bạn"),
@@ -303,9 +364,9 @@ export const pages: Page[] = [
       [
         l("What’s running today", "Những gì đang chạy"),
         l(
-          "Three Wolves Badminton Club in Christchurch runs on Luvallplay twice a week. These tools are in daily use there.",
-          "Three Wolves Badminton Club ở Christchurch dùng Luvallplay hai buổi mỗi tuần. Những công cụ sau đang được dùng hằng ngày ở đó.",
-        ),
+      "These tools are in use every week at the first club on Luvallplay.",
+      "Những công cụ sau đang được dùng hằng tuần tại câu lạc bộ đầu tiên trên Luvallplay.",
+    ),
         [
           l("Sessions, sign-ups and waitlists that move up on their own.", "Lịch chơi, đăng ký và danh sách chờ tự đôn lên."),
           l("Memberships and casual sessions, paid online or recorded by hand.", "Hội viên và buổi chơi lẻ, trả trực tuyến hoặc ghi nhận thủ công."),
@@ -412,16 +473,19 @@ export const pages: Page[] = [
       "“Love all, play.” là tiếng hô mở đầu một trận đấu: 0–0, bắt đầu. Ai cũng ngang nhau, ai cũng được chào đón.",
     ),
     l(
-      "Luvallplay is a platform for sports clubs and their players, started at Three Wolves Badminton Club in Christchurch, New Zealand.",
-      "Luvallplay là nền tảng cho câu lạc bộ thể thao và người chơi, bắt đầu từ Three Wolves Badminton Club ở Christchurch, New Zealand.",
+      "Luvallplay is a platform for sports clubs and their players: sessions, sign-ups, memberships, challenges and rankings, in English and Vietnamese.",
+      "Luvallplay là nền tảng cho câu lạc bộ thể thao và người chơi: lịch chơi, đăng ký, hội viên, thách đấu và xếp hạng, bằng tiếng Việt và tiếng Anh.",
     ),
     [
       [
-        l("Where it started", "Khởi đầu"),
         l(
-          "Luvallplay began as the app behind Three Wolves Badminton Club, a social club that plays on Wednesday and Friday evenings in Christchurch. It handled the weekly question every organiser knows: who’s in, who has paid, and who’s on which court.",
-          "Luvallplay khởi đầu là ứng dụng của Three Wolves Badminton Club, một câu lạc bộ giao lưu chơi vào tối thứ Tư và thứ Sáu ở Christchurch. Nó giải quyết câu hỏi hằng tuần mà người tổ chức nào cũng quen: ai đi, ai đã đóng tiền, ai đánh sân nào.",
-        ),
+      "What it does",
+      "Luvallplay làm gì",
+    ),
+        l(
+      "Luvallplay answers the weekly question every organiser knows: who’s in, who has paid, and who’s on which court. Players book a spot, clubs fill their sessions, and everyone keeps score.",
+      "Luvallplay trả lời câu hỏi hằng tuần mà người tổ chức nào cũng quen: ai đi, ai đã đóng tiền, ai đánh sân nào. Người chơi giữ chỗ, câu lạc bộ xếp đủ người, và ai cũng ghi được điểm.",
+    ),
       ],
       [
         l("Where it’s going", "Hướng đi"),
@@ -443,11 +507,24 @@ export const pages: Page[] = [
       [
         l("Who’s behind it", "Ai đứng sau"),
         l(
-          "Luvallplay is a product of The GOAT Solution. Three Wolves Badminton Club is its first club and keeps its own name and look.",
-          "Luvallplay là sản phẩm của The GOAT Solution. Three Wolves Badminton Club là câu lạc bộ đầu tiên và vẫn giữ tên cùng diện mạo riêng.",
-        ),
+      "Luvallplay is a product of The GOAT Solution. Its first club is Three Wolves Badminton Club.",
+      "Luvallplay là sản phẩm của The GOAT Solution. Câu lạc bộ đầu tiên là Three Wolves Badminton Club.",
+    ),
       ],
     ],
+  ),
+  page(
+    "availability",
+    l("What’s live today", "Hôm nay đã có gì"),
+    l(
+      "A plain list of what you can use on Luvallplay now, what is in early use, and what is still coming. We keep it current as features ship.",
+      "Danh sách rõ ràng về những gì dùng được trên Luvallplay hôm nay, những gì đang dùng thử và những gì sắp có. Chúng tôi cập nhật mỗi khi có tính năng mới.",
+    ),
+    l(
+      "What is available on Luvallplay today, what is in early use, and what is coming soon, kept current as features ship.",
+      "Những gì đã có trên Luvallplay hôm nay, những gì đang dùng thử và những gì sắp ra mắt, được cập nhật khi có tính năng mới.",
+    ),
+    [],
   ),
   page(
     "help",

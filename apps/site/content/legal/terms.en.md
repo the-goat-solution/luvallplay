@@ -56,7 +56,7 @@ We may ignore or delete submissions that break these rules, and block the source
 
 The Luvallplay name and logo, and the words, design and images on this website, belong to us or to those who licensed them to us. You're welcome to view the website, share links to it and quote short passages with credit. Please don't copy it in bulk, or use our name or logo in a way that suggests we endorse you, without asking first.
 
-Three Wolves Badminton Club is named on this website, with permission, as the first club. Its name and logo belong to the club.
+Three Wolves Badminton Club is named on this website, with permission, as the first club using Luvallplay. Its name and logo belong to the club.
 
 Other names mentioned on this website belong to their owners.
 

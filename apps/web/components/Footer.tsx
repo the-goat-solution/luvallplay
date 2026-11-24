@@ -7,6 +7,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import { Trans } from "@/components/Trans";
 import type { Lang } from "@/lib/i18n";
 
+// The platform's public site.
+const LUVALLPLAY_URL = "https://luvallplay.com";
 const FB_URL = "https://www.facebook.com/profile.php?id=61575583556969";
 
 export function Footer() {
@@ -188,6 +190,11 @@ export function Footer() {
             </div>
           </div>
         </div>
+
+        <a className="footer-platform" href={LUVALLPLAY_URL} target="_blank" rel="noopener">
+          <span>{lang === "vi" ? "Câu lạc bộ vận hành trên" : "Our club runs on"}</span>
+          <img src="/brand/luvallplay-lockup-dark.svg" alt="Luvallplay" width={125} height={24} />
+        </a>
 
         <div className="footer-bottom">
           <p className="footer-copy">

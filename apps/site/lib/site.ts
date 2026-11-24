@@ -1,5 +1,5 @@
 // Where the site lives, its routes, and where each call to action leads.
-import type { Lang, SiteSettings } from "./types";
+import type { Availability, AvailabilityItem, Lang, SiteSettings } from "./types";
 
 type Env = Record<string, string | undefined>;
 
@@ -32,6 +32,7 @@ export function indexingAllowed(settings: Pick<SiteSettings, "searchIndexing">, 
 /** Every static page, as a path without the language prefix. "" is home. */
 export const STATIC_PATHS = [
   "",
+  "/availability",
   "/vision",
   "/for-clubs",
   "/find-a-club",
@@ -78,6 +79,15 @@ export function ctaTarget(kind: CtaKind, lang: Lang, s: SiteSettings): CtaTarget
   }
 }
 
+/** The current state of one feature (content/availability.ts, or Sanity). */
+export function availabilityOf(content: { availability: Availability }, key: string): AvailabilityItem | undefined {
+  return content.availability.items.find((i) => i.key === key);
+}
+/** True unless the feature is fully live. An unknown key counts as not yet available. */
+export function notYetLive(content: { availability: Availability }, key: string): boolean {
+  return availabilityOf(content, key)?.status !== "live";
+}
+
 /** Accent-insensitive, case-insensitive text for search (Vietnamese aware). */
 export function fold(s: string): string {
   return s
@@ -86,4 +96,9 @@ export function fold(s: string): string {
     .replace(/[đĐ]/g, "d")
     .toLowerCase()
     .trim();
+}
+
+/** A club logo: sized by Sanity's CDN when it lives there, as is when local. */
+export function logoSrc(url: string, width = 160): string {
+  return url.startsWith("https://cdn.sanity.io/") ? `${url}?w=${width}&fit=max&auto=format` : url;
 }

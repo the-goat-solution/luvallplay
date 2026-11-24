@@ -4,11 +4,12 @@ summary: "Luvallplay isn't open for new clubs yet. Here's how the waitlist and f
 audience: organisers
 order: 2
 updated: 2026-11-24
+features: newClubs, setupWizard
 ---
 
 ## Where things stand
 
-Luvallplay isn't open for new clubs yet. One club runs on it today: Three Wolves Badminton Club in Christchurch. We're building the tools that let any club set itself up, and we want to get them right before we hand them over.
+Luvallplay isn't open for new clubs yet. One club runs on it today, a badminton club in Christchurch. We're building the tools that let any club set itself up, and we want to get them right before we hand them over.
 
 So for now, "Start your club" means "join the waitlist". It takes about a minute.
 

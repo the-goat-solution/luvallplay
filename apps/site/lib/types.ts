@@ -49,6 +49,11 @@ export type SiteSettings = {
 };
 
 export type Feature = { key: string; title: L; body: L; status: "live" | "soon" };
+
+/** One line of the availability list (content/availability.ts). It wins over a tile's own status. */
+export type AvailabilityStatus = "live" | "limited" | "soon";
+export type AvailabilityItem = { _key: string; key: string; group: "players" | "clubs" | "platform"; status: AvailabilityStatus; name: L; note: L };
+export type Availability = { _id: "availability"; _type: "availability"; updated: string; items: AvailabilityItem[] };
 export type TitledText = { _key: string; title: L; body: L };
 
 export type HomePage = {
@@ -64,22 +69,25 @@ export type HomePage = {
     lead: L;
     primaryCta: L;
     secondaryCta: L;
+    /** The quieter line under the buttons, for players. */
+    playerLine: L;
+    playerCta: L;
     photos: { _key: string; image?: ImageSlot; fallbackAlt: L }[];
     scoreLabel: L;
     scoreCaption: L;
     nextLabel: L;
     nextTitle: L;
     nextMeta: L;
-    kudos: L;
+    paidChip: L;
   };
   sports: { intro: L };
-  features: { title: L; lead: L; items: Feature[]; sessionRows: { _key: string; name: L; meta: L; action: L }[]; finderCta: L; mapChip: L };
+  features: { title: L; lead: L; items: Feature[]; sessionRows: { _key: string; name: L; meta: L; action: L }[]; feeModes: L[]; schemesCaption: L };
   vision: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; note: L; figureCaption: L; benefits: TitledText[] };
-  how: { title: L; steps: TitledText[]; storeNote: L };
+  how: { eyebrow: L; title: L; lead: L; steps: TitledText[]; storeNote: L };
   rankings: { eyebrow: L; title: L; lead: L; note: L; cta: L };
   finder: { title: L; lead: L };
   story: { title: L; body: L; caption: L };
-  clubs: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; stats: { _key: string; value: L; label: L }[] };
+  clubs: { eyebrow: L; title: L; lead: L; primaryCta: L; secondaryCta: L; steps: TitledText[] };
   pricing: {
     players: { eyebrow: L; price: L; body: L; cta: L };
     clubs: { eyebrow: L; badge: L; price: L; body: L; note: L; cta: L };
@@ -128,6 +136,8 @@ export type HelpArticle = {
   audience: "organisers" | "players" | "everyone";
   order: number;
   updated: string;
+  /** Availability keys this article is about: their current status shows at the top. */
+  features?: string[];
   body: LBlocks;
 };
 
@@ -152,10 +162,11 @@ export type Testimonial = {
   consent: boolean;
 };
 
-export type Doc = SiteSettings | HomePage | Page | Sport | Club | FaqItem | HelpArticle | LegalPage | Testimonial;
+export type Doc = SiteSettings | Availability | HomePage | Page | Sport | Club | FaqItem | HelpArticle | LegalPage | Testimonial;
 
 export type Content = {
   settings: SiteSettings;
+  availability: Availability;
   home: HomePage;
   pages: Record<string, Page>;
   sports: Sport[];

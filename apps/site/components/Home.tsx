@@ -4,7 +4,7 @@ import { Finder, type FinderClub } from "./Finder";
 import { Icon } from "./icons";
 import { ScoreDemo } from "./ScoreDemo";
 import { t } from "@/lib/messages";
-import { ctaTarget, href } from "@/lib/site";
+import { availabilityOf, ctaTarget, href, logoSrc } from "@/lib/site";
 import type { Content, Lang } from "@/lib/types";
 
 type P = { lang: Lang; content: Content };
@@ -14,11 +14,13 @@ const PETAL_ICONS = ["shuttle", "paddle", "net", "court"];
 export function Hero({ lang, content }: P) {
   const m = t(lang);
   const h = content.home.hero;
+  const s = content.settings;
+  const walk = ctaTarget("walkthrough", lang, s);
   return (
     <section id="top" className="wrap hero">
       <div className="hero-copy">
-        <a href={href(lang, "/vision")} className="card hero-badge">
-          <span className="chip lime">{m.badge.new}</span>
+        <a href={href(lang, "/for-clubs")} className="card hero-badge">
+          <span className="chip lime"><Icon name="star" size={14} strokeWidth={2.4} /></span>
           {h.badge[lang]}
           <Icon name="arrow" size={16} />
         </a>
@@ -27,9 +29,15 @@ export function Hero({ lang, content }: P) {
         </h1>
         <p className="lead">{h.lead[lang]}</p>
         <div className="cta-row">
-          <a className="btn btn-primary btn-lg" href={href(lang, "/find-a-club")}><Icon name="pin" size={20} />{h.primaryCta[lang]}</a>
-          <a className="btn btn-secondary btn-lg" href={href(lang, "/for-clubs")}>{h.secondaryCta[lang]}</a>
+          <a className="btn btn-primary btn-lg" href={ctaTarget("startClub", lang, s).href}>{h.primaryCta[lang]}</a>
+          <a className="btn btn-secondary btn-lg" href={walk.href} rel={walk.external ? "noopener" : undefined}>{h.secondaryCta[lang]}</a>
         </div>
+        {h.playerLine ? (
+          <p className="hero-player">
+            {h.playerLine[lang]}{" "}
+            <a href={href(lang, "/find-a-club")}><Icon name="pin" size={16} />{h.playerCta[lang]}</a>
+          </p>
+        ) : null}
       </div>
       <div className="stage green court-lines">
         <div className="stage-mid" aria-hidden="true" />
@@ -49,39 +57,43 @@ export function Hero({ lang, content }: P) {
           <span className="h-card">{h.nextTitle[lang]}</span>
           <span className="score-note">{h.nextMeta[lang]}</span>
         </div>
-        <div className="navy kudos hide-sm" aria-hidden="true">
-          <span className="kudos-ic"><Icon name="heart" size={16} strokeWidth={2.2} /></span>
-          {h.kudos[lang]}
-        </div>
+        {h.paidChip ? (
+          <div className="navy kudos hide-sm" aria-hidden="true">
+            <span className="kudos-ic kudos-ok"><Icon name="check" size={16} strokeWidth={2.6} /></span>
+            {h.paidChip[lang]}
+          </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
-export function Sports({ lang, content }: P) {
-  const m = t(lang);
-  return (
-    <section aria-label={m.finder.sportsLabel} className="wrap sports">
-      <p className="muted" style={{ fontSize: 14 }}>{content.home.sports.intro[lang]}</p>
-      <ul>
-        {content.sports.map((s) => (
-          <li key={s.key} className="card">
-            {s.name[lang]}
-            {s.status === "live" ? <span className="chip lime">{m.badge.live}</span> : <span className="soon">{m.badge.soon}</span>}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
+const FEATURE_ICON: Record<string, string> = { memberships: "card", admin: "bell", modules: "flag" };
 
-const FEATURE_ICON: Record<string, string> = { challenges: "flag", memberships: "card", social: "chat", marketplace: "bag" };
+// The light primary and accent of each of the 12 club colour schemes
+// (packages/ui/src/color-schemes.json), shown as swatches.
+const SCHEMES: [string, string, string][] = [
+  ["Court Green", "#0e6b4f", "#d4f23c"], ["Midnight Rally", "#1e3a8a", "#fbbf24"], ["Shuttle Mono", "#18181b", "#facc15"],
+  ["Sunset Smash", "#c2410c", "#fde047"], ["Ocean Drive", "#0f766e", "#f9a8d4"], ["Royal Drop", "#6d28d9", "#6ee7b7"],
+  ["Cherry Net", "#be123c", "#fcd34d"], ["Electric Serve", "#1d4ed8", "#fb923c"], ["Jungle Rally", "#166534", "#fda4af"],
+  ["Aurora", "#0e7490", "#fef08a"], ["Plum Clear", "#86198f", "#5eead4"], ["Arctic Smash", "#075985", "#f0abfc"],
+];
 
 export function Features({ lang, content }: P) {
   const m = t(lang);
   const f = content.home.features;
   const by = Object.fromEntries(f.items.map((i) => [i.key, i]));
-  const soon = (key: string) => (by[key]?.status === "soon" ? <span className="chip chip-soft">{m.badge.soon}</span> : null);
+  // "Coming soon" comes from the availability list (content/availability.ts); the tile's own status is only a fallback.
+  const soon = (key: string) => ((availabilityOf(content, key)?.status ?? by[key]?.status) === "soon" ? <span className="chip chip-soft">{m.badge.soon}</span> : null);
+  const small = (k: string) =>
+    by[k] ? (
+      <div key={k} className="tile card lift rise">
+        <span className="ic-box"><Icon name={FEATURE_ICON[k] ?? "check"} size={26} /></span>
+        <h3 className="h-card">{by[k].title[lang]}</h3>
+        <p className="card-p">{by[k].body[lang]}</p>
+        {soon(k)}
+      </div>
+    ) : null;
   return (
     <section id="features" className="wrap sec">
       <div className="sec-head-center">
@@ -89,63 +101,61 @@ export function Features({ lang, content }: P) {
         <p className="lead-sm">{f.lead[lang]}</p>
       </div>
       <div className="bento">
-        <div className="tile tile-green green span2 on-green rise">
-          <div className="tile-head">
-            <div>
-              <h3 className="h-card" style={{ fontSize: 36 }}>{by.sessions.title[lang]}</h3>
-              <p>{by.sessions.body[lang]}</p>
-            </div>
-            <span className="ic-box ic-box-green"><Icon name="calendar" size={26} /></span>
-          </div>
-          <div className="rows" role="img" aria-label={`${m.badge.illustration}: ${f.sessionRows.map((r) => `${r.name[lang]}, ${r.meta[lang]}`).join("; ")}`}>
-            {f.sessionRows.map((r, i) => (
-              <div key={r._key} className="row" aria-hidden="true">
-                <b>{r.name[lang]}</b>
-                <span className="meta">{r.meta[lang]}</span>
-                <span className={`pill-mock ${i === 0 ? "btn-primary" : "btn-secondary"}`}>{r.action[lang]}</span>
+        {by.sessions ? (
+          <div className="tile tile-green green span2 on-green rise">
+            <div className="tile-head">
+              <div>
+                <h3 className="h-card" style={{ fontSize: 36 }}>{by.sessions.title[lang]}</h3>
+                <p>{by.sessions.body[lang]}</p>
               </div>
-            ))}
+              <span className="ic-box ic-box-green"><Icon name="calendar" size={26} /></span>
+            </div>
+            <div className="rows" role="img" aria-label={`${m.badge.illustration}: ${f.sessionRows.map((r) => `${r.name[lang]}, ${r.meta[lang]}`).join("; ")}`}>
+              {f.sessionRows.map((r, i) => (
+                <div key={r._key} className="row" aria-hidden="true">
+                  <span><b>{r.name[lang]}</b><span className="meta">{r.meta[lang]}</span></span>
+                  <span className={`pill-mock ${i === 0 ? "btn-primary" : "btn-secondary"}`}>{r.action[lang]}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        <div className="tile tile-navy navy on-dark rise">
-          <h3 className="h-card">{by.rankings.title[lang]}</h3>
-          <p className="muted">{by.rankings.body[lang]}</p>
-          <div className="ladder" role="img" aria-label={`${m.badge.illustration}: ${content.home.rankings.note[lang]}`}>
-            <div aria-hidden="true"><span className="pos">1</span><span className="bar" /></div>
-            <div aria-hidden="true" className="you lime"><span className="pos">2</span><span style={{ flex: 1 }}>{m.mock.you}</span></div>
-            <div aria-hidden="true"><span className="pos">3</span><span className="bar bar-short" /></div>
+        {by.fees ? (
+          <div className="tile tile-navy navy on-dark rise">
+            <h3 className="h-card">{by.fees.title[lang]}</h3>
+            <p className="muted">{by.fees.body[lang]}</p>
+            {f.feeModes?.length ? (
+              <ul className="fee-modes">
+                {f.feeModes.map((mode, i) => (
+                  <li key={i}><Icon name="check" size={16} strokeWidth={2.6} />{mode[lang]}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
-        </div>
+        ) : null}
 
-        {(["challenges", "memberships"] as const).map((k) => (
-          <div key={k} className="tile card lift rise">
-            <span className="ic-box"><Icon name={FEATURE_ICON[k]} size={26} /></span>
-            <h3 className="h-card">{by[k].title[lang]}</h3>
-            <p className="card-p">{by[k].body[lang]}</p>
-          </div>
-        ))}
+        {small("memberships")}
 
-        <div className="tile tile-finder card span2 rise">
-          <div>
-            <h3 className="h-card" style={{ fontSize: 36 }}>{by.finder.title[lang]}</h3>
-            <p className="card-p">{by.finder.body[lang]}</p>
-            <a className="btn btn-primary btn-sm" href={href(lang, "/find-a-club")}>{f.finderCta[lang]}</a>
+        {by.brand ? (
+          <div className="tile tile-brand card span2 rise">
+            <div>
+              <h3 className="h-card" style={{ fontSize: 36 }}>{by.brand.title[lang]}</h3>
+              <p className="card-p">{by.brand.body[lang]}</p>
+            </div>
+            <figure className="swatches">
+              <ul aria-hidden="true">
+                {SCHEMES.map(([name, primary, accent]) => (
+                  <li key={name} title={name} style={{ background: primary }}><i style={{ background: accent }} /></li>
+                ))}
+              </ul>
+              {f.schemesCaption ? <figcaption className="label muted">{f.schemesCaption[lang]}</figcaption> : null}
+            </figure>
           </div>
-          <div className="map" aria-hidden="true">
-            <i className="road1" /><i className="road2" /><i className="pin" />
-            <div className="glass map-chip">{f.mapChip[lang]}</div>
-          </div>
-        </div>
+        ) : null}
 
-        {(["social", "marketplace"] as const).map((k) => (
-          <div key={k} className="tile card lift rise">
-            <span className="ic-box"><Icon name={FEATURE_ICON[k]} size={26} />{k === "social" ? <span className="ic-dot" /> : null}</span>
-            <h3 className="h-card">{by[k].title[lang]}</h3>
-            <p className="card-p">{by[k].body[lang]}</p>
-            {soon(k)}
-          </div>
-        ))}
+        {small("admin")}
+        {small("modules")}
       </div>
     </section>
   );
@@ -222,21 +232,23 @@ export function Vision({ lang, content, page = false }: P & { page?: boolean }) 
               ) : (
                 <a className="btn btn-lime btn-lg" href={href(lang, "/vision")}><Icon name="video" size={20} />{v.primaryCta[lang]}</a>
               )}
-              <a className="btn btn-ghost btn-lg" href="#vision-how">{v.secondaryCta[lang]}</a>
+              {page ? <a className="btn btn-ghost btn-lg" href="#vision-how">{v.secondaryCta[lang]}</a> : null}
             </div>
           </div>
         </div>
         <VisionFigure lang={lang} content={content} />
-        <p className="vnote">{v.figureCaption[lang]}. {v.note[lang]}</p>
-        <div id="vision-how" className="benefits">
-          {v.benefits.map((b, i) => (
-            <div key={b._key} className="glass-dark benefit">
-              <Icon name={BENEFIT_ICONS[i % 4]} size={26} />
-              <B className="h-small">{b.title[lang]}</B>
-              <p>{b.body[lang]}</p>
-            </div>
-          ))}
-        </div>
+        <p className="vnote">{v.figureCaption[lang]}.{page ? ` ${(availabilityOf(content, "vision")?.note ?? v.note)[lang]}` : ""}</p>
+        {page ? (
+          <div id="vision-how" className="benefits">
+            {v.benefits.map((b, i) => (
+              <div key={b._key} className="glass-dark benefit">
+                <Icon name={BENEFIT_ICONS[i % 4]} size={26} />
+                <B className="h-small">{b.title[lang]}</B>
+                <p>{b.body[lang]}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -250,13 +262,13 @@ export function How({ lang, content }: P) {
   const live = s.launchMode === "live";
   const stores: ["appStore" | "playStore", string][] = [["appStore", m.mock.appStore], ["playStore", m.mock.playStore]];
   return (
-    <section className="wrap how">
+    <section id="members" className="wrap how">
       <div>
         <div className="phone-wrap">
           <div className="phone" role="img" aria-label={m.mock.caption}>
             <div className="screen" aria-hidden="true">
               <div className="screen-top"><b>{m.mock.home}</b><span className="bell"><Icon name="bell" size={20} /><i /></span></div>
-              <div className="m-card m-green green"><span className="label">{hero.nextLabel[lang]}</span><b>{hero.nextTitle[lang]}</b><span>{hero.nextMeta[lang]}</span></div>
+              <div className="m-card m-green green"><span className="label">{m.mock.next}</span><b>{hero.nextLabel[lang]}</b><span>{m.mock.youreIn}</span></div>
               <div className="m-card m-rank"><div><span className="label">{m.mock.rank}</span><b>#4</b></div><span className="chip lime">{m.mock.up}</span></div>
               <div className="m-card">
                 <span className="label">{m.mock.arena}</span>
@@ -272,7 +284,11 @@ export function How({ lang, content }: P) {
         <p className="phone-cap">{m.mock.caption}</p>
       </div>
       <div className="how-copy">
-        <h2 className="h-sec">{h.title[lang]}</h2>
+        <div className="how-head">
+          {h.eyebrow ? <span className="label accent">{h.eyebrow[lang]}</span> : null}
+          <h2 className="h-sec">{h.title[lang]}</h2>
+          {h.lead ? <p className="lead-sm">{h.lead[lang]}</p> : null}
+        </div>
         <ol className="steps">
           {h.steps.map((st, i) => (
             <li key={st._key} className="card step">
@@ -292,35 +308,7 @@ export function How({ lang, content }: P) {
             );
           })}
         </div>
-        {live ? null : <p>{h.storeNote[lang]}</p>}
-      </div>
-    </section>
-  );
-}
-
-export function Rankings({ lang, content }: P) {
-  const m = t(lang);
-  const r = content.home.rankings;
-  return (
-    <section id="rankings" className="rank-band">
-      <div className="wrap sec">
-        <div className="sec-head-split">
-          <div className="rank-head">
-            <span className="chip lime">{r.eyebrow[lang]}</span>
-            <h2 className="h-sec">{r.title[lang]}</h2>
-          </div>
-          <p>{r.lead[lang]}</p>
-        </div>
-        <div className="podium" role="img" aria-label={r.note[lang]}>
-          <div className="card pod pod-2" aria-hidden="true"><span className="pos">2</span><span className="skel" /><span className="skel skel-sm" /><span className="chip lime">{m.mock.up}</span></div>
-          <div className="green pod pod-1" aria-hidden="true"><span className="pos">1</span><span className="skel" /><span className="skel skel-sm" /></div>
-          <div className="card pod" aria-hidden="true"><span className="pos">3</span><span className="skel" /><span className="skel skel-sm" /></div>
-          <ol className="rank-list" aria-hidden="true">
-            <li className="card"><span className="pos">4</span><span className="skel" /></li>
-            <li className="card"><span className="pos">5</span><span className="skel" style={{ width: "50%" }} /></li>
-          </ol>
-        </div>
-        <p className="note"><span className="chip chip-soft">{m.badge.illustration}</span> {r.note[lang]} <a href={href(lang, "/help/challenges-and-the-ladder")}>{r.cta[lang]}</a></p>
+        {(availabilityOf(content, "storeApps")?.status ?? (live ? "live" : "soon")) === "live" ? null : <p>{(availabilityOf(content, "storeApps")?.note ?? h.storeNote)[lang]}</p>}
       </div>
     </section>
   );
@@ -338,6 +326,8 @@ export function finderProps(lang: Lang, content: Content) {
     schedule: c.schedule[lang],
     meta: c.audience[lang],
     url: c.url,
+    logo: c.logo?.url ? logoSrc(c.logo.url) : undefined,
+    logoAlt: c.logo?.alt?.[lang] ?? "",
   }));
   return {
     clubs,
@@ -361,40 +351,9 @@ export function FinderSection({ lang, content }: P) {
   );
 }
 
-export function Story({ lang, content }: P) {
-  const s = content.home.story;
-  const quote = content.testimonials[0];
-  return (
-    <section className="wrap story">
-      <div className="collage" role="img" aria-label={s.caption[lang]}>
-        <div className="c1"><Icon name="court" strokeWidth={1.2} /></div>
-        <div className="c2"><Icon name="shuttle" strokeWidth={1.2} /></div>
-        <div className="c3"><Icon name="net" strokeWidth={1.2} /></div>
-      </div>
-      {quote ? (
-        <figure>
-          <span className="quote-mark" aria-hidden="true"><img src="/brand/luvallplay-mark.svg" alt="" width={40} height={39} /></span>
-          <blockquote>{quote.quote[lang]}</blockquote>
-          <figcaption className="muted" style={{ fontSize: 14 }}>{quote.name}, {quote.role[lang]} · {quote.club}</figcaption>
-        </figure>
-      ) : (
-        <div className="story-copy">
-          <span className="quote-mark" aria-hidden="true"><img src="/brand/luvallplay-mark.svg" alt="" width={40} height={39} /></span>
-          <h2>{s.title[lang]}</h2>
-          <p className="lead-sm">{s.body[lang]}</p>
-          <p className="note">{s.caption[lang]}</p>
-        </div>
-      )}
-    </section>
-  );
-}
-
 export function ForClubs({ lang, content }: P) {
-  const m = t(lang);
   const c = content.home.clubs;
   const s = content.settings;
-  const club = content.clubs.find((x) => x.slug === "three-wolves") ?? content.clubs[0];
-  const sport = content.sports.find((x) => x.key === club?.sportKey);
   const walk = ctaTarget("walkthrough", lang, s);
   return (
     <section id="clubs" className="clubs-outer">
@@ -408,24 +367,16 @@ export function ForClubs({ lang, content }: P) {
             <a className="btn btn-ghost btn-lg" href={walk.href} rel={walk.external ? "noopener" : undefined}>{c.secondaryCta[lang]}</a>
           </div>
         </div>
-        <div style={{ gap: 16 }}>
-          {club ? (
-            <div className="tw-card">
-              <div className="tw-head">
-                <span className="tw-logo btn-dark" aria-hidden="true">{club.name.split(" ").slice(0, 2).map((w) => w[0]).join("")}</span>
-                <span><b>{club.name}</b><small>{club.city} · {club.schedule[lang]}</small></span>
-              </div>
-              <div className="tw-stats">
-                <div><b>2</b><span>{m.mock.sessionsWeek}</span></div>
-                <div><b style={{ fontSize: 30 }}>{sport?.name[lang]}</b><span>{m.mock.sport}</span></div>
-              </div>
-              <div className="tw-foot"><img src="/brand/luvallplay-mark.svg" alt="" width={18} height={18} />{m.mock.onLuvallplay}</div>
-            </div>
-          ) : null}
-          <div className="trio">
-            {c.stats.map((st) => <div key={st._key} className="navy"><b>{st.value[lang]}</b><span>{st.label[lang]}</span></div>)}
-          </div>
-        </div>
+        {c.steps?.length ? (
+          <ol className="club-steps">
+            {c.steps.map((st, i) => (
+              <li key={st._key} className="navy">
+                <span className="num lime" aria-hidden="true">{i + 1}</span>
+                <div><h3 className="h-small">{st.title[lang]}</h3><p>{st.body[lang]}</p></div>
+              </li>
+            ))}
+          </ol>
+        ) : null}
       </div>
     </section>
   );
@@ -437,12 +388,6 @@ export function Pricing({ lang, content, heading = "h2" }: P & { heading?: "h2" 
   const H = heading;
   return (
     <section id="pricing" className="wrap pricing">
-      <div className="card price">
-        <H className="label muted">{p.players.eyebrow[lang]}</H>
-        <p className="big">{p.players.price[lang]}</p>
-        <p className="muted">{p.players.body[lang]}</p>
-        <a className="btn btn-dark" href={ctaTarget("getApp", lang, s).href}>{p.players.cta[lang]}</a>
-      </div>
       <div className="green price price-green on-green">
         <span className="chip lime">{p.clubs.badge[lang]}</span>
         <H className="label">{p.clubs.eyebrow[lang]}</H>
@@ -450,6 +395,12 @@ export function Pricing({ lang, content, heading = "h2" }: P & { heading?: "h2" 
         <p>{p.clubs.body[lang]}</p>
         <p className="price-note">{p.clubs.note[lang]}</p>
         <a className="btn btn-secondary" href={ctaTarget("startClub", lang, s).href}>{p.clubs.cta[lang]}</a>
+      </div>
+      <div className="card price">
+        <H className="label muted">{p.players.eyebrow[lang]}</H>
+        <p className="big">{p.players.price[lang]}</p>
+        <p className="muted">{p.players.body[lang]}</p>
+        <a className="btn btn-dark" href={ctaTarget("getApp", lang, s).href}>{p.players.cta[lang]}</a>
       </div>
     </section>
   );

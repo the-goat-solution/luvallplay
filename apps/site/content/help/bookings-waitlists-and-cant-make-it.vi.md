@@ -4,13 +4,14 @@ summary: "Cách đặt một buổi chơi, chuyện gì xảy ra khi đã đầy
 audience: players
 order: 11
 updated: 2026-11-24
+features: sessions
 ---
 
 ## Vì sao cần đăng ký
 
 Nhà thi đấu chỉ có ngần ấy sân. Sân bóng chỉ chứa được ngần ấy đội. Khi CLB biết ai sẽ đến, mọi người được chơi nhiều hơn và đứng chờ ít hơn.
 
-Bài này mô tả cách mọi thứ đang chạy với thành viên Three Wolves. Các CLB tham gia Luvallplay sau này sẽ có cùng bộ công cụ, nhưng mỗi CLB tự đặt quy định của mình.
+Bài này mô tả cách mọi thứ đang chạy với thành viên của câu lạc bộ đầu tiên trên Luvallplay. Các CLB tham gia Luvallplay sau này sẽ có cùng bộ công cụ, nhưng mỗi CLB tự đặt quy định của mình.
 
 ## Hai cách tham gia
 

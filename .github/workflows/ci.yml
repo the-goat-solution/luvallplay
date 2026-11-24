@@ -64,9 +64,59 @@ jobs:
         run: pnpm --filter "./packages/*" typecheck
       - name: Types (Sanity Studio)
         run: pnpm --filter studio typecheck
+      - name: Types (website Studio)
+        run: pnpm --filter site-studio typecheck
       - name: Lint (0 errors, 0 warnings)
         run: pnpm --filter web exec eslint . --max-warnings 0
       - name: Tests (unit, database, data guard, schema drift, golden master)
         run: pnpm --filter web test
       - name: Build
         run: pnpm --filter web build
+
+  # The public website (apps/site): its own app, its own small database.
+  # Gate R (test plan §9): both languages complete, links, meta, axe, motion,
+  # budgets and the forms end to end, against a production build.
+  site:
+    name: Website (types, lint, tests, build, gate R)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: site_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SITE_DATABASE_URL: postgres://postgres:postgres@localhost:5432/site_test
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Types
+        run: pnpm --filter site typecheck
+      - name: Lint (0 errors, 0 warnings)
+        run: pnpm --filter site lint
+      - name: Tests (both languages complete, content rules, forms, routing)
+        run: pnpm --filter site test
+      - name: Build (applies the site database schema first)
+        run: pnpm --filter site build
+      - name: Browser for the end-to-end checks
+        run: |
+          npm install -g playwright@1
+          playwright install --with-deps chromium
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+      - name: Gate R, end to end
+        run: pnpm --filter site e2e

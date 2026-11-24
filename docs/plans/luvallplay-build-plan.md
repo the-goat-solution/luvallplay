@@ -46,6 +46,8 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **AI: Xero scope (§12.3):** push **sales, payments, fees, refunds and expenses**, and pull **accounts, tax rates, tracking categories and bank accounts**. Bank lines stay with Xero's own bank feed.
 - **AJ: NZ launch bar (§12.6):** before the first paid NZ club, **NZ direct debit for memberships**, a **MYOB connector** and the **Windcave gateway** are ready. Pay by bank (open banking) is not required for launch.
 - **AK: the Xero connection is a paid add-on** (decided 24 Nov). It's priced to cover Xero's developer-tier costs, certification and support. *Assumptions to confirm (§12.9): the MYOB connector is a paid add-on too; the Shopify connector, direct debit and Windcave are included in base plans; Three Wolves gets add-ons free under its licence.*
+- **AL: there is one store app, and no separate admin store app** (decided 24 Nov). The players' app stays **Luvallplay**, the rebranded profile app (decision A stands). **Club admin stays web-only** (responsive, opened from the app through the secure handoff link). A "Luvallplay Manage" store app was considered and rejected (§4.6).
+- **AM: club look inside, Luvallplay frame** (decided 24 Nov). After sign-in, the club's logo, colours, fonts and words fill the app and the web admin. The store icon, splash screen, sign-in screens and a small "on Luvallplay" footer stay Luvallplay (§6.3).
 - **First outside feedback:** the current order stays (outside clubs join after the setup wizard). Recruiting and interviews, which need no engineering, still start now.
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
@@ -407,6 +409,19 @@ Playwright visual snapshots run at each window class on every pull request. Real
 
 ---
 
+### 4.6 Decision record: no separate admin store app
+
+On 24 Nov the idea of a second store app, **"Luvallplay Manage"** (the Three Wolves admin rebranded, for organisers), was considered and **rejected** (decision AL). Recorded so it isn't proposed again without new evidence:
+
+- **Why not:**
+  - Today's admin is about 25 desk-style pages (finance, bank matching, modules, brand, the website editor, billing). A store app that only wraps them would fail Apple's rule 4.2 (the plan already decided not to wrap the live site), and rebuilding them all as app screens roughly doubles Phases 4 and 5.
+  - A second app means a second listing, review cycle, release train and demo account, plus one more place where a review problem could hold up the app every member uses.
+  - Club organisers are usually players too, so they'd need both apps.
+  - Selling plans or add-ons from an admin app raises Apple's payment rules (**Check** 3.1.3).
+- **What covers organisers instead:** the web admin works on a phone, and the **"Club admin" button** in the app opens it through the 60-second handoff link (§2.4), so there's no second sign-in.
+- **Revisit if** real organisers say they need to run sessions from the hall on their phones (for example ticking attendance or cancelling a day) often enough to justify a second app. The first thing to try then is **admin-role alerts inside the Luvallplay app** (push for a new message, a join request or a photo to review, opening the right admin page), not a second app.
+- **Nothing in the architecture blocks it later:** Phase 4's typed API, bearer sign-in and roles are the same pieces a future admin app would use.
+
 ## 5. Request 4: clean-up of all pages
 
 | Area | Clean-up |
@@ -624,7 +639,10 @@ Not club modules at all: **Setup check** (environment diagnostics) and **Platfor
 - A theme has: logo, colours, fonts, rank-art set and terms.
 - **Three Wolves keeps everything already built for it:** the wolf rank art, "Wolf Points", "Wolf Vision", Copperplate fonts and the navy palette. These are stored as *its* imported brand (§6.3.2) and terms, not as code. It's the first real test of custom branding.
 - Theming works through **semantic** CSS custom properties set per club (`--primary`, `--on-primary`, `--accent`, `--on-accent`, `--surface`, `--ink`, `--font-display`, `--font-text`, …). The same components render differently with no per-club code. `packages/ui` (Phase 2) uses only semantic tokens, never brand names, so presets and imported brands plug straight in.
-- A theme applies to the club's website, the club's spaces inside the app, emails, QR posters and the club's shop. The store app's icon and the sign-in screens stay Luvallplay.
+- A theme applies to the club's website, the club's spaces inside the app and the web admin, emails, QR posters and the club's shop.
+- **The Luvallplay frame (decision AM):** the **store icon and name, the splash screen, the sign-in screens and a small "on Luvallplay" footer** stay Luvallplay. A store app has one icon and one name, and Apple's template-app rule (4.2.6) rules out one copy per club. Hiding the footer mark is not offered.
+- **Switching clubs** (a player in several clubs) changes the look immediately. Opening a club's own link (an invite or a QR poster) applies that club's look first.
+- **Three Wolves members:** the app they use today, "My Three Wolves" at threewolvesbadminton.org/profile, is the ancestor of the Luvallplay app. In the Luvallplay app they see **Three Wolves' own look** (navy, wolves, "Wolf" terms) from their first sign-in. Nobody is signed out when they move (the session handover in §4.5 of the test plan, "Moving to luvallplay domains"), and the installed home-screen app keeps working at its current address until they choose to switch.
 
 #### 6.3.1 Twelve ready-made colour schemes
 
@@ -675,7 +693,7 @@ Clubs that already have a look can import it instead of picking a scheme (wizard
 |---|---|
 | `luvallplay.com` (primary), plus `luvallplay.org`, `.nz` and `.vn` | Platform marketing, **Find a club**, "Start your club" wizard, help, legal. `.com` is the brand's main address (`.org` reads as non-profit); `.vn` is the Vietnamese-language home; the others redirect |
 | `app.luvallplay.com` | Player app (PWA). Same bundle as the store apps |
-| `admin.luvallplay.com/{club}` | Club admin (one cookie domain, so the account sign-in just works) |
+| `admin.luvallplay.com/{club}` | Club admin, **web only** (decision AL): responsive for phones, one cookie domain so the account sign-in just works, and opened from the app through the secure handoff link |
 | `api.luvallplay.com` | API for app, integrations and MCP |
 | `{club}.luvallplay.com` or **custom domain** (e.g. `threewolvesbadminton.org`) | Club landing page |
 

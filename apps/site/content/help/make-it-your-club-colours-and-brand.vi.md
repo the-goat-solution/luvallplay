@@ -4,6 +4,7 @@ summary: "Chọn 1 trong 12 bộ màu có sẵn hoặc dùng logo, phông chữ 
 audience: organisers
 order: 5
 updated: 2026-11-24
+features: brand
 ---
 
 ## CLB của bạn, không phải của chúng tôi

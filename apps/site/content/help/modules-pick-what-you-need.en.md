@@ -4,6 +4,7 @@ summary: "A small core every club gets, plus optional modules you switch on when
 audience: organisers
 order: 6
 updated: 2026-11-24
+features: modules
 ---
 
 ## Small by default

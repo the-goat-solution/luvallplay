@@ -4,6 +4,7 @@ summary: "Luvallplay giúp các câu lạc bộ thể thao tổ chức buổi ch
 audience: everyone
 order: 1
 updated: 2026-11-24
+features: sessions, newClubs, storeApps, otherSports
 ---
 
 ## Nói ngắn gọn

@@ -4,6 +4,7 @@ summary: "How Arena works: pair up, throw down a challenge, confirm the score an
 audience: players
 order: 12
 updated: 2026-11-24
+features: challenges, rankings
 ---
 
 ## A reason to play one more game

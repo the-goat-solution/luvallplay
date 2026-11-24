@@ -675,3 +675,17 @@ html:lang(en) .only-vi, html:lang(vi) .only-en { display: none; }
 .club-steps .num { width: 48px; height: 48px; font-size: 24px; border-radius: 999px; color: #0b1b2b; }
 .club-steps p { font-size: 15px; color: #a9b8b2; margin-top: 2px; }
 .club-steps h3 { color: #fafaf7; }
+
+/* Availability: the list page and the status note on articles. */
+.avail { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.avail li { padding: 20px; border-radius: 22px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.avail li.card:hover { transform: none; }
+.avail p { font-size: 15px; color: var(--ink-muted); margin-top: 4px; }
+.status-note { padding: 20px 22px; border-radius: 22px; display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
+.status-note.card:hover { transform: none; }
+.status-note ul { display: flex; flex-direction: column; gap: 10px; }
+.status-note li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 22px; }
+.status-note li .chip { flex: none; margin-top: 1px; }
+.status-note a { font-size: 14px; font-weight: 600; align-self: flex-start; padding: 6px 0; }
+.band.court-lines::after { display: none; }
+@media (max-width: 560px) { .status-note li { flex-direction: column; gap: 6px; } }

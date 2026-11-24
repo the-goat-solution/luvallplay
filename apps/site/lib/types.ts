@@ -49,6 +49,11 @@ export type SiteSettings = {
 };
 
 export type Feature = { key: string; title: L; body: L; status: "live" | "soon" };
+
+/** One line of the availability list (content/availability.ts). It wins over a tile's own status. */
+export type AvailabilityStatus = "live" | "limited" | "soon";
+export type AvailabilityItem = { _key: string; key: string; group: "players" | "clubs" | "platform"; status: AvailabilityStatus; name: L; note: L };
+export type Availability = { _id: "availability"; _type: "availability"; updated: string; items: AvailabilityItem[] };
 export type TitledText = { _key: string; title: L; body: L };
 
 export type HomePage = {
@@ -131,6 +136,8 @@ export type HelpArticle = {
   audience: "organisers" | "players" | "everyone";
   order: number;
   updated: string;
+  /** Availability keys this article is about: their current status shows at the top. */
+  features?: string[];
   body: LBlocks;
 };
 
@@ -155,10 +162,11 @@ export type Testimonial = {
   consent: boolean;
 };
 
-export type Doc = SiteSettings | HomePage | Page | Sport | Club | FaqItem | HelpArticle | LegalPage | Testimonial;
+export type Doc = SiteSettings | Availability | HomePage | Page | Sport | Club | FaqItem | HelpArticle | LegalPage | Testimonial;
 
 export type Content = {
   settings: SiteSettings;
+  availability: Availability;
   home: HomePage;
   pages: Record<string, Page>;
   sports: Sport[];

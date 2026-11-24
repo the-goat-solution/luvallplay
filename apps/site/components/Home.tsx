@@ -4,7 +4,7 @@ import { Finder, type FinderClub } from "./Finder";
 import { Icon } from "./icons";
 import { ScoreDemo } from "./ScoreDemo";
 import { t } from "@/lib/messages";
-import { ctaTarget, href, logoSrc } from "@/lib/site";
+import { availabilityOf, ctaTarget, href, logoSrc } from "@/lib/site";
 import type { Content, Lang } from "@/lib/types";
 
 type P = { lang: Lang; content: Content };
@@ -83,7 +83,8 @@ export function Features({ lang, content }: P) {
   const m = t(lang);
   const f = content.home.features;
   const by = Object.fromEntries(f.items.map((i) => [i.key, i]));
-  const soon = (key: string) => (by[key]?.status === "soon" ? <span className="chip chip-soft">{m.badge.soon}</span> : null);
+  // "Coming soon" comes from the availability list (content/availability.ts); the tile's own status is only a fallback.
+  const soon = (key: string) => ((availabilityOf(content, key)?.status ?? by[key]?.status) === "soon" ? <span className="chip chip-soft">{m.badge.soon}</span> : null);
   const small = (k: string) =>
     by[k] ? (
       <div key={k} className="tile card lift rise">
@@ -236,7 +237,7 @@ export function Vision({ lang, content, page = false }: P & { page?: boolean }) 
           </div>
         </div>
         <VisionFigure lang={lang} content={content} />
-        <p className="vnote">{v.figureCaption[lang]}.{page ? ` ${v.note[lang]}` : ""}</p>
+        <p className="vnote">{v.figureCaption[lang]}.{page ? ` ${(availabilityOf(content, "vision")?.note ?? v.note)[lang]}` : ""}</p>
         {page ? (
           <div id="vision-how" className="benefits">
             {v.benefits.map((b, i) => (
@@ -307,7 +308,7 @@ export function How({ lang, content }: P) {
             );
           })}
         </div>
-        {live ? null : <p>{h.storeNote[lang]}</p>}
+        {(availabilityOf(content, "storeApps")?.status ?? (live ? "live" : "soon")) === "live" ? null : <p>{(availabilityOf(content, "storeApps")?.note ?? h.storeNote)[lang]}</p>}
       </div>
     </section>
   );

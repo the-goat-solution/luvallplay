@@ -2,7 +2,7 @@
 // falls back to its seeded content for anything missing here.
 import { defineArrayMember, defineField, defineType, type FieldDefinition } from "sanity";
 
-export const SINGLETONS = ["siteSettings", "homePage"];
+export const SINGLETONS = ["siteSettings", "homePage", "availability"];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const both = (rule: any) => rule.required();
@@ -112,6 +112,42 @@ const siteSettings = defineType({
     defineField({ name: "companyAddress", title: "Company postal address", type: "string" }),
   ],
   preview: { prepare: () => ({ title: "Site settings" }) },
+});
+
+const availability = defineType({
+  name: "availability",
+  title: "Availability",
+  type: "document",
+  description: "What is available today. Every “coming soon” badge and every sentence about who can use a feature reads from this list. Change a line here when a feature ships.",
+  fields: [
+    defineField({ name: "updated", title: "Last updated (change it whenever a line changes)", type: "date", validation: both }),
+    defineField({
+      name: "items",
+      title: "Features",
+      type: "array",
+      of: [
+        defineArrayMember({
+          type: "object",
+          fields: [
+            defineField({ name: "key", title: "Key (don't change)", type: "string", readOnly: true, validation: both }),
+            defineField({ name: "group", title: "Group", type: "string", options: { list: [{ title: "For players", value: "players" }, { title: "For clubs", value: "clubs" }, { title: "Sports and languages", value: "platform" }] }, validation: both }),
+            defineField({
+              name: "status",
+              title: "Status",
+              description: "Live: open to everyone it is meant for. Early access: real, but only for some (say who in the note). Coming soon: not available yet.",
+              type: "string",
+              options: { list: [{ title: "Live", value: "live" }, { title: "Early access", value: "limited" }, { title: "Coming soon", value: "soon" }], layout: "radio" },
+              validation: both,
+            }),
+            s("name", "Name"),
+            t("note", "One sentence: who can use it today"),
+          ],
+          preview: { select: { title: "name.en", subtitle: "status" } },
+        }),
+      ],
+    }),
+  ],
+  preview: { prepare: () => ({ title: "Availability" }) },
 });
 
 const titled = [s("title", "Title"), t("body", "Text")];
@@ -264,6 +300,7 @@ const helpArticle = defineType({
     defineField({ name: "audience", title: "For", type: "string", options: { list: [{ title: "Organisers", value: "organisers" }, { title: "Players", value: "players" }, { title: "Everyone", value: "everyone" }], layout: "radio" }, validation: both }),
     defineField({ name: "order", title: "Order", type: "number", validation: both }),
     defineField({ name: "updated", title: "Last updated", type: "date", validation: both }),
+    defineField({ name: "features", title: "Features this article is about", description: "Their current status (from the Availability document) shows at the top of the article. Use the keys from Availability, e.g. vision, storeApps.", type: "array", of: [defineArrayMember({ type: "string" })] }),
     defineField({ name: "body", title: "Article", type: "localeBlocks", validation: both }),
   ],
   orderings: [{ title: "Order", name: "order", by: [{ field: "order", direction: "asc" }] }],
@@ -308,6 +345,7 @@ export const schemaTypes = [
   localeBlocks,
   imageSlot,
   siteSettings,
+  availability,
   homePage,
   page,
   sport,

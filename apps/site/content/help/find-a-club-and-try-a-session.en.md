@@ -4,6 +4,7 @@ summary: "The club finder is a short, hand-picked list for now. Here's how to tr
 audience: players
 order: 9
 updated: 2026-11-24
+features: finder
 ---
 
 ## Where the finder is today

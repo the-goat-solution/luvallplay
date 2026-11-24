@@ -41,6 +41,8 @@ What each domain then does (already set up in Vercel):
 | `luvallplay.org`, `luvallplay.nz` | Redirect to `luvallplay.com` |
 | `www.` of each | Redirects to its bare domain (the `.org` and `.nz` ones to `luvallplay.com`) |
 
+**The players' app (Phase 4):** `app.luvallplay.com` is attached to the separate Vercel project `luvallplay-app`. While luvallplay.com's DNS is on Vercel's name servers it needs no record from you. If the DNS is managed elsewhere, add CNAME `app` → `0614f58185a129ba.vercel-dns-017.com.` (details: `phase-4-runbook.md` §3).
+
 Vercel issues the SSL certificates by itself once the records are visible (minutes to a few hours). Check in Vercel → luvallplay-site → Settings → Domains: each should show "Valid configuration".
 
 **After DNS works**, tell Claude (or do it in Vercel → Settings → Environment Variables, Production):

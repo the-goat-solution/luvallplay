@@ -3,13 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Typed messages in per-area namespaces (site, profile, arena, jersey), English and Vietnamese.",
+  "description": "Typed messages in per-area namespaces (site, profile, arena, jersey, app), English and Vietnamese.",
   "exports": {
     ".": "./src/index.ts",
     "./site": "./src/site.ts",
     "./profile": "./src/profile.ts",
     "./arena": "./src/arena.ts",
-    "./jersey": "./src/jersey.ts"
+    "./jersey": "./src/jersey.ts",
+    "./app": "./src/app.ts",
+    "./format": "./src/format.ts"
   },
   "dependencies": {
     "@luvallplay/core": "workspace:*"

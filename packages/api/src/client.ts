@@ -1,7 +1,11 @@
 // The transport under the generated client (client.gen.ts): one fetch per
 // call, the bearer token when there is one, errors as ApiError. Works in a
 // browser, a Capacitor web view and Node.
-import { API_PREFIX, ENDPOINTS, fillPath, type EndpointId } from "./contract.ts";
+// It imports only the generated route table (no zod), to keep the app small.
+import { API_PREFIX, ROUTES, type RouteId as EndpointId } from "./routes.gen.ts";
+
+export { fillPath } from "./path.ts";
+import { fillPath } from "./path.ts";
 
 export class ApiError extends Error {
   /** HTTP status; 0 when the request never got an answer (offline, DNS, CORS). */
@@ -31,8 +35,12 @@ export type TransportOptions = {
   fetch?: typeof fetch;
   /** Called on a 401 for an endpoint that needs a session, so the app can show sign-in. */
   onUnauthorized?: () => void;
-  /** Check answers against the contract (development and tests). */
-  validate?: boolean;
+  /**
+   * Check answers against the contract (development and tests): pass
+   * `contractValidator` from "@luvallplay/api/validate". Returns a description
+   * of what is wrong, or null.
+   */
+  validate?: (id: EndpointId, data: unknown) => string | null;
 };
 
 export type CallInput = {
@@ -47,7 +55,7 @@ export type Transport = { call: (id: EndpointId, input?: CallInput) => Promise<u
 export function createTransport(options: TransportOptions): Transport {
   const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
   const url = (id: EndpointId, input: CallInput = {}): string => {
-    const e = ENDPOINTS[id];
+    const e = ROUTES[id];
     const search = new URLSearchParams();
     for (const [k, v] of Object.entries(input.query ?? {})) if (v !== undefined && v !== null) search.set(k, String(v));
     const qs = search.toString();
@@ -56,7 +64,7 @@ export function createTransport(options: TransportOptions): Transport {
   return {
     url,
     async call(id, input = {}) {
-      const e = ENDPOINTS[id];
+      const e = ROUTES[id];
       const headers: Record<string, string> = { Accept: "application/json" };
       const token = await options.getToken?.();
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -87,10 +95,8 @@ export function createTransport(options: TransportOptions): Transport {
         if (res.status === 401 && e.auth === "session") options.onUnauthorized?.();
         throw new ApiError(id, res.status, typeof body.error === "string" ? body.error : `http_${res.status}`, typeof body.message === "string" ? body.message : undefined);
       }
-      if (options.validate) {
-        const parsed = e.response.safeParse(data);
-        if (!parsed.success) throw new ApiError(id, res.status, "contract", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
-      }
+      const wrong = options.validate?.(id, data);
+      if (wrong) throw new ApiError(id, res.status, "contract", wrong);
       return data;
     },
   };

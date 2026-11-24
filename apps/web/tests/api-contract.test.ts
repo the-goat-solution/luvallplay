@@ -22,7 +22,8 @@ import { z } from "zod";
 import { API_PREFIX, API_VERSION, ENDPOINTS, fillPath } from "@luvallplay/api/contract";
 import { breakingChanges, shapeOf } from "@luvallplay/api/shape";
 import { contractBreaks, currentSnapshot, type ContractSnapshot } from "../../../packages/api/src/snapshot.ts";
-import { generateClient } from "../../../packages/api/scripts/generate.ts";
+import { generateClient, generateRoutes } from "../../../packages/api/scripts/generate.ts";
+import { ROUTES } from "@luvallplay/api/routes";
 import { MODULES, routeOwner } from "@luvallplay/modules";
 
 const PKG = new URL("../../../packages/api/", import.meta.url);
@@ -86,6 +87,17 @@ describe("breaking-change detection", () => {
 describe("generated client", () => {
   test("client.gen.ts is what the generator writes (run: pnpm --filter @luvallplay/api generate)", () => {
     assert.equal(readFileSync(new URL("src/client.gen.ts", PKG), "utf8"), generateClient());
+  });
+  test("routes.gen.ts (the zod-free route table the client ships) is current and matches the contract", () => {
+    assert.equal(readFileSync(new URL("src/routes.gen.ts", PKG), "utf8"), generateRoutes());
+    assert.deepEqual(Object.keys(ROUTES).sort(), Object.keys(ENDPOINTS).sort());
+    for (const [id, e] of Object.entries(ENDPOINTS)) assert.deepEqual(ROUTES[id as keyof typeof ROUTES], { method: e.method, path: e.path, auth: e.auth }, id);
+  });
+  test("the client doesn't import the schemas (the app's bundle carries no zod)", () => {
+    for (const f of ["src/client.ts", "src/client.gen.ts", "src/routes.gen.ts"]) {
+      const src = readFileSync(new URL(f, PKG), "utf8");
+      assert.doesNotMatch(src, /^import (?!type)[^;]*from "(\.\/contract|\.\/schemas|zod)/m, f);
+    }
   });
   test("it has one method per endpoint", () => {
     const src = generateClient();

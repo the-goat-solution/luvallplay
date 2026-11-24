@@ -59,7 +59,7 @@ Don't push empty commits to start a build.
 | Piece | Path |
 |---|---|
 | The contract (zod schemas, one entry per endpoint) | `packages/api/src/contract.ts`, `schemas.ts` |
-| The typed client, generated from the contract | `packages/api/src/client.gen.ts` (transport: `client.ts`) |
+| The typed client, generated from the contract | `packages/api/src/client.gen.ts` (transport: `client.ts`; route table without the schemas: `routes.gen.ts`) |
 | The snapshot released apps were built against | `packages/api/contract.snapshot.json` |
 | The server wrapper every route goes through | `apps/web/lib/app-api.ts` |
 | Route handlers | `apps/web/app/api/v1/app/...` |
@@ -91,7 +91,7 @@ The older `/api/v1/*` routes (personal access keys, shared with the MCP server) 
 **Changing the contract**
 
 1. Edit `packages/api/src/schemas.ts` / `contract.ts`, add the route file under `apps/web/app/api/v1/app/` using `appRoute("<id>", ...)`.
-2. `pnpm --filter @luvallplay/api generate` (client) and `pnpm --filter @luvallplay/api snapshot` (snapshot).
+2. `pnpm --filter @luvallplay/api generate` (client and route table) and `pnpm --filter @luvallplay/api snapshot` (snapshot).
 3. Adding a response field or an optional request field is fine. Removing or renaming a field, changing a type, making a request field required or a public endpoint private is refused by the snapshot script and fails `tests/api-contract.test.ts`: bump `API_VERSION` and keep serving the old version beside the new one.
 
 **Tests**
@@ -113,3 +113,92 @@ pnpm --filter web e2e        # builds, then runs every journey
 |---|---|
 | `APP_ORIGINS` | Extra exact origins allowed to call the API from a browser. |
 | `API_BASE_<REGION>` | The API host of a region (for example `API_BASE_SYD=https://api.luvallplay.com`). Without it, a club in this deployment's region gets this deployment's own host. |
+
+## 3. The players' app (`apps/app`)
+
+A client-side app (Vite, React 19, TanStack Router and Query) built to static files. It talks only to the API in §2, through the client generated from the contract.
+
+**Run it**
+
+```
+pnpm --filter web dev          # the API, on http://localhost:3000
+pnpm --filter app dev          # the app, on http://localhost:5173 (proxies /api to :3000)
+```
+
+Sign in with an email; without `RESEND_API_KEY` the code is printed in the API's terminal.
+
+**What is there now (the shell)**
+
+| Piece | Where |
+|---|---|
+| The Luvallplay frame: sign-in, splash, the "on Luvallplay" mark | `src/Frame.tsx`, `src/screens/SignIn.tsx` |
+| A club's invite or QR link, `/c/<club>`: the club's look before sign-in | `src/screens/Invite.tsx` |
+| The signed-in shell: the club's look, name and logo, navigation, club switcher | `src/screens/Shell.tsx` |
+| Tabs (Me, Arena, Vision, Player, Settings), each its own chunk | `src/router.tsx`, `src/screens/*.tsx` |
+| Theme → CSS custom properties, light and dark | `src/lib/theme.ts` |
+| Window classes and the navigation for each | `src/lib/window-class.ts`, `src/styles/app.css` |
+| Which tabs a club shows (a module that is off takes its tab away) | `src/lib/nav.ts` |
+| The token and the person's choices (one interface; secure storage in Phase 5) | `src/lib/storage.ts`, `src/lib/store.ts` |
+| Text in English and Vietnamese | `packages/i18n/src/app.ts` |
+
+Me, Arena, Vision and Player are honest placeholders until their screens move in (steps 3 to 6). Settings already has language, appearance, sign out and sign out everywhere. The **Club admin** button shows for people who can open the admin, but is disabled with an explanation until the handoff endpoint is in the contract.
+
+**How the look works (decision AM)**
+
+- Signed out, the page wears Luvallplay's own theme (`packages/ui/tokens.css`, Court Green).
+- After sign-in the app asks for the person's clubs, then the current club's config, and sets the club's semantic tokens as custom properties on `<html>`; `data-theme` is `light` or `dark` (the device's setting unless one is chosen in Settings). The last config seen is kept on the device, so the look is there at once on the next start.
+- Switching clubs swaps the tokens, name, logo, words and tabs; tokens the new club doesn't set are removed.
+- `/c/<club>` loads that club's public config and wears its look through sign-in, then opens that club.
+- Components and the stylesheet use only semantic tokens; a test fails on a brand name or a colour literal.
+
+**Layout**
+
+| Window class | Width | Navigation |
+|---|---|---|
+| compact | under 600 | bottom tab bar |
+| medium | 600 to 839 | navigation rail |
+| expanded | 840 to 1199 | navigation rail; screens lay panes side by side (container queries) |
+| large | 1200 and up | sidebar |
+
+Safe areas on every edge, `dvh`, 44px touch targets, rem type (text scales to 200%), reduced motion, and on a foldable opened flat the navigation takes the first screen and the content the second (Viewport Segments).
+
+**Environment variables (build time)**
+
+| Name | Meaning |
+|---|---|
+| `VITE_API_BASE` | The home API host, for example `https://api.luvallplay.com`. Empty means the app's own origin. |
+| `VITE_API_HOSTS` | More API hosts (other regions), space or comma separated. |
+
+These, plus `https://api.luvallplay.com`, are the only hosts the built page may reach: the build writes them into the page's Content-Security-Policy (`connect-src`, `img-src`), and the app only sends a session token to a host on that list. The API must allow the app's origin in turn (`APP_ORIGINS`, §2).
+
+**Tests**
+
+```
+pnpm --filter app typecheck
+pnpm --filter app test                    # pure logic, the stylesheet's rules, both languages
+pnpm --filter app build && pnpm --filter app budget
+(cd apps/web && E2E_BUILD=1 npm run build) && pnpm --filter app e2e
+```
+
+- `tests/lib.test.ts`: theme to custom properties (and what it refuses), window classes, tabs and modules, storage, which host gets the token, messages complete in both languages and sport-neutral, the stylesheet's rules.
+- `tests/e2e/app.mjs` (APP1 to APP15): the real API on a fresh local Postgres, the app built and served on its own origin. Sign in by email code; Luvallplay's look before, the club's after; an invite link applies the club's look first; switching clubs changes look, words and tabs at once (the second club is simulated in the browser, since one deployment serves one club); a module that is off; a refused token; languages; light and dark; the Club admin button; five widths with the right navigation and no sideways scroll; text at 200%; reduced motion; axe in light and dark; the Content-Security-Policy; screens as separate chunks.
+- CI job "Players' app" runs all of it.
+
+**Performance budget**
+
+The app shell (the entry script and what it preloads) must stay at or under **150 KB gzipped JavaScript**; `scripts/check-budget.mjs` fails the build over that. Today it is about 109 KB. The client carries no zod: it uses a generated route table (`packages/api/src/routes.gen.ts`), and the schemas stay on the server.
+
+**Vercel project and domain (24 Nov 2026)**
+
+- Project **`luvallplay-app`** (`prj_ZjHXLpD1IUVPgpWsED5bkKXdeuk9`), root `apps/app`, framework Vite, connected to this repository, with the §1 ignore rule as its Ignored Build Step and in `apps/app/vercel.json`.
+- **`app.luvallplay.com`** is attached to it and verified. luvallplay.com's DNS is on Vercel's name servers, so Vercel created the record itself: **no DNS step is needed**. If the DNS ever moves away from Vercel, the records are: CNAME `app` → `0614f58185a129ba.vercel-dns-017.com.` (older value `cname.vercel-dns.com.`), or A `216.198.79.1` and `64.29.17.1`.
+- **The project is paused** (24 Nov 2026). Vercel promotes a new project's very first deployment to production whatever its branch, so the first push after the project was created put an unmerged build of the shell on `app.luvallplay.com` for a few minutes. It could not sign anyone in (no API host was set) and touched no data. The project was paused straight away; the address now answers "deployment paused" (503). **Unpause it** (Vercel → luvallplay-app → Settings → General, or ask Claude) once `apps/app` is on `main` and its production build is the one you want there. From the second deployment on, only `main` deploys to production.
+- **Before the app can sign anyone in on that address**, two settings are needed (ask before changing production settings):
+  1. On `luvallplay-app`: `VITE_API_BASE` = the host that serves the API (today the Three Wolves web host), for Production and Preview.
+  2. On `three-wolves-badminton`: nothing for the real address (`https://app.luvallplay.com` is in the API's built-in allow-list). Only if a `*.vercel.app` preview of the app should be able to sign in, add that exact origin to `APP_ORIGINS`.
+
+**Not yet**
+
+- Offline, the service worker and the PWA manifest (step 7).
+- Text-message sign-in in the app (the API has it; the screen is an extension point in `SignIn.tsx`).
+- The club's and Luvallplay's web fonts in the app (system fallbacks for now; part of the visual-parity pass).

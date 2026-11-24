@@ -57,6 +57,13 @@ test("preview on its own Neon branch: database kept", () => {
   assert.equal(env.POSTGRES_URL, BRANCH);
 });
 
+test("a preview whose app login points at production is switched off, and the login is removed too", () => {
+  const env: Record<string, string | undefined> = { VERCEL_ENV: "preview", POSTGRES_URL: BRANCH, APP_DATABASE_URL: PROD_POOLED, PRODUCTION_DATABASE_HOSTS: "ep-cool-sun-123456.ap-southeast-2.aws.neon.tech" };
+  assert.equal(guardPreviewDatabase(env).blocked, true);
+  assert.equal(env.APP_DATABASE_URL, undefined);
+  assert.equal(env.POSTGRES_URL, undefined);
+});
+
 test("production, local and CI are never touched", () => {
   for (const VERCEL_ENV of ["production", undefined, "development"]) {
     const env = { VERCEL_ENV, POSTGRES_URL: PROD_POOLED };

@@ -122,3 +122,54 @@ jobs:
           echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
       - name: Gate R, end to end
         run: pnpm --filter site e2e
+
+  # The players' app (apps/app): a client-side app on the typed API.
+  # Phase 4 gate (test plan §9): the app's own rules, the performance budget,
+  # and its journeys against the real API (a production build of apps/web on
+  # a fresh database) with the app served from its own origin, so CORS and
+  # the page's Content-Security-Policy are the real ones.
+  app:
+    name: Players' app (types, tests, build, budget, journeys)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_PG_URL: postgres://postgres:postgres@localhost:5432
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Types
+        run: pnpm --filter app typecheck
+      - name: Tests (theme, window classes, tabs and modules, storage, messages in both languages)
+        run: pnpm --filter app test
+      - name: Build
+        run: pnpm --filter app build
+      - name: Performance budget (app shell at most 150 KB gzipped JavaScript)
+        run: pnpm --filter app budget
+      - name: Build the API (apps/web, end-to-end build)
+        run: E2E_BUILD=1 pnpm --filter web build
+      - name: Browser for the end-to-end checks
+        run: |
+          npm install -g playwright@1
+          playwright install --with-deps chromium
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+      - name: Journeys (sign-in, the club's look, switching clubs, modules, layout, axe)
+        run: pnpm --filter app e2e

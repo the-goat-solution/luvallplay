@@ -2,6 +2,9 @@
 // Phase 2 merged the four separate dictionaries (lib/i18n.ts, profile-i18n.ts,
 // arena-i18n.ts, jersey-i18n.ts) into this package. Languages: en and vi.
 //
+// The players' app has its own namespace, imported on its own
+// ("@luvallplay/i18n/app"), so the app's bundle carries only its own text.
+//
 //   translate("arena", "vi", "err_cap_today")
 //   translate("profile", lang, "me_streak", { n: 3 })
 

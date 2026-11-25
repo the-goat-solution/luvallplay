@@ -637,6 +637,11 @@ const SESSION_ENDPOINTS = [
   ["GET", "/account/export"],
   ["POST", "/account/admin-handoff"],
   ["POST", "/account/delete"],
+  ["GET", "/account/integrations"],
+  ["POST", "/account/integrations/tokens"],
+  ["DELETE", "/account/integrations/tokens/{id}"],
+  ["POST", "/account/integrations/webhooks"],
+  ["DELETE", "/account/integrations/webhooks/{id}"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1129,6 +1134,53 @@ describe("API · the players' app API", () => {
       await one.context.close();
       await two.context.close();
       await owner.context.close();
+    }
+  });
+
+  test("API15 · connected apps: a key shown once that works on the older API until disconnected; webhooks public https only; nobody else's", async () => {
+    const pete = await signedIn(PEOPLE.player.email);
+    const mia = await signedIn(PEOPLE.member.email);
+    const call = (method, path, body, token = pete.token) => appApi(method, path, { token, body });
+    try {
+      const empty = (await call("GET", "/account/integrations")).json;
+      assert.deepEqual(Object.keys(empty).sort(), ["tokens", "webhooks"]);
+      const before = empty.tokens.length;
+
+      assert.equal((await call("POST", "/account/integrations/tokens", { name: "Tracker", scopes: ["read:everything"] })).status, 400);
+      assert.equal((await call("POST", "/account/integrations/tokens", { name: "Tracker", scopes: [] })).status, 400);
+      const made = await call("POST", "/account/integrations/tokens", { name: "Tracker", scopes: ["read:stats"] });
+      assert.equal(made.status, 200);
+      assert.match(made.json.token, /^tw_/);
+      assert.equal(made.json.record.prefix, made.json.token.slice(0, 9));
+      const listed = (await call("GET", "/account/integrations")).json.tokens;
+      assert.equal(listed.length, before + 1);
+      assert.ok(!JSON.stringify(listed).includes(made.json.token), "the key itself is never listed");
+
+      // The key works on the older API, as one made on the website does.
+      const older = await fetch(`${base()}/api/v1/me`, { headers: { Authorization: `Bearer ${made.json.token}` } });
+      assert.equal(older.status, 200);
+      // Somebody else can't disconnect it.
+      await call("DELETE", `/account/integrations/tokens/${made.json.record.id}`, undefined, mia.token);
+      assert.equal((await fetch(`${base()}/api/v1/me`, { headers: { Authorization: `Bearer ${made.json.token}` } })).status, 200);
+      assert.deepEqual((await call("DELETE", `/account/integrations/tokens/${made.json.record.id}`)).json, { ok: true });
+      assert.equal((await fetch(`${base()}/api/v1/me`, { headers: { Authorization: `Bearer ${made.json.token}` } })).status, 401);
+      assert.equal((await call("GET", "/account/integrations")).json.tokens.length, before);
+      assert.equal((await call("DELETE", "/account/integrations/tokens/abc")).status, 404);
+
+      for (const url of ["http://example.com/hook", "https://localhost/hook", "https://10.0.0.1/hook", "not a url"]) {
+        const r = await call("POST", "/account/integrations/webhooks", { url });
+        assert.deepEqual([r.status, r.json.error], [400, "invalid_url"], url);
+      }
+      const hook = await call("POST", "/account/integrations/webhooks", { url: "https://hooks.example.com/tw" });
+      assert.equal(hook.status, 200);
+      assert.ok(hook.json.secret.length >= 16);
+      assert.deepEqual(hook.json.endpoint.events, ["attendance.recorded", "round_robin.result", "membership.changed", "photo.approved"]);
+      assert.ok(!JSON.stringify((await call("GET", "/account/integrations")).json).includes(hook.json.secret), "the secret is never listed");
+      await call("DELETE", `/account/integrations/webhooks/${hook.json.endpoint.id}`);
+      assert.equal((await call("GET", "/account/integrations")).json.webhooks.some((w) => w.id === hook.json.endpoint.id), false);
+    } finally {
+      await pete.context.close();
+      await mia.context.close();
     }
   });
 

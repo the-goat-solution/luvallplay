@@ -2,13 +2,14 @@
 // picture, details, language, appearance, privacy, the person's data and
 // signing out. Language is kept on the account too, so the website and the
 // club's emails follow. Still to come (they touch signing in): changing the
-// phone number, connected apps and deleting the account.
+// phone number (it needs text-message codes).
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, store } from "../app.ts";
 import { useCurrentClub, useLang, usePrefs, useSession, useT } from "../hooks.tsx";
 import { AccountCards } from "./settings/Account.tsx";
 import { ClubAdmin } from "./settings/ClubAdmin.tsx";
+import { ConnectedApps } from "./settings/ConnectedApps.tsx";
 import { useSaveLanguage } from "./settings/data.ts";
 import type { ThemeChoice } from "../lib/theme.ts";
 
@@ -39,6 +40,7 @@ export default function SettingsScreen() {
       <h1>{t("settings_title")}</h1>
       <div className="panes">
         <AccountCards />
+        <ConnectedApps />
         <fieldset className="card stack">
           <legend>{t("settings_language")}</legend>
           {(["en", "vi"] as const).map((l) => (

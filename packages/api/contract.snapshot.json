@@ -804,6 +804,265 @@
         }
       }
     },
+    "integrations.createToken": {
+      "method": "POST",
+      "path": "/account/integrations/tokens",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "name": {
+            "t": "string"
+          },
+          "scopes": {
+            "t": "array",
+            "of": {
+              "t": "enum",
+              "values": [
+                "read:stats",
+                "read:attendance",
+                "read:calendar",
+                "write:activity"
+              ]
+            }
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "record": {
+            "t": "object",
+            "fields": {
+              "createdAt": {
+                "t": "string"
+              },
+              "id": {
+                "t": "number"
+              },
+              "lastUsedAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "name": {
+                "t": "string"
+              },
+              "prefix": {
+                "t": "string"
+              },
+              "scopes": {
+                "t": "array",
+                "of": {
+                  "t": "enum",
+                  "values": [
+                    "read:stats",
+                    "read:attendance",
+                    "read:calendar",
+                    "write:activity"
+                  ]
+                }
+              }
+            }
+          },
+          "token": {
+            "t": "string"
+          }
+        }
+      }
+    },
+    "integrations.createWebhook": {
+      "method": "POST",
+      "path": "/account/integrations/webhooks",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "events": {
+            "t": "array",
+            "of": {
+              "t": "enum",
+              "values": [
+                "attendance.recorded",
+                "round_robin.result",
+                "membership.changed",
+                "photo.approved"
+              ]
+            },
+            "optional": true
+          },
+          "url": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "endpoint": {
+            "t": "object",
+            "fields": {
+              "active": {
+                "t": "boolean"
+              },
+              "createdAt": {
+                "t": "string"
+              },
+              "events": {
+                "t": "array",
+                "of": {
+                  "t": "enum",
+                  "values": [
+                    "attendance.recorded",
+                    "round_robin.result",
+                    "membership.changed",
+                    "photo.approved"
+                  ]
+                }
+              },
+              "id": {
+                "t": "number"
+              },
+              "lastStatus": {
+                "t": "string",
+                "nullable": true
+              },
+              "url": {
+                "t": "string"
+              }
+            }
+          },
+          "secret": {
+            "t": "string"
+          }
+        }
+      }
+    },
+    "integrations.deleteWebhook": {
+      "method": "DELETE",
+      "path": "/account/integrations/webhooks/{id}",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "integrations.list": {
+      "method": "GET",
+      "path": "/account/integrations",
+      "auth": "session",
+      "response": {
+        "t": "object",
+        "fields": {
+          "tokens": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "createdAt": {
+                  "t": "string"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "lastUsedAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "name": {
+                  "t": "string"
+                },
+                "prefix": {
+                  "t": "string"
+                },
+                "scopes": {
+                  "t": "array",
+                  "of": {
+                    "t": "enum",
+                    "values": [
+                      "read:stats",
+                      "read:attendance",
+                      "read:calendar",
+                      "write:activity"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "webhooks": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "active": {
+                  "t": "boolean"
+                },
+                "createdAt": {
+                  "t": "string"
+                },
+                "events": {
+                  "t": "array",
+                  "of": {
+                    "t": "enum",
+                    "values": [
+                      "attendance.recorded",
+                      "round_robin.result",
+                      "membership.changed",
+                      "photo.approved"
+                    ]
+                  }
+                },
+                "id": {
+                  "t": "number"
+                },
+                "lastStatus": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "url": {
+                  "t": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "integrations.revokeToken": {
+      "method": "DELETE",
+      "path": "/account/integrations/tokens/{id}",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
     "me.absence": {
       "method": "POST",
       "path": "/clubs/{club}/me/absence",

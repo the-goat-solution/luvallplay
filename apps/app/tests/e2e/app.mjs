@@ -907,6 +907,43 @@ describe("APP · settings: the account", () => {
     await context.close();
   });
 
+  test("APP31 · connected apps: a key made, shown once, disconnected; a webhook refused, added and removed", async () => {
+    const { context } = await signedIn(PEOPLE.player.email, { viewport: { width: 900, height: 1000 } });
+    const page = await context.newPage();
+    const peteId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.player.email])).rows[0].id;
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.getByText(/^Access keys \(\d+\)$/).click();
+      await page.getByLabel("App name").fill("Habit tracker");
+      await page.getByLabel("Read my upcoming play days (calendar feed)").check();
+      await page.getByRole("button", { name: "Create key" }).click();
+      const shown = page.getByRole("status").filter({ hasText: "won't be shown again" });
+      await shown.waitFor();
+      const key = await shown.locator("code").textContent();
+      assert.match(key, /^tw_/);
+      const row = (await db.query(`SELECT scopes FROM api_tokens WHERE player_id = $1 AND name = 'Habit tracker' AND revoked_at IS NULL`, [peteId])).rows[0];
+      assert.deepEqual(row.scopes.sort(), ["read:attendance", "read:calendar", "read:stats"]);
+      await page.getByRole("button", { name: "Disconnect: Habit tracker" }).click();
+      await page.getByRole("button", { name: "Disconnect: Habit tracker" }).waitFor({ state: "detached" });
+      assert.equal((await db.query(`SELECT 1 FROM api_tokens WHERE player_id = $1 AND revoked_at IS NULL`, [peteId])).rowCount, 0);
+
+      await page.getByText(/^Webhooks \(\d+\)$/).click();
+      await page.getByPlaceholder("https://").fill("https://localhost/hook");
+      await page.getByRole("button", { name: "Add webhook" }).click();
+      await page.getByRole("alert").filter({ hasText: "public https://" }).waitFor();
+      await page.getByPlaceholder("https://").fill("https://hooks.example.com/tw");
+      await page.getByRole("button", { name: "Add webhook" }).click();
+      await page.getByRole("status").filter({ hasText: "Signing secret" }).waitFor();
+      await page.getByRole("button", { name: "Disconnect: https://hooks.example.com/tw" }).click();
+      await page.getByRole("button", { name: "Disconnect: https://hooks.example.com/tw" }).waitFor({ state: "detached" });
+      assert.equal((await db.query(`SELECT 1 FROM webhook_endpoints WHERE player_id = $1`, [peteId])).rowCount, 0);
+    } finally {
+      await db.query(`DELETE FROM api_tokens WHERE player_id = $1`, [peteId]);
+      await db.query(`DELETE FROM webhook_endpoints WHERE player_id = $1`, [peteId]);
+      await context.close();
+    }
+  });
+
   test("APP29 · download my data: a JSON file with the account in it", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();

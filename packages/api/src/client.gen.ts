@@ -67,6 +67,23 @@ export function createApi(transport: Transport) {
       list: (options?: Options) =>
         transport.call("clubs.list", { signal: options?.signal }) as Promise<ResponseOf<"clubs.list">>,
     },
+    integrations: {
+      /** POST /account/integrations/tokens (signed in) */
+      createToken: (body: BodyOf<"integrations.createToken">, options?: Options) =>
+        transport.call("integrations.createToken", { body, signal: options?.signal }) as Promise<ResponseOf<"integrations.createToken">>,
+      /** POST /account/integrations/webhooks (signed in) */
+      createWebhook: (body: BodyOf<"integrations.createWebhook">, options?: Options) =>
+        transport.call("integrations.createWebhook", { body, signal: options?.signal }) as Promise<ResponseOf<"integrations.createWebhook">>,
+      /** DELETE /account/integrations/webhooks/{id} (signed in) */
+      deleteWebhook: (params: ParamsOf<"integrations.deleteWebhook">, options?: Options) =>
+        transport.call("integrations.deleteWebhook", { params, signal: options?.signal }) as Promise<ResponseOf<"integrations.deleteWebhook">>,
+      /** GET /account/integrations (signed in) */
+      list: (options?: Options) =>
+        transport.call("integrations.list", { signal: options?.signal }) as Promise<ResponseOf<"integrations.list">>,
+      /** DELETE /account/integrations/tokens/{id} (signed in) */
+      revokeToken: (params: ParamsOf<"integrations.revokeToken">, options?: Options) =>
+        transport.call("integrations.revokeToken", { params, signal: options?.signal }) as Promise<ResponseOf<"integrations.revokeToken">>,
+    },
     me: {
       /** POST /clubs/{club}/me/absence (signed in) */
       absence: (params: ParamsOf<"me.absence">, body: BodyOf<"me.absence">, options?: Options) =>

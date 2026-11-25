@@ -78,3 +78,17 @@ export function useDeleteAccount() {
     },
   });
 }
+
+/** Connected apps: access keys and webhooks. */
+export function useConnectedApps() {
+  const { token } = usePrefs();
+  const queryClient = useQueryClient();
+  const key = ["integrations", token];
+  const list = useQuery({ queryKey: key, queryFn: ({ signal }) => api.integrations.list({ signal }), enabled: !!token });
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: key });
+  const createToken = useMutation({ mutationFn: (v: BodyOf<"integrations.createToken">) => api.integrations.createToken(v), onSuccess: refresh });
+  const revokeToken = useMutation({ mutationFn: (id: number) => api.integrations.revokeToken({ id }), onSuccess: refresh });
+  const createWebhook = useMutation({ mutationFn: (url: string) => api.integrations.createWebhook({ url }), onSuccess: refresh });
+  const deleteWebhook = useMutation({ mutationFn: (id: number) => api.integrations.deleteWebhook({ id }), onSuccess: refresh });
+  return { list, createToken, revokeToken, createWebhook, deleteWebhook };
+}

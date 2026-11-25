@@ -7,6 +7,7 @@ import { endPlayerArena } from "./arena-db";
 import type { AppSession } from "./app-api";
 import { deletePlayerAccount, setPlayerAvatar } from "./player-db";
 import { sendAdminAlertEmail } from "./player-email";
+import { EVENTS, createApiToken, createWebhookEndpoint, isAllowedWebhookUrl, listApiTokens, listWebhookEndpoints, type Scope, type WebhookEvent } from "./webhooks";
 import { deletePublicBlobs } from "./public-blob";
 import { publicStorage } from "./storage";
 import { countUpload } from "./usage-hooks";
@@ -86,4 +87,24 @@ export async function deleteAccount(player: AppSession["player"]): Promise<{ ok:
     lines: [`${player.firstName} ${player.lastName} (${player.email}) deleted their account in the app. Their payment records are kept.`],
   }).catch((err) => console.error("[app-api] delete alert failed:", err));
   return { ok: true };
+}
+
+// Connected apps, with the website's limits (ten keys, five webhooks, public https only).
+const MAX_TOKENS = 10;
+const MAX_WEBHOOKS = 5;
+
+export async function connectedApps(playerId: number) {
+  const [tokens, webhooks] = await Promise.all([listApiTokens(playerId), listWebhookEndpoints(playerId)]);
+  return { tokens, webhooks };
+}
+
+export async function newAccessKey(playerId: number, name: string, scopes: Scope[]) {
+  if ((await listApiTokens(playerId)).length >= MAX_TOKENS) return { ok: false as const, status: 409 as const, code: "too_many" };
+  return { ok: true as const, ...(await createApiToken(playerId, name, scopes)) };
+}
+
+export async function newWebhook(playerId: number, url: string, events: WebhookEvent[] | undefined) {
+  if (!isAllowedWebhookUrl(url)) return { ok: false as const, status: 400 as const, code: "invalid_url" };
+  if ((await listWebhookEndpoints(playerId)).length >= MAX_WEBHOOKS) return { ok: false as const, status: 409 as const, code: "too_many" };
+  return { ok: true as const, ...(await createWebhookEndpoint(playerId, url, events ?? [...EVENTS])) };
 }

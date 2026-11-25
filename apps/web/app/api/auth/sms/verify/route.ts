@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { smsVerifySchema } from "@/lib/auth-schemas";
-import { checkRateLimit, getClientIp } from "@/lib/security";
+import { rateLimit, getClientIp } from "@/lib/security";
 import { endSessionFromRequest, createPlayerSession, getPlayerFromRequest, safeNextPath } from "@/lib/player-auth";
 import { getPlayerByVerifiedPhone, markPhoneVerified } from "@/lib/player-db";
 import { verifySmsCode } from "@/lib/sms";
@@ -12,7 +12,7 @@ const bodySchema = smsVerifySchema;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  if (!checkRateLimit(`auth-sms-verify:${ip}`, 20, 15 * 60_000)) {
+  if (!(await rateLimit(`auth-sms-verify:${ip}`, 20, 15 * 60_000))) {
     return NextResponse.json({ error: "too_many_attempts" }, { status: 429 });
   }
   let body: z.infer<typeof bodySchema>;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { emailVerifySchema } from "@/lib/auth-schemas";
-import { checkRateLimit, getClientIp } from "@/lib/security";
+import { rateLimit, getClientIp } from "@/lib/security";
 import { endSessionFromRequest, createPlayerSession, safeNextPath, verifyEmailCode } from "@/lib/player-auth";
 import { ensurePlayerForEmail, markPhoneVerified } from "@/lib/player-db";
 import { verifyPhoneProof } from "@/lib/phone-proof";
@@ -11,7 +11,7 @@ const bodySchema = emailVerifySchema;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  if (!checkRateLimit(`auth-verify:${ip}`, 30, 15 * 60_000)) {
+  if (!(await rateLimit(`auth-verify:${ip}`, 30, 15 * 60_000))) {
     return NextResponse.json({ error: "too_many_attempts" }, { status: 429 });
   }
   let body: z.infer<typeof bodySchema>;

@@ -1229,7 +1229,10 @@ describe("APP · the Arena", () => {
       const card = cp.locator(".fight", { hasText: "Fridays at Pioneer" });
       await card.waitFor();
       assert.match(await card.textContent(), /Team up first/);
-      assert.match(await card.textContent(), /open 7 days|open 6 days/);
+      // Open until the end of the club's day, seven days on: 7 to 8 days from
+      // now, which the card rounds (as the website does), so "open 8 days" in
+      // the club's morning and "open 7 days" from noon. Never 6.
+      assert.match(await card.textContent(), /open [78] days/);
       await mp.getByRole("button", { name: "Take it down" }).click();
       await mp.getByRole("button", { name: "Throw down a challenge" }).waitFor();
 

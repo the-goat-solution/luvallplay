@@ -15,22 +15,22 @@ export function RankLadder({ me }: { me: MeView | null }) {
   const myTier = me ? LADDER[me.rank.shown].item : null;
   return (
     <section className={styles.card} aria-labelledby="ladder-title">
-        <h2 id="ladder-title" className={styles.cardTitle}>
-          {t("ranks_title")}
-        </h2>
-        <p className={styles.small} style={{ marginBottom: 10 }}>
-          {t("ranks_sub")}
-        </p>
-        <ol className={seg.ladder}>
-          {[...tiers].reverse().map((r) => (
-            <li key={r.index} className={r.item === myTier ? seg.here : undefined}>
-              <RankIcon index={r.index} px={34} />
-              <span className={seg.tierName}>{ITEMS[r.item][lang]}</span>
-              <small>{r.wp > 0 ? t("ranks_from", { n: r.wp }) : t("ranks_start")}</small>
-              {r.item === myTier && <em>{t("ranks_you_here")}</em>}
-            </li>
-          ))}
-        </ol>
+      <h2 id="ladder-title" className={styles.cardTitle}>
+        {t("ranks_title")}
+      </h2>
+      <p className={styles.small} style={{ marginBottom: 10 }}>
+        {t("ranks_sub")}
+      </p>
+      <ol className={seg.ladder}>
+        {[...tiers].reverse().map((r) => (
+          <li key={r.index} className={r.item === myTier ? seg.here : undefined}>
+            <RankIcon index={r.index} px={34} />
+            <span className={seg.tierName}>{ITEMS[r.item][lang]}</span>
+            <small>{r.wp > 0 ? t("ranks_from", { n: r.wp }) : t("ranks_start")}</small>
+            {r.item === myTier && <em>{t("ranks_you_here")}</em>}
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

@@ -10,6 +10,7 @@ import { getPausedDays } from "@/lib/day-requests";
 import { formatEventTimeRange, getClubToday, isDatePaused } from "@/lib/dates";
 import { getStripeSyncState } from "@/lib/finance-stripe";
 import s from "./today.module.css";
+import { clubLocale } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,11 @@ function dayState(d: { paused: boolean; miniGame: boolean; locked: boolean; spot
 }
 
 function longDate(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString("en-NZ", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" });
+  return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString(clubLocale(), { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" });
 }
 
 function shortDate(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString("en-NZ", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" });
+  return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString(clubLocale(), { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" });
 }
 
 function relativeDay(dateKey: string, today: string): string {

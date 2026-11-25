@@ -7,6 +7,7 @@ import { CountBadge } from "@/components/admin/kit";
 import { FlashToast } from "@/components/admin/FlashToast";
 import { activeHref, type BadgeKey, type NavGroup } from "@/components/admin/nav-config";
 import s from "./shell.module.css";
+import { clubShortName } from "@/lib/club-brand";
 
 // The admin frame: a sidebar on wide screens; on a phone, a top bar with a
 // menu button that slides the same sidebar in. Pages render inside <main>.
@@ -63,7 +64,7 @@ export function AdminShell({
       <aside id="admin-sidebar" className={`${s.sidebar} ${open ? s.sidebarOpen : ""}`} aria-label="Club admin">
         <div className={s.brand}>
           <AdminLink href="/admin" className={s.brandLink}>
-            Three Wolves
+            {clubShortName()}
             <span className={s.brandSub}>Club admin</span>
           </AdminLink>
           <button type="button" className={s.closeButton} aria-label="Close menu" onClick={() => setOpen(false)}>

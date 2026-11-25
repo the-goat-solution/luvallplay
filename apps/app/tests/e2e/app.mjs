@@ -104,7 +104,10 @@ async function sessionToken(email) {
 /** A browser context already signed in as `email` (the token is in the app's storage before it starts). */
 async function signedIn(email, options = {}) {
   const token = await sessionToken(email);
-  const context = await browser.newContext({ viewport: PHONE, ...options });
+  // The app's service worker is blocked unless a journey is about it: a page
+  // it controls can bypass context.route, so the stand-ins (Stripe, the
+  // photo store, failing calls) would be skipped.
+  const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block", ...options });
   await context.addInitScript((t) => {
     if (!sessionStorage.getItem("e2e-seeded")) {
       localStorage.setItem("lp.token", t);
@@ -186,7 +189,7 @@ async function withSecondClub(context) {
 
 describe("APP · the Luvallplay frame and the club's look (decision AM)", () => {
   test("APP1 · sign in by email code: Luvallplay's look before, the club's after; sign out returns to Luvallplay", async () => {
-    const context = await browser.newContext({ viewport: PHONE });
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
     const page = await context.newPage();
     const problems = watch(page);
     await page.goto(APP);
@@ -243,7 +246,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
   });
 
   test("APP2 · a wrong code and a bad email say so, in words, and nobody is signed in", async () => {
-    const context = await browser.newContext({ viewport: PHONE });
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
     const page = await context.newPage();
     await page.goto(`${APP}/signin`);
     await page.getByLabel("Email").fill("not-an-email");
@@ -260,7 +263,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
   });
 
   test("APP3 · a club's invite link applies the club's look before sign-in, then opens that club", async () => {
-    const context = await browser.newContext({ viewport: PHONE });
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
     const page = await context.newPage();
     const problems = watch(page);
     await page.goto(`${APP}/c/three-wolves`);
@@ -290,7 +293,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
   });
 
   test("APP3 · an invite link to a club that doesn't exist (or a malformed one) keeps Luvallplay's look and still offers sign-in", async () => {
-    const context = await browser.newContext({ viewport: PHONE });
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
     const page = await context.newPage();
     for (const slug of ["no-such-club", "Not%20A%20Slug"]) {
       await page.goto(`${APP}/c/${slug}`);
@@ -713,7 +716,7 @@ describe("APP · settings", () => {
   });
 
   test("APP7 · a Vietnamese device starts in Vietnamese on the sign-in screen", async () => {
-    const context = await browser.newContext({ viewport: PHONE, locale: "vi-VN" });
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block", locale: "vi-VN" });
     const page = await context.newPage();
     await page.goto(`${APP}/signin`);
     await page.waitForSelector("text=Đăng nhập");
@@ -973,7 +976,7 @@ describe("APP · settings: the account", () => {
 
   test("APP32 · a brand-new account is asked its name after the code; skipping leaves a reminder that leads back", async () => {
     const signUp = async (email) => {
-      const context = await browser.newContext({ viewport: PHONE });
+      const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
       const page = await context.newPage();
       await page.goto(`${APP}/signin`);
       await page.getByLabel("Email").fill(email);
@@ -1693,7 +1696,7 @@ describe("APP · performance on a mid-range phone (build plan §4.4)", () => {
   // not milliseconds. The numbers are printed on every run.
   const LIMITS = { firstStart: 9000, savedStart: 4000, tab: 4500 };
   test("APP47 · first start, a start from the saved screens, and switching tabs stay within their limits", async () => {
-    const { context } = await signedIn(PEOPLE.member.email);
+    const { context } = await signedIn(PEOPLE.member.email, { serviceWorkers: "allow" });
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
@@ -1818,7 +1821,7 @@ describe("APP · offline and installing (build plan §4.1)", () => {
   const meFor = async (token) => (await fetch(`${env.base}/api/v1/app/clubs/three-wolves/me`, { headers: { authorization: `Bearer ${token}` } })).json();
 
   test("APP42 · offline: the app and Me open from this device, Can't make it waits on it and is sent when the connection is back", async () => {
-    const { context, token } = await signedIn(PEOPLE.member.email);
+    const { context, token } = await signedIn(PEOPLE.member.email, { serviceWorkers: "allow" });
     const page = await context.newPage();
     const problems = watch(page);
     const next = (await meFor(token)).calendar.find((d) => !d.paused && d.included && !d.booked && !d.absent);
@@ -1960,7 +1963,7 @@ describe("APP · layout (build plan §4.4)", () => {
   });
 
   test("APP10 · sign-in and an invite link at five widths: no sideways scroll", async () => {
-    const context = await browser.newContext({ viewport: PHONE });
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
     const page = await context.newPage();
     for (const route of ["/signin", "/c/three-wolves"]) {
       await page.goto(`${APP}${route}`);
@@ -2000,7 +2003,7 @@ describe("APP · layout (build plan §4.4)", () => {
   });
 
   test("APP12 · reduced motion: nothing animates", async () => {
-    const context = await browser.newContext({ viewport: PHONE, reducedMotion: "reduce" });
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block", reducedMotion: "reduce" });
     const page = await context.newPage();
     await page.goto(`${APP}/signin`);
     await page.getByLabel("Email").waitFor();
@@ -2016,7 +2019,7 @@ describe("APP · accessibility and the page's rules", () => {
     for (const colorScheme of ["light", "dark"]) {
       // axe is injected by the test, which the page's own CSP would (rightly) refuse.
       const { context } = await signedIn(PEOPLE.admin.email, { colorScheme, bypassCSP: true });
-      const anon = await browser.newContext({ viewport: PHONE, colorScheme, bypassCSP: true });
+      const anon = await browser.newContext({ viewport: PHONE, serviceWorkers: "block", colorScheme, bypassCSP: true });
       for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/vision", '[data-screen="nav_vision"][data-state="ready"]'], [context, "/vision/label", '[data-testid="label-file"]'], [context, "/membership", '[data-screen="membership"][data-state="ready"]'], [context, "/arena", '[data-screen="nav_arena"]']]) {
         const page = await ctx.newPage();
         await page.goto(`${APP}${route}`);
@@ -2052,7 +2055,7 @@ describe("APP · accessibility and the page's rules", () => {
     assert.doesNotMatch(csp.match(/connect-src[^;]*/)[0], /https:(\s|$)/);
     assert.doesNotMatch(html, /<script(?![^>]+src=)[^>]*>/);
     // And it bites: a request to any other host is refused by the page itself.
-    const context = await browser.newContext({ viewport: PHONE });
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
     const page = await context.newPage();
     await page.goto(`${APP}/signin`);
     const refused = await page.evaluate(() => fetch("https://example.com/").then(() => false, () => true));

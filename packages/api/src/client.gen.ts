@@ -122,6 +122,11 @@ export function createApi(transport: Transport) {
       thread: (params: ParamsOf<"messages.thread">, options?: Options) =>
         transport.call("messages.thread", { params, signal: options?.signal }) as Promise<ResponseOf<"messages.thread">>,
     },
+    player: {
+      /** GET /clubs/{club}/me/stats (signed in) */
+      stats: (params: ParamsOf<"player.stats">, options?: Options) =>
+        transport.call("player.stats", { params, signal: options?.signal }) as Promise<ResponseOf<"player.stats">>,
+    },
   };
 }
 

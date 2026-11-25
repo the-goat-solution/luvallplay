@@ -37,6 +37,7 @@ export const ROUTES = {
   "messages.reply": { method: "POST", path: "/clubs/{club}/messages/{id}", auth: "session" },
   "messages.start": { method: "POST", path: "/clubs/{club}/messages", auth: "session" },
   "messages.thread": { method: "GET", path: "/clubs/{club}/messages/{id}", auth: "session" },
+  "player.stats": { method: "GET", path: "/clubs/{club}/me/stats", auth: "session" },
 } as const;
 
 export type RouteId = keyof typeof ROUTES;

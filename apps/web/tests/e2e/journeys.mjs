@@ -646,6 +646,7 @@ const SESSION_ENDPOINTS = [
   ["POST", "/clubs/{club}/arena"],
   ["GET", "/clubs/{club}/leaderboard"],
   ["GET", "/clubs/{club}/players/{id}"],
+  ["GET", "/clubs/{club}/me/stats"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1282,6 +1283,23 @@ describe("API · the players' app API", () => {
     } finally {
       await mia.context.close();
       await hana.context.close();
+    }
+  });
+
+  test("API18 · the Player tab's stats: play days by period from the person's attendance, streaks, board places, the club's days", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    try {
+      const r = await appApi("GET", `/clubs/${CLUB}/me/stats`, { token: mia.token });
+      assert.equal(r.status, 200);
+      assert.deepEqual(Object.keys(r.json).sort(), ["attended", "attendedDates", "clubDates", "ranks", "rr", "rrHistory", "streak"]);
+      const { rows } = await db.query(`SELECT count(*)::int AS n FROM attendance WHERE email = $1 AND verified AND NOT removed`, [PEOPLE.member.email]);
+      assert.equal(r.json.attended.lifetime, rows[0].n, "all-time play days are the person's own attendance");
+      assert.equal(r.json.attendedDates.length, rows[0].n);
+      assert.ok(r.json.attended.month <= r.json.attended.quarter && r.json.attended.quarter <= r.json.attended.lifetime);
+      for (let i = 1; i < r.json.attendedDates.length; i++) assert.ok(r.json.attendedDates[i - 1] >= r.json.attendedDates[i], "newest first");
+      assert.equal((await appApi("GET", `/clubs/${CLUB}/me/stats`)).status, 401);
+    } finally {
+      await mia.context.close();
     }
   });
 

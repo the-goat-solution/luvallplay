@@ -43,6 +43,9 @@ export function createApi(transport: Transport) {
       /** POST /clubs/{club}/arena (signed in) */
       action: (params: ParamsOf<"arena.action">, body: BodyOf<"arena.action">, options?: Options) =>
         transport.call("arena.action", { params, body, signal: options?.signal }) as Promise<ResponseOf<"arena.action">>,
+      /** GET /clubs/{club}/arena/challenges/{id}/stats (signed in) */
+      matchStats: (params: ParamsOf<"arena.matchStats">, options?: Options) =>
+        transport.call("arena.matchStats", { params, signal: options?.signal }) as Promise<ResponseOf<"arena.matchStats">>,
       /** GET /clubs/{club}/arena (signed in) */
       state: (params: ParamsOf<"arena.state">, options?: Options) =>
         transport.call("arena.state", { params, signal: options?.signal }) as Promise<ResponseOf<"arena.state">>,

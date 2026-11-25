@@ -202,6 +202,12 @@ export const ENDPOINTS = define({
     params: S.clubParams, body: S.arenaActionRequest, response: S.arenaActionResponse,
     rateLimit: { limit: 60, windowMs: MIN },
   },
+  // A game's tracked stats (the website's GET /api/arena/match-stats: any signed-in player, Arena on).
+  "arena.matchStats": {
+    method: "GET", path: "/clubs/{club}/arena/challenges/{id}/stats", auth: "session", scope: "club", module: "arena",
+    params: S.visionChallengeParams, response: S.visionChallengeResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
   // The Leaderboard tab: the points board for a source and period, and one
   // player's card (someone who hides from the board is 404, except to themselves).
   "leaderboard.board": {

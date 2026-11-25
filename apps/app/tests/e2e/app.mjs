@@ -1092,7 +1092,7 @@ describe("APP · the Arena", () => {
     }
   });
 
-  test("APP34 · a whole game: accepted, checked in, the score entered and confirmed, then the after-game card", async () => {
+  test("APP34 · a whole game: accepted (the versus splash), checked in, the score entered and confirmed, then the after-game card", async () => {
     const mia = await signedIn(PEOPLE.member.email, { viewport: { width: 1000, height: 1000 } });
     const pete = await sessionToken(PEOPLE.player.email);
     const cora = await signedIn(PEOPLE.coach.email);
@@ -1106,6 +1106,19 @@ describe("APP · the Arena", () => {
 
       const mp = await mia.context.newPage();
       await mp.goto(`${APP}/arena`);
+      // The versus splash: both pairs, VS, and "Later" puts it off to a pill.
+      const splash = mp.getByRole("dialog", { name: "Challenge accepted!" });
+      await splash.waitFor();
+      assert.match(await splash.textContent(), /threw it down[\s\S]*took it on/);
+      if (process.env.E2E_SHOTS) await mp.screenshot({ path: `${process.env.E2E_SHOTS}/app-arena-versus.png` });
+      await splash.getByRole("button", { name: /Minimize/ }).click();
+      await mp.getByText("Your match is on").waitFor();
+      await mp.getByRole("button", { name: "Open", exact: true }).click();
+      await splash.getByRole("button", { name: "Let's go" }).click();
+      await splash.waitFor({ state: "detached" });
+      await mp.reload();
+      await mp.waitForSelector('[data-screen="nav_arena"][data-state="ready"]');
+      assert.equal(await splash.count(), 0, "seen: not shown again");
       const mine = mp.locator(`#challenge-${id}`);
       await mine.getByText("Challenge accepted!").waitFor();
       await mine.getByRole("button", { name: "We're here" }).click();
@@ -1147,6 +1160,83 @@ describe("APP · the Arena", () => {
       for (const who of [mia.token, cora.token]) await act(who, { action: "pair_leave" }).catch(() => {});
       await mia.context.close();
       await cora.context.close();
+    }
+  });
+
+  test("APP44 · the ladder's pictures on the Player tab, the Leaderboard and the Arena; a played game's tracked stats from the feed; a player's card that opens the Arena on them", async () => {
+    const mia = await signedIn(PEOPLE.member.email, { viewport: { width: 1000, height: 1000 } });
+    const pete = await sessionToken(PEOPLE.player.email);
+    const cora = await sessionToken(PEOPLE.coach.email);
+    const adam = await sessionToken(PEOPLE.admin.email);
+    const page = await mia.context.newPage();
+    const problems = watch(page);
+    try {
+      await pairUp(mia.token, pete);
+      await pairUp(cora, adam);
+      const posted = await act(mia.token, { action: "post", days: 3, note: "" });
+      const id = posted.state.mine.find((c) => c.status === "open").id;
+      await act(cora, { action: "accept", id });
+      await act(mia.token, { action: "checkin_now", id });
+      // Tracked stats, saved as the tracker does, then the game finished.
+      const setup = await (await fetch(`${api}/clubs/three-wolves/vision/challenges/${id}`, { headers: { Authorization: `Bearer ${mia.token}` } })).json();
+      const players = setup.setup.teams.flatMap((t) => t.players.map((p, k) => ({ playerId: p.id, hits: 10 + k, distance: 120.5, topSpeed: 6.2 })));
+      const saved = await fetch(`${api}/clubs/three-wolves/vision/stats`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${mia.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId: id, mode: "live", duration: 900, rallies: 31, longestRally: 17, avgRallyShots: 6, fastestShotKmh: 212, players }),
+      });
+      assert.equal(saved.status, 200);
+      await db.query(`UPDATE arena_challenges SET checked_in_at = NOW() - INTERVAL '40 minutes' WHERE id = $1`, [id]);
+      await act(mia.token, { action: "score", id, posting: 21, accepting: 12 });
+      await act(cora, { action: "confirm", id });
+      await act(mia.token, { action: "rank_seen" }); // a rank-up from this game isn't what this journey is about
+
+      // The feed's Stats chip opens the game's numbers.
+      await page.goto(`${APP}/arena`);
+      await page.waitForSelector('[data-screen="nav_arena"][data-state="ready"]');
+      const after = page.getByRole("dialog", { name: "Victory!" });
+      await after.waitFor({ timeout: 15000 });
+      await after.getByLabel("Split up").check();
+      await after.getByRole("button", { name: "Done" }).click();
+      await after.waitFor({ state: "detached" });
+      await page.locator(".feed").getByRole("button", { name: /Stats/ }).first().click();
+      const stats = page.getByTestId("match-stats");
+      await stats.waitFor();
+      assert.match(await stats.textContent(), /31[\s\S]*17[\s\S]*212/);
+      assert.equal(await stats.locator("tbody tr").count(), 4);
+      assert.match(await stats.textContent(), /120\.5 m[\s\S]*6\.2 m\/s/);
+      await page.keyboard.press("Escape");
+
+      // The Player tab: the rank's picture, the kit bag's and the ladder's.
+      await page.goto(`${APP}/player`);
+      await page.waitForSelector('[data-screen="nav_player"][data-state="ready"]');
+      const hero = page.locator(".rank-hero > svg[role=img]");
+      assert.equal(await hero.getAttribute("width"), "92");
+      assert.ok((await hero.getAttribute("aria-label")).length > 2);
+      assert.ok((await page.locator(".kit-item svg[role=img]").count()) >= 4);
+      assert.ok((await page.locator(".achievements svg[role=img]").count()) > 0);
+      assert.ok((await page.locator(".ladder svg[role=img]").count()) > 3);
+
+      // The Leaderboard: a badge on every face; a card's Challenge opens the Arena on that player.
+      await page.goto(`${APP}/leaderboard`);
+      await page.waitForSelector('[data-screen="nav_leaderboard"][data-state="ready"]');
+      const rows = await page.locator(".board-row").count();
+      assert.equal(await page.locator(".board-row .board-face-rank[role=img]").count(), rows);
+      await act(mia.token, { action: "pair_leave" });
+      await act(cora, { action: "pair_leave" });
+      const coraRow = page.locator(".board-row").filter({ hasText: "Cora" }).first();
+      if (await coraRow.count()) {
+        await coraRow.getByRole("button").click();
+        const card = page.getByRole("dialog");
+        await card.locator("svg[role=img]").first().waitFor();
+        await card.getByRole("button", { name: "Challenge" }).click();
+        await page.waitForURL(`${APP}/arena`);
+        await page.getByText("Post a challenge with your partner, and they can accept it.").waitFor();
+      }
+      assert.deepEqual(problems.filter((p) => !/Failed to load resource/i.test(p)), []);
+    } finally {
+      for (const who of [mia.token, cora]) await act(who, { action: "pair_leave" }).catch(() => {});
+      await mia.context.close();
     }
   });
 });

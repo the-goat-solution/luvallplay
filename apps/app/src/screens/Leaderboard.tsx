@@ -10,6 +10,7 @@ import { localeOf } from "../lib/format.ts";
 import { useArenaT } from "./arena/words.ts";
 import { useBoard, type Board, type BoardQuery, type BoardRow } from "./leaderboard/data.ts";
 import { PlayerCard } from "./leaderboard/PlayerCard.tsx";
+import { RankIcon } from "../components/RankIcon.tsx";
 
 type Source = NonNullable<BoardQuery["source"]>;
 type Period = NonNullable<BoardQuery["period"]>;
@@ -49,12 +50,20 @@ export default function LeaderboardScreen() {
     <li key={`p${r.playerId}`} className={`board-row${mine ? " board-mine" : ""}`}>
       <button type="button" className="board-button" aria-haspopup="dialog" onClick={() => setSelected(r.playerId)}>
         <span className={`board-rank${r.rank <= 3 ? ` board-top${r.rank}` : ""}`}>{r.rank}</span>
-        <span className="avatar avatar-small" aria-hidden="true">{r.avatarUrl ? <img src={r.avatarUrl} alt="" loading="lazy" /> : r.initials}</span>
+        <span className="board-face">
+          <span className="avatar avatar-small" aria-hidden="true">{r.avatarUrl ? <img src={r.avatarUrl} alt="" loading="lazy" /> : r.initials}</span>
+          <RankIcon index={r.index} tarnished={r.tarnishing} px={22} className="board-face-rank" />
+        </span>
         <span className="row-text">
           <span>
             <strong>{r.name}</strong>
             {mine && <em> · {t("lb_you")}</em>}
-            {r.seat && <span className="tag board-seat"> {t(r.seat === "alpha" ? "lb_alpha" : "lb_silver")}</span>}
+            {r.seat && (
+              <span className="tag board-seat">
+                <RankIcon index={r.index} seat={r.seat} px={16} />
+                {t(r.seat === "alpha" ? "lb_alpha" : "lb_silver")}
+              </span>
+            )}
           </span>
           <span className="muted small">{[rank(r.index), breakdown(r)].filter(Boolean).join(" · ")}</span>
         </span>
@@ -102,7 +111,10 @@ export default function LeaderboardScreen() {
           </div>
           {b.me.ladder && next && (
             <div className="card stack-tight next-tier">
-              <strong>{t("lb_next_tier", { tier: rank(next.index) })}</strong>
+              <span className="next-tier-head">
+                <RankIcon index={next.index} px={34} />
+                <strong>{t("lb_next_tier", { tier: rank(next.index) })}</strong>
+              </span>
               <span className="muted small">{t("lb_next_tier_to_go", { n: Math.max(1, next.wp - b.me.ladder.wpTotal), total: b.me.ladder.wpTotal })}</span>
               <progress max={next.wp - LADDER[b.me.ladder.index].wp} value={Math.max(0, b.me.ladder.wpTotal - LADDER[b.me.ladder.index].wp)} aria-label={t("lb_next_tier", { tier: rank(next.index) })} />
             </div>
@@ -118,6 +130,7 @@ export default function LeaderboardScreen() {
                     const start = tierStart(r.index);
                     out.push(
                       <li key={`tier${r.playerId}`} className="tier-line" aria-hidden="true">
+                        <RankIcon index={start.index} px={22} />
                         <span>{ITEMS[start.item][lang]}</span>
                         <small>{start.wp > 0 ? t("lb_tier_from", { n: start.wp }) : t("lb_tier_start")}</small>
                       </li>,

@@ -127,6 +127,20 @@ export function createApi(transport: Transport) {
       stats: (params: ParamsOf<"player.stats">, options?: Options) =>
         transport.call("player.stats", { params, signal: options?.signal }) as Promise<ResponseOf<"player.stats">>,
     },
+    shop: {
+      /** POST /clubs/{club}/shop/orders/{id}/cancel (signed in) */
+      cancel: (params: ParamsOf<"shop.cancel">, body: BodyOf<"shop.cancel">, options?: Options) =>
+        transport.call("shop.cancel", { params, body, signal: options?.signal }) as Promise<ResponseOf<"shop.cancel">>,
+      /** POST /clubs/{club}/shop/orders/{id}/confirm (signed in) */
+      confirm: (params: ParamsOf<"shop.confirm">, body: BodyOf<"shop.confirm">, options?: Options) =>
+        transport.call("shop.confirm", { params, body, signal: options?.signal }) as Promise<ResponseOf<"shop.confirm">>,
+      /** GET /clubs/{club}/shop (signed in) */
+      list: (params: ParamsOf<"shop.list">, options?: Options) =>
+        transport.call("shop.list", { params, signal: options?.signal }) as Promise<ResponseOf<"shop.list">>,
+      /** POST /clubs/{club}/shop/orders (signed in) */
+      order: (params: ParamsOf<"shop.order">, body: BodyOf<"shop.order">, options?: Options) =>
+        transport.call("shop.order", { params, body, signal: options?.signal }) as Promise<ResponseOf<"shop.order">>,
+    },
   };
 }
 

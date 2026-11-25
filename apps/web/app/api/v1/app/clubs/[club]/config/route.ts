@@ -30,6 +30,7 @@ const route = appRoute("clubs.config", async ({ club, request }) => {
       paymentMode: mode === "offline" || mode === "online" ? mode : ("free" as const),
       sports: stored?.sports ?? [],
       webUrl: getSiteUrl(),
+      stripeKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || null,
     },
     apiBase: apiBaseForRegion(club.region, request) ?? `${new URL(request.url).origin}/api/v1/app`,
     modules,

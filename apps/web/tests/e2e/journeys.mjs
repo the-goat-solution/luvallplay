@@ -647,6 +647,10 @@ const SESSION_ENDPOINTS = [
   ["GET", "/clubs/{club}/leaderboard"],
   ["GET", "/clubs/{club}/players/{id}"],
   ["GET", "/clubs/{club}/me/stats"],
+  ["GET", "/clubs/{club}/shop"],
+  ["POST", "/clubs/{club}/shop/orders"],
+  ["POST", "/clubs/{club}/shop/orders/{id}/confirm"],
+  ["POST", "/clubs/{club}/shop/orders/{id}/cancel"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -664,6 +668,34 @@ async function appApi(method, path, { token, body, headers = {}, raw } = {}) {
     json = JSON.parse(text);
   } catch {}
   return { status: r.status, json, headers: r.headers };
+}
+
+/** A test product (a tee: men's M with 2 in stock, women's S sold out), and the modules the shop needs; undo() puts everything back. */
+async function seedShop(db, { cash = true } = {}) {
+  const before = (await db.query(`SELECT module_id, enabled FROM tenant_modules WHERE tenant_id = 1 AND module_id IN ('shop', 'payments-to-check')`)).rows;
+  const set = (id, on) => db.query(`INSERT INTO tenant_modules (tenant_id, module_id, enabled) VALUES (1, $1, $2) ON CONFLICT (tenant_id, module_id) DO UPDATE SET enabled = $2`, [id, on]);
+  await set("shop", true);
+  await set("payments-to-check", cash);
+  const slug = `e2e-tee-${Date.now()}`;
+  const product = (await db.query(`INSERT INTO shop_products (slug, name_en, name_vi, desc_en, price_cents, has_fit, has_sizes, sort) VALUES ($1, 'E2E Tee', 'Áo E2E', 'A test shirt.', 4500, TRUE, TRUE, -1) RETURNING id`, [slug])).rows[0].id;
+  const men = (await db.query(`INSERT INTO shop_variants (product_id, fit, size, stock) VALUES ($1, 'men', 'M', 2) RETURNING id`, [product])).rows[0].id;
+  const women = (await db.query(`INSERT INTO shop_variants (product_id, fit, size, stock) VALUES ($1, 'women', 'S', 0) RETURNING id`, [product])).rows[0].id;
+  return {
+    product, men, women, set,
+    async undo() {
+      const orders = (await db.query(`SELECT DISTINCT order_id FROM shop_order_items WHERE variant_id IN ($1, $2)`, [men, women])).rows.map((r) => r.order_id);
+      await db.query(`DELETE FROM shop_order_items WHERE order_id = ANY($1)`, [orders]);
+      await db.query(`DELETE FROM shop_orders WHERE id = ANY($1)`, [orders]);
+      await db.query(`DELETE FROM shop_stock_log WHERE variant_id IN ($1, $2)`, [men, women]);
+      await db.query(`DELETE FROM shop_variants WHERE product_id = $1`, [product]);
+      await db.query(`DELETE FROM shop_products WHERE id = $1`, [product]);
+      for (const m of ["shop", "payments-to-check"]) {
+        const was = before.find((r) => r.module_id === m);
+        if (was) await set(m, was.enabled);
+        else await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [m]);
+      }
+    },
+  };
 }
 
 describe("API · the players' app API", () => {
@@ -1299,6 +1331,57 @@ describe("API · the players' app API", () => {
       for (let i = 1; i < r.json.attendedDates.length; i++) assert.ok(r.json.attendedDates[i - 1] >= r.json.attendedDates[i], "newest first");
       assert.equal((await appApi("GET", `/clubs/${CLUB}/me/stats`)).status, 401);
     } finally {
+      await mia.context.close();
+    }
+  });
+
+  test("API19 · the shop: products and orders, a cash reservation held and cancelled, cash only when the club checks it, card without a provider leaves nothing held, sold out, other people's orders", async () => {
+    const shop = await seedShop(db);
+    const pete = await signedIn(PEOPLE.player.email);
+    const mia = await signedIn(PEOPLE.member.email);
+    const call = (method, path, body, who = pete) => appApi(method, `/clubs/${CLUB}${path}`, { token: who.token, body });
+    const stock = async () => (await db.query(`SELECT reserved, sold FROM shop_variants WHERE id = $1`, [shop.men])).rows[0];
+    try {
+      const list = await call("GET", "/shop");
+      assert.equal(list.status, 200);
+      const tee = list.json.products.find((p) => p.id === shop.product);
+      assert.deepEqual([tee.nameEn, tee.priceCents, tee.hasFit, tee.available], ["E2E Tee", 4500, true, 2]);
+      assert.deepEqual(tee.variants.map((v) => [v.fit, v.size, v.available]).sort(), [["men", "M", 2], ["women", "S", 0]]);
+      assert.equal(list.json.cash, true);
+
+      const cash = await call("POST", "/shop/orders", { variantId: shop.men, method: "cash" });
+      assert.equal(cash.status, 200);
+      assert.deepEqual([cash.json.order.status, cash.json.order.method, cash.json.order.totalCents, cash.json.clientSecret], ["reserved_cash", "cash", 4500, null]);
+      assert.ok(cash.json.order.holdExpiresAt);
+      assert.equal(JSON.stringify(cash.json).includes("@e2e.test"), false, "no email in the answer");
+      assert.equal((await stock()).reserved, 1);
+      assert.ok((await call("GET", "/shop")).json.orders.some((o) => o.id === cash.json.order.id));
+      assert.equal((await call("POST", `/shop/orders/${cash.json.order.id}/cancel`, {}, mia)).status, 404, "not hers");
+      assert.equal((await call("POST", `/shop/orders/${cash.json.order.id}/confirm`, {})).status, 404, "a cash order has no card payment");
+      assert.deepEqual((await call("POST", `/shop/orders/${cash.json.order.id}/cancel`, {})).json, { ok: true });
+      assert.equal((await stock()).reserved, 0, "back on the shelf");
+
+      const soldOut = await call("POST", "/shop/orders", { variantId: shop.women, method: "cash" });
+      assert.deepEqual([soldOut.status, soldOut.json.error], [409, "sold_out"]);
+
+      // Card: no card provider here, so it fails, and nothing stays held.
+      const card = await call("POST", "/shop/orders", { variantId: shop.men, method: "card" });
+      if (card.status === 200) {
+        assert.ok(card.json.clientSecret);
+        await call("POST", `/shop/orders/${card.json.order.id}/cancel`, {});
+      } else assert.equal(card.status, 500);
+      assert.equal((await stock()).reserved, 0);
+
+      await shop.set("payments-to-check", false);
+      const noCash = await call("POST", "/shop/orders", { variantId: shop.men, method: "cash" });
+      assert.deepEqual([noCash.status, noCash.json.error], [409, "cash_unavailable"]);
+      assert.equal((await call("GET", "/shop")).json.cash, false);
+
+      await shop.set("shop", false);
+      assert.deepEqual([(await call("GET", "/shop")).status, (await call("GET", "/shop")).json.error], [404, "module_off"]);
+    } finally {
+      await shop.undo();
+      await pete.context.close();
       await mia.context.close();
     }
   });

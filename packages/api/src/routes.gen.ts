@@ -38,6 +38,10 @@ export const ROUTES = {
   "messages.start": { method: "POST", path: "/clubs/{club}/messages", auth: "session" },
   "messages.thread": { method: "GET", path: "/clubs/{club}/messages/{id}", auth: "session" },
   "player.stats": { method: "GET", path: "/clubs/{club}/me/stats", auth: "session" },
+  "shop.cancel": { method: "POST", path: "/clubs/{club}/shop/orders/{id}/cancel", auth: "session" },
+  "shop.confirm": { method: "POST", path: "/clubs/{club}/shop/orders/{id}/confirm", auth: "session" },
+  "shop.list": { method: "GET", path: "/clubs/{club}/shop", auth: "session" },
+  "shop.order": { method: "POST", path: "/clubs/{club}/shop/orders", auth: "session" },
 } as const;
 
 export type RouteId = keyof typeof ROUTES;

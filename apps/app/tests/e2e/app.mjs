@@ -175,6 +175,8 @@ async function withSecondClub(context) {
     const body = { ...mine, membership: null, join: { monthly: 4000, quarterly: 11000, days: ["tuesday"] }, calendar: [], inbox: { unread: 0, latest: [] } };
     return route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json", "cache-control": "no-store" }, body: JSON.stringify(body) });
   });
+  // Its shop: open, nothing in it yet.
+  await serveJson(context, `${api}/clubs/harbour-smash/shop`, async () => ({ products: [], orders: [], cash: false }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1230,6 +1232,111 @@ describe("APP · the Player tab", () => {
   });
 });
 
+/** A test product (a tee: men's M with 2 in stock, women's S sold out), and the modules the shop needs; undo() puts everything back. */
+async function seedShop(db, { cash = true } = {}) {
+  const before = (await db.query(`SELECT module_id, enabled FROM tenant_modules WHERE tenant_id = 1 AND module_id IN ('shop', 'payments-to-check')`)).rows;
+  const set = (id, on) => db.query(`INSERT INTO tenant_modules (tenant_id, module_id, enabled) VALUES (1, $1, $2) ON CONFLICT (tenant_id, module_id) DO UPDATE SET enabled = $2`, [id, on]);
+  await set("shop", true);
+  await set("payments-to-check", cash);
+  const slug = `e2e-tee-${Date.now()}`;
+  const product = (await db.query(`INSERT INTO shop_products (slug, name_en, name_vi, desc_en, price_cents, has_fit, has_sizes, sort) VALUES ($1, 'E2E Tee', 'Áo E2E', 'A test shirt.', 4500, TRUE, TRUE, -1) RETURNING id`, [slug])).rows[0].id;
+  const men = (await db.query(`INSERT INTO shop_variants (product_id, fit, size, stock) VALUES ($1, 'men', 'M', 2) RETURNING id`, [product])).rows[0].id;
+  const women = (await db.query(`INSERT INTO shop_variants (product_id, fit, size, stock) VALUES ($1, 'women', 'S', 0) RETURNING id`, [product])).rows[0].id;
+  return {
+    product, men, women, set,
+    async undo() {
+      const orders = (await db.query(`SELECT DISTINCT order_id FROM shop_order_items WHERE variant_id IN ($1, $2)`, [men, women])).rows.map((r) => r.order_id);
+      await db.query(`DELETE FROM shop_order_items WHERE order_id = ANY($1)`, [orders]);
+      await db.query(`DELETE FROM shop_orders WHERE id = ANY($1)`, [orders]);
+      await db.query(`DELETE FROM shop_stock_log WHERE variant_id IN ($1, $2)`, [men, women]);
+      await db.query(`DELETE FROM shop_variants WHERE product_id = $1`, [product]);
+      await db.query(`DELETE FROM shop_products WHERE id = $1`, [product]);
+      for (const m of ["shop", "payments-to-check"]) {
+        const was = before.find((r) => r.module_id === m);
+        if (was) await set(m, was.enabled);
+        else await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [m]);
+      }
+    },
+  };
+}
+
+describe("APP · the club shop", () => {
+  // Stripe's script, stood in for: the card fields mount, and paying succeeds.
+  const FAKE_STRIPE = `window.Stripe = function () {
+    return {
+      elements: function () {
+        return { create: function () {
+          var ready = null;
+          return {
+            on: function (e, cb) { if (e === "ready") ready = cb; },
+            mount: function (el) { var d = document.createElement("div"); d.className = "fake-card-fields"; d.textContent = "4242 4242 4242 4242"; el.appendChild(d); setTimeout(function () { ready && ready(); }, 20); },
+            destroy: function () {}
+          };
+        } };
+      },
+      confirmPayment: function () { window.__paid = (window.__paid || 0) + 1; return Promise.resolve({ paymentIntent: { id: "pi_test", status: "succeeded" } }); },
+      confirmSetup: function () { return Promise.resolve({ setupIntent: { id: "seti_test", status: "succeeded" } }); }
+    };
+  };`;
+
+  test("APP37 · the shop on Me: fits and sizes with stock, a cash reservation and its cancelling, and paying by card through Stripe's form", async () => {
+    const shop = await seedShop(db);
+    const { context } = await signedIn(PEOPLE.player.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/me`);
+      await page.waitForSelector(ME_READY);
+      const tee = page.locator("article.product", { hasText: "E2E Tee" });
+      await tee.waitFor();
+      assert.match(await tee.textContent(), /\$45(\.00)?/);
+      const pay = tee.getByRole("button", { name: /Choose a size|Pay by card/ });
+      assert.equal(await pay.isDisabled(), true);
+      await tee.getByRole("button", { name: "Women's", exact: true }).click();
+      assert.equal(await tee.getByRole("button", { name: /S · Sold out/ }).isDisabled(), true);
+      await tee.getByRole("button", { name: "Men's", exact: true }).click();
+      await tee.getByRole("button", { name: /M · 2 left/ }).click();
+
+      await tee.getByRole("button", { name: "Reserve & pay cash at a play day" }).click();
+      await tee.getByRole("status").filter({ hasText: /Reserved! Bring \$45(\.00)? cash/ }).waitFor();
+      const orders = page.locator(".card", { has: page.getByRole("heading", { name: "Your orders" }) });
+      await orders.getByText(/Reserved: bring \$45(\.00)? cash by/).waitFor();
+      await orders.getByRole("button", { name: "Cancel reservation" }).click();
+      await orders.waitFor({ state: "detached" });
+      assert.equal((await db.query(`SELECT reserved FROM shop_variants WHERE id = $1`, [shop.men])).rows[0].reserved, 0);
+
+      // By card: the club's Stripe key, Stripe's form, the payment, then the order shows as paid.
+      const base = await realConfig();
+      await serveJson(context, `${api}/clubs/three-wolves/config`, () => ({ ...base, club: { ...base.club, stripeKey: "pk_test_e2e" } }));
+      await context.route("https://js.stripe.com/v3/", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_STRIPE }));
+      const order = { id: 999001, status: "pending_payment", method: "card", totalCents: 4500, holdExpiresAt: null, paidAt: null, collectedAt: null, createdAt: new Date().toISOString(), items: [{ label: "E2E Tee · Men's M", qty: 1, unitPriceCents: 4500 }] };
+      await context.route(`${api}/clubs/three-wolves/shop/orders`, (route) =>
+        route.request().method() === "POST" ? route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ order, clientSecret: "pi_test_secret_e2e", playDay: null }) }) : route.fallback(),
+      );
+      let confirmed = false;
+      await context.route(`${api}/clubs/three-wolves/shop/orders/999001/confirm`, (route) => {
+        if (route.request().method() !== "POST") return route.fallback();
+        confirmed = true;
+        return route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ order: { ...order, status: "paid", paidAt: new Date().toISOString() } }) });
+      });
+      await page.reload();
+      await page.waitForSelector(ME_READY);
+      await tee.getByRole("button", { name: /M · 2 left/ }).click();
+      await tee.getByRole("button", { name: /^Pay by card · \$45(\.00)?$/ }).click();
+      const dialog = page.getByRole("dialog", { name: "Pay by card" });
+      await dialog.locator(".fake-card-fields").waitFor();
+      await dialog.getByRole("button", { name: /^Pay by card · \$45(\.00)?$/ }).click();
+      await tee.getByRole("status").filter({ hasText: "Paid! Collect it at your next play day." }).waitFor();
+      assert.equal(confirmed, true);
+      assert.equal(await page.evaluate(() => window.__paid), 1);
+      assert.deepEqual(problems, []);
+    } finally {
+      await shop.undo();
+      await context.close();
+    }
+  });
+});
+
 describe("APP · layout (build plan §4.4)", () => {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
@@ -1348,13 +1455,15 @@ describe("APP · accessibility and the page's rules", () => {
     assert.deepEqual(problems, []);
   });
 
-  test("APP14 · the built page carries a strict Content-Security-Policy that names only the API host", async () => {
+  test("APP14 · the built page carries a strict Content-Security-Policy that names only the API host and Stripe's", async () => {
     const html = await (await fetch(`${APP}/signin`)).text();
     const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1] ?? "";
     assert.match(csp, /default-src 'self'/);
-    assert.match(csp, /script-src 'self'(;|$)/);
+    // Stripe's published hosts, for the card form (loaded only on a payment step).
+    assert.match(csp, /script-src 'self' https:\/\/js\.stripe\.com(;|$)/);
+    assert.match(csp, /frame-src https:\/\/js\.stripe\.com https:\/\/hooks\.stripe\.com(;|$)/);
     assert.match(csp, /style-src 'self'(;|$)/);
-    assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com`));
+    assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com https://api\\.stripe\\.com(;|$)`));
     assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|\*/);
     // Images from any https host (club logos, photos in Blob storage); nothing else is widened.
     assert.match(csp, /img-src 'self' data: https: /);

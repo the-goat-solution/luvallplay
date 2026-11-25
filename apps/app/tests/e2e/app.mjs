@@ -712,16 +712,48 @@ describe("APP · settings", () => {
     await context.close();
   });
 
-  test("APP9 · Club admin: shown to an owner (waiting for the handoff endpoint), never to a member; sign out everywhere", async () => {
+  test("APP9 · Club admin: opens the club's admin signed in; an old sign-in confirms by emailed code first; never shown to a member", async () => {
+    const owner = await signedIn(PEOPLE.owner.email);
+    const page = await owner.context.newPage();
+    const hash = createHash("sha256").update(owner.token).digest("hex");
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+
+      // Signed in more than 12 hours ago: Settings asks for a fresh code, then opens admin.
+      await db.query(`UPDATE player_sessions SET created_at = NOW() - INTERVAL '13 hours' WHERE token_hash = $1`, [hash]);
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.getByText("confirm it's you first").waitFor();
+      await fetch(`${env.base}/api/dev/outbox`, { method: "DELETE" });
+      await page.getByRole("button", { name: "Email me a code" }).click();
+      await page.getByLabel("6-digit code").fill("000000");
+      const code = await outboxCode(PEOPLE.owner.email);
+      if (code !== "000000") {
+        await page.getByRole("button", { name: "Confirm and open" }).click();
+        await page.getByRole("alert").filter({ hasText: "isn't right" }).waitFor();
+      }
+      await page.getByLabel("6-digit code").fill(code);
+      await page.getByRole("button", { name: "Confirm and open" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${owner.token}` } })).status, 200, "the older session wasn't ended either");
+    } finally {
+      await owner.context.close();
+    }
+
+    const member = await signedIn(PEOPLE.member.email);
+    const mp = await member.context.newPage();
+    await mp.goto(`${APP}/settings`);
+    await mp.waitForSelector("text=Signed in as");
+    assert.equal(await mp.getByRole("button", { name: "Club admin" }).count(), 0);
+    await member.context.close();
+  });
+
+  test("APP9b · sign out everywhere ends every session of the person", async () => {
     const owner = await signedIn(PEOPLE.owner.email);
     const page = await owner.context.newPage();
     await page.goto(`${APP}/settings`);
-    const button = page.getByRole("button", { name: "Club admin" });
-    await button.waitFor();
-    assert.equal(await button.isDisabled(), true);
-    await page.waitForSelector("text=Opening the club's admin from the app is coming soon.");
-
-    // A second device of the same person, then "sign out everywhere" from the first.
     const other = await sessionToken(PEOPLE.owner.email);
     await page.getByRole("button", { name: "Sign out everywhere" }).click();
     await page.waitForURL(`${APP}/signin`);

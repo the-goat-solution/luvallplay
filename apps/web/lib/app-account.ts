@@ -1,6 +1,9 @@
 // The players' app's account settings (/api/v1/app/account/...): the same
 // changes the website's Settings page makes, from the same functions.
 import { revalidateTag } from "next/cache";
+import { audit, db as adminDb } from "./admin-access";
+import { createHandoff, getAccess, hasAdminAccess, isStepUpFresh } from "./admin-roles";
+import type { AppSession } from "./app-api";
 import { setPlayerAvatar } from "./player-db";
 import { deletePublicBlobs } from "./public-blob";
 import { publicStorage } from "./storage";
@@ -45,4 +48,22 @@ export async function removePhoto(playerId: number): Promise<void> {
   const old = await setPlayerAvatar(playerId, null);
   await deletePublicBlobs([old]);
   refreshLeaderboard();
+}
+
+export type HandoffResult = { ok: true; url: string; expiresInSeconds: number } | { ok: false; status: 403; code: "forbidden" | "step_up" };
+
+/**
+ * The app's "Club admin" button: the same single-use link as the web's
+ * /api/admin/handoff (needs an admin role and a sign-in within 12 hours),
+ * audited the same way.
+ */
+export async function adminHandoff(session: AppSession, requestUrl: string): Promise<HandoffResult> {
+  const { player, signedInAt } = session;
+  const access = await getAccess(adminDb, player.id, player.email);
+  if (!hasAdminAccess(access)) return { ok: false, status: 403, code: "forbidden" };
+  if (!isStepUpFresh(signedInAt)) return { ok: false, status: 403, code: "step_up" };
+  const { token, expiresInSeconds } = await createHandoff(adminDb, player.id);
+  const ctx = { kind: "player" as const, player: { id: player.id, email: player.email, firstName: player.firstName, lastName: player.lastName }, access, signedInAt, stepUpFresh: true };
+  await audit(ctx, { action: "admin.handoff_created", target: `player:${player.id}` });
+  return { ok: true, url: new URL(`/admin/handoff?token=${encodeURIComponent(token)}`, requestUrl).toString(), expiresInSeconds };
 }

@@ -1,6 +1,26 @@
 {
   "version": "v1",
   "endpoints": {
+    "account.adminHandoff": {
+      "method": "POST",
+      "path": "/account/admin-handoff",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {}
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "expiresInSeconds": {
+            "t": "number"
+          },
+          "url": {
+            "t": "string"
+          }
+        }
+      }
+    },
     "account.details": {
       "method": "POST",
       "path": "/account/details",

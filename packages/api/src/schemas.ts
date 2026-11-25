@@ -376,3 +376,9 @@ export const photoResponse = z.object({ ok: z.literal(true), url: z.string().nul
 
 /** Everything the club holds under this account (NZ Privacy Act 2020), as the website's "Download my data". */
 export const exportResponse = z.record(z.unknown());
+
+/** "Club admin": a single-use link (about a minute) that opens the club's admin already signed in. */
+export const adminHandoffResponse = z.object({
+  url: z.string().url(),
+  expiresInSeconds: z.number().int().positive(),
+});

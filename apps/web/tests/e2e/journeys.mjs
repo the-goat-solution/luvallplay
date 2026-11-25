@@ -635,6 +635,7 @@ const SESSION_ENDPOINTS = [
   ["POST", "/account/photo"],
   ["DELETE", "/account/photo"],
   ["GET", "/account/export"],
+  ["POST", "/account/admin-handoff"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1053,6 +1054,49 @@ describe("API · the players' app API", () => {
       );
       await db.query(`UPDATE club_members SET leaderboard_visible = $2 WHERE user_id = $1`, [before.id, before.leaderboard_visible]);
       await pete.context.close();
+    }
+  });
+
+  test("API13 · Club admin: a fresh owner gets a one-use link that opens admin signed in; an old sign-in must confirm (403, not 401); a member can't", async () => {
+    const owner = await signedIn(PEOPLE.owner.email);
+    const member = await signedIn(PEOPLE.member.email);
+    try {
+      const made = await appApi("POST", "/account/admin-handoff", { token: owner.token, body: {} });
+      assert.equal(made.status, 200);
+      assert.deepEqual(Object.keys(made.json).sort(), ["expiresInSeconds", "url"]);
+      assert.ok(made.json.expiresInSeconds > 0 && made.json.expiresInSeconds <= 120);
+      const link = new URL(made.json.url);
+      assert.equal(link.origin, base());
+      assert.equal(link.pathname, "/admin/handoff");
+      assert.equal(made.headers.get("cache-control"), "no-store");
+      const audited = await db.query(`SELECT 1 FROM admin_audit_log WHERE action = 'admin.handoff_created' AND target = (SELECT 'player:' || id FROM players WHERE email = $1)`, [PEOPLE.owner.email]);
+      assert.ok(audited.rowCount >= 1, "audited like the web's handoff");
+
+      // The link opens admin in a fresh browser, once.
+      const fresh = await browser.newContext({ viewport: PHONE, baseURL: base() });
+      const page = await fresh.newPage();
+      await page.goto(made.json.url);
+      await page.waitForURL(/\/admin(\/|$|\?)/);
+      assert.doesNotMatch(new URL(page.url()).pathname, /handoff|signin|login/);
+      await fresh.close();
+      const again = await browser.newContext({ viewport: PHONE, baseURL: base() });
+      const page2 = await again.newPage();
+      await page2.goto(made.json.url);
+      assert.doesNotMatch(new URL(page2.url()).pathname, /^\/admin\/?$/, "a used link doesn't open admin again");
+      await again.close();
+
+      // Signed in 13 hours ago: confirm first. 403, so the app doesn't think it was signed out.
+      await db.query(`UPDATE player_sessions SET created_at = NOW() - INTERVAL '13 hours' WHERE token_hash = $1`, [createHash("sha256").update(owner.token).digest("hex")]);
+      const stale = await appApi("POST", "/account/admin-handoff", { token: owner.token, body: {} });
+      assert.deepEqual([stale.status, stale.json.error], [403, "step_up"]);
+      assert.equal((await appApi("GET", "/auth/session", { token: owner.token })).status, 200, "still signed in");
+
+      const refused = await appApi("POST", "/account/admin-handoff", { token: member.token, body: {} });
+      assert.deepEqual([refused.status, refused.json.error], [403, "forbidden"]);
+      assert.equal((await appApi("POST", "/account/admin-handoff", { body: {} })).status, 401);
+    } finally {
+      await owner.context.close();
+      await member.context.close();
     }
   });
 

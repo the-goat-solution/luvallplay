@@ -8,6 +8,9 @@ type Options = { signal?: AbortSignal };
 export function createApi(transport: Transport) {
   return {
     account: {
+      /** POST /account/admin-handoff (signed in) */
+      adminHandoff: (body: BodyOf<"account.adminHandoff">, options?: Options) =>
+        transport.call("account.adminHandoff", { body, signal: options?.signal }) as Promise<ResponseOf<"account.adminHandoff">>,
       /** POST /account/details (signed in) */
       details: (body: BodyOf<"account.details">, options?: Options) =>
         transport.call("account.details", { body, signal: options?.signal }) as Promise<ResponseOf<"account.details">>,

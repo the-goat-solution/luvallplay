@@ -193,7 +193,13 @@ const en = {
   settings_sign_out_all: "Sign out everywhere",
   settings_sign_out_all_hint: "Ends your session on every phone, tablet and computer.",
   settings_club_admin: "Club admin",
-  settings_club_admin_soon: "Opening the club's admin from the app is coming soon. For now, open it on the club's website.",
+  settings_club_admin_hint: "Opens the club's admin in your browser, already signed in.",
+  cancel: "Cancel",
+  admin_opening: "Opening…",
+  admin_step_up: "To keep the club safe, confirm it's you first: we'll email a 6-digit code to {email}.",
+  admin_send_code: "Email me a code",
+  admin_confirm: "Confirm and open",
+  admin_forbidden: "You can't open this club's admin any more. Ask the club's owner if that's a mistake.",
 } as const;
 
 export type AppKey = keyof typeof en;
@@ -383,7 +389,13 @@ const vi: Messages<AppKey> = {
   settings_sign_out_all: "Đăng xuất mọi nơi",
   settings_sign_out_all_hint: "Kết thúc phiên đăng nhập trên mọi điện thoại, máy tính bảng và máy tính.",
   settings_club_admin: "Quản trị câu lạc bộ",
-  settings_club_admin_soon: "Sắp có thể mở trang quản trị từ ứng dụng. Hiện tại, hãy mở trên trang web của câu lạc bộ.",
+  settings_club_admin_hint: "Mở trang quản trị của câu lạc bộ trong trình duyệt, đã đăng nhập sẵn.",
+  cancel: "Huỷ",
+  admin_opening: "Đang mở…",
+  admin_step_up: "Để giữ an toàn cho câu lạc bộ, hãy xác nhận đó là bạn: chúng tôi sẽ gửi mã 6 chữ số tới {email}.",
+  admin_send_code: "Gửi mã cho tôi",
+  admin_confirm: "Xác nhận và mở",
+  admin_forbidden: "Bạn không còn mở được trang quản trị của câu lạc bộ này. Hãy hỏi chủ câu lạc bộ nếu đây là nhầm lẫn.",
 };
 
 export const app = { en, vi };

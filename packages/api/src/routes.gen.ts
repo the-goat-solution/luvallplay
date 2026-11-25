@@ -4,6 +4,7 @@ export const API_VERSION = "v1";
 export const API_PREFIX = "/api/v1/app";
 
 export const ROUTES = {
+  "account.adminHandoff": { method: "POST", path: "/account/admin-handoff", auth: "session" },
   "account.details": { method: "POST", path: "/account/details", auth: "session" },
   "account.dismissWelcome": { method: "POST", path: "/account/welcome-dismissed", auth: "session" },
   "account.export": { method: "GET", path: "/account/export", auth: "session" },

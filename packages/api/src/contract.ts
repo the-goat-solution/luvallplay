@@ -144,6 +144,14 @@ export const ENDPOINTS = define({
     response: S.photoResponse,
     rateLimit: { limit: 10, windowMs: 60 * MIN },
   },
+  // 403 forbidden: not an admin of this club. 403 step_up: signed in more than
+  // 12 hours ago; confirm with a fresh code first (403, not 401, so the app
+  // doesn't treat it as signed out).
+  "account.adminHandoff": {
+    method: "POST", path: "/account/admin-handoff", auth: "session", scope: "account",
+    body: S.emptyRequest, response: S.adminHandoffResponse,
+    rateLimit: { limit: 10, windowMs: MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

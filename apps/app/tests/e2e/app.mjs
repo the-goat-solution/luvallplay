@@ -1003,15 +1003,149 @@ describe("APP · settings: the account", () => {
   });
 });
 
+describe("APP · the Arena", () => {
+  const act = async (token, body) => {
+    const r = await fetch(`${api}/clubs/three-wolves/arena`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const json = await r.json();
+    if (!r.ok) throw new Error(`${body.action}: ${r.status} ${json.error}`);
+    return json;
+  };
+  const pairUp = async (a, b) => {
+    const { code } = await act(a, { action: "pair_code" });
+    await act(b, { action: "pair_enter", code: code.code });
+    await act(a, { action: "pair_respond", accept: true });
+  };
+  const ARENA_READY = '[data-screen="nav_arena"][data-state="ready"]';
+
+  test("APP33 · pairing by code in the app, a challenge put up and taken down, and an invite link that pairs whoever opens it", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const pete = await signedIn(PEOPLE.player.email);
+    const cora = await signedIn(PEOPLE.coach.email);
+    const mp = await mia.context.newPage();
+    const pp = await pete.context.newPage();
+    const problems = watch(mp);
+    try {
+      await mp.goto(`${APP}/arena`);
+      await mp.waitForSelector(ARENA_READY);
+      await mp.getByRole("heading", { name: "Team up" }).waitFor();
+      await mp.getByRole("button", { name: "Other ways to pair" }).click();
+      await mp.getByRole("button", { name: "Show my code" }).click();
+      const digits = (await mp.locator(".code-tiles").getAttribute("aria-label")).replace(/\s/g, "");
+      assert.match(digits, /^\d{5}$/);
+      assert.match(await mp.getByRole("timer").textContent(), /New code in \d:\d\d/);
+
+      await pp.goto(`${APP}/arena`);
+      await pp.getByRole("button", { name: "Other ways to pair" }).click();
+      await pp.getByRole("button", { name: "Enter their code" }).click();
+      await pp.getByLabel("Partner's 5-digit code").fill("12");
+      assert.equal(await pp.getByRole("button", { name: "Team up" }).isDisabled(), true);
+      await pp.getByLabel("Partner's 5-digit code").fill(digits);
+      await pp.getByRole("button", { name: "Team up" }).click();
+      await pp.getByText("Waiting for Mia").waitFor();
+
+      // Mia's board catches up by itself (it refreshes every few seconds).
+      await mp.getByRole("heading", { name: /wants to team up with you/ }).waitFor({ timeout: 15000 });
+      await mp.getByRole("button", { name: "Accept" }).click();
+      await mp.getByRole("button", { name: "Throw down a challenge" }).waitFor();
+      await mp.getByRole("button", { name: "Choose days or add a note" }).click();
+      await mp.getByLabel("7 days").check();
+      await mp.getByLabel("A note for challengers (optional)").fill("Fridays at Pioneer");
+      await mp.getByRole("button", { name: "Put us up" }).click();
+      await mp.getByText("You're up for a challenge").waitFor();
+      // Cora (no partner) sees it, and why she can't take it yet.
+      const cp = await cora.context.newPage();
+      await cp.goto(`${APP}/arena`);
+      const card = cp.locator(".fight", { hasText: "Fridays at Pioneer" });
+      await card.waitFor();
+      assert.match(await card.textContent(), /Team up first/);
+      assert.match(await card.textContent(), /open 7 days|open 6 days/);
+      await mp.getByRole("button", { name: "Take it down" }).click();
+      await mp.getByRole("button", { name: "Throw down a challenge" }).waitFor();
+
+      // An invite link (what the QR holds) pairs Cora with Olivia as soon as she opens it.
+      const olivia = await sessionToken(PEOPLE.owner.email);
+      const invite = await act(olivia, { action: "pair_invite" });
+      await cp.goto(`${APP}/arena?join=${invite.code.code}`);
+      await cp.getByText("You're a pair!").waitFor();
+      assert.equal(new URL(cp.url()).search, "", "the code leaves the address bar");
+      await cp.getByRole("heading", { name: /Olivia/ }).waitFor();
+      assert.deepEqual(problems, []);
+    } finally {
+      for (const who of [mia.token, cora.token]) await act(who, { action: "pair_leave" }).catch(() => {});
+      await mia.context.close();
+      await pete.context.close();
+      await cora.context.close();
+    }
+  });
+
+  test("APP34 · a whole game: accepted, checked in, the score entered and confirmed, then the after-game card", async () => {
+    const mia = await signedIn(PEOPLE.member.email, { viewport: { width: 1000, height: 1000 } });
+    const pete = await sessionToken(PEOPLE.player.email);
+    const cora = await signedIn(PEOPLE.coach.email);
+    const adam = await sessionToken(PEOPLE.admin.email);
+    try {
+      await pairUp(mia.token, pete);
+      await pairUp(cora.token, adam);
+      const posted = await act(mia.token, { action: "post", days: 3, note: "" });
+      const id = posted.state.mine.find((c) => c.status === "open").id;
+      await act(cora.token, { action: "accept", id });
+
+      const mp = await mia.context.newPage();
+      await mp.goto(`${APP}/arena`);
+      const mine = mp.locator(`#challenge-${id}`);
+      await mine.getByText("Challenge accepted!").waitFor();
+      await mine.getByRole("button", { name: "We're here" }).click();
+      await mine.getByText("Game on!").waitFor();
+      // The game takes its time (the score opens a few minutes after check-in).
+      await db.query(`UPDATE arena_challenges SET checked_in_at = NOW() - INTERVAL '40 minutes' WHERE id = $1`, [id]);
+
+      await mine.getByRole("button", { name: "Final score" }).click();
+      const dialog = mp.getByRole("dialog", { name: "Final score" });
+      await dialog.waitFor();
+      const send = dialog.getByRole("button", { name: /^Send to/ });
+      await dialog.getByRole("textbox").nth(1).fill("21");
+      assert.equal(await send.isDisabled(), true, "21–21 isn't a final score");
+      await dialog.getByRole("textbox").nth(1).fill("15");
+      await dialog.getByText("✓ Valid score").waitFor();
+      await send.click();
+      await dialog.waitFor({ state: "detached" });
+      await mine.getByText(/Waiting for .* to confirm 21–15/).waitFor();
+
+      const cp = await cora.context.newPage();
+      await cp.goto(`${APP}/arena`);
+      const theirs = cp.locator(`#challenge-${id}`);
+      await theirs.getByText(/entered 15–21\. Is that right\?|entered 21–15\. Is that right\?/).waitFor();
+      await theirs.getByRole("button", { name: "Confirm" }).click();
+
+      // Mia's after-game card: the win, the points, and what next.
+      const after = mp.getByRole("dialog", { name: "Victory!" });
+      await after.waitFor({ timeout: 15000 });
+      assert.match(await after.textContent(), /\+\d+ WP/);
+      const done = after.getByRole("button", { name: "Done" });
+      assert.equal(await done.isDisabled(), true);
+      await after.getByLabel("Split up").check();
+      await done.click();
+      await after.waitFor({ state: "detached" });
+      await mp.getByRole("heading", { name: "Team up" }).waitFor();
+      const row = (await db.query(`SELECT status, score_posting, score_accepting FROM arena_challenges WHERE id = $1`, [id])).rows[0];
+      assert.deepEqual(row, { status: "completed", score_posting: 21, score_accepting: 15 });
+    } finally {
+      for (const who of [mia.token, cora.token]) await act(who, { action: "pair_leave" }).catch(() => {});
+      await mia.context.close();
+      await cora.context.close();
+    }
+  });
+});
+
 describe("APP · layout (build plan §4.4)", () => {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
   test("APP10 · five widths: no sideways scroll, and the right navigation for each window class", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/leaderboard", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/arena", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : ".shell-nav .tab");
       for (const width of WIDTHS) {
         const height = width < 600 ? 812 : 900;
         await page.setViewportSize({ width, height });
@@ -1065,9 +1199,9 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP11 · text at 200%: still no sideways scroll on a phone, and nothing is cut off", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/leaderboard", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/arena", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : ".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
       const afterSize = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

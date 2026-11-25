@@ -152,3 +152,42 @@ export function hostsForTenant(tenant: { slug: string; customDomain?: string | n
 export function hostKey(host: string): string {
   return `host_${host.replace(/[^a-z0-9-]/g, "_")}`;
 }
+
+// ── Clubs without their own domain: app.luvallplay.com/{club} ───────────────
+// (build plan §6.4, decision of 25 Nov 2026). Pure, like the rest of this file.
+
+/** First path segments a club can't take: platform pages, framework paths, languages. */
+export const RESERVED_PATH_SLUGS: ReadonlySet<string> = new Set([
+  ...RESERVED_SUBDOMAINS,
+  "clubs", "club", "find", "start", "new", "about", "pricing", "download", "legal", "privacy", "terms", "contact", "settings", "account", "me",
+  "en", "vi", "static", "public", "favicon", "robots", "sitemap", "manifest", "sw", "well-known", "studio", "platform",
+]);
+
+/** A club slug: 2–40 lower-case letters, digits and single hyphens, not reserved. */
+export function isValidClubSlug(slug: unknown): slug is string {
+  return typeof slug === "string" && slug.length >= 2 && slug.length <= 40 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug) && !RESERVED_PATH_SLUGS.has(slug);
+}
+
+/**
+ * On the platform's app host, the club a path belongs to:
+ * "/three-wolves/arena" → { slug: "three-wolves", rest: "/arena" }.
+ * Null for "/", for reserved names, and for anything that isn't a club slug
+ * ("/_next/…", "/api/…", "/favicon.ico").
+ */
+export function clubFromPath(pathname: string): { slug: string; rest: string } | null {
+  if (!pathname.startsWith("/")) return null;
+  const [, first = "", ...more] = pathname.split("/");
+  if (!isValidClubSlug(first)) return null;
+  return { slug: first, rest: more.length ? `/${more.join("/")}` : "/" };
+}
+
+/**
+ * Where a club's platform path should send the visitor: its own domain when
+ * it has one (a permanent redirect, so there is one address per club), else
+ * null (serve in place).
+ */
+export function canonicalClubUrl(club: { customDomain?: string | null }, rest: string, search = ""): string | null {
+  const custom = normalizeHost(club.customDomain);
+  if (!custom) return null;
+  return `https://${custom}${rest === "/" ? "/" : rest}${search}`;
+}

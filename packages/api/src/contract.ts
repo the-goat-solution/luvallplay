@@ -188,6 +188,20 @@ export const ENDPOINTS = define({
     params: S.integrationParams, response: S.okResponse,
     rateLimit: { limit: 30, windowMs: MIN },
   },
+  // The Arena: the board snapshot (poll it while the tab is open) and one
+  // action at a time, answered with the fresh snapshot. A refused action is
+  // 409 with the Arena's own code (for example not_your_turn); fetch the
+  // snapshot again after it.
+  "arena.state": {
+    method: "GET", path: "/clubs/{club}/arena", auth: "session", scope: "club", module: "arena",
+    params: S.clubParams, response: S.arenaStateSchema,
+    rateLimit: { limit: 120, windowMs: MIN },
+  },
+  "arena.action": {
+    method: "POST", path: "/clubs/{club}/arena", auth: "session", scope: "club", module: "arena",
+    params: S.clubParams, body: S.arenaActionRequest, response: S.arenaActionResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

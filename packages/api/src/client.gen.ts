@@ -39,6 +39,14 @@ export function createApi(transport: Transport) {
       removePhoto: (options?: Options) =>
         transport.call("account.removePhoto", { signal: options?.signal }) as Promise<ResponseOf<"account.removePhoto">>,
     },
+    arena: {
+      /** POST /clubs/{club}/arena (signed in) */
+      action: (params: ParamsOf<"arena.action">, body: BodyOf<"arena.action">, options?: Options) =>
+        transport.call("arena.action", { params, body, signal: options?.signal }) as Promise<ResponseOf<"arena.action">>,
+      /** GET /clubs/{club}/arena (signed in) */
+      state: (params: ParamsOf<"arena.state">, options?: Options) =>
+        transport.call("arena.state", { params, signal: options?.signal }) as Promise<ResponseOf<"arena.state">>,
+    },
     auth: {
       /** POST /auth/email/start (no sign-in needed) */
       emailStart: (body: BodyOf<"auth.emailStart">, options?: Options) =>

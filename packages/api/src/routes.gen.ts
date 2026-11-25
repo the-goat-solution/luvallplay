@@ -14,6 +14,8 @@ export const ROUTES = {
   "account.privacy": { method: "POST", path: "/account/privacy", auth: "session" },
   "account.profile": { method: "GET", path: "/account/profile", auth: "session" },
   "account.removePhoto": { method: "DELETE", path: "/account/photo", auth: "session" },
+  "arena.action": { method: "POST", path: "/clubs/{club}/arena", auth: "session" },
+  "arena.state": { method: "GET", path: "/clubs/{club}/arena", auth: "session" },
   "auth.emailStart": { method: "POST", path: "/auth/email/start", auth: "public" },
   "auth.emailVerify": { method: "POST", path: "/auth/email/verify", auth: "public" },
   "auth.logout": { method: "POST", path: "/auth/logout", auth: "session" },

@@ -642,6 +642,8 @@ const SESSION_ENDPOINTS = [
   ["DELETE", "/account/integrations/tokens/{id}"],
   ["POST", "/account/integrations/webhooks"],
   ["DELETE", "/account/integrations/webhooks/{id}"],
+  ["GET", "/clubs/{club}/arena"],
+  ["POST", "/clubs/{club}/arena"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1181,6 +1183,59 @@ describe("API · the players' app API", () => {
     } finally {
       await pete.context.close();
       await mia.context.close();
+    }
+  });
+
+  test("API16 · the Arena: the same board as the website's, pairing by code, a challenge posted and taken down, refusals as codes, off with its module", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const pete = await signedIn(PEOPLE.player.email);
+    const act = (who, body) => appApi("POST", `/clubs/${CLUB}/arena`, { token: who.token, body });
+    const board = (who) => appApi("GET", `/clubs/${CLUB}/arena`, { token: who.token });
+    try {
+      // The same snapshot the website's Arena polls, for the same person.
+      const app = await board(mia);
+      assert.equal(app.status, 200);
+      const web = await (await fetch(`${base()}/api/arena`, { headers: { Cookie: `tw_player=${mia.token}` } })).json();
+      assert.deepEqual(Object.keys(app.json).sort(), Object.keys(web).sort());
+      assert.equal(app.json.me.id, web.me.id);
+      assert.deepEqual(app.json.open.map((c) => c.id), web.open.map((c) => c.id));
+
+      // Pair by code: Mia shows a code, Pete enters it, Mia accepts.
+      const shown = await act(mia, { action: "pair_code" });
+      assert.equal(shown.status, 200);
+      assert.match(shown.json.code.code, /^[A-Z0-9-]{5,7}$/i);
+      const wrong = await act(pete, { action: "pair_enter", code: "ZZZZZ" });
+      assert.deepEqual([wrong.status, wrong.json.error], [409, "bad_code"]);
+      assert.equal((await act(pete, { action: "pair_enter", code: shown.json.code.code })).status, 200);
+      assert.equal((await board(mia)).json.me.incomingRequest?.id, (await board(pete)).json.me.id);
+      const paired = await act(mia, { action: "pair_respond", accept: true });
+      assert.equal(paired.status, 200);
+      assert.ok(paired.json.state.me.pair, "now a pair");
+
+      // A challenge up for two days, then taken down.
+      const posted = await act(mia, { action: "post", days: 2, note: "Anyone for Friday?" });
+      assert.equal(posted.status, 200);
+      const mine = posted.json.state.mine.find((c) => c.status === "open");
+      assert.equal(mine.note, "Anyone for Friday?");
+      assert.equal((await act(pete, { action: "accept", id: mine.id })).status, 409, "a pair can't take its own challenge");
+      assert.equal((await act(mia, { action: "cancel", id: mine.id })).status, 200);
+      assert.ok(!(await board(mia)).json.mine.some((c) => c.id === mine.id && c.status === "open"));
+
+      for (const bad of [{ action: "fly" }, { action: "post", days: 9 }, { action: "score", id: 1, posting: 31, accepting: 0 }]) {
+        assert.equal((await act(mia, bad)).status, 400, JSON.stringify(bad));
+      }
+
+      await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'arena'`);
+      try {
+        const off = await board(mia);
+        assert.deepEqual([off.status, off.json.error], [404, "module_off"]);
+      } finally {
+        await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'arena'`);
+      }
+    } finally {
+      await act(mia, { action: "pair_leave" }).catch(() => {});
+      await mia.context.close();
+      await pete.context.close();
     }
   });
 

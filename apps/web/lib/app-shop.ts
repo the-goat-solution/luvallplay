@@ -20,7 +20,6 @@ import {
   type Order,
 } from "./shop-db";
 import { notifyOrderPlaced, notifyOversold } from "./shop-notify";
-import { getStripe } from "./stripe";
 
 type Fail = { ok: false; status: number; code: string };
 
@@ -90,8 +89,9 @@ export async function placeOrder(player: Player, variantId: number, method: "car
 export async function confirmOrder(player: Player, id: number) {
   const order = await getOrder(id);
   if (!order || order.playerId !== player.id || !order.stripePaymentIntentId) return { ok: false, status: 404, code: "not_found" } satisfies Fail;
-  const pi = await getStripe().paymentIntents.retrieve(order.stripePaymentIntentId);
-  if (pi.status !== "succeeded") return { ok: false, status: 409, code: "not_paid" } satisfies Fail;
+  // Through the payments interface (the website's confirm route still asks Stripe directly; same answer).
+  const payment = await payments().getPayment(order.stripePaymentIntentId);
+  if (payment.status !== "succeeded") return { ok: false, status: 409, code: "not_paid" } satisfies Fail;
   const result = await markOrderPaidByCard(order.id);
   const fresh = await getOrder(order.id);
   if (fresh && result === "paid") await notifyOrderPlaced(fresh);

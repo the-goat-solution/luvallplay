@@ -427,3 +427,184 @@ export const newWebhookRequest = z.object({
 });
 export const newWebhookResponse = z.object({ secret: z.string(), endpoint: webhookSchema });
 export const integrationParams = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+
+// ── The Arena (the website's /api/arena snapshot and actions) ─────────────
+const seat = z.enum(["alpha", "silver"]);
+export const playerChipSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  initials: z.string(),
+  rank: z.number().int(),
+  seat: seat.nullable(),
+  tarnishing: z.boolean(),
+});
+export const pairViewSchema = z.object({
+  id: z.number().int(),
+  name: z.string().nullable(),
+  players: z.tuple([playerChipSchema, playerChipSchema]),
+  avgRank: z.number(),
+});
+export const CHALLENGE_STATUSES = ["open", "accepted", "live", "awaiting", "completed", "disputed", "void", "expired", "cancelled", "lapsed"] as const;
+const side = z.enum(["posting", "accepting"]);
+export const challengeViewSchema = z.object({
+  id: z.number().int(),
+  status: z.enum(CHALLENGE_STATUSES),
+  posting: pairViewSchema,
+  accepting: pairViewSchema.nullable(),
+  note: z.string().nullable(),
+  availableUntil: z.string(),
+  postedAt: z.string(),
+  acceptedAt: z.string().nullable(),
+  checkedInAt: z.string().nullable(),
+  scorePosting: z.number().int().nullable(),
+  scoreAccepting: z.number().int().nullable(),
+  retiredBy: side.nullable(),
+  enteredByMySide: z.boolean().nullable(),
+  mySide: side.nullable(),
+  /** Why this viewer can't accept (a code), or null. */
+  blocker: z.string().nullable(),
+  h2h: z.object({ won: z.number().int(), lost: z.number().int() }).nullable(),
+  offer: z.object({ giantKiller: z.boolean(), newRival: z.boolean(), crown: z.boolean() }).nullable(),
+  crownMatch: z.boolean(),
+  hasStats: z.boolean(),
+  tracking: z.object({ rallies: z.number(), hits: z.number(), quality: z.number() }).nullable(),
+});
+export const feedItemSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("result"), id: z.number().int(), at: z.string(), winners: pairViewSchema, losers: pairViewSchema,
+    scoreW: z.number().int().nullable(), scoreL: z.number().int().nullable(), retired: z.boolean(), stickers: z.array(z.string()), hasStats: z.boolean(),
+  }),
+  z.object({ kind: z.literal("rankup"), at: z.string(), player: playerChipSchema, rank: z.number().int() }),
+]);
+export const playerRankSchema = z.object({
+  wpTotal: z.number(), wpPlayDays: z.number(), wpRoundRobin: z.number(), wpChallenges: z.number(), wpBonuses: z.number(),
+  wp90: z.number(), wp60: z.number(), earned: z.number(), shown: z.number(),
+  tarnishing: z.boolean(), daysToSlip: z.number().nullable(), progress: z.number(), seat: seat.nullable(),
+});
+export const afterGameSchema = z.object({
+  challengeId: z.number().int(), won: z.boolean(), total: z.number(), base: z.number(),
+  giantKiller: z.number(), newRival: z.number(), hotStreak: z.number(), crownBounty: z.number(),
+  scoreFor: z.number().int().nullable(), scoreAgainst: z.number().int().nullable(), retired: z.boolean(),
+  opponents: pairViewSchema, partner: playerChipSchema,
+});
+export const arenaMeSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  initials: z.string(),
+  rank: playerRankSchema,
+  rankUp: z.object({ from: z.number().int(), to: z.number().int() }).nullable(),
+  pair: pairViewSchema.extend({ record: z.object({ won: z.number().int(), lost: z.number().int(), streak: z.number().int() }) }).nullable(),
+  incomingRequest: playerChipSchema.nullable(),
+  outgoingRequest: playerChipSchema.nullable(),
+  /** Achievement key → when it was earned. */
+  achievements: z.record(z.string()),
+  after: z.array(afterGameSchema),
+});
+export const arenaStateSchema = z.object({
+  now: z.string(),
+  signedIn: z.boolean(),
+  sandbox: z.boolean(),
+  minGameMinutes: z.number(),
+  me: arenaMeSchema.nullable(),
+  counts: z.object({ up: z.number().int(), live: z.number().int(), week: z.number().int() }),
+  crown: z.object({ pair: pairViewSchema, since: z.string(), defences: z.number().int() }).nullable(),
+  packLeader: z.object({ player: playerChipSchema, games: z.number().int() }).nullable(),
+  champion: z.object({ player: playerChipSchema, wp: z.number(), key: z.string() }).nullable(),
+  hot: z.object({ player: playerChipSchema, streak: z.number().int() }).nullable(),
+  live: z.array(challengeViewSchema),
+  open: z.array(challengeViewSchema),
+  mine: z.array(challengeViewSchema),
+  feed: z.array(feedItemSchema),
+});
+const challengeId = z.number().int().positive().max(2147483647);
+/** One Arena action, as the website's POST /api/arena. */
+export const arenaActionRequest = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("pair_code") }),
+  z.object({ action: z.literal("pair_enter"), code: z.string().max(12) }),
+  z.object({ action: z.literal("pair_invite") }),
+  z.object({ action: z.literal("pair_join"), code: z.string().max(20) }),
+  z.object({ action: z.literal("checkin_now"), id: challengeId }),
+  z.object({ action: z.literal("pair_respond"), accept: z.boolean() }),
+  z.object({ action: z.literal("pair_cancel") }),
+  z.object({ action: z.literal("pair_leave") }),
+  z.object({ action: z.literal("pair_rename"), name: z.string().max(60) }),
+  z.object({ action: z.literal("post"), days: z.number().int().min(0).max(7), note: z.string().max(200).default("") }),
+  z.object({ action: z.literal("cancel"), id: challengeId }),
+  z.object({ action: z.literal("accept"), id: challengeId }),
+  z.object({ action: z.literal("call_off"), id: challengeId }),
+  z.object({ action: z.literal("score"), id: challengeId, posting: z.number().int().min(0).max(30), accepting: z.number().int().min(0).max(30) }),
+  z.object({ action: z.literal("retired"), id: challengeId, retiredBy: side }),
+  z.object({ action: z.literal("confirm"), id: challengeId }),
+  z.object({ action: z.literal("dispute"), id: challengeId, note: z.string().max(400).default("") }),
+  z.object({ action: z.literal("after"), id: challengeId, keep: z.boolean(), again: z.boolean() }),
+  z.object({ action: z.literal("rank_seen") }),
+]);
+export const arenaActionResponse = z.object({
+  ok: z.literal(true),
+  /** A pair code or invite to show, when the action made one. */
+  code: z.object({ code: z.string(), expiresAt: z.string() }).nullable(),
+  state: arenaStateSchema,
+});
+
+// ── The Leaderboard (the website's points board and player cards) ──────────
+export const BOARD_SOURCES = ["all", "challenges", "play", "rr"] as const;
+export const BOARD_PERIODS = ["month", "quarter", "year", "lifetime"] as const;
+export const boardQuery = z.object({
+  source: z.enum(BOARD_SOURCES).optional(),
+  period: z.enum(BOARD_PERIODS).optional(),
+  /** A past period ("2026-10", "2026-Q3", "2025"); the current one when left out. */
+  key: z.string().max(20).optional(),
+});
+export const boardRowSchema = z.object({
+  rank: z.number().int(),
+  playerId: z.number().int(),
+  name: z.string(),
+  initials: z.string(),
+  avatarUrl: z.string().nullable(),
+  /** Points from the chosen source(s) in the period. */
+  value: z.number(),
+  play: z.number(),
+  rr: z.number(),
+  challenges: z.number(),
+  /** Ladder position (from all-time points). */
+  index: z.number().int(),
+  seat: z.enum(["alpha", "silver"]).nullable(),
+  tarnishing: z.boolean(),
+});
+export const boardResponse = z.object({
+  source: z.enum(BOARD_SOURCES),
+  period: z.enum(BOARD_PERIODS),
+  range: z.object({ period: z.enum(BOARD_PERIODS), key: z.string(), start: z.string().nullable(), end: z.string().nullable() }),
+  prevKey: z.string().nullable(),
+  nextKey: z.string().nullable(),
+  isCurrent: z.boolean(),
+  /** Up to 200 rows; people who hide from the leaderboard are left out. */
+  rows: z.array(boardRowSchema),
+  me: z.object({
+    id: z.number().int(),
+    visible: z.boolean(),
+    /** Your own rank when you hide from the board (only you see it). */
+    hiddenRank: z.number().int().nullable(),
+    ladder: z.object({ index: z.number().int(), wpTotal: z.number() }).nullable(),
+  }),
+});
+export const playerParams = clubParams.extend({ id: z.coerce.number().int().positive().max(2147483647) });
+export const playerCardResponse = z.object({
+  card: z.object({
+    id: z.number().int(),
+    name: z.string(),
+    initials: z.string(),
+    avatarUrl: z.string().nullable(),
+    rankIndex: z.number().int(),
+    seat: z.enum(["alpha", "silver"]).nullable(),
+    tarnishing: z.boolean(),
+    wpTotal: z.number(),
+    wp90: z.number(),
+    /** Last five challenge results, newest first. */
+    form: z.array(z.enum(["W", "L"])),
+    isMe: z.boolean(),
+    /** Their pair's open challenge: "Challenge" accepts it. */
+    openChallengeId: z.number().int().nullable(),
+    partner: z.boolean(),
+  }),
+});

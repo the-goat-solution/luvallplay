@@ -244,6 +244,1910 @@
         }
       }
     },
+    "arena.action": {
+      "method": "POST",
+      "path": "/clubs/{club}/arena",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "unknown"
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "code": {
+            "t": "object",
+            "fields": {
+              "code": {
+                "t": "string"
+              },
+              "expiresAt": {
+                "t": "string"
+              }
+            },
+            "nullable": true
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "state": {
+            "t": "object",
+            "fields": {
+              "champion": {
+                "t": "object",
+                "fields": {
+                  "key": {
+                    "t": "string"
+                  },
+                  "player": {
+                    "t": "object",
+                    "fields": {
+                      "id": {
+                        "t": "number"
+                      },
+                      "initials": {
+                        "t": "string"
+                      },
+                      "name": {
+                        "t": "string"
+                      },
+                      "rank": {
+                        "t": "number"
+                      },
+                      "seat": {
+                        "t": "enum",
+                        "values": [
+                          "alpha",
+                          "silver"
+                        ],
+                        "nullable": true
+                      },
+                      "tarnishing": {
+                        "t": "boolean"
+                      }
+                    }
+                  },
+                  "wp": {
+                    "t": "number"
+                  }
+                },
+                "nullable": true
+              },
+              "counts": {
+                "t": "object",
+                "fields": {
+                  "live": {
+                    "t": "number"
+                  },
+                  "up": {
+                    "t": "number"
+                  },
+                  "week": {
+                    "t": "number"
+                  }
+                }
+              },
+              "crown": {
+                "t": "object",
+                "fields": {
+                  "defences": {
+                    "t": "number"
+                  },
+                  "pair": {
+                    "t": "object",
+                    "fields": {
+                      "avgRank": {
+                        "t": "number"
+                      },
+                      "id": {
+                        "t": "number"
+                      },
+                      "name": {
+                        "t": "string",
+                        "nullable": true
+                      },
+                      "players": {
+                        "t": "unknown"
+                      }
+                    }
+                  },
+                  "since": {
+                    "t": "string"
+                  }
+                },
+                "nullable": true
+              },
+              "feed": {
+                "t": "array",
+                "of": {
+                  "t": "unknown"
+                }
+              },
+              "hot": {
+                "t": "object",
+                "fields": {
+                  "player": {
+                    "t": "object",
+                    "fields": {
+                      "id": {
+                        "t": "number"
+                      },
+                      "initials": {
+                        "t": "string"
+                      },
+                      "name": {
+                        "t": "string"
+                      },
+                      "rank": {
+                        "t": "number"
+                      },
+                      "seat": {
+                        "t": "enum",
+                        "values": [
+                          "alpha",
+                          "silver"
+                        ],
+                        "nullable": true
+                      },
+                      "tarnishing": {
+                        "t": "boolean"
+                      }
+                    }
+                  },
+                  "streak": {
+                    "t": "number"
+                  }
+                },
+                "nullable": true
+              },
+              "live": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "acceptedAt": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "accepting": {
+                      "t": "object",
+                      "fields": {
+                        "avgRank": {
+                          "t": "number"
+                        },
+                        "id": {
+                          "t": "number"
+                        },
+                        "name": {
+                          "t": "string",
+                          "nullable": true
+                        },
+                        "players": {
+                          "t": "unknown"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "availableUntil": {
+                      "t": "string"
+                    },
+                    "blocker": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "checkedInAt": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "crownMatch": {
+                      "t": "boolean"
+                    },
+                    "enteredByMySide": {
+                      "t": "boolean",
+                      "nullable": true
+                    },
+                    "h2h": {
+                      "t": "object",
+                      "fields": {
+                        "lost": {
+                          "t": "number"
+                        },
+                        "won": {
+                          "t": "number"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "hasStats": {
+                      "t": "boolean"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "mySide": {
+                      "t": "enum",
+                      "values": [
+                        "posting",
+                        "accepting"
+                      ],
+                      "nullable": true
+                    },
+                    "note": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "offer": {
+                      "t": "object",
+                      "fields": {
+                        "crown": {
+                          "t": "boolean"
+                        },
+                        "giantKiller": {
+                          "t": "boolean"
+                        },
+                        "newRival": {
+                          "t": "boolean"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "postedAt": {
+                      "t": "string"
+                    },
+                    "posting": {
+                      "t": "object",
+                      "fields": {
+                        "avgRank": {
+                          "t": "number"
+                        },
+                        "id": {
+                          "t": "number"
+                        },
+                        "name": {
+                          "t": "string",
+                          "nullable": true
+                        },
+                        "players": {
+                          "t": "unknown"
+                        }
+                      }
+                    },
+                    "retiredBy": {
+                      "t": "enum",
+                      "values": [
+                        "posting",
+                        "accepting"
+                      ],
+                      "nullable": true
+                    },
+                    "scoreAccepting": {
+                      "t": "number",
+                      "nullable": true
+                    },
+                    "scorePosting": {
+                      "t": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "t": "enum",
+                      "values": [
+                        "open",
+                        "accepted",
+                        "live",
+                        "awaiting",
+                        "completed",
+                        "disputed",
+                        "void",
+                        "expired",
+                        "cancelled",
+                        "lapsed"
+                      ]
+                    },
+                    "tracking": {
+                      "t": "object",
+                      "fields": {
+                        "hits": {
+                          "t": "number"
+                        },
+                        "quality": {
+                          "t": "number"
+                        },
+                        "rallies": {
+                          "t": "number"
+                        }
+                      },
+                      "nullable": true
+                    }
+                  }
+                }
+              },
+              "me": {
+                "t": "object",
+                "fields": {
+                  "achievements": {
+                    "t": "record",
+                    "of": {
+                      "t": "string"
+                    }
+                  },
+                  "after": {
+                    "t": "array",
+                    "of": {
+                      "t": "object",
+                      "fields": {
+                        "base": {
+                          "t": "number"
+                        },
+                        "challengeId": {
+                          "t": "number"
+                        },
+                        "crownBounty": {
+                          "t": "number"
+                        },
+                        "giantKiller": {
+                          "t": "number"
+                        },
+                        "hotStreak": {
+                          "t": "number"
+                        },
+                        "newRival": {
+                          "t": "number"
+                        },
+                        "opponents": {
+                          "t": "object",
+                          "fields": {
+                            "avgRank": {
+                              "t": "number"
+                            },
+                            "id": {
+                              "t": "number"
+                            },
+                            "name": {
+                              "t": "string",
+                              "nullable": true
+                            },
+                            "players": {
+                              "t": "unknown"
+                            }
+                          }
+                        },
+                        "partner": {
+                          "t": "object",
+                          "fields": {
+                            "id": {
+                              "t": "number"
+                            },
+                            "initials": {
+                              "t": "string"
+                            },
+                            "name": {
+                              "t": "string"
+                            },
+                            "rank": {
+                              "t": "number"
+                            },
+                            "seat": {
+                              "t": "enum",
+                              "values": [
+                                "alpha",
+                                "silver"
+                              ],
+                              "nullable": true
+                            },
+                            "tarnishing": {
+                              "t": "boolean"
+                            }
+                          }
+                        },
+                        "retired": {
+                          "t": "boolean"
+                        },
+                        "scoreAgainst": {
+                          "t": "number",
+                          "nullable": true
+                        },
+                        "scoreFor": {
+                          "t": "number",
+                          "nullable": true
+                        },
+                        "total": {
+                          "t": "number"
+                        },
+                        "won": {
+                          "t": "boolean"
+                        }
+                      }
+                    }
+                  },
+                  "id": {
+                    "t": "number"
+                  },
+                  "incomingRequest": {
+                    "t": "object",
+                    "fields": {
+                      "id": {
+                        "t": "number"
+                      },
+                      "initials": {
+                        "t": "string"
+                      },
+                      "name": {
+                        "t": "string"
+                      },
+                      "rank": {
+                        "t": "number"
+                      },
+                      "seat": {
+                        "t": "enum",
+                        "values": [
+                          "alpha",
+                          "silver"
+                        ],
+                        "nullable": true
+                      },
+                      "tarnishing": {
+                        "t": "boolean"
+                      }
+                    },
+                    "nullable": true
+                  },
+                  "initials": {
+                    "t": "string"
+                  },
+                  "name": {
+                    "t": "string"
+                  },
+                  "outgoingRequest": {
+                    "t": "object",
+                    "fields": {
+                      "id": {
+                        "t": "number"
+                      },
+                      "initials": {
+                        "t": "string"
+                      },
+                      "name": {
+                        "t": "string"
+                      },
+                      "rank": {
+                        "t": "number"
+                      },
+                      "seat": {
+                        "t": "enum",
+                        "values": [
+                          "alpha",
+                          "silver"
+                        ],
+                        "nullable": true
+                      },
+                      "tarnishing": {
+                        "t": "boolean"
+                      }
+                    },
+                    "nullable": true
+                  },
+                  "pair": {
+                    "t": "object",
+                    "fields": {
+                      "avgRank": {
+                        "t": "number"
+                      },
+                      "id": {
+                        "t": "number"
+                      },
+                      "name": {
+                        "t": "string",
+                        "nullable": true
+                      },
+                      "players": {
+                        "t": "unknown"
+                      },
+                      "record": {
+                        "t": "object",
+                        "fields": {
+                          "lost": {
+                            "t": "number"
+                          },
+                          "streak": {
+                            "t": "number"
+                          },
+                          "won": {
+                            "t": "number"
+                          }
+                        }
+                      }
+                    },
+                    "nullable": true
+                  },
+                  "rank": {
+                    "t": "object",
+                    "fields": {
+                      "daysToSlip": {
+                        "t": "number",
+                        "nullable": true
+                      },
+                      "earned": {
+                        "t": "number"
+                      },
+                      "progress": {
+                        "t": "number"
+                      },
+                      "seat": {
+                        "t": "enum",
+                        "values": [
+                          "alpha",
+                          "silver"
+                        ],
+                        "nullable": true
+                      },
+                      "shown": {
+                        "t": "number"
+                      },
+                      "tarnishing": {
+                        "t": "boolean"
+                      },
+                      "wp60": {
+                        "t": "number"
+                      },
+                      "wp90": {
+                        "t": "number"
+                      },
+                      "wpBonuses": {
+                        "t": "number"
+                      },
+                      "wpChallenges": {
+                        "t": "number"
+                      },
+                      "wpPlayDays": {
+                        "t": "number"
+                      },
+                      "wpRoundRobin": {
+                        "t": "number"
+                      },
+                      "wpTotal": {
+                        "t": "number"
+                      }
+                    }
+                  },
+                  "rankUp": {
+                    "t": "object",
+                    "fields": {
+                      "from": {
+                        "t": "number"
+                      },
+                      "to": {
+                        "t": "number"
+                      }
+                    },
+                    "nullable": true
+                  }
+                },
+                "nullable": true
+              },
+              "minGameMinutes": {
+                "t": "number"
+              },
+              "mine": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "acceptedAt": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "accepting": {
+                      "t": "object",
+                      "fields": {
+                        "avgRank": {
+                          "t": "number"
+                        },
+                        "id": {
+                          "t": "number"
+                        },
+                        "name": {
+                          "t": "string",
+                          "nullable": true
+                        },
+                        "players": {
+                          "t": "unknown"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "availableUntil": {
+                      "t": "string"
+                    },
+                    "blocker": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "checkedInAt": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "crownMatch": {
+                      "t": "boolean"
+                    },
+                    "enteredByMySide": {
+                      "t": "boolean",
+                      "nullable": true
+                    },
+                    "h2h": {
+                      "t": "object",
+                      "fields": {
+                        "lost": {
+                          "t": "number"
+                        },
+                        "won": {
+                          "t": "number"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "hasStats": {
+                      "t": "boolean"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "mySide": {
+                      "t": "enum",
+                      "values": [
+                        "posting",
+                        "accepting"
+                      ],
+                      "nullable": true
+                    },
+                    "note": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "offer": {
+                      "t": "object",
+                      "fields": {
+                        "crown": {
+                          "t": "boolean"
+                        },
+                        "giantKiller": {
+                          "t": "boolean"
+                        },
+                        "newRival": {
+                          "t": "boolean"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "postedAt": {
+                      "t": "string"
+                    },
+                    "posting": {
+                      "t": "object",
+                      "fields": {
+                        "avgRank": {
+                          "t": "number"
+                        },
+                        "id": {
+                          "t": "number"
+                        },
+                        "name": {
+                          "t": "string",
+                          "nullable": true
+                        },
+                        "players": {
+                          "t": "unknown"
+                        }
+                      }
+                    },
+                    "retiredBy": {
+                      "t": "enum",
+                      "values": [
+                        "posting",
+                        "accepting"
+                      ],
+                      "nullable": true
+                    },
+                    "scoreAccepting": {
+                      "t": "number",
+                      "nullable": true
+                    },
+                    "scorePosting": {
+                      "t": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "t": "enum",
+                      "values": [
+                        "open",
+                        "accepted",
+                        "live",
+                        "awaiting",
+                        "completed",
+                        "disputed",
+                        "void",
+                        "expired",
+                        "cancelled",
+                        "lapsed"
+                      ]
+                    },
+                    "tracking": {
+                      "t": "object",
+                      "fields": {
+                        "hits": {
+                          "t": "number"
+                        },
+                        "quality": {
+                          "t": "number"
+                        },
+                        "rallies": {
+                          "t": "number"
+                        }
+                      },
+                      "nullable": true
+                    }
+                  }
+                }
+              },
+              "now": {
+                "t": "string"
+              },
+              "open": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "acceptedAt": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "accepting": {
+                      "t": "object",
+                      "fields": {
+                        "avgRank": {
+                          "t": "number"
+                        },
+                        "id": {
+                          "t": "number"
+                        },
+                        "name": {
+                          "t": "string",
+                          "nullable": true
+                        },
+                        "players": {
+                          "t": "unknown"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "availableUntil": {
+                      "t": "string"
+                    },
+                    "blocker": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "checkedInAt": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "crownMatch": {
+                      "t": "boolean"
+                    },
+                    "enteredByMySide": {
+                      "t": "boolean",
+                      "nullable": true
+                    },
+                    "h2h": {
+                      "t": "object",
+                      "fields": {
+                        "lost": {
+                          "t": "number"
+                        },
+                        "won": {
+                          "t": "number"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "hasStats": {
+                      "t": "boolean"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "mySide": {
+                      "t": "enum",
+                      "values": [
+                        "posting",
+                        "accepting"
+                      ],
+                      "nullable": true
+                    },
+                    "note": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "offer": {
+                      "t": "object",
+                      "fields": {
+                        "crown": {
+                          "t": "boolean"
+                        },
+                        "giantKiller": {
+                          "t": "boolean"
+                        },
+                        "newRival": {
+                          "t": "boolean"
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "postedAt": {
+                      "t": "string"
+                    },
+                    "posting": {
+                      "t": "object",
+                      "fields": {
+                        "avgRank": {
+                          "t": "number"
+                        },
+                        "id": {
+                          "t": "number"
+                        },
+                        "name": {
+                          "t": "string",
+                          "nullable": true
+                        },
+                        "players": {
+                          "t": "unknown"
+                        }
+                      }
+                    },
+                    "retiredBy": {
+                      "t": "enum",
+                      "values": [
+                        "posting",
+                        "accepting"
+                      ],
+                      "nullable": true
+                    },
+                    "scoreAccepting": {
+                      "t": "number",
+                      "nullable": true
+                    },
+                    "scorePosting": {
+                      "t": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "t": "enum",
+                      "values": [
+                        "open",
+                        "accepted",
+                        "live",
+                        "awaiting",
+                        "completed",
+                        "disputed",
+                        "void",
+                        "expired",
+                        "cancelled",
+                        "lapsed"
+                      ]
+                    },
+                    "tracking": {
+                      "t": "object",
+                      "fields": {
+                        "hits": {
+                          "t": "number"
+                        },
+                        "quality": {
+                          "t": "number"
+                        },
+                        "rallies": {
+                          "t": "number"
+                        }
+                      },
+                      "nullable": true
+                    }
+                  }
+                }
+              },
+              "packLeader": {
+                "t": "object",
+                "fields": {
+                  "games": {
+                    "t": "number"
+                  },
+                  "player": {
+                    "t": "object",
+                    "fields": {
+                      "id": {
+                        "t": "number"
+                      },
+                      "initials": {
+                        "t": "string"
+                      },
+                      "name": {
+                        "t": "string"
+                      },
+                      "rank": {
+                        "t": "number"
+                      },
+                      "seat": {
+                        "t": "enum",
+                        "values": [
+                          "alpha",
+                          "silver"
+                        ],
+                        "nullable": true
+                      },
+                      "tarnishing": {
+                        "t": "boolean"
+                      }
+                    }
+                  }
+                },
+                "nullable": true
+              },
+              "sandbox": {
+                "t": "boolean"
+              },
+              "signedIn": {
+                "t": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "arena.state": {
+      "method": "GET",
+      "path": "/clubs/{club}/arena",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "champion": {
+            "t": "object",
+            "fields": {
+              "key": {
+                "t": "string"
+              },
+              "player": {
+                "t": "object",
+                "fields": {
+                  "id": {
+                    "t": "number"
+                  },
+                  "initials": {
+                    "t": "string"
+                  },
+                  "name": {
+                    "t": "string"
+                  },
+                  "rank": {
+                    "t": "number"
+                  },
+                  "seat": {
+                    "t": "enum",
+                    "values": [
+                      "alpha",
+                      "silver"
+                    ],
+                    "nullable": true
+                  },
+                  "tarnishing": {
+                    "t": "boolean"
+                  }
+                }
+              },
+              "wp": {
+                "t": "number"
+              }
+            },
+            "nullable": true
+          },
+          "counts": {
+            "t": "object",
+            "fields": {
+              "live": {
+                "t": "number"
+              },
+              "up": {
+                "t": "number"
+              },
+              "week": {
+                "t": "number"
+              }
+            }
+          },
+          "crown": {
+            "t": "object",
+            "fields": {
+              "defences": {
+                "t": "number"
+              },
+              "pair": {
+                "t": "object",
+                "fields": {
+                  "avgRank": {
+                    "t": "number"
+                  },
+                  "id": {
+                    "t": "number"
+                  },
+                  "name": {
+                    "t": "string",
+                    "nullable": true
+                  },
+                  "players": {
+                    "t": "unknown"
+                  }
+                }
+              },
+              "since": {
+                "t": "string"
+              }
+            },
+            "nullable": true
+          },
+          "feed": {
+            "t": "array",
+            "of": {
+              "t": "unknown"
+            }
+          },
+          "hot": {
+            "t": "object",
+            "fields": {
+              "player": {
+                "t": "object",
+                "fields": {
+                  "id": {
+                    "t": "number"
+                  },
+                  "initials": {
+                    "t": "string"
+                  },
+                  "name": {
+                    "t": "string"
+                  },
+                  "rank": {
+                    "t": "number"
+                  },
+                  "seat": {
+                    "t": "enum",
+                    "values": [
+                      "alpha",
+                      "silver"
+                    ],
+                    "nullable": true
+                  },
+                  "tarnishing": {
+                    "t": "boolean"
+                  }
+                }
+              },
+              "streak": {
+                "t": "number"
+              }
+            },
+            "nullable": true
+          },
+          "live": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "acceptedAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "accepting": {
+                  "t": "object",
+                  "fields": {
+                    "avgRank": {
+                      "t": "number"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "name": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "players": {
+                      "t": "unknown"
+                    }
+                  },
+                  "nullable": true
+                },
+                "availableUntil": {
+                  "t": "string"
+                },
+                "blocker": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "checkedInAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "crownMatch": {
+                  "t": "boolean"
+                },
+                "enteredByMySide": {
+                  "t": "boolean",
+                  "nullable": true
+                },
+                "h2h": {
+                  "t": "object",
+                  "fields": {
+                    "lost": {
+                      "t": "number"
+                    },
+                    "won": {
+                      "t": "number"
+                    }
+                  },
+                  "nullable": true
+                },
+                "hasStats": {
+                  "t": "boolean"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "mySide": {
+                  "t": "enum",
+                  "values": [
+                    "posting",
+                    "accepting"
+                  ],
+                  "nullable": true
+                },
+                "note": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "offer": {
+                  "t": "object",
+                  "fields": {
+                    "crown": {
+                      "t": "boolean"
+                    },
+                    "giantKiller": {
+                      "t": "boolean"
+                    },
+                    "newRival": {
+                      "t": "boolean"
+                    }
+                  },
+                  "nullable": true
+                },
+                "postedAt": {
+                  "t": "string"
+                },
+                "posting": {
+                  "t": "object",
+                  "fields": {
+                    "avgRank": {
+                      "t": "number"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "name": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "players": {
+                      "t": "unknown"
+                    }
+                  }
+                },
+                "retiredBy": {
+                  "t": "enum",
+                  "values": [
+                    "posting",
+                    "accepting"
+                  ],
+                  "nullable": true
+                },
+                "scoreAccepting": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "scorePosting": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "status": {
+                  "t": "enum",
+                  "values": [
+                    "open",
+                    "accepted",
+                    "live",
+                    "awaiting",
+                    "completed",
+                    "disputed",
+                    "void",
+                    "expired",
+                    "cancelled",
+                    "lapsed"
+                  ]
+                },
+                "tracking": {
+                  "t": "object",
+                  "fields": {
+                    "hits": {
+                      "t": "number"
+                    },
+                    "quality": {
+                      "t": "number"
+                    },
+                    "rallies": {
+                      "t": "number"
+                    }
+                  },
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "me": {
+            "t": "object",
+            "fields": {
+              "achievements": {
+                "t": "record",
+                "of": {
+                  "t": "string"
+                }
+              },
+              "after": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "base": {
+                      "t": "number"
+                    },
+                    "challengeId": {
+                      "t": "number"
+                    },
+                    "crownBounty": {
+                      "t": "number"
+                    },
+                    "giantKiller": {
+                      "t": "number"
+                    },
+                    "hotStreak": {
+                      "t": "number"
+                    },
+                    "newRival": {
+                      "t": "number"
+                    },
+                    "opponents": {
+                      "t": "object",
+                      "fields": {
+                        "avgRank": {
+                          "t": "number"
+                        },
+                        "id": {
+                          "t": "number"
+                        },
+                        "name": {
+                          "t": "string",
+                          "nullable": true
+                        },
+                        "players": {
+                          "t": "unknown"
+                        }
+                      }
+                    },
+                    "partner": {
+                      "t": "object",
+                      "fields": {
+                        "id": {
+                          "t": "number"
+                        },
+                        "initials": {
+                          "t": "string"
+                        },
+                        "name": {
+                          "t": "string"
+                        },
+                        "rank": {
+                          "t": "number"
+                        },
+                        "seat": {
+                          "t": "enum",
+                          "values": [
+                            "alpha",
+                            "silver"
+                          ],
+                          "nullable": true
+                        },
+                        "tarnishing": {
+                          "t": "boolean"
+                        }
+                      }
+                    },
+                    "retired": {
+                      "t": "boolean"
+                    },
+                    "scoreAgainst": {
+                      "t": "number",
+                      "nullable": true
+                    },
+                    "scoreFor": {
+                      "t": "number",
+                      "nullable": true
+                    },
+                    "total": {
+                      "t": "number"
+                    },
+                    "won": {
+                      "t": "boolean"
+                    }
+                  }
+                }
+              },
+              "id": {
+                "t": "number"
+              },
+              "incomingRequest": {
+                "t": "object",
+                "fields": {
+                  "id": {
+                    "t": "number"
+                  },
+                  "initials": {
+                    "t": "string"
+                  },
+                  "name": {
+                    "t": "string"
+                  },
+                  "rank": {
+                    "t": "number"
+                  },
+                  "seat": {
+                    "t": "enum",
+                    "values": [
+                      "alpha",
+                      "silver"
+                    ],
+                    "nullable": true
+                  },
+                  "tarnishing": {
+                    "t": "boolean"
+                  }
+                },
+                "nullable": true
+              },
+              "initials": {
+                "t": "string"
+              },
+              "name": {
+                "t": "string"
+              },
+              "outgoingRequest": {
+                "t": "object",
+                "fields": {
+                  "id": {
+                    "t": "number"
+                  },
+                  "initials": {
+                    "t": "string"
+                  },
+                  "name": {
+                    "t": "string"
+                  },
+                  "rank": {
+                    "t": "number"
+                  },
+                  "seat": {
+                    "t": "enum",
+                    "values": [
+                      "alpha",
+                      "silver"
+                    ],
+                    "nullable": true
+                  },
+                  "tarnishing": {
+                    "t": "boolean"
+                  }
+                },
+                "nullable": true
+              },
+              "pair": {
+                "t": "object",
+                "fields": {
+                  "avgRank": {
+                    "t": "number"
+                  },
+                  "id": {
+                    "t": "number"
+                  },
+                  "name": {
+                    "t": "string",
+                    "nullable": true
+                  },
+                  "players": {
+                    "t": "unknown"
+                  },
+                  "record": {
+                    "t": "object",
+                    "fields": {
+                      "lost": {
+                        "t": "number"
+                      },
+                      "streak": {
+                        "t": "number"
+                      },
+                      "won": {
+                        "t": "number"
+                      }
+                    }
+                  }
+                },
+                "nullable": true
+              },
+              "rank": {
+                "t": "object",
+                "fields": {
+                  "daysToSlip": {
+                    "t": "number",
+                    "nullable": true
+                  },
+                  "earned": {
+                    "t": "number"
+                  },
+                  "progress": {
+                    "t": "number"
+                  },
+                  "seat": {
+                    "t": "enum",
+                    "values": [
+                      "alpha",
+                      "silver"
+                    ],
+                    "nullable": true
+                  },
+                  "shown": {
+                    "t": "number"
+                  },
+                  "tarnishing": {
+                    "t": "boolean"
+                  },
+                  "wp60": {
+                    "t": "number"
+                  },
+                  "wp90": {
+                    "t": "number"
+                  },
+                  "wpBonuses": {
+                    "t": "number"
+                  },
+                  "wpChallenges": {
+                    "t": "number"
+                  },
+                  "wpPlayDays": {
+                    "t": "number"
+                  },
+                  "wpRoundRobin": {
+                    "t": "number"
+                  },
+                  "wpTotal": {
+                    "t": "number"
+                  }
+                }
+              },
+              "rankUp": {
+                "t": "object",
+                "fields": {
+                  "from": {
+                    "t": "number"
+                  },
+                  "to": {
+                    "t": "number"
+                  }
+                },
+                "nullable": true
+              }
+            },
+            "nullable": true
+          },
+          "minGameMinutes": {
+            "t": "number"
+          },
+          "mine": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "acceptedAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "accepting": {
+                  "t": "object",
+                  "fields": {
+                    "avgRank": {
+                      "t": "number"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "name": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "players": {
+                      "t": "unknown"
+                    }
+                  },
+                  "nullable": true
+                },
+                "availableUntil": {
+                  "t": "string"
+                },
+                "blocker": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "checkedInAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "crownMatch": {
+                  "t": "boolean"
+                },
+                "enteredByMySide": {
+                  "t": "boolean",
+                  "nullable": true
+                },
+                "h2h": {
+                  "t": "object",
+                  "fields": {
+                    "lost": {
+                      "t": "number"
+                    },
+                    "won": {
+                      "t": "number"
+                    }
+                  },
+                  "nullable": true
+                },
+                "hasStats": {
+                  "t": "boolean"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "mySide": {
+                  "t": "enum",
+                  "values": [
+                    "posting",
+                    "accepting"
+                  ],
+                  "nullable": true
+                },
+                "note": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "offer": {
+                  "t": "object",
+                  "fields": {
+                    "crown": {
+                      "t": "boolean"
+                    },
+                    "giantKiller": {
+                      "t": "boolean"
+                    },
+                    "newRival": {
+                      "t": "boolean"
+                    }
+                  },
+                  "nullable": true
+                },
+                "postedAt": {
+                  "t": "string"
+                },
+                "posting": {
+                  "t": "object",
+                  "fields": {
+                    "avgRank": {
+                      "t": "number"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "name": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "players": {
+                      "t": "unknown"
+                    }
+                  }
+                },
+                "retiredBy": {
+                  "t": "enum",
+                  "values": [
+                    "posting",
+                    "accepting"
+                  ],
+                  "nullable": true
+                },
+                "scoreAccepting": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "scorePosting": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "status": {
+                  "t": "enum",
+                  "values": [
+                    "open",
+                    "accepted",
+                    "live",
+                    "awaiting",
+                    "completed",
+                    "disputed",
+                    "void",
+                    "expired",
+                    "cancelled",
+                    "lapsed"
+                  ]
+                },
+                "tracking": {
+                  "t": "object",
+                  "fields": {
+                    "hits": {
+                      "t": "number"
+                    },
+                    "quality": {
+                      "t": "number"
+                    },
+                    "rallies": {
+                      "t": "number"
+                    }
+                  },
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "now": {
+            "t": "string"
+          },
+          "open": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "acceptedAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "accepting": {
+                  "t": "object",
+                  "fields": {
+                    "avgRank": {
+                      "t": "number"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "name": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "players": {
+                      "t": "unknown"
+                    }
+                  },
+                  "nullable": true
+                },
+                "availableUntil": {
+                  "t": "string"
+                },
+                "blocker": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "checkedInAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "crownMatch": {
+                  "t": "boolean"
+                },
+                "enteredByMySide": {
+                  "t": "boolean",
+                  "nullable": true
+                },
+                "h2h": {
+                  "t": "object",
+                  "fields": {
+                    "lost": {
+                      "t": "number"
+                    },
+                    "won": {
+                      "t": "number"
+                    }
+                  },
+                  "nullable": true
+                },
+                "hasStats": {
+                  "t": "boolean"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "mySide": {
+                  "t": "enum",
+                  "values": [
+                    "posting",
+                    "accepting"
+                  ],
+                  "nullable": true
+                },
+                "note": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "offer": {
+                  "t": "object",
+                  "fields": {
+                    "crown": {
+                      "t": "boolean"
+                    },
+                    "giantKiller": {
+                      "t": "boolean"
+                    },
+                    "newRival": {
+                      "t": "boolean"
+                    }
+                  },
+                  "nullable": true
+                },
+                "postedAt": {
+                  "t": "string"
+                },
+                "posting": {
+                  "t": "object",
+                  "fields": {
+                    "avgRank": {
+                      "t": "number"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "name": {
+                      "t": "string",
+                      "nullable": true
+                    },
+                    "players": {
+                      "t": "unknown"
+                    }
+                  }
+                },
+                "retiredBy": {
+                  "t": "enum",
+                  "values": [
+                    "posting",
+                    "accepting"
+                  ],
+                  "nullable": true
+                },
+                "scoreAccepting": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "scorePosting": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "status": {
+                  "t": "enum",
+                  "values": [
+                    "open",
+                    "accepted",
+                    "live",
+                    "awaiting",
+                    "completed",
+                    "disputed",
+                    "void",
+                    "expired",
+                    "cancelled",
+                    "lapsed"
+                  ]
+                },
+                "tracking": {
+                  "t": "object",
+                  "fields": {
+                    "hits": {
+                      "t": "number"
+                    },
+                    "quality": {
+                      "t": "number"
+                    },
+                    "rallies": {
+                      "t": "number"
+                    }
+                  },
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "packLeader": {
+            "t": "object",
+            "fields": {
+              "games": {
+                "t": "number"
+              },
+              "player": {
+                "t": "object",
+                "fields": {
+                  "id": {
+                    "t": "number"
+                  },
+                  "initials": {
+                    "t": "string"
+                  },
+                  "name": {
+                    "t": "string"
+                  },
+                  "rank": {
+                    "t": "number"
+                  },
+                  "seat": {
+                    "t": "enum",
+                    "values": [
+                      "alpha",
+                      "silver"
+                    ],
+                    "nullable": true
+                  },
+                  "tarnishing": {
+                    "t": "boolean"
+                  }
+                }
+              }
+            },
+            "nullable": true
+          },
+          "sandbox": {
+            "t": "boolean"
+          },
+          "signedIn": {
+            "t": "boolean"
+          }
+        }
+      }
+    },
     "auth.emailStart": {
       "method": "POST",
       "path": "/auth/email/start",
@@ -1059,6 +2963,263 @@
           "ok": {
             "t": "literal",
             "value": true
+          }
+        }
+      }
+    },
+    "leaderboard.board": {
+      "method": "GET",
+      "path": "/clubs/{club}/leaderboard",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "query": {
+        "t": "object",
+        "fields": {
+          "key": {
+            "t": "string",
+            "optional": true
+          },
+          "period": {
+            "t": "enum",
+            "values": [
+              "month",
+              "quarter",
+              "year",
+              "lifetime"
+            ],
+            "optional": true
+          },
+          "source": {
+            "t": "enum",
+            "values": [
+              "all",
+              "challenges",
+              "play",
+              "rr"
+            ],
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "isCurrent": {
+            "t": "boolean"
+          },
+          "me": {
+            "t": "object",
+            "fields": {
+              "hiddenRank": {
+                "t": "number",
+                "nullable": true
+              },
+              "id": {
+                "t": "number"
+              },
+              "ladder": {
+                "t": "object",
+                "fields": {
+                  "index": {
+                    "t": "number"
+                  },
+                  "wpTotal": {
+                    "t": "number"
+                  }
+                },
+                "nullable": true
+              },
+              "visible": {
+                "t": "boolean"
+              }
+            }
+          },
+          "nextKey": {
+            "t": "string",
+            "nullable": true
+          },
+          "period": {
+            "t": "enum",
+            "values": [
+              "month",
+              "quarter",
+              "year",
+              "lifetime"
+            ]
+          },
+          "prevKey": {
+            "t": "string",
+            "nullable": true
+          },
+          "range": {
+            "t": "object",
+            "fields": {
+              "end": {
+                "t": "string",
+                "nullable": true
+              },
+              "key": {
+                "t": "string"
+              },
+              "period": {
+                "t": "enum",
+                "values": [
+                  "month",
+                  "quarter",
+                  "year",
+                  "lifetime"
+                ]
+              },
+              "start": {
+                "t": "string",
+                "nullable": true
+              }
+            }
+          },
+          "rows": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "avatarUrl": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "challenges": {
+                  "t": "number"
+                },
+                "index": {
+                  "t": "number"
+                },
+                "initials": {
+                  "t": "string"
+                },
+                "name": {
+                  "t": "string"
+                },
+                "play": {
+                  "t": "number"
+                },
+                "playerId": {
+                  "t": "number"
+                },
+                "rank": {
+                  "t": "number"
+                },
+                "rr": {
+                  "t": "number"
+                },
+                "seat": {
+                  "t": "enum",
+                  "values": [
+                    "alpha",
+                    "silver"
+                  ],
+                  "nullable": true
+                },
+                "tarnishing": {
+                  "t": "boolean"
+                },
+                "value": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "source": {
+            "t": "enum",
+            "values": [
+              "all",
+              "challenges",
+              "play",
+              "rr"
+            ]
+          }
+        }
+      }
+    },
+    "leaderboard.player": {
+      "method": "GET",
+      "path": "/clubs/{club}/players/{id}",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "card": {
+            "t": "object",
+            "fields": {
+              "avatarUrl": {
+                "t": "string",
+                "nullable": true
+              },
+              "form": {
+                "t": "array",
+                "of": {
+                  "t": "enum",
+                  "values": [
+                    "W",
+                    "L"
+                  ]
+                }
+              },
+              "id": {
+                "t": "number"
+              },
+              "initials": {
+                "t": "string"
+              },
+              "isMe": {
+                "t": "boolean"
+              },
+              "name": {
+                "t": "string"
+              },
+              "openChallengeId": {
+                "t": "number",
+                "nullable": true
+              },
+              "partner": {
+                "t": "boolean"
+              },
+              "rankIndex": {
+                "t": "number"
+              },
+              "seat": {
+                "t": "enum",
+                "values": [
+                  "alpha",
+                  "silver"
+                ],
+                "nullable": true
+              },
+              "tarnishing": {
+                "t": "boolean"
+              },
+              "wp90": {
+                "t": "number"
+              },
+              "wpTotal": {
+                "t": "number"
+              }
+            }
           }
         }
       }

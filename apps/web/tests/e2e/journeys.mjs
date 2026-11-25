@@ -642,6 +642,10 @@ const SESSION_ENDPOINTS = [
   ["DELETE", "/account/integrations/tokens/{id}"],
   ["POST", "/account/integrations/webhooks"],
   ["DELETE", "/account/integrations/webhooks/{id}"],
+  ["GET", "/clubs/{club}/arena"],
+  ["POST", "/clubs/{club}/arena"],
+  ["GET", "/clubs/{club}/leaderboard"],
+  ["GET", "/clubs/{club}/players/{id}"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1181,6 +1185,103 @@ describe("API · the players' app API", () => {
     } finally {
       await pete.context.close();
       await mia.context.close();
+    }
+  });
+
+  test("API16 · the Arena: the same board as the website's, pairing by code, a challenge posted and taken down, refusals as codes, off with its module", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const pete = await signedIn(PEOPLE.player.email);
+    const act = (who, body) => appApi("POST", `/clubs/${CLUB}/arena`, { token: who.token, body });
+    const board = (who) => appApi("GET", `/clubs/${CLUB}/arena`, { token: who.token });
+    try {
+      // The same snapshot the website's Arena polls, for the same person.
+      const app = await board(mia);
+      assert.equal(app.status, 200);
+      const web = await (await fetch(`${base()}/api/arena`, { headers: { Cookie: `tw_player=${mia.token}` } })).json();
+      assert.deepEqual(Object.keys(app.json).sort(), Object.keys(web).sort());
+      assert.equal(app.json.me.id, web.me.id);
+      assert.deepEqual(app.json.open.map((c) => c.id), web.open.map((c) => c.id));
+
+      // Pair by code: Mia shows a code, Pete enters it, Mia accepts.
+      const shown = await act(mia, { action: "pair_code" });
+      assert.equal(shown.status, 200);
+      assert.match(shown.json.code.code, /^[A-Z0-9-]{5,7}$/i);
+      const wrong = await act(pete, { action: "pair_enter", code: "ZZZZZ" });
+      assert.deepEqual([wrong.status, wrong.json.error], [409, "bad_code"]);
+      assert.equal((await act(pete, { action: "pair_enter", code: shown.json.code.code })).status, 200);
+      assert.equal((await board(mia)).json.me.incomingRequest?.id, (await board(pete)).json.me.id);
+      const paired = await act(mia, { action: "pair_respond", accept: true });
+      assert.equal(paired.status, 200);
+      assert.ok(paired.json.state.me.pair, "now a pair");
+
+      // A challenge up for two days, then taken down.
+      const posted = await act(mia, { action: "post", days: 2, note: "Anyone for Friday?" });
+      assert.equal(posted.status, 200);
+      const mine = posted.json.state.mine.find((c) => c.status === "open");
+      assert.equal(mine.note, "Anyone for Friday?");
+      assert.equal((await act(pete, { action: "accept", id: mine.id })).status, 409, "a pair can't take its own challenge");
+      assert.equal((await act(mia, { action: "cancel", id: mine.id })).status, 200);
+      assert.ok(!(await board(mia)).json.mine.some((c) => c.id === mine.id && c.status === "open"));
+
+      for (const bad of [{ action: "fly" }, { action: "post", days: 9 }, { action: "score", id: 1, posting: 31, accepting: 0 }]) {
+        assert.equal((await act(mia, bad)).status, 400, JSON.stringify(bad));
+      }
+
+      await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'arena'`);
+      try {
+        const off = await board(mia);
+        assert.deepEqual([off.status, off.json.error], [404, "module_off"]);
+      } finally {
+        await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'arena'`);
+      }
+    } finally {
+      await act(mia, { action: "pair_leave" }).catch(() => {});
+      await mia.context.close();
+      await pete.context.close();
+    }
+  });
+
+  test("API17 · the Leaderboard: the board by source and period, steps back in time, someone who hides is left out (but sees their own rank), player cards", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const hana = await signedIn(PEOPLE.hidden.email);
+    const get = (who, q = "") => appApi("GET", `/clubs/${CLUB}/leaderboard${q}`, { token: who.token });
+    try {
+      const all = await get(mia);
+      assert.equal(all.status, 200);
+      assert.deepEqual([all.json.source, all.json.period, all.json.isCurrent, all.json.prevKey, all.json.nextKey], ["all", "lifetime", true, null, null]);
+      const hanaId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.hidden.email])).rows[0].id;
+      assert.ok(!all.json.rows.some((r) => r.playerId === hanaId), "someone who hides isn't on the board");
+      for (let i = 1; i < all.json.rows.length; i++) assert.ok(all.json.rows[i - 1].value >= all.json.rows[i].value, "highest first");
+      assert.equal(all.json.me.visible, true);
+
+      const month = await get(mia, "?period=month&source=play");
+      assert.deepEqual([month.json.period, month.json.source, month.json.isCurrent, month.json.nextKey], ["month", "play", true, null]);
+      assert.match(month.json.prevKey, /^\d{4}-\d{2}$/);
+      const before = await get(mia, `?period=month&source=play&key=${month.json.prevKey}`);
+      assert.deepEqual([before.json.range.key, before.json.isCurrent], [month.json.prevKey, false]);
+      assert.ok(before.json.nextKey, "a past month can step forward");
+
+      // Hana hides: she's not on it, but sees her own rank when she has one.
+      const hers = await get(hana);
+      assert.equal(hers.json.me.visible, false);
+      assert.ok(!hers.json.rows.some((r) => r.playerId === hanaId));
+
+      for (const q of ["?source=bogus", "?period=week", `?key=${"x".repeat(21)}`]) assert.equal((await get(mia, q)).status, 400, q);
+
+      // Cards: anyone on the board; someone hidden only to themselves.
+      const someone = all.json.rows.find((r) => r.playerId !== all.json.me.id);
+      if (someone) {
+        const card = await appApi("GET", `/clubs/${CLUB}/players/${someone.playerId}`, { token: mia.token });
+        assert.equal(card.status, 200);
+        assert.deepEqual(Object.keys(card.json.card).sort(), ["avatarUrl", "form", "id", "initials", "isMe", "name", "openChallengeId", "partner", "rankIndex", "seat", "tarnishing", "wp90", "wpTotal"]);
+      }
+      assert.equal((await appApi("GET", `/clubs/${CLUB}/players/${hanaId}`, { token: mia.token })).status, 404);
+      const own = await appApi("GET", `/clubs/${CLUB}/players/${hanaId}`, { token: hana.token });
+      assert.deepEqual([own.status, own.json.card?.isMe], [200, true]);
+      assert.equal((await appApi("GET", `/clubs/${CLUB}/players/0`, { token: mia.token })).status, 404);
+    } finally {
+      await mia.context.close();
+      await hana.context.close();
     }
   });
 

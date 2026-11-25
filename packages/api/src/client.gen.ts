@@ -39,6 +39,14 @@ export function createApi(transport: Transport) {
       removePhoto: (options?: Options) =>
         transport.call("account.removePhoto", { signal: options?.signal }) as Promise<ResponseOf<"account.removePhoto">>,
     },
+    arena: {
+      /** POST /clubs/{club}/arena (signed in) */
+      action: (params: ParamsOf<"arena.action">, body: BodyOf<"arena.action">, options?: Options) =>
+        transport.call("arena.action", { params, body, signal: options?.signal }) as Promise<ResponseOf<"arena.action">>,
+      /** GET /clubs/{club}/arena (signed in) */
+      state: (params: ParamsOf<"arena.state">, options?: Options) =>
+        transport.call("arena.state", { params, signal: options?.signal }) as Promise<ResponseOf<"arena.state">>,
+    },
     auth: {
       /** POST /auth/email/start (no sign-in needed) */
       emailStart: (body: BodyOf<"auth.emailStart">, options?: Options) =>
@@ -83,6 +91,14 @@ export function createApi(transport: Transport) {
       /** DELETE /account/integrations/tokens/{id} (signed in) */
       revokeToken: (params: ParamsOf<"integrations.revokeToken">, options?: Options) =>
         transport.call("integrations.revokeToken", { params, signal: options?.signal }) as Promise<ResponseOf<"integrations.revokeToken">>,
+    },
+    leaderboard: {
+      /** GET /clubs/{club}/leaderboard (signed in) */
+      board: (params: ParamsOf<"leaderboard.board">, query: QueryOf<"leaderboard.board">, options?: Options) =>
+        transport.call("leaderboard.board", { params, query, signal: options?.signal }) as Promise<ResponseOf<"leaderboard.board">>,
+      /** GET /clubs/{club}/players/{id} (signed in) */
+      player: (params: ParamsOf<"leaderboard.player">, options?: Options) =>
+        transport.call("leaderboard.player", { params, signal: options?.signal }) as Promise<ResponseOf<"leaderboard.player">>,
     },
     me: {
       /** POST /clubs/{club}/me/absence (signed in) */

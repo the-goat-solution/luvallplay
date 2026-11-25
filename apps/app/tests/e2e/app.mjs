@@ -1438,6 +1438,10 @@ describe("APP · the club shop", () => {
         confirmed = true;
         return route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ order: { ...order, status: "paid", paidAt: new Date().toISOString() } }) });
       });
+      // The club's config changed (it has a Stripe key now). The screens saved on
+      // this device hold a copy under a minute old, which the app rightly keeps
+      // using for that minute; drop it, as if the minute had passed.
+      await page.evaluate(() => localStorage.removeItem("lp.cache"));
       await page.reload();
       await page.waitForSelector(ME_READY);
       await tee.getByRole("button", { name: /M · 2 left/ }).click();
@@ -1916,11 +1920,14 @@ describe("APP · offline and installing (build plan §4.1)", () => {
       const [w, h] = [png.readUInt32BE(16), png.readUInt32BE(20)];
       assert.equal(`${w}x${h}`, icon.sizes, icon.src);
     }
-    assert.ok(manifest.icons.some((i) => i.purpose === "maskable"));
+    for (const purpose of ["any", "maskable", "monochrome"]) assert.ok(manifest.icons.some((i) => i.purpose === purpose && i.sizes === "512x512"), purpose);
+    assert.match(html, /<link rel="icon" href="\/favicon\.ico"/);
+    assert.equal((await fetch(`${APP}/favicon.ico`)).status, 200);
     const sw = await (await fetch(`${APP}/sw.js`)).text();
     const assets = JSON.parse(sw.match(/const ASSETS = (\[.*?\]);/)[1]);
     assert.ok(assets.some((a) => /\/assets\/Me-.*\.js$/.test(a)) && assets.some((a) => /\/assets\/index-.*\.js$/.test(a)), "the screens are kept on the device");
     assert.equal(assets.some((a) => a.startsWith("/mediapipe/") || a.startsWith("/api/")), false);
+    for (const icon of manifest.icons) assert.ok(assets.includes(icon.src), `${icon.src} is kept on the device`);
 
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();

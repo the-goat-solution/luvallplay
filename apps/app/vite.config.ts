@@ -19,6 +19,9 @@ const STRIPE = { script: "https://js.stripe.com", frame: "https://js.stripe.com 
 
 // The tracker's person and pose models, downloaded on its screen only.
 const MODELS = "https://storage.googleapis.com";
+// My photos go straight to the club's photo store (Vercel Blob): its upload
+// API, and the store's own host (its name carries the store's id).
+const PHOTO_STORE = "https://vercel.com/api/blob/ https://*.public.blob.vercel-storage.com";
 
 function apiHosts(env: Record<string, string>): string[] {
   const listed = (env.VITE_API_HOSTS ?? "").split(/[\s,]+/).filter(Boolean);
@@ -44,7 +47,7 @@ function csp(env: Record<string, string>): Plugin {
         // Videos chosen on the device (the tracker and the labelling tool play them from a blob: address).
         "media-src 'self' blob:",
         // The tracker's detection models (Google's MediaPipe model storage).
-        `connect-src 'self' ${hosts} ${STRIPE.connect} ${MODELS}`,
+        `connect-src 'self' ${hosts} ${STRIPE.connect} ${MODELS} ${PHOTO_STORE}`,
         "worker-src 'self' blob:",
         `frame-src ${STRIPE.frame}`,
         "base-uri 'self'",

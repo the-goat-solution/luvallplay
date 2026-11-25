@@ -3,9 +3,9 @@
 // wide enough: next up, membership and the calendar; the inbox and the
 // welcome card beside them. Cards for modules the club has off aren't there.
 //
-// Not here yet (later steps): the shop and My photos (with the shop and
-// Player steps), and paying in the app (the membership step). The inbox is
-// its own screen (/inbox), opened from the bell and the Messages card.
+// The shop and My photos (with the Gallery on) sit in the second column.
+// The inbox is its own screen (/inbox), opened from the bell and the
+// Messages card.
 import { useSession } from "../hooks.tsx";
 import { nextUp } from "../lib/format.ts";
 import { useMe } from "./me/data.ts";
@@ -17,6 +17,7 @@ import { usePlace } from "./me/parts.tsx";
 import { PlayCalendar } from "./me/PlayCalendar.tsx";
 import { WelcomeCard } from "./me/Welcome.tsx";
 import { ShopSection } from "./shop/ShopSection.tsx";
+import { PhotosCard } from "./me/Photos.tsx";
 
 function Loading() {
   const { t } = usePlace();
@@ -47,6 +48,7 @@ function Loading() {
 export default function MeScreen() {
   const { t } = usePlace();
   const me = useMe();
+  const session = useSession();
 
   if (!me.data) {
     return (
@@ -82,6 +84,7 @@ export default function MeScreen() {
           <InboxPreview inbox={data.inbox} />
           {data.welcome && <WelcomeCard firstName={data.player.firstName} />}
           <ShopSection />
+          {session.data && <PhotosCard t={t} playerId={session.data.player.id} />}
         </div>
       </div>
     </section>

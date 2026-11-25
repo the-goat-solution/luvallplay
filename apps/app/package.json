@@ -23,6 +23,7 @@
     "@luvallplay/vision": "workspace:*",
     "@tanstack/react-query": "^5.108.4",
     "@tanstack/react-router": "^1.170.46",
+    "@vercel/blob": "^2.8.1",
     "jsqr": "^1.4.0",
     "qrcode": "^1.5.4",
     "react": "^19.1.0",

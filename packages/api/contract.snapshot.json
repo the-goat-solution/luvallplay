@@ -4144,6 +4144,188 @@
         }
       }
     },
+    "photos.add": {
+      "method": "POST",
+      "path": "/clubs/{club}/me/photos",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "bytes": {
+            "t": "number"
+          },
+          "caption": {
+            "t": "string",
+            "nullable": true,
+            "optional": true
+          },
+          "consent": {
+            "t": "literal",
+            "value": true
+          },
+          "displayUrl": {
+            "t": "string"
+          },
+          "height": {
+            "t": "number",
+            "nullable": true
+          },
+          "originalUrl": {
+            "t": "string"
+          },
+          "thumbUrl": {
+            "t": "string"
+          },
+          "width": {
+            "t": "number",
+            "nullable": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "id": {
+            "t": "number"
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "status": {
+            "t": "enum",
+            "values": [
+              "pending",
+              "approved",
+              "needs_review",
+              "rejected",
+              "hidden"
+            ]
+          }
+        }
+      }
+    },
+    "photos.delete": {
+      "method": "DELETE",
+      "path": "/clubs/{club}/me/photos/{id}",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "photos.list": {
+      "method": "GET",
+      "path": "/clubs/{club}/me/photos",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "perDay": {
+            "t": "number"
+          },
+          "photos": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "caption": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "t": "string"
+                },
+                "displayUrl": {
+                  "t": "string"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "status": {
+                  "t": "enum",
+                  "values": [
+                    "pending",
+                    "approved",
+                    "needs_review",
+                    "rejected",
+                    "hidden"
+                  ]
+                },
+                "thumbUrl": {
+                  "t": "string"
+                }
+              }
+            }
+          },
+          "uploadMode": {
+            "t": "enum",
+            "values": [
+              "token",
+              "presigned"
+            ],
+            "nullable": true
+          }
+        }
+      }
+    },
+    "photos.upload": {
+      "method": "POST",
+      "path": "/clubs/{club}/me/photos/upload",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "record",
+        "of": {
+          "t": "unknown"
+        }
+      },
+      "response": {
+        "t": "record",
+        "of": {
+          "t": "unknown"
+        }
+      }
+    },
     "play.book": {
       "method": "POST",
       "path": "/clubs/{club}/me/book",

@@ -109,7 +109,7 @@ test("only the listed files talk to the storage provider's library directly", ()
     "lib/storage.ts",
     "lib/finance-receipts.ts",
     "lib/setup-check.ts",
-    "app/api/profile/photos/upload/route.ts",
+    "lib/photos-service.ts",
     "components/profile/player/PhotosPanel.tsx",
   ]);
   const found: string[] = [];

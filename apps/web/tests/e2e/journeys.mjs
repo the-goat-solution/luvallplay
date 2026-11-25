@@ -670,6 +670,10 @@ const SESSION_ENDPOINTS = [
   ["POST", "/clubs/{club}/vision/model"],
   ["POST", "/clubs/{club}/vision/share"],
   ["GET", "/clubs/{club}/arena/challenges/{id}/stats"],
+  ["GET", "/clubs/{club}/me/photos"],
+  ["POST", "/clubs/{club}/me/photos"],
+  ["POST", "/clubs/{club}/me/photos/upload"],
+  ["DELETE", "/clubs/{club}/me/photos/{id}"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1544,6 +1548,50 @@ describe("API · the players' app API", () => {
       const sent = await app("POST", "/share", one);
       assert.deepEqual([sent.status, sent.json.ok, sent.json.sent, sent.json.failed], [200, true, ["dee.guest@e2e.test"], []]);
     } finally {
+      await mia.context.close();
+    }
+  });
+
+  test("API23 · My photos: your own photos only, sharing not set up without a photo store, only files in your own folder, delete only yours, off with the Gallery", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const call = (method, path, body) => appApi(method, `/clubs/${CLUB}/me/photos${path}`, { token: mia.token, body });
+    const ids = Object.fromEntries((await db.query(`SELECT email, id FROM players WHERE email = ANY($1)`, [[PEOPLE.member.email, PEOPLE.player.email]])).rows.map((r) => [r.email, r.id]));
+    const insert = async (playerId, status) =>
+      (await db.query(
+        `INSERT INTO player_photos (player_id, original_url, display_url, thumb_url, width, height, bytes, caption, consent_at, status)
+         VALUES ($1, $2, $2, $2, 10, 10, 100, 'net play', NOW(), $3) RETURNING id`,
+        [playerId, `https://store.public.blob.vercel-storage.com/photos/${playerId}/x.jpg`, status],
+      )).rows[0].id;
+    const mine = await insert(ids[PEOPLE.member.email], "approved");
+    const theirs = await insert(ids[PEOPLE.player.email], "approved");
+    try {
+      const list = await call("GET", "");
+      assert.equal(list.status, 200);
+      assert.deepEqual([list.json.uploadMode, list.json.perDay], [null, 20]);
+      assert.deepEqual(list.json.photos.map((p) => [p.id, p.status, p.caption]), [[mine, "approved", "net play"]]);
+      assert.equal(JSON.stringify(list.json).includes("original"), false, "the original's address isn't sent");
+
+      const upload = await call("POST", "/upload", { type: "blob.generate-client-token", payload: { pathname: `photos/${ids[PEOPLE.member.email]}/a.jpg`, callbackUrl: "", clientPayload: null, multipart: false } });
+      assert.deepEqual([upload.status, upload.json.error], [503, "not_configured"]);
+      const own = `https://store.public.blob.vercel-storage.com/photos/${ids[PEOPLE.member.email]}/b.jpg`;
+      const foreign = `https://store.public.blob.vercel-storage.com/photos/${ids[PEOPLE.player.email]}/b.jpg`;
+      const add = (url) => call("POST", "", { originalUrl: url, displayUrl: url, thumbUrl: url, width: 10, height: 10, bytes: 100, caption: null, consent: true });
+      assert.deepEqual([(await add(foreign)).status, (await add(foreign)).json.error], [400, "invalid"]);
+      assert.equal((await call("POST", "", { originalUrl: own, displayUrl: own, thumbUrl: own, width: 10, height: 10, bytes: 100, consent: false })).status, 400);
+
+      assert.deepEqual([(await call("DELETE", `/${theirs}`)).status], [404]);
+      assert.equal((await call("DELETE", `/${mine}`)).status, 200);
+      assert.equal((await db.query(`SELECT deleted_at IS NOT NULL AS gone FROM player_photos WHERE id = $1`, [mine])).rows[0].gone, true);
+      assert.equal((await db.query(`SELECT deleted_at IS NULL AS kept FROM player_photos WHERE id = $1`, [theirs])).rows[0].kept, true);
+
+      await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'gallery'`);
+      try {
+        assert.deepEqual([(await call("GET", "")).status, (await call("GET", "")).json.error], [404, "module_off"]);
+      } finally {
+        await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'gallery'`);
+      }
+    } finally {
+      await db.query(`DELETE FROM player_photos WHERE id = ANY($1)`, [[mine, theirs]]);
       await mia.context.close();
     }
   });

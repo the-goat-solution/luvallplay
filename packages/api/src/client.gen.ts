@@ -142,6 +142,20 @@ export function createApi(transport: Transport) {
       thread: (params: ParamsOf<"messages.thread">, options?: Options) =>
         transport.call("messages.thread", { params, signal: options?.signal }) as Promise<ResponseOf<"messages.thread">>,
     },
+    photos: {
+      /** POST /clubs/{club}/me/photos (signed in) */
+      add: (params: ParamsOf<"photos.add">, body: BodyOf<"photos.add">, options?: Options) =>
+        transport.call("photos.add", { params, body, signal: options?.signal }) as Promise<ResponseOf<"photos.add">>,
+      /** DELETE /clubs/{club}/me/photos/{id} (signed in) */
+      delete: (params: ParamsOf<"photos.delete">, options?: Options) =>
+        transport.call("photos.delete", { params, signal: options?.signal }) as Promise<ResponseOf<"photos.delete">>,
+      /** GET /clubs/{club}/me/photos (signed in) */
+      list: (params: ParamsOf<"photos.list">, options?: Options) =>
+        transport.call("photos.list", { params, signal: options?.signal }) as Promise<ResponseOf<"photos.list">>,
+      /** POST /clubs/{club}/me/photos/upload (signed in) */
+      upload: (params: ParamsOf<"photos.upload">, body: BodyOf<"photos.upload">, options?: Options) =>
+        transport.call("photos.upload", { params, body, signal: options?.signal }) as Promise<ResponseOf<"photos.upload">>,
+    },
     play: {
       /** POST /clubs/{club}/me/book (signed in) */
       book: (params: ParamsOf<"play.book">, body: BodyOf<"play.book">, options?: Options) =>

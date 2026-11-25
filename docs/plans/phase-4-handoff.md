@@ -28,7 +28,7 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - **Still opens on the club's website** (says so on the link): manage or join a membership, and book a casual spot. They move into the app with step 5.
 - **Inbox (3b)**: `messages.*` endpoints and `apps/app/src/screens/Inbox.tsx` (`/inbox`, `/inbox/new`, `/inbox/<id>`); Me's bell and Messages card open it.
 - **Settings part A (3c)**: `account.profile`, `details`, `language`, `privacy`, `photo` (POST and DELETE), `export`; server code `apps/web/lib/app-account.ts`; app `apps/app/src/screens/Settings.tsx`, `src/screens/settings/*`, `src/lib/photo.ts`.
-- **Settings part B (3c)**: `account.adminHandoff`, `account.delete`, `integrations.*`; app `settings/ClubAdmin.tsx`, `settings/ConnectedApps.tsx`, `screens/Welcome.tsx`. **Phone change and text-message sign-in wait for the owner** (reCAPTCHA vs the app's Content-Security-Policy).
+- **Settings part B (3c)**: `account.adminHandoff`, `account.delete`, `integrations.*`; app `settings/ClubAdmin.tsx`, `settings/ConnectedApps.tsx`, `screens/Welcome.tsx`. **Phone change and text-message sign-in are left for the native app** (owner's decision, 25 Nov: reCAPTCHA vs the app's Content-Security-Policy).
 - **Not on Me yet**: the shop (step 5) and My photos (with the Player step).
 - **Words**: Me words are in the app's own dictionary (`packages/i18n/src/app.ts`), copied from the website's wording without the club's name or "$" (the website's `profile` dictionary still has both typed in).
 
@@ -65,7 +65,7 @@ Use the strangler method: one tab at a time, the server-rendered pages in `apps/
 For each screen: add endpoints to the contract, add route files with `appRoute`, run `pnpm --filter @luvallplay/api generate` and `snapshot`, put queries in `apps/web/lib/repos` (no SQL in route files; a test enforces it), then build the screen in `apps/app/src`, add journeys, update the runbook and the delivery log (§4.7).
 
 1. ~~**Me**~~: done in step 3a, except the shop and My photos (see §1a).
-2. **Settings** is done except **phone change and text-message sign-in**, which wait for the owner's decision on reCAPTCHA in the app (the API has `auth.smsStart`/`smsVerify`; `SignIn.tsx` has the extension point).
+2. **Settings** is done except **phone change and text-message sign-in**, which the owner decided to leave for the native app (Capacitor), because reCAPTCHA doesn't fit the app's Content-Security-Policy (the API has `auth.smsStart`/`smsVerify`; `SignIn.tsx` has the extension point).
 3. **Arena**: Challenges, Leaderboard with player cards, Ranks, QR pairing and scanning, codes.
 4. **Player, shop orders, membership and cancel flows**. Payments stay on the existing Stripe flows; show money through `@luvallplay/core/money`. Load Stripe only when used.
 5. **Vision**: set-up, analyzer (MediaPipe lazy-loaded), labelling.

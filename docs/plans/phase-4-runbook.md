@@ -195,7 +195,7 @@ Behind the ⚙ in the header, as on the website:
 
 A brand-new account is asked its name after its first code (`/welcome`); skipping leaves a reminder with a link back until a name is saved anywhere.
 
-**Not in the app yet: changing the phone number and text-message sign-in.** Both need a text-message code, which on the website goes through Google reCAPTCHA; the app's Content-Security-Policy allows only its own scripts. Waiting for the owner's decision.
+**Not in the app yet: changing the phone number and text-message sign-in.** Both need a text-message code, which on the website goes through Google reCAPTCHA; the app's Content-Security-Policy allows only its own scripts. The owner decided (25 Nov) to leave both for the native app (Capacitor), where phone checks work differently; until then the phone is shown read-only.
 
 **Not on Me yet**: the **shop** (with the shop step) and **My photos** (with the Player step).
 

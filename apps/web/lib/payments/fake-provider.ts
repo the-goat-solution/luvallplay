@@ -6,21 +6,25 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   PaymentError,
   assertValidPayment,
+  type Checkout,
   type CreatePaymentInput,
+  type Customers,
   type Payment,
   type PaymentCapabilities,
   type PaymentEvent,
   type PaymentEventType,
   type PaymentProvider,
   type Refund,
+  type Subscription,
+  type Subscriptions,
 } from "@luvallplay/core/payments";
 
 export const CARD_CAPABILITIES: PaymentCapabilities = {
-  clientConfirmation: true, qr: false, recurring: true, refunds: true, partialRefunds: true, webhooks: true, payoutStatus: true, currencies: ["NZD", "AUD"],
+  clientConfirmation: true, qr: false, recurring: true, refunds: true, partialRefunds: true, webhooks: true, payoutStatus: true, customers: true, hostedCheckout: true, currencies: ["NZD", "AUD"],
 };
 /** A bank-transfer QR provider: no cards, no recurring charges, no refunds through the provider. */
 export const QR_CAPABILITIES: PaymentCapabilities = {
-  clientConfirmation: false, qr: true, recurring: false, refunds: false, partialRefunds: false, webhooks: false, payoutStatus: false, currencies: ["VND"],
+  clientConfirmation: false, qr: true, recurring: false, refunds: false, partialRefunds: false, webhooks: false, payoutStatus: false, customers: false, hostedCheckout: false, currencies: ["VND"],
 };
 
 export type FakeProvider = PaymentProvider & {
@@ -29,6 +33,8 @@ export type FakeProvider = PaymentProvider & {
   /** The signed webhook for any event (to replay, reorder, or forge). */
   webhook(type: PaymentEventType, paymentId: string, extra?: { refunded?: number; eventId?: string; occurredAt?: number }): { body: string; headers: Record<string, string> };
   payments: Map<string, Payment>;
+  /** Time passes: every subscription whose next charge is due is charged (or ends, when it was set to stop). */
+  advanceTo(at: number): void;
 };
 
 export function fakeProvider(options: { id?: string; capabilities?: PaymentCapabilities; secret?: string; now?: () => number } = {}): FakeProvider {
@@ -49,11 +55,144 @@ export function fakeProvider(options: { id?: string; capabilities?: PaymentCapab
     return p;
   };
 
+  // ── Customers, subscriptions and a hosted page, when the capabilities say so ──
+  const WEEK = 7 * 86_400_000;
+  const customerByEmail = new Map<string, string>();
+  const setups = new Map<string, { customerId: string; succeeded: boolean }>();
+  type Sub = Subscription & { weeks: number; price: string; change: { price: string; weeks: number; metadata: Record<string, string> } | null; freeNext: boolean };
+  const subs = new Map<string, Sub>();
+  const pages = new Map<string, { paid: boolean; metadata: Record<string, string> }>();
+  const sub = (subId: string): Sub => {
+    const s = subs.get(subId);
+    if (!s) throw new PaymentError("not_found", `No subscription ${subId}`);
+    return s;
+  };
+  const view = (s: Sub, billing?: boolean): Subscription => ({
+    id: s.id,
+    status: s.status,
+    cancelAtPeriodEnd: s.cancelAtPeriodEnd,
+    nextChargeAt: s.nextChargeAt,
+    amount: s.amount,
+    metadata: { ...s.metadata },
+    changeRef: s.change ? `${s.id}_change` : null,
+    ...(billing ? { paymentMethod: { card: { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 } }, pendingChange: s.change && s.nextChargeAt ? { startsAt: s.nextChargeAt, metadata: { ...s.change.metadata } } : null } : {}),
+  });
+  const priceRef = (price: { priceId: string } | { amount: number }) => ("priceId" in price ? price.priceId : `amount_${price.amount}`);
+
+  const customers: Customers = {
+    async find(email) {
+      return customerByEmail.get(email.toLowerCase()) ?? null;
+    },
+    async create(input) {
+      const customerId = `${id}_cus_${++n}`;
+      customerByEmail.set(input.email.toLowerCase(), customerId);
+      return customerId;
+    },
+    async billing() {
+      return { paymentMethod: null, receipts: [] };
+    },
+    async savedCard() {
+      return null;
+    },
+    async cardUpdateUrl({ customerId, returnUrl }) {
+      return `https://pay.example.test/${customerId}/card?back=${encodeURIComponent(returnUrl)}`;
+    },
+    async createCardSetup({ customerId }) {
+      const setupId = `${id}_setup_${++n}`;
+      setups.set(setupId, { customerId, succeeded: true });
+      return { id: setupId, clientSecret: `${setupId}_secret` };
+    },
+    async getCardSetup(setupId) {
+      const s = setups.get(setupId);
+      if (!s) throw new PaymentError("not_found", `No card setup ${setupId}`);
+      return { succeeded: s.succeeded, customerId: s.customerId, paymentMethodId: `${setupId}_pm` };
+    },
+  };
+
+  const subscriptions: Subscriptions = {
+    async start(input) {
+      const subId = `${id}_sub_${++n}`;
+      subs.set(subId, { id: subId, status: "active", cancelAtPeriodEnd: false, nextChargeAt: now() + 4 * WEEK, amount: "amount" in input.price ? input.price.amount : null, metadata: { ...input.metadata }, changeRef: null, weeks: 4, price: priceRef(input.price), change: null, freeNext: false });
+      return { subscriptionId: subId, clientSecret: `${subId}_secret` };
+    },
+    async startLater(input) {
+      const subId = `${id}_sub_${++n}`;
+      subs.set(subId, { id: subId, status: "trialing", cancelAtPeriodEnd: false, nextChargeAt: input.firstChargeAt, amount: null, metadata: { ...input.metadata }, changeRef: null, weeks: 4, price: priceRef(input.price), change: null, freeNext: false });
+      return { subscriptionId: subId };
+    },
+    async get(subId, opts) {
+      return view(sub(subId), opts?.billing);
+    },
+    async setCancelAtPeriodEnd(subId, cancel) {
+      sub(subId).cancelAtPeriodEnd = cancel;
+    },
+    async scheduleChange(subscription, change) {
+      const s = sub(subscription.id);
+      s.change = { price: change.price.priceId, weeks: change.weeks, metadata: { ...change.metadata } };
+      return { startsAt: s.nextChargeAt ?? now() };
+    },
+    async clearScheduledChange(subscription) {
+      sub(subscription.id).change = null;
+    },
+    async skipNextCharge(subId) {
+      const s = sub(subId);
+      if (s.freeNext) return { alreadyQueued: true };
+      s.freeNext = true;
+      return { alreadyQueued: false };
+    },
+    async postponeNextCharge(subId, days) {
+      const s = sub(subId);
+      if (s.status !== "active" && s.status !== "trialing") throw new PaymentError("bad_request", `This subscription is ${s.status}, so it can't be extended.`);
+      s.nextChargeAt = (s.nextChargeAt ?? now()) + days * 86_400_000;
+      s.status = "trialing";
+      return s.nextChargeAt;
+    },
+  };
+
+  const checkout: Checkout = {
+    async create(input) {
+      assertValidPayment(provider, { amount: input.amount, currency: input.currency, description: input.description, metadata: input.metadata, idempotencyKey: "checkout" });
+      const pageId = `${id}_page_${++n}`;
+      pages.set(pageId, { paid: false, metadata: { ...input.metadata } });
+      return { id: pageId, url: `https://pay.example.test/${pageId}` };
+    },
+    async get(pageId) {
+      const page = pages.get(pageId);
+      if (!page) throw new PaymentError("not_found", `No payment page ${pageId}`);
+      return { ...page };
+    },
+  };
+
   const provider: FakeProvider = {
     id,
     capabilities,
     payments,
     configured: () => true,
+    assertReady: () => {},
+    ...(capabilities.customers ? { customers } : {}),
+    ...(capabilities.recurring ? { subscriptions } : {}),
+    ...(capabilities.hostedCheckout ? { checkout } : {}),
+
+    advanceTo(at) {
+      for (const s of subs.values()) {
+        while (s.status !== "canceled" && s.nextChargeAt !== null && s.nextChargeAt <= at) {
+          if (s.cancelAtPeriodEnd) {
+            s.status = "canceled";
+            s.nextChargeAt = null;
+            break;
+          }
+          if (s.change) {
+            s.price = s.change.price;
+            s.weeks = s.change.weeks;
+            s.metadata = { ...s.metadata, ...s.change.metadata };
+            s.change = null;
+          }
+          s.freeNext = false;
+          s.status = "active";
+          s.nextChargeAt += s.weeks * WEEK;
+        }
+      }
+    },
 
     async createPayment(input: CreatePaymentInput): Promise<Payment> {
       assertValidPayment(provider, input);
@@ -145,6 +284,12 @@ export function fakeProvider(options: { id?: string; capabilities?: PaymentCapab
     },
 
     pay(paymentId) {
+      // A hosted page is paid by its own id.
+      const page = pages.get(paymentId);
+      if (page) {
+        page.paid = true;
+        return { body: "", headers: {} };
+      }
       const p = get(paymentId);
       if (p.status === "pending" || p.status === "processing") p.status = "succeeded";
       return provider.webhook("payment.succeeded", paymentId);

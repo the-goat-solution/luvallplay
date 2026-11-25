@@ -3,8 +3,8 @@ import { z } from "zod";
 import { getAvailableSpots, isRegistrationLocked } from "@/lib/db";
 import { isSessionDatePaused } from "@/lib/day-requests";
 import { getWeekdayForDate } from "@/lib/dates";
-import { CASUAL_PRICE_CENTS, CLUB_CURRENCY, WEEKDAY_LABEL } from "@/lib/constants";
-import { payments } from "@/lib/payments";
+import { CASUAL_PRICE_CENTS, WEEKDAY_LABEL } from "@/lib/constants";
+import { createCasualPayment } from "@/lib/payments/membership";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import {
   assertSessionBookable,
@@ -39,9 +39,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Captcha verification failed" }, { status: 403 });
     }
 
-    if (process.env.POSTGRES_URL) {
-    }
-
     await assertSessionBookable(body.sessionDate);
 
     if (await isSessionDatePaused(body.sessionDate)) {
@@ -65,21 +62,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // Through the Payments interface (lib/payments): the provider is the club's.
-    const payment = await payments().createPayment({
+    // Through the Payments interface (lib/payments): the provider is the
+    // club's. The same payment as the players' app makes.
+    const payment = await createCasualPayment({
+      sessionDate: body.sessionDate,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      email: body.email,
+      phone: body.phone ?? "",
       amount: CASUAL_PRICE_CENTS,
-      currency: CLUB_CURRENCY,
-      metadata: {
-        type: "casual",
-        sessionDate: body.sessionDate,
-        firstName: body.firstName,
-        lastName: body.lastName,
-        email: body.email,
-        phone: body.phone ?? "",
-      },
-      receiptEmail: body.email,
-      description: `Casual session — ${body.sessionDate}`,
-      idempotencyKey: `casual-${body.sessionDate}-${body.email}-${Date.now()}`,
     });
 
     if (!payment.clientSecret) {

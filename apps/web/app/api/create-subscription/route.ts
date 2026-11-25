@@ -1,16 +1,7 @@
-import { clubClock } from "@/lib/club";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  getStripe,
-  getInvoicePaymentIntent,
-  resolvePriceId,
-  createOneTimeMembershipPaymentIntent,
-} from "@/lib/stripe";
+import { joinMembership } from "@/lib/payments/membership";
 import { checkRateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
-import { assignAndReserveMembershipAccessStart, attachStripeIdToMembership, type MembershipAssignment } from "@/lib/db";
-import { getClubToday } from "@/lib/dates";
-import { isDayPaused } from "@/lib/day-requests";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 
 const bodySchema = z.object({
@@ -23,9 +14,6 @@ const bodySchema = z.object({
   recurring: z.boolean().optional().default(true),
   turnstileToken: z.string().optional(),
 });
-
-const TIER_LABEL = { monthly: "Monthly", quarterly: "Quarterly" } as const;
-const DAY_LABEL = { friday: "Friday", wednesday: "Wednesday" } as const;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -57,139 +45,27 @@ export async function POST(request: Request) {
       );
     }
 
-    if (await isDayPaused(body.day)) {
-      return NextResponse.json(
-        { error: "day_paused", day: body.day },
-        { status: 409 },
-      );
-    }
-
-    const stripe = getStripe();
-
-    // Reserve the membership's access-start date — and therefore capacity —
-    // before touching Stripe at all, so a full play day never gets oversold
-    // and nobody is charged for a signup that turns out to be impossible.
-    // When there's no DB configured (local dev without POSTGRES_URL), skip
-    // this entirely; there's no capacity data to check against.
-    let assignment: (MembershipAssignment & { blocked: false }) | null = null;
-    if (process.env.POSTGRES_URL) {
-      const result = await assignAndReserveMembershipAccessStart(
-        body.plan,
-        body.day,
-        {
-          email: body.email,
-          firstName: body.firstName,
-          lastName: body.lastName,
-          phone: body.phone || null,
-          recurring: body.recurring,
-        },
-      );
-      if (result.blocked) {
+    // One membership path for the website and the players' app
+    // (lib/payments/membership.ts): the paused-day check, capacity reserved
+    // before the provider is touched, then the payment.
+    const result = await joinMembership(
+      { firstName: body.firstName, lastName: body.lastName, email: body.email, phone: body.phone },
+      { plan: body.plan, day: body.day, recurring: body.recurring },
+    );
+    if (!result.ok) {
+      if (result.kind === "no_payment") {
         return NextResponse.json(
-          { error: result.reason, day: body.day },
-          { status: 409 },
-        );
-      }
-      assignment = result;
-    }
-    const periodStart =
-      assignment?.periodStart ?? getClubToday(new Date(), await clubClock()).dateKey;
-
-    if (!body.recurring) {
-      const paymentIntent = await createOneTimeMembershipPaymentIntent({
-        plan: body.plan,
-        day: body.day,
-        firstName: body.firstName,
-        lastName: body.lastName,
-        email: body.email,
-        phone: body.phone,
-      });
-
-      if (!paymentIntent.client_secret) {
-        return NextResponse.json(
-          { error: "Failed to initialize membership payment" },
+          { error: result.recurring ? "Failed to initialize subscription payment" : "Failed to initialize membership payment" },
           { status: 500 },
         );
       }
-
-      if (assignment) {
-        await attachStripeIdToMembership(assignment.membershipId, {
-          stripePaymentIntentId: paymentIntent.id,
-        });
-      }
-
-      return NextResponse.json({
-        clientSecret: paymentIntent.client_secret,
-        periodStart,
-      });
-    }
-
-    const priceId = await resolvePriceId(body.plan, body.day);
-
-    const customers = await stripe.customers.list({
-      email: body.email,
-      limit: 1,
-    });
-    const customer =
-      customers.data[0] ??
-      (await stripe.customers.create({
-        email: body.email,
-        name: `${body.firstName} ${body.lastName}`,
-        phone: body.phone,
-        metadata: { plan: body.plan, day: body.day },
-      }));
-
-    const subscription = await stripe.subscriptions.create({
-      customer: customer.id,
-      items: [{ price: priceId }],
-      payment_behavior: "default_incomplete",
-      payment_settings: {
-        save_default_payment_method: "on_subscription",
-      },
-      description: `Three Wolves — ${TIER_LABEL[body.plan]} Membership (${DAY_LABEL[body.day]})`,
-      metadata: {
-        plan: body.plan,
-        day: body.day,
-        firstName: body.firstName,
-        lastName: body.lastName,
-        email: body.email,
-      },
-    });
-
-    const invoiceId =
-      typeof subscription.latest_invoice === "string"
-        ? subscription.latest_invoice
-        : subscription.latest_invoice?.id;
-
-    const invoicePaymentIntent = invoiceId
-      ? await getInvoicePaymentIntent(stripe, invoiceId)
-      : null;
-
-    if (!invoicePaymentIntent) {
-      return NextResponse.json(
-        { error: "Failed to initialize subscription payment" },
-        { status: 500 },
-      );
-    }
-    const clientSecret = invoicePaymentIntent.clientSecret;
-
-    // Setting receipt_email always sends a payment receipt once this invoice's
-    // payment succeeds, regardless of the account's dashboard email settings —
-    // without this, new members paid but received no confirmation email.
-    await stripe.paymentIntents.update(invoicePaymentIntent.id, {
-      receipt_email: body.email,
-    });
-
-    if (assignment) {
-      await attachStripeIdToMembership(assignment.membershipId, {
-        stripeSubscriptionId: subscription.id,
-      });
+      return NextResponse.json({ error: result.reason, day: body.day }, { status: 409 });
     }
 
     return NextResponse.json({
-      clientSecret,
-      subscriptionId: subscription.id,
-      periodStart,
+      clientSecret: result.clientSecret,
+      ...(result.subscriptionId ? { subscriptionId: result.subscriptionId } : {}),
+      periodStart: result.periodStart,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";

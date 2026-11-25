@@ -31,6 +31,7 @@ export function meteredPayments(provider: PaymentProvider): PaymentProvider {
   return {
     ...provider,
     capabilities: provider.capabilities,
+    assertReady: () => provider.assertReady(),
     async createPayment(input) {
       const payment = await provider.createPayment(input);
       await recordUsage(sql, "payments.created");

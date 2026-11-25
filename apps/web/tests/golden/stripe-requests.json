@@ -34,8 +34,6 @@
             "automatic_payment_methods": {
               "enabled": true
             },
-            "receipt_email": "ana@example.test",
-            "description": "Three Wolves — Monthly Membership (Friday) — one-time",
             "metadata": {
               "type": "membership",
               "plan": "monthly",
@@ -45,7 +43,9 @@
               "lastName": "Ngata",
               "email": "ana@example.test",
               "phone": "+64211234567"
-            }
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
           },
           {
             "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
@@ -81,8 +81,6 @@
             "automatic_payment_methods": {
               "enabled": true
             },
-            "receipt_email": "ana@example.test",
-            "description": "Three Wolves — Quarterly Membership (Wednesday) — renewal",
             "metadata": {
               "type": "membership",
               "plan": "quarterly",
@@ -94,7 +92,9 @@
               "phone": "",
               "renewal": "true",
               "renewalOf": "31"
-            }
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Quarterly Membership (Wednesday) — renewal"
           },
           {
             "idempotencyKey": "membership-onetime-quarterly-ana@example.test-<now>"
@@ -327,8 +327,6 @@
             "automatic_payment_methods": {
               "enabled": true
             },
-            "receipt_email": "ana@example.test",
-            "description": "Three Wolves — Monthly Membership (Friday) — one-time",
             "metadata": {
               "type": "membership",
               "plan": "monthly",
@@ -338,7 +336,9 @@
               "lastName": "Ngata",
               "email": "ana@example.test",
               "phone": "+64211234567"
-            }
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
           },
           {
             "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
@@ -822,6 +822,186 @@
           "date": "2026-12-06",
           "amountCents": 6000
         },
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: the customer's default isn't a card": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": null,
+        "nextCharge": null,
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: the subscription's own method isn't a card": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": null,
+        "nextCharge": {
+          "date": "2026-11-30",
+          "amountCents": 6000
+        },
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: a scheduled change that isn't a plan the club knows": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": {
+          "brand": "visa",
+          "last4": "4242",
+          "expMonth": 4,
+          "expYear": 2029
+        },
+        "nextCharge": {
+          "date": "2026-11-30",
+          "amountCents": 6000
+        },
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: a schedule that has finished": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": {
+          "brand": "visa",
+          "last4": "4242",
+          "expMonth": 4,
+          "expYear": 2029
+        },
+        "nextCharge": null,
         "pendingChange": null,
         "receipts": []
       }
@@ -1503,8 +1683,6 @@
             "automatic_payment_methods": {
               "enabled": true
             },
-            "receipt_email": "ana@example.test",
-            "description": "Three Wolves — Monthly Membership (Friday) — one-time",
             "metadata": {
               "type": "membership",
               "plan": "monthly",
@@ -1514,7 +1692,9 @@
               "lastName": "Ngata",
               "email": "ana@example.test",
               "phone": ""
-            }
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
           },
           {
             "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
@@ -1687,8 +1867,6 @@
             "automatic_payment_methods": {
               "enabled": true
             },
-            "receipt_email": "ana@example.test",
-            "description": "Three Wolves — Monthly Membership (Friday) — one-time",
             "metadata": {
               "type": "membership",
               "plan": "monthly",
@@ -1698,7 +1876,9 @@
               "lastName": "Ngata",
               "email": "ana@example.test",
               "phone": "+64211234567"
-            }
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
           },
           {
             "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
@@ -1737,8 +1917,6 @@
             "automatic_payment_methods": {
               "enabled": true
             },
-            "receipt_email": "ana@example.test",
-            "description": "Three Wolves — Monthly Membership (Friday) — one-time",
             "metadata": {
               "type": "membership",
               "plan": "monthly",
@@ -1748,7 +1926,9 @@
               "lastName": "Ngata",
               "email": "ana@example.test",
               "phone": "+64211234567"
-            }
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
           },
           {
             "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"

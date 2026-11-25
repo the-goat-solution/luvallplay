@@ -1,16 +1,11 @@
 import { clubClock } from "./club";
-import Stripe from "stripe";
 import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
 import { sql } from "./database";
 import { addDays, assignAndReserveMembershipAccessStart, attachStripeIdToMembership, getActiveRenewalOf, getSpotsAndHeadcountForDates, listSessionsInRange, type MembershipRow } from "./db";
 import { isDayPaused } from "./day-requests";
 import { getClubToday } from "./dates";
-import {
-  createOneTimeMembershipPaymentIntent,
-  getStripe,
-  oneTimeMembershipPriceCents,
-  resolvePriceId,
-} from "./stripe";
+import { customersOf, payments, subscriptionsOf, type Subscription } from "./payments";
+import { createOneTimeMembershipPayment, membershipDescription, oneTimeMembershipPriceCents, resolvePriceId } from "./payments/membership";
 import { type MembershipDay, type MembershipTier } from "./constants";
 import { type Player } from "./player-db";
 import { sendAdminAlertEmail, sendPlayerNoticeEmail } from "./player-email";
@@ -18,11 +13,16 @@ import { clubMajor } from "./money";
 
 // Self-service membership management from the profile's Membership tab.
 //
-// Plan and day changes take effect at the NEXT renewal (a Stripe
-// subscription schedule: the current phase runs out, then the new price
-// starts with no proration). The new phase carries the new plan/day as
-// subscription metadata, which the Stripe webhook copies onto the
-// membership row — see syncPlanFromSubscriptionMetadata.
+// Every call to the payment provider goes through the payments interface
+// (lib/payments): customers, cards and subscriptions. A club whose provider
+// has no subscriptions gets PaymentError("unsupported") from the auto-renew
+// changes; tests/stripe-requests.test.ts pins what Stripe is sent.
+//
+// Plan and day changes take effect at the NEXT renewal (the provider's
+// scheduleChange: the current period runs out, then the new price starts
+// with no proration). The change carries the new plan/day as subscription
+// metadata, which the webhook copies onto the membership row — see
+// syncPlanFromSubscriptionMetadata.
 
 const LIVE_STATUSES = ["active", "trialing", "past_due"];
 
@@ -116,19 +116,16 @@ export async function playDaysLeft(m: MemberView): Promise<number> {
 // ---------------------------------------------------------------------------
 
 export async function stripeCustomerFor(player: Player, create = false): Promise<string | null> {
-  if (!process.env.STRIPE_SECRET_KEY) return null;
+  if (!payments().configured()) return null;
   if (player.stripeCustomerId) return player.stripeCustomerId;
-  const stripe = getStripe();
-  const found = await stripe.customers.list({ email: player.email, limit: 1 });
-  let id = found.data[0]?.id ?? null;
+  const customers = customersOf(payments());
+  let id = await customers.find(player.email);
   if (!id && create) {
-    id = (
-      await stripe.customers.create({
-        email: player.email,
-        name: `${player.firstName} ${player.lastName}`.trim() || undefined,
-        phone: player.phone ?? undefined,
-      })
-    ).id;
+    id = await customers.create({
+      email: player.email,
+      name: `${player.firstName} ${player.lastName}`.trim() || undefined,
+      phone: player.phone ?? undefined,
+    });
   }
   if (id) {
     await sql`UPDATE players SET stripe_customer_id = ${id} WHERE id = ${player.id} AND stripe_customer_id IS NULL;`;
@@ -143,83 +140,52 @@ export type Billing = {
   receipts: { date: string; amountCents: number; description: string; url: string | null; refunded: boolean }[];
 };
 
-function isoDate(unix: number | null | undefined): string | null {
-  return unix ? getClubToday(new Date(unix * 1000)).dateKey : null;
+/** The club's date for a provider time (ms since the epoch). */
+function isoDate(at: number | null | undefined): string | null {
+  return at ? getClubToday(new Date(at)).dateKey : null;
 }
 
 export async function getBilling(player: Player, m: MemberView | null): Promise<Billing> {
   const empty: Billing = { card: null, nextCharge: null, pendingChange: null, receipts: [] };
   const customerId = await stripeCustomerFor(player);
   if (!customerId) return empty;
-  const stripe = getStripe();
+  const customers = customersOf(payments());
   const billing: Billing = { ...empty };
 
-  const [customer, charges] = await Promise.all([
-    stripe.customers.retrieve(customerId, { expand: ["invoice_settings.default_payment_method"] }),
-    stripe.charges.list({ customer: customerId, limit: 12 }),
-  ]);
-  billing.receipts = charges.data
-    .filter((c) => c.status === "succeeded")
-    .map((c) => ({
-      date: isoDate(c.created) ?? "",
-      amountCents: c.amount,
-      description: c.description ?? "Three Wolves",
-      url: c.receipt_url ?? null,
-      refunded: c.refunded,
-    }));
+  const { paymentMethod, receipts } = await customers.billing(customerId);
+  billing.receipts = receipts.map((r) => ({
+    date: isoDate(r.paidAt) ?? "",
+    amountCents: r.amount,
+    description: r.description ?? "Three Wolves",
+    url: r.url,
+    refunded: r.refunded,
+  }));
 
-  let pm: Stripe.PaymentMethod | null = null;
-  if (!customer.deleted) {
-    const dpm = customer.invoice_settings?.default_payment_method;
-    if (dpm && typeof dpm === "object") pm = dpm;
-  }
+  let pm = paymentMethod;
 
   if (m?.stripeSubscriptionId) {
-    const sub = await stripe.subscriptions.retrieve(m.stripeSubscriptionId, {
-      expand: ["default_payment_method", "schedule"],
-    });
-    if (sub.default_payment_method && typeof sub.default_payment_method === "object") pm = sub.default_payment_method;
-    const item = sub.items.data[0];
-    const nextAt = sub.status === "trialing" && sub.trial_end ? sub.trial_end : item?.current_period_end;
-    let amount = item?.price?.unit_amount ?? 0;
-    const schedule = sub.schedule && typeof sub.schedule === "object" ? sub.schedule : null;
-    if (schedule && schedule.status === "active") {
-      const now = Math.floor(Date.now() / 1000);
-      const upcoming = schedule.phases.find((p) => p.start_date > now);
-      const md = upcoming?.metadata ?? {};
-      if (upcoming && (md.plan === "monthly" || md.plan === "quarterly") && (md.day === "friday" || md.day === "wednesday")) {
-        billing.pendingChange = { plan: md.plan, day: md.day, from: isoDate(upcoming.start_date) ?? "" };
-        amount = oneTimeMembershipPriceCents(md.plan);
-      }
+    const sub = await subscriptionsOf(payments()).get(m.stripeSubscriptionId, { billing: true });
+    if (sub.paymentMethod) pm = sub.paymentMethod;
+    let amount = sub.amount ?? 0;
+    const md = sub.pendingChange?.metadata ?? {};
+    if (sub.pendingChange && (md.plan === "monthly" || md.plan === "quarterly") && (md.day === "friday" || md.day === "wednesday")) {
+      billing.pendingChange = { plan: md.plan, day: md.day, from: isoDate(sub.pendingChange.startsAt) ?? "" };
+      amount = oneTimeMembershipPriceCents(md.plan);
     }
-    if (!sub.cancel_at_period_end && nextAt && sub.status !== "canceled") {
-      billing.nextCharge = { date: isoDate(nextAt) ?? "", amountCents: amount };
+    if (!sub.cancelAtPeriodEnd && sub.nextChargeAt && sub.status !== "canceled") {
+      billing.nextCharge = { date: isoDate(sub.nextChargeAt) ?? "", amountCents: amount };
     }
   }
-  if (!pm) {
-    const list = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
-    pm = list.data[0] ?? null;
-  }
-  if (pm?.card) {
-    billing.card = { brand: pm.card.brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year };
-  }
+  // Nothing set as the default: any card they've saved. (A default that isn't a card shows no card.)
+  billing.card = pm ? pm.card : await customers.savedCard(customerId);
   return billing;
 }
 
-/** Stripe's hosted page, limited to updating the card (no cancel button). */
+/** The provider's hosted page, limited to updating the card (no cancel button). */
 export async function cardUpdatePortalUrl(player: Player, returnUrl: string): Promise<string> {
   const customerId = await stripeCustomerFor(player, true);
   if (!customerId) throw new Error("Payments aren't set up");
-  const session = await getStripe().billingPortal.sessions.create({
-    customer: customerId,
-    return_url: returnUrl,
-    ...(process.env.STRIPE_PORTAL_CONFIGURATION_ID ? { configuration: process.env.STRIPE_PORTAL_CONFIGURATION_ID } : {}),
-    flow_data: {
-      type: "payment_method_update",
-      after_completion: { type: "redirect", redirect: { return_url: returnUrl } },
-    },
-  });
-  return session.url;
+  return customersOf(payments()).cardUpdateUrl({ customerId, returnUrl });
 }
 
 // ---------------------------------------------------------------------------
@@ -248,20 +214,11 @@ async function dayHasRoom(day: MembershipDay, fromDate: string): Promise<boolean
   return sessions.some((d) => miniGame[d] || (spots[d] ?? 0) > 0);
 }
 
-async function currentSubscription(m: MemberView): Promise<Stripe.Subscription> {
+async function currentSubscription(m: MemberView): Promise<Subscription> {
   if (!m.stripeSubscriptionId || !m.recurring) throw new SelfServiceError("not_recurring");
-  const sub = await getStripe().subscriptions.retrieve(m.stripeSubscriptionId);
+  const sub = await subscriptionsOf(payments()).get(m.stripeSubscriptionId);
   if (!["active", "trialing", "past_due"].includes(sub.status)) throw new SelfServiceError("not_active");
   return sub;
-}
-
-async function releaseSchedule(sub: Stripe.Subscription): Promise<void> {
-  const id = typeof sub.schedule === "string" ? sub.schedule : sub.schedule?.id;
-  if (!id) return;
-  const schedule = await getStripe().subscriptionSchedules.retrieve(id);
-  if (schedule.status === "active" || schedule.status === "not_started") {
-    await getStripe().subscriptionSchedules.release(id);
-  }
 }
 
 /**
@@ -271,9 +228,9 @@ async function releaseSchedule(sub: Stripe.Subscription): Promise<void> {
  */
 export async function scheduleChangeAtRenewal(m: MemberView, plan: MembershipTier, day: MembershipDay): Promise<{ from: string } | { cleared: true }> {
   const sub = await currentSubscription(m);
-  if (sub.cancel_at_period_end) throw new SelfServiceError("cancelling");
+  if (sub.cancelAtPeriodEnd) throw new SelfServiceError("cancelling");
   if (plan === m.plan && day === m.day) {
-    await releaseSchedule(sub);
+    await subscriptionsOf(payments()).clearScheduledChange(sub);
     return { cleared: true };
   }
   if (day !== m.day) {
@@ -281,43 +238,13 @@ export async function scheduleChangeAtRenewal(m: MemberView, plan: MembershipTie
     const from = m.periodEnd ? addDays(m.periodEnd, 1) : getClubToday(new Date(), await clubClock()).dateKey;
     if (!(await dayHasRoom(day, from))) throw new SelfServiceError("sessions_full");
   }
-  const stripe = getStripe();
-  const newPrice = await resolvePriceId(plan, day);
-  let scheduleId = typeof sub.schedule === "string" ? sub.schedule : sub.schedule?.id;
-  if (!scheduleId) {
-    scheduleId = (await stripe.subscriptionSchedules.create({ from_subscription: sub.id })).id;
-  }
-  const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
-  const now = Math.floor(Date.now() / 1000);
-  const currentPhase =
-    schedule.phases.find((p) => p.start_date <= now && p.end_date > now) ?? schedule.phases[0];
-  const currentItems = currentPhase.items.map((it) => ({
-    price: typeof it.price === "string" ? it.price : it.price.id,
-    quantity: it.quantity ?? 1,
-  }));
-  await stripe.subscriptionSchedules.update(scheduleId, {
-    end_behavior: "release",
-    phases: [
-      {
-        items: currentItems,
-        start_date: currentPhase.start_date,
-        end_date: currentPhase.end_date,
-        metadata: { ...(sub.metadata ?? {}) },
-        ...(currentPhase.trial_end ? { trial_end: currentPhase.trial_end } : {}),
-      },
-      {
-        items: [{ price: newPrice, quantity: 1 }],
-        duration: { interval: "week", interval_count: plan === "quarterly" ? 12 : 4 },
-        proration_behavior: "none",
-        metadata: { ...(sub.metadata ?? {}), plan, day },
-      },
-    ],
-  });
-  return { from: isoDate(currentPhase.end_date) ?? "" };
+  const priceId = await resolvePriceId(plan, day);
+  const { startsAt } = await subscriptionsOf(payments()).scheduleChange(sub, { price: { priceId }, weeks: plan === "quarterly" ? 12 : 4, metadata: { plan, day } });
+  return { from: isoDate(startsAt) ?? "" };
 }
 
 export async function cancelPendingChange(m: MemberView): Promise<void> {
-  await releaseSchedule(await currentSubscription(m));
+  await subscriptionsOf(payments()).clearScheduledChange(await currentSubscription(m));
 }
 
 export async function recordFeedback(playerId: number, membershipId: number, action: "downgrade" | "cancel", reason: string, comment: string | null): Promise<void> {
@@ -360,8 +287,9 @@ export function formatNzDate(dateKey: string | null): string {
 /** Turns off auto-renew; access continues to the end of the paid period. */
 export async function cancelAtPeriodEnd(player: Player, m: MemberView, reason: string, comment: string | null): Promise<string | null> {
   const sub = await currentSubscription(m);
-  await releaseSchedule(sub);
-  await getStripe().subscriptions.update(sub.id, { cancel_at_period_end: true });
+  const subscriptions = subscriptionsOf(payments());
+  await subscriptions.clearScheduledChange(sub);
+  await subscriptions.setCancelAtPeriodEnd(sub.id, true);
   await sql`UPDATE memberships SET cancel_at_period_end = TRUE WHERE id = ${m.id};`;
   await recordFeedback(player.id, m.id, "cancel", reason, comment);
   const end = formatNzDate(m.periodEnd);
@@ -391,7 +319,7 @@ export async function cancelAtPeriodEnd(player: Player, m: MemberView, reason: s
 
 export async function resumeMembership(m: MemberView): Promise<void> {
   if (!m.stripeSubscriptionId) throw new SelfServiceError("not_recurring");
-  await getStripe().subscriptions.update(m.stripeSubscriptionId, { cancel_at_period_end: false });
+  await subscriptionsOf(payments()).setCancelAtPeriodEnd(m.stripeSubscriptionId, false);
   await sql`UPDATE memberships SET cancel_at_period_end = FALSE WHERE id = ${m.id};`;
 }
 
@@ -411,7 +339,7 @@ export async function startOneTimeRenewal(player: Player, m: MemberView, plan: M
     { membershipId: m.id, periodEnd: m.periodEnd },
   );
   if (assignment.blocked) throw new SelfServiceError(assignment.reason === "already_member" ? "already_renewed" : assignment.reason);
-  const pi = await createOneTimeMembershipPaymentIntent({
+  const pi = await createOneTimeMembershipPayment({
     plan,
     day: m.day,
     firstName: player.firstName,
@@ -420,9 +348,9 @@ export async function startOneTimeRenewal(player: Player, m: MemberView, plan: M
     phone: player.phone,
     renewalOf: m.id,
   });
-  if (!pi.client_secret) throw new SelfServiceError("payment_failed");
+  if (!pi.clientSecret) throw new SelfServiceError("payment_failed");
   await attachStripeIdToMembership(assignment.membershipId, { stripePaymentIntentId: pi.id });
-  return { clientSecret: pi.client_secret, periodStart: assignment.periodStart, periodEnd: assignment.periodEnd, priceNzd: clubMajor(oneTimeMembershipPriceCents(plan)) };
+  return { clientSecret: pi.clientSecret, periodStart: assignment.periodStart, periodEnd: assignment.periodEnd, priceNzd: clubMajor(oneTimeMembershipPriceCents(plan)) };
 }
 
 /**
@@ -432,14 +360,9 @@ export async function startOneTimeRenewal(player: Player, m: MemberView, plan: M
 export async function createAutoRenewSetup(player: Player): Promise<{ clientSecret: string }> {
   const customerId = await stripeCustomerFor(player, true);
   if (!customerId) throw new SelfServiceError("payment_failed");
-  const si = await getStripe().setupIntents.create({
-    customer: customerId,
-    usage: "off_session",
-    automatic_payment_methods: { enabled: true },
-    metadata: { type: "membership_autorenew", playerId: String(player.id) },
-  });
-  if (!si.client_secret) throw new SelfServiceError("payment_failed");
-  return { clientSecret: si.client_secret };
+  const setup = await customersOf(payments()).createCardSetup({ customerId, metadata: { type: "membership_autorenew", playerId: String(player.id) } });
+  if (!setup.clientSecret) throw new SelfServiceError("payment_failed");
+  return { clientSecret: setup.clientSecret };
 }
 
 /**
@@ -457,14 +380,15 @@ export async function confirmAutoRenewFromOneTime(
 ): Promise<{ periodStart: string }> {
   if (m.recurring || !m.periodEnd) throw new SelfServiceError("not_one_time");
   if (await getActiveRenewalOf(m.id)) throw new SelfServiceError("already_renewed");
-  const stripe = getStripe();
+  // Asked for first, so a provider that can't is refused before the customer is looked up.
+  const subscriptions = subscriptionsOf(payments());
+  payments().assertReady();
   const customerId = await stripeCustomerFor(player);
-  const si = await stripe.setupIntents.retrieve(setupIntentId);
-  const siCustomer = typeof si.customer === "string" ? si.customer : si.customer?.id;
-  if (si.status !== "succeeded" || !customerId || siCustomer !== customerId || !si.payment_method) {
+  const setup = await customersOf(payments()).getCardSetup(setupIntentId);
+  if (!setup.succeeded || !customerId || setup.customerId !== customerId || !setup.paymentMethodId) {
     throw new SelfServiceError("card_not_saved");
   }
-  const paymentMethod = typeof si.payment_method === "string" ? si.payment_method : si.payment_method.id;
+  const paymentMethod = setup.paymentMethodId;
 
   const assignment = await assignAndReserveMembershipAccessStart(
     plan,
@@ -478,16 +402,15 @@ export async function confirmAutoRenewFromOneTime(
   // Charge on the morning of the first play day of the new window (NZ).
   const startsAt = Math.floor(new Date(`${assignment.periodStart}T08:00:00+13:00`).getTime() / 1000);
   const trialEnd = Math.max(startsAt, Math.floor(Date.now() / 1000) + 3600);
-  const sub = await stripe.subscriptions.create({
-    customer: customerId,
-    items: [{ price: await resolvePriceId(plan, m.day) }],
-    default_payment_method: paymentMethod,
-    trial_end: trialEnd,
-    trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
-    description: `Three Wolves — ${PLAN_LABEL[plan]} Membership (${DAY_LABEL[m.day]})`,
+  const sub = await subscriptions.startLater({
+    customerId,
+    price: { priceId: await resolvePriceId(plan, m.day) },
+    paymentMethodId: paymentMethod,
+    firstChargeAt: trialEnd * 1000,
+    description: membershipDescription(plan, m.day),
     metadata: { plan, day: m.day, firstName: player.firstName, lastName: player.lastName, email: player.email, renewalOf: String(m.id) },
   });
-  await attachStripeIdToMembership(assignment.membershipId, { stripeSubscriptionId: sub.id });
+  await attachStripeIdToMembership(assignment.membershipId, { stripeSubscriptionId: sub.subscriptionId });
   await sql`
     UPDATE memberships SET period_end = period_start - 1, renewal_of = ${m.id}, status = 'active'
     WHERE id = ${assignment.membershipId};

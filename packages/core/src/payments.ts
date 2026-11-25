@@ -7,6 +7,17 @@
 //
 // Every provider passes one shared contract suite
 // (apps/web/tests/payments.test.ts → paymentContract).
+//
+// Three optional parts sit beside the one-off payments every provider has,
+// each present only when the matching capability is true:
+//
+//   customers       payers the provider knows by its own id, and their cards
+//   subscriptions   charges the provider repeats by itself (capabilities.recurring)
+//   checkout        a payment page the provider hosts (capabilities.hostedCheckout)
+//
+// Callers reach them through customersOf(), subscriptionsOf() and
+// checkoutOf(), which refuse with PaymentError("unsupported") instead of
+// failing on a missing property. Times are milliseconds since the epoch.
 
 export type PaymentCapabilities = {
   /** Card or wallet payments confirmed in the browser with a client secret. */
@@ -21,6 +32,10 @@ export type PaymentCapabilities = {
   webhooks: boolean;
   /** Payout (settlement) status can be read. */
   payoutStatus: boolean;
+  /** The provider keeps customers and their saved cards (`customers`). */
+  customers: boolean;
+  /** The provider has its own payment page to send a payer to (`checkout`). */
+  hostedCheckout: boolean;
   /** Currencies the provider takes, upper case. */
   currencies: readonly string[];
 };
@@ -101,11 +116,117 @@ export type PaymentEvent = {
 
 export type PayoutStatus = { available: number; pending: number; currency: string; lastPayoutAt: number | null };
 
+// ── Customers and their cards ──────────────────────────────────────────────
+
+export type Card = { brand: string; last4: string; expMonth: number; expYear: number };
+
+/** How a payer pays. `card` is null for anything that isn't a card (a bank debit, a wallet). */
+export type PaymentMethod = { card: Card | null };
+
+export type Receipt = { paidAt: number; amount: number; description: string | null; url: string | null; refunded: boolean };
+
+export type CustomerInput = { email: string; name?: string; phone?: string; metadata?: Record<string, string> };
+
+/** A card being saved for later charges, confirmed in the browser. */
+export type CardSetup = { id: string; clientSecret: string | null };
+
+export interface Customers {
+  /** The provider's id for the payer with this email, if it has one. */
+  find(email: string): Promise<string | null>;
+  create(input: CustomerInput): Promise<string>;
+  /** The customer's default way to pay and their latest payments (failed ones left out). */
+  billing(customerId: string): Promise<{ paymentMethod: PaymentMethod | null; receipts: Receipt[] }>;
+  /** Any card the customer has saved, for when neither they nor their subscription has a default. */
+  savedCard(customerId: string): Promise<Card | null>;
+  /** The provider's own page for replacing the card, coming back to `returnUrl`. */
+  cardUpdateUrl(input: { customerId: string; returnUrl: string }): Promise<string>;
+  /** Starts saving a card, to charge later without the payer present. Nothing is charged. */
+  createCardSetup(input: { customerId: string; metadata: Record<string, string> }): Promise<CardSetup>;
+  getCardSetup(id: string): Promise<{ succeeded: boolean; customerId: string | null; paymentMethodId: string | null }>;
+}
+
+// ── Subscriptions (capabilities.recurring) ─────────────────────────────────
+
+/** What a subscription charges: one of the provider's own prices, or an amount made on the spot. */
+export type SubscriptionPrice = { priceId: string } | { amount: number; currency: string; productId: string; every: "month" };
+
+export type Subscription = {
+  id: string;
+  /** The provider's own word (Stripe: active, trialing, past_due, canceled, …). */
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  /** When the provider charges next (the end of a free period, or of the paid one). */
+  nextChargeAt: number | null;
+  /** What it charges each time, in minor units, when the provider says. */
+  amount: number | null;
+  metadata: Record<string, string>;
+  /** The provider's handle on a change waiting for the next renewal, if any. */
+  changeRef: string | null;
+  /** With `{ billing: true }`: what it charges, when the subscription has its own. */
+  paymentMethod?: PaymentMethod | null;
+  /** With `{ billing: true }`: the change that starts at a later renewal. */
+  pendingChange?: { startsAt: number; metadata: Record<string, string> } | null;
+};
+
+export type StartSubscriptionInput = {
+  customerId: string;
+  price: SubscriptionPrice;
+  description?: string;
+  metadata: Record<string, string>;
+  /** Where the receipt for the first payment goes. */
+  receiptEmail: string;
+};
+
+export interface Subscriptions {
+  /**
+   * A subscription whose first payment the payer confirms in the browser now.
+   * `clientSecret` is null when the provider had no payment ready to confirm.
+   */
+  start(input: StartSubscriptionInput): Promise<{ subscriptionId: string; clientSecret: string | null }>;
+  /** A subscription on a card already saved, first charged at `firstChargeAt`; cancelled if the card has gone by then. */
+  startLater(input: { customerId: string; price: SubscriptionPrice; paymentMethodId: string; firstChargeAt: number; description?: string; metadata: Record<string, string> }): Promise<{ subscriptionId: string }>;
+  get(id: string, options?: { billing?: boolean }): Promise<Subscription>;
+  /** true: stops at the end of the paid period. false: carries on. */
+  setCancelAtPeriodEnd(id: string, cancel: boolean): Promise<void>;
+  /** From the next renewal: a new price, charged every `weeks` weeks, with `metadata` added to the subscription's. Replaces a change already waiting. */
+  scheduleChange(subscription: Subscription, change: { price: { priceId: string }; weeks: number; metadata: Record<string, string> }): Promise<{ startsAt: number }>;
+  /** Drops a change waiting for the next renewal. Nothing happens when there is none. */
+  clearScheduledChange(subscription: Subscription): Promise<void>;
+  /** Makes the next renewal free, once. `alreadyQueued`: one was already waiting, nothing changed. */
+  skipNextCharge(id: string): Promise<{ alreadyQueued: boolean }>;
+  /** Pushes the next charge out by `days`; the price afterwards is unchanged. Returns the new date. */
+  postponeNextCharge(id: string, days: number): Promise<number>;
+}
+
+// ── A payment page the provider hosts (capabilities.hostedCheckout) ────────
+
+export type CheckoutInput = {
+  amount: number;
+  currency: string;
+  /** What the payer sees they're buying. */
+  name: string;
+  description: string;
+  email: string;
+  metadata: Record<string, string>;
+  successUrl: string;
+  cancelUrl: string;
+};
+
+export interface Checkout {
+  create(input: CheckoutInput): Promise<{ id: string; url: string | null }>;
+  get(id: string): Promise<{ paid: boolean; metadata: Record<string, string> }>;
+}
+
 export interface PaymentProvider {
   readonly id: string;
   readonly capabilities: PaymentCapabilities;
   /** Whether the provider has its credentials. */
   configured(): boolean;
+  /** Throws when the provider can't be used here (no credentials, or live credentials outside production). Call before reserving anything for a payment. */
+  assertReady(): void;
+  readonly customers?: Customers;
+  readonly subscriptions?: Subscriptions;
+  readonly checkout?: Checkout;
   createPayment(input: CreatePaymentInput): Promise<Payment>;
   getPayment(id: string): Promise<Payment>;
   refund(input: RefundInput): Promise<Refund>;
@@ -138,6 +259,29 @@ export class PaymentError extends Error {
 /** Throws unless the provider can do it. Call before offering or starting the feature. */
 export function requireCapability(provider: Pick<PaymentProvider, "id" | "capabilities">, capability: Exclude<keyof PaymentCapabilities, "currencies">): void {
   if (!provider.capabilities[capability]) throw new PaymentError("unsupported", `${provider.id} doesn't support ${capability}`);
+}
+
+type Part = Pick<PaymentProvider, "id" | "capabilities" | "customers" | "subscriptions" | "checkout">;
+
+/** The provider's customers, or PaymentError("unsupported"). */
+export function customersOf(provider: Part): Customers {
+  requireCapability(provider, "customers");
+  if (!provider.customers) throw new PaymentError("unsupported", `${provider.id} declares customers but has none`);
+  return provider.customers;
+}
+
+/** The provider's subscriptions, or PaymentError("unsupported"): offer renewal reminders instead. */
+export function subscriptionsOf(provider: Part): Subscriptions {
+  requireCapability(provider, "recurring");
+  if (!provider.subscriptions) throw new PaymentError("unsupported", `${provider.id} declares recurring but has no subscriptions`);
+  return provider.subscriptions;
+}
+
+/** The provider's hosted payment page, or PaymentError("unsupported"). */
+export function checkoutOf(provider: Part): Checkout {
+  requireCapability(provider, "hostedCheckout");
+  if (!provider.checkout) throw new PaymentError("unsupported", `${provider.id} declares hostedCheckout but has none`);
+  return provider.checkout;
 }
 
 /** The checks every provider makes before creating a payment. */

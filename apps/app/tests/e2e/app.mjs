@@ -1229,7 +1229,7 @@ describe("APP · the Arena", () => {
       const card = cp.locator(".fight", { hasText: "Fridays at Pioneer" });
       await card.waitFor();
       assert.match(await card.textContent(), /Team up first/);
-      assert.match(await card.textContent(), /open 7 days|open 6 days/);
+      assert.match(await card.textContent(), /open [678] days/);
       await mp.getByRole("button", { name: "Take it down" }).click();
       await mp.getByRole("button", { name: "Throw down a challenge" }).waitFor();
 

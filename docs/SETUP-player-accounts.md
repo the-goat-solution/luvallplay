@@ -85,7 +85,7 @@ The site's existing Blob store is **private** (it holds receipts). Player photos
 
 1. Vercel → **Storage** → **Create Database / Store** → **Blob**.
 2. Name it `three-wolves-photos`. Set **Access: Public**. Choose the region closest to NZ if asked (Sydney).
-3. Click **Create**, then connect it to the `luvallplay-app` project (Production and Preview).
+3. Click **Create**, then connect it to the `luvallplay` project (Production and Preview).
 4. **Important:** under **Advanced options**, set the **custom prefix** to **`PHOTO`**. Vercel then adds `PHOTO_STORE_ID` and `PHOTO_WEBHOOK_PUBLIC_KEY`, and the site signs in to the store with the deployment's own short-lived token. There's nothing to copy. Without the prefix, the variables would be named for the receipts store (`BLOB_…`), and receipts must stay in a private store.
 5. Redeploy. Setup check → Photos → **Photo storage: Working**.
 
@@ -133,7 +133,7 @@ Sports photos are occasionally rated “possible racy” (bare arms and legs). T
 **d. Authorised domains.** **Authentication → Settings → Authorized domains** → **Add domain**:
 - `threewolvesbadminton.org`
 - `www.threewolvesbadminton.org`
-- your Vercel domain (e.g. `luvallplay-app.vercel.app`), so Preview deployments work too.
+- your Vercel domain (e.g. `luvallplay.vercel.app`), so Preview deployments work too.
 
 **e. SMS region policy.** **Authentication → Settings → SMS region policy** → **Allow** → New Zealand, Australia and Vietnam → **Save**. This blocks expensive SMS fraud to other countries.
 

@@ -39,7 +39,7 @@ The code for each Phase 2 pull request is built and tested in its PR. These step
 **Fix (pick A, recommended, or B):**
 
 A. **Stop using the old US databases for previews, and give previews Sydney branches.**
-   1. Vercel → Project `luvallplay-app` → **Storage**. For each Neon database that is **not** the Sydney one (`three-wolves-sydney`, env prefix `SYD_`): open it → **Projects** → disconnect `luvallplay-app`, or turn off "Create database branch for deployment → Preview". The site uses only the `SYD_` database (`DATABASE_URL_VAR=SYD_POSTGRES_URL`).
+   1. Vercel → Project `luvallplay` → **Storage**. For each Neon database that is **not** the Sydney one (`three-wolves-sydney`, env prefix `SYD_`): open it → **Projects** → disconnect `luvallplay`, or turn off "Create database branch for deployment → Preview". The site uses only the `SYD_` database (`DATABASE_URL_VAR=SYD_POSTGRES_URL`).
    2. Open the Sydney database → **Settings** → turn on **"Create a database branch for each preview deployment"** (Preview only, never Production).
    3. Neon console → project `neon-almond-button` → **Branches**: delete the nine `preview/claude/…` branches (they belong to old, finished pull requests).
 
@@ -135,7 +135,7 @@ PR 7 moves the app into `apps/web` and the schema into `packages/db` (pnpm works
 
 **Order:**
 1. PR 4 and PR 6 are merged (after the production data run, §5), then PR 7 is merged, then PR 8 (shared packages; no behaviour change, so it can follow in the same sitting or any time later).
-2. **Vercel → Project `luvallplay-app` → Settings → Build and Deployment:**
+2. **Vercel → Project `luvallplay` → Settings → Build and Deployment:**
    - **Root Directory:** `apps/web` → **Save**.
    - Leave **"Include files outside the root directory in the Build Step"** on (the default). The app imports `packages/db`.
    - **Framework Preset:** Next.js. Leave Build Command, Output Directory and Install Command on their defaults. Vercel finds `pnpm-lock.yaml` at the repository root and runs `pnpm install` there.

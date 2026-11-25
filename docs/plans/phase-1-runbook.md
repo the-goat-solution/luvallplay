@@ -10,7 +10,7 @@ Run commands from a checkout of the `claude/luvallplay-phase-0-1` branch on a tr
 
 The code already refuses to let a preview use the production database (`lib/db-switch.ts`). Today that means previews have **no** database at all, which is safe. To give previews their own database again:
 
-1. **Vercel → Project `luvallplay-app` → Settings → Environment Variables → Add**
+1. **Vercel → Project `luvallplay` → Settings → Environment Variables → Add**
    - Key: `PRODUCTION_DATABASE_HOSTS`
    - Value: the production database host(s), comma-separated. Copy the host part (between `@` and `/`) of `SYD_POSTGRES_URL` **and** `SYD_POSTGRES_URL_NON_POOLING` (e.g. `ep-xxxx-pooler.ap-southeast-2.aws.neon.tech,ep-xxxx.ap-southeast-2.aws.neon.tech`). Hosts only, never the password.
    - Environments: **Preview** (and Production; it's harmless there).

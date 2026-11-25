@@ -16,7 +16,7 @@
 // offline (cash and bank) invoices, the ledger sync, the webhook's handlers,
 // and four admin and profile files owned by other lanes.
 import type { PaymentProvider } from "@luvallplay/core/payments";
-import { getStripe } from "./stripe-client.ts";
+import { connectSettings, getStripe } from "./stripe-client.ts";
 import { stripeProvider } from "./stripe-provider.ts";
 import { meteredPayments } from "../usage-hooks.ts";
 
@@ -38,6 +38,9 @@ export function payments(): PaymentProvider {
     stripeProvider(getStripe, () => process.env.STRIPE_WEBHOOK_SECRET, () => Boolean(process.env.STRIPE_SECRET_KEY?.trim()), {
       freePeriodCouponId: FREE_PERIOD_COUPON_ID,
       portalConfigurationId: () => process.env.STRIPE_PORTAL_CONFIGURATION_ID,
+      // Stripe Connect, test mode (off unless STRIPE_CONNECT_ACCOUNT is set).
+      connect: () => connectSettings(),
+      connectWebhookSecret: () => process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
     }),
   );
   return current;

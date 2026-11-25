@@ -87,6 +87,7 @@ function toEvent(event: Stripe.Event): PaymentEvent {
   const type = EVENT_TYPES[event.type] ?? "other";
   const object = event.data.object as unknown as Record<string, unknown>;
   const out: PaymentEvent = { id: event.id, provider: "stripe", type, providerType: event.type, occurredAt: event.created * 1000, raw: event };
+  if (event.account) out.account = event.account;
   if (event.type.startsWith("payment_intent.")) {
     out.paymentId = object.id as string;
     out.amount = object.amount as number;
@@ -161,6 +162,15 @@ export type StripeProviderOptions = {
   freePeriodCouponId?: string;
   /** The billing portal configuration for card updates, when the account has one. */
   portalConfigurationId?: () => string | undefined;
+  /**
+   * Stripe Connect: the club's connected account and the platform's fee in
+   * basis points (lib/payments/stripe-client.ts). The account itself rides on
+   * the client; this only adds the fee to what is charged. No account, or a
+   * fee of 0: nothing is added.
+   */
+  connect?: () => { account: string | null; feeBps: number };
+  /** The signing secret of the platform's Connect webhook endpoint (events from connected accounts). */
+  connectWebhookSecret?: () => string | undefined;
 };
 
 /**
@@ -170,6 +180,15 @@ export type StripeProviderOptions = {
  */
 export function stripeProvider(client: () => Stripe, webhookSecret: () => string | undefined, isConfigured: () => boolean, options: StripeProviderOptions = {}): PaymentProvider {
   const freePeriodCouponId = options.freePeriodCouponId ?? "free-period";
+
+  // The platform's fee, only on a connected account and only when above 0.
+  const feeBps = (): number => {
+    const connect = options.connect?.();
+    return connect?.account ? connect.feeBps : 0;
+  };
+  const feeAmount = (amount: number): number => Math.round((amount * feeBps()) / 10_000);
+  const feeOnPayment = (amount: number) => (feeAmount(amount) > 0 ? { application_fee_amount: feeAmount(amount) } : {});
+  const feeOnSubscription = () => (feeBps() > 0 ? { application_fee_percent: feeBps() / 100 } : {});
 
   const customers: Customers = {
     find: (email) => wrap(async () => (await client().customers.list({ email, limit: 1 })).data[0]?.id ?? null),
@@ -255,6 +274,7 @@ export function stripeProvider(client: () => Stripe, webhookSecret: () => string
           payment_settings: { save_default_payment_method: "on_subscription" },
           ...(input.description ? { description: input.description } : {}),
           metadata: input.metadata,
+          ...feeOnSubscription(),
         });
         const invoiceId = typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice?.id;
         const payment = invoiceId ? await invoicePayment(stripe, invoiceId) : null;
@@ -276,6 +296,7 @@ export function stripeProvider(client: () => Stripe, webhookSecret: () => string
           trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
           ...(input.description ? { description: input.description } : {}),
           metadata: input.metadata,
+          ...feeOnSubscription(),
         });
         return { subscriptionId: sub.id };
       }),
@@ -390,6 +411,7 @@ export function stripeProvider(client: () => Stripe, webhookSecret: () => string
           metadata: input.metadata,
           success_url: input.successUrl,
           cancel_url: input.cancelUrl,
+          ...(feeAmount(input.amount) > 0 ? { payment_intent_data: feeOnPayment(input.amount) } : {}),
         });
         return { id: cs.id, url: cs.url };
       }),
@@ -424,6 +446,7 @@ export function stripeProvider(client: () => Stripe, webhookSecret: () => string
               metadata: input.metadata,
               ...(input.receiptEmail ? { receipt_email: input.receiptEmail } : {}),
               description: input.description,
+              ...feeOnPayment(input.amount),
             },
             { idempotencyKey: input.idempotencyKey },
           ),
@@ -457,17 +480,20 @@ export function stripeProvider(client: () => Stripe, webhookSecret: () => string
     },
 
     async verifyWebhook(request): Promise<PaymentEvent> {
-      const secret = webhookSecret();
-      if (!secret) throw new PaymentError("not_configured", "The webhook signing secret isn't set");
+      // Two endpoints can deliver here: the account's own, and the platform's
+      // Connect endpoint (events from connected accounts), each with its secret.
+      const secrets = [webhookSecret(), options.connectWebhookSecret?.()].filter((s): s is string => Boolean(s));
+      if (secrets.length === 0) throw new PaymentError("not_configured", "The webhook signing secret isn't set");
       const signature = request.headers["stripe-signature"];
       if (!signature) throw new PaymentError("bad_signature", "Missing signature");
-      let event: Stripe.Event;
-      try {
-        event = client().webhooks.constructEvent(request.body, signature, secret);
-      } catch {
-        throw new PaymentError("bad_signature", "Invalid signature");
+      for (const secret of secrets) {
+        try {
+          return toEvent(client().webhooks.constructEvent(request.body, signature, secret));
+        } catch {
+          // Not signed with this one.
+        }
       }
-      return toEvent(event);
+      throw new PaymentError("bad_signature", "Invalid signature");
     },
 
     async listSucceeded(range): Promise<Payment[]> {

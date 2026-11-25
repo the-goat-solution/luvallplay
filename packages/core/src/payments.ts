@@ -110,6 +110,8 @@ export type PaymentEvent = {
   metadata?: Record<string, string>;
   /** When it happened at the provider (ms since epoch). */
   occurredAt: number;
+  /** The provider's id for the club's own merchant account, when the event came through the platform (Stripe Connect). */
+  account?: string;
   /** The provider's own event object, for handlers that need more. */
   raw: unknown;
 };

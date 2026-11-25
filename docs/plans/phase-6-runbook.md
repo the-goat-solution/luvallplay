@@ -163,7 +163,7 @@ Started 25 Nov 2026 (decision AP). W1 needs nothing from another lane; W2 (the w
 | Step | State | Notes |
 |---|---|---|
 | 1. Every card flow behind the payments interface; one membership path | **Built, waiting for your OK to merge** (branch `claude/lane-w`) | §10.2 |
-| 2. Stripe Connect in test mode | Not started | Needs a Stripe **test** key for the platform account (§10.3) |
+| 2. Stripe Connect in test mode | **Part built, off** (same branch): the connected account on every request, the 0% fee, the Connect webhook secret. Creating and onboarding accounts waits for the test key | §10.4. Needs a Stripe **test** key for the platform account (§10.3) |
 | 3. Per-club website content model, templates, Look & feel | Not started | |
 | 4. Stage A open items | Checked | §7a |
 
@@ -193,3 +193,19 @@ Started 25 Nov 2026 (decision AP). W1 needs nothing from another lane; W2 (the w
 
 1. **Your OK to merge step 1** (§10.2).
 2. **A Stripe test key for the platform account** (starts `sk_test_`), for Stripe Connect in test mode. Claude asks for it through a secure form; it is never pasted into chat, and production keys are never used. If the NZ company's Stripe account doesn't exist yet, a test key from any Stripe account with Connect switched on (Settings → Connect) is enough to build against.
+
+### 10.4 Step 2: Stripe Connect, test mode
+
+How it works (build plan §6.5): the platform's Stripe key acts **on a club's own Stripe account** ("direct charges"). The money, customers, subscriptions and payouts are the club's; Luvallplay never holds them.
+
+Built so far, and **switched off unless the first setting below is set** (Three Wolves' deployment has none of them, so nothing changes for it):
+
+| Setting | What it does |
+|---|---|
+| `STRIPE_CONNECT_ACCOUNT` | The club's connected account (`acct_…`). The account is put on the Stripe client itself (`lib/payments/stripe-client.ts`), so **every** request carries it; a test fails if any file makes its own client or names an account on a single call |
+| `STRIPE_CONNECT_FEE_BPS` | The platform's fee in basis points (100 = 1%). Unset or `0` = **0%**, and then nothing about a fee is sent to Stripe |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | The signing secret of the platform's Connect webhook endpoint. Events signed with it are accepted beside the account's own, and carry the account they belong to |
+
+Safety rules, each with a test (`apps/web/tests/stripe-connect.test.ts`): a connected account **with a live key is refused**, on production too (W1 is test mode only); an account id or fee that isn't well formed stops the app instead of guessing.
+
+Still to do in step 2, once the test key is here (so each call is tried against Stripe's test mode, not assumed): creating a connected account for a new club, the onboarding link, reading whether the account can take payments and be paid out, connecting an **existing** account (Three Wolves' own is connected, not recreated), and the webhook's handlers reading the event's account (a `[lane W]` change to the webhook route). The account moves from a deployment setting to the club's own payment settings with the wizard (W2), through the migration queue.

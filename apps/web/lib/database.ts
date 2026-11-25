@@ -37,7 +37,7 @@ import type pg from "pg";
 import * as schema from "@luvallplay/db/schema";
 import { createPgDatabase, type PgDatabase } from "./database-pg.ts";
 import { defaultTenantSlug } from "./tenant-members.ts";
-import { APP_ROLE, isReadOnlyStatement, readScoped, scopePool, type PoolLike } from "./tenant-scope.ts";
+import { isReadOnlyStatement, readScoped, scopePool, scopeStatement, type PoolLike } from "./tenant-scope.ts";
 
 // Postgres DATE columns stay the 'YYYY-MM-DD' string Postgres sends. The
 // driver's default turns them into a Date at local midnight, which shifts the
@@ -151,16 +151,12 @@ async function viaHttp<R extends QueryResultRow>(text: string, params: unknown[]
   return (await run.query(text, params as Primitive[])) as unknown as QueryResult<R>;
 }
 
-/** One statement over HTTP as the app's role for the club: a three-statement transaction in one request. */
+/** One statement over HTTP as the app's role for the club: a two-statement transaction in one request. */
 async function viaHttpScoped<R extends QueryResultRow>(text: string, params: unknown[]): Promise<QueryResult<R>> {
   const run = neon(url(), { fullResults: true });
   const id = await scopeTenantId();
-  const results = await run.transaction([
-    run.query(`SET LOCAL ROLE ${APP_ROLE}`),
-    run.query(`SELECT set_config('app.tenant_id', $1, true)`, [String(id)]),
-    run.query(text, params as Primitive[]),
-  ]);
-  return results[2] as unknown as QueryResult<R>;
+  const results = await run.transaction([run.query(scopeStatement(id)), run.query(text, params as Primitive[])]);
+  return results[1] as unknown as QueryResult<R>;
 }
 
 /** The pool of whichever driver is in use, unscoped. */

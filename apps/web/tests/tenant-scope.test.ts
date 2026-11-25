@@ -8,7 +8,7 @@ import fs from "node:fs";
 import pg from "pg";
 import { CLUB_OWNED_TABLES } from "@luvallplay/db/tenancy";
 import { migrate } from "../scripts/db/migrate.mjs";
-import { isReadOnlyStatement, probeTenantIsolation, readScoped, scopeClient, scopePool, textOf, transactionVerb } from "../lib/tenant-scope.ts";
+import { isReadOnlyStatement, probeTenantIsolation, readScoped, scopeClient, scopePool, scopeStatement, textOf, transactionVerb } from "../lib/tenant-scope.ts";
 import { shadowHeartbeat } from "../lib/shadow-log.ts";
 
 test("statements that open or close a transaction are recognised", () => {
@@ -29,6 +29,51 @@ test("only statements that can't change anything are run a second time", () => {
     "SELECT nextval('s')", "SELECT set_config('app.tenant_id', '2', false)", "SELECT pg_advisory_lock(1)", "SELECT pg_advisory_xact_lock(1)",
     "SELECT * FROM t FOR UPDATE", "SELECT * FROM t FOR NO KEY UPDATE", "SELECT 1; DROP TABLE t", "BEGIN", "",
   ]) assert.equal(isReadOnlyStatement(t), false, t);
+});
+
+test("the scope statement names the role and one club, and takes nothing but a whole number", () => {
+  assert.equal(scopeStatement(7), `SELECT set_config('role', 'luvallplay_app', true), set_config('app.tenant_id', '7', true)`);
+  assert.equal(scopeStatement(null), `SELECT set_config('role', 'luvallplay_app', true)`);
+  // The id is written into the text (it shares a message with BEGIN), so anything else is refused before a byte is sent.
+  for (const bad of ["1", "1 OR 1=1", "1'; DROP TABLE players; --", 1.5, NaN, Infinity, -1, undefined, {}, [1]]) {
+    assert.throws(() => scopeStatement(bad as never), /is not a club id/, String(bad));
+  }
+  assert.throws(() => scopeClient({ query: async () => ({}) }, "1; SELECT 1" as never), /is not a club id/);
+});
+
+test("round trips: a scoped statement costs three, a caller's transaction one extra (audit: five and two before)", async () => {
+  const sent: string[] = [];
+  const client = { query: async (...args: unknown[]) => (sent.push(textOf(args)), { rows: [] }) };
+  const scoped = scopeClient(client, 3);
+  await scoped.query("SELECT 1");
+  assert.deepEqual(sent, [`BEGIN; ${scopeStatement(3)}`, "SELECT 1", "COMMIT"]);
+  sent.length = 0;
+  await scoped.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+  await scoped.query("SELECT 1");
+  await scoped.query("SELECT 2");
+  await scoped.query("COMMIT");
+  assert.deepEqual(sent, ["BEGIN ISOLATION LEVEL SERIALIZABLE", scopeStatement(3), "SELECT 1", "SELECT 2", "COMMIT"]);
+  sent.length = 0;
+  const pool = { query: client.query, connect: async () => ({ ...client, release() {} }) };
+  await readScoped(pool, 3, "SELECT 1");
+  await readScoped(pool, null, "SELECT 2");
+  assert.deepEqual(sent, [`BEGIN READ ONLY; ${scopeStatement(3)}`, "SELECT 1", "ROLLBACK", `BEGIN READ ONLY; ${scopeStatement(null)}`, "SELECT 2", "ROLLBACK"]);
+});
+
+test("a statement that fails, or a setup that fails, is rolled back and the error is the caller's", async () => {
+  for (const failOn of ["SELECT boom", "BEGIN;"]) {
+    const sent: string[] = [];
+    const client = {
+      query: async (...args: unknown[]) => {
+        const t = textOf(args);
+        sent.push(t.split(" ")[0]);
+        if (t.startsWith(failOn)) throw new Error("failed");
+        return { rows: [] };
+      },
+    };
+    await assert.rejects(scopeClient(client, 1).query("SELECT boom"), /failed/);
+    assert.equal(sent.at(-1), "ROLLBACK", failOn);
+  }
 });
 
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;

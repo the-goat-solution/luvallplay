@@ -7,7 +7,7 @@ export function WelcomeCard({ firstName }: { firstName: string }) {
   const dismiss = useDismissWelcome();
   return (
     <section className="card stack welcome" aria-labelledby="welcome-title">
-      <h2 id="welcome-title">{t("welcome_title", { name: firstName || "👋" })}</h2>
+      <h2 className="title" id="welcome-title">{t("welcome_title", { name: firstName || "👋" })}</h2>
       <p>{t("welcome_body")}</p>
       <ol>
         <li>{t("welcome_check_name")}</li>

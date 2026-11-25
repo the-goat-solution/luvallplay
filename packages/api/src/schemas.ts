@@ -134,6 +134,11 @@ export const themeTokensSchema = z.object({
   danger: z.string(),
   "font-display": z.string(),
   "font-text": z.string(),
+  /** Optional: when missing, the app derives them from the tokens above. */
+  "primary-strong": z.string().optional(),
+  "on-primary-strong": z.string().optional(),
+  "surface-sunken": z.string().optional(),
+  success: z.string().optional(),
 });
 export type ThemeTokens = z.infer<typeof themeTokensSchema>;
 

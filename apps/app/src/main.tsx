@@ -11,6 +11,7 @@ import "@fontsource/barlow-condensed/600.css";
 import "@fontsource/barlow-condensed/700.css";
 import "@fontsource/barlow-condensed/800.css";
 import "@luvallplay/ui/tokens.css";
+import "@luvallplay/ui/system.css";
 import "./styles/app.css";
 import { storage, store } from "./app.ts";
 import { watchInstall } from "./lib/install.ts";

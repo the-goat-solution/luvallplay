@@ -82,7 +82,7 @@ export function ManageCard({ m, state, cardUpdated }: { m: Member; state: Member
     <section className="card stack membership" aria-labelledby="mem-title">
       <div className="card-head">
         <div className="stack-tight">
-          <h2 id="mem-title">{t("mem_plan_line", { plan: planName(t, m.plan), day: daysName(t, m.day) })}</h2>
+          <h2 className="title" id="mem-title">{t("mem_plan_line", { plan: planName(t, m.plan), day: daysName(t, m.day) })}</h2>
           <p className="muted small">
             {m.recurring ? t("mem_auto_renews") : t("mem_one_time")}
             {m.method === "cash" ? ` · ${t("mem_cash")}` : m.method === "bank_transfer" ? ` · ${t("mem_bank_transfer")}` : ""}
@@ -127,7 +127,7 @@ export function ManageCard({ m, state, cardUpdated }: { m: Member; state: Member
       </div>
       <div className="stack-tight">
         {m.manageable && m.plan === "monthly" && !b?.pendingChange && (
-          <button type="button" className="button button-primary" onClick={() => setSheet("upgrade")}>★ {t("mem_upgrade")}</button>
+          <button type="button" className="button button-accent" onClick={() => setSheet("upgrade")}>★ {t("mem_upgrade")}</button>
         )}
         {m.manageable && otherDay && !state.pausedDays.includes(otherDay) && (
           <button type="button" className="button" onClick={() => setSheet("day")}>{t("mem_change_day")}</button>

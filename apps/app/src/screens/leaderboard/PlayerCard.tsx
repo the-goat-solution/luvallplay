@@ -45,7 +45,7 @@ export function PlayerCard({ id, onClose }: { id: number; onClose: () => void })
           <div className="me-head">
             <div className="avatar" aria-hidden="true">{c.avatarUrl ? <img src={c.avatarUrl} alt="" width={64} height={64} /> : c.initials}</div>
             <div className="me-who">
-              <h2>{c.name}</h2>
+              <h2 className="title">{c.name}</h2>
               <span className="pill seat-pill">
                 <RankIcon index={c.rankIndex} seat={c.seat} tarnished={c.tarnishing} px={28} />
                 {rank(c.rankIndex)}

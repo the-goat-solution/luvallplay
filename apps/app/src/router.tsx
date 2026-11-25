@@ -1,6 +1,6 @@
 // Routes. Sign-in and the shell are in the first bundle; each tab's screen
 // is its own chunk, loaded when it is first opened.
-import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, redirect } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Navigate, Outlet, redirect } from "@tanstack/react-router";
 import { store } from "./app.ts";
 import { InviteScreen } from "./screens/Invite.tsx";
 import { Shell } from "./screens/Shell.tsx";
@@ -58,9 +58,9 @@ export const router = createRouter({
   routeTree,
   defaultPreload: "intent",
   scrollRestoration: true,
-  defaultNotFoundComponent: () => {
-    throw redirect({ to: "/", replace: true });
-  },
+  // An address the app doesn't have: to the start (Me, or sign-in). A redirect
+  // thrown here isn't caught (it showed the router's bare error page).
+  defaultNotFoundComponent: () => <Navigate to="/" replace />,
 });
 
 declare module "@tanstack/react-router" {

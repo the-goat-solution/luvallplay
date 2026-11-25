@@ -93,20 +93,30 @@ describe("window classes (build plan §4.4)", () => {
   test("the stylesheet uses the same breakpoints", () => {
     const css = read("../src/styles/app.css");
     const used = [...css.matchAll(/@media \(min-width: (\d+)px\)/g)].map((m) => Number(m[1]));
-    assert.deepEqual([...new Set(used)].sort((a, b) => a - b), [BREAKPOINTS.medium, BREAKPOINTS.large]);
+    const known: number[] = [BREAKPOINTS.medium, BREAKPOINTS.expanded, BREAKPOINTS.large];
+    for (const w of used) assert.ok(known.includes(w), `${w}px is not a window class breakpoint`);
+    assert.ok(used.includes(BREAKPOINTS.medium) && used.includes(BREAKPOINTS.large));
     assert.equal(BREAKPOINTS.expanded, 840);
   });
 });
 
 describe("the stylesheet's rules", () => {
   const css = read("../src/styles/app.css");
-  test("only semantic tokens: no brand names, no colour literals outside shadows", () => {
+  test("only semantic and design-system tokens: no brand names, no colour literals", () => {
     assert.doesNotMatch(css, /navy|bronze|cream|court-green|smash-lime|wolf/i);
     const hex = css.match(/#[0-9a-f]{3,8}\b/gi) ?? [];
     assert.deepEqual(hex, []);
-    const tokens = new Set([...css.matchAll(/var\(--([a-z-]+)/g)].map((m) => m[1]));
+    const tokens = new Set([...css.matchAll(/var\(--([a-z0-9-]+)/g)].map((m) => m[1]));
     const semantic = ["primary", "on-primary", "accent", "on-accent", "surface", "surface-raised", "ink", "ink-muted", "line", "control-border", "focus", "danger", "font-display", "font-text"];
-    for (const t of tokens) assert.ok(semantic.includes(t) || t === "nav-size", `--${t} is not a semantic token`);
+    // packages/ui/src/system.css: the design system's derived tokens, scale, elevation and motion.
+    const system = [...read("../../../packages/ui/src/system.css").matchAll(/^\s*--([a-z0-9-]+):/gm)].map((m) => m[1]);
+    const local = ["nav-size", "head-size"];
+    for (const t of tokens) assert.ok(semantic.includes(t) || system.includes(t) || local.includes(t), `--${t} is not a semantic or system token`);
+  });
+  test("the design system's colours are derived from the semantic tokens (bar the brand mark's coral and the success green)", () => {
+    const sys = read("../../../packages/ui/src/system.css");
+    const hex = [...new Set(sys.match(/#[0-9a-f]{3,8}\b/gi) ?? [])].sort();
+    assert.deepEqual(hex, ["#1d7a46", "#6fd39a", "#ff6b4a"]);
   });
   test("safe areas on every edge, dynamic viewport height, reduced motion, container queries, foldables", () => {
     for (const edge of ["top", "right", "bottom", "left"]) assert.match(css, new RegExp(`env\\(safe-area-inset-${edge}\\)`), edge);
@@ -118,9 +128,10 @@ describe("the stylesheet's rules", () => {
   });
   test("type is in rem (so it scales to 200%), touch targets are 44px", () => {
     assert.deepEqual(css.match(/font-size:\s*[\d.]+px/g) ?? [], []);
-    assert.match(css, /\.button \{[^}]*min-height: 2\.75rem/);
-    assert.match(css, /\.choice \{[^}]*min-height: 2\.75rem/);
-    assert.match(css, /\.field input \{[^}]*min-height: 2\.75rem/);
+    const minHeight = (rule: RegExp) => Number(css.match(rule)?.[1]);
+    assert.ok(minHeight(/\.button \{[^}]*min-height: ([\d.]+)rem/) >= 2.75);
+    assert.ok(minHeight(/\.choice \{[^}]*min-height: ([\d.]+)rem/) >= 2.75);
+    assert.ok(minHeight(/\.field input, \.field select \{[^}]*min-height: ([\d.]+)rem/) >= 2.75);
   });
   test("no screen names a brand colour in code either", () => {
     for (const f of ["Shell", "SignIn", "Invite", "Settings", "Me", "Placeholder"]) {

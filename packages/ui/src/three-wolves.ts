@@ -56,7 +56,8 @@ export function threeWolvesCssVars(): Record<string, string> {
  * same navy, bronze and type on the club's darkest navy.
  */
 export function threeWolvesTheme(mode: "light" | "dark"): Record<
-  "primary" | "on-primary" | "accent" | "on-accent" | "surface" | "surface-raised" | "ink" | "ink-muted" | "line" | "control-border" | "focus" | "danger" | "font-display" | "font-text",
+  | "primary" | "on-primary" | "accent" | "on-accent" | "surface" | "surface-raised" | "ink" | "ink-muted" | "line" | "control-border" | "focus" | "danger" | "font-display" | "font-text"
+  | "primary-strong" | "on-primary-strong" | "surface-sunken" | "success",
   string
 > {
   const c = threeWolves.color;
@@ -65,12 +66,15 @@ export function threeWolvesTheme(mode: "light" | "dark"): Record<
     return {
       primary: c["navy-mid"], "on-primary": c.white, accent: c["bronze-light"], "on-accent": c["text-dark"],
       surface: "#0a1f2d", "surface-raised": c["navy-dark"], ink: c.cream, "ink-muted": c.steel,
-      line: "#24465c", "control-border": c["text-light"], focus: c["bronze-light"], danger: "#ff8a80", ...fonts,
+      line: "#24465c", "control-border": c["text-light"], focus: c["bronze-light"], danger: "#ff8a80",
+      "primary-strong": "#123651", "on-primary-strong": c.cream, "surface-sunken": "#0c2635", success: "#7fd3a0", ...fonts,
     };
   }
   return {
     primary: c.navy, "on-primary": c.white, accent: c.bronze, "on-accent": c["text-dark"],
     surface: c.cream, "surface-raised": c.white, ink: c["text-dark"], "ink-muted": c["text-mid"],
-    line: c["steel-light"], "control-border": c["text-light"], focus: c["navy-mid"], danger: "#b3261e", ...fonts,
+    line: c["steel-light"], "control-border": c["text-light"], focus: c["navy-mid"], danger: "#b3261e",
+    // The website's top bar and "Next up" card (navy-dark), its tiles (cream-dark), its "Active" green.
+    "primary-strong": c["navy-dark"], "on-primary-strong": c.white, "surface-sunken": c["cream-dark"], success: "#1d6b3d", ...fonts,
   };
 }

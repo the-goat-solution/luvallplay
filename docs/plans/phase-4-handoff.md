@@ -10,8 +10,9 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 | 1. API skeleton: `packages/api`, bearer sign-in, clubs, club config | **Merged** | #127 |
 | 2. `apps/app` shell: Luvallplay frame, club look, switcher, tabs, layout, i18n | **Merged** | #128 |
 | 3a. Me | **Merged** | #131, see §1a |
-| 3b. Inbox | **PR open** | see §1a |
-| 3c. Settings (with the admin handoff) | Not started | |
+| 3b. Inbox | **PR open** | #132, see §1a |
+| 3c. Settings, part A (account, no sign-in changes) | **PR open** | see §1a |
+| 3c. Settings, part B (phone, connected apps, delete, admin handoff, name step) | Not started; **merge needs the owner's OK** | |
 | 4. Arena | Not started | |
 | 5. Player, shop orders, membership and cancel flows | Not started | |
 | 6. Vision | Not started | |
@@ -26,6 +27,7 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - **App**: `apps/app/src/screens/Me.tsx` and `src/screens/me/*` (header, next up, membership or join, calendar, inbox preview, welcome), `src/lib/format.ts`.
 - **Still opens on the club's website** (says so on the link): manage or join a membership, and book a casual spot. They move into the app with step 5.
 - **Inbox (3b)**: `messages.*` endpoints and `apps/app/src/screens/Inbox.tsx` (`/inbox`, `/inbox/new`, `/inbox/<id>`); Me's bell and Messages card open it.
+- **Settings part A (3c)**: `account.profile`, `details`, `language`, `privacy`, `photo` (POST and DELETE), `export`; server code `apps/web/lib/app-account.ts`; app `apps/app/src/screens/Settings.tsx`, `src/screens/settings/*`, `src/lib/photo.ts`.
 - **Not on Me yet**: the shop (step 5) and My photos (with the Player step).
 - **Words**: Me words are in the app's own dictionary (`packages/i18n/src/app.ts`), copied from the website's wording without the club's name or "$" (the website's `profile` dictionary still has both typed in).
 
@@ -62,7 +64,7 @@ Use the strangler method: one tab at a time, the server-rendered pages in `apps/
 For each screen: add endpoints to the contract, add route files with `appRoute`, run `pnpm --filter @luvallplay/api generate` and `snapshot`, put queries in `apps/web/lib/repos` (no SQL in route files; a test enforces it), then build the screen in `apps/app/src`, add journeys, update the runbook and the delivery log (§4.7).
 
 1. ~~**Me**~~: done in step 3a, except the shop and My photos (see §1a).
-2. **Settings** (the inbox is done in 3b): details, phone, language (save to the account; today it is device-only), privacy, connected apps, export, delete account, sign out. Add the **admin handoff endpoint** to the contract and enable the "Club admin" button (it is shown but disabled now). Existing handoff: `lib/admin-roles.ts` `createHandoff`, `app/api/admin/handoff/route.ts`. Also the name step for `needsDetails` and text-message sign-in in the app (the API has it; `SignIn.tsx` has the extension point).
+2. **Settings part B** (part A is done: details, picture, language on the account, privacy, export): phone change and confirmation by text, connected apps, delete account. Add the **admin handoff endpoint** to the contract and enable the "Club admin" button (it is shown but disabled now). Existing handoff: `lib/admin-roles.ts` `createHandoff`, `app/api/admin/handoff/route.ts`. Also the name step for `needsDetails` and text-message sign-in in the app (the API has it; `SignIn.tsx` has the extension point).
 3. **Arena**: Challenges, Leaderboard with player cards, Ranks, QR pairing and scanning, codes.
 4. **Player, shop orders, membership and cancel flows**. Payments stay on the existing Stripe flows; show money through `@luvallplay/core/money`. Load Stripe only when used.
 5. **Vision**: set-up, analyzer (MediaPipe lazy-loaded), labelling.

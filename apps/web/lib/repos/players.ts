@@ -52,3 +52,8 @@ export async function listPlayersForPicker(limit = 2000): Promise<PickerPlayer[]
   const rows = await p;
   return rows.map((r) => ({ id: Number(r.id), name: String(r.name), avatarUrl: r.avatarUrl ?? null }));
 }
+
+/** The language the person reads the app and emails in. */
+export async function setPlayerLang(playerId: number, lang: "en" | "vi"): Promise<void> {
+  await orm().update(players).set({ lang }).where(eq(players.id, playerId));
+}

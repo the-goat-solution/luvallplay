@@ -731,6 +731,137 @@ describe("APP · settings", () => {
   });
 });
 
+describe("APP · settings: the account", () => {
+  const playerRow = async (email) =>
+    (await db.query(`SELECT id, first_name, last_name, display_name, lang, leaderboard_visible, avatar_url FROM players WHERE email = $1`, [email])).rows[0];
+  // A tiny real picture (2×2 PNG), for the file picker.
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==", "base64");
+
+  test("APP26 · your details: names saved to the account, shown on Me; the email and phone are shown, not edited here", async () => {
+    const before = await playerRow(PEOPLE.player.email);
+    const { context } = await signedIn(PEOPLE.player.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/settings`);
+      const form = page.locator("form", { has: page.getByRole("heading", { name: "Your details" }) });
+      await form.waitFor();
+      assert.equal(await page.getByLabel("First name").inputValue(), before.first_name);
+      assert.equal(await form.getByRole("button", { name: "Save" }).isDisabled(), true, "nothing to save yet");
+      assert.match(await form.locator(".facts").textContent(), new RegExp(PEOPLE.player.email.replace(".", "\\.")));
+      await page.getByLabel("First name").fill("Peter");
+      await page.getByLabel("Last name").fill("Player-Smith");
+      await page.getByLabel("Display name").fill("Pistol Pete");
+      await form.getByRole("button", { name: "Save" }).click();
+      await form.getByRole("status").filter({ hasText: "Saved" }).waitFor();
+      const after = await playerRow(PEOPLE.player.email);
+      assert.deepEqual([after.first_name, after.last_name, after.display_name], ["Peter", "Player-Smith", "Pistol Pete"]);
+      // Me follows at once (no reload).
+      await page.locator(".shell-nav").getByRole("link", { name: "Me", exact: true }).click();
+      await page.waitForSelector(ME_READY);
+      assert.equal(await page.locator(".me-head h1").textContent(), "Peter Player-Smith");
+      // Clearing the display name goes back to the default.
+      await page.goto(`${APP}/settings`);
+      await page.getByLabel("Display name").fill("");
+      await form.getByRole("button", { name: "Save" }).click();
+      await form.getByRole("status").filter({ hasText: "Saved" }).waitFor();
+      assert.equal((await playerRow(PEOPLE.player.email)).display_name, null);
+      assert.deepEqual(problems, []);
+    } finally {
+      await db.query(`UPDATE players SET first_name = $2, last_name = $3, display_name = $4 WHERE id = $1`, [before.id, before.first_name, before.last_name, before.display_name]);
+      await context.close();
+    }
+  });
+
+  test("APP27 · language is kept on the account; the leaderboard switch moves at once and is saved", async () => {
+    const before = await playerRow(PEOPLE.member.email);
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const waitFor = async (check) => {
+      for (let i = 0; i < 40; i++) {
+        if (check(await playerRow(PEOPLE.member.email))) return;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      assert.fail("the account did not change");
+    };
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.getByLabel("Tiếng Việt").check();
+      await waitFor((r) => r.lang === "vi");
+      await page.getByLabel("English").check();
+      await waitFor((r) => r.lang === "en");
+      const toggle = page.getByLabel("Show me on the leaderboard");
+      assert.equal(await toggle.isChecked(), before.leaderboard_visible);
+      await toggle.setChecked(!before.leaderboard_visible);
+      await waitFor((r) => r.leaderboard_visible === !before.leaderboard_visible);
+      await page.reload();
+      assert.equal(await page.getByLabel("Show me on the leaderboard").isChecked(), !before.leaderboard_visible);
+      // Refused: the switch goes back and says so.
+      await context.route(`${api}/account/privacy`, (route) =>
+        route.request().method() === "POST" ? route.fulfill({ status: 500, headers: { ...CORS, "content-type": "application/json" }, body: '{"error":"server_error"}' }) : route.fallback(),
+      );
+      await page.getByLabel("Show me on the leaderboard").setChecked(before.leaderboard_visible);
+      await page.getByRole("alert").waitFor();
+      assert.equal(await page.getByLabel("Show me on the leaderboard").isChecked(), !before.leaderboard_visible);
+    } finally {
+      await db.query(`UPDATE players SET lang = $2, leaderboard_visible = $3 WHERE id = $1`, [before.id, before.lang, before.leaderboard_visible]);
+      await context.close();
+    }
+  });
+
+  test("APP28 · photo: shrunk to a square in the browser and sent; no storage says so plainly; a photo can be removed", async () => {
+    const before = await playerRow(PEOPLE.member.email);
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const photo = page.locator("section", { has: page.getByRole("heading", { name: "Profile picture" }) });
+    try {
+      await page.goto(`${APP}/settings`);
+      // This local server has no picture storage: the real answer.
+      await photo.locator('input[type="file"]').setInputFiles({ name: "me.png", mimeType: "image/png", buffer: PNG });
+      await photo.getByRole("alert").filter({ hasText: "switched on yet" }).waitFor();
+      // With storage: what the app sends is a small square picture.
+      let sent;
+      await context.route(`${api}/account/photo`, async (route) => {
+        if (route.request().method() !== "POST") return route.fallback();
+        sent = route.request().postDataJSON().image;
+        await route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ ok: true, url: null }) });
+      });
+      await photo.locator('input[type="file"]').setInputFiles({ name: "me.png", mimeType: "image/png", buffer: PNG });
+      await photo.getByRole("status").filter({ hasText: "looking sharp" }).waitFor();
+      assert.match(sent, /^data:image\/(webp|jpeg);base64,/);
+      const size = await page.evaluate((src) => new Promise((ok) => { const i = new Image(); i.onload = () => ok([i.naturalWidth, i.naturalHeight]); i.src = src; }), sent);
+      assert.deepEqual(size, [2, 2], "never enlarged; already square");
+      await context.unroute(`${api}/account/photo`);
+      // A photo on the account: shown, and Remove takes it off.
+      await db.query(`UPDATE players SET avatar_url = $2 WHERE id = $1`, [before.id, `data:image/png;base64,${PNG.toString("base64")}`]);
+      await page.reload();
+      await photo.locator(".avatar img").waitFor();
+      await photo.getByRole("button", { name: "Remove" }).click();
+      await photo.getByRole("status").filter({ hasText: "Picture removed" }).waitFor();
+      assert.equal((await playerRow(PEOPLE.member.email)).avatar_url, null);
+      assert.equal(await photo.locator(".avatar img").count(), 0);
+    } finally {
+      await db.query(`UPDATE players SET avatar_url = $2 WHERE id = $1`, [before.id, before.avatar_url]);
+      await context.close();
+    }
+  });
+
+  test("APP29 · download my data: a JSON file with the account in it", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    try {
+      await page.goto(`${APP}/settings`);
+      const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download my data" }).click()]);
+      assert.equal(download.suggestedFilename(), "my-club-data.json");
+      const text = readFileSync(await download.path(), "utf8");
+      assert.match(text, new RegExp(PEOPLE.member.email.replace(".", "\\.")));
+      JSON.parse(text);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
 describe("APP · layout (build plan §4.4)", () => {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 

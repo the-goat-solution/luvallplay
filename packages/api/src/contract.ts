@@ -114,6 +114,41 @@ export const ENDPOINTS = define({
     rateLimit: { limit: 30, windowMs: 60 * MIN },
   },
   // ── The account (the same in every club) ────────────────────────────────
+  "account.profile": {
+    method: "GET", path: "/account/profile", auth: "session", scope: "account",
+    response: S.profileResponse,
+    rateLimit: { limit: 120, windowMs: MIN },
+  },
+  "account.details": {
+    method: "POST", path: "/account/details", auth: "session", scope: "account",
+    body: S.detailsRequest, response: S.okResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  "account.language": {
+    method: "POST", path: "/account/language", auth: "session", scope: "account",
+    body: S.languageRequest, response: S.okResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  "account.privacy": {
+    method: "POST", path: "/account/privacy", auth: "session", scope: "account",
+    body: S.privacyRequest, response: S.okResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  "account.photo": {
+    method: "POST", path: "/account/photo", auth: "session", scope: "account",
+    body: S.photoRequest, response: S.photoResponse,
+    rateLimit: { limit: 10, windowMs: 60 * MIN },
+  },
+  "account.removePhoto": {
+    method: "DELETE", path: "/account/photo", auth: "session", scope: "account",
+    response: S.photoResponse,
+    rateLimit: { limit: 10, windowMs: 60 * MIN },
+  },
+  "account.export": {
+    method: "GET", path: "/account/export", auth: "session", scope: "account",
+    response: S.exportResponse,
+    rateLimit: { limit: 10, windowMs: 60 * MIN },
+  },
   "account.dismissWelcome": {
     method: "POST", path: "/account/welcome-dismissed", auth: "session", scope: "account",
     body: S.emptyRequest, response: S.okResponse,

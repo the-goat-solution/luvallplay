@@ -306,6 +306,14 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
   background: var(--surface-raised); color: var(--ink); font: inherit; width: 100%;
 }
 
+/* ── Settings ──────────────────────────────────────────────────────────── */
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+.field-hint { display: block; font-weight: 400; }
+.photo-row { display: flex; align-items: center; gap: 0.875rem; }
+.facts { margin: 0; display: grid; gap: 0.75rem; }
+.facts dt { font-weight: 600; }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+
 /* ── The inbox ─────────────────────────────────────────────────────────── */
 .inbox { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
 .back { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--ink); font-weight: 600; }

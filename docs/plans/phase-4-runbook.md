@@ -84,6 +84,12 @@ The older `/api/v1/*` routes (personal access keys, shared with the MCP server) 
 | `POST /clubs/{club}/messages` | signed in | Start a conversation (`{subject, body}`); the club's admins are emailed. Same limit as the web (10 an hour, one bucket for both). |
 | `GET /clubs/{club}/messages/{id}` | signed in | One conversation; reading it marks it read. Somebody else's, or an id that can't exist, is `404 not_found`. |
 | `POST /clubs/{club}/messages/{id}` | signed in | Reply (`{body}`); reopens a closed conversation; the admins are emailed. Same limit as the web (30 an hour). |
+| `GET /account/profile` | signed in | The account for Settings (the same in every club): names, display name (and whether it is the person's own or the default), email, phone and whether it is confirmed, language, leaderboard switch, picture. |
+| `POST /account/details` | signed in | First name, last name and display name (`null` = the default). The phone and its confirmation are left as they are; changing the phone is the sign-in step. |
+| `POST /account/language` | signed in | `{lang: "en" | "vi"}`, kept on the account so the website and the club's emails follow. |
+| `POST /account/privacy` | signed in | `{leaderboardVisible}`, as the website's switch; the leaderboard is refreshed. |
+| `POST /account/photo`, `DELETE /account/photo` | signed in | A new picture (`{image}`: a JPEG, PNG or WebP data URL up to 2 MB, already squared and shrunk by the app) or none. Same storage and limits as the website (10 an hour). Without picture storage: `503 not_configured`. |
+| `GET /account/export` | signed in | Everything kept about the person, as the website's Download my data (10 an hour). |
 
 **Rules the wrapper applies to every route**
 
@@ -151,7 +157,7 @@ Sign in with an email; without `RESEND_API_KEY` the code is printed in the API's
 | The token and the person's choices (one interface; secure storage in Phase 5) | `src/lib/storage.ts`, `src/lib/store.ts` |
 | Text in English and Vietnamese | `packages/i18n/src/app.ts` |
 
-**Me** is the real screen (step 3, see below). Player, Arena, Leaderboard and Vision are honest placeholders until their screens move in. Settings already has language, appearance, sign out and sign out everywhere. The **Club admin** button shows for people who can open the admin, but is disabled with an explanation until the handoff endpoint is in the contract.
+**Me** is the real screen (step 3, see below). Player, Arena, Leaderboard and Vision are honest placeholders until their screens move in. Settings has the account's details, picture, language, appearance, privacy, Download my data and signing out (step 3c, below). The **Club admin** button shows for people who can open the admin, but is disabled with an explanation until the handoff endpoint is in the contract.
 
 **Me (step 3)**
 
@@ -170,6 +176,10 @@ Can't make it and Done change the screen at once and are put back (with a messag
 **Inbox (step 3b)**
 
 `/inbox` (the list), `/inbox/new` (a new message) and `/inbox/<id>` (one conversation), opened from Me's bell and Messages card; not a tab, as on the website. On a phone the list and a conversation are one screen each with "All messages" to go back; when the screen is wide enough (a container query) they sit side by side. An open conversation refreshes every 20 seconds while it is on screen, as on the website; reading it updates the list and Me's bell. A refused send keeps what was written and says why (too many messages, or try again).
+
+**Settings (step 3c, part A)**
+
+Behind the ⚙ in the header, as on the website: the Club admin button (still disabled, see below), picture (chosen on the device, cut square and shrunk to 512 px in the browser, never enlarged), your details (first, last and display name; the email and phone are shown with whether the phone is confirmed), language (on the device at once and saved to the account), appearance, the leaderboard switch (moves at once, goes back if refused), Download my data, and sign out or sign out everywhere. **Still to come in part B**, which touches signing in and waits for the owner's OK: changing and confirming the phone by text, connected apps, deleting the account, opening the web admin, and the name step for a new account.
 
 **Not on Me yet**: the **shop** (with the shop step) and **My photos** (with the Player step).
 
@@ -212,7 +222,7 @@ pnpm --filter app build && pnpm --filter app budget
 
 - `tests/lib.test.ts`: theme to custom properties (and what it refuses), window classes, tabs and modules, storage, which host gets the token, messages complete in both languages and sport-neutral, the stylesheet's rules.
 - `tests/format.test.ts`: dates in the club's country and time zone, money in minor units, months, next up, and the Me words complete in Vietnamese with no club name or currency typed in.
-- `tests/e2e/app.mjs` (APP1 to APP21): the real API on a fresh local Postgres, the app built and served on its own origin. Sign in by email code; Luvallplay's look before, the club's after; an invite link applies the club's look first; switching clubs changes look, words and tabs at once (the second club is simulated in the browser, since one deployment serves one club); a module that is off; a refused token; languages; light and dark; the Club admin button; five widths with the right navigation and no sideways scroll; text at 200%; reduced motion; axe in light and dark; the Content-Security-Policy; screens as separate chunks. Me (APP16 to APP21): a member's Me matches the API's own answer card for card; Can't make it flips at once, is saved, survives a reload and undoes, and a refused one is put back; a newcomer sees the join card in the club's money and the welcome card, and Done stays done; Memberships off hides both cards; Me in Vietnamese; Me that can't load offers Try again. The inbox (APP23 to APP25): from Me to a conversation and back on a phone, reply, and the bell catches up; a new message side by side on a tablet, and the admins are emailed; a refused send keeps the text and says why; a conversation that isn't yours isn't there. APP22 takes screenshots (`E2E_SHOTS=<folder>`) for people to look at.
+- `tests/e2e/app.mjs` (APP1 to APP29): the real API on a fresh local Postgres, the app built and served on its own origin. Sign in by email code; Luvallplay's look before, the club's after; an invite link applies the club's look first; switching clubs changes look, words and tabs at once (the second club is simulated in the browser, since one deployment serves one club); a module that is off; a refused token; languages; light and dark; the Club admin button; five widths with the right navigation and no sideways scroll; text at 200%; reduced motion; axe in light and dark; the Content-Security-Policy; screens as separate chunks. Me (APP16 to APP21): a member's Me matches the API's own answer card for card; Can't make it flips at once, is saved, survives a reload and undoes, and a refused one is put back; a newcomer sees the join card in the club's money and the welcome card, and Done stays done; Memberships off hides both cards; Me in Vietnamese; Me that can't load offers Try again. The inbox (APP23 to APP25): from Me to a conversation and back on a phone, reply, and the bell catches up; a new message side by side on a tablet, and the admins are emailed; a refused send keeps the text and says why; a conversation that isn't yours isn't there. Settings (APP26 to APP29): names saved and shown on Me at once; language saved to the account; the leaderboard switch saved and put back when refused; a picture sent small and square, no storage said plainly, and removed; Download my data gives a JSON file. APP22 takes screenshots (`E2E_SHOTS=<folder>`) for people to look at.
 - CI job "Players' app" runs all of it.
 
 **Performance budget**

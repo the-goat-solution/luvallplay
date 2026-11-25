@@ -10,6 +10,7 @@ import { dayLabel, money } from "../../lib/format.ts";
 import { daysName, planName, usePlace } from "../me/parts.tsx";
 import { LeaveFlow } from "./LeaveFlow.tsx";
 import { useBilling, useMembershipAction, usePortal, useRefreshSoon, type Member, type MembershipState, type Plan } from "./data.ts";
+import { Icon } from "../../components/Icon.tsx";
 
 const ERR: Record<string, AppKey> = { day_paused: "mem_err_day_paused", sessions_full: "mem_err_sessions_full", already_renewed: "mem_err_already_renewed" };
 const STATUS = { active: "mem_status_active", ending: "mem_status_ending", upcoming: "mem_status_upcoming", past_due: "mem_status_past_due" } as const;
@@ -106,7 +107,7 @@ export function ManageCard({ m, state, cardUpdated }: { m: Member; state: Member
           <div><button type="button" className="button button-primary" disabled={action.isPending} onClick={() => run({ action: "resume" }, () => t("mem_resumed"))}>{t("mem_resume")}</button></div>
         </div>
       )}
-      {m.continuation && <p className="muted small">✓ {t("mem_continuation", { plan: planName(t, m.continuation.plan), date: date(m.continuation.periodStart, true) })}</p>}
+      {m.continuation && <p className="muted small icon-line"><Icon name="check" size={16} />{t("mem_continuation", { plan: planName(t, m.continuation.plan), date: date(m.continuation.periodStart, true) })}</p>}
       {b?.pendingChange && (
         <div className="notice stack-tight">
           <span>{t("mem_pending_change", { plan: planName(t, b.pendingChange.plan), day: daysName(t, b.pendingChange.day), date: date(b.pendingChange.from, true) })}</span>
@@ -127,7 +128,7 @@ export function ManageCard({ m, state, cardUpdated }: { m: Member; state: Member
       </div>
       <div className="stack-tight">
         {m.manageable && m.plan === "monthly" && !b?.pendingChange && (
-          <button type="button" className="button button-accent" onClick={() => setSheet("upgrade")}>★ {t("mem_upgrade")}</button>
+          <button type="button" className="button button-accent" onClick={() => setSheet("upgrade")}><Icon name="star" size={18} />{t("mem_upgrade")}</button>
         )}
         {m.manageable && otherDay && !state.pausedDays.includes(otherDay) && (
           <button type="button" className="button" onClick={() => setSheet("day")}>{t("mem_change_day")}</button>
@@ -155,7 +156,7 @@ export function ManageCard({ m, state, cardUpdated }: { m: Member; state: Member
                   <strong>{r.description}</strong>
                   <span className="muted small">{date(r.date, true)} · {money(r.amountCents, currency)}{r.refunded ? ` · ${t("mem_refunded")}` : ""}</span>
                 </span>
-                {r.url && <a className="button button-quiet button-small" href={r.url} target="_blank" rel="noopener noreferrer">{t("mem_receipt")} ↗</a>}
+                {r.url && <a className="button button-quiet button-small" href={r.url} target="_blank" rel="noopener noreferrer">{t("mem_receipt")}<Icon name="external" size={16} /></a>}
               </li>
             ))}
           </ul>

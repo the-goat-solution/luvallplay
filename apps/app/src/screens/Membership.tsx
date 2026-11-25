@@ -6,6 +6,7 @@ import { JoinPanel } from "./membership/JoinPanel.tsx";
 import { ManageCard } from "./membership/ManageCard.tsx";
 import { useMembership } from "./membership/data.ts";
 import { LoadError } from "../components/LoadError.tsx";
+import { Icon } from "../components/Icon.tsx";
 
 export default function MembershipScreen() {
   const { config } = useCurrentClub();
@@ -15,7 +16,7 @@ export default function MembershipScreen() {
   const cardUpdated = new URLSearchParams(window.location.search).get("card") === "updated";
   return (
     <div className="screen" data-screen="membership" data-state={s ? "ready" : state.isError ? "error" : "loading"}>
-      <Link to="/me" className="back">← {t("nav_me")}</Link>
+      <Link to="/profile" className="back"><Icon name="chevronLeft" size={20} />{t("nav_profile")}</Link>
       <h1>{t("me_membership")}</h1>
       {!s ? (
         state.isError ? (

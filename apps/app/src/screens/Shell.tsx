@@ -8,6 +8,8 @@ import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, u
 import { isHomePath, moduleForPath, spaceClub, tabForPath, visibleTabs, visibleTabsAcross, type TabId } from "../lib/nav.ts";
 import { translator } from "../lib/messages.ts";
 import { ClubBadge } from "../components/ClubTag.tsx";
+import { Icon, type IconName } from "../components/Icon.tsx";
+import { useUnread } from "./me/data.ts";
 import { navKind } from "../lib/window-class.ts";
 import { focus } from "../lib/focus.ts";
 import { online } from "../lib/offline.ts";
@@ -15,24 +17,33 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 import type { ArenaState } from "./arena/data.ts";
 import { useVersus } from "./arena/versus-store.ts";
 
-// The same pictures as the website's tabs: Player a trophy, Arena crossed
-// rackets, Leaderboard a podium.
-const ICONS: Record<TabId, string> = {
-  me: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0",
-  player: "M7 4h10v4a5 5 0 0 1-10 0V4Zm5 9v4m-4 3h8M7 6H4a3 3 0 0 0 3 4m10-4h3a3 3 0 0 1-3 4",
-  arena: "M4 4l9 9M20 4l-9 9M11 15l-5 5M13 15l5 5M3.5 3.5a2.4 3.2 -45 1 0 4.2 4.2a2.4 3.2 -45 1 0-4.2-4.2ZM16.3 3.5a2.4 3.2 45 1 0 4.2 4.2a2.4 3.2 45 1 0-4.2-4.2Z",
-  leaderboard: "M3 21h18M9 21V8h6v13M3 21v-8h6M15 21V11h6v10",
-  vision: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
-};
-const SETTINGS_ICON =
-  "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-3 2-1-2-4-2 1-2-1-.5-2h-4L11 6 9 7 7 6 5 10l2 1v2l-2 1 2 4 2-1 2 1 .5 2h4l.5-2 2-1 2 1 2-4-2-1Z";
+// Each tab's picture (components/Icon.tsx): Home a house, Player a trophy,
+// Arena crossed rackets, Leaderboard a podium, Vision an eye in a camera frame.
+const TAB_ICON: Record<TabId, IconName> = { home: "home", player: "trophy", arena: "rackets", leaderboard: "podium", vision: "vision" };
 
-
-function Icon({ d }: { d: string }) {
+/** The top bar's right side: the inbox bell (unread across clubs) and the person's picture, which opens My profile. */
+function TopActions({ clubs, t }: { clubs: Club[] | null; t: ReturnType<typeof useT> }) {
+  const session = useSession();
+  const unread = useUnread(clubs);
+  const p = session.data?.player;
+  const initials = p ? `${p.firstName.trim()[0] ?? ""}${p.lastName.trim()[0] ?? ""}`.toUpperCase() || (p.displayName.trim()[0] ?? "").toUpperCase() : "";
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d={d} />
-    </svg>
+    <div className="top-actions">
+      <Link
+        to="/inbox"
+        className="head-icon"
+        aria-label={unread > 0 ? `${t("me_inbox")}, ${t("me_inbox_unread", { n: unread })}` : t("me_inbox")}
+        activeProps={{ "aria-current": "page" }}
+      >
+        <Icon name="bell" />
+        {unread > 0 && <span className="badge" aria-hidden="true">{unread > 9 ? "9+" : unread}</span>}
+      </Link>
+      {/* Named by hidden text, not aria-label: the initials shown aren't words, and a label that doesn't contain what's shown confuses voice control. */}
+      <Link to="/profile" className="head-avatar" activeProps={{ "aria-current": "page" }}>
+        {p?.avatarUrl ? <img src={p.avatarUrl} alt="" width={36} height={36} /> : initials ? <span aria-hidden="true">{initials}</span> : <Icon name="user" size={20} />}
+        <span className="visually-hidden">{t("nav_profile")}</span>
+      </Link>
+    </div>
   );
 }
 
@@ -71,9 +82,7 @@ function SpacePicker({ clubs, current, configOf, module }: { clubs: Club[]; curr
     <div className="switcher space-picker" ref={ref}>
       <button className="space-title space-button" type="button" aria-label={`${current.name}, ${t("switch_club")}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
         {head}
-        <svg className="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        <Icon name="chevronDown" size={18} className="chevron" />
       </button>
       {open && (
         <ul className="switcher-list card" id={id} aria-label={t("your_clubs")}>
@@ -91,9 +100,7 @@ function SpacePicker({ clubs, current, configOf, module }: { clubs: Club[]; curr
                 <ClubBadge club={c} config={configOf(c)} />
                 <span className="switcher-name">{c.name}</span>
                 {c.slug === current.slug && (
-                  <svg className="switcher-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-label={t("switch_current")} role="img">
-                    <path d="M5 12.5 10 17 19 7.5" />
-                  </svg>
+                  <Icon name="check" size={18} className="switcher-check" label={t("switch_current")} />
                 )}
               </button>
             </li>
@@ -169,7 +176,7 @@ export function Shell() {
   const arenaClub = multi ? spaceClub(list, modulesOf, prefs.club, "arena") : current;
   const arenaOn = !!arenaClub && !!(multi ? configOf(arenaClub) : currentConfig)?.modules.includes("arena");
   useEffect(() => {
-    if (gone) void navigate({ to: "/me", replace: true });
+    if (gone) void navigate({ to: "/home", replace: true });
   }, [gone, navigate]);
 
   if (!prefs.token) return <Splash />;
@@ -177,7 +184,9 @@ export function Shell() {
   // one club or several decides what Home is, and nothing should flip after it shows.
   if (clubsQuery.isPending || (!multi && !currentConfig && loading)) return <Splash />;
 
-  const screen = <Suspense fallback={<Splash />}>{gone ? null : <Outlet />}</Suspense>;
+  // A club's space whose club isn't known yet (its config is loading): the mark, not another club's screen.
+  const waiting = multi && !home && !space && !known;
+  const screen = waiting ? <Splash /> : <Suspense fallback={<Splash />}>{gone ? null : <Outlet />}</Suspense>;
 
   return (
     <div className="shell" data-window-class={cls} data-nav={navKind(cls)} data-focus={focused ? "on" : undefined}>
@@ -195,16 +204,14 @@ export function Shell() {
             <p className="club-name">{config?.club.name ?? t("brand")}</p>
           </>
         )}
-        <Link to="/settings" className="head-icon" aria-label={t("nav_settings")} activeProps={{ "aria-current": "page" }}>
-          <Icon d={SETTINGS_ICON} />
-        </Link>
+        <TopActions clubs={clubs} t={t} />
       </header>
       <nav className="shell-nav" aria-label={t("nav_label")}>
         <ul>
           {tabs.map((tab) => (
             <li key={tab.id}>
               <Link to={tab.path} className="tab" activeProps={{ "aria-current": "page" }}>
-                <Icon d={ICONS[tab.id]} />
+                <Icon name={TAB_ICON[tab.id]} />
                 <span>{tabLabel(tab)}</span>
               </Link>
             </li>

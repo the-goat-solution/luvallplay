@@ -5,6 +5,7 @@
 // (in the Gallery, under review, can't be shared, hidden), and delete.
 import { useId, useRef, useState } from "react";
 import { ScopeTag } from "../../components/ClubTag.tsx";
+import { Icon } from "../../components/Icon.tsx";
 import type { AppKey } from "@luvallplay/i18n/app";
 import type { T } from "../../lib/messages.ts";
 import { LoadError } from "../../components/LoadError.tsx";
@@ -64,7 +65,7 @@ export function PhotosCard({ t, playerId, onlyWhenOn = false }: { t: T; playerId
     void list.refetch();
   };
   const jobLabel = (s: JobState) =>
-    s === "preparing" ? t("ph_preparing") : s === "checking" ? t("ph_checking") : s === "approved" ? `✓ ${t("ph_done_shared")}` : s === "needs_review" || s === "pending" ? t("ph_done_review") : s === "rejected" || s === "hidden" ? t("ph_done_blocked") : t("ph_failed");
+    s === "preparing" ? t("ph_preparing") : s === "checking" ? t("ph_checking") : s === "approved" ? t("ph_done_shared") : s === "needs_review" || s === "pending" ? t("ph_done_review") : s === "rejected" || s === "hidden" ? t("ph_done_blocked") : t("ph_failed");
 
   return (
     <section className="card stack" aria-labelledby={titleId} data-testid="my-photos">
@@ -104,7 +105,7 @@ export function PhotosCard({ t, playerId, onlyWhenOn = false }: { t: T; playerId
               {jobs.map((j, i) => (
                 <li key={i}>
                   <img src={j.preview} alt="" />
-                  <span className={`small photo-${j.state === "approved" ? "ok" : j.state === "failed" || j.state === "rejected" || j.state === "hidden" ? "bad" : "wait"}`}>{jobLabel(j.state)}</span>
+                  <span className={`small photo-${j.state === "approved" ? "ok" : j.state === "failed" || j.state === "rejected" || j.state === "hidden" ? "bad" : "wait"}`}>{j.state === "approved" && <Icon name="check" size={14} />}{jobLabel(j.state)}</span>
                 </li>
               ))}
             </ul>

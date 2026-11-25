@@ -6,6 +6,7 @@ import { useCurrentClub, useT } from "../../hooks.tsx";
 import { squarePhoto } from "../../lib/photo.ts";
 import { useDeleteAccount, useDownloadData, usePhoto, useProfile, useSaveDetails, useSavePrivacy, type Profile } from "./data.ts";
 import { LoadError } from "../../components/LoadError.tsx";
+import { Icon } from "../../components/Icon.tsx";
 
 type T = ReturnType<typeof useT>;
 
@@ -102,7 +103,7 @@ function Details({ p, t }: { p: Profile; t: T }) {
           <dt>{t("acc_phone")}</dt>
           <dd>
             {p.phone ?? <span className="muted">{t("acc_phone_none")}</span>}
-            {p.phone && <span className="muted small field-hint">{p.phoneVerified ? `✓ ${t("acc_phone_confirmed")}` : t("acc_phone_unconfirmed")}</span>}
+            {p.phone && <span className="muted small field-hint">{p.phoneVerified ? <><Icon name="check" size={14} /> {t("acc_phone_confirmed")}</> : t("acc_phone_unconfirmed")}</span>}
           </dd>
         </div>
       </dl>
@@ -111,7 +112,7 @@ function Details({ p, t }: { p: Profile; t: T }) {
         <button type="submit" className="button button-primary" disabled={save.isPending || !dirty || !form.firstName.trim()}>
           {save.isPending ? t("acc_saving") : t("acc_save")}
         </button>
-        {saved && !dirty && <span className="muted" role="status">✓ {t("acc_saved")}</span>}
+        {saved && !dirty && <span className="muted icon-line" role="status"><Icon name="check" size={16} />{t("acc_saved")}</span>}
       </div>
     </form>
   );

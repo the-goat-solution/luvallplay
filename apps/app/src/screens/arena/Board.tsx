@@ -9,6 +9,7 @@ import type { ArenaT } from "./words.ts";
 import { MatchStats } from "./Stats.tsx";
 import { RankIcon } from "../../components/RankIcon.tsx";
 import { useVisionStatus } from "../vision/data.ts";
+import { Icon } from "../../components/Icon.tsx";
 
 /** "Set up {visionName}", with "Free now" during the tracker's free trial (as on the website). */
 function RecordStats({ id, t, hint = false }: { id: number; t: ArenaT; hint?: boolean }) {
@@ -344,7 +345,7 @@ export function Side({ state, t, rank, lang }: { state: ArenaState; lang: string
     <div className="stack">
       {statsFor !== null && <MatchStats id={statsFor} t={t} onClose={() => setStatsFor(null)} />}
       <section className="card stack crown" aria-labelledby="crown-title">
-        <h2 id="crown-title">👑 {t("crown")}</h2>
+        <h2 id="crown-title" className="icon-title"><Icon name="crown" size={18} />{t("crown")}</h2>
         {state.crown ? (
           <>
             <PairBlock pair={state.crown.pair} rank={rank} />
@@ -397,7 +398,7 @@ export function Side({ state, t, rank, lang }: { state: ArenaState; lang: string
         ) : (
           <p className="muted">{t("feed_empty")}</p>
         )}
-        {state.hot && <p className="small">🔥 {t("on_fire", { name: state.hot.player.name, n: state.hot.streak })}</p>}
+        {state.hot && <p className="small icon-line"><Icon name="flame" size={16} />{t("on_fire", { name: state.hot.player.name, n: state.hot.streak })}</p>}
       </section>
     </div>
   );

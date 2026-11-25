@@ -135,7 +135,7 @@ describe("the stylesheet's rules", () => {
     assert.ok(minHeight(/\.field input, \.field select \{[^}]*min-height: ([\d.]+)rem/) >= 2.75);
   });
   test("no screen names a brand colour in code either", () => {
-    for (const f of ["Shell", "SignIn", "Invite", "Settings", "Me", "Placeholder"]) {
+    for (const f of ["Shell", "SignIn", "Invite", "Settings", "Home", "Profile", "Placeholder"]) {
       const src = read(`../src/screens/${f}.tsx`);
       assert.doesNotMatch(src, /#[0-9a-f]{6}\b|navy|bronze|three.?wolves/i, f);
     }
@@ -145,15 +145,15 @@ describe("the stylesheet's rules", () => {
 describe("tabs and modules", () => {
   const ids = (modules: string[] | null) => visibleTabs(modules).map((t) => t.id);
   test("every module on: all five tabs, in the website's order", () => {
-    assert.deepEqual(ids(["arena", "vision", "memberships"]), ["me", "player", "arena", "leaderboard", "vision"]);
+    assert.deepEqual(ids(["arena", "vision", "memberships"]), ["home", "player", "arena", "leaderboard", "vision"]);
   });
-  test("a module that is off takes its tabs away (the Arena takes the Leaderboard with it); Me and Player are always there", () => {
-    assert.deepEqual(ids(["vision"]), ["me", "player", "vision"]);
-    assert.deepEqual(ids(["arena"]), ["me", "player", "arena", "leaderboard"]);
-    assert.deepEqual(ids([]), ["me", "player"]);
+  test("a module that is off takes its tabs away (the Arena takes the Leaderboard with it); Home and Player are always there", () => {
+    assert.deepEqual(ids(["vision"]), ["home", "player", "vision"]);
+    assert.deepEqual(ids(["arena"]), ["home", "player", "arena", "leaderboard"]);
+    assert.deepEqual(ids([]), ["home", "player"]);
   });
   test("before the club's modules are known, a module's tab isn't shown", () => {
-    assert.deepEqual(ids(null), ["me", "player"]);
+    assert.deepEqual(ids(null), ["home", "player"]);
   });
   test("Settings is not a tab (it is the header's ⚙)", () => {
     assert.equal(tabForPath("/settings"), null);

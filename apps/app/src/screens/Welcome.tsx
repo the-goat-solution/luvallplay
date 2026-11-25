@@ -20,7 +20,7 @@ export default function Welcome() {
       {
         onSuccess: () => {
           store.set({ needsDetails: false });
-          void navigate({ to: "/me", replace: true });
+          void navigate({ to: "/home", replace: true });
         },
       },
     );
@@ -43,7 +43,7 @@ export default function Welcome() {
           <button type="submit" className="button button-primary" disabled={save.isPending || !firstName.trim()}>
             {save.isPending ? t("acc_saving") : t("name_step_save")}
           </button>
-          <Link to="/me" className="button button-quiet">{t("cancel")}</Link>
+          <Link to="/home" className="button button-quiet">{t("cancel")}</Link>
         </div>
       </form>
     </div>

@@ -1,4 +1,5 @@
-// Settings (the ⚙ in the header), as on the website: the Club admin button,
+// Settings, the second half of My profile (the person's picture in the top
+// bar; /settings lands there too), as on the website: the Club admin button,
 // picture, details, language, appearance, privacy, the person's data and
 // signing out. Language is kept on the account too, so the website and the
 // club's emails follow. Still to come (they touch signing in): changing the
@@ -14,7 +15,8 @@ import { InstallCard } from "./settings/Install.tsx";
 import { useSaveLanguage } from "./settings/data.ts";
 import type { ThemeChoice } from "../lib/theme.ts";
 
-export default function SettingsScreen() {
+/** Settings, as sections of My profile (screens/Profile.tsx). */
+export function SettingsSections() {
   const { config, current } = useCurrentClub();
   // Settings are the person's own: with several clubs, in Luvallplay's words.
   const clubs = useClubs().data?.clubs ?? [];
@@ -40,9 +42,9 @@ export default function SettingsScreen() {
 
   const themes: [ThemeChoice, string][] = [["system", t("settings_theme_system")], ["light", t("settings_theme_light")], ["dark", t("settings_theme_dark")]];
   return (
-    <section className="screen stack" data-screen="nav_settings">
-      <h1>{t("settings_title")}</h1>
-      <div className="panes">
+    <section className="stack profile-section" id="settings" aria-labelledby="settings-title" data-screen="nav_settings">
+      <h2 className="section-title" id="settings-title">{t("profile_settings")}</h2>
+      <div className="settings-cards">
         <AccountCards />
         <ConnectedApps />
         <fieldset className="card stack">

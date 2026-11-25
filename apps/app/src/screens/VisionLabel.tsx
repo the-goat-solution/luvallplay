@@ -8,6 +8,7 @@ import { Link } from "@tanstack/react-router";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { useCurrentClub, useT } from "../hooks.tsx";
 import { useSaveLabels } from "./vision/data.ts";
+import { Icon } from "../components/Icon.tsx";
 
 type Hit = { t: number; player: number; rally: number };
 const SLOTS: AppKey[] = ["label_near_left", "label_near_right", "label_far_left", "label_far_right"];
@@ -104,10 +105,10 @@ export default function VisionLabelScreen() {
 
   return (
     <div className="screen vision-label" data-screen="vision-label">
-      <Link to="/vision" className="back">← {t("nav_vision")}</Link>
+      <Link to="/vision" className="back"><Icon name="chevronLeft" size={20} />{t("nav_vision")}</Link>
       <h1>{t("label_title")}</h1>
       <section className="card stack">
-        <span className="tag">✦ {t("label_badge")}</span>
+        <span className="tag"><Icon name="sparkles" size={14} />{t("label_badge")}</span>
         <p className="small">{t("label_help")}</p>
         <label className="field">
           <span>{t("label_video")}</span>

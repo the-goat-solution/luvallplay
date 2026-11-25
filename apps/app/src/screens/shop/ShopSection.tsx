@@ -109,7 +109,7 @@ function ProductCard({ p, cash }: { p: Product; cash: boolean }) {
           <CardPayment
             clientSecret={checkout.clientSecret}
             label={t("shop_pay_card", { price })}
-            returnPath="/me"
+            returnPath="/home"
             onDone={() => {
               const id = checkout.id;
               setCheckout(null);

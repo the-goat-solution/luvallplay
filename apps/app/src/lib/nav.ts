@@ -2,14 +2,14 @@
 // takes its screens away: build plan §6.2.3).
 import type { AppKey } from "@luvallplay/i18n/app";
 
-export type TabId = "me" | "player" | "arena" | "leaderboard" | "vision";
+export type TabId = "home" | "player" | "arena" | "leaderboard" | "vision";
 export type Tab = { id: TabId; path: `/${TabId}`; label: AppKey; module: string | null };
 
-// The same tabs, in the same order, as the club website's My Profile:
-// Me · Player · Arena · Leaderboard · Vision. Settings isn't a tab; it is
-// the ⚙ button in the header (as on the website, where it sits behind Me).
+// Home · Player · Arena · Leaderboard · Vision: the website's My Profile
+// order, with Home first. The person's own page (My profile: memberships,
+// photos and settings) isn't a tab: it is their picture in the top bar.
 export const TABS: readonly Tab[] = [
-  { id: "me", path: "/me", label: "nav_me", module: null },
+  { id: "home", path: "/home", label: "nav_home", module: null },
   { id: "player", path: "/player", label: "nav_player", module: null },
   { id: "arena", path: "/arena", label: "nav_arena", module: "arena" },
   { id: "leaderboard", path: "/leaderboard", label: "nav_leaderboard", module: "arena" },
@@ -33,7 +33,7 @@ export function tabForPath(pathname: string): Tab | null {
 
 /** Home: the person's own pages, for all their clubs at once. Everything else belongs to one club. */
 export function isHomePath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/me" || pathname === "/welcome" || /^\/(inbox|settings)(\/|$)/.test(pathname);
+  return pathname === "/" || pathname === "/home" || pathname === "/me" || pathname === "/welcome" || /^\/(inbox|settings|profile)(\/|$)/.test(pathname);
 }
 
 /** The module a club space needs (Arena, Leaderboard: "arena"; Vision: "vision"), or null when every club has it. */
@@ -50,11 +50,16 @@ export function visibleTabsAcross(modulesByClub: readonly (readonly string[] | n
 /**
  * The club a club space shows: the chosen one when it has the space's
  * module, else the first club (in the person's order) that has it; null
- * when none does (yet).
+ * when none does, or while a club before it is still loading (so the space
+ * never opens as another club and then flips).
  */
 export function spaceClub<C extends { slug: string }>(clubs: readonly C[], modules: (club: C) => readonly string[] | null, chosen: string | null, module: string | null): C | null {
-  const fits = (c: C) => module === null || (modules(c)?.includes(module) ?? false);
   const picked = clubs.find((c) => c.slug === chosen);
-  if (picked && fits(picked)) return picked;
-  return clubs.find(fits) ?? null;
+  for (const c of picked ? [picked, ...clubs.filter((x) => x !== picked)] : clubs) {
+    if (module === null) return c;
+    const m = modules(c);
+    if (m === null) return null;
+    if (m.includes(module)) return c;
+  }
+  return null;
 }

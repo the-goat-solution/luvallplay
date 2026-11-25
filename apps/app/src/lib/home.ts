@@ -44,3 +44,8 @@ export function initials(name: string): string {
   const words = all.filter((w) => !/^(club|the|of|and)$/i.test(w));
   return (words.length ? words : all).slice(0, 2).map((w) => [...w][0].toUpperCase()).join("") || "?";
 }
+
+/** Morning from 5 until noon, afternoon until 6pm, evening the rest (the device's own clock). */
+export function partOfDay(hour: number): "morning" | "afternoon" | "evening" {
+  return hour >= 5 && hour < 12 ? "morning" : hour >= 12 && hour < 18 ? "afternoon" : "evening";
+}

@@ -8,6 +8,7 @@ import { money } from "../lib/format.ts";
 import { usePlace } from "./me/parts.tsx";
 import { useVisionChallenge, useVisionStatus, type VisionChallenge } from "./vision/data.ts";
 import { LoadError } from "../components/LoadError.tsx";
+import { Icon } from "../components/Icon.tsx";
 
 const DAY = 86_400_000;
 
@@ -98,7 +99,7 @@ export default function VisionScreen() {
         </>
       )}
       <section className="card stack" aria-labelledby="vision-about">
-        <span className="tag">✦ {t("vision_ai_badge")}</span>
+        <span className="tag"><Icon name="sparkles" size={14} />{t("vision_ai_badge")}</span>
         <h2 id="vision-about" className="visually-hidden">{t("vision_ai_badge")}</h2>
         <p>{t("vision_intro")}</p>
         <p className="muted small">{t("vision_ai_layers")}</p>

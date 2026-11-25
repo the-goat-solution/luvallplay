@@ -31,6 +31,18 @@ const base = () => env.base;
 before(async () => {
   env = await startEnv({ log: () => {} });
   browser = await chromium.launch();
+  // The journeys talk to the app under test and to nothing else. Pages load
+  // Stripe's script from the root layout; left alone it calls Stripe's
+  // servers (js.stripe.com, m.stripe.network, m.stripe.com) from wherever
+  // the journeys run, which is traffic a test shouldn't send and which kept
+  // the Arena page from ever settling in CI. Every context refuses any host
+  // but this machine. No journey needs one: payments are stood in for.
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (options) => {
+    const context = await newContext(options);
+    await context.route((url) => !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname), (route) => route.abort());
+    return context;
+  };
   db = new pg.Client({ connectionString: env.dbUrl });
   await db.connect();
   mkdirSync(SHOTS, { recursive: true });

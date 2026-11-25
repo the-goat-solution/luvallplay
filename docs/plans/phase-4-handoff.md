@@ -14,8 +14,9 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 | 3c. Settings, part A (account, no sign-in changes) | **Merged** | #133, see §1a |
 | 3c. Settings, part B (admin handoff, delete, connected apps, name step) | **Merged** | #134, see §1a |
 | 4. Arena and Leaderboard | **Merged** | #135, see §1a |
-| 5a. Player tab | **PR open** | see §1a |
-| 5b. Shop orders, membership and cancel flows | Not started | |
+| 5a. Player tab | **Merged** | #136, see §1a |
+| 5b. Shop (card payments through Stripe) | **PR open; merge needs the owner's OK** (payments) | see §1a |
+| 5c. Membership: join, renew, change, cancel, billing; casual booking | In progress | |
 | 6. Vision | Not started | |
 | 7. Offline and PWA | Not started | |
 | 8. Responsive and visual pass, performance, old-client tests, docs | Not started | |
@@ -33,7 +34,8 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - **Arena (4)**: `arena.state`, `arena.action`; server `apps/web/lib/app-arena.ts`; app `apps/app/src/screens/Arena.tsx`, `src/screens/arena/*` (words, data, TeamUp, Board, Dialogs). Not yet: match stats, Wolf Vision links, player card, versus splash.
 - **Leaderboard (4)**: `leaderboard.board`, `leaderboard.player`; server `apps/web/lib/app-leaderboard.ts`; app `apps/app/src/screens/Leaderboard.tsx`, `src/screens/leaderboard/*`. Rank icons not yet.
 - **Player (5a)**: `player.stats`; app `apps/app/src/screens/Player.tsx`, `src/screens/player/*` (data, Charts, RankCard). Rank art not yet.
-- **Not on Me yet**: the shop (step 5) and My photos (with the Player step).
+- **Shop (5b)**: `shop.*`; server `apps/web/lib/app-shop.ts`; app `src/screens/shop/*`, `src/components/CardPayment.tsx`, `src/lib/stripe.ts`. Stripe's hosts are in `apps/app/vite.config.ts`.
+- **Not on Me yet**: My photos and My photos (with the Player step).
 - **Words**: Me words are in the app's own dictionary (`packages/i18n/src/app.ts`), copied from the website's wording without the club's name or "$" (the website's `profile` dictionary still has both typed in).
 
 ## 2. What exists now

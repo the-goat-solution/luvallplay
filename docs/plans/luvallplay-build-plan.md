@@ -1563,7 +1563,7 @@ Lane V builds the Vietnam pieces that don't wait for discovery or counsel. **Not
 | 6 MoMo and Zalo reading | this section | §11.4.1 | From search excerpts only; a direct read is still owed |
 
 **Decisions made while building (each can be changed):**
-- **Payment references** look like `LVP000016JX`: a prefix, the payment's number in letters and digits that aren't confused with each other, and a check character. They survive what banks do to transfer notes (capitals, no accents, their own text around it, spaces pushed in).
+- **Payment references** look like `LVP000016JK`: a prefix, the payment's number in letters and digits that aren't confused with each other, and a check character. They survive what banks do to transfer notes (capitals, no accents, their own text around it, spaces pushed in).
 - **A transfer with the wrong amount is never matched automatically**, in either direction; neither is a transfer with no reference, even when only one open payment has that amount. A person decides, with the reason shown.
 - **Accent-free search in the database uses built-in Postgres functions**, not the `unaccent` extension, because a Vietnamese cloud's managed Postgres may not offer it. No migration was needed. If name search becomes slow on a large club, an indexed search column goes through the migration queue.
 - **The Vietnam pack can't be selected**: its tax and legal items are empty until counsel answers, and the checklist refuses a pack with open items.

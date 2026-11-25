@@ -9,6 +9,9 @@ import { MatchAnalyzer, VisionHostProvider, fillTerms, type VisionHost, type Vis
 import { clubHost, store } from "../app.ts";
 import { useCurrentClub, useLang, useSession } from "../hooks.tsx";
 import { focus } from "../lib/focus.ts";
+import { money } from "../lib/format.ts";
+import { usePlace } from "./me/parts.tsx";
+import { useVisionStatus } from "./vision/data.ts";
 
 function clubTransport(host: string, club: string): VisionTransport {
   return async (endpoint, { method = "GET", query, body, keepalive } = {}) => {
@@ -35,6 +38,8 @@ export default function VisionTrackScreen() {
   const { current, slug, config } = useCurrentClub();
   const lang = useLang();
   const session = useSession();
+  const { currency } = usePlace();
+  const prices = useVisionStatus().data?.prices;
   const terms = config?.terms ?? null;
   const params = new URLSearchParams(window.location.search);
   const challengeId = Number(params.get("challenge"));
@@ -55,9 +60,11 @@ export default function VisionTrackScreen() {
       visionName: fill(lang)("{visionName}"),
       transport: clubTransport(clubHost(current.apiBase), slug),
       links: { arena: "/arena", tracker: "/vision/track", label: "/vision/label", signIn: () => "/signin" },
+      // The prices after the trial, from the club's API, in its money; the words for a player and a pair are plain.
+      prices: prices ? { live: money(prices.live, currency), upload: money(prices.upload, currency) } : { live: "…", upload: "…" },
       onFocus: setFocus,
     };
-  }, [slug, current, lang, terms]);
+  }, [slug, current, lang, terms, prices, currency]);
 
   if (!host) return null;
   return (

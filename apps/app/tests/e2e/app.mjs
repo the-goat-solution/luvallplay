@@ -1618,6 +1618,9 @@ describe("APP · Vision", () => {
       await page.getByTestId("mode-camera").waitFor();
       const banner = await page.getByTestId("trial-banner").textContent();
       assert.match(banner, /Wolf Vision is free until 28 February 2027/);
+      // The prices come from the club's API, in its money; no club's words of their own.
+      await page.getByTestId("trial-banner").filter({ hasText: "From 1 March 2027: $5 a live match, $2 a video." }).waitFor();
+      assert.doesNotMatch(await page.locator("body").innerText(), /NZ\$|\{(player|players|Player|Pair|priceLive|priceUpload)\}/);
       assert.ok(await page.locator(".shell-nav").isVisible(), "the tabs stay until a session starts");
 
       // Its language switch is the app's.

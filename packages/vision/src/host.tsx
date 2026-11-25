@@ -5,7 +5,10 @@
 // status codes, so the tracker reads every answer the same way.
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 
-export type Lang = "en" | "vi";
+import type { ClubWords, Lang } from "./words.ts";
+
+export type { ClubWords, Lang } from "./words.ts";
+export { PLAIN_WORDS, fillWords } from "./words.ts";
 
 /** The tracker's server calls. */
 export type VisionEndpoint =
@@ -41,6 +44,10 @@ export type VisionHost = {
   termed: <T>(copy: T, lang: Lang) => T;
   /** The club's name for the tracker. */
   visionName: string;
+  /** The club's words for a player and a pair (default: plain ones). */
+  words?: Partial<Record<Lang, ClubWords>>;
+  /** A live match's and a video's price after the trial, in the club's money ("NZ$5"). */
+  prices: { live: string; upload: string };
   transport: VisionTransport;
   links: {
     /** Back to the Arena. */

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ObjectDetector } from "@mediapipe/tasks-vision";
-import { useHostFocus, useVisionHost } from "../host";
+import { fillTerms, fillWords, useHostFocus, useVisionHost } from "../host";
 import { formatClock, landmarkId, type CourtTap, type Pt } from "../match-analyzer";
 import { MatchEngine } from "../engine/engine";
 import { LENS_PRIOR, fitCamera, suspectTap, type CourtCamera, type LensPreset } from "../engine/lens";
@@ -113,9 +113,12 @@ export function MatchAnalyzer({
   /** The signed-in player (Wolf 1 in a session that isn't a challenge). */
   me?: Me | null;
 }) {
-  const { lang, setLang, termed, transport, links } = useVisionHost();
+  const host = useVisionHost();
+  const { lang, setLang, termed, transport, links } = host;
   // The club's own name for the tracker is filled in as each line is read.
-  const c = useMemo(() => termed(COPY[lang], lang), [lang, termed]);
+  const c = useMemo(() => fillTerms(termed(COPY[lang], lang), (text) => fillWords(text, lang, host)), [lang, termed, host]);
+  /** English, for the stats emailed to players who aren't registered. */
+  const en = useMemo(() => fillTerms(COPY.en, (text) => fillWords(text, "en", host)), [host]);
 
   // ── Challenge ─────────────────────────────────────────────────────────
   const [setup, setSetup] = useState<MatchSetup | null>(null);
@@ -127,7 +130,7 @@ export function MatchAnalyzer({
   const [choosing, setChoosing] = useState<number | null>(null);
   const [emailState, setEmailState] = useState<{ kind: "idle" | "sending" } | { kind: "sent" | "error"; to: string[] }>({ kind: "idle" });
   const emailedRef = useRef<string>("");
-  const [teams, setTeams] = useState<[string, string]>([COPY.en.teamA, COPY.en.teamB]);
+  const [teams, setTeams] = useState<[string, string]>(() => [en.teamA, en.teamB]);
   useEffect(() => {
     if (!challengeId) return;
     let alive = true;
@@ -622,7 +625,7 @@ export function MatchAnalyzer({
       const players = people.map((p, i) => {
         const st = final.players[order.indexOf(i)];
         return {
-          name: (p.placeholder ? COPY.en.player(i + 1) : p.name).slice(0, 60),
+          name: (p.placeholder ? en.player(i + 1) : p.name).slice(0, 60),
           team: (i < 2 ? 0 : 1) as 0 | 1,
           hits: st?.hits ?? 0,
           distance: Math.round((st?.distance ?? 0) * 10) / 10,

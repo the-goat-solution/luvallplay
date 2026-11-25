@@ -197,6 +197,8 @@ test("links and sections follow the switches: a link to a module that is off isn
   assert.equal(linkShown(club, "/profile/settings"), true);
   assert.equal(linkShown(club, "/profile/arena"), false);
   assert.equal(linkShown(club, "/profile/arena?tab=leaderboard"), false, "the query string doesn't hide the owner");
+  assert.equal(linkShown(club, "/profile/leaderboard"), false, "the Leaderboard tab belongs to the Arena");
+  assert.equal(linkShown(club, "/profile/leaderboard?period=year"), false);
   assert.equal(linkShown(club, "/profile/wolf-vision"), false);
   assert.equal(linkShown(club, "/gallery#top"), false);
   assert.equal(moduleOn(club, "memberships"), true);

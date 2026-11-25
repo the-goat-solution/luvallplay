@@ -37,6 +37,16 @@ const TABS: {
     ),
   },
   {
+    href: "/profile/player",
+    key: "tab_player",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z" />
+        <path d="M17 6h3v2a3 3 0 01-3 3M7 6H4v2a3 3 0 003 3" />
+      </svg>
+    ),
+  },
+  {
     href: "/profile/arena",
     key: "tab_arena",
     icon: (
@@ -50,6 +60,19 @@ const TABS: {
     ),
   },
   {
+    href: "/profile/leaderboard",
+    key: "tab_leaderboard",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 21h18" />
+        <rect x="9" y="7" width="6" height="14" rx="1" />
+        <rect x="3" y="12" width="6" height="9" rx="1" />
+        <rect x="15" y="10" width="6" height="11" rx="1" />
+        <path d="M12 2.5l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 4.6l2-.3z" />
+      </svg>
+    ),
+  },
+  {
     href: "/profile/wolf-vision",
     key: "tab_wolfvision",
     special: true,
@@ -58,16 +81,6 @@ const TABS: {
         <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
         <circle cx="12" cy="12" r="3.2" />
         <path d="M12 2v2M12 20v2" />
-      </svg>
-    ),
-  },
-  {
-    href: "/profile/player",
-    key: "tab_player",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z" />
-        <path d="M17 6h3v2a3 3 0 01-3 3M7 6H4v2a3 3 0 003 3" />
       </svg>
     ),
   },
@@ -313,11 +326,6 @@ export function ProfileShell({
                   <Link href="/profile/settings" role="menuitem" onClick={() => setMenuOpen(false)}>
                     {tr("me_settings")}
                   </Link>
-                  {linkShown(club, "/profile/arena") && (
-                    <Link href="/profile/arena?tab=leaderboard" role="menuitem" onClick={() => setMenuOpen(false)}>
-                      {tr("leaderboard")}
-                    </Link>
-                  )}
                   <Link href="/" role="menuitem">
                     {tr("view_site")}
                   </Link>

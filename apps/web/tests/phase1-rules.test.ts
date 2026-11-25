@@ -138,8 +138,8 @@ test("redirects: every moved URL is permanent and lands on the new page", () => 
   assert.equal(resolve("/profile/membership", true), "/profile");
   assert.equal(resolve("/profile/membership", false), "/profile", "signed out: /profile then asks to sign in");
   assert.equal(resolve("/profile/me", true), "/profile");
-  assert.equal(resolve("/leaderboard", true), "/profile/arena?tab=leaderboard");
-  assert.equal(resolve("/leaderboard?source=challenges&period=year", true), "/profile/arena?tab=leaderboard");
+  assert.equal(resolve("/leaderboard", true), "/profile/leaderboard");
+  assert.equal(resolve("/leaderboard?source=challenges&period=year", true), "/profile/leaderboard");
   assert.equal(resolve("/leaderboard", false), "/#leaderboard");
   assert.equal(resolve("/match-analyzer", false), "/profile/wolf-vision");
 });

@@ -24,6 +24,7 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   ["/login", "account"],
   ["/profile", "account"],
   ["/profile/arena", "arena"],
+  ["/profile/leaderboard", "arena"],
   ["/profile/wolf-vision", "vision"],
   ["/challenges", "arena"],
   ["/casual-play", "court-board"],

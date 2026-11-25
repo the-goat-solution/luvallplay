@@ -25,7 +25,7 @@ export default function manifest(): MetadataRoute.Manifest {
       // Old installs keep their old shortcut URLs; lib/redirects.ts sends those here.
       { name: "Me", url: "/profile", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
       { name: "My stats", url: "/profile/player", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
-      { name: "Leaderboard", url: "/profile/arena?tab=leaderboard", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "Leaderboard", url: "/profile/leaderboard", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
     ],
   };
 }

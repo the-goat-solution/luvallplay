@@ -8,7 +8,7 @@ import { AchievementIcon, RankIcon } from "./RankIcon";
 import styles from "@/components/profile/profile.module.css";
 import r from "./rankcard.module.css";
 
-/** Player tab: rank, Wolf Points, kit bag and achievements. */
+/** Player tab: rank, Wolf Points, kit bag and achievements (the ladder follows, see RankLadder). */
 export function RankCard({ me }: { me: MeView }) {
   const { t, lang } = useArenaT();
   const rank = me.rank;
@@ -61,9 +61,6 @@ export function RankCard({ me }: { me: MeView }) {
             {t("wp_bonuses")}
           </div>
         </div>
-        <a className={r.arena} href="/profile/arena">
-          ⚔️ {t("go_arena")}
-        </a>
         <p className={r.how}>
           <b>{t("how_title")}.</b> {t("how_body")}
         </p>

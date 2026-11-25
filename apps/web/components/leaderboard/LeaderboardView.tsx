@@ -56,7 +56,7 @@ export function LeaderboardView({
   signedIn,
   justHidden,
   myLadder,
-  basePath = "/profile/arena?tab=leaderboard",
+  basePath = "/profile/leaderboard",
 }: {
   source: PointsSource;
   period: Period;
@@ -71,7 +71,7 @@ export function LeaderboardView({
   signedIn: boolean;
   justHidden: boolean;
   myLadder: MyLadder | null;
-  /** Where the filter links point (the Arena's Leaderboard segment). */
+  /** Where the filter links point (the Leaderboard tab). */
   basePath?: string;
 }) {
   const { tr, lang } = useProfileT();

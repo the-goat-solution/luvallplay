@@ -14,7 +14,11 @@ export const CLUB_TERMS = {
   visionName: "Wolf Vision",
   alphaName: "Alpha Wolf",
   silverName: "Silver Wolf",
-  localized: { vi: { pointsName: "Điểm Sói", alphaName: "Sói Đầu Đàn", silverName: "Sói Bạc" } },
+  // The tracker's words for a player, players and a pair ("Wolf 1", "Pack A").
+  playerName: "Wolf",
+  playersName: "Wolves",
+  pairName: "Pack",
+  localized: { vi: { pointsName: "Điểm Sói", alphaName: "Sói Đầu Đàn", silverName: "Sói Bạc", playerName: "Sói", playersName: "Sói", pairName: "Bầy" } },
 } as const;
 
 // Days of the week that grant recurring-membership access. Every other day

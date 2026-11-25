@@ -92,6 +92,13 @@
       "when": 1795463004000,
       "tag": "0012_junior_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795463005000,
+      "tag": "0013_terms_players",
+      "breakpoints": true
     }
   ]
 }

@@ -286,3 +286,20 @@ describe("the built page's rules", () => {
     assert.match(v.headers[1].headers[0].value, /immutable/);
   });
 });
+
+describe("a club's words for the tracker", async () => {
+  const { clubWords } = await import("../src/lib/club-words.ts");
+  test("Three Wolves' terms: Wolf, wolves, Pack; Sói and Bầy in Vietnamese", () => {
+    const words = clubWords({ playerName: "Wolf", playersName: "Wolves", pairName: "Pack", localized: { vi: { playerName: "Sói", pairName: "Bầy" } } });
+    assert.deepEqual(words, {
+      en: { Player: "Wolf", player: "wolf", players: "wolves", Pair: "Pack" },
+      vi: { Player: "Sói", player: "sói", players: "sói", Pair: "Bầy" },
+    });
+  });
+  test("no words of its own: the tracker's plain ones; only a name and no pair: plain too", () => {
+    assert.equal(clubWords({}), undefined);
+    assert.equal(clubWords(null), undefined);
+    assert.equal(clubWords({ playerName: "Hawk" }), undefined);
+    assert.deepEqual(clubWords({ playerName: "Hawk", pairName: "Nest" })?.en, { Player: "Hawk", player: "hawk", players: "hawks", Pair: "Nest" });
+  });
+});

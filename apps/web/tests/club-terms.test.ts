@@ -68,7 +68,7 @@ test("another club's names appear in both languages, and nothing of Three Wolves
   }
 });
 
-test("migrations 0008 and 0009 store Three Wolves' own names, and the stored settings equal the built-in ones", { skip: !process.env.DATA_GUARD_TEST_URL ? "set DATA_GUARD_TEST_URL" : false }, async () => {
+test("migrations 0008, 0009 and 0013 store Three Wolves' own names, and the stored settings equal the built-in ones", { skip: !process.env.DATA_GUARD_TEST_URL ? "set DATA_GUARD_TEST_URL" : false }, async () => {
   const { default: pg } = await import("pg");
   const { migrate } = await import("../scripts/db/migrate.mjs");
   const { compareClubConfig } = await import("../lib/club-config.ts");
@@ -89,7 +89,8 @@ test("migrations 0008 and 0009 store Three Wolves' own names, and the stored set
     const { rows } = await c.query(`SELECT terms FROM tenants WHERE slug = 'three-wolves'`);
     assert.deepEqual(rows[0].terms, {
       points_name: "Wolf Points", vision_name: "Wolf Vision", alpha_name: "Alpha Wolf", silver_name: "Silver Wolf",
-      localized: { vi: { points_name: "Điểm Sói", alpha_name: "Sói Đầu Đàn", silver_name: "Sói Bạc" } },
+      player_name: "Wolf", players_name: "Wolves", pair_name: "Pack",
+      localized: { vi: { points_name: "Điểm Sói", alpha_name: "Sói Đầu Đàn", silver_name: "Sói Bạc", player_name: "Sói", players_name: "Sói", pair_name: "Bầy" } },
     });
     const report = await compareClubConfig(c);
     assert.deepEqual({ stored: report.stored, problems: report.problems, differences: report.differences }, { stored: true, problems: [], differences: [] });

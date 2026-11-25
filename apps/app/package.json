@@ -16,6 +16,8 @@
     "prebuild": "node ../../packages/vision/scripts/copy-mediapipe.mjs public"
   },
   "dependencies": {
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/be-vietnam-pro": "^5.3.0",
     "@luvallplay/api": "workspace:*",
     "@luvallplay/core": "workspace:*",
     "@luvallplay/i18n": "workspace:*",

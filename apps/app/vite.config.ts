@@ -43,7 +43,8 @@ function csp(env: Record<string, string>): Plugin {
         `script-src 'self' 'wasm-unsafe-eval' ${STRIPE.script}`,
         "style-src 'self'",
         `img-src 'self' data: blob: https: ${hosts}`,
-        "font-src 'self'",
+        // The app's own fonts, and a club's fonts from its website (the API hosts).
+        `font-src 'self' ${hosts}`,
         // Videos chosen on the device (the tracker and the labelling tool play them from a blob: address).
         "media-src 'self' blob:",
         // The tracker's detection models (Google's MediaPipe model storage).

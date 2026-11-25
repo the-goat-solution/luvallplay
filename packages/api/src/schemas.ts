@@ -145,6 +145,8 @@ export const clubThemeSchema = z.object({
   logoUrl: z.string().nullable(),
   light: themeTokensSchema,
   dark: themeTokensSchema,
+  /** Files for the club's own font families, on its website (absolute addresses). */
+  fonts: z.array(z.object({ family: z.string(), src: z.string(), weight: z.number().int(), style: z.enum(["normal", "italic"]) })).optional(),
 });
 
 const termsSchema = z.object({
@@ -152,6 +154,10 @@ const termsSchema = z.object({
   visionName: z.string(),
   alphaName: z.string(),
   silverName: z.string(),
+  /** Optional: what the club calls a player, players and a pair. */
+  playerName: z.string().optional(),
+  playersName: z.string().optional(),
+  pairName: z.string().optional(),
 });
 
 /**

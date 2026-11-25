@@ -2,6 +2,14 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
+// Luvallplay's own fonts (bundled; only the weights the app uses). A club's
+// fonts come from its own website (lib/club-fonts.ts).
+import "@fontsource/be-vietnam-pro/400.css";
+import "@fontsource/be-vietnam-pro/600.css";
+import "@fontsource/be-vietnam-pro/700.css";
+import "@fontsource/barlow-condensed/600.css";
+import "@fontsource/barlow-condensed/700.css";
+import "@fontsource/barlow-condensed/800.css";
 import "@luvallplay/ui/tokens.css";
 import "./styles/app.css";
 import { storage, store } from "./app.ts";

@@ -23,7 +23,11 @@ export type ClubConfig = {
   currency: string;
   languages: string[];
   /** The club's own names; `localized` holds a language's own wording where it differs (e.g. vi). */
-  terms: { pointsName: string; visionName: string; alphaName: string; silverName: string; localized: Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string }> };
+  terms: {
+    pointsName: string; visionName: string; alphaName: string; silverName: string;
+    /** Optional: what the club calls a player, players and a pair (the tracker's "Player 1", "Pair A"). */
+    playerName?: string; playersName?: string; pairName?: string;
+    localized: Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string; playerName?: string; playersName?: string; pairName?: string }> };
   playDays: {
     /** Courts booked → players allowed. */
     courtsToMaxPlayers: Record<number, number>;
@@ -90,20 +94,27 @@ function intMap(v: unknown): Record<number, number> | null {
  * list of fields that fell back to `defaults` (empty when every value was
  * present and valid).
  */
-function localizedTerms(raw: unknown): Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string }> {
-  const out: Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string }> = {};
+function localizedTerms(raw: unknown): Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string; playerName?: string; playersName?: string; pairName?: string }> {
+  const out: Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string; playerName?: string; playersName?: string; pairName?: string }> = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
   for (const [lang, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!/^[a-z]{2}$/.test(lang) || !v || typeof v !== "object") continue;
     const names = v as Record<string, unknown>;
-    const entry: { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string } = {};
+    const entry: { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string; playerName?: string; playersName?: string; pairName?: string } = {};
     if (typeof names.points_name === "string" && names.points_name.trim()) entry.pointsName = names.points_name.trim();
     if (typeof names.vision_name === "string" && names.vision_name.trim()) entry.visionName = names.vision_name.trim();
     if (typeof names.alpha_name === "string" && names.alpha_name.trim()) entry.alphaName = names.alpha_name.trim();
     if (typeof names.silver_name === "string" && names.silver_name.trim()) entry.silverName = names.silver_name.trim();
+    if (typeof names.player_name === "string" && names.player_name.trim()) entry.playerName = names.player_name.trim().slice(0, 30);
+    if (typeof names.players_name === "string" && names.players_name.trim()) entry.playersName = names.players_name.trim().slice(0, 30);
+    if (typeof names.pair_name === "string" && names.pair_name.trim()) entry.pairName = names.pair_name.trim().slice(0, 30);
     if (Object.keys(entry).length) out[lang] = entry;
   }
   return out;
+}
+
+function optionalWord<K extends string>(key: K, v: unknown): Partial<Record<K, string>> {
+  return typeof v === "string" && v.trim() ? ({ [key]: v.trim().slice(0, 30) } as Record<K, string>) : {};
 }
 
 export function parseClubConfig(tenant: TenantRow, modules: ModuleSettingsRow[], defaults: ClubConfig): { config: ClubConfig; problems: string[] } {
@@ -157,6 +168,10 @@ export function parseClubConfig(tenant: TenantRow, modules: ModuleSettingsRow[],
       // The titles of the top seats on the points board.
       alphaName: pick("tenant.terms.alpha_name", terms.alpha_name, str, defaults.terms.alphaName),
       silverName: pick("tenant.terms.silver_name", terms.silver_name, str, defaults.terms.silverName),
+      // Optional, never borrowed from the defaults (no word: the tracker's plain "Player", "Pair").
+      ...optionalWord("playerName", terms.player_name),
+      ...optionalWord("playersName", terms.players_name),
+      ...optionalWord("pairName", terms.pair_name),
       // Optional, and never borrowed from the defaults: a language with no name of its own uses the club's.
       localized: localizedTerms(terms.localized),
     },

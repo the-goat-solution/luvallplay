@@ -79,6 +79,11 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: csp },
         ],
       },
+      // The club's font files, readable by the players' app on its own
+      // origin (a browser loads a font from another origin only with this).
+      // Fonts only: the files are public on the site already.
+      { source: "/fonts/:file(.*\\.(?:ttf|otf|woff2?))", headers: [{ key: "Access-Control-Allow-Origin", value: "*" }] },
+      { source: "/uploads/:file(Montserrat-.*\\.ttf)", headers: [{ key: "Access-Control-Allow-Origin", value: "*" }] },
     ];
   },
 };

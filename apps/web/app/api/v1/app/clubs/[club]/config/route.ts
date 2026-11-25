@@ -34,8 +34,12 @@ const route = appRoute("clubs.config", async ({ club, request }) => {
     },
     apiBase: apiBaseForRegion(club.region, request) ?? `${new URL(request.url).origin}/api/v1/app`,
     modules,
-    // A logo stored as a path lives on the club's web host.
-    theme: { ...theme, logoUrl: theme.logoUrl?.startsWith("/") ? `${getSiteUrl()}${theme.logoUrl}` : theme.logoUrl },
+    // A logo or font stored as a path lives on the club's web host.
+    theme: {
+      ...theme,
+      logoUrl: theme.logoUrl?.startsWith("/") ? `${getSiteUrl()}${theme.logoUrl}` : theme.logoUrl,
+      fonts: theme.fonts.map((f) => ({ ...f, src: f.src.startsWith("/") ? `${getSiteUrl()}${f.src}` : f.src })),
+    },
     terms: club.terms,
     settings: {
       playDays: { bookingWindowDays: club.playDays.bookingWindowDays, bookingCutoffHour: club.playDays.bookingCutoffHour },

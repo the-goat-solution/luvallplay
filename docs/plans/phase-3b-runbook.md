@@ -8,7 +8,7 @@ Build plan §6.8, decision V. Test plan §3.17, journey J1, gate "3b Junior acco
 
 | # | Step | State |
 |---|---|---|
-| 1 | Data guard counts junior profiles as people; tables for a junior's bookings and attendance (migration `0012`) | Built and rehearsed (18 accounts, 0 problems). **Production step: waiting for your go-ahead** |
+| 1 | Data guard counts junior profiles as people; tables for a junior's bookings and attendance (migration `0012`) | Built and rehearsed (18 accounts, 0 problems). **#119 merged 25 Nov 00:46 UTC; confirm whether `0012` has run on production.** Merged code expects the tables (drift, `verify.mjs`, the row-level security heartbeat), and running `0013` would also run `0012` (audit C0) |
 | 2 | `juniors` and `forms-waivers` modules; switching Juniors on needs an owner, a fresh sign-in check and the safeguarding policy acknowledged | Not started |
 | 3 | Guardian side: a "Family" section, adding a child, consent | Not started |
 | 4 | Waivers, emergency contacts, encrypted medical notes | Not started |

@@ -220,7 +220,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForURL(`${APP}/signin`);
     await page.waitForSelector("text=Luvallplay");
     assert.deepEqual(await look(page), { primary: COURT_GREEN, look: "luvallplay", mode: "light", lang: "en" });
-    assert.equal(await page.title(), "Luvallplay");
+    assert.equal(await page.title(), "Sign in · Luvallplay");
 
     await fetch(`${env.base}/api/dev/outbox`, { method: "DELETE" });
     await page.getByLabel("Email").fill("  Mia.Member@E2E.test ");
@@ -235,7 +235,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForFunction((navy) => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === navy, NAVY);
     assert.deepEqual(await look(page), { primary: NAVY, look: "club", mode: "light", lang: "en" });
     assert.equal(await page.locator(".club-name").textContent(), "Three Wolves Badminton Club");
-    assert.equal(await page.title(), "Three Wolves Badminton Club · Luvallplay");
+    assert.equal(await page.title(), "Home · Three Wolves Badminton Club · Luvallplay");
     assert.equal(await page.locator('meta[name="theme-color"]').getAttribute("content"), NAVY);
     await page.waitForSelector(ME_READY);
     // The club's own word for Vision is on the tab; the frame's mark stays.
@@ -575,21 +575,73 @@ describe("APP · Me (the home tab)", () => {
     await context.close();
   });
 
-  test("APP17 · a refused Can't make it puts the day back and says so", async () => {
+  test("APP17 · Can't make it the server can't take waits and shows; one the club refuses is put back and said", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
-    await context.route(`${api}/clubs/three-wolves/me/absence`, (route) =>
-      route.request().method() === "OPTIONS"
-        ? route.fulfill({ status: 204, headers: CORS })
-        : route.fulfill({ status: 500, headers: { ...CORS, "content-type": "application/json" }, body: '{"error":"failed"}' }),
-    );
+    let answer = { status: 500, body: '{"error":"failed"}' };
+    let calls = 0;
+    await context.route(`${api}/clubs/three-wolves/me/absence`, (route) => {
+      if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+      calls++;
+      return route.fulfill({ status: answer.status, headers: { ...CORS, "content-type": answer.type ?? "application/json" }, body: answer.body });
+    });
     const page = await context.newPage();
     await page.goto(`${APP}/me`);
     await page.waitForSelector(ME_READY);
     const nextCard = page.getByRole("region", { name: "Next up" });
+    const calendar = page.getByRole("region", { name: "Play calendar" });
+
+    // The server is down: the choice stays on screen (also over a fresh Me) and waits on this device.
     await nextCard.getByRole("button", { name: "Can't make it" }).click();
-    await nextCard.getByRole("alert").waitFor();
+    await nextCard.getByRole("button", { name: "I can come after all" }).waitFor();
+    await nextCard.getByRole("status").filter({ hasText: "Saved on this device" }).waitFor();
+    assert.equal(await page.locator(".day", { hasText: "You said you can't come" }).count(), 1);
+    assert.match(await page.evaluate(() => localStorage.getItem("lp.queue")), /"absent":true/);
+    await page.reload();
+    await page.waitForSelector(ME_READY);
+    await nextCard.getByRole("button", { name: "I can come after all" }).waitFor();
+
+    // A Wi-Fi sign-in page answering "200" in the API's place: still waiting, nothing dropped.
+    answer = { status: 200, type: "text/html", body: "<html>Sign in to Wi-Fi</html>" };
+    const before = calls;
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await page.waitForTimeout(500);
+    assert.ok(calls > before, "tried again");
+    assert.match(await page.evaluate(() => localStorage.getItem("lp.queue")), /"absent":true/);
+    assert.equal(await calendar.getByRole("alert").count(), 0);
+
+    // The club says no for good: the day goes back, and the person is told (until they close it).
+    answer = { status: 409, body: '{"error":"too_late"}' };
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await calendar.getByRole("alert").filter({ hasText: "couldn't be saved" }).waitFor();
     await nextCard.getByRole("button", { name: "Can't make it" }).waitFor();
     assert.equal(await page.locator(".day", { hasText: "You said you can't come" }).count(), 0);
+    assert.equal(await page.evaluate(() => localStorage.getItem("lp.queue")), null);
+    await calendar.getByRole("alert").getByRole("button", { name: "Close" }).click();
+    assert.equal(await calendar.getByRole("alert").count(), 0);
+    assert.equal(await page.evaluate(() => localStorage.getItem("lp.dropped")), null);
+    await context.close();
+  });
+
+  test("APP17b · a new screen takes the focus and names itself in the title; a screen that fails says so", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector(ME_READY);
+    assert.equal(await page.title(), "Home · Three Wolves Badminton Club · Luvallplay");
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Player" }).click();
+    await page.waitForURL(`${APP}/player`);
+    await page.waitForFunction(() => document.title.startsWith("Player · "));
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "main", "focus is on the new screen's content");
+
+    // A screen whose code can't be fetched (a broken deploy): one reload is tried, then the error screen, with a way on.
+    await context.route(/\/assets\/Leaderboard-[^/]+\.js$/, (route) => route.abort());
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Leaderboard" }).click();
+    const crash = page.getByTestId("crash");
+    await crash.getByRole("heading", { name: "Something went wrong" }).waitFor();
+    await crash.getByRole("button", { name: "Reload the app" }).waitFor();
+    await context.unroute(/\/assets\/Leaderboard-[^/]+\.js$/);
+    await crash.getByRole("button", { name: "Try again" }).click();
+    await page.waitForSelector('[data-screen="nav_leaderboard"]');
     await context.close();
   });
 
@@ -1229,7 +1281,7 @@ describe("APP · the Arena", () => {
       const card = cp.locator(".fight", { hasText: "Fridays at Pioneer" });
       await card.waitFor();
       assert.match(await card.textContent(), /Team up first/);
-      assert.match(await card.textContent(), /open 7 days|open 6 days/);
+      assert.match(await card.textContent(), /open [678] days/);
       await mp.getByRole("button", { name: "Take it down" }).click();
       await mp.getByRole("button", { name: "Throw down a challenge" }).waitFor();
 
@@ -2015,6 +2067,10 @@ describe("APP · offline and installing (build plan §4.1)", () => {
       await page.waitForSelector(ME_READY);
       assert.equal(await page.evaluate(() => !!navigator.serviceWorker.controller), true);
       await page.waitForFunction(() => (localStorage.getItem("lp.cache") ?? "").includes('"me"'));
+      // The saved screens never hold the session token (audit H9), and say which build wrote them.
+      const saved = await page.evaluate(() => localStorage.getItem("lp.cache"));
+      assert.equal(saved.includes(token), false);
+      assert.ok(JSON.parse(saved).build);
 
       await context.setOffline(true);
       await page.reload();
@@ -2359,7 +2415,7 @@ describe("APP · accessibility and the page's rules", () => {
     assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com https://api\\.stripe\\.com https://storage\\.googleapis\\.com https://vercel\\.com/api/blob/ https://\\*\\.public\\.blob\\.vercel-storage\\.com(;|$)`));
     assert.match(csp, /worker-src 'self' blob:(;|$)/);
     // Fonts: the app's own, and a club's from its website (the API host).
-    assert.match(csp, new RegExp(`font-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com(;|$)`));
+    assert.match(csp, new RegExp(`font-src 'self' https: ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com(;|$)`));
     // The one wildcard is the photo store's own host (its name carries the store's id).
     assert.doesNotMatch(csp.replace("https://*.public.blob.vercel-storage.com", ""), /unsafe-inline|'unsafe-eval'|\*/);
     // Images from any https host (club logos, photos in Blob storage); nothing else is widened.

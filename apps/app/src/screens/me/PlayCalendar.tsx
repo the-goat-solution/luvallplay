@@ -44,6 +44,7 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
           {d.location ? ` · ${d.location}` : ""}
         </span>
         {saved && d.absent && <span className="small" role="status">{t("cal_absence_saved")}</span>}
+        {absence.data?.queued && <span className="small muted" role="status">{t("cal_queued")}</span>}
         {message && <span className={`small${message.ok ? "" : " notice-error"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
       </div>
       <div className="day-action">

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -54,10 +56,32 @@ function csp(env: Record<string, string>): Plugin {
   };
 }
 
+/**
+ * The service worker (sw/sw.js) as dist/sw.js, with the list of built files
+ * to keep on the device and a version that changes with them.
+ */
+function serviceWorker(): Plugin {
+  return {
+    name: "luvallplay-sw",
+    apply: "build",
+    generateBundle(_options, bundle) {
+      const files = Object.keys(bundle).filter((f) => /\.(js|css)$/.test(f)).map((f) => `/${f}`);
+      const assets = ["/", "/icon.svg", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png", ...files.sort()];
+      const version = createHash("sha256").update(assets.join("\n")).digest("hex").slice(0, 12);
+      const source = readFileSync(new URL("./sw/sw.js", import.meta.url), "utf8");
+      this.emitFile({
+        type: "asset",
+        fileName: "sw.js",
+        source: `const ASSETS = ${JSON.stringify(assets)};\nconst VERSION = ${JSON.stringify(version)};\n${source}`,
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   return {
-    plugins: [react(), csp(env)],
+    plugins: [react(), csp(env), serviceWorker()],
     build: { target: "es2022", sourcemap: false },
     server: { port: 5173, strictPort: true, proxy: { "/api": "http://localhost:3000" } },
     preview: { port: 4173, strictPort: true },

@@ -3,8 +3,9 @@
 // put back if the club's server refuses them.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResponseOf } from "@luvallplay/api/contract";
-import { apiForClub } from "../../app.ts";
+import { apiForClub, storage } from "../../app.ts";
 import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { enqueue } from "../../lib/offline.ts";
 
 export type Me = ResponseOf<"me.home">;
 export type PlayDay = Me["calendar"][number];
@@ -23,14 +24,33 @@ export function useMe() {
   return { ...query, apiBase: current?.apiBase, slug };
 }
 
-/** "Can't make it" and "I can come after all": the day flips (and its spot frees up) before the server answers. */
+/**
+ * "Can't make it" and "I can come after all": the day flips (and its spot
+ * frees up) before the server answers. Without a connection the change
+ * waits on this device (`queued: true`) and is sent when it's back.
+ */
 export function useAbsence() {
   const { token } = usePrefs();
   const { current, slug } = useCurrentClub();
   const queryClient = useQueryClient();
   const key = meKey(slug, token);
   return useMutation({
-    mutationFn: (v: { date: string; absent: boolean }) => apiForClub(current?.apiBase).me.absence({ club: slug as string }, v),
+    // Runs offline too: the change is queued rather than paused in memory.
+    networkMode: "always",
+    mutationFn: async (v: { date: string; absent: boolean }): Promise<{ queued: boolean }> => {
+      const later = () => {
+        enqueue(storage, { club: slug as string, apiBase: current?.apiBase, ...v });
+        return { queued: true };
+      };
+      if (!navigator.onLine) return later();
+      try {
+        await apiForClub(current?.apiBase).me.absence({ club: slug as string }, v);
+        return { queued: false };
+      } catch (err) {
+        if ((err as { status?: number }).status === 0) return later();
+        throw err;
+      }
+    },
     onMutate: async (v) => {
       await queryClient.cancelQueries({ queryKey: key });
       const before = queryClient.getQueryData<Me>(key);
@@ -47,7 +67,7 @@ export function useAbsence() {
     onError: (_err, _v, context) => {
       if (context?.before) queryClient.setQueryData(key, context.before);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+    onSettled: (result) => (result?.queued ? undefined : queryClient.invalidateQueries({ queryKey: key })),
   });
 }
 

@@ -10,6 +10,7 @@ import { useCurrentClub, useLang, usePrefs, useSession, useT } from "../hooks.ts
 import { AccountCards } from "./settings/Account.tsx";
 import { ClubAdmin } from "./settings/ClubAdmin.tsx";
 import { ConnectedApps } from "./settings/ConnectedApps.tsx";
+import { InstallCard } from "./settings/Install.tsx";
 import { useSaveLanguage } from "./settings/data.ts";
 import type { ThemeChoice } from "../lib/theme.ts";
 
@@ -62,6 +63,7 @@ export default function SettingsScreen() {
             </label>
           ))}
         </fieldset>
+        <InstallCard t={t} />
         {current?.canOpenAdmin && <ClubAdmin clubName={current.name} email={session.data?.player.email} />}
         <div className="card stack">
           <h2>{t("settings_account")}</h2>

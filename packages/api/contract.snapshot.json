@@ -1,6 +1,24 @@
 {
   "version": "v1",
   "endpoints": {
+    "account.dismissWelcome": {
+      "method": "POST",
+      "path": "/account/welcome-dismissed",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {}
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
     "auth.emailStart": {
       "method": "POST",
       "path": "/auth/email/start",
@@ -305,6 +323,11 @@
               },
               "timezone": {
                 "t": "string"
+              },
+              "webUrl": {
+                "t": "string",
+                "nullable": true,
+                "optional": true
               }
             }
           },
@@ -552,6 +575,252 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "me.absence": {
+      "method": "POST",
+      "path": "/clubs/{club}/me/absence",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "absent": {
+            "t": "boolean"
+          },
+          "date": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "me.home": {
+      "method": "GET",
+      "path": "/clubs/{club}/me",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "calendar": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "absent": {
+                  "t": "boolean"
+                },
+                "bookable": {
+                  "t": "boolean"
+                },
+                "booked": {
+                  "t": "boolean"
+                },
+                "closed": {
+                  "t": "boolean"
+                },
+                "date": {
+                  "t": "string"
+                },
+                "endTime": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "included": {
+                  "t": "boolean"
+                },
+                "location": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "paused": {
+                  "t": "boolean"
+                },
+                "spots": {
+                  "t": "number"
+                },
+                "startTime": {
+                  "t": "string",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "casualPrice": {
+            "t": "number"
+          },
+          "inbox": {
+            "t": "object",
+            "fields": {
+              "latest": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "id": {
+                      "t": "number"
+                    },
+                    "lastMessageAt": {
+                      "t": "string"
+                    },
+                    "preview": {
+                      "t": "string"
+                    },
+                    "subject": {
+                      "t": "string"
+                    },
+                    "unread": {
+                      "t": "boolean"
+                    }
+                  }
+                }
+              },
+              "unread": {
+                "t": "number"
+              }
+            }
+          },
+          "join": {
+            "t": "object",
+            "fields": {
+              "days": {
+                "t": "array",
+                "of": {
+                  "t": "string"
+                }
+              },
+              "monthly": {
+                "t": "number"
+              },
+              "quarterly": {
+                "t": "number"
+              }
+            },
+            "nullable": true
+          },
+          "membership": {
+            "t": "object",
+            "fields": {
+              "autoRenews": {
+                "t": "boolean"
+              },
+              "day": {
+                "t": "string"
+              },
+              "daysLeft": {
+                "t": "number"
+              },
+              "method": {
+                "t": "string"
+              },
+              "next": {
+                "t": "object",
+                "fields": {
+                  "periodEnd": {
+                    "t": "string",
+                    "nullable": true
+                  },
+                  "periodStart": {
+                    "t": "string",
+                    "nullable": true
+                  },
+                  "plan": {
+                    "t": "enum",
+                    "values": [
+                      "monthly",
+                      "quarterly"
+                    ]
+                  }
+                },
+                "nullable": true
+              },
+              "periodEnd": {
+                "t": "string",
+                "nullable": true
+              },
+              "periodStart": {
+                "t": "string",
+                "nullable": true
+              },
+              "plan": {
+                "t": "enum",
+                "values": [
+                  "monthly",
+                  "quarterly"
+                ]
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "active",
+                  "ending",
+                  "upcoming",
+                  "past_due"
+                ]
+              }
+            },
+            "nullable": true
+          },
+          "player": {
+            "t": "object",
+            "fields": {
+              "avatarUrl": {
+                "t": "string",
+                "nullable": true
+              },
+              "displayName": {
+                "t": "string"
+              },
+              "firstName": {
+                "t": "string"
+              },
+              "initials": {
+                "t": "string"
+              },
+              "lastName": {
+                "t": "string"
+              }
+            }
+          },
+          "stats": {
+            "t": "object",
+            "fields": {
+              "monthRank": {
+                "t": "number",
+                "nullable": true
+              },
+              "streak": {
+                "t": "number"
+              }
+            }
+          },
+          "welcome": {
+            "t": "boolean"
           }
         }
       }

@@ -80,6 +80,24 @@ export const ENDPOINTS = define({
     params: S.clubParams, response: S.clubConfigResponse,
     rateLimit: { limit: 120, windowMs: MIN },
   },
+  // ── Me (the home tab) ────────────────────────────────────────────────────
+  "me.home": {
+    method: "GET", path: "/clubs/{club}/me", auth: "session", scope: "club",
+    params: S.clubParams, response: S.meResponse,
+    rateLimit: { limit: 120, windowMs: MIN },
+  },
+  /** "Can't make it" on a membership day (and "I can come after all"). */
+  "me.absence": {
+    method: "POST", path: "/clubs/{club}/me/absence", auth: "session", scope: "club",
+    params: S.clubParams, body: S.absenceRequest, response: S.okResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  // ── The account (the same in every club) ────────────────────────────────
+  "account.dismissWelcome": {
+    method: "POST", path: "/account/welcome-dismissed", auth: "session", scope: "account",
+    body: S.emptyRequest, response: S.okResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
 });
 
 export type EndpointId = keyof typeof ENDPOINTS;

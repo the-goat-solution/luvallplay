@@ -1446,15 +1446,61 @@ describe("APP · membership and casual booking", () => {
   });
 });
 
+describe("APP · Vision", () => {
+  test("APP40 · the Vision tab: the free trial with its dates and prices, the tracker on the club's website, a challenge that isn't there; the labelling tool marks hits by key and saves them", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const miaId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.member.email])).rows[0].id;
+    try {
+      await page.goto(`${APP}/vision`);
+      await page.waitForSelector('[data-screen="nav_vision"][data-state="ready"]');
+      await page.getByRole("heading", { name: /is free until 28 February 2027/ }).waitFor();
+      assert.match(await page.locator(".trial").textContent(), /days left of the free trial|Last day of the free trial/);
+      assert.match(await page.locator(".trial").textContent(), /From 1 March 2027: \$5(\.00)? a live match, \$2(\.00)? a video\./);
+      const camera = page.getByRole("link", { name: /^Phone camera/ });
+      assert.equal(await camera.getAttribute("href"), `${env.base}/profile/wolf-vision`);
+      assert.equal(await camera.getAttribute("target"), "_blank");
+
+      await page.goto(`${APP}/vision?challenge=999999`);
+      await page.getByText("This challenge could not be found.").waitFor();
+      assert.equal(await page.getByRole("link", { name: /^Analyse a video/ }).getAttribute("href"), `${env.base}/profile/wolf-vision?challenge=999999`);
+      problems.length = 0; // the 404 for the missing challenge is expected
+
+      await page.getByRole("link", { name: "Open the labelling tool" }).click();
+      await page.waitForURL(`${APP}/vision/label`);
+      await page.getByTestId("label-file").setInputFiles({ name: "club-night.mp4", mimeType: "video/mp4", buffer: Buffer.from("not really a video") });
+      await page.getByRole("button", { name: "1 · Near left" }).waitFor();
+      await page.locator("body").click({ position: { x: 5, y: 5 } });
+      await page.keyboard.press("1");
+      await page.keyboard.press("r");
+      await page.keyboard.press("4");
+      await page.getByRole("button", { name: "3 · Far left" }).click();
+      assert.match(await page.getByTestId("label-summary").textContent(), /3 hits in 2 rallies · rally 2/);
+      await page.keyboard.press("Backspace");
+      assert.match(await page.getByTestId("label-summary").textContent(), /2 hits in 2 rallies/);
+      await page.getByRole("button", { name: "Save to the labelling set" }).click();
+      await page.getByRole("status").filter({ hasText: "Saved 2 hits to the labelling set" }).waitFor();
+      const row = (await db.query(`SELECT id, video_name, hits FROM wv_labels WHERE player_id = $1 ORDER BY id DESC LIMIT 1`, [miaId])).rows[0];
+      assert.equal(row.video_name, "club-night.mp4");
+      assert.deepEqual(row.hits.map((h) => [h.player, h.rally]), [[0, 0], [3, 1]]);
+      await db.query(`DELETE FROM wv_labels WHERE id = $1`, [row.id]);
+      assert.deepEqual(problems.filter((p) => !/MEDIA_ERR|media|video|Failed to load resource/i.test(p)), []);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
 describe("APP · layout (build plan §4.4)", () => {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
   test("APP10 · five widths: no sideways scroll, and the right navigation for each window class", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/membership", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/vision", "/membership", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : route === "/vision" ? '[data-screen="nav_vision"][data-state="ready"]' : ".shell-nav .tab");
       for (const width of WIDTHS) {
         const height = width < 600 ? 812 : 900;
         await page.setViewportSize({ width, height });
@@ -1508,9 +1554,9 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP11 · text at 200%: still no sideways scroll on a phone, and nothing is cut off", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/membership", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/vision", "/membership", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : route === "/vision" ? '[data-screen="nav_vision"][data-state="ready"]' : ".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
       const afterSize = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
@@ -1549,7 +1595,7 @@ describe("APP · accessibility and the page's rules", () => {
       // axe is injected by the test, which the page's own CSP would (rightly) refuse.
       const { context } = await signedIn(PEOPLE.admin.email, { colorScheme, bypassCSP: true });
       const anon = await browser.newContext({ viewport: PHONE, colorScheme, bypassCSP: true });
-      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/membership", '[data-screen="membership"][data-state="ready"]'], [context, "/arena", '[data-screen="nav_arena"]']]) {
+      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/vision", '[data-screen="nav_vision"][data-state="ready"]'], [context, "/vision/label", '[data-testid="label-file"]'], [context, "/membership", '[data-screen="membership"][data-state="ready"]'], [context, "/arena", '[data-screen="nav_arena"]']]) {
         const page = await ctx.newPage();
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);
@@ -1572,6 +1618,8 @@ describe("APP · accessibility and the page's rules", () => {
     assert.match(csp, /script-src 'self' https:\/\/js\.stripe\.com(;|$)/);
     assert.match(csp, /frame-src https:\/\/js\.stripe\.com https:\/\/hooks\.stripe\.com(;|$)/);
     assert.match(csp, /style-src 'self'(;|$)/);
+    // Videos chosen on the device only (the labelling tool).
+    assert.match(csp, /media-src 'self' blob:(;|$)/);
     assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com https://api\\.stripe\\.com(;|$)`));
     assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|\*/);
     // Images from any https host (club logos, photos in Blob storage); nothing else is widened.

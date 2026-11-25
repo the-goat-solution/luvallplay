@@ -651,6 +651,12 @@ const SESSION_ENDPOINTS = [
   ["POST", "/clubs/{club}/shop/orders"],
   ["POST", "/clubs/{club}/shop/orders/{id}/confirm"],
   ["POST", "/clubs/{club}/shop/orders/{id}/cancel"],
+  ["GET", "/clubs/{club}/membership"],
+  ["GET", "/clubs/{club}/membership/billing"],
+  ["POST", "/clubs/{club}/membership"],
+  ["POST", "/clubs/{club}/membership/portal"],
+  ["POST", "/clubs/{club}/membership/join"],
+  ["POST", "/clubs/{club}/me/book"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1383,6 +1389,58 @@ describe("API · the players' app API", () => {
       await shop.undo();
       await pete.context.close();
       await mia.context.close();
+    }
+  });
+
+  test("API20 · membership: a member's membership with prices and days, refusals as codes, a paused day can't be joined, casual booking checks the day, off with its module", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const pete = await signedIn(PEOPLE.player.email);
+    const call = (method, path, body, who = mia) => appApi(method, `/clubs/${CLUB}${path}`, { token: who.token, body });
+    try {
+      const state = await call("GET", "/membership");
+      assert.equal(state.status, 200);
+      assert.deepEqual(Object.keys(state.json).sort(), ["days", "membership", "monthRank", "pausedDays", "prices", "streak"]);
+      const m = state.json.membership;
+      assert.ok(m, "Mia is a member");
+      assert.deepEqual(Object.keys(m).sort(), ["cancelAtPeriodEnd", "continuation", "day", "daysLeft", "manageable", "method", "periodEnd", "periodStart", "plan", "recurring", "status"]);
+      assert.ok(state.json.prices.monthly > 0 && state.json.prices.quarterly > state.json.prices.monthly);
+      const me = (await call("GET", "/me")).json;
+      assert.deepEqual([m.plan, m.day, m.daysLeft], [me.membership.plan, me.membership.day, me.membership.daysLeft], "the same membership Me shows");
+
+      const peteState = (await call("GET", "/membership", undefined, pete)).json;
+      assert.equal(peteState.membership, null);
+      assert.deepEqual((await call("POST", "/membership", { action: "resume" }, pete)).json, { error: "no_membership" });
+      for (const bad of [{ action: "fly" }, { action: "cancel" }, { action: "cancel", reason: "" }, { action: "change", plan: "yearly", day: "friday" }]) {
+        assert.equal((await call("POST", "/membership", bad)).status, 400, JSON.stringify(bad));
+      }
+
+      // A paused day can't be joined (before anything is reserved or charged).
+      const pausedBefore = (await db.query(`SELECT paused FROM day_signup_settings WHERE tenant_id = 1 AND day = 'wednesday'`)).rows[0]?.paused;
+      await db.query(`INSERT INTO day_signup_settings (tenant_id, day, paused, updated_at) VALUES (1, 'wednesday', TRUE, NOW()) ON CONFLICT (tenant_id, day) DO UPDATE SET paused = TRUE`);
+      try {
+        const paused = await call("POST", "/membership/join", { plan: "monthly", day: "wednesday", recurring: true }, pete);
+        assert.deepEqual([paused.status, paused.json.error], [409, "day_paused"]);
+        assert.ok((await call("GET", "/membership", undefined, pete)).json.pausedDays.includes("wednesday"));
+      } finally {
+        if (pausedBefore === undefined) await db.query(`DELETE FROM day_signup_settings WHERE tenant_id = 1 AND day = 'wednesday'`);
+        else await db.query(`UPDATE day_signup_settings SET paused = $1 WHERE tenant_id = 1 AND day = 'wednesday'`, [pausedBefore]);
+      }
+      assert.equal((await call("POST", "/membership/join", { plan: "yearly", day: "friday", recurring: true }, pete)).status, 400);
+
+      // Casual booking: a day that isn't open for booking is refused as such.
+      const far = await call("POST", "/me/book", { date: "2099-01-02" }, pete);
+      assert.deepEqual([far.status, far.json.error], [409, "not_bookable"]);
+      assert.equal((await call("POST", "/me/book", { date: "2026-02-30" }, pete)).status, 400);
+
+      await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'memberships'`);
+      try {
+        assert.deepEqual([(await call("GET", "/membership")).status, (await call("GET", "/membership")).json.error], [404, "module_off"]);
+      } finally {
+        await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'memberships'`);
+      }
+    } finally {
+      await mia.context.close();
+      await pete.context.close();
     }
   });
 

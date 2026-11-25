@@ -1,10 +1,9 @@
 // The membership card (what they have) and the join card (the way in), as on
-// the website. Changing, renewing or cancelling are card payments: they move
-// into the app with the membership step; until then they open on the club's
-// website.
+// the website. Managing or joining opens the Membership screen (/membership).
 import type { Me } from "./data.ts";
 import { dayLabel, money } from "../../lib/format.ts";
-import { daysName, planName, usePlace, webHref, WebsiteLink } from "./parts.tsx";
+import { Link } from "@tanstack/react-router";
+import { daysName, planName, usePlace } from "./parts.tsx";
 
 type Membership = NonNullable<Me["membership"]>;
 
@@ -16,14 +15,13 @@ const STATUS = {
 } as const;
 
 export function MembershipCard({ m }: { m: Membership }) {
-  const { t, locale, webUrl } = usePlace();
+  const { t, locale } = usePlace();
   const when =
     m.status === "upcoming"
       ? t("mem_starts_on", { date: dayLabel(m.periodStart, locale) })
       : m.autoRenews
         ? t("mem_renews_on", { date: dayLabel(m.periodEnd, locale) })
         : t("mem_ends_on", { date: dayLabel(m.periodEnd, locale) });
-  const manage = webHref(webUrl, "/profile");
   return (
     <section className="card stack membership" aria-labelledby="mem-title">
       <div className="card-head">
@@ -47,14 +45,13 @@ export function MembershipCard({ m }: { m: Membership }) {
         </div>
       </dl>
       {m.next && <p className="muted small">✓ {t("mem_continuation", { plan: planName(t, m.next.plan), date: dayLabel(m.next.periodStart, locale, true) })}</p>}
-      {manage && <WebsiteLink href={manage}>{t("me_manage")}</WebsiteLink>}
+      <div><Link to="/membership" className="button">{t("me_manage")}</Link></div>
     </section>
   );
 }
 
 export function JoinCard({ join }: { join: NonNullable<Me["join"]> }) {
-  const { t, currency, webUrl } = usePlace();
-  const href = webHref(webUrl, "/profile");
+  const { t, currency } = usePlace();
   return (
     <section className="card stack join" aria-labelledby="join-title">
       <div className="stack-tight">
@@ -78,11 +75,7 @@ export function JoinCard({ join }: { join: NonNullable<Me["join"]> }) {
         </li>
       </ul>
       {join.days.length > 0 && <p className="muted small">{join.days.map((d) => daysName(t, d)).join(" · ")}</p>}
-      {href && (
-        <WebsiteLink href={href} className="button button-primary">
-          {t("me_join")}
-        </WebsiteLink>
-      )}
+      <div><Link to="/membership" className="button button-primary">{t("me_join")}</Link></div>
     </section>
   );
 }

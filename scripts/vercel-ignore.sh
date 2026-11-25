@@ -3,7 +3,7 @@
 #   exit 0 = skip the build, exit 1 = build.
 #
 #   bash ../../scripts/vercel-ignore.sh site   (project luvallplay-site, root apps/site)
-#   bash ../../scripts/vercel-ignore.sh web    (project for apps/web: three-wolves-badminton today, luvallplay-app after the rename)
+#   bash ../../scripts/vercel-ignore.sh web    (project luvallplay-app, root apps/web)
 #
 # Only `main` builds by default; other branches build only with [deploy] in
 # the commit message (see "Branch and deployment rules" in README.md).

@@ -382,3 +382,6 @@ export const adminHandoffResponse = z.object({
   url: z.string().url(),
   expiresInSeconds: z.number().int().positive(),
 });
+
+/** Deleting the account: the person types DELETE, as on the website. */
+export const deleteAccountRequest = z.object({ confirm: z.literal("DELETE") });

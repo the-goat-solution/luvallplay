@@ -878,6 +878,35 @@ describe("APP · settings: the account", () => {
     }
   });
 
+  test("APP30 · deleting the account: typed DELETE, back to sign-in; the club's only owner is told to hand over first", async () => {
+    const owner = await signedIn(PEOPLE.owner.email);
+    const op = await owner.context.newPage();
+    await op.goto(`${APP}/settings`);
+    await op.getByRole("button", { name: "Delete my account" }).click();
+    const confirm = op.getByRole("button", { name: "Delete my account" });
+    assert.equal(await confirm.isDisabled(), true, "nothing typed yet");
+    await op.getByLabel("Type DELETE to confirm").fill("delete");
+    await confirm.click();
+    await op.getByRole("alert").filter({ hasText: "only owner" }).waitFor();
+    await owner.context.close();
+
+    const email = `app.delete.${Date.now()}@e2e.test`;
+    const id = (await db.query(`INSERT INTO players (email, first_name, last_name, claimed_at) VALUES ($1, 'Dee', 'Leted', NOW()) RETURNING id`, [email])).rows[0].id;
+    const { context, token } = await signedIn(email);
+    const page = await context.newPage();
+    await page.goto(`${APP}/settings`);
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await page.getByRole("button", { name: "Cancel" }).last().click();
+    assert.equal(await page.getByLabel("Type DELETE to confirm").count(), 0, "Cancel closes it");
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await page.getByLabel("Type DELETE to confirm").fill("DELETE");
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await page.waitForURL(`${APP}/signin`);
+    assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${token}` } })).status, 401);
+    assert.ok((await db.query(`SELECT deleted_at FROM players WHERE id = $1`, [id])).rows[0].deleted_at);
+    await context.close();
+  });
+
   test("APP29 · download my data: a JSON file with the account in it", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();

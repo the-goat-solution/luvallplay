@@ -152,6 +152,13 @@ export const ENDPOINTS = define({
     body: S.emptyRequest, response: S.adminHandoffResponse,
     rateLimit: { limit: 10, windowMs: MIN },
   },
+  // 409 last_owner: the club's only owner hands over first. Signs the person
+  // out everywhere; payment records stay with the club.
+  "account.delete": {
+    method: "POST", path: "/account/delete", auth: "session", scope: "account",
+    body: S.deleteAccountRequest, response: S.okResponse,
+    rateLimit: { limit: 5, windowMs: 60 * MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

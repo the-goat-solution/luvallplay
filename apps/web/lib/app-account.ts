@@ -2,9 +2,11 @@
 // changes the website's Settings page makes, from the same functions.
 import { revalidateTag } from "next/cache";
 import { audit, db as adminDb } from "./admin-access";
-import { createHandoff, getAccess, hasAdminAccess, isStepUpFresh } from "./admin-roles";
+import { createHandoff, getAccess, hasAdminAccess, isLastOwner, isStepUpFresh } from "./admin-roles";
+import { endPlayerArena } from "./arena-db";
 import type { AppSession } from "./app-api";
-import { setPlayerAvatar } from "./player-db";
+import { deletePlayerAccount, setPlayerAvatar } from "./player-db";
+import { sendAdminAlertEmail } from "./player-email";
 import { deletePublicBlobs } from "./public-blob";
 import { publicStorage } from "./storage";
 import { countUpload } from "./usage-hooks";
@@ -66,4 +68,22 @@ export async function adminHandoff(session: AppSession, requestUrl: string): Pro
   const ctx = { kind: "player" as const, player: { id: player.id, email: player.email, firstName: player.firstName, lastName: player.lastName }, access, signedInAt, stepUpFresh: true };
   await audit(ctx, { action: "admin.handoff_created", target: `player:${player.id}` });
   return { ok: true, url: new URL(`/admin/handoff?token=${encodeURIComponent(token)}`, requestUrl).toString(), expiresInSeconds };
+}
+
+/**
+ * Deleting the account, as the website's /api/profile/delete: the club keeps
+ * an owner, the arena and the picture go, every session ends, the admins hear.
+ */
+export async function deleteAccount(player: AppSession["player"]): Promise<{ ok: true } | { ok: false; status: 409; code: "last_owner" }> {
+  if (await isLastOwner(adminDb, player.id)) return { ok: false, status: 409, code: "last_owner" };
+  await endPlayerArena(player.id).catch((err) => console.error("[app-api] arena cleanup failed:", err));
+  await deletePublicBlobs([await setPlayerAvatar(player.id, null).catch(() => null)]);
+  await deletePlayerAccount(player.id);
+  refreshLeaderboard();
+  await sendAdminAlertEmail({
+    subject: `Account deleted: ${player.email}`,
+    heading: "A player deleted their account",
+    lines: [`${player.firstName} ${player.lastName} (${player.email}) deleted their account in the app. Their payment records are kept.`],
+  }).catch((err) => console.error("[app-api] delete alert failed:", err));
+  return { ok: true };
 }

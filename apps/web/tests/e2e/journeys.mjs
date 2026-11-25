@@ -636,6 +636,7 @@ const SESSION_ENDPOINTS = [
   ["DELETE", "/account/photo"],
   ["GET", "/account/export"],
   ["POST", "/account/admin-handoff"],
+  ["POST", "/account/delete"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1097,6 +1098,37 @@ describe("API · the players' app API", () => {
     } finally {
       await owner.context.close();
       await member.context.close();
+    }
+  });
+
+  test("API14 · deleting the account: typed DELETE, the club keeps its only owner, every session ends, the admins hear", async () => {
+    const email = `delete.me.${Date.now()}@e2e.test`;
+    const id = (await db.query(`INSERT INTO players (email, first_name, last_name, claimed_at) VALUES ($1, 'Dee', 'Leted', NOW()) RETURNING id`, [email])).rows[0].id;
+    const one = await signedIn(email);
+    const two = await signedIn(email);
+    const owner = await signedIn(PEOPLE.owner.email);
+    try {
+      for (const bad of [{}, { confirm: "delete" }, { confirm: "yes" }]) {
+        const r = await appApi("POST", "/account/delete", { token: one.token, body: bad });
+        assert.deepEqual([r.status, r.json.error], [400, "confirm"], JSON.stringify(bad));
+      }
+      const last = await appApi("POST", "/account/delete", { token: owner.token, body: { confirm: "DELETE" } });
+      assert.deepEqual([last.status, last.json.error], [409, "last_owner"]);
+      assert.equal((await appApi("GET", "/auth/session", { token: owner.token })).status, 200, "the owner is untouched");
+
+      await clearOutbox();
+      const done = await appApi("POST", "/account/delete", { token: one.token, body: { confirm: "DELETE" } });
+      assert.deepEqual([done.status, done.json], [200, { ok: true }]);
+      for (const t of [one.token, two.token]) assert.equal((await appApi("GET", "/auth/session", { token: t })).status, 401, "every session ended");
+      const row = (await db.query(`SELECT deleted_at, email, first_name FROM players WHERE id = $1`, [id])).rows[0];
+      assert.ok(row.deleted_at, "the account is marked deleted");
+      assert.deepEqual([row.email, row.first_name], [`deleted-${id}@deleted.invalid`, ""], "and its details cleared");
+      const mail = (await (await fetch(`${base()}/api/dev/outbox`)).json()).mail;
+      assert.ok(mail.some((m) => m.subject === `Account deleted: ${email}`), "the admins are told");
+    } finally {
+      await one.context.close();
+      await two.context.close();
+      await owner.context.close();
     }
   });
 

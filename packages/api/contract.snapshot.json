@@ -21,6 +21,29 @@
         }
       }
     },
+    "account.delete": {
+      "method": "POST",
+      "path": "/account/delete",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "confirm": {
+            "t": "literal",
+            "value": "DELETE"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
     "account.details": {
       "method": "POST",
       "path": "/account/details",

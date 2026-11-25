@@ -174,6 +174,10 @@ const en = {
   acc_data: "Your data",
   acc_download: "Download my data",
   acc_download_hint: "Everything the club holds under your account, as a file.",
+  acc_delete: "Delete my account",
+  acc_delete_confirm: "Delete your account? You'll be signed out everywhere. Payment records stay with the club as the law requires.",
+  acc_delete_type: "Type DELETE to confirm",
+  acc_delete_last_owner: "You're the club's only owner. Make someone else an owner in Admin → People → Admins before deleting your account.",
 
   switch_club: "Switch club",
   switch_current: "Current club",
@@ -370,6 +374,10 @@ const vi: Messages<AppKey> = {
   acc_data: "Dữ liệu của bạn",
   acc_download: "Tải dữ liệu của tôi",
   acc_download_hint: "Mọi thông tin câu lạc bộ lưu theo tài khoản của bạn, dưới dạng tệp.",
+  acc_delete: "Xoá tài khoản",
+  acc_delete_confirm: "Xoá tài khoản? Bạn sẽ bị đăng xuất khỏi mọi thiết bị. Hồ sơ thanh toán vẫn được CLB lưu theo quy định pháp luật.",
+  acc_delete_type: "Gõ DELETE để xác nhận",
+  acc_delete_last_owner: "Bạn là chủ duy nhất của câu lạc bộ. Hãy chỉ định người khác làm chủ trong Admin → People → Admins trước khi xoá tài khoản.",
 
   switch_club: "Đổi câu lạc bộ",
   switch_current: "Câu lạc bộ hiện tại",

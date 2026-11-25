@@ -3,7 +3,7 @@
 // session's name and language).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
-import { api } from "../../app.ts";
+import { api, store } from "../../app.ts";
 import { usePrefs } from "../../hooks.tsx";
 
 export type Profile = ResponseOf<"account.profile">;
@@ -63,6 +63,18 @@ export function useDownloadData() {
       document.body.append(a);
       a.click();
       a.remove();
+    },
+  });
+}
+
+/** Deleting the account; once done this device signs out (every session has ended). */
+export function useDeleteAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.account.delete({ confirm: "DELETE" }),
+    onSuccess: () => {
+      store.signOut();
+      queryClient.clear();
     },
   });
 }

@@ -4,7 +4,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useCurrentClub, useT } from "../../hooks.tsx";
 import { squarePhoto } from "../../lib/photo.ts";
-import { useDownloadData, usePhoto, useProfile, useSaveDetails, useSavePrivacy, type Profile } from "./data.ts";
+import { useDeleteAccount, useDownloadData, usePhoto, useProfile, useSaveDetails, useSavePrivacy, type Profile } from "./data.ts";
 
 type T = ReturnType<typeof useT>;
 
@@ -140,17 +140,50 @@ function Privacy({ p, t }: { p: Profile; t: T }) {
 
 function YourData({ t }: { t: T }) {
   const download = useDownloadData();
+  const remove = useDeleteAccount();
   const id = useId();
+  const [deleting, setDeleting] = useState(false);
+  const [typed, setTyped] = useState("");
+  const lastOwner = (remove.error as { code?: string } | null)?.code === "last_owner";
   return (
     <section className="card stack" aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`}>{t("acc_data")}</h2>
       <p className="muted small">{t("acc_download_hint")}</p>
-      <div>
+      <div className="actions">
         <button type="button" className="button" disabled={download.isPending} onClick={() => download.mutate()}>
           {download.isPending ? t("loading") : t("acc_download")}
         </button>
+        {!deleting && (
+          <button type="button" className="button button-danger" onClick={() => setDeleting(true)}>
+            {t("acc_delete")}
+          </button>
+        )}
       </div>
       {download.isError && <p className="notice notice-error" role="alert">{t("error_generic")}</p>}
+      {deleting && (
+        <form
+          className="stack delete-confirm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            remove.mutate();
+          }}
+        >
+          <p>{t("acc_delete_confirm")}</p>
+          <label className="field">
+            <span>{t("acc_delete_type")}</span>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoCapitalize="characters" autoComplete="off" spellCheck={false} />
+          </label>
+          {remove.isError && <p className="notice notice-error" role="alert">{lastOwner ? t("acc_delete_last_owner") : t("error_generic")}</p>}
+          <div className="actions">
+            <button type="submit" className="button button-danger" disabled={typed.trim().toUpperCase() !== "DELETE" || remove.isPending}>
+              {remove.isPending ? t("loading") : t("acc_delete")}
+            </button>
+            <button type="button" className="button button-quiet" onClick={() => { setDeleting(false); setTyped(""); remove.reset(); }}>
+              {t("cancel")}
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }

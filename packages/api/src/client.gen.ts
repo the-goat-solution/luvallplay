@@ -11,6 +11,9 @@ export function createApi(transport: Transport) {
       /** POST /account/admin-handoff (signed in) */
       adminHandoff: (body: BodyOf<"account.adminHandoff">, options?: Options) =>
         transport.call("account.adminHandoff", { body, signal: options?.signal }) as Promise<ResponseOf<"account.adminHandoff">>,
+      /** POST /account/delete (signed in) */
+      delete: (body: BodyOf<"account.delete">, options?: Options) =>
+        transport.call("account.delete", { body, signal: options?.signal }) as Promise<ResponseOf<"account.delete">>,
       /** POST /account/details (signed in) */
       details: (body: BodyOf<"account.details">, options?: Options) =>
         transport.call("account.details", { body, signal: options?.signal }) as Promise<ResponseOf<"account.details">>,

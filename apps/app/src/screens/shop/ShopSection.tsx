@@ -7,6 +7,7 @@ import { dayLabel, localeOf, money } from "../../lib/format.ts";
 import { CardPayment } from "../../components/CardPayment.tsx";
 import { Dialog } from "../arena/Dialogs.tsx";
 import { useShop, useShopActions, type Order, type Product } from "./data.ts";
+import { LoadError } from "../../components/LoadError.tsx";
 
 const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
@@ -154,6 +155,7 @@ export function ShopSection() {
   const t = useT(config);
   const shop = useShop();
   const s = shop.data;
+  if (config?.modules.includes("shop") && !s && shop.isError) return <LoadError compact onRetry={() => void shop.refetch()} />;
   if (!config?.modules.includes("shop") || !s || (s.products.length === 0 && s.orders.length === 0)) return null;
   return (
     <section className="stack" aria-labelledby="shop-title" id="shop">

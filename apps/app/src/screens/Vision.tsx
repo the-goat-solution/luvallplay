@@ -7,6 +7,7 @@ import { useCurrentClub, useT } from "../hooks.tsx";
 import { money } from "../lib/format.ts";
 import { usePlace } from "./me/parts.tsx";
 import { useVisionChallenge, useVisionStatus, type VisionChallenge } from "./vision/data.ts";
+import { LoadError } from "../components/LoadError.tsx";
 
 const DAY = 86_400_000;
 
@@ -80,7 +81,7 @@ export default function VisionScreen() {
         </section>
       )}
       {!s ? (
-        status.isError ? <p className="notice notice-error" role="alert">{t("me_retry_load")}</p> : <div className="skeleton skeleton-tall" aria-busy="true" />
+        status.isError ? <LoadError onRetry={() => void status.refetch()} /> : <div className="skeleton skeleton-tall" aria-busy="true" />
       ) : (
         <>
           {s.trial && (

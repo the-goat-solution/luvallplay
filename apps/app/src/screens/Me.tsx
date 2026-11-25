@@ -18,6 +18,7 @@ import { PlayCalendar } from "./me/PlayCalendar.tsx";
 import { WelcomeCard } from "./me/Welcome.tsx";
 import { ShopSection } from "./shop/ShopSection.tsx";
 import { PhotosCard } from "./me/Photos.tsx";
+import { LoadError } from "../components/LoadError.tsx";
 
 function Loading() {
   const { t } = usePlace();
@@ -54,14 +55,7 @@ export default function MeScreen() {
     return (
       <section className="screen stack" data-screen="nav_me" data-state={me.isError ? "error" : "loading"}>
         {me.isError ? (
-          <div className="card stack" role="alert">
-            <p>{t("me_retry_load")}</p>
-            <div>
-              <button type="button" className="button" onClick={() => void me.refetch()}>
-                {t("retry")}
-              </button>
-            </div>
-          </div>
+          <LoadError onRetry={() => void me.refetch()} />
         ) : (
           <Loading />
         )}

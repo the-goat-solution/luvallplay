@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useCurrentClub, useT } from "../../hooks.tsx";
 import { squarePhoto } from "../../lib/photo.ts";
 import { useDeleteAccount, useDownloadData, usePhoto, useProfile, useSaveDetails, useSavePrivacy, type Profile } from "./data.ts";
+import { LoadError } from "../../components/LoadError.tsx";
 
 type T = ReturnType<typeof useT>;
 
@@ -195,7 +196,7 @@ export function AccountCards() {
   const profile = useProfile();
   if (!profile.data) {
     return profile.isError ? (
-      <p className="notice notice-error" role="alert">{t("me_retry_load")}</p>
+      <LoadError onRetry={() => void profile.refetch()} />
     ) : (
       <p className="muted" role="status">{t("loading")}</p>
     );

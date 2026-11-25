@@ -8,6 +8,7 @@ import { useArena } from "./arena/data.ts";
 import { Heatmap, RrChart } from "./player/Charts.tsx";
 import { usePlayerStats } from "./player/data.ts";
 import { RankCard, RankLadder } from "./player/RankCard.tsx";
+import { LoadError } from "../components/LoadError.tsx";
 
 const PERIODS = [["month", "pl_this_month"], ["quarter", "pl_this_quarter"], ["year", "pl_this_year"], ["lifetime", "pl_lifetime"]] as const;
 
@@ -28,7 +29,7 @@ export default function PlayerScreen() {
       <div className="screen" data-screen="nav_player" data-state={stats.isError ? "error" : "loading"}>
         <h1>{t("pl_title")}</h1>
         {stats.isError ? (
-          <p className="notice notice-error" role="alert">{t("me_retry_load")} <button type="button" className="button button-small" onClick={() => void stats.refetch()}>↻</button></p>
+          <LoadError onRetry={() => void stats.refetch()} />
         ) : (
           <div className="skeleton skeleton-tall" aria-busy="true" />
         )}

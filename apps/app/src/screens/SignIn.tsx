@@ -3,21 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ApiError } from "@luvallplay/api/client";
-import type { AppKey } from "@luvallplay/i18n/app";
 import { api, store } from "../app.ts";
+import { signInErrorKey as errorKey } from "../lib/signin-errors.ts";
+import type { AppKey } from "@luvallplay/i18n/app";
 import { LuvallplayMark, Notice, OnLuvallplay, useLook } from "../Frame.tsx";
 import { useLang, useT, type ClubConfig } from "../hooks.tsx";
-
-function errorKey(err: unknown, fallback: AppKey): AppKey {
-  if (!(err instanceof ApiError)) return "error_generic";
-  if (err.offline) return "offline";
-  if (err.code === "invalid_email") return "signin_err_invalid_email";
-  if (err.status === 429) return "signin_err_too_many";
-  if (err.code === "captcha") return "signin_err_captcha";
-  if (err.code === "send_failed") return "signin_err_send";
-  return err.status === 400 ? fallback : "error_generic";
-}
 
 /** The form itself; `club` is set on a club's invite link (the club to open after sign-in). */
 export function SignInForm({ club }: { club?: string }) {
@@ -53,7 +43,7 @@ export function SignInForm({ club }: { club?: string }) {
       const session = await api.auth.emailVerify({ email, code });
       queryClient.clear();
       store.set({ token: session.token, needsDetails: session.needsDetails, ...(club ? { club } : {}) });
-      await navigate({ to: "/me" });
+      await navigate({ to: session.needsDetails ? "/welcome" : "/me" });
     } catch (err) {
       setError(errorKey(err, "signin_err_code"));
       setBusy(false);

@@ -1,14 +1,15 @@
 // Settings (the ⚙ in the header), as on the website: the Club admin button,
 // picture, details, language, appearance, privacy, the person's data and
 // signing out. Language is kept on the account too, so the website and the
-// club's emails follow. Still to come (a separate step, as they touch
-// signing in): changing the phone number, connected apps, deleting the
-// account and opening the web admin.
+// club's emails follow. Still to come (they touch signing in): changing the
+// phone number (it needs text-message codes).
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, store } from "../app.ts";
 import { useCurrentClub, useLang, usePrefs, useSession, useT } from "../hooks.tsx";
 import { AccountCards } from "./settings/Account.tsx";
+import { ClubAdmin } from "./settings/ClubAdmin.tsx";
+import { ConnectedApps } from "./settings/ConnectedApps.tsx";
 import { useSaveLanguage } from "./settings/data.ts";
 import type { ThemeChoice } from "../lib/theme.ts";
 
@@ -39,6 +40,7 @@ export default function SettingsScreen() {
       <h1>{t("settings_title")}</h1>
       <div className="panes">
         <AccountCards />
+        <ConnectedApps />
         <fieldset className="card stack">
           <legend>{t("settings_language")}</legend>
           {(["en", "vi"] as const).map((l) => (
@@ -60,16 +62,7 @@ export default function SettingsScreen() {
             </label>
           ))}
         </fieldset>
-        {current?.canOpenAdmin && (
-          <div className="card stack">
-            <h2>{current.name}</h2>
-            {/* The 60-second handoff link needs its endpoint in the contract (packages/api); until then the button explains itself. */}
-            <button className="button" type="button" disabled aria-describedby="club-admin-soon">
-              {t("settings_club_admin")}
-            </button>
-            <p className="muted" id="club-admin-soon">{t("settings_club_admin_soon")}</p>
-          </div>
-        )}
+        {current?.canOpenAdmin && <ClubAdmin clubName={current.name} email={session.data?.player.email} />}
         <div className="card stack">
           <h2>{t("settings_account")}</h2>
           {session.data && <p className="muted">{t("settings_signed_in_as", { email: session.data.player.email })}</p>}

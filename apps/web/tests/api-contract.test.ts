@@ -20,6 +20,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { API_PREFIX, API_VERSION, ENDPOINTS, fillPath } from "@luvallplay/api/contract";
+import * as S from "@luvallplay/api/schemas";
 import { breakingChanges, shapeOf } from "@luvallplay/api/shape";
 import { contractBreaks, currentSnapshot, type ContractSnapshot } from "../../../packages/api/src/snapshot.ts";
 import { generateClient, generateRoutes } from "../../../packages/api/scripts/generate.ts";
@@ -202,4 +203,12 @@ describe("request validation (what the wrapper applies)", () => {
     assert.ok(params.safeParse({ club: "three-wolves" }).success);
     for (const bad of ["Three-Wolves", "a b", "../x", "", "a--b", "x".repeat(80), "a/b"]) assert.equal(params.safeParse({ club: bad }).success, false, bad);
   });
+});
+
+describe("connected apps: the contract's lists match the website's", () => {
+  // lib/webhooks.ts needs a database to import, so its lists are read from the file.
+  const source = readFileSync(join(import.meta.dirname, "..", "lib", "webhooks.ts"), "utf8");
+  const list = (name: string) => JSON.parse(`[${source.match(new RegExp(`export const ${name} = \\[([^\\]]*)\\]`))?.[1] ?? ""}]`);
+  test("access-key permissions", () => assert.deepEqual([...S.API_SCOPES], list("SCOPES")));
+  test("webhook events", () => assert.deepEqual([...S.WEBHOOK_EVENTS], list("EVENTS")));
 });

@@ -4,6 +4,8 @@ export const API_VERSION = "v1";
 export const API_PREFIX = "/api/v1/app";
 
 export const ROUTES = {
+  "account.adminHandoff": { method: "POST", path: "/account/admin-handoff", auth: "session" },
+  "account.delete": { method: "POST", path: "/account/delete", auth: "session" },
   "account.details": { method: "POST", path: "/account/details", auth: "session" },
   "account.dismissWelcome": { method: "POST", path: "/account/welcome-dismissed", auth: "session" },
   "account.export": { method: "GET", path: "/account/export", auth: "session" },
@@ -20,6 +22,11 @@ export const ROUTES = {
   "auth.smsVerify": { method: "POST", path: "/auth/sms/verify", auth: "public" },
   "clubs.config": { method: "GET", path: "/clubs/{club}/config", auth: "public" },
   "clubs.list": { method: "GET", path: "/clubs", auth: "session" },
+  "integrations.createToken": { method: "POST", path: "/account/integrations/tokens", auth: "session" },
+  "integrations.createWebhook": { method: "POST", path: "/account/integrations/webhooks", auth: "session" },
+  "integrations.deleteWebhook": { method: "DELETE", path: "/account/integrations/webhooks/{id}", auth: "session" },
+  "integrations.list": { method: "GET", path: "/account/integrations", auth: "session" },
+  "integrations.revokeToken": { method: "DELETE", path: "/account/integrations/tokens/{id}", auth: "session" },
   "me.absence": { method: "POST", path: "/clubs/{club}/me/absence", auth: "session" },
   "me.home": { method: "GET", path: "/clubs/{club}/me", auth: "session" },
   "messages.list": { method: "GET", path: "/clubs/{club}/messages", auth: "session" },

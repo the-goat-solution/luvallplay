@@ -635,6 +635,13 @@ const SESSION_ENDPOINTS = [
   ["POST", "/account/photo"],
   ["DELETE", "/account/photo"],
   ["GET", "/account/export"],
+  ["POST", "/account/admin-handoff"],
+  ["POST", "/account/delete"],
+  ["GET", "/account/integrations"],
+  ["POST", "/account/integrations/tokens"],
+  ["DELETE", "/account/integrations/tokens/{id}"],
+  ["POST", "/account/integrations/webhooks"],
+  ["DELETE", "/account/integrations/webhooks/{id}"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1053,6 +1060,127 @@ describe("API · the players' app API", () => {
       );
       await db.query(`UPDATE club_members SET leaderboard_visible = $2 WHERE user_id = $1`, [before.id, before.leaderboard_visible]);
       await pete.context.close();
+    }
+  });
+
+  test("API13 · Club admin: a fresh owner gets a one-use link that opens admin signed in; an old sign-in must confirm (403, not 401); a member can't", async () => {
+    const owner = await signedIn(PEOPLE.owner.email);
+    const member = await signedIn(PEOPLE.member.email);
+    try {
+      const made = await appApi("POST", "/account/admin-handoff", { token: owner.token, body: {} });
+      assert.equal(made.status, 200);
+      assert.deepEqual(Object.keys(made.json).sort(), ["expiresInSeconds", "url"]);
+      assert.ok(made.json.expiresInSeconds > 0 && made.json.expiresInSeconds <= 120);
+      const link = new URL(made.json.url);
+      assert.equal(link.origin, base());
+      assert.equal(link.pathname, "/admin/handoff");
+      assert.equal(made.headers.get("cache-control"), "no-store");
+      const audited = await db.query(`SELECT 1 FROM admin_audit_log WHERE action = 'admin.handoff_created' AND target = (SELECT 'player:' || id FROM players WHERE email = $1)`, [PEOPLE.owner.email]);
+      assert.ok(audited.rowCount >= 1, "audited like the web's handoff");
+
+      // The link opens admin in a fresh browser, once.
+      const fresh = await browser.newContext({ viewport: PHONE, baseURL: base() });
+      const page = await fresh.newPage();
+      await page.goto(made.json.url);
+      await page.waitForURL(/\/admin(\/|$|\?)/);
+      assert.doesNotMatch(new URL(page.url()).pathname, /handoff|signin|login/);
+      await fresh.close();
+      const again = await browser.newContext({ viewport: PHONE, baseURL: base() });
+      const page2 = await again.newPage();
+      await page2.goto(made.json.url);
+      assert.doesNotMatch(new URL(page2.url()).pathname, /^\/admin\/?$/, "a used link doesn't open admin again");
+      await again.close();
+
+      // Signed in 13 hours ago: confirm first. 403, so the app doesn't think it was signed out.
+      await db.query(`UPDATE player_sessions SET created_at = NOW() - INTERVAL '13 hours' WHERE token_hash = $1`, [createHash("sha256").update(owner.token).digest("hex")]);
+      const stale = await appApi("POST", "/account/admin-handoff", { token: owner.token, body: {} });
+      assert.deepEqual([stale.status, stale.json.error], [403, "step_up"]);
+      assert.equal((await appApi("GET", "/auth/session", { token: owner.token })).status, 200, "still signed in");
+
+      const refused = await appApi("POST", "/account/admin-handoff", { token: member.token, body: {} });
+      assert.deepEqual([refused.status, refused.json.error], [403, "forbidden"]);
+      assert.equal((await appApi("POST", "/account/admin-handoff", { body: {} })).status, 401);
+    } finally {
+      await owner.context.close();
+      await member.context.close();
+    }
+  });
+
+  test("API14 · deleting the account: typed DELETE, the club keeps its only owner, every session ends, the admins hear", async () => {
+    const email = `delete.me.${Date.now()}@e2e.test`;
+    const id = (await db.query(`INSERT INTO players (email, first_name, last_name, claimed_at) VALUES ($1, 'Dee', 'Leted', NOW()) RETURNING id`, [email])).rows[0].id;
+    const one = await signedIn(email);
+    const two = await signedIn(email);
+    const owner = await signedIn(PEOPLE.owner.email);
+    try {
+      for (const bad of [{}, { confirm: "delete" }, { confirm: "yes" }]) {
+        const r = await appApi("POST", "/account/delete", { token: one.token, body: bad });
+        assert.deepEqual([r.status, r.json.error], [400, "confirm"], JSON.stringify(bad));
+      }
+      const last = await appApi("POST", "/account/delete", { token: owner.token, body: { confirm: "DELETE" } });
+      assert.deepEqual([last.status, last.json.error], [409, "last_owner"]);
+      assert.equal((await appApi("GET", "/auth/session", { token: owner.token })).status, 200, "the owner is untouched");
+
+      await clearOutbox();
+      const done = await appApi("POST", "/account/delete", { token: one.token, body: { confirm: "DELETE" } });
+      assert.deepEqual([done.status, done.json], [200, { ok: true }]);
+      for (const t of [one.token, two.token]) assert.equal((await appApi("GET", "/auth/session", { token: t })).status, 401, "every session ended");
+      const row = (await db.query(`SELECT deleted_at, email, first_name FROM players WHERE id = $1`, [id])).rows[0];
+      assert.ok(row.deleted_at, "the account is marked deleted");
+      assert.deepEqual([row.email, row.first_name], [`deleted-${id}@deleted.invalid`, ""], "and its details cleared");
+      const mail = (await (await fetch(`${base()}/api/dev/outbox`)).json()).mail;
+      assert.ok(mail.some((m) => m.subject === `Account deleted: ${email}`), "the admins are told");
+    } finally {
+      await one.context.close();
+      await two.context.close();
+      await owner.context.close();
+    }
+  });
+
+  test("API15 · connected apps: a key shown once that works on the older API until disconnected; webhooks public https only; nobody else's", async () => {
+    const pete = await signedIn(PEOPLE.player.email);
+    const mia = await signedIn(PEOPLE.member.email);
+    const call = (method, path, body, token = pete.token) => appApi(method, path, { token, body });
+    try {
+      const empty = (await call("GET", "/account/integrations")).json;
+      assert.deepEqual(Object.keys(empty).sort(), ["tokens", "webhooks"]);
+      const before = empty.tokens.length;
+
+      assert.equal((await call("POST", "/account/integrations/tokens", { name: "Tracker", scopes: ["read:everything"] })).status, 400);
+      assert.equal((await call("POST", "/account/integrations/tokens", { name: "Tracker", scopes: [] })).status, 400);
+      const made = await call("POST", "/account/integrations/tokens", { name: "Tracker", scopes: ["read:stats"] });
+      assert.equal(made.status, 200);
+      assert.match(made.json.token, /^tw_/);
+      assert.equal(made.json.record.prefix, made.json.token.slice(0, 9));
+      const listed = (await call("GET", "/account/integrations")).json.tokens;
+      assert.equal(listed.length, before + 1);
+      assert.ok(!JSON.stringify(listed).includes(made.json.token), "the key itself is never listed");
+
+      // The key works on the older API, as one made on the website does.
+      const older = await fetch(`${base()}/api/v1/me`, { headers: { Authorization: `Bearer ${made.json.token}` } });
+      assert.equal(older.status, 200);
+      // Somebody else can't disconnect it.
+      await call("DELETE", `/account/integrations/tokens/${made.json.record.id}`, undefined, mia.token);
+      assert.equal((await fetch(`${base()}/api/v1/me`, { headers: { Authorization: `Bearer ${made.json.token}` } })).status, 200);
+      assert.deepEqual((await call("DELETE", `/account/integrations/tokens/${made.json.record.id}`)).json, { ok: true });
+      assert.equal((await fetch(`${base()}/api/v1/me`, { headers: { Authorization: `Bearer ${made.json.token}` } })).status, 401);
+      assert.equal((await call("GET", "/account/integrations")).json.tokens.length, before);
+      assert.equal((await call("DELETE", "/account/integrations/tokens/abc")).status, 404);
+
+      for (const url of ["http://example.com/hook", "https://localhost/hook", "https://10.0.0.1/hook", "not a url"]) {
+        const r = await call("POST", "/account/integrations/webhooks", { url });
+        assert.deepEqual([r.status, r.json.error], [400, "invalid_url"], url);
+      }
+      const hook = await call("POST", "/account/integrations/webhooks", { url: "https://hooks.example.com/tw" });
+      assert.equal(hook.status, 200);
+      assert.ok(hook.json.secret.length >= 16);
+      assert.deepEqual(hook.json.endpoint.events, ["attendance.recorded", "round_robin.result", "membership.changed", "photo.approved"]);
+      assert.ok(!JSON.stringify((await call("GET", "/account/integrations")).json).includes(hook.json.secret), "the secret is never listed");
+      await call("DELETE", `/account/integrations/webhooks/${hook.json.endpoint.id}`);
+      assert.equal((await call("GET", "/account/integrations")).json.webhooks.some((w) => w.id === hook.json.endpoint.id), false);
+    } finally {
+      await pete.context.close();
+      await mia.context.close();
     }
   });
 

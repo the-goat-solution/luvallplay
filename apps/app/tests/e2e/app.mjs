@@ -712,16 +712,48 @@ describe("APP · settings", () => {
     await context.close();
   });
 
-  test("APP9 · Club admin: shown to an owner (waiting for the handoff endpoint), never to a member; sign out everywhere", async () => {
+  test("APP9 · Club admin: opens the club's admin signed in; an old sign-in confirms by emailed code first; never shown to a member", async () => {
+    const owner = await signedIn(PEOPLE.owner.email);
+    const page = await owner.context.newPage();
+    const hash = createHash("sha256").update(owner.token).digest("hex");
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+
+      // Signed in more than 12 hours ago: Settings asks for a fresh code, then opens admin.
+      await db.query(`UPDATE player_sessions SET created_at = NOW() - INTERVAL '13 hours' WHERE token_hash = $1`, [hash]);
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.getByText("confirm it's you first").waitFor();
+      await fetch(`${env.base}/api/dev/outbox`, { method: "DELETE" });
+      await page.getByRole("button", { name: "Email me a code" }).click();
+      await page.getByLabel("6-digit code").fill("000000");
+      const code = await outboxCode(PEOPLE.owner.email);
+      if (code !== "000000") {
+        await page.getByRole("button", { name: "Confirm and open" }).click();
+        await page.getByRole("alert").filter({ hasText: "isn't right" }).waitFor();
+      }
+      await page.getByLabel("6-digit code").fill(code);
+      await page.getByRole("button", { name: "Confirm and open" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${owner.token}` } })).status, 200, "the older session wasn't ended either");
+    } finally {
+      await owner.context.close();
+    }
+
+    const member = await signedIn(PEOPLE.member.email);
+    const mp = await member.context.newPage();
+    await mp.goto(`${APP}/settings`);
+    await mp.waitForSelector("text=Signed in as");
+    assert.equal(await mp.getByRole("button", { name: "Club admin" }).count(), 0);
+    await member.context.close();
+  });
+
+  test("APP9b · sign out everywhere ends every session of the person", async () => {
     const owner = await signedIn(PEOPLE.owner.email);
     const page = await owner.context.newPage();
     await page.goto(`${APP}/settings`);
-    const button = page.getByRole("button", { name: "Club admin" });
-    await button.waitFor();
-    assert.equal(await button.isDisabled(), true);
-    await page.waitForSelector("text=Opening the club's admin from the app is coming soon.");
-
-    // A second device of the same person, then "sign out everywhere" from the first.
     const other = await sessionToken(PEOPLE.owner.email);
     await page.getByRole("button", { name: "Sign out everywhere" }).click();
     await page.waitForURL(`${APP}/signin`);
@@ -839,10 +871,119 @@ describe("APP · settings: the account", () => {
       await photo.getByRole("button", { name: "Remove" }).click();
       await photo.getByRole("status").filter({ hasText: "Picture removed" }).waitFor();
       assert.equal((await playerRow(PEOPLE.member.email)).avatar_url, null);
-      assert.equal(await photo.locator(".avatar img").count(), 0);
+      await photo.locator(".avatar img").waitFor({ state: "detached" });
     } finally {
       await db.query(`UPDATE players SET avatar_url = $2 WHERE id = $1`, [before.id, before.avatar_url]);
       await context.close();
+    }
+  });
+
+  test("APP30 · deleting the account: typed DELETE, back to sign-in; the club's only owner is told to hand over first", async () => {
+    const owner = await signedIn(PEOPLE.owner.email);
+    const op = await owner.context.newPage();
+    await op.goto(`${APP}/settings`);
+    await op.getByRole("button", { name: "Delete my account" }).click();
+    const confirm = op.getByRole("button", { name: "Delete my account" });
+    assert.equal(await confirm.isDisabled(), true, "nothing typed yet");
+    await op.getByLabel("Type DELETE to confirm").fill("delete");
+    await confirm.click();
+    await op.getByRole("alert").filter({ hasText: "only owner" }).waitFor();
+    await owner.context.close();
+
+    const email = `app.delete.${Date.now()}@e2e.test`;
+    const id = (await db.query(`INSERT INTO players (email, first_name, last_name, claimed_at) VALUES ($1, 'Dee', 'Leted', NOW()) RETURNING id`, [email])).rows[0].id;
+    const { context, token } = await signedIn(email);
+    const page = await context.newPage();
+    await page.goto(`${APP}/settings`);
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await page.getByRole("button", { name: "Cancel" }).last().click();
+    assert.equal(await page.getByLabel("Type DELETE to confirm").count(), 0, "Cancel closes it");
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await page.getByLabel("Type DELETE to confirm").fill("DELETE");
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await page.waitForURL(`${APP}/signin`);
+    assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${token}` } })).status, 401);
+    assert.ok((await db.query(`SELECT deleted_at FROM players WHERE id = $1`, [id])).rows[0].deleted_at);
+    await context.close();
+  });
+
+  test("APP31 · connected apps: a key made, shown once, disconnected; a webhook refused, added and removed", async () => {
+    const { context } = await signedIn(PEOPLE.player.email, { viewport: { width: 900, height: 1000 } });
+    const page = await context.newPage();
+    const peteId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.player.email])).rows[0].id;
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.getByText(/^Access keys \(\d+\)$/).click();
+      await page.getByLabel("App name").fill("Habit tracker");
+      await page.getByLabel("Read my upcoming play days (calendar feed)").check();
+      await page.getByRole("button", { name: "Create key" }).click();
+      const shown = page.getByRole("status").filter({ hasText: "won't be shown again" });
+      await shown.waitFor();
+      const key = await shown.locator("code").textContent();
+      assert.match(key, /^tw_/);
+      const row = (await db.query(`SELECT scopes FROM api_tokens WHERE player_id = $1 AND name = 'Habit tracker' AND revoked_at IS NULL`, [peteId])).rows[0];
+      assert.deepEqual(row.scopes.sort(), ["read:attendance", "read:calendar", "read:stats"]);
+      await page.getByRole("button", { name: "Disconnect: Habit tracker" }).click();
+      await page.getByRole("button", { name: "Disconnect: Habit tracker" }).waitFor({ state: "detached" });
+      assert.equal((await db.query(`SELECT 1 FROM api_tokens WHERE player_id = $1 AND revoked_at IS NULL`, [peteId])).rowCount, 0);
+
+      await page.getByText(/^Webhooks \(\d+\)$/).click();
+      await page.getByPlaceholder("https://").fill("https://localhost/hook");
+      await page.getByRole("button", { name: "Add webhook" }).click();
+      await page.getByRole("alert").filter({ hasText: "public https://" }).waitFor();
+      await page.getByPlaceholder("https://").fill("https://hooks.example.com/tw");
+      await page.getByRole("button", { name: "Add webhook" }).click();
+      await page.getByRole("status").filter({ hasText: "Signing secret" }).waitFor();
+      await page.getByRole("button", { name: "Disconnect: https://hooks.example.com/tw" }).click();
+      await page.getByRole("button", { name: "Disconnect: https://hooks.example.com/tw" }).waitFor({ state: "detached" });
+      assert.equal((await db.query(`SELECT 1 FROM webhook_endpoints WHERE player_id = $1`, [peteId])).rowCount, 0);
+    } finally {
+      await db.query(`DELETE FROM api_tokens WHERE player_id = $1`, [peteId]);
+      await db.query(`DELETE FROM webhook_endpoints WHERE player_id = $1`, [peteId]);
+      await context.close();
+    }
+  });
+
+  test("APP32 · a brand-new account is asked its name after the code; skipping leaves a reminder that leads back", async () => {
+    const signUp = async (email) => {
+      const context = await browser.newContext({ viewport: PHONE });
+      const page = await context.newPage();
+      await page.goto(`${APP}/signin`);
+      await page.getByLabel("Email").fill(email);
+      await page.getByRole("button", { name: "Send my code" }).click();
+      await page.waitForSelector("text=Check your email");
+      await page.getByLabel("6-digit code").fill(await outboxCode(email));
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.waitForURL(`${APP}/welcome`);
+      return { context, page };
+    };
+    const stamp = Date.now();
+    const first = `new.one.${stamp}@e2e.test`;
+    const second = `new.two.${stamp}@e2e.test`;
+    try {
+      const a = await signUp(first);
+      await a.page.getByRole("heading", { name: "What's your name?" }).waitFor();
+      await a.page.getByLabel("First name").fill("Nina");
+      await a.page.getByLabel("Last name").fill("New");
+      await a.page.getByRole("button", { name: "Continue" }).click();
+      await a.page.waitForURL(`${APP}/me`);
+      await a.page.waitForSelector(ME_READY);
+      assert.equal(await a.page.getByText("Add your name so your club knows who you are.").count(), 0);
+      assert.deepEqual((await db.query(`SELECT first_name, last_name FROM players WHERE email = $1`, [first])).rows[0], { first_name: "Nina", last_name: "New" });
+      await a.context.close();
+
+      const b = await signUp(second);
+      await b.page.getByRole("link", { name: "Cancel" }).click();
+      await b.page.waitForURL(`${APP}/me`);
+      await b.page.getByRole("link", { name: "Add my name" }).click();
+      await b.page.waitForURL(`${APP}/welcome`);
+      await b.page.getByLabel("First name").fill("Ned");
+      await b.page.getByRole("button", { name: "Continue" }).click();
+      await b.page.waitForURL(`${APP}/me`);
+      assert.equal(await b.page.getByRole("link", { name: "Add my name" }).count(), 0);
+      await b.context.close();
+    } finally {
+      await db.query(`DELETE FROM player_sessions WHERE player_id IN (SELECT id FROM players WHERE email = ANY($1))`, [[first, second]]);
     }
   });
 
@@ -965,7 +1106,7 @@ describe("APP · accessibility and the page's rules", () => {
       // axe is injected by the test, which the page's own CSP would (rightly) refuse.
       const { context } = await signedIn(PEOPLE.admin.email, { colorScheme, bypassCSP: true });
       const anon = await browser.newContext({ viewport: PHONE, colorScheme, bypassCSP: true });
-      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/arena", '[data-screen="nav_arena"]']]) {
+      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/arena", '[data-screen="nav_arena"]']]) {
         const page = await ctx.newPage();
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);

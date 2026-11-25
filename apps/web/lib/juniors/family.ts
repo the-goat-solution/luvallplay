@@ -12,8 +12,9 @@
 //   and with two guardians both must agree.
 //
 // `guardianships` is the one source of truth for who a child's guardians
-// are. `junior_profiles.guardian_user_id` only records who created the
-// profile; nothing reads it for access (audit, "Migration 0012 details").
+// are: a row that was confirmed (consent_at) and hasn't ended (ended_at).
+// It is club-owned, like the profile. `junior_profiles.guardian_user_id` is
+// no longer written or read (audit, "Migration 0012 details").
 //
 // Callers check that Juniors is on for the club first (lib/juniors/module.ts).
 // Takes a small `Db` and the club's id, so tests and scripts share it.
@@ -119,7 +120,8 @@ export function effectiveConsent(perGuardian: readonly ConsentChoices[]): Consen
 // ── Reads ───────────────────────────────────────────────────────────────────
 
 const CHILD_COLUMNS = `j.id, j.name, j.birth_year, j.created_at, g.consent_at, g.consent_scope,
-  (SELECT count(*)::int FROM guardianships o JOIN players op ON op.id = o.guardian_user_id AND op.deleted_at IS NULL WHERE o.junior_profile_id = j.id) AS guardians`;
+  (SELECT count(*)::int FROM guardianships o JOIN players op ON op.id = o.guardian_user_id AND op.deleted_at IS NULL
+    WHERE o.junior_profile_id = j.id AND o.consent_at IS NOT NULL AND o.ended_at IS NULL) AS guardians`;
 
 function toChild(r: Record<string, unknown>): Child {
   const consent = readConsent(r.consent_scope);
@@ -140,7 +142,7 @@ export async function listChildren(db: Db, tenantId: number, guardianId: number)
   const { rows } = await db.query(
     `SELECT ${CHILD_COLUMNS}
      FROM guardianships g JOIN junior_profiles j ON j.id = g.junior_profile_id
-     WHERE g.guardian_user_id = $2 AND j.tenant_id = $1 AND j.deleted_at IS NULL AND g.consent_at IS NOT NULL
+     WHERE g.guardian_user_id = $2 AND j.tenant_id = $1 AND j.deleted_at IS NULL AND g.consent_at IS NOT NULL AND g.ended_at IS NULL
      ORDER BY j.created_at, j.id`,
     [tenantId, guardianId],
   );
@@ -152,7 +154,7 @@ export async function getChild(db: Db, tenantId: number, guardianId: number, chi
   const { rows } = await db.query(
     `SELECT ${CHILD_COLUMNS}
      FROM guardianships g JOIN junior_profiles j ON j.id = g.junior_profile_id
-     WHERE g.guardian_user_id = $2 AND j.tenant_id = $1 AND j.id = $3 AND j.deleted_at IS NULL AND g.consent_at IS NOT NULL`,
+     WHERE g.guardian_user_id = $2 AND j.tenant_id = $1 AND j.id = $3 AND j.deleted_at IS NULL AND g.consent_at IS NOT NULL AND g.ended_at IS NULL`,
     [tenantId, guardianId, childId],
   );
   return rows[0] ? toChild(rows[0]) : null;
@@ -168,7 +170,7 @@ export async function childConsent(db: Db, tenantId: number, childId: number): P
   const { rows } = await db.query(
     `SELECT g.consent_scope
      FROM guardianships g JOIN junior_profiles j ON j.id = g.junior_profile_id JOIN players p ON p.id = g.guardian_user_id
-     WHERE j.tenant_id = $1 AND j.id = $2 AND j.deleted_at IS NULL AND g.consent_at IS NOT NULL AND p.deleted_at IS NULL`,
+     WHERE j.tenant_id = $1 AND j.id = $2 AND j.deleted_at IS NULL AND g.consent_at IS NOT NULL AND g.ended_at IS NULL AND p.deleted_at IS NULL`,
     [tenantId, childId],
   );
   return effectiveConsent(rows.map((r) => readConsent(r.consent_scope).choices));
@@ -208,12 +210,12 @@ export async function addChild(db: Db, tenantId: number, guardianId: number, inp
   const at = (opts.now ?? new Date()).toISOString();
   const { rows } = await db.query(
     `WITH j AS (
-       INSERT INTO junior_profiles (tenant_id, guardian_user_id, name, birth_year)
-       SELECT $1, p.id, $3, $4 FROM players p WHERE p.id = $2 AND p.deleted_at IS NULL
+       INSERT INTO junior_profiles (tenant_id, name, birth_year)
+       SELECT $1, $3, $4 FROM players p WHERE p.id = $2 AND p.deleted_at IS NULL
        RETURNING id
      )
-     INSERT INTO guardianships (guardian_user_id, junior_profile_id, consent_at, consent_scope)
-     SELECT $2, j.id, $5::timestamptz, $6::jsonb FROM j
+     INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at, consent_scope)
+     SELECT $1, $2, j.id, $5::timestamptz, $6::jsonb FROM j
      RETURNING junior_profile_id`,
     [tenantId, guardianId, name, input.birthYear, at, JSON.stringify(storedConsent(choicesFrom(input.consent), at))],
   );
@@ -244,7 +246,7 @@ export async function updateChild(db: Db, tenantId: number, guardianId: number, 
     await db.query(
       `UPDATE junior_profiles j SET name = $4, birth_year = $5
        WHERE j.id = $3 AND j.tenant_id = $1 AND j.deleted_at IS NULL
-         AND EXISTS (SELECT 1 FROM guardianships g WHERE g.junior_profile_id = j.id AND g.guardian_user_id = $2 AND g.consent_at IS NOT NULL)`,
+         AND EXISTS (SELECT 1 FROM guardianships g WHERE g.tenant_id = $1 AND g.junior_profile_id = j.id AND g.guardian_user_id = $2 AND g.consent_at IS NOT NULL AND g.ended_at IS NULL)`,
       [tenantId, guardianId, childId, name, birthYear],
     );
   }
@@ -260,11 +262,11 @@ export async function setConsent(db: Db, tenantId: number, guardianId: number, c
   for (const item of CONSENT_ITEMS) if (typeof changes[item] === "boolean") next[item] = changes[item] as boolean;
   const at = (opts.now ?? new Date()).toISOString();
   const previous = (
-    await db.query(`SELECT consent_scope FROM guardianships WHERE guardian_user_id = $1 AND junior_profile_id = $2`, [guardianId, childId])
+    await db.query(`SELECT consent_scope FROM guardianships WHERE tenant_id = $1 AND guardian_user_id = $2 AND junior_profile_id = $3`, [tenantId, guardianId, childId])
   ).rows[0]?.consent_scope;
   await db.query(
     `UPDATE guardianships g SET consent_scope = $4::jsonb
-     WHERE g.guardian_user_id = $2 AND g.junior_profile_id = $3
+     WHERE g.tenant_id = $1 AND g.guardian_user_id = $2 AND g.junior_profile_id = $3 AND g.ended_at IS NULL
        AND EXISTS (SELECT 1 FROM junior_profiles j WHERE j.id = g.junior_profile_id AND j.tenant_id = $1 AND j.deleted_at IS NULL)`,
     [tenantId, guardianId, childId, JSON.stringify(storedConsent(next, at, previous))],
   );

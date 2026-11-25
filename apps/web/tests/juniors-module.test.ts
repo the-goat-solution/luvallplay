@@ -274,8 +274,8 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
   test("switching off: owners and Luvallplay staff; data is kept, the acknowledgement is not, and on again asks again", async () => {
     assert.equal(code(await tryOn(P.owner)), "ok");
     const kids = async () => (await c.query(`SELECT (SELECT count(*) FROM junior_profiles)::int AS profiles, (SELECT count(*) FROM guardianships)::int AS guardians`)).rows[0];
-    await c.query(`INSERT INTO junior_profiles (tenant_id, guardian_user_id, name, birth_year) VALUES (1, $1, 'Test Child', 2016)`, [P.member]);
-    await c.query(`INSERT INTO guardianships (guardian_user_id, junior_profile_id, consent_at) SELECT $1, id, now() FROM junior_profiles`, [P.member]);
+    await c.query(`INSERT INTO junior_profiles (tenant_id, name, birth_year) VALUES (1, 'Test Child', 2016)`);
+    await c.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at) SELECT 1, $1, id, now() FROM junior_profiles`, [P.member]);
     const before = await kids();
     try {
       for (const who of [P.member, P.coach, P.admin, P.otherClubOwner]) {

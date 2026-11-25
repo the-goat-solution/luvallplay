@@ -354,11 +354,11 @@ describe("data guard on Postgres", { skip }, () => {
   // each with bookings and attendance of their own.
   const JUNIORS = `
     CREATE TABLE junior_profiles (id serial PRIMARY KEY, guardian_user_id integer NOT NULL REFERENCES players(id), name text NOT NULL, birth_year smallint, deleted_at timestamptz);
-    CREATE TABLE guardianships (guardian_user_id integer NOT NULL REFERENCES players(id), junior_profile_id integer NOT NULL REFERENCES junior_profiles(id), PRIMARY KEY (guardian_user_id, junior_profile_id));
+    CREATE TABLE guardianships (guardian_user_id integer NOT NULL REFERENCES players(id), junior_profile_id integer NOT NULL REFERENCES junior_profiles(id), ended_at timestamptz, PRIMARY KEY (guardian_user_id, junior_profile_id));
     CREATE TABLE junior_bookings (id serial PRIMARY KEY, junior_profile_id integer NOT NULL REFERENCES junior_profiles(id), booked_by_user_id integer NOT NULL REFERENCES players(id), session_date date NOT NULL, status text NOT NULL);
     CREATE TABLE junior_attendance (junior_profile_id integer NOT NULL REFERENCES junior_profiles(id), session_date date NOT NULL, PRIMARY KEY (junior_profile_id, session_date));
     INSERT INTO junior_profiles (id, guardian_user_id, name, birth_year) VALUES (1, 1, 'Ana', 2015), (2, 1, 'Ben', 2017);
-    INSERT INTO guardianships VALUES (1, 1), (1, 2), (2, 2);
+    INSERT INTO guardianships (guardian_user_id, junior_profile_id) VALUES (1, 1), (1, 2), (2, 2);
     INSERT INTO junior_bookings (junior_profile_id, booked_by_user_id, session_date, status) VALUES (1, 1, '2026-11-06', 'confirmed'), (1, 1, '2026-11-13', 'confirmed'), (2, 1, '2026-11-06', 'confirmed');
     INSERT INTO junior_attendance VALUES (1, '2026-11-06'), (2, '2026-11-06');`;
   async function rehearseJuniors(changeSql: string, x: Partial<Expectations> = {}) {
@@ -414,6 +414,19 @@ describe("data guard on Postgres", { skip }, () => {
   test("JUNIORS · CAUGHT · a child left with no guardian", async () => {
     const { findings } = await rehearseJuniors(`DELETE FROM guardianships WHERE junior_profile_id = 1;`);
     assert.deepEqual(byCode(findings, "AFTER_DEPENDENT_WITHOUT_GUARDIAN")[0].people, ["junior:1"]);
+  });
+
+  test("JUNIORS · CAUGHT · a child whose only guardian's account is deleted, or whose only guardian stepped away", async () => {
+    // Ana (child 1) has one guardian, account 1. The row is still there, but nobody can act for her.
+    const gone = await rehearseJuniors(`UPDATE players SET deleted_at = now() WHERE id = 1;`, { allowAccountChanges: [{ target: "1", reason: "test: the guardian deletes their account" }] });
+    assert.deepEqual(byCode(gone.findings, "AFTER_DEPENDENT_WITHOUT_GUARDIAN")[0].people, ["junior:1"], "Ben still has account 2");
+    assert.equal(gone.after.people.find((p) => p.id === "junior:1")?.liveGuardians, 0);
+    assert.equal(gone.after.people.find((p) => p.id === "junior:2")?.liveGuardians, 1);
+    const ended = await rehearseJuniors(`UPDATE guardianships SET ended_at = now() WHERE guardian_user_id = 1 AND junior_profile_id = 1;`);
+    assert.deepEqual(byCode(ended.findings, "AFTER_DEPENDENT_WITHOUT_GUARDIAN")[0].people, ["junior:1"]);
+    // One of two guardians stepping away leaves the child with a guardian: nothing to report.
+    const one = await rehearseJuniors(`UPDATE guardianships SET ended_at = now() WHERE guardian_user_id = 2 AND junior_profile_id = 2;`);
+    assert.equal(byCode(one.findings, "AFTER_DEPENDENT_WITHOUT_GUARDIAN").length, 0);
   });
 
   test("JUNIORS · SAFE · a guardian deletes one child's data: declared, and the other child and the guardian are intact", async () => {

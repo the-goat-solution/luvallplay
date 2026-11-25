@@ -132,9 +132,10 @@ describe("a guardian's family, from the database", { skip: !BASE_URL && !REQUIRE
       { ...child, id: 0, addedAt: "" },
       { id: 0, name: "Mai Golden", birthYear: 2015, consent: { leaderboard: false, photos: false, vision: false }, consentAt: NOW.toISOString(), consentVersion: CONSENT_VERSION, addedAt: "", guardians: 1 },
     );
-    const row = (await c.query(`SELECT j.tenant_id, j.guardian_user_id, g.guardian_user_id AS g, g.consent_scope FROM junior_profiles j JOIN guardianships g ON g.junior_profile_id = j.id`)).rows;
+    // guardianships says who the guardian is; the profile's own guardian_user_id is no longer written.
+    const row = (await c.query(`SELECT j.tenant_id, j.guardian_user_id, g.guardian_user_id AS g, g.tenant_id AS gt, g.ended_at, g.consent_scope FROM junior_profiles j JOIN guardianships g ON g.junior_profile_id = j.id`)).rows;
     assert.equal(row.length, 1);
-    assert.deepEqual([row[0].tenant_id, row[0].guardian_user_id, row[0].g], [1, MIA, MIA]);
+    assert.deepEqual([row[0].tenant_id, row[0].guardian_user_id, row[0].g, row[0].gt, row[0].ended_at], [1, null, MIA, 1, null]);
     assert.deepEqual(row[0].consent_scope, { version: CONSENT_VERSION, items: { leaderboard: { granted: false, at: NOW.toISOString() }, photos: { granted: false, at: NOW.toISOString() }, vision: { granted: false, at: NOW.toISOString() } } });
     assert.deepEqual(await listChildren(c, 1, MIA), [child]);
     assert.deepEqual(await childConsent(c, 1, child.id), { leaderboard: false, photos: false, vision: false });
@@ -198,6 +199,10 @@ describe("a guardian's family, from the database", { skip: !BASE_URL && !REQUIRE
     assert.deepEqual(await listChildren(asClub2, 1, MIA), [], "even when the code names the wrong club");
     assert.equal(await getChild(asClub2, 1, MIA, here.id), null);
     await assert.rejects(addChild(asClub2, 1, MIA, { name: "Wrong Club", birthYear: 2016, guardianConfirmed: true }, { year: YEAR }), /row-level security/);
+    // The guardianship itself is club-owned: the other club's connection can't see or write it.
+    assert.equal((await asClub2.query(`SELECT count(*)::int AS n FROM guardianships`)).rows[0].n, 0);
+    await assert.rejects(asClub2.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at) VALUES (1, $1, $2, now())`, [PETE, here.id]), /row-level security/);
+    await assert.rejects(c.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at) VALUES ($1, $2, $3, now())`, [club2, PETE, here.id]), /guardianships_junior_in_club_fkey/, "even the owner connection can't put a guardianship in another club");
     const asClub1 = scopePool(pool, async () => 1);
     assert.deepEqual((await listChildren(asClub1, 1, MIA)).map((x) => x.id), [here.id]);
     assert.equal(code(await addChild(asClub1, 1, MIA, { name: "Second Child", birthYear: 2014, guardianConfirmed: true }, { year: YEAR })), "ok");
@@ -232,7 +237,7 @@ describe("a guardian's family, from the database", { skip: !BASE_URL && !REQUIRE
 
   test("a second guardian: both see the child, each has their own answers, and both must agree", async () => {
     const child = value(await add(MIA, { consent: { photos: true, leaderboard: true } }));
-    await c.query(`INSERT INTO guardianships (guardian_user_id, junior_profile_id, consent_at, consent_scope) VALUES ($1, $2, now(), '{}'::jsonb)`, [PETE, child.id]);
+    await c.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at, consent_scope) VALUES (1, $1, $2, now(), '{}'::jsonb)`, [PETE, child.id]);
     assert.equal((await getChild(c, 1, MIA, child.id))?.guardians, 2);
     assert.deepEqual((await getChild(c, 1, PETE, child.id))?.consent, { leaderboard: false, photos: false, vision: false });
     assert.deepEqual(await childConsent(c, 1, child.id), { leaderboard: false, photos: false, vision: false }, "one guardian's yes isn't enough");
@@ -243,9 +248,15 @@ describe("a guardian's family, from the database", { skip: !BASE_URL && !REQUIRE
 
   test("a guardianship nobody confirmed gives no access; a deleted profile is gone for everyone", async () => {
     const child = value(await add(MIA));
-    await c.query(`INSERT INTO guardianships (guardian_user_id, junior_profile_id) VALUES ($1, $2)`, [QUINN, child.id]);
+    await c.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id) VALUES (1, $1, $2)`, [QUINN, child.id]);
     assert.equal(await isGuardianOf(c, 1, QUINN, child.id), false, "no consent_at, no access");
     assert.deepEqual(await listChildren(c, 1, QUINN), []);
+    // A guardian who stepped away keeps their row and loses access; the child's other guardian doesn't.
+    await c.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at, ended_at) VALUES (1, $1, $2, now(), now())`, [PETE, child.id]);
+    assert.equal(await isGuardianOf(c, 1, PETE, child.id), false, "ended, no access");
+    assert.equal(code(await setConsent(c, 1, PETE, child.id, { photos: true })), "not_found");
+    assert.equal((await getChild(c, 1, MIA, child.id))?.guardians, 1, "and they no longer count as a guardian");
+    assert.deepEqual(await childConsent(c, 1, child.id), { leaderboard: false, photos: false, vision: false });
     await c.query(`UPDATE junior_profiles SET deleted_at = now() WHERE id = $1`, [child.id]);
     assert.deepEqual(await listChildren(c, 1, MIA), []);
     assert.equal(await isGuardianOf(c, 1, MIA, child.id), false);

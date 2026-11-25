@@ -871,7 +871,7 @@ describe("APP · settings: the account", () => {
       await photo.getByRole("button", { name: "Remove" }).click();
       await photo.getByRole("status").filter({ hasText: "Picture removed" }).waitFor();
       assert.equal((await playerRow(PEOPLE.member.email)).avatar_url, null);
-      assert.equal(await photo.locator(".avatar img").count(), 0);
+      await photo.locator(".avatar img").waitFor({ state: "detached" });
     } finally {
       await db.query(`UPDATE players SET avatar_url = $2 WHERE id = $1`, [before.id, before.avatar_url]);
       await context.close();
@@ -941,6 +941,49 @@ describe("APP · settings: the account", () => {
       await db.query(`DELETE FROM api_tokens WHERE player_id = $1`, [peteId]);
       await db.query(`DELETE FROM webhook_endpoints WHERE player_id = $1`, [peteId]);
       await context.close();
+    }
+  });
+
+  test("APP32 · a brand-new account is asked its name after the code; skipping leaves a reminder that leads back", async () => {
+    const signUp = async (email) => {
+      const context = await browser.newContext({ viewport: PHONE });
+      const page = await context.newPage();
+      await page.goto(`${APP}/signin`);
+      await page.getByLabel("Email").fill(email);
+      await page.getByRole("button", { name: "Send my code" }).click();
+      await page.waitForSelector("text=Check your email");
+      await page.getByLabel("6-digit code").fill(await outboxCode(email));
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.waitForURL(`${APP}/welcome`);
+      return { context, page };
+    };
+    const stamp = Date.now();
+    const first = `new.one.${stamp}@e2e.test`;
+    const second = `new.two.${stamp}@e2e.test`;
+    try {
+      const a = await signUp(first);
+      await a.page.getByRole("heading", { name: "What's your name?" }).waitFor();
+      await a.page.getByLabel("First name").fill("Nina");
+      await a.page.getByLabel("Last name").fill("New");
+      await a.page.getByRole("button", { name: "Continue" }).click();
+      await a.page.waitForURL(`${APP}/me`);
+      await a.page.waitForSelector(ME_READY);
+      assert.equal(await a.page.getByText("Add your name so your club knows who you are.").count(), 0);
+      assert.deepEqual((await db.query(`SELECT first_name, last_name FROM players WHERE email = $1`, [first])).rows[0], { first_name: "Nina", last_name: "New" });
+      await a.context.close();
+
+      const b = await signUp(second);
+      await b.page.getByRole("link", { name: "Cancel" }).click();
+      await b.page.waitForURL(`${APP}/me`);
+      await b.page.getByRole("link", { name: "Add my name" }).click();
+      await b.page.waitForURL(`${APP}/welcome`);
+      await b.page.getByLabel("First name").fill("Ned");
+      await b.page.getByRole("button", { name: "Continue" }).click();
+      await b.page.waitForURL(`${APP}/me`);
+      assert.equal(await b.page.getByRole("link", { name: "Add my name" }).count(), 0);
+      await b.context.close();
+    } finally {
+      await db.query(`DELETE FROM player_sessions WHERE player_id IN (SELECT id FROM players WHERE email = ANY($1))`, [[first, second]]);
     }
   });
 
@@ -1063,7 +1106,7 @@ describe("APP · accessibility and the page's rules", () => {
       // axe is injected by the test, which the page's own CSP would (rightly) refuse.
       const { context } = await signedIn(PEOPLE.admin.email, { colorScheme, bypassCSP: true });
       const anon = await browser.newContext({ viewport: PHONE, colorScheme, bypassCSP: true });
-      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/arena", '[data-screen="nav_arena"]']]) {
+      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/arena", '[data-screen="nav_arena"]']]) {
         const page = await ctx.newPage();
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);

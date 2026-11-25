@@ -307,6 +307,7 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
 }
 
 /* ── Settings ──────────────────────────────────────────────────────────── */
+.narrow { max-width: 28rem; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
 .field-hint { display: block; font-weight: 400; }
 .photo-row { display: flex; align-items: center; gap: 0.875rem; }

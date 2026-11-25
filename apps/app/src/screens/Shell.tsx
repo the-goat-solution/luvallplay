@@ -89,6 +89,12 @@ export function Shell() {
   useEffect(() => {
     if (!prefs.token) void navigate({ to: "/signin", replace: true });
   }, [prefs.token, navigate]);
+  // A name saved anywhere (here, in Settings or on the website) ends the reminder.
+  const named = !!session.data?.player.firstName.trim();
+  useEffect(() => {
+    if (prefs.needsDetails && named) store.set({ needsDetails: false });
+  }, [prefs.needsDetails, named]);
+  const onWelcome = pathname === "/welcome";
 
   const tabs = visibleTabs(config ? config.modules : null);
   const here = tabForPath(pathname);
@@ -124,7 +130,11 @@ export function Shell() {
         </ul>
       </nav>
       <main className="shell-main" id="main">
-        {prefs.needsDetails && <Notice>{t("needs_details")}</Notice>}
+        {prefs.needsDetails && !onWelcome && (
+          <Notice>
+            {t("needs_details")} <Link to="/welcome">{t("needs_details_link")}</Link>
+          </Notice>
+        )}
         {current?.status === "disabled" && <Notice tone="error">{t("club_disabled", { club: current.name })}</Notice>}
         {session.isError && !session.data && <Notice tone="error">{t("offline")}</Notice>}
         <Suspense fallback={<Splash />}>{gone ? null : <Outlet />}</Suspense>

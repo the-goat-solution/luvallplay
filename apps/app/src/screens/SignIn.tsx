@@ -43,7 +43,7 @@ export function SignInForm({ club }: { club?: string }) {
       const session = await api.auth.emailVerify({ email, code });
       queryClient.clear();
       store.set({ token: session.token, needsDetails: session.needsDetails, ...(club ? { club } : {}) });
-      await navigate({ to: "/me" });
+      await navigate({ to: session.needsDetails ? "/welcome" : "/me" });
     } catch (err) {
       setError(errorKey(err, "signin_err_code"));
       setBusy(false);

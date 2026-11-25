@@ -46,9 +46,10 @@ const inboxScreen = lazyRouteComponent(() => import("./screens/Inbox.tsx"));
 const inbox = createRoute({ getParentRoute: () => shell, path: "/inbox", component: inboxScreen });
 const inboxNew = createRoute({ getParentRoute: () => shell, path: "/inbox/new", component: inboxScreen });
 const inboxThread = createRoute({ getParentRoute: () => shell, path: "/inbox/$id", component: inboxScreen });
+const welcome = createRoute({ getParentRoute: () => shell, path: "/welcome", component: lazyRouteComponent(() => import("./screens/Welcome.tsx")) });
 const settings = createRoute({ getParentRoute: () => shell, path: "/settings", component: lazyRouteComponent(() => import("./screens/Settings.tsx")) });
 
-const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([me, player, arena, leaderboard, vision, settings, inbox, inboxNew, inboxThread])]);
+const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([me, player, arena, leaderboard, vision, settings, welcome, inbox, inboxNew, inboxThread])]);
 
 export const router = createRouter({
   routeTree,

@@ -8,6 +8,7 @@ import { useCurrentClub, usePrefs, useSession, useT, useWindowClass, type Club }
 import { tabForPath, visibleTabs, type TabId } from "../lib/nav.ts";
 import { navKind } from "../lib/window-class.ts";
 import { focus } from "../lib/focus.ts";
+import { online } from "../lib/offline.ts";
 
 // The same pictures as the website's tabs: Player a trophy, Arena crossed
 // rackets, Leaderboard a podium.
@@ -79,6 +80,7 @@ function ClubSwitcher({ clubs, current }: { clubs: Club[]; current: Club }) {
 export function Shell() {
   const prefs = usePrefs();
   const focused = useSyncExternalStore(focus.subscribe, focus.get);
+  const connected = useSyncExternalStore(online.subscribe, online.get);
   const session = useSession();
   const { clubs, current, config, loading } = useCurrentClub();
   useLook(config);
@@ -138,7 +140,7 @@ export function Shell() {
           </Notice>
         )}
         {current?.status === "disabled" && <Notice tone="error">{t("club_disabled", { club: current.name })}</Notice>}
-        {session.isError && !session.data && <Notice tone="error">{t("offline")}</Notice>}
+        {!connected ? <Notice>{t("offline_saved")}</Notice> : session.isError && !session.data && <Notice tone="error">{t("offline")}</Notice>}
         <Suspense fallback={<Splash />}>{gone ? null : <Outlet />}</Suspense>
         <footer className="shell-foot">
           <OnLuvallplay />

@@ -1535,6 +1535,106 @@ describe("APP · Vision", () => {
   });
 });
 
+describe("APP · offline and installing (build plan §4.1)", () => {
+  const meFor = async (token) => (await fetch(`${env.base}/api/v1/app/clubs/three-wolves/me`, { headers: { authorization: `Bearer ${token}` } })).json();
+
+  test("APP42 · offline: the app and Me open from this device, Can't make it waits on it and is sent when the connection is back", async () => {
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const next = (await meFor(token)).calendar.find((d) => !d.paused && d.included && !d.booked && !d.absent);
+    const absentRow = async () => (await db.query(`SELECT 1 FROM player_absences WHERE session_date = $1 AND email = $2`, [next.date, PEOPLE.member.email])).rowCount;
+    const nextCard = page.getByRole("region", { name: "Next up" });
+    try {
+      await page.goto(`${APP}/me`);
+      await page.waitForSelector(ME_READY);
+      // The service worker takes over, and Me is saved on the device.
+      await page.evaluate(() => navigator.serviceWorker.ready);
+      await page.reload();
+      await page.waitForSelector(ME_READY);
+      assert.equal(await page.evaluate(() => !!navigator.serviceWorker.controller), true);
+      await page.waitForFunction(() => (localStorage.getItem("lp.cache") ?? "").includes('"me"'));
+
+      await context.setOffline(true);
+      await page.reload();
+      await page.waitForSelector(ME_READY);
+      await page.getByRole("status").filter({ hasText: "You're offline: this is what was saved on this device." }).waitFor();
+
+      await nextCard.getByRole("button", { name: "Can't make it" }).click();
+      await nextCard.getByRole("button", { name: "I can come after all" }).waitFor();
+      await nextCard.getByRole("status").filter({ hasText: "Saved on this device" }).waitFor();
+      assert.equal(await absentRow(), 0, "not sent yet");
+      assert.match(await page.evaluate(() => localStorage.getItem("lp.queue")), new RegExp(next.date));
+
+      // Still waiting after a restart without a connection.
+      await page.waitForTimeout(1500); // the saved copy is written a moment after a change
+      await page.reload();
+      await page.waitForSelector(ME_READY);
+      await nextCard.getByRole("button", { name: "I can come after all" }).waitFor();
+
+      // Back online: sent, and Me shows the club's own answer.
+      await context.setOffline(false);
+      await page.waitForFunction(() => localStorage.getItem("lp.queue") === null);
+      for (let i = 0; i < 50 && !(await absentRow()); i++) await new Promise((r) => setTimeout(r, 100));
+      assert.equal(await absentRow(), 1);
+      await nextCard.getByRole("button", { name: "I can come after all" }).waitFor();
+      assert.deepEqual(problems.filter((p) => !/Failed to load resource|ERR_INTERNET_DISCONNECTED|net::/i.test(p)), []);
+    } finally {
+      await context.setOffline(false);
+      await db.query(`DELETE FROM player_absences WHERE session_date = $1 AND email = $2`, [next.date, PEOPLE.member.email]);
+      await context.close();
+    }
+  });
+
+  test("APP43 · installing: a manifest with icons, the service worker served fresh, and the Install card (the browser's prompt, or the steps on an iPhone)", async () => {
+    const html = await (await fetch(`${APP}/me`)).text();
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest"/);
+    assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png"/);
+    const manifest = await (await fetch(`${APP}/manifest.webmanifest`)).json();
+    assert.deepEqual([manifest.name, manifest.display, manifest.start_url], ["Luvallplay", "standalone", "/me"]);
+    for (const icon of manifest.icons.filter((i) => i.type === "image/png")) {
+      const r = await fetch(`${APP}${icon.src}`);
+      assert.equal(r.headers.get("content-type"), "image/png", icon.src);
+      const png = Buffer.from(await r.arrayBuffer());
+      const [w, h] = [png.readUInt32BE(16), png.readUInt32BE(20)];
+      assert.equal(`${w}x${h}`, icon.sizes, icon.src);
+    }
+    assert.ok(manifest.icons.some((i) => i.purpose === "maskable"));
+    const sw = await (await fetch(`${APP}/sw.js`)).text();
+    const assets = JSON.parse(sw.match(/const ASSETS = (\[.*?\]);/)[1]);
+    assert.ok(assets.some((a) => /\/assets\/Me-.*\.js$/.test(a)) && assets.some((a) => /\/assets\/index-.*\.js$/.test(a)), "the screens are kept on the device");
+    assert.equal(assets.some((a) => a.startsWith("/mediapipe/") || a.startsWith("/api/")), false);
+
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.waitForSelector('[data-screen="nav_settings"]');
+      assert.equal(await page.locator("[data-install]").count(), 0, "nothing to offer when the browser offers nothing");
+      // The browser offers its prompt.
+      await page.evaluate(() => {
+        const e = new Event("beforeinstallprompt");
+        e.prompt = async () => { window.__prompted = true; };
+        e.userChoice = Promise.resolve({ outcome: "accepted" });
+        window.dispatchEvent(e);
+      });
+      await page.getByRole("button", { name: "Install" }).click();
+      await page.getByText("Installed: open it from your home screen.").waitFor();
+      assert.equal(await page.evaluate(() => window.__prompted), true);
+    } finally {
+      await context.close();
+    }
+    const iphone = await signedIn(PEOPLE.member.email, { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" });
+    const p2 = await iphone.context.newPage();
+    try {
+      await p2.goto(`${APP}/settings`);
+      await p2.getByText("On an iPhone or iPad: tap Share, then Add to Home Screen.").waitFor();
+    } finally {
+      await iphone.context.close();
+    }
+  });
+});
+
 describe("APP · layout (build plan §4.4)", () => {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 

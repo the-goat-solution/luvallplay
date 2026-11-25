@@ -20,6 +20,7 @@ export function NextUp({ day }: { day: PlayDay | null }) {
           <p><span className="tag">{day.booked ? t("me_next_booked") : t("me_next_included")}</span></p>
           {day.absent && <p className="muted">{t("cal_absent")}</p>}
           {absence.isError && <p className="notice notice-error" role="alert">{t("mem_err_generic")}</p>}
+          {absence.data?.queued && <p className="muted small" role="status">{t("cal_queued")}</p>}
           {day.included && !day.booked && (
             <div>
               <button

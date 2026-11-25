@@ -5,10 +5,7 @@
 // (in the Gallery, under review, can't be shared, hidden), and delete.
 import { useId, useRef, useState } from "react";
 import { ScopeTag } from "../../components/ClubTag.tsx";
-<<<<<<< HEAD
 import { Icon } from "../../components/Icon.tsx";
-=======
->>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
 import type { AppKey } from "@luvallplay/i18n/app";
 import type { T } from "../../lib/messages.ts";
 import { LoadError } from "../../components/LoadError.tsx";

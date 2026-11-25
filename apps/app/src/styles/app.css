@@ -949,7 +949,6 @@ progress { width: 100%; height: 0.5rem; accent-color: var(--primary); }
 .pick-club-link .club-tag { font-size: var(--text-md); }
 .pick-club-link .club-badge { width: 1.75rem; height: 1.75rem; font-size: 0.625rem; }
 .pick-club > li { border-top: 1px solid var(--line); }
-<<<<<<< HEAD
 
 /* ── Icons (components/Icon.tsx) ─────────────────────────────────────── */
 .icon { flex: none; display: inline-block; vertical-align: middle; }
@@ -1008,5 +1007,3 @@ progress { width: 100%; height: 0.5rem; accent-color: var(--primary); }
 @container screen (min-width: 68rem) {
   .settings-cards { columns: 3; }
 }
-=======
->>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b

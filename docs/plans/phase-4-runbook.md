@@ -76,7 +76,10 @@ The older `/api/v1/*` routes (personal access keys, shared with the MCP server) 
 | `GET /auth/session` | signed in | Who the token belongs to. |
 | `POST /auth/logout` | signed in | Ends this session, or every session with `{ "all": true }`. |
 | `GET /clubs` | signed in | The person's clubs, each with its role, its region's API base and whether the "Club admin" button shows. |
-| `GET /clubs/{club}/config` | anyone | The club's look (semantic tokens, light and dark), modules that are on, terms, currency and exponent, country, region, payment mode and the settings the app needs. Public so an invite link can apply the look before sign-in. |
+| `GET /clubs/{club}/config` | anyone | The club's look (semantic tokens, light and dark), modules that are on, terms, currency and exponent, country, region, payment mode, the club's website (`webUrl`) and the settings the app needs. Public so an invite link can apply the look before sign-in. |
+| `GET /clubs/{club}/me` | signed in | The Me tab in one answer (so it opens from the cache at once): name and initials, the membership (plan, day, status, dates, days left, a paid follow-on) or the prices to join, the casual price, streak and month rank, the next five weeks of play days as this person sees them, the inbox's unread count and three latest conversations, and whether to show the welcome card. Memberships off: no membership and no join prices. |
+| `POST /clubs/{club}/me/absence` | signed in | "Can't make it" (`{date, absent: true}`) and "I can come after all" (`absent: false`), as the web's `/api/profile/absence`: frees the spot and tells the waitlist. Past days (`past`), non-members (`no_membership`) and impossible dates (`bad_request`) are refused. |
+| `POST /account/welcome-dismissed` | signed in | The welcome card's Done; kept on the account. |
 
 **Rules the wrapper applies to every route**
 
@@ -134,14 +137,32 @@ Sign in with an email; without `RESEND_API_KEY` the code is printed in the API's
 | The Luvallplay frame: sign-in, splash, the "on Luvallplay" mark | `src/Frame.tsx`, `src/screens/SignIn.tsx` |
 | A club's invite or QR link, `/c/<club>`: the club's look before sign-in | `src/screens/Invite.tsx` |
 | The signed-in shell: the club's look, name and logo, navigation, club switcher | `src/screens/Shell.tsx` |
-| Tabs (Me, Arena, Vision, Player, Settings), each its own chunk | `src/router.tsx`, `src/screens/*.tsx` |
+| Tabs (Me, Player, Arena, Leaderboard, Vision, as on the website), each its own chunk; Settings behind the ⚙ in the header | `src/router.tsx`, `src/screens/*.tsx` |
+| Me: header, next up, membership or join, play calendar, inbox preview, welcome card | `src/screens/Me.tsx`, `src/screens/me/*` |
+| Dates, times and money in the club's country, time zone and currency | `src/lib/format.ts` |
 | Theme → CSS custom properties, light and dark | `src/lib/theme.ts` |
 | Window classes and the navigation for each | `src/lib/window-class.ts`, `src/styles/app.css` |
 | Which tabs a club shows (a module that is off takes its tab away) | `src/lib/nav.ts` |
 | The token and the person's choices (one interface; secure storage in Phase 5) | `src/lib/storage.ts`, `src/lib/store.ts` |
 | Text in English and Vietnamese | `packages/i18n/src/app.ts` |
 
-Me, Arena, Vision and Player are honest placeholders until their screens move in (steps 3 to 6). Settings already has language, appearance, sign out and sign out everywhere. The **Club admin** button shows for people who can open the admin, but is disabled with an explanation until the handoff endpoint is in the contract.
+**Me** is the real screen (step 3, see below). Player, Arena, Leaderboard and Vision are honest placeholders until their screens move in. Settings already has language, appearance, sign out and sign out everywhere. The **Club admin** button shows for people who can open the admin, but is disabled with an explanation until the handoff endpoint is in the contract.
+
+**Me (step 3)**
+
+The website's Me page (`apps/web/app/profile/page.tsx`), card for card, from one call (`me.home`):
+
+- **Header**: picture or initials, name, the membership pill ("Active · renews Fri 18 Dec"), and the inbox bell with the unread count (it takes you to the Messages card).
+- **Next up**: the first play day they're in, with **Can't make it** on a membership day.
+- **Membership** (plan · day, status, days left, renews or ends, a paid follow-on) or **Become a member** (both plans in the club's money). Hidden when the club has Memberships off.
+- **Play calendar**: five weeks by month; their days marked, Can't make it on each, casual spots left, paused and closed days.
+- **Messages**: the three latest conversations; **Welcome card** for a new account, until Done.
+
+Can't make it and Done change the screen at once and are put back (with a message) if the server refuses them.
+
+**Opens on the club's website for now** (a link that says so; the app has no card payments or inbox yet): managing or joining a membership and booking a casual spot (the membership and shop step), and reading or replying to messages (the inbox step). The address comes from the club's config (`webUrl`).
+
+**Not on Me yet**: the **shop** (with the shop step) and **My photos** (with the Player step).
 
 **How the look works (decision AM)**
 
@@ -181,12 +202,13 @@ pnpm --filter app build && pnpm --filter app budget
 ```
 
 - `tests/lib.test.ts`: theme to custom properties (and what it refuses), window classes, tabs and modules, storage, which host gets the token, messages complete in both languages and sport-neutral, the stylesheet's rules.
-- `tests/e2e/app.mjs` (APP1 to APP15): the real API on a fresh local Postgres, the app built and served on its own origin. Sign in by email code; Luvallplay's look before, the club's after; an invite link applies the club's look first; switching clubs changes look, words and tabs at once (the second club is simulated in the browser, since one deployment serves one club); a module that is off; a refused token; languages; light and dark; the Club admin button; five widths with the right navigation and no sideways scroll; text at 200%; reduced motion; axe in light and dark; the Content-Security-Policy; screens as separate chunks.
+- `tests/format.test.ts`: dates in the club's country and time zone, money in minor units, months, next up, and the Me words complete in Vietnamese with no club name or currency typed in.
+- `tests/e2e/app.mjs` (APP1 to APP21): the real API on a fresh local Postgres, the app built and served on its own origin. Sign in by email code; Luvallplay's look before, the club's after; an invite link applies the club's look first; switching clubs changes look, words and tabs at once (the second club is simulated in the browser, since one deployment serves one club); a module that is off; a refused token; languages; light and dark; the Club admin button; five widths with the right navigation and no sideways scroll; text at 200%; reduced motion; axe in light and dark; the Content-Security-Policy; screens as separate chunks. Me (APP16 to APP21): a member's Me matches the API's own answer card for card; Can't make it flips at once, is saved, survives a reload and undoes, and a refused one is put back; a newcomer sees the join card in the club's money and the welcome card, and Done stays done; Memberships off hides both cards; Me in Vietnamese; Me that can't load offers Try again. APP22 takes screenshots (`E2E_SHOTS=<folder>`) for people to look at.
 - CI job "Players' app" runs all of it.
 
 **Performance budget**
 
-The app shell (the entry script and what it preloads) must stay at or under **150 KB gzipped JavaScript**; `scripts/check-budget.mjs` fails the build over that. Today it is about 109 KB. The client carries no zod: it uses a generated route table (`packages/api/src/routes.gen.ts`), and the schemas stay on the server.
+The app shell (the entry script and what it preloads) must stay at or under **150 KB gzipped JavaScript**; `scripts/check-budget.mjs` fails the build over that. Today it is about 111 KB; the Me screen is a separate 5.4 KB chunk. The client carries no zod: it uses a generated route table (`packages/api/src/routes.gen.ts`), and the schemas stay on the server.
 
 **Vercel project and domain (24 Nov 2026)**
 

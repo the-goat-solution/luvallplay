@@ -7,6 +7,11 @@ type Options = { signal?: AbortSignal };
 
 export function createApi(transport: Transport) {
   return {
+    account: {
+      /** POST /account/welcome-dismissed (signed in) */
+      dismissWelcome: (body: BodyOf<"account.dismissWelcome">, options?: Options) =>
+        transport.call("account.dismissWelcome", { body, signal: options?.signal }) as Promise<ResponseOf<"account.dismissWelcome">>,
+    },
     auth: {
       /** POST /auth/email/start (no sign-in needed) */
       emailStart: (body: BodyOf<"auth.emailStart">, options?: Options) =>
@@ -34,6 +39,14 @@ export function createApi(transport: Transport) {
       /** GET /clubs (signed in) */
       list: (options?: Options) =>
         transport.call("clubs.list", { signal: options?.signal }) as Promise<ResponseOf<"clubs.list">>,
+    },
+    me: {
+      /** POST /clubs/{club}/me/absence (signed in) */
+      absence: (params: ParamsOf<"me.absence">, body: BodyOf<"me.absence">, options?: Options) =>
+        transport.call("me.absence", { params, body, signal: options?.signal }) as Promise<ResponseOf<"me.absence">>,
+      /** GET /clubs/{club}/me (signed in) */
+      home: (params: ParamsOf<"me.home">, options?: Options) =>
+        transport.call("me.home", { params, signal: options?.signal }) as Promise<ResponseOf<"me.home">>,
     },
   };
 }

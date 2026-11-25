@@ -124,6 +124,9 @@ const look = (page) =>
 
 const tabLabels = (page) => page.locator(".shell-nav .tab span").allTextContents();
 
+/** The Me screen with its data (not the loading skeleton). */
+const ME_READY = '[data-screen="nav_me"][data-state="ready"]';
+
 /** Console errors and failed requests, so a CSP or CORS refusal fails the journey. */
 function watch(page) {
   const problems = [];
@@ -164,6 +167,14 @@ async function withSecondClub(context) {
     return route.fulfill({ response, json });
   });
   await serveJson(context, `${api}/clubs/harbour-smash/config`, async () => second);
+  // Its Me: the same person, no membership there yet.
+  await context.route(`${api}/clubs/harbour-smash/me`, async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+    const auth = route.request().headers().authorization;
+    const mine = await (await fetch(`${api}/clubs/three-wolves/me`, { headers: { authorization: auth } })).json();
+    const body = { ...mine, membership: null, join: { monthly: 4000, quarterly: 11000, days: ["tuesday"] }, calendar: [], inbox: { unread: 0, latest: [] } };
+    return route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json", "cache-control": "no-store" }, body: JSON.stringify(body) });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +207,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.equal(await page.locator(".club-name").textContent(), "Three Wolves Badminton Club");
     assert.equal(await page.title(), "Three Wolves Badminton Club · Luvallplay");
     assert.equal(await page.locator('meta[name="theme-color"]').getAttribute("content"), NAVY);
-    await page.waitForSelector("text=Hi Mia");
+    await page.waitForSelector(ME_READY);
     // The club's own word for Vision is on the tab; the frame's mark stays.
     assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
     assert.match(await page.locator(".shell-foot").textContent(), /on Luvallplay/);
@@ -209,7 +220,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     const token = await page.evaluate(() => localStorage.getItem("lp.token"));
     assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${token}` } })).status, 200);
     await page.reload();
-    await page.waitForSelector("text=Hi Mia");
+    await page.waitForSelector(ME_READY);
     assert.equal((await look(page)).primary, NAVY);
 
     await page.getByRole("link", { name: "Settings" }).click();
@@ -264,7 +275,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.getByLabel("6-digit code").fill(await outboxCode(PEOPLE.player.email));
     await page.getByRole("button", { name: "Sign in" }).click();
     await page.waitForURL(`${APP}/me`);
-    await page.waitForSelector("text=Hi Pete");
+    await page.waitForSelector(ME_READY);
     assert.equal(await page.evaluate(() => localStorage.getItem("lp.club")), "three-wolves");
     assert.equal((await look(page)).primary, NAVY);
     assert.deepEqual(problems, []);
@@ -325,7 +336,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await serveJson(context, `${api}/clubs/three-wolves/config`, async () => ({ ...base, modules: base.modules.filter((m) => m !== "vision") }));
     const page = await context.newPage();
     await page.goto(`${APP}/me`);
-    await page.waitForSelector("text=Hi Mia");
+    await page.waitForSelector(ME_READY);
     assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard"]);
     await page.goto(`${APP}/vision`);
     await page.waitForURL(`${APP}/me`);
@@ -338,13 +349,208 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     const { context, token } = await signedIn(PEOPLE.coach.email);
     const page = await context.newPage();
     await page.goto(`${APP}/me`);
-    await page.waitForSelector("text=Hi Cora");
+    await page.waitForSelector(ME_READY);
     await db.query(`DELETE FROM player_sessions WHERE token_hash = $1`, [createHash("sha256").update(token).digest("hex")]);
     await page.reload();
     await page.waitForURL(`${APP}/signin`);
     assert.equal(await page.evaluate(() => localStorage.getItem("lp.token")), null);
     assert.equal((await look(page)).primary, COURT_GREEN);
     await context.close();
+  });
+});
+
+describe("APP · Me (the home tab)", () => {
+  const meFor = async (token) => (await fetch(`${api}/clubs/three-wolves/me`, { headers: { authorization: `Bearer ${token}` } })).json();
+  // Formatted by the page's own browser, so the expected text uses the same date wording.
+  const dayKey = (page, d) => page.evaluate((key) => new Date(`${key}T00:00:00Z`).toLocaleDateString("en-NZ", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }), d);
+
+  test("APP16 · a member's Me: header, next up, membership card, calendar and inbox, from the same data as the website", async () => {
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    await page.goto(`${APP}/me`);
+    await page.waitForSelector(ME_READY);
+    const data = await meFor(token);
+    // Header: name, pill, bell with the unread count.
+    assert.equal(await page.locator(".me-head h1").textContent(), "Mia Member");
+    assert.equal(await page.locator(".me-head .pill").textContent(), `Active · renews ${await dayKey(page, data.membership.periodEnd)}`);
+    assert.equal(await page.locator(".me-head .icon-button").getAttribute("aria-label"), `Inbox, ${data.inbox.unread} unread`);
+    // Next up: her first Friday, included in her membership.
+    const next = data.calendar.find((d) => !d.paused && (d.booked || d.included));
+    const nextCard = page.getByRole("region", { name: "Next up" });
+    assert.equal(await nextCard.locator(".next-date").textContent(), await dayKey(page, next.date));
+    assert.match(await nextCard.textContent(), /Pioneer Stadium/);
+    assert.match(await nextCard.textContent(), /Included in your membership/);
+    // Membership: plan and day, status, days left, and the way to manage it on the club's website.
+    const card = page.locator(".membership");
+    assert.equal(await card.getByRole("heading").textContent(), "Monthly · Fridays");
+    assert.equal(await card.locator(".status").textContent(), "Active");
+    assert.equal(await card.locator(".stat-value").textContent(), String(data.membership.daysLeft));
+    const manage = card.getByRole("link", { name: /Manage membership/ });
+    assert.equal(await manage.getAttribute("href"), `${env.base}/profile`);
+    assert.equal(await manage.getAttribute("target"), "_blank");
+    assert.equal(await page.locator(".join").count(), 0, "no join card for a member");
+    // Calendar: every play day, her Fridays marked as hers.
+    assert.equal(await page.locator(".day").count(), data.calendar.length);
+    assert.equal(await page.locator(".day-yours").count(), data.calendar.filter((d) => d.included && !d.absent).length);
+    assert.ok((await page.locator(".month").count()) >= 1);
+    // Inbox: the club's unread message; the bell takes you to it.
+    const thread = page.locator(".thread.unread").first();
+    assert.match(await thread.textContent(), /Welcome to Fridays/);
+    assert.equal(await thread.locator("a").getAttribute("href"), `${env.base}/profile?thread=${data.inbox.latest[0].id}`);
+    await page.locator(".me-head .icon-button").click();
+    await page.waitForFunction(() => document.activeElement?.id === "inbox");
+    assert.equal(await page.locator(".welcome").count(), 0);
+    assert.deepEqual(problems, []);
+    await context.close();
+  });
+
+  test("APP17 · Can't make it: the day flips at once, is saved, survives a reload, and undoes", async () => {
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    await page.goto(`${APP}/me`);
+    await page.waitForSelector(ME_READY);
+    const next = (await meFor(token)).calendar.find((d) => !d.paused && (d.booked || d.included));
+    const absentRow = async () => (await db.query(`SELECT 1 FROM player_absences WHERE session_date = $1 AND email = $2`, [next.date, PEOPLE.member.email])).rowCount;
+    const nextCard = page.getByRole("region", { name: "Next up" });
+    try {
+      await nextCard.getByRole("button", { name: "Can't make it" }).click();
+      await nextCard.getByRole("button", { name: "I can come after all" }).waitFor();
+      assert.equal(await nextCard.getByRole("button", { name: "I can come after all" }).getAttribute("aria-pressed"), "true");
+      await nextCard.getByText("You said you can't come").waitFor();
+      for (let i = 0; i < 20 && (await absentRow()) === 0; i++) await page.waitForTimeout(150);
+      assert.equal(await absentRow(), 1, "saved on the server");
+      // The calendar row for that day agrees, and the day isn't marked as hers any more.
+      const row = page.locator(".day", { hasText: "You said you can't come" });
+      assert.equal(await row.count(), 1);
+      await page.reload();
+      await page.waitForSelector(ME_READY);
+      await nextCard.getByRole("button", { name: "I can come after all" }).click();
+      await nextCard.getByRole("button", { name: "Can't make it" }).waitFor();
+      for (let i = 0; i < 20 && (await absentRow()) === 1; i++) await page.waitForTimeout(150);
+      assert.equal(await absentRow(), 0);
+    } finally {
+      await db.query(`DELETE FROM player_absences WHERE session_date = $1 AND email = $2`, [next.date, PEOPLE.member.email]);
+    }
+    await context.close();
+  });
+
+  test("APP17 · a refused Can't make it puts the day back and says so", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    await context.route(`${api}/clubs/three-wolves/me/absence`, (route) =>
+      route.request().method() === "OPTIONS"
+        ? route.fulfill({ status: 204, headers: CORS })
+        : route.fulfill({ status: 500, headers: { ...CORS, "content-type": "application/json" }, body: '{"error":"failed"}' }),
+    );
+    const page = await context.newPage();
+    await page.goto(`${APP}/me`);
+    await page.waitForSelector(ME_READY);
+    const nextCard = page.getByRole("region", { name: "Next up" });
+    await nextCard.getByRole("button", { name: "Can't make it" }).click();
+    await nextCard.getByRole("alert").waitFor();
+    await nextCard.getByRole("button", { name: "Can't make it" }).waitFor();
+    assert.equal(await page.locator(".day", { hasText: "You said you can't come" }).count(), 0);
+    await context.close();
+  });
+
+  test("APP18 · not a member: the join card in the club's money, the welcome card, and Done keeps it away", async () => {
+    const { context } = await signedIn(PEOPLE.player.email);
+    const { rows } = await db.query(`SELECT id, welcome_card_dismissed_at FROM players WHERE email = $1`, [PEOPLE.player.email]);
+    const page = await context.newPage();
+    try {
+      await page.goto(`${APP}/me`);
+      await page.waitForSelector(ME_READY);
+      assert.equal(await page.locator(".me-head .pill").textContent(), "Not a member yet");
+      assert.equal(await page.locator(".membership").count(), 0);
+      const join = page.locator(".join");
+      assert.match(await join.textContent(), /Become a member/);
+      assert.match(await join.textContent(), /\$33\s*\/ 4 weeks/);
+      assert.match(await join.textContent(), /\$85\s*\/ 12 weeks/);
+      assert.match(await join.locator(".plan-best").textContent(), /Best value/);
+      assert.equal(await join.getByRole("link", { name: /Choose your plan/ }).getAttribute("href"), `${env.base}/profile`);
+      assert.match(await page.getByRole("region", { name: "Next up" }).textContent(), /Nothing booked yet/);
+      // A day with casual spots offers a booking, in the club's money.
+      if (await page.locator(".day").count()) assert.ok((await page.getByRole("link", { name: /Book · \$10/ }).count()) >= 0);
+      await page.locator(".welcome").getByRole("button", { name: "Done" }).click();
+      await page.locator(".welcome").waitFor({ state: "detached" });
+      for (let i = 0; i < 20; i++) {
+        if ((await db.query(`SELECT welcome_card_dismissed_at FROM players WHERE id = $1`, [rows[0].id])).rows[0].welcome_card_dismissed_at) break;
+        await page.waitForTimeout(150);
+      }
+      await page.reload();
+      await page.waitForSelector(ME_READY);
+      assert.equal(await page.locator(".welcome").count(), 0, "still gone after a reload");
+    } finally {
+      await db.query(`UPDATE players SET welcome_card_dismissed_at = $2 WHERE id = $1`, [rows[0].id, rows[0].welcome_card_dismissed_at]);
+      await context.close();
+    }
+  });
+
+  test("APP19 · Memberships switched off: no membership card and no join card; the calendar stays", async () => {
+    await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'memberships'`);
+    try {
+      for (const email of [PEOPLE.member.email, PEOPLE.player.email]) {
+        const { context } = await signedIn(email);
+        const page = await context.newPage();
+        await page.goto(`${APP}/me`);
+        await page.waitForSelector(ME_READY);
+        assert.equal(await page.locator(".membership, .join").count(), 0, email);
+        assert.ok((await page.locator(".day").count()) >= 1);
+        await context.close();
+      }
+    } finally {
+      await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'memberships'`);
+    }
+  });
+
+  test("APP20 · Me in Vietnamese: the club's days and dates in Vietnamese", async () => {
+    const { context } = await signedIn(PEOPLE.member.email, { locale: "vi-VN" });
+    await context.addInitScript(() => localStorage.setItem("lp.lang", "vi"));
+    const page = await context.newPage();
+    await page.goto(`${APP}/me`);
+    await page.waitForSelector(ME_READY);
+    assert.equal(await page.locator(".membership").getByRole("heading").textContent(), "Hàng tháng · Thứ Sáu");
+    await page.getByRole("heading", { name: "Sắp tới" }).waitFor();
+    await page.getByRole("heading", { name: "Lịch chơi" }).waitFor();
+    assert.match(await page.locator(".me-head .pill").textContent(), /^Đang hoạt động · gia hạn /);
+    await context.close();
+  });
+
+  test("APP21 · Me can't load: a plain message and Try again, which then works", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    let fail = true;
+    await context.route(`${api}/clubs/three-wolves/me`, (route) =>
+      fail && route.request().method() === "GET"
+        ? route.fulfill({ status: 503, headers: { ...CORS, "content-type": "application/json" }, body: '{"error":"unavailable"}' })
+        : route.fallback(),
+    );
+    const page = await context.newPage();
+    await page.goto(`${APP}/me`);
+    await page.waitForSelector('[data-screen="nav_me"][data-state="error"]', { timeout: 15_000 });
+    fail = false;
+    await page.getByRole("button", { name: "Try again" }).click();
+    await page.waitForSelector(ME_READY);
+    await context.close();
+  });
+});
+
+describe("APP · screenshots", () => {
+  // For people to look at (docs/screenshots/phase-4), not compared: the visual pass compares later.
+  test("APP22 · Me at a phone and a tablet width, light and dark, member and newcomer", { skip: !process.env.E2E_SHOTS }, async () => {
+    const dir = process.env.E2E_SHOTS;
+    for (const [who, email] of [["member", PEOPLE.member.email], ["newcomer", PEOPLE.player.email]]) {
+      for (const colorScheme of ["light", "dark"]) {
+        for (const width of [375, 900]) {
+          const { context } = await signedIn(email, { colorScheme, viewport: { width, height: width < 600 ? 812 : 1000 }, deviceScaleFactor: 2 });
+          const page = await context.newPage();
+          await page.goto(`${APP}/me`);
+          await page.waitForSelector(ME_READY);
+          await page.waitForTimeout(200);
+          await page.screenshot({ path: `${dir}/me-${who}-${colorScheme}-${width}.png`, fullPage: true });
+          await context.close();
+        }
+      }
+    }
   });
 });
 
@@ -421,7 +627,7 @@ describe("APP · layout (build plan §4.4)", () => {
     const page = await context.newPage();
     for (const route of ["/me", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : ".shell-nav .tab");
       for (const width of WIDTHS) {
         const height = width < 600 ? 812 : 900;
         await page.setViewportSize({ width, height });
@@ -438,7 +644,7 @@ describe("APP · layout (build plan §4.4)", () => {
         }
         // Touch targets: every tab and every control is at least 44px tall.
         const small = await page.evaluate(() =>
-          [...document.querySelectorAll(".tab, .head-icon, .button, .choice, .field input")]
+          [...document.querySelectorAll(".tab, .head-icon, .icon-button, .button, .choice, .field input, .thread-link")]
             .map((el) => ({ what: el.textContent?.trim().slice(0, 30), h: el.getBoundingClientRect().height }))
             .filter((x) => x.h > 0 && x.h < 44),
         );
@@ -477,14 +683,21 @@ describe("APP · layout (build plan §4.4)", () => {
     const page = await context.newPage();
     for (const route of ["/me", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : ".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
       const afterSize = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       assert.ok(Math.abs(afterSize - before * 2) < 0.5, "type follows the text size setting");
       for (const width of [320, 375]) {
         await page.setViewportSize({ width, height: 812 });
-        assert.ok((await overflow(page)) <= 1, `${route} at ${width}px and 200% scrolls sideways`);
+        const wide = await page.evaluate(() =>
+          [...document.querySelectorAll("body *")]
+            // The bottom bar is fixed: it can't make the page scroll, so it isn't listed.
+            .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1 && !el.closest(".visually-hidden, .shell-nav"))
+            .map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].join(".")} (${Math.round(el.getBoundingClientRect().right)}px)`)
+            .slice(0, 8),
+        );
+        assert.ok((await overflow(page)) <= 1, `${route} at ${width}px and 200% scrolls sideways: ${wide.join(", ")}`);
       }
       await page.setViewportSize(PHONE);
     }
@@ -509,7 +722,7 @@ describe("APP · accessibility and the page's rules", () => {
       // axe is injected by the test, which the page's own CSP would (rightly) refuse.
       const { context } = await signedIn(PEOPLE.admin.email, { colorScheme, bypassCSP: true });
       const anon = await browser.newContext({ viewport: PHONE, colorScheme, bypassCSP: true });
-      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ".shell-nav .tab"], [context, "/settings", "text=Signed in as"], [context, "/arena", '[data-screen="nav_arena"]']]) {
+      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/settings", "text=Signed in as"], [context, "/arena", '[data-screen="nav_arena"]']]) {
         const page = await ctx.newPage();
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);
@@ -550,7 +763,7 @@ describe("APP · accessibility and the page's rules", () => {
       if (r.url().endsWith(".js")) scripts.push(path.basename(new URL(r.url()).pathname));
     });
     await page.goto(`${APP}/me`);
-    await page.waitForSelector("text=Hi Mia");
+    await page.waitForSelector(ME_READY);
     assert.ok(scripts.some((s) => s.startsWith("Me-")), `Me's chunk loaded (${scripts.join(", ")})`);
     assert.ok(!scripts.some((s) => s.startsWith("Settings-")), "Settings isn't loaded on Me");
     await page.getByRole("link", { name: "Settings" }).click();

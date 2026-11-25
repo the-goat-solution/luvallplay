@@ -4,6 +4,7 @@ export const API_VERSION = "v1";
 export const API_PREFIX = "/api/v1/app";
 
 export const ROUTES = {
+  "account.dismissWelcome": { method: "POST", path: "/account/welcome-dismissed", auth: "session" },
   "auth.emailStart": { method: "POST", path: "/auth/email/start", auth: "public" },
   "auth.emailVerify": { method: "POST", path: "/auth/email/verify", auth: "public" },
   "auth.logout": { method: "POST", path: "/auth/logout", auth: "session" },
@@ -12,6 +13,8 @@ export const ROUTES = {
   "auth.smsVerify": { method: "POST", path: "/auth/sms/verify", auth: "public" },
   "clubs.config": { method: "GET", path: "/clubs/{club}/config", auth: "public" },
   "clubs.list": { method: "GET", path: "/clubs", auth: "session" },
+  "me.absence": { method: "POST", path: "/clubs/{club}/me/absence", auth: "session" },
+  "me.home": { method: "GET", path: "/clubs/{club}/me", auth: "session" },
 } as const;
 
 export type RouteId = keyof typeof ROUTES;

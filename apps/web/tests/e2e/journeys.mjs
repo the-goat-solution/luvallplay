@@ -617,8 +617,17 @@ describe("T · tenant isolation at the routes", () => {
 
 const APP_API = "/api/v1/app";
 // Kept in step with packages/api/src/contract.ts by the last test of this group.
-const SESSION_ENDPOINTS = [["GET", "/auth/session"], ["POST", "/auth/logout"], ["GET", "/clubs"]];
+const SESSION_ENDPOINTS = [
+  ["GET", "/auth/session"],
+  ["POST", "/auth/logout"],
+  ["GET", "/clubs"],
+  ["GET", "/clubs/{club}/me"],
+  ["POST", "/clubs/{club}/me/absence"],
+  ["POST", "/account/welcome-dismissed"],
+];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
+const CLUB = "three-wolves";
+const filled = (path) => path.replace("{club}", CLUB);
 
 async function appApi(method, path, { token, body, headers = {}, raw } = {}) {
   const r = await fetch(`${base()}${APP_API}${path}`, {
@@ -750,7 +759,8 @@ describe("API · the players' app API", () => {
       assert.deepEqual([clubs.length, clubs[0].role, clubs[0].canOpenAdmin], [1, role, canOpenAdmin], who);
       await s.context.close();
     }
-    for (const [method, path] of SESSION_ENDPOINTS) {
+    for (const [method, template] of SESSION_ENDPOINTS) {
+      const path = filled(template);
       for (const [what, headers] of [
         ["nobody", {}],
         ["a made-up token", { Authorization: `Bearer ${randomBytes(32).toString("base64url")}` }],
@@ -811,6 +821,111 @@ describe("API · the players' app API", () => {
     const fromApp = await appApi("POST", "/auth/logout", { headers: { Cookie: `tw_player=${s.token}`, Origin: "https://app.luvallplay.com" }, body: {} });
     assert.equal(fromApp.status, 200);
     await s.context.close();
+  });
+
+  test("API8 · Me: a member's home is the website's Me data; a non-member gets the way to join; Memberships off hides both", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const me = await appApi("GET", `/clubs/${CLUB}/me`, { token: mia.token });
+    assert.equal(me.status, 200, JSON.stringify(me.json));
+    assert.deepEqual(Object.keys(me.json).sort(), ["calendar", "casualPrice", "inbox", "join", "membership", "player", "stats", "welcome"]);
+    assert.equal(me.headers.get("cache-control"), "no-store");
+    assert.deepEqual([me.json.player.firstName, me.json.player.initials], ["Mia", "MM"]);
+    const m = me.json.membership;
+    assert.deepEqual([m.plan, m.day, m.status, m.autoRenews, m.method], ["monthly", "friday", "active", true, "card"]);
+    assert.ok(m.daysLeft >= 1, `days left ${m.daysLeft}`);
+    assert.equal(me.json.join, null);
+    assert.equal(me.json.casualPrice, 1000);
+    assert.ok(me.json.calendar.length >= 2, "the seeded play days");
+    for (const d of me.json.calendar) {
+      assert.match(d.date, /^\d{4}-\d{2}-\d{2}$/);
+      assert.equal(d.location, "Pioneer Stadium");
+    }
+    // Her Fridays are included; the Wednesdays are not.
+    const fridays = me.json.calendar.filter((d) => new Date(`${d.date}T12:00:00Z`).getUTCDay() === 5);
+    assert.ok(fridays.length && fridays.every((d) => d.included), "Fridays are in her membership");
+    assert.ok(me.json.calendar.filter((d) => new Date(`${d.date}T12:00:00Z`).getUTCDay() === 3).every((d) => !d.included));
+    assert.ok(me.json.inbox.unread >= 1);
+    assert.equal(me.json.inbox.latest[0].subject, "Welcome to Fridays");
+    assert.ok(me.json.inbox.latest.length <= 3);
+    assert.equal(me.json.welcome, false);
+
+    const pete = await signedIn(PEOPLE.player.email);
+    const his = (await appApi("GET", `/clubs/${CLUB}/me`, { token: pete.token })).json;
+    assert.equal(his.membership, null);
+    assert.deepEqual([his.join.monthly, his.join.quarterly], [3300, 8500]);
+    assert.ok(his.join.days.includes("friday"));
+    assert.equal(his.welcome, true);
+    assert.equal(his.inbox.unread, 0);
+    assert.ok(his.calendar.every((d) => !d.included));
+
+    // A club with Memberships off: no card, no way to join; the play days stay.
+    await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'memberships'`);
+    try {
+      let off;
+      for (let i = 0; i < 20; i++) {
+        off = (await appApi("GET", `/clubs/${CLUB}/me`, { token: mia.token })).json;
+        if (off.membership === null) break;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      assert.equal(off.membership, null);
+      assert.equal((await appApi("GET", `/clubs/${CLUB}/me`, { token: pete.token })).json.join, null);
+      assert.ok(off.calendar.length >= 2);
+    } finally {
+      await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'memberships'`);
+    }
+    // Another club's Me doesn't exist on this deployment.
+    assert.equal((await appApi("GET", "/clubs/hanoi-smash/me", { token: mia.token })).status, 404);
+    await mia.context.close();
+    await pete.context.close();
+  });
+
+  test("API9 · Can't make it: frees the spot, shows on Me, undoes; past days, non-members and impossible dates are refused", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const home = async () => (await appApi("GET", `/clubs/${CLUB}/me`, { token: mia.token })).json;
+    const day = (await home()).calendar.find((d) => d.included && !d.paused && !d.absent);
+    assert.ok(day, "an included Friday");
+    const set = (absent, date = day.date) => appApi("POST", `/clubs/${CLUB}/me/absence`, { token: mia.token, body: { date, absent } });
+    try {
+      assert.deepEqual([(await set(true)).status], [200]);
+      const after = (await home()).calendar.find((d) => d.date === day.date);
+      assert.equal(after.absent, true);
+      assert.equal(after.spots, day.spots + 1, "her spot is free for someone else");
+      assert.equal((await db.query(`SELECT 1 FROM player_absences WHERE session_date = $1 AND email = $2`, [day.date, PEOPLE.member.email])).rowCount, 1);
+      // The website sees the same thing (one table).
+      assert.equal((await set(false)).status, 200);
+      const back = (await home()).calendar.find((d) => d.date === day.date);
+      assert.deepEqual([back.absent, back.spots], [false, day.spots]);
+    } finally {
+      await db.query(`DELETE FROM player_absences WHERE session_date = $1 AND email = $2`, [day.date, PEOPLE.member.email]);
+    }
+    const yesterday = new Date(Date.now() - 2 * 86_400_000).toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" });
+    assert.deepEqual([(await set(true, yesterday)).status, (await set(true, yesterday)).json], [400, { error: "past" }]);
+    for (const bad of ["2026-02-30", "2026-13-01", "26-01-01", "tomorrow", ""]) {
+      const r = await set(true, bad);
+      assert.deepEqual([r.status, r.json], [400, { error: "bad_request" }], bad);
+    }
+    const pete = await signedIn(PEOPLE.player.email);
+    const r = await appApi("POST", `/clubs/${CLUB}/me/absence`, { token: pete.token, body: { date: day.date, absent: true } });
+    assert.deepEqual([r.status, r.json], [404, { error: "no_membership" }]);
+    await mia.context.close();
+    await pete.context.close();
+  });
+
+  test("API10 · the welcome card's Done is kept on the account", async () => {
+    const pete = await signedIn(PEOPLE.player.email);
+    const { rows } = await db.query(`SELECT id, welcome_card_dismissed_at FROM players WHERE email = $1`, [PEOPLE.player.email]);
+    try {
+      assert.equal((await appApi("GET", `/clubs/${CLUB}/me`, { token: pete.token })).json.welcome, true);
+      const done = await appApi("POST", "/account/welcome-dismissed", { token: pete.token, body: {} });
+      assert.deepEqual([done.status, done.json], [200, { ok: true }]);
+      assert.equal((await appApi("GET", `/clubs/${CLUB}/me`, { token: pete.token })).json.welcome, false);
+      assert.ok((await db.query(`SELECT welcome_card_dismissed_at FROM players WHERE id = $1`, [rows[0].id])).rows[0].welcome_card_dismissed_at);
+      assert.equal((await db.query(`SELECT 1 FROM player_events WHERE player_id = $1 AND event = 'welcome_dismissed'`, [rows[0].id])).rowCount >= 1, true);
+    } finally {
+      // Other journeys meet Pete's welcome card.
+      await db.query(`UPDATE players SET welcome_card_dismissed_at = $2 WHERE id = $1`, [rows[0].id, rows[0].welcome_card_dismissed_at]);
+      await pete.context.close();
+    }
   });
 
   test("API7 · the older access-key API and its shapes are untouched by the app API", async () => {

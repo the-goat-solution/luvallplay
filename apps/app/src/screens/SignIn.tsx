@@ -23,13 +23,17 @@ export function SignInForm({ club }: { club?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AppKey | null>(null);
   // "Send a new code": after a pause (the email may just be slow), and said when sent.
+  const [resendAt, setResendAt] = useState(0);
   const [wait, setWait] = useState(0);
   const [resent, setResent] = useState(false);
   useEffect(() => {
-    if (wait <= 0) return;
-    const timer = setTimeout(() => setWait((s) => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [wait]);
+    // By the clock, not by counting ticks: right again after the phone slept or the tab was away.
+    const tick = () => setWait(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
+    tick();
+    if (resendAt <= Date.now()) return;
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [resendAt]);
 
   async function resend() {
     setBusy(true);
@@ -39,7 +43,7 @@ export function SignInForm({ club }: { club?: string }) {
       await api.auth.emailStart({ email, lang });
       setCode("");
       setResent(true);
-      setWait(RESEND_WAIT_S);
+      setResendAt(Date.now() + RESEND_WAIT_S * 1000);
     } catch (err) {
       setError(errorKey(err, "signin_err_send"));
     } finally {
@@ -54,7 +58,7 @@ export function SignInForm({ club }: { club?: string }) {
     try {
       await api.auth.emailStart({ email, lang });
       setResent(false);
-      setWait(RESEND_WAIT_S);
+      setResendAt(Date.now() + RESEND_WAIT_S * 1000);
       setStep("code");
     } catch (err) {
       setError(errorKey(err, "signin_err_invalid_email"));

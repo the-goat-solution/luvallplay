@@ -48,6 +48,7 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **AK: the Xero connection is a paid add-on** (decided 24 Nov). It's priced to cover Xero's developer-tier costs, certification and support. *Assumptions to confirm (§12.9): the MYOB connector is a paid add-on too; the Shopify connector, direct debit and Windcave are included in base plans; Three Wolves gets add-ons free under its licence.*
 - **AL: there is one store app, and no separate admin store app** (decided 24 Nov). The players' app stays **Luvallplay**, the rebranded profile app (decision A stands). **Club admin stays web-only** (responsive, opened from the app through the secure handoff link). A "Luvallplay Manage" store app was considered and rejected (§4.6).
 - **AM: club look inside, Luvallplay frame** (decided 24 Nov). After sign-in, the club's logo, colours, fonts and words fill the app and the web admin. The store icon, splash screen, sign-in screens and a small "on Luvallplay" footer stay Luvallplay (§6.3).
+- **AN: the club admin becomes a white-label module host** (decided 25 Nov, strategy in §6.2.4). One admin codebase, adapted to each club by configuration (modules, theme, terms, settings, country pack, roles), never by per-club code. Menus, Today cards, badges and settings panels are generated from the module registry, and a new module's admin plugs in through a defined contract.
 - **First outside feedback:** the current order stays (outside clubs join after the setup wizard). Recruiting and interviews, which need no engineering, still start now.
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
@@ -71,6 +72,7 @@ The work runs in **8 phases (0–7) over roughly 23–29 weeks** of focused buil
 | 6 | **Luvallplay brand, websites and setup wizard** | Platform site (luvallplay.com), club landing pages driven by templates, custom domains, a modular setup wizard, and Admin → Modules | 3–4 wks |
 | 3b | **Junior accounts** | Guardian-managed junior profiles, safeguarding rules and forms (§6.8) | 2–3 wks |
 | 7 | **Global modules** | Find a club nearby, then per-sport leaderboards. Social and marketplace only when the gate passes (§8, §11.6). Each module is opt-in per club | 3–5 wks each |
+| A | **White-label admin host (track)** | The club admin generated from the module registry, in the club's look, words and currency; a module admin contract with a scaffold; capabilities; a starter admin for every new club (§6.2.4). Steps A1 to A3 before Phase 6 stage B | 4–6 wks |
 | B | **Business foundations (track)** | NZ company, legal pack, company-owned accounts, trademark, IP audit, cost model and metering: the hard gates in §11.3. Runs from week 0 beside Phase 2 | weeks 0–8 |
 | V | **Vietnam launch pack (track)** | Discovery now; then VietQR and local payments, Zalo, Vietnamese localisation, region (§11.4). Social and marketplace stay gated | 8–12 wks build |
 
@@ -644,6 +646,71 @@ Not club modules at all: **Setup check** (environment diagnostics) and **Platfor
   - *Coaching academy*: + Memberships, Day requests.
   - Three Wolves keeps every module it uses today.
 
+#### 6.2.4 White-label admin: the strategy (decision AN)
+
+**Goal.** One club admin that any club can run. A new club's admin works the moment its `tenants` row and `tenant_modules` exist, in the club's look, language, currency and words, with only its modules showing. Adapting it never means editing code or forking.
+
+**Where we are (audit, 25 Nov).** The plumbing is already multi-tenant: tenants, row-level security, route ownership (`packages/modules/src/routes.ts`), module enforcement, the club config loader, settings, minor-unit money and typed i18n. The **presentation layer is still Three Wolves' own**:
+- **Two menu lists.** The menu is hand-written in `components/admin/nav-config.ts`, while each module manifest also declares `admin.nav`.
+- **Hard-coded club specifics.** The shell greets "Three Wolves", and 19 more lines in 9 files hard-code the club name, **Friday and Wednesday** membership days, **"NZD"** labels and Stripe descriptions, and the annual report header.
+- **English only.** Admin text is inline English and doesn't use `packages/i18n`.
+- **Thin UI kit.** `components/admin/kit` holds a confirm button and a stylesheet, so each page carries its own markup and styling.
+- **No club theme.** The admin doesn't read the club's theme.
+
+**The strategy: seven layers.**
+
+1. **One admin host, modules plug in.**
+   - The **shell** owns layout, navigation, theming, role gating, flash messages, search, breadcrumbs and the audit hook.
+   - Each module owns its admin pages and declares them in its manifest: nav items (with label keys, icon and group), the capability needed to see them, a badge provider, **Today widgets**, a settings panel, help link and empty state.
+   - The **menu, the Today dashboard, badges, search and the settings panels are generated from the registry**, filtered by: module on for this club, the person's capabilities, the club's plan (add-on entitlements), payment mode, platform availability, and sport or country where the module declares one.
+   - `nav-config.ts` stops being its own list. A test checks that the registry's nav, the real routes and the permission matrix agree.
+2. **A module admin contract.** What a module provides to plug in, enforced by tests:
+   - pages in the module's own folder, each loading data through the tenant-aware repositories;
+   - actions that write the audit log and ask for a fresh sign-in code where the capability says so;
+   - settings declared as a zod schema, with simple settings **rendered automatically** as a form;
+   - English and Vietnamese messages in its own namespace;
+   - loading, empty and error states;
+   - isolation, permission, translation and on/off (journey S2) tests.
+   - A scaffold, **`pnpm new-module <id>`**, creates the files, the manifest entry and the failing tests to fill in. The measure of success: **a new module's admin is usable in about a day.**
+3. **Adapting to a club is configuration, never code.**
+   - Inputs: the club's country, region, currency, time zone, languages, sports, payment mode, enabled modules and their settings, `terms`, `theme`, roles, plan and country pack.
+   - Nothing club-specific is written in admin code. Everything comes from helpers such as `club.name`, `club.money.format()`, `club.terms.t("points")`, `club.membershipDays` and `club.timezone`.
+   - A **CI scan** fails on club names, "Wolf", "NZD", weekday literals and fixed prices in admin code (as the existing scans do for money and time zones). Fixtures and tests are exempt.
+4. **White-label presentation (decision AM).**
+   - The admin shows the **club's logo and name** and fills with the club's colours, fonts and words, through semantic tokens only, with a dark theme. A small "on Luvallplay" footer stays.
+   - It works on a phone: tables become cards, forms stack, actions stay reachable (the admin is web-only, decision AL).
+   - Printed reports, exports and emails carry the club's letterhead.
+5. **Language and terms.** English and Vietnamese, typed per-module namespaces in `packages/i18n`. A club's `terms` override sport words (court or pitch, session or match). Dates, numbers and money follow the club's locale and settings. Lists use accent-insensitive search and family-name-first names for Vietnamese. **A CI ratchet** means the count of untranslated admin strings can only go down.
+6. **Capabilities, not paths.** Today a role opens pages by path (`adminPathAllowed`). Modules declare capabilities (for example `finance.view`, `finance.edit`, `people.manage`, `juniors.medical.view`), roles map to capabilities, and the permission matrix test is generated from the registry. Roles stay fixed (owner, admin, coach) for now; custom roles per club are a later option.
+7. **A starter admin for every new club.**
+   - **Today** shows only widgets from enabled modules.
+   - A **setup checklist** driven by what's missing ("Add your first play day", "Add bank details to take transfers").
+   - Empty states that guide the next step.
+   - A synthetic **Demo club** for each country, sport and payment-mode combination, used for visual and end-to-end tests and for sales demos.
+
+**What clubs can and can't customise.** They choose modules, theme, words, settings, roles and languages. They don't get custom pages or per-club code. A club-specific need becomes either a setting, a module, a per-club feature flag while it's beta, or an integration through the API, webhooks and connectors (§12).
+
+**Security and tenancy.** Every admin read and write goes through the tenant-aware repositories (row-level security). Every admin route has an owner in the route table. Platform pages (system check, platform staff) never render in a club's admin. Search, exports and emails are club-scoped. "View as admin" for support needs consent and is audited (§11.5).
+
+**Delivery: Track A, six small steps.** Each is a pull request that changes no club's data.
+- **A1 One menu source:** generate the menu, Today widgets and badges from the registry, delete the duplicate list, keep the permission test.
+- **A2 Remove the hard-coding:** replace every club-specific literal with club config (the 19 known spots in 9 files, listed in the runbook), then switch on the CI scan.
+- **A3 Theming:** the shell reads the club's theme, logo and terms; mobile card layouts.
+- **A4 Admin kit:** `PageHeader`, `DataTable`, `Badge`, `Toolbar`, `EmptyState`, form fields, `Stat`, `Tabs` and an auto-rendered settings panel. Pages migrate as they're touched.
+- **A5 Admin i18n:** namespaces per module, the ratchet, and Vietnamese for the pages a Vietnamese club needs first (Play days, People, Messages, Memberships, Payments to check).
+- **A6 Contract, capabilities and starter:** the module contract with the scaffold, capabilities replacing path checks, the setup checklist and the Demo clubs.
+
+**Sequencing.** A1 to A3 land **before Phase 6 stage B**, so the admin is white-label by the time the first outside club exists. The Phase 3b junior pages and the Phase 6 pages (Admin → Modules, Look & feel, Payments, website editor) are built on the contract from the start. Track A touches `apps/web` admin pages only, so it doesn't conflict with the players' app (Phase 4).
+
+**Acceptance ("a new club's admin is ready" when):**
+- a synthetic club in each country, sport and payment-mode combination shows the right menu, theme, terms, currency, membership days and language;
+- no club name, currency or weekday is written in admin code (the scan passes);
+- every module's admin passes journey S2 (on and off), the generated permission matrix, isolation and translation checks;
+- visual snapshots at the five widths pass for two different club themes;
+- adding a new module's admin through the scaffold takes about a day.
+
+**Open choices (defaults applied; say if you'd change them):** the order of Vietnamese admin translation (A5, default as above); fixed roles for now with per-club custom roles later; no club-built custom pages.
+
 **Settings replacing constants:**
 - `MEMBERSHIP_ACCESS_DAYS` → `memberships.settings.days`
 - `COURTS_TO_MAX_PLAYERS` → `play-days.settings.courts`
@@ -1214,6 +1281,7 @@ Wk 13–17  Phase 5  Capacitor, native features, compliance, TestFlight / Play t
 Wk  3–7   Track R  Luvallplay introduction website (EN + VI, "coming soon" + waitlist) on luvallplay.org (§7.4)
 Wk 16–20  Phase 6  Platform site in launch mode, club templates, wizard, Admin → Modules (onboard 1–2 pilot clubs)
 Wk 20+    Phase 7  Find a club → per-sport leaderboards; social and marketplace only when the gate passes
+Wk 11–17  Track A  White-label admin host: one menu source, no hard-coding, club theme (A1–A3), then kit, i18n, contract (A4–A6) (§6.2.4)
 Wk 14–26  Track I  Integrations for NZ: framework + Xero sync, NZ direct debit, Windcave, Shopify connector, MYOB connector (§12). Needs Phase 3 and live NZ billing
 Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat and booking, Vietnamese legal pack (§11.4)
 ```
@@ -1246,6 +1314,7 @@ Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat 
 | **Postings rejected by Xero** (lock dates, deleted accounts, rate limits) | Error queue, no deletes in Xero, daily reconciliation report (§12.3) |
 | **Direct debit scheme duties** (mandates, notifications, disputes) | Mandate flow and notification emails built to the scheme rules, tested with Stripe's NZ test mode (§12.6) |
 | **Shopify's distribution choice can't be changed** | Custom apps for partner clubs first; a public app is a separate, later decision (§12.5) |
+| **The admin is still Three Wolves-specific** (menu list, 19 hard-coded spots, English only, no club theme), so the first outside club would see another club's words, days and currency | Track A (§6.2.4): A1 to A3 before Phase 6 stage B, a CI scan for club-specific literals, the club-theme and Demo-club tests |
 | **Schedule is optimistic** | Re-baseline after Phase 2 and Phase 3 |
 
 ---

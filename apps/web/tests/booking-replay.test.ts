@@ -46,7 +46,7 @@ describe("a casual booking is counted once", { skip: !BASE_URL && !REQUIRE_DB ? 
   /** Fills the day and says how many spots it had. */
   const fill = async (date: string, prefix: string) => {
     let n = 0;
-    while ((await (lib.reserveBookingSlot(date, who(`${prefix}_${n}`)).then((ok: boolean) => (ok ? "reserved" : "full")))) === "reserved") n++;
+    while ((await lib.reserveBookingSlotOnce(date, who(`${prefix}_${n}`))) === "reserved") n++;
     assert.ok(n > 0 && n < 200, `the day holds ${n} casual players`);
     return n;
   };
@@ -89,8 +89,8 @@ describe("a casual booking is counted once", { skip: !BASE_URL && !REQUIRE_DB ? 
 
   test("the same payment twice: one booking, the count goes up by one", async () => {
     const date = freshDay();
-    assert.equal(await (lib.reserveBookingSlot(date, who("pi_twice")).then((ok: boolean) => (ok ? "reserved" : "full"))), "reserved");
-    assert.equal(await (lib.reserveBookingSlot(date, who("pi_twice")).then((ok: boolean) => (ok ? "reserved" : "full"))), "already");
+    assert.equal(await lib.reserveBookingSlotOnce(date, who("pi_twice")), "reserved");
+    assert.equal(await lib.reserveBookingSlotOnce(date, who("pi_twice")), "already");
     assert.deepEqual(await state(date), { booked: 1, rows: 1 });
     // The older name answers "they have their spot" both times.
     assert.equal(await lib.reserveBookingSlot(date, who("pi_twice")), true);
@@ -99,7 +99,7 @@ describe("a casual booking is counted once", { skip: !BASE_URL && !REQUIRE_DB ? 
 
   test("the same payment 12 times at the same moment: still one booking and one count", async () => {
     const date = freshDay();
-    const results = await Promise.all(Array.from({ length: 12 }, () => (lib.reserveBookingSlot(date, who("pi_storm")).then((ok: boolean) => (ok ? "reserved" : "full")))));
+    const results = await Promise.all(Array.from({ length: 12 }, () => lib.reserveBookingSlotOnce(date, who("pi_storm"))));
     assert.equal(results.filter((r) => r === "reserved").length, 1);
     assert.equal(results.filter((r) => r === "already").length, 11);
     assert.deepEqual(await state(date), { booked: 1, rows: 1 });
@@ -109,8 +109,8 @@ describe("a casual booking is counted once", { skip: !BASE_URL && !REQUIRE_DB ? 
     const date = freshDay();
     const spots = await fill(date, "pi_fill");
     assert.deepEqual(await state(date), { booked: spots, rows: spots }, "a refused booking leaves no row behind");
-    for (let i = 0; i < spots; i++) assert.equal(await (lib.reserveBookingSlot(date, who(`pi_fill_${i}`)).then((ok: boolean) => (ok ? "reserved" : "full"))), "already");
-    assert.equal(await (lib.reserveBookingSlot(date, who("pi_latecomer")).then((ok: boolean) => (ok ? "reserved" : "full"))), "full");
+    for (let i = 0; i < spots; i++) assert.equal(await lib.reserveBookingSlotOnce(date, who(`pi_fill_${i}`)), "already");
+    assert.equal(await lib.reserveBookingSlotOnce(date, who("pi_latecomer")), "full");
     assert.equal(await lib.reserveBookingSlot(date, who("pi_latecomer")), false);
     assert.deepEqual(await state(date), { booked: spots, rows: spots });
   });
@@ -119,7 +119,7 @@ describe("a casual booking is counted once", { skip: !BASE_URL && !REQUIRE_DB ? 
     const probe = freshDay();
     const spots = await fill(probe, "pi_probe");
     const date = freshDay();
-    const results = await Promise.all(Array.from({ length: spots + 7 }, (_, i) => (lib.reserveBookingSlot(date, who(`pi_rush_${i}`)).then((ok: boolean) => (ok ? "reserved" : "full")))));
+    const results = await Promise.all(Array.from({ length: spots + 7 }, (_, i) => lib.reserveBookingSlotOnce(date, who(`pi_rush_${i}`))));
     assert.equal(results.filter((r) => r === "reserved").length, spots);
     assert.equal(results.filter((r) => r === "full").length, 7);
     assert.deepEqual(await state(date), { booked: spots, rows: spots });

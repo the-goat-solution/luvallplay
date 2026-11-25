@@ -47,6 +47,12 @@ export type GuardConfig = {
   extraPersonColumns: string[];
   /** Per-person counts split by a status/role column, e.g. memberships by status. The first person column that exists is used, so renames (player_id → user_id) keep working. */
   statusLinks: { table: string; person: string[]; status: string }[];
+  /**
+   * People without an account of their own: a child's profile, managed by a
+   * guardian. They can't sign in, so there is no access to lose, but their
+   * rows are checked person by person exactly like an account's.
+   */
+  dependentTables: { table: string; id: string; deleted?: string; prefix: string; guardianLink: string; statusLinks: { table: string; person: string; status: string }[] }[];
   /** Tables left out entirely (pure logs, caches, rate limits). */
   ignoreTables: string[];
   /** Column names (exact or regex source) whose sums are reported (money, points). */
@@ -82,6 +88,16 @@ export const DEFAULT_CONFIG: GuardConfig = {
     { table: "club_roles", person: ["player_id", "user_id"], status: "role" },
     { table: "club_members", person: ["user_id", "player_id"], status: "role" },
   ],
+  dependentTables: [
+    {
+      table: "junior_profiles",
+      id: "id",
+      deleted: "deleted_at",
+      prefix: "junior",
+      guardianLink: "guardianships.junior_profile_id",
+      statusLinks: [{ table: "junior_bookings", person: "junior_profile_id", status: "status" }],
+    },
+  ],
   ignoreTables: ["schema_runs", "sms_sends", "auth_codes", "webhook_deliveries", "pv_arena_code_attempts", "arena_code_attempts"],
   sumColumns: /(_cents|amount|price|total|points|balance)$/,
 };
@@ -93,6 +109,10 @@ export const DEFAULT_CONFIG: GuardConfig = {
 export type ColumnSnap = { type: string; nullable: boolean; hash: string; nulls: number; sum?: string };
 export type TableSnap = { rows: number; primaryKey: string[]; keyHash: string; columns: Record<string, ColumnSnap> };
 export type PersonSnap = {
+  /** Set for a person without an account (a junior profile); their id is "<prefix>:<row id>". */
+  kind?: "dependent";
+  /** For a dependent: the link that names their guardians, e.g. "guardianships.junior_profile_id". */
+  guardianLink?: string;
   id: string;
   emailHash: string;
   emailEmpty: boolean;
@@ -310,6 +330,39 @@ export async function snapshot(query: Query, opts: { label?: string; config?: Gu
     if (col) await count(s.table, col, col === "email" || col.endsWith("_email"), s.status);
   }
 
+  // People without an account: one person per row of each dependent table,
+  // with their rows counted from the foreign keys that point at it.
+  for (const d of cfg.dependentTables ?? []) {
+    if (!hasCol(d.table, d.id)) continue;
+    const gone = hasCol(d.table, d.deleted) ? `${quoteIdent(d.deleted!)} IS NOT NULL` : "false";
+    const rows = await query(`SELECT ${quoteIdent(d.id)}::text AS id, ${gone} AS deleted FROM ${quoteIdent(d.table)} ORDER BY 1`);
+    const byDependent = new Map<string, PersonSnap>();
+    for (const r of rows) {
+      const id = `${d.prefix}:${r.id}`;
+      const person: PersonSnap = { kind: "dependent", guardianLink: d.guardianLink, id, emailHash: personHash(id), emailEmpty: false, deleted: r.deleted === true, phoneHash: null, liveSessions: 0, sessionsExpireAt: null, links: {} };
+      people.push(person);
+      byDependent.set(String(r.id), person);
+    }
+    const countFor = async (table: string, col: string, status?: string) => {
+      if (!hasCol(table, col) || (status && !hasCol(table, status))) return;
+      const found = await query(
+        `SELECT ${quoteIdent(col)}::text AS k, ${status ? `coalesce(${quoteIdent(status)}::text, '')` : `''`} AS s, count(*)::int AS n
+         FROM ${quoteIdent(table)} WHERE ${quoteIdent(col)} IS NOT NULL GROUP BY 1, 2`,
+      );
+      for (const r of found) {
+        const linkKey = status ? `${table}.${col}[${status}=${r.s}]` : `${table}.${col}`;
+        const person = byDependent.get(String(r.k));
+        if (person) person.links[linkKey] = (person.links[linkKey] ?? 0) + Number(r.n);
+        else orphans[linkKey] = (orphans[linkKey] ?? 0) + Number(r.n);
+      }
+    };
+    for (const ref of (await foreignKeysTo(query, cfg, d.table)).sort()) {
+      const [table, col] = ref.split(".");
+      await countFor(table, col);
+    }
+    for (const l of d.statusLinks) await countFor(l.table, l.person, l.status);
+  }
+
   return { version: SNAPSHOT_VERSION, takenAt: new Date(String(now)).toISOString(), label: opts.label ?? "", identityTable: identity.table, tables, people, orphans };
 }
 
@@ -335,7 +388,11 @@ function finding(level: Level, code: string, message: string, extra: Partial<Fin
 export function checkSnapshot(s: Snapshot): Finding[] {
   const out: Finding[] = [];
   if (!s.identityTable) return [finding("error", "NO_ACCOUNTS_TABLE", "No accounts table found (players/users), so nobody can sign in.")];
-  const live = s.people.filter((p) => !p.deleted);
+  const live = s.people.filter((p) => !p.deleted && p.kind !== "dependent");
+  const dependents = s.people.filter((p) => !p.deleted && p.kind === "dependent");
+  const unguarded = dependents.filter((p) => !p.guardianLink || !(p.links[p.guardianLink] > 0)).map((p) => p.id);
+  if (unguarded.length)
+    out.push(finding("error", "DEPENDENT_WITHOUT_GUARDIAN", "Junior profiles with no guardian: nobody can see, manage or delete that child's data.", { people: unguarded }));
 
   const empty = live.filter((p) => p.emailEmpty).map((p) => p.id);
   if (empty.length) out.push(finding("error", "EMPTY_EMAIL", "Accounts with an empty email can't receive a sign-in code.", { people: empty }));
@@ -365,7 +422,9 @@ export function checkSnapshot(s: Snapshot): Finding[] {
   const hasRoleTable = Object.keys(s.tables).some((t) => t === "club_roles" || t === "club_members");
   if (hasRoleTable && roles.length === 0) out.push(finding("error", "NO_ADMIN", "A roles table exists but no live account is an owner or admin: nobody can reach admin."));
 
-  out.push(finding("info", "SUMMARY", `${live.length} live accounts, ${live.filter((p) => p.liveSessions > 0).length} signed in on at least one device.`));
+  out.push(
+    finding("info", "SUMMARY", `${live.length} live accounts, ${live.filter((p) => p.liveSessions > 0).length} signed in on at least one device${dependents.length ? `; ${dependents.length} junior profiles` : ""}.`),
+  );
   return out;
 }
 
@@ -470,6 +529,8 @@ export function diffSnapshots(before: Snapshot, after: Snapshot, x: Expectations
   for (const p of after.people) if (!p.emailEmpty && (!afterByEmail.has(p.emailHash) || afterByEmail.get(p.emailHash)!.deleted)) afterByEmail.set(p.emailHash, p);
 
   const missing: string[] = [];
+  const dependentMissing: string[] = [];
+  const dependentDeleted: string[] = [];
   const deletedNow: string[] = [];
   const emailChanged: string[] = [];
   const phoneLost: string[] = [];
@@ -486,11 +547,11 @@ export function diffSnapshots(before: Snapshot, after: Snapshot, x: Expectations
     }
     if (!a) a = afterByEmail.get(b.emailHash);
     if (!a) {
-      if (!accountAllowed(b.id)) missing.push(b.id);
+      if (!accountAllowed(b.id)) (b.kind === "dependent" ? dependentMissing : missing).push(b.id);
       continue;
     }
     if (a.deleted) {
-      if (!accountAllowed(b.id)) deletedNow.push(b.id);
+      if (!accountAllowed(b.id)) (b.kind === "dependent" ? dependentDeleted : deletedNow).push(b.id);
       continue;
     }
     if (b.phoneHash && a.phoneHash !== b.phoneHash && !accountAllowed(b.id)) phoneLost.push(b.id);
@@ -508,6 +569,8 @@ export function diffSnapshots(before: Snapshot, after: Snapshot, x: Expectations
 
   if (missing.length) out.push(finding("error", "ACCOUNT_MISSING", "Accounts that existed before are gone (no same id, no same email).", { people: missing }));
   if (deletedNow.length) out.push(finding("error", "ACCOUNT_DELETED", "Live accounts became deleted.", { people: deletedNow }));
+  if (dependentMissing.length) out.push(finding("error", "DEPENDENT_MISSING", "Junior profiles that existed before are gone.", { people: dependentMissing }));
+  if (dependentDeleted.length) out.push(finding("error", "DEPENDENT_DELETED", "Live junior profiles became deleted.", { people: dependentDeleted }));
   if (emailChanged.length) out.push(finding("error", "EMAIL_CHANGED", "Accounts' sign-in email changed, so their codes now go elsewhere.", { people: emailChanged }));
   if (phoneLost.length) out.push(finding("error", "PHONE_SIGNIN_LOST", "Accounts lost their verified phone (SMS sign-in).", { people: phoneLost }));
   if (signedOut.length) out.push(finding("error", "SIGNED_OUT", "People signed in before are signed out after (sessions gone before their expiry).", { people: signedOut }));
@@ -522,7 +585,9 @@ export function diffSnapshots(before: Snapshot, after: Snapshot, x: Expectations
   for (const f of checkSnapshot(after)) if (f.level === "error") out.push({ ...f, code: `AFTER_${f.code}` });
 
   const errors = out.filter((f) => f.level === "error").length;
-  out.push(finding("info", "SUMMARY", `${before.people.filter((p) => !p.deleted).length} accounts checked, ${errors} problem${errors === 1 ? "" : "s"}.`));
+  const checked = before.people.filter((p) => !p.deleted);
+  const juniors = checked.filter((p) => p.kind === "dependent").length;
+  out.push(finding("info", "SUMMARY", `${checked.length - juniors} accounts${juniors ? ` and ${juniors} junior profiles` : ""} checked, ${errors} problem${errors === 1 ? "" : "s"}.`));
   return out;
 }
 

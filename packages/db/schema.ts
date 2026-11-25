@@ -1450,6 +1450,8 @@ export const junior_profiles = pgTable("junior_profiles", {
 }, (table) => [
 	index("junior_profiles_tenant_id_idx").using("btree", table.tenant_id.asc().nullsLast(), table.id.asc().nullsLast()),
 	index("junior_profiles_guardian_user_id_idx").using("btree", table.guardian_user_id.asc().nullsLast()),
+	// A junior's rows must be in the junior's own club: the target of their foreign keys.
+	unique("junior_profiles_tenant_id_id_key").on(table.tenant_id, table.id),
 	foreignKey({
 			columns: [table.tenant_id],
 			foreignColumns: [tenants.id],
@@ -1460,6 +1462,56 @@ export const junior_profiles = pgTable("junior_profiles", {
 			foreignColumns: [players.id],
 			name: "junior_profiles_guardian_user_id_fkey"
 		}).onDelete("restrict"),
+]);
+
+// Phase 3b: a junior's bookings and attendance. Tables of their own, because
+// the adults' tables are keyed by an account's email and everything that
+// reads them assumes someone who can be emailed (build plan §6.8).
+export const junior_bookings = pgTable("junior_bookings", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	junior_profile_id: integer().notNull(),
+	session_date: date().notNull(),
+	// The guardian who booked, and who pays. Never the child.
+	booked_by_user_id: integer().notNull(),
+	payment_intent_id: text(),
+	// In the currency's smallest unit, with the currency beside it.
+	amount_minor: integer(),
+	currency: text(),
+	status: text().default('pending').notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	cancelled_at: timestamp({ withTimezone: true, mode: 'string' }),
+}, (table) => [
+	uniqueIndex("junior_bookings_one_live").using("btree", table.tenant_id.asc().nullsLast(), table.junior_profile_id.asc().nullsLast(), table.session_date.asc().nullsLast()).where(sql`(status = ANY (ARRAY['pending'::text, 'confirmed'::text]))`),
+	index("junior_bookings_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
+	index("junior_bookings_session_idx").using("btree", table.tenant_id.asc().nullsLast(), table.session_date.asc().nullsLast()),
+	index("junior_bookings_booked_by_user_id_idx").using("btree", table.booked_by_user_id.asc().nullsLast()),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "junior_bookings_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.junior_profile_id], foreignColumns: [junior_profiles.id], name: "junior_bookings_junior_profile_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "junior_bookings_junior_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.session_date], foreignColumns: [sessions.tenant_id, sessions.date], name: "junior_bookings_session_date_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.booked_by_user_id], foreignColumns: [players.id], name: "junior_bookings_booked_by_user_id_fkey" }).onDelete("restrict"),
+	unique("junior_bookings_payment_intent_id_key").on(table.payment_intent_id),
+	check("junior_bookings_status_check", sql`status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'refunded'::text])`),
+	check("junior_bookings_amount_check", sql`((amount_minor IS NULL) AND (currency IS NULL)) OR ((amount_minor >= 0) AND (currency ~ '^[A-Z]{3}$'::text))`),
+]);
+
+export const junior_attendance = pgTable("junior_attendance", {
+	tenant_id: integer().notNull(),
+	session_date: date().notNull(),
+	junior_profile_id: integer().notNull(),
+	source: text().notNull(),
+	removed: boolean().default(false).notNull(),
+	recorded_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// The coach or admin who marked it.
+	recorded_by_user_id: integer(),
+}, (table) => [
+	index("junior_attendance_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "junior_attendance_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.junior_profile_id], foreignColumns: [junior_profiles.id], name: "junior_attendance_junior_profile_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "junior_attendance_junior_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.recorded_by_user_id], foreignColumns: [players.id], name: "junior_attendance_recorded_by_user_id_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.session_date, table.junior_profile_id], name: "junior_attendance_pkey"}),
 ]);
 
 // One child can have two guardians, one guardian several children.

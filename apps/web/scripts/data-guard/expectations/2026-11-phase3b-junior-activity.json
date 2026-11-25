@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3b-junior-activity",
+  "description": "Phase 3b step 1 (build plan §6.8): two new, empty, club-owned tables for a junior's bookings and attendance, with row-level security, and a unique constraint on junior_profiles (tenant_id, id), a table that is empty in production. Additive: no row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

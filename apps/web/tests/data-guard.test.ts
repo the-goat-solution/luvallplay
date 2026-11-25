@@ -349,6 +349,89 @@ describe("data guard on Postgres", { skip }, () => {
     assert.deepEqual(errorCodes(findings), []);
   });
 
+  // ---- Junior profiles: people without an account (Phase 3b) ----
+  // Two children of account 1, the second also in the care of account 2,
+  // each with bookings and attendance of their own.
+  const JUNIORS = `
+    CREATE TABLE junior_profiles (id serial PRIMARY KEY, guardian_user_id integer NOT NULL REFERENCES players(id), name text NOT NULL, birth_year smallint, deleted_at timestamptz);
+    CREATE TABLE guardianships (guardian_user_id integer NOT NULL REFERENCES players(id), junior_profile_id integer NOT NULL REFERENCES junior_profiles(id), PRIMARY KEY (guardian_user_id, junior_profile_id));
+    CREATE TABLE junior_bookings (id serial PRIMARY KEY, junior_profile_id integer NOT NULL REFERENCES junior_profiles(id), booked_by_user_id integer NOT NULL REFERENCES players(id), session_date date NOT NULL, status text NOT NULL);
+    CREATE TABLE junior_attendance (junior_profile_id integer NOT NULL REFERENCES junior_profiles(id), session_date date NOT NULL, PRIMARY KEY (junior_profile_id, session_date));
+    INSERT INTO junior_profiles (id, guardian_user_id, name, birth_year) VALUES (1, 1, 'Ana', 2015), (2, 1, 'Ben', 2017);
+    INSERT INTO guardianships VALUES (1, 1), (1, 2), (2, 2);
+    INSERT INTO junior_bookings (junior_profile_id, booked_by_user_id, session_date, status) VALUES (1, 1, '2026-11-06', 'confirmed'), (1, 1, '2026-11-13', 'confirmed'), (2, 1, '2026-11-06', 'confirmed');
+    INSERT INTO junior_attendance VALUES (1, '2026-11-06'), (2, '2026-11-06');`;
+  async function rehearseJuniors(changeSql: string, x: Partial<Expectations> = {}) {
+    return withSchema(async (schema, exec) => {
+      const config = { ...DEFAULT_CONFIG, schema };
+      await exec(JUNIORS);
+      const before = await takeSnapshot(DB_URL!, { config });
+      await exec(changeSql);
+      const after = await takeSnapshot(DB_URL!, { config });
+      return { findings: diffSnapshots(before, after, expect(x)), before, after };
+    });
+  }
+
+  test("JUNIORS · each profile is a person with rows of their own, and no way to sign in", async () => {
+    const { before, findings } = await rehearseJuniors(`SELECT 1;`);
+    const ana = before.people.find((p) => p.id === "junior:1")!;
+    assert.equal(ana.kind, "dependent");
+    assert.equal(ana.liveSessions, 0);
+    assert.deepEqual(ana.links, {
+      "guardianships.junior_profile_id": 1,
+      "junior_attendance.junior_profile_id": 1,
+      "junior_bookings.junior_profile_id": 2,
+      "junior_bookings.junior_profile_id[status=confirmed]": 2,
+    });
+    // The guardian's own links name the children they look after and paid for.
+    const guardian = before.people.find((p) => p.id === "1")!;
+    assert.equal(guardian.links["guardianships.guardian_user_id"], 2);
+    assert.equal(guardian.links["junior_bookings.booked_by_user_id"], 3);
+    assert.deepEqual(errorCodes(findings), []);
+    assert.match(byCode(findings, "SUMMARY")[0].message, /accounts and 2 junior profiles checked, 0 problems/);
+    assert.match(byCode(checkSnapshot(before), "SUMMARY")[0].message, /; 2 junior profiles\.$/);
+  });
+
+  test("JUNIORS · SAFE · a guardian books another session", async () => {
+    const { findings } = await rehearseJuniors(`INSERT INTO junior_bookings (junior_profile_id, booked_by_user_id, session_date, status) VALUES (2, 1, '2026-11-13', 'confirmed');`);
+    assert.deepEqual(errorCodes(findings), []);
+  });
+
+  test("JUNIORS · CAUGHT · losing one child's attendance names that child", async () => {
+    const { findings } = await rehearseJuniors(`DELETE FROM junior_attendance WHERE junior_profile_id = 2;`);
+    assert.deepEqual(byCode(findings, "DATA_LOST").find((f) => f.target === "junior_attendance.junior_profile_id")?.people, ["junior:2"]);
+  });
+
+  test("JUNIORS · CAUGHT · a profile soft-deleted or gone", async () => {
+    const soft = await rehearseJuniors(`UPDATE junior_profiles SET deleted_at = now() WHERE id = 1;`);
+    assert.deepEqual(byCode(soft.findings, "DEPENDENT_DELETED")[0].people, ["junior:1"]);
+    const hard = await rehearseJuniors(`DELETE FROM junior_attendance WHERE junior_profile_id = 1; DELETE FROM junior_bookings WHERE junior_profile_id = 1; DELETE FROM guardianships WHERE junior_profile_id = 1; DELETE FROM junior_profiles WHERE id = 1;`);
+    assert.deepEqual(byCode(hard.findings, "DEPENDENT_MISSING")[0].people, ["junior:1"]);
+    // An account is never reported as a junior, or the other way round.
+    assert.equal(byCode(hard.findings, "ACCOUNT_MISSING").length, 0);
+  });
+
+  test("JUNIORS · CAUGHT · a child left with no guardian", async () => {
+    const { findings } = await rehearseJuniors(`DELETE FROM guardianships WHERE junior_profile_id = 1;`);
+    assert.deepEqual(byCode(findings, "AFTER_DEPENDENT_WITHOUT_GUARDIAN")[0].people, ["junior:1"]);
+  });
+
+  test("JUNIORS · SAFE · a guardian deletes one child's data: declared, and the other child and the guardian are intact", async () => {
+    const sql = `DELETE FROM junior_attendance WHERE junior_profile_id = 1; DELETE FROM junior_bookings WHERE junior_profile_id = 1; DELETE FROM guardianships WHERE junior_profile_id = 1; DELETE FROM junior_profiles WHERE id = 1;`;
+    const why = "The guardian asked for this child's data to be deleted";
+    const declared = await rehearseJuniors(sql, {
+      allowAccountChanges: [{ target: "junior:1", reason: why }],
+      allowRowDecrease: ["junior_profiles", "guardianships", "junior_bookings", "junior_attendance"].map((target) => ({ target, reason: why })),
+    });
+    assert.deepEqual(errorCodes(declared.findings), []);
+    // Deleting the wrong child's rows under the same declaration is still caught, per person.
+    const wrong = await rehearseJuniors(sql.replace("DELETE FROM junior_attendance WHERE junior_profile_id = 1", "DELETE FROM junior_attendance"), {
+      allowAccountChanges: [{ target: "junior:1", reason: why }],
+      allowRowDecrease: ["junior_profiles", "guardianships", "junior_bookings"].map((target) => ({ target, reason: why })),
+    });
+    assert.deepEqual(byCode(wrong.findings, "DATA_LOST").find((f) => f.target === "junior_attendance.junior_profile_id")?.people, ["junior:2"]);
+  });
+
   // ---- The command line, end to end ----
 
   test("CLI rehearse: passes a safe change, fails a bad one, refuses production", { skip: spawnSync("psql", ["--version"]).status !== 0 ? "psql not installed" : false }, async () => {

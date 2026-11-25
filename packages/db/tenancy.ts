@@ -38,6 +38,8 @@ export const CLUB_OWNED_TABLES = [
   "finance_settings",
   "finance_sync_state",
   "jersey_registrations",
+  "junior_attendance",
+  "junior_bookings",
   "junior_profiles",
   "membership_reminders_sent",
   "memberships",

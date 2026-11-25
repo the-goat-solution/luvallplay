@@ -30,6 +30,14 @@ export const webTransport: VisionTransport = (endpoint, { method = "GET", query,
   });
 };
 
+// Three Wolves' own words for a player and a pair, as the tracker always said.
+const WORDS: VisionHost["words"] = {
+  en: { player: "wolf", players: "wolves", Player: "Wolf", Pair: "Pack" },
+  vi: { player: "sói", players: "sói", Player: "Sói", Pair: "Bầy" },
+};
+// The pass prices after the trial (PASS_PRICE_CENTS in lib/wolf-vision-db.ts).
+const PRICES: VisionHost["prices"] = { live: "NZ$5", upload: "NZ$2" };
+
 const LINKS: VisionHost["links"] = {
   arena: "/profile/arena",
   tracker: "/profile/wolf-vision",
@@ -48,6 +56,8 @@ export function WebVisionHost({ children }: { children: ReactNode }) {
       visionName: visionName(),
       transport: webTransport,
       links: LINKS,
+      words: WORDS,
+      prices: PRICES,
       onFocus,
     }),
     [lang, setLang, onFocus],

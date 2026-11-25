@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { API_PREFIX } from "@luvallplay/api/routes";
 import { format, setTerms } from "@luvallplay/i18n/format";
 import { MatchAnalyzer, VisionHostProvider, fillTerms, type VisionHost, type VisionTransport } from "@luvallplay/vision/ui";
+import { clubWords } from "../lib/club-words.ts";
 import { clubHost, store } from "../app.ts";
 import { useCurrentClub, useLang, useSession } from "../hooks.tsx";
 import { focus } from "../lib/focus.ts";
@@ -60,7 +61,8 @@ export default function VisionTrackScreen() {
       visionName: fill(lang)("{visionName}"),
       transport: clubTransport(clubHost(current.apiBase), slug),
       links: { arena: "/arena", tracker: "/vision/track", label: "/vision/label", signIn: () => "/signin" },
-      // The prices after the trial, from the club's API, in its money; the words for a player and a pair are plain.
+      words: clubWords(terms),
+      // The prices after the trial, from the club's API, in its money.
       prices: prices ? { live: money(prices.live, currency), upload: money(prices.upload, currency) } : { live: "…", upload: "…" },
       onFocus: setFocus,
     };

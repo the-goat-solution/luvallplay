@@ -1735,6 +1735,38 @@ describe("APP · performance on a mid-range phone (build plan §4.4)", () => {
   });
 });
 
+describe("APP · fonts", () => {
+  test("APP48 · Luvallplay's own fonts before sign-in, the club's fonts from its website after", async () => {
+    const loaded = (page, family) => page.evaluate(async (f) => {
+      await document.fonts.ready;
+      return [...document.fonts].filter((x) => x.family.replace(/["']/g, "") === f && x.status === "loaded").length;
+    }, family);
+    const anon = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
+    const page = await anon.newPage();
+    const problems = watch(page);
+    await page.goto(`${APP}/signin`);
+    await page.getByRole("button").first().waitFor();
+    assert.ok((await loaded(page, "Be Vietnam Pro")) > 0, "Be Vietnam Pro");
+    assert.ok((await loaded(page, "Barlow Condensed")) > 0, "Barlow Condensed");
+    await anon.close();
+
+    const { context } = await signedIn(PEOPLE.member.email);
+    const club = await context.newPage();
+    const clubProblems = watch(club);
+    await club.goto(`${APP}/me`);
+    await club.waitForSelector(ME_READY);
+    const faces = await club.evaluate(() => [...document.fonts].map((f) => f.family.replace(/["']/g, "")));
+    assert.ok(faces.includes("Copperplate") && faces.includes("Montserrat"), faces.join(", "));
+    assert.ok((await loaded(club, "Montserrat")) > 0, "Montserrat, from the club's website");
+    assert.ok((await loaded(club, "Copperplate")) > 0, "Copperplate, from the club's website");
+    // The website lets the app read them (fonts need it across origins).
+    const r = await fetch(`${env.base}/fonts/UTM-Copperplate.ttf`, { headers: { Origin: APP } });
+    assert.equal(r.headers.get("access-control-allow-origin"), "*");
+    assert.deepEqual([...problems, ...clubProblems], []);
+    await context.close();
+  });
+});
+
 describe("APP · My photos", () => {
   test("APP45 · My photos on Me: not set up without a photo store; with one, photos are prepared on the device, go straight to the store and are registered with the caption and consent", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
@@ -2051,6 +2083,8 @@ describe("APP · accessibility and the page's rules", () => {
     assert.match(csp, /media-src 'self' blob:(;|$)/);
     assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com https://api\\.stripe\\.com https://storage\\.googleapis\\.com https://vercel\\.com/api/blob/ https://\\*\\.public\\.blob\\.vercel-storage\\.com(;|$)`));
     assert.match(csp, /worker-src 'self' blob:(;|$)/);
+    // Fonts: the app's own, and a club's from its website (the API host).
+    assert.match(csp, new RegExp(`font-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com(;|$)`));
     // The one wildcard is the photo store's own host (its name carries the store's id).
     assert.doesNotMatch(csp.replace("https://*.public.blob.vercel-storage.com", ""), /unsafe-inline|'unsafe-eval'|\*/);
     // Images from any https host (club logos, photos in Blob storage); nothing else is widened.

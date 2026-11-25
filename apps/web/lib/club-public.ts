@@ -12,7 +12,11 @@ export type PublicClub = {
   clock: ClubClock;
   currency: string;
   /** The club's own names for points and the match tracker. */
-  terms: { pointsName: string; visionName: string; alphaName: string; silverName: string; localized: Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string }> };
+  terms: {
+    pointsName: string; visionName: string; alphaName: string; silverName: string;
+    playerName?: string; playersName?: string; pairName?: string;
+    localized: Record<string, { pointsName?: string; visionName?: string; alphaName?: string; silverName?: string; playerName?: string; playersName?: string; pairName?: string }>;
+  };
   sessionCapacity: number;
   miniGameMaxPlayers: number;
   /** The modules switched on for the club (every module when that can't be read). */
@@ -23,7 +27,11 @@ export type PublicClub = {
 export const DEFAULT_PUBLIC_CLUB: PublicClub = {
   clock: DEFAULT_CLUB_CLOCK,
   currency: CLUB_CURRENCY,
-  terms: { pointsName: CLUB_TERMS.pointsName, visionName: CLUB_TERMS.visionName, alphaName: CLUB_TERMS.alphaName, silverName: CLUB_TERMS.silverName, localized: { vi: { ...CLUB_TERMS.localized.vi } } },
+  terms: {
+    pointsName: CLUB_TERMS.pointsName, visionName: CLUB_TERMS.visionName, alphaName: CLUB_TERMS.alphaName, silverName: CLUB_TERMS.silverName,
+    playerName: CLUB_TERMS.playerName, playersName: CLUB_TERMS.playersName, pairName: CLUB_TERMS.pairName,
+    localized: { vi: { ...CLUB_TERMS.localized.vi } },
+  },
   sessionCapacity: SESSION_CAPACITY,
   miniGameMaxPlayers: MINI_GAME_MAX_PLAYERS,
   modules: MODULES.map((m) => m.id),

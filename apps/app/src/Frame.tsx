@@ -4,6 +4,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useLang, useMode, useT, type ClubConfig } from "./hooks.tsx";
 import { applyTheme } from "./lib/theme.ts";
+import { applyClubFonts } from "./lib/club-fonts.ts";
 
 const LUVALLPLAY_THEME_COLOR = { light: "#0e6b4f", dark: "#0b1b2b" };
 
@@ -12,6 +13,9 @@ export function useLook(club: ClubConfig | null): void {
   const mode = useMode();
   const lang = useLang();
   const theme = club?.theme ?? null;
+  useEffect(() => {
+    applyClubFonts(theme?.fonts ?? []);
+  }, [theme]);
   useEffect(() => {
     const primary = applyTheme(document.documentElement, theme, mode);
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", primary ?? LUVALLPLAY_THEME_COLOR[mode]);

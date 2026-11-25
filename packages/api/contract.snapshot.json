@@ -2636,6 +2636,18 @@
                       "t": "string",
                       "optional": true
                     },
+                    "pairName": {
+                      "t": "string",
+                      "optional": true
+                    },
+                    "playerName": {
+                      "t": "string",
+                      "optional": true
+                    },
+                    "playersName": {
+                      "t": "string",
+                      "optional": true
+                    },
                     "pointsName": {
                       "t": "string",
                       "optional": true
@@ -2650,6 +2662,18 @@
                     }
                   }
                 }
+              },
+              "pairName": {
+                "t": "string",
+                "optional": true
+              },
+              "playerName": {
+                "t": "string",
+                "optional": true
+              },
+              "playersName": {
+                "t": "string",
+                "optional": true
               },
               "pointsName": {
                 "t": "string"
@@ -2714,6 +2738,31 @@
                     "t": "string"
                   }
                 }
+              },
+              "fonts": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "family": {
+                      "t": "string"
+                    },
+                    "src": {
+                      "t": "string"
+                    },
+                    "style": {
+                      "t": "enum",
+                      "values": [
+                        "normal",
+                        "italic"
+                      ]
+                    },
+                    "weight": {
+                      "t": "number"
+                    }
+                  }
+                },
+                "optional": true
               },
               "light": {
                 "t": "object",

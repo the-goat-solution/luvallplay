@@ -41,7 +41,11 @@ export const DEFAULT_CLUB_CONFIG: ClubConfig = {
   timezone: C.CLUB_TIME_ZONE,
   currency: C.CLUB_CURRENCY,
   languages: ["en", "vi"],
-  terms: { pointsName: C.CLUB_TERMS.pointsName, visionName: C.CLUB_TERMS.visionName, alphaName: C.CLUB_TERMS.alphaName, silverName: C.CLUB_TERMS.silverName, localized: { vi: { ...C.CLUB_TERMS.localized.vi } } },
+  terms: {
+    pointsName: C.CLUB_TERMS.pointsName, visionName: C.CLUB_TERMS.visionName, alphaName: C.CLUB_TERMS.alphaName, silverName: C.CLUB_TERMS.silverName,
+    playerName: C.CLUB_TERMS.playerName, playersName: C.CLUB_TERMS.playersName, pairName: C.CLUB_TERMS.pairName,
+    localized: { vi: { ...C.CLUB_TERMS.localized.vi } },
+  },
   playDays: {
     courtsToMaxPlayers: C.COURTS_TO_MAX_PLAYERS,
     sessionCapacity: C.SESSION_CAPACITY,

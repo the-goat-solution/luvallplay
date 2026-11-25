@@ -10,6 +10,11 @@ import react from "@vitejs/plugin-react";
 // regions' hosts. Keep this list short: it is the app's whole network reach.
 const DEFAULT_API_HOSTS = ["https://api.luvallplay.com"];
 
+// Stripe, the card provider (its published CSP requirements): the script, its
+// card-field frames, and its API. Nothing else of Stripe's runs until a
+// payment step loads it.
+const STRIPE = { script: "https://js.stripe.com", frame: "https://js.stripe.com https://hooks.stripe.com", connect: "https://api.stripe.com" };
+
 function apiHosts(env: Record<string, string>): string[] {
   const listed = (env.VITE_API_HOSTS ?? "").split(/[\s,]+/).filter(Boolean);
   const all = [env.VITE_API_BASE, ...listed, ...DEFAULT_API_HOSTS].filter((h): h is string => !!h && /^https?:\/\/[^\s/'";]+$/.test(h));
@@ -25,11 +30,13 @@ function csp(env: Record<string, string>): Plugin {
       const hosts = apiHosts(env).join(" ");
       const policy = [
         "default-src 'self'",
-        "script-src 'self'",
+        // Stripe's card form (Payment Element), loaded only on a payment step.
+        `script-src 'self' ${STRIPE.script}`,
         "style-src 'self'",
         `img-src 'self' data: https: ${hosts}`,
         "font-src 'self'",
-        `connect-src 'self' ${hosts}`,
+        `connect-src 'self' ${hosts} ${STRIPE.connect}`,
+        `frame-src ${STRIPE.frame}`,
         "base-uri 'self'",
         "form-action 'self'",
         "object-src 'none'",

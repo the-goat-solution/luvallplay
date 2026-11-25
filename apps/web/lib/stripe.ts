@@ -273,3 +273,42 @@ export async function createOneTimeMembershipPaymentIntent(input: {
     },
   );
 }
+
+const TIER_LABEL = { monthly: "Monthly", quarterly: "Quarterly" } as const;
+const DAY_LABEL = { friday: "Friday", wednesday: "Wednesday" } as const;
+
+/**
+ * A new auto-renewing membership's subscription, as app/api/create-subscription
+ * makes it (keep the two in step): find or create the customer, subscribe
+ * with the first invoice left to pay in the browser, and send its receipt.
+ * Returns that invoice's payment to confirm, or null.
+ */
+export async function createMembershipSubscription(input: {
+  plan: "monthly" | "quarterly";
+  day: "friday" | "wednesday";
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+}): Promise<{ subscriptionId: string; clientSecret: string } | null> {
+  const stripe = getStripe();
+  const priceId = await resolvePriceId(input.plan, input.day);
+  const customers = await stripe.customers.list({ email: input.email, limit: 1 });
+  const customer =
+    customers.data[0] ??
+    (await stripe.customers.create({ email: input.email, name: `${input.firstName} ${input.lastName}`, phone: input.phone, metadata: { plan: input.plan, day: input.day } }));
+  const subscription = await stripe.subscriptions.create({
+    customer: customer.id,
+    items: [{ price: priceId }],
+    payment_behavior: "default_incomplete",
+    payment_settings: { save_default_payment_method: "on_subscription" },
+    description: `Three Wolves — ${TIER_LABEL[input.plan]} Membership (${DAY_LABEL[input.day]})`,
+    metadata: { plan: input.plan, day: input.day, firstName: input.firstName, lastName: input.lastName, email: input.email },
+  });
+  const invoiceId = typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice?.id;
+  const pi = invoiceId ? await getInvoicePaymentIntent(stripe, invoiceId) : null;
+  if (!pi) return null;
+  // A receipt is always sent once this invoice is paid.
+  await stripe.paymentIntents.update(pi.id, { receipt_email: input.email });
+  return { subscriptionId: subscription.id, clientSecret: pi.clientSecret };
+}

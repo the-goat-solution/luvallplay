@@ -2450,6 +2450,11 @@
                   "t": "string"
                 }
               },
+              "stripeKey": {
+                "t": "string",
+                "nullable": true,
+                "optional": true
+              },
               "timezone": {
                 "t": "string"
               },
@@ -3470,6 +3475,355 @@
         }
       }
     },
+    "membership.action": {
+      "method": "POST",
+      "path": "/clubs/{club}/membership",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "unknown"
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "cleared": {
+            "t": "boolean",
+            "optional": true
+          },
+          "clientSecret": {
+            "t": "string",
+            "optional": true
+          },
+          "endsOn": {
+            "t": "string",
+            "nullable": true,
+            "optional": true
+          },
+          "from": {
+            "t": "string",
+            "optional": true
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "periodEnd": {
+            "t": "string",
+            "optional": true
+          },
+          "periodStart": {
+            "t": "string",
+            "optional": true
+          },
+          "priceNzd": {
+            "t": "number",
+            "optional": true
+          }
+        }
+      }
+    },
+    "membership.billing": {
+      "method": "GET",
+      "path": "/clubs/{club}/membership/billing",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "card": {
+            "t": "object",
+            "fields": {
+              "brand": {
+                "t": "string"
+              },
+              "expMonth": {
+                "t": "number"
+              },
+              "expYear": {
+                "t": "number"
+              },
+              "last4": {
+                "t": "string"
+              }
+            },
+            "nullable": true
+          },
+          "nextCharge": {
+            "t": "object",
+            "fields": {
+              "amountCents": {
+                "t": "number"
+              },
+              "date": {
+                "t": "string"
+              }
+            },
+            "nullable": true
+          },
+          "pendingChange": {
+            "t": "object",
+            "fields": {
+              "day": {
+                "t": "enum",
+                "values": [
+                  "friday",
+                  "wednesday"
+                ]
+              },
+              "from": {
+                "t": "string"
+              },
+              "plan": {
+                "t": "enum",
+                "values": [
+                  "monthly",
+                  "quarterly"
+                ]
+              }
+            },
+            "nullable": true
+          },
+          "receipts": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "amountCents": {
+                  "t": "number"
+                },
+                "date": {
+                  "t": "string"
+                },
+                "description": {
+                  "t": "string"
+                },
+                "refunded": {
+                  "t": "boolean"
+                },
+                "url": {
+                  "t": "string",
+                  "nullable": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "membership.join": {
+      "method": "POST",
+      "path": "/clubs/{club}/membership/join",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "day": {
+            "t": "enum",
+            "values": [
+              "friday",
+              "wednesday"
+            ]
+          },
+          "plan": {
+            "t": "enum",
+            "values": [
+              "monthly",
+              "quarterly"
+            ]
+          },
+          "recurring": {
+            "t": "boolean"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "clientSecret": {
+            "t": "string"
+          },
+          "periodStart": {
+            "t": "string",
+            "nullable": true
+          }
+        }
+      }
+    },
+    "membership.portal": {
+      "method": "POST",
+      "path": "/clubs/{club}/membership/portal",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {}
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "url": {
+            "t": "string"
+          }
+        }
+      }
+    },
+    "membership.state": {
+      "method": "GET",
+      "path": "/clubs/{club}/membership",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "days": {
+            "t": "array",
+            "of": {
+              "t": "enum",
+              "values": [
+                "friday",
+                "wednesday"
+              ]
+            }
+          },
+          "membership": {
+            "t": "object",
+            "fields": {
+              "cancelAtPeriodEnd": {
+                "t": "boolean"
+              },
+              "continuation": {
+                "t": "object",
+                "fields": {
+                  "periodEnd": {
+                    "t": "string",
+                    "nullable": true
+                  },
+                  "periodStart": {
+                    "t": "string",
+                    "nullable": true
+                  },
+                  "plan": {
+                    "t": "enum",
+                    "values": [
+                      "monthly",
+                      "quarterly"
+                    ]
+                  },
+                  "recurring": {
+                    "t": "boolean"
+                  }
+                },
+                "nullable": true
+              },
+              "day": {
+                "t": "enum",
+                "values": [
+                  "friday",
+                  "wednesday"
+                ]
+              },
+              "daysLeft": {
+                "t": "number"
+              },
+              "manageable": {
+                "t": "boolean"
+              },
+              "method": {
+                "t": "string"
+              },
+              "periodEnd": {
+                "t": "string",
+                "nullable": true
+              },
+              "periodStart": {
+                "t": "string",
+                "nullable": true
+              },
+              "plan": {
+                "t": "enum",
+                "values": [
+                  "monthly",
+                  "quarterly"
+                ]
+              },
+              "recurring": {
+                "t": "boolean"
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "active",
+                  "ending",
+                  "upcoming",
+                  "past_due"
+                ]
+              }
+            },
+            "nullable": true
+          },
+          "monthRank": {
+            "t": "number",
+            "nullable": true
+          },
+          "pausedDays": {
+            "t": "array",
+            "of": {
+              "t": "string"
+            }
+          },
+          "prices": {
+            "t": "object",
+            "fields": {
+              "monthly": {
+                "t": "number"
+              },
+              "quarterly": {
+                "t": "number"
+              }
+            }
+          },
+          "streak": {
+            "t": "number"
+          }
+        }
+      }
+    },
     "messages.list": {
       "method": "GET",
       "path": "/clubs/{club}/messages",
@@ -3678,6 +4032,39 @@
         }
       }
     },
+    "play.book": {
+      "method": "POST",
+      "path": "/clubs/{club}/me/book",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "date": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "clientSecret": {
+            "t": "string"
+          },
+          "periodStart": {
+            "t": "string",
+            "nullable": true
+          }
+        }
+      }
+    },
     "player.stats": {
       "method": "GET",
       "path": "/clubs/{club}/me/stats",
@@ -3839,6 +4226,391 @@
                 "t": "number"
               }
             }
+          }
+        }
+      }
+    },
+    "shop.cancel": {
+      "method": "POST",
+      "path": "/clubs/{club}/shop/orders/{id}/cancel",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {}
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "shop.confirm": {
+      "method": "POST",
+      "path": "/clubs/{club}/shop/orders/{id}/confirm",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {}
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "order": {
+            "t": "object",
+            "fields": {
+              "collectedAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "createdAt": {
+                "t": "string"
+              },
+              "holdExpiresAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "id": {
+                "t": "number"
+              },
+              "items": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "label": {
+                      "t": "string"
+                    },
+                    "qty": {
+                      "t": "number"
+                    },
+                    "unitPriceCents": {
+                      "t": "number"
+                    }
+                  }
+                }
+              },
+              "method": {
+                "t": "enum",
+                "values": [
+                  "card",
+                  "cash"
+                ]
+              },
+              "paidAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "pending_payment",
+                  "reserved_cash",
+                  "paid",
+                  "collected",
+                  "cancelled",
+                  "expired",
+                  "refunded"
+                ]
+              },
+              "totalCents": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "shop.list": {
+      "method": "GET",
+      "path": "/clubs/{club}/shop",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "cash": {
+            "t": "boolean"
+          },
+          "orders": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "collectedAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "t": "string"
+                },
+                "holdExpiresAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "id": {
+                  "t": "number"
+                },
+                "items": {
+                  "t": "array",
+                  "of": {
+                    "t": "object",
+                    "fields": {
+                      "label": {
+                        "t": "string"
+                      },
+                      "qty": {
+                        "t": "number"
+                      },
+                      "unitPriceCents": {
+                        "t": "number"
+                      }
+                    }
+                  }
+                },
+                "method": {
+                  "t": "enum",
+                  "values": [
+                    "card",
+                    "cash"
+                  ]
+                },
+                "paidAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "status": {
+                  "t": "enum",
+                  "values": [
+                    "pending_payment",
+                    "reserved_cash",
+                    "paid",
+                    "collected",
+                    "cancelled",
+                    "expired",
+                    "refunded"
+                  ]
+                },
+                "totalCents": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "products": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "available": {
+                  "t": "number"
+                },
+                "descEn": {
+                  "t": "string"
+                },
+                "descVi": {
+                  "t": "string"
+                },
+                "hasFit": {
+                  "t": "boolean"
+                },
+                "hasSizes": {
+                  "t": "boolean"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "images": {
+                  "t": "array",
+                  "of": {
+                    "t": "string"
+                  }
+                },
+                "kind": {
+                  "t": "string"
+                },
+                "nameEn": {
+                  "t": "string"
+                },
+                "nameVi": {
+                  "t": "string"
+                },
+                "priceCents": {
+                  "t": "number"
+                },
+                "sizeChartMen": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "sizeChartWomen": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "slug": {
+                  "t": "string"
+                },
+                "variants": {
+                  "t": "array",
+                  "of": {
+                    "t": "object",
+                    "fields": {
+                      "available": {
+                        "t": "number"
+                      },
+                      "fit": {
+                        "t": "enum",
+                        "values": [
+                          "men",
+                          "women",
+                          "unisex"
+                        ]
+                      },
+                      "id": {
+                        "t": "number"
+                      },
+                      "size": {
+                        "t": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shop.order": {
+      "method": "POST",
+      "path": "/clubs/{club}/shop/orders",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "method": {
+            "t": "enum",
+            "values": [
+              "card",
+              "cash"
+            ]
+          },
+          "variantId": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "clientSecret": {
+            "t": "string",
+            "nullable": true
+          },
+          "order": {
+            "t": "object",
+            "fields": {
+              "collectedAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "createdAt": {
+                "t": "string"
+              },
+              "holdExpiresAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "id": {
+                "t": "number"
+              },
+              "items": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "label": {
+                      "t": "string"
+                    },
+                    "qty": {
+                      "t": "number"
+                    },
+                    "unitPriceCents": {
+                      "t": "number"
+                    }
+                  }
+                }
+              },
+              "method": {
+                "t": "enum",
+                "values": [
+                  "card",
+                  "cash"
+                ]
+              },
+              "paidAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "pending_payment",
+                  "reserved_cash",
+                  "paid",
+                  "collected",
+                  "cancelled",
+                  "expired",
+                  "refunded"
+                ]
+              },
+              "totalCents": {
+                "t": "number"
+              }
+            }
+          },
+          "playDay": {
+            "t": "string",
+            "nullable": true
           }
         }
       }

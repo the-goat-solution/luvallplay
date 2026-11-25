@@ -220,6 +220,68 @@ export const ENDPOINTS = define({
     params: S.clubParams, response: S.playerStatsResponse,
     rateLimit: { limit: 60, windowMs: MIN },
   },
+  // The club shop: products and your orders; an order paid by card (a
+  // payment to confirm in the browser, held 15 minutes) or reserved for cash
+  // at your next play day. Refusals are 409 with a code: sold_out,
+  // not_found, invalid, inactive, cash_unavailable; confirm before the
+  // payment succeeded is 409 not_paid.
+  "shop.list": {
+    method: "GET", path: "/clubs/{club}/shop", auth: "session", scope: "club", module: "shop",
+    params: S.clubParams, response: S.shopResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "shop.order": {
+    method: "POST", path: "/clubs/{club}/shop/orders", auth: "session", scope: "club", module: "shop",
+    params: S.clubParams, body: S.shopOrderRequest, response: S.shopOrderResponse,
+    rateLimit: { limit: 15, windowMs: 60 * MIN },
+  },
+  "shop.confirm": {
+    method: "POST", path: "/clubs/{club}/shop/orders/{id}/confirm", auth: "session", scope: "club", module: "shop",
+    params: S.orderParams, body: S.emptyRequest, response: S.orderResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  "shop.cancel": {
+    method: "POST", path: "/clubs/{club}/shop/orders/{id}/cancel", auth: "session", scope: "club", module: "shop",
+    params: S.orderParams, body: S.emptyRequest, response: S.okResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  // Membership self-service (module memberships), as the website's Me:
+  // the membership with what can be done with it, billing from Stripe,
+  // one change at a time, updating the card in Stripe's portal, joining,
+  // and booking a casual spot (a payment). Refusals are 409 with a code
+  // (day_paused, sessions_full, already_member, already_renewed,
+  // not_one_time, card_not_saved, cancelling, not_recurring, not_active,
+  // full, locked); 404 no_membership.
+  "membership.state": {
+    method: "GET", path: "/clubs/{club}/membership", auth: "session", scope: "club", module: "memberships",
+    params: S.clubParams, response: S.membershipStateResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "membership.billing": {
+    method: "GET", path: "/clubs/{club}/membership/billing", auth: "session", scope: "club", module: "memberships",
+    params: S.clubParams, response: S.billingResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  "membership.action": {
+    method: "POST", path: "/clubs/{club}/membership", auth: "session", scope: "club", module: "memberships",
+    params: S.clubParams, body: S.membershipActionRequest, response: S.membershipActionResponse,
+    rateLimit: { limit: 20, windowMs: 60 * MIN },
+  },
+  "membership.portal": {
+    method: "POST", path: "/clubs/{club}/membership/portal", auth: "session", scope: "club", module: "memberships",
+    params: S.clubParams, body: S.emptyRequest, response: S.portalResponse,
+    rateLimit: { limit: 10, windowMs: MIN },
+  },
+  "membership.join": {
+    method: "POST", path: "/clubs/{club}/membership/join", auth: "session", scope: "club", module: "memberships",
+    params: S.clubParams, body: S.joinRequest, response: S.paymentStartResponse,
+    rateLimit: { limit: 10, windowMs: MIN },
+  },
+  "play.book": {
+    method: "POST", path: "/clubs/{club}/me/book", auth: "session", scope: "club",
+    params: S.clubParams, body: S.bookRequest, response: S.paymentStartResponse,
+    rateLimit: { limit: 10, windowMs: MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

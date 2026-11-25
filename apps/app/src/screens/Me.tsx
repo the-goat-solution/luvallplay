@@ -16,6 +16,7 @@ import { NextUp } from "./me/NextUp.tsx";
 import { usePlace } from "./me/parts.tsx";
 import { PlayCalendar } from "./me/PlayCalendar.tsx";
 import { WelcomeCard } from "./me/Welcome.tsx";
+import { ShopSection } from "./shop/ShopSection.tsx";
 
 function Loading() {
   const { t } = usePlace();
@@ -80,6 +81,7 @@ export default function MeScreen() {
         <div className="stack">
           <InboxPreview inbox={data.inbox} />
           {data.welcome && <WelcomeCard firstName={data.player.firstName} />}
+          <ShopSection />
         </div>
       </div>
     </section>

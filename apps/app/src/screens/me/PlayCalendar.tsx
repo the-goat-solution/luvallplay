@@ -1,24 +1,35 @@
 // The next five weeks of play days, by month, as on the website: their
 // membership days (with "Can't make it"), booked spots, and the days with
-// casual spots. Booking a spot is a card payment: it opens on the club's
-// website until the payments step brings it into the app.
+// casual spots. Booking a spot is a card payment (Stripe), in a dialog; the
+// webhook books it once paid.
 import { useState } from "react";
 import type { PlayDay } from "./data.ts";
 import { useAbsence } from "./data.ts";
 import { byMonth, dayLabel, dayTile, money, monthLabel, timeRange } from "../../lib/format.ts";
-import { usePlace, webHref, WebsiteLink } from "./parts.tsx";
+import { usePlace } from "./parts.tsx";
+import { CardPayment } from "../../components/CardPayment.tsx";
+import { Dialog } from "../arena/Dialogs.tsx";
+import { useBook, useRefreshSoon } from "../membership/data.ts";
 
 function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
-  const { t, locale, timezone, currency, webUrl } = usePlace();
+  const { t, locale, timezone, currency } = usePlace();
   const absence = useAbsence();
+  const book = useBook();
+  const refreshSoon = useRefreshSoon();
   const [saved, setSaved] = useState(false);
+  const [paying, setPaying] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const tile = dayTile(d.date, locale);
   const time = timeRange(d.startTime, d.endTime, locale, timezone);
   const yours = d.included || d.booked;
   const title = d.included ? (d.absent ? t("cal_absent") : `✓ ${t("cal_included")}`) : d.booked ? `✓ ${t("cal_booked")}` : time || dayLabel(d.date, locale);
   const detail = yours ? time : d.paused ? t("cal_paused") : d.closed ? t("cal_closed") : d.spots > 0 ? t("cal_spots", { n: d.spots }) : t("cal_full");
   const canBook = !yours && d.bookable && !d.paused && !d.closed && d.spots > 0;
-  const book = canBook ? webHref(webUrl, "/profile") : null;
+  const price = money(casualPrice, currency);
+  const start = () => {
+    setMessage(null);
+    book.mutate(d.date, { onSuccess: (r) => setPaying(r.clientSecret), onError: () => setMessage({ ok: false, text: t("cal_booking_failed") }) });
+  };
   return (
     <li className={`day${d.included && !d.absent ? " day-yours" : ""}`}>
       <div className="day-tile" aria-hidden="true">
@@ -33,6 +44,7 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
           {d.location ? ` · ${d.location}` : ""}
         </span>
         {saved && d.absent && <span className="small" role="status">{t("cal_absence_saved")}</span>}
+        {message && <span className={`small${message.ok ? "" : " notice-error"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
       </div>
       <div className="day-action">
         {d.included ? (
@@ -48,14 +60,31 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
           >
             {d.absent ? t("cal_undo_absence") : t("cal_cant_make_it")}
           </button>
-        ) : d.booked ? null : book ? (
-          <WebsiteLink href={book} className="button button-small button-primary">
-            {t("cal_book", { price: money(casualPrice, currency) })}
-          </WebsiteLink>
+        ) : d.booked ? null : canBook ? (
+          <button type="button" className="button button-small button-primary" disabled={book.isPending} onClick={start}>
+            {t("cal_book", { price })}
+          </button>
         ) : !d.bookable ? (
           <span className="muted small">{t("cal_not_open")}</span>
         ) : null}
       </div>
+      {paying && (
+        <Dialog label={t("cal_book_title")} onClose={() => setPaying(null)}>
+          <h2>{t("cal_book_title")}</h2>
+          <p className="muted">{t("cal_book_for", { date: dayLabel(d.date, locale, true), price })}</p>
+          <CardPayment
+            clientSecret={paying}
+            label={t("mem_pay", { amount: price })}
+            returnPath="/me"
+            onDone={() => {
+              setPaying(null);
+              setMessage({ ok: true, text: t("cal_booked_done", { date: dayLabel(d.date, locale) }) });
+              refreshSoon();
+            }}
+          />
+          <div><button type="button" className="button button-quiet" onClick={() => setPaying(null)}>{t("cancel")}</button></div>
+        </Dialog>
+      )}
     </li>
   );
 }

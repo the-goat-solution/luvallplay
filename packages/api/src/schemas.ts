@@ -175,6 +175,8 @@ export const clubConfigResponse = z.object({
     sports: z.array(z.string()),
     /** The club's website, for what the app doesn't do yet (opened in the browser). Null when it has none. */
     webUrl: z.string().nullable().optional(),
+    /** The card provider's public key for this club's payments (Stripe publishable key), when it takes cards. */
+    stripeKey: z.string().nullable().optional(),
   }),
   apiBase: z.string(),
   /** Ids of the modules that are on. Screens of a module that isn't listed disappear. */
@@ -627,3 +629,125 @@ export const playerStatsResponse = z.object({
     placing: z.number().int(), teams: z.number().int(), diff: z.number(),
   })),
 });
+
+// ── The club shop (the website's Me → Club shop) ───────────────────────────
+export const variantSchema = z.object({
+  id: z.number().int(),
+  fit: z.enum(["men", "women", "unisex"]),
+  size: z.string(),
+  /** How many can still be bought (stock less reserved and sold). */
+  available: z.number().int(),
+});
+export const productSchema = z.object({
+  id: z.number().int(),
+  slug: z.string(),
+  kind: z.string(),
+  nameEn: z.string(),
+  nameVi: z.string(),
+  descEn: z.string(),
+  descVi: z.string(),
+  /** Minor units of the club's currency. */
+  priceCents: z.number().int(),
+  images: z.array(z.string()),
+  hasFit: z.boolean(),
+  hasSizes: z.boolean(),
+  sizeChartMen: z.string().nullable(),
+  sizeChartWomen: z.string().nullable(),
+  variants: z.array(variantSchema),
+  available: z.number().int(),
+});
+export const ORDER_STATUSES = ["pending_payment", "reserved_cash", "paid", "collected", "cancelled", "expired", "refunded"] as const;
+export const orderSchema = z.object({
+  id: z.number().int(),
+  status: z.enum(ORDER_STATUSES),
+  method: z.enum(["card", "cash"]),
+  totalCents: z.number().int(),
+  /** A cash reservation is kept until then. */
+  holdExpiresAt: z.string().nullable(),
+  paidAt: z.string().nullable(),
+  collectedAt: z.string().nullable(),
+  createdAt: z.string(),
+  items: z.array(z.object({ label: z.string(), qty: z.number().int(), unitPriceCents: z.number().int() })),
+});
+export const shopResponse = z.object({
+  products: z.array(productSchema),
+  /** Reserved, paid and collected orders. */
+  orders: z.array(orderSchema),
+  /** Whether "reserve and pay cash" is offered (the club checks cash payments). */
+  cash: z.boolean(),
+});
+export const shopOrderRequest = z.object({ variantId: z.number().int().positive().max(2147483647), method: z.enum(["card", "cash"]) });
+export const shopOrderResponse = z.object({
+  order: orderSchema,
+  /** Card: confirm this payment in the browser with the card provider, then call confirm. */
+  clientSecret: z.string().nullable(),
+  /** Cash: the play day to bring it to. */
+  playDay: z.string().nullable(),
+});
+export const orderParams = clubParams.extend({ id: z.coerce.number().int().positive().max(2147483647) });
+export const orderResponse = z.object({ order: orderSchema });
+
+// ── Membership self-service and casual booking (the website's Me) ─────────
+const tier = z.enum(["monthly", "quarterly"]);
+/** The weekdays a membership can be for (as the club's payments are set up). */
+const membershipDay = z.enum(["friday", "wednesday"]);
+export const membershipStateResponse = z.object({
+  membership: z.object({
+    plan: tier,
+    day: membershipDay,
+    status: z.enum(["active", "ending", "upcoming", "past_due"]),
+    periodStart: z.string().nullable(),
+    periodEnd: z.string().nullable(),
+    /** Renews by itself (a subscription), until turned off. */
+    recurring: z.boolean(),
+    cancelAtPeriodEnd: z.boolean(),
+    /** How it was paid: "card", "cash", "bank_transfer". */
+    method: z.string(),
+    /** Plan and day changes and turning it off are possible (a card subscription). */
+    manageable: z.boolean(),
+    continuation: z.object({ plan: tier, periodStart: z.string().nullable(), periodEnd: z.string().nullable(), recurring: z.boolean() }).nullable(),
+    daysLeft: z.number().int(),
+  }).nullable(),
+  /** Minor units of the club's currency. */
+  prices: z.object({ monthly: z.number().int(), quarterly: z.number().int() }),
+  days: z.array(membershipDay),
+  /** Days the club has paused (no new memberships or changes to them). */
+  pausedDays: z.array(z.string()),
+  streak: z.number().int(),
+  monthRank: z.number().int().nullable(),
+});
+export const billingResponse = z.object({
+  card: z.object({ brand: z.string(), last4: z.string(), expMonth: z.number().int(), expYear: z.number().int() }).nullable(),
+  nextCharge: z.object({ date: z.string(), amountCents: z.number().int() }).nullable(),
+  pendingChange: z.object({ plan: tier, day: membershipDay, from: z.string() }).nullable(),
+  receipts: z.array(z.object({ date: z.string(), amountCents: z.number().int(), description: z.string(), url: z.string().nullable(), refunded: z.boolean() })),
+});
+const reason = z.string().min(1).max(60);
+/** One membership change, as the website's /api/profile/membership/action. */
+export const membershipActionRequest = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("change"), plan: tier, day: membershipDay, reason: reason.optional(), comment: z.string().max(1000).optional() }),
+  z.object({ action: z.literal("cancel_change") }),
+  z.object({ action: z.literal("cancel"), reason, comment: z.string().max(1000).optional() }),
+  z.object({ action: z.literal("resume") }),
+  z.object({ action: z.literal("renew"), plan: tier }),
+  z.object({ action: z.literal("autorenew_setup") }),
+  z.object({ action: z.literal("autorenew_confirm"), plan: tier, setupIntentId: z.string().min(5).max(100) }),
+]);
+export const membershipActionResponse = z.object({
+  ok: z.literal(true),
+  /** change: when the new plan or day starts. */
+  from: z.string().optional(),
+  cleared: z.boolean().optional(),
+  /** cancel: the last day. */
+  endsOn: z.string().nullable().optional(),
+  /** renew (a payment) and autorenew_setup (saving a card): confirm in the browser. */
+  clientSecret: z.string().optional(),
+  periodStart: z.string().optional(),
+  periodEnd: z.string().optional(),
+  /** renew: the price in major units, as the website shows it. */
+  priceNzd: z.number().optional(),
+});
+export const portalResponse = z.object({ url: z.string().url() });
+export const joinRequest = z.object({ plan: tier, day: membershipDay, recurring: z.boolean() });
+export const paymentStartResponse = z.object({ clientSecret: z.string(), periodStart: z.string().nullable() });
+export const bookRequest = z.object({ date: dateKeySchema });

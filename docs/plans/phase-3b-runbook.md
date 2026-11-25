@@ -9,7 +9,7 @@ Build plan §6.8, decision V. Test plan §3.17, journey J1, gate "3b Junior acco
 | # | Step | State |
 |---|---|---|
 | 1 | Data guard counts junior profiles as people; tables for a junior's bookings and attendance (migration `0012`) | Built and rehearsed (18 accounts, 0 problems). **Production step: waiting for your go-ahead** |
-| 2 | `juniors` and `forms-waivers` modules; switching Juniors on needs an owner, a fresh sign-in check and the safeguarding policy acknowledged | Not started |
+| 2 | `juniors` and `forms-waivers` modules; switching Juniors on needs an owner, a fresh sign-in check and the safeguarding policy acknowledged | **Built** (25 Nov, lane J): both modules are in the registry, hidden; the switch-on guard and its page are tested. Nothing can switch it on in production (§2a) |
 | 3 | Guardian side: a "Family" section, adding a child, consent | Not started |
 | 4 | Waivers, emergency contacts, encrypted medical notes | Not started |
 | 5 | Booking and paying for a child | Not started |
@@ -65,12 +65,36 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs
 
 **Rollback:** in the rehearsal report.
 
+## 2a. Step 2: the modules and the switch (no data step)
+
+**Two new modules, both hidden platform-wide.** `forms-waivers` ("Forms & waivers") and `juniors` ("Juniors", which needs Forms & waivers). Hidden means: not listed on Admin → Settings → Modules, refused by the ordinary switch and by the platform's lock, not part of Three Wolves' list, and never counted as on when the club's switches can't be read. They have no rows in `tenant_modules`, and a missing row reads as off.
+
+**Juniors fails closed.** Every other module counts as on when the switches can't be read, so a database problem never turns a club's features off. Juniors is the opposite: `juniorsOn()` (`apps/web/lib/juniors/module.ts`) answers yes only when the club's row says on, an owner's acknowledgement is stored beside it, and the deployment offers Juniors. Anything else, an error included, is off. Every junior endpoint and page asks there.
+
+**Switching it on** (Admin → Juniors → Set up, `/admin/juniors/setup`) needs all three:
+
+| Needed | How it is checked |
+|---|---|
+| An owner of the club | The person's role in this club is `owner`. An admin, a coach, an owner of another club and Luvallplay staff are refused: the acknowledgement is the club's own |
+| A fresh sign-in code | The session was created in the last 5 minutes; otherwise the page sends the owner to enter a new code and brings them back. (Lane J's own check until the admin's per-action step-up, audit H8, is on `main`; then it calls that) |
+| The safeguarding policy acknowledged | Six plain statements, version `2026-11` (`apps/web/lib/juniors/safeguarding-policy.ts`), with a tick box. The version, who ticked and when are stored with the switch, and the audit log records it. A new version asks the club again; Juniors stays on meanwhile |
+
+Forms & waivers is switched on with it, in the same statement. Switching Juniors **off** needs an owner or Luvallplay staff and nothing else (off is the safe direction): it hides everything, keeps every child's data, and removes the acknowledgement, so switching on again always asks again.
+
+**Why nobody can switch it on in production yet.** The page and the guard read whether the deployment offers Juniors. In production that is the manifest's word alone (`hidden`), so the page answers "not found" and the guard refuses, for owners too. On test databases and previews `JUNIORS_AVAILABILITY=available` opens it. Opening it in production is a one-line change to the manifest that will come to you as its own pull request, after the safeguarding review.
+
+**Tests:** `apps/web/tests/juniors-module.test.ts` (who may switch, each refusal, fail closed, another club untouched, switching off keeps data), plus the registry, route and enforcement suites.
+
 ## 3. Decisions waiting for you
 
 | # | Question | What I'll build unless you say otherwise |
 |---|---|---|
 | 1 | Who may read a child's medical notes? | Owners, and coaches assigned to juniors who have a valid recorded safety check. Admins see the roster and emergency contacts, not medical notes |
 | 2 | What does a junior's session cost? | The club's casual price, with a junior price the club can set in the Juniors module |
+| 3 | May Luvallplay staff switch Juniors on for a club? | No. Only an owner of that club can, because the safeguarding acknowledgement is the club's own promise. Staff can switch it off or lock it off |
+| 4 | How fresh must the owner's sign-in code be to switch Juniors on? | 5 minutes |
+| 5 | The safeguarding policy's wording (six statements, in §2a's file) | My draft, in English and Vietnamese. It needs the safeguarding review and counsel before any real child's profile exists; the Vietnamese needs a native review |
+| 6 | Does Juniors need Forms & waivers? | Yes: switching Juniors on switches Forms & waivers on too, since a guardian signs the club's consent forms and waivers for each child (step 4) |
 
 ## 4. Check with counsel (not claimed as done)
 

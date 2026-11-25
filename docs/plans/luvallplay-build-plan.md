@@ -679,6 +679,8 @@ Clubs that already have a look can import it instead of picking a scheme (wizard
 | `api.luvallplay.com` | API for app, integrations and MCP |
 | `{club}.luvallplay.com` or **custom domain** (e.g. `threewolvesbadminton.org`) | Club landing page |
 
+- **Decision (25 Nov 2026): path addressing for clubs without a domain.** A club with no custom domain lives at `app.luvallplay.com/{club}` (not `{club}.luvallplay.com`: no wildcard DNS or certificate, one cookie domain, works inside the Capacitor app; subdomains can come later as a vanity option). `luvallplay.com` stays the marketing site. A club with a custom domain (Three Wolves: `threewolvesbadminton.org`) is served there, and its platform path 301-redirects to the custom domain. Club slugs are unique and a reserved list (`admin`, `api`, `app`, `help`, `login`, `clubs`, `www`, ...) is refused. Three Wolves stays one tenant of the shared code base: no separate repository.
+- **Decision (25 Nov 2026): merge to `main` once per phase** to stay under Vercel's 100 deployments a day. Phase branches, `[deploy]` opt-in previews and hotfix exception: see README, "Branch and deployment rules".
 - `proxy.ts` resolves the club from the host name, using a cached lookup in Edge Config, and rewrites to `/_sites/[club]/…`. The lookup also returns the club's **region** (§6.9), and the request is served by that region's deployment.
 - Custom domains are added through the Vercel Domains API, with automatic SSL.
 - Club pages are statically generated and revalidated with a `tenant:{id}` tag.

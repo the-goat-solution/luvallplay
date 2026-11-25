@@ -3,7 +3,10 @@
 #   exit 0 = skip the build, exit 1 = build.
 #
 #   bash ../../scripts/vercel-ignore.sh site   (project luvallplay-site, root apps/site)
-#   bash ../../scripts/vercel-ignore.sh web    (project three-wolves-badminton, root apps/web)
+#   bash ../../scripts/vercel-ignore.sh web    (project for apps/web: three-wolves-badminton today, luvallplay-app after the rename)
+#
+# Only `main` builds by default; other branches build only with [deploy] in
+# the commit message (see "Branch and deployment rules" in README.md).
 #
 # The public site rebuilds only when its own files or the lockfile change.
 # The platform app skips a build only when every changed file belongs to the
@@ -11,6 +14,16 @@
 set -u
 app="${1:-}"
 prev="${VERCEL_GIT_PREVIOUS_SHA:-}"
+
+# Deployment budget (100 a day): only `main` builds by default. Any other
+# branch (phase branches, PR branches) builds only when the commit message
+# contains [deploy], e.g. the phase's release-candidate push.
+ref="${VERCEL_GIT_COMMIT_REF:-}"
+msg="${VERCEL_GIT_COMMIT_MESSAGE:-}"
+if [ -n "$ref" ] && [ "$ref" != "main" ] && [[ "$msg" != *"[deploy]"* ]]; then
+  echo "Branch '$ref' without [deploy] in the commit message: skipping."
+  exit 0
+fi
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 
 if [ -z "$prev" ] || ! git cat-file -e "$prev^{commit}" 2>/dev/null; then

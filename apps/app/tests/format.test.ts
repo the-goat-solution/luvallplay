@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { app } from "@luvallplay/i18n/app";
-import { byMonth, dayLabel, dayTile, localeOf, money, monthLabel, nextUp, timeRange } from "../src/lib/format.ts";
+import { byMonth, dayLabel, openFor, dayTile, localeOf, money, monthLabel, nextUp, timeRange } from "../src/lib/format.ts";
 
 test("locale: Vietnamese as in Vietnam; English as in the club's country", () => {
   assert.equal(localeOf("vi", "NZ"), "vi-VN");
@@ -52,4 +52,17 @@ test("every Me word has a Vietnamese wording, and no club name or currency is ty
     assert.ok(vi && vi.trim(), `vi.${k}`);
     for (const text of [(app.en as Record<string, string>)[k], vi]) assert.doesNotMatch(text, /Three Wolves|Wolf|\$\d|NZD/, k);
   }
+});
+
+test("a challenge's time left: whole days, never more than were chosen, whatever the hour it was put up", () => {
+  const H = 3600_000;
+  const D = 24 * H;
+  // Put up for 7 days, it closes at the end of the club's day: 7 days and 0 to 24 hours away.
+  for (const hours of [0.01, 1, 9, 12, 15, 23.99]) assert.deepEqual(openFor(7 * D + hours * H), { unit: "days", n: 7 }, `${hours} h into the day`);
+  assert.deepEqual(openFor(7 * D - 1), { unit: "days", n: 6 });
+  assert.deepEqual(openFor(D), { unit: "days", n: 1 });
+  assert.deepEqual(openFor(D - 1), { unit: "hours", n: 24 });
+  assert.deepEqual(openFor(5.4 * H), { unit: "hours", n: 5 });
+  assert.deepEqual(openFor(H - 1), { unit: "today" });
+  assert.deepEqual(openFor(-5), { unit: "today" });
 });

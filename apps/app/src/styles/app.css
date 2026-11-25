@@ -322,8 +322,12 @@ fieldset.card > legend + * { clear: both; }
   padding: 0.25rem 0.125rem;
   color: var(--ink-muted); text-decoration: none;
   /* Scales with the phone's width so five labels ("Leaderboard" the longest) fit on one line. */
-  font-size: clamp(0.5625rem, 2.7vw, 0.6875rem); font-weight: 700; text-align: center;
+  font-size: clamp(0.5625rem, 2.7vw, 0.6875rem); font-weight: 600; text-align: center;
   transition: color var(--ease), background var(--ease);
+}
+/* Small phones (iPhone SE): the labels get the tab's whole width. */
+@media (max-width: 374px) {
+  .tab { padding-inline: 1px; letter-spacing: -0.01em; }
 }
 .tab svg { flex: none; }
 .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

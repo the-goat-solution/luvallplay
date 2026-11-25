@@ -22,6 +22,7 @@ import { ClubTag } from "../../components/ClubTag.tsx";
 import { LoadError } from "../../components/LoadError.tsx";
 import { meKey, type Me } from "./data.ts";
 import { JoinCard } from "./Membership.tsx";
+import { MembershipAlert } from "./MembershipAlert.tsx";
 import { Greeting } from "../../components/Greeting.tsx";
 import { HomeLoading } from "../Home.tsx";
 import { NextUp } from "./NextUp.tsx";
@@ -117,6 +118,11 @@ export function AllClubsHome({ clubs }: { clubs: Club[] }) {
     <section className="screen stack" data-screen="nav_home" data-state="ready" data-home="clubs">
       <Greeting firstName={session.data?.player.firstName ?? all[0].me.player.firstName} />
       <Filter clubs={clubs} configs={configs} chosen={chosen} t={t} />
+      {shown.map((l) => (
+        <ClubScopeProvider key={`alert:${l.club.slug}`} club={l.club}>
+          <MembershipAlert m={l.me.membership} />
+        </ClubScopeProvider>
+      ))}
       {clubs.filter((c) => c.status === "disabled" && (!chosen || c.slug === chosen)).map((c) => (
         <p key={c.slug} className="notice notice-error" role="status">{t("club_disabled", { club: c.name })}</p>
       ))}

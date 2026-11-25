@@ -7,7 +7,9 @@
    Rules for components: colours only from these and the semantic tokens;
    sizes in rem (text scales to 200%); radii, elevation and motion from here. */
 
-:root {
+/* Derived on the page and on any element that wears its own look
+   ([data-look-scope]: e.g. a Luvallplay dialog inside a club's look). */
+:root, [data-look-scope] {
   /* ── Colour: derived roles ─────────────────────────────────────────── */
   /* The deep brand colour: the top bar, hero cards, the active sidebar item. */
   --primary-strong: color-mix(in oklab, var(--primary) 66%, black);
@@ -58,7 +60,7 @@
   --ease-spring: 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 
-[data-theme="dark"] {
+[data-theme="dark"], [data-theme="dark"] [data-look-scope] {
   --primary-strong: color-mix(in oklab, var(--primary) 52%, var(--surface));
   --surface-sunken: color-mix(in oklab, var(--surface) 55%, var(--surface-raised));
   --success: #6fd39a;

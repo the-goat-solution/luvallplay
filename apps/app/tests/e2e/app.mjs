@@ -26,7 +26,7 @@ const OUT = "dist-e2e";
 
 // Playwright is preinstalled globally (resolved through NODE_PATH, which only require() uses).
 const require = createRequire(import.meta.url);
-const { chromium } = require("playwright");
+const { chromium, devices } = require("playwright");
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const pg = createRequire(path.join(WEB_DIR, "package.json"))("pg");
 
@@ -36,6 +36,7 @@ const NAVY_DARK_MODE = "#1e5a8a";
 const WIDTHS = [320, 375, 600, 840, 1200];
 const NAV_AT = { 320: "bar", 375: "bar", 600: "rail", 840: "rail", 1200: "sidebar" };
 const PHONE = { width: 375, height: 812 };
+const STORE = { ios: "https://apps.apple.com/app/luvallplay/id0000000000", android: "https://play.google.com/store/apps/details?id=com.luvallplay.app" };
 
 let env;
 let PEOPLE;
@@ -53,7 +54,8 @@ before(async () => {
   env = await e2e.startEnv({ log: () => {} });
   api = `${env.base}/api/v1/app`;
 
-  const build = spawnSync("npx", ["vite", "build", "--outDir", OUT, "--emptyOutDir"], { cwd: APP_DIR, encoding: "utf8", env: { ...process.env, VITE_API_BASE: env.base } });
+  // Store links as if the store apps were live, so "Get the app" can be seen (APP49); computers never get it.
+  const build = spawnSync("npx", ["vite", "build", "--outDir", OUT, "--emptyOutDir"], { cwd: APP_DIR, encoding: "utf8", env: { ...process.env, VITE_API_BASE: env.base, VITE_APP_STORE_URL: STORE.ios, VITE_PLAY_STORE_URL: STORE.android } });
   assert.equal(build.status, 0, `app build failed:\n${build.stdout}\n${build.stderr}`);
   preview = spawn("npx", ["vite", "preview", "--outDir", OUT, "--port", String(APP_PORT), "--strictPort"], { cwd: APP_DIR, stdio: "ignore", detached: true });
   for (let i = 0; ; i++) {
@@ -446,6 +448,20 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.match(await page.locator(".compose-to").textContent(), /^Write to/);
     assert.equal(await page.getByLabel("Subject").count(), 1);
     assert.deepEqual(problems, []);
+    await context.close();
+  });
+
+  test("APP5b · Vision is for badminton clubs: a club that plays another sport has no Vision tab and no Vision screen, whatever it switched on", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const base = await realConfig();
+    assert.ok(base.modules.includes("vision") && base.club.sports.includes("badminton"), "Three Wolves plays badminton and has Vision on");
+    await serveJson(context, `${api}/clubs/three-wolves/config`, async () => ({ ...base, club: { ...base.club, sports: ["tennis"] } }));
+    const page = await context.newPage();
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector(ME_READY);
+    assert.deepEqual(await tabLabels(page), ["Home", "Player", "Arena", "Leaderboard"]);
+    await page.goto(`${APP}/vision`);
+    await page.waitForURL(`${APP}/home`);
     await context.close();
   });
 
@@ -2227,6 +2243,106 @@ describe("APP · accessibility and the page's rules", () => {
       await context.close();
     }
     assert.deepEqual(problems, []);
+  });
+
+  test("APP49 · Get the app: on a phone's browser every fifth open, in Luvallplay's look, the phone's own store; Not now closes it; never on a computer", async () => {
+    const opensAt = (n) => (ctx) => ctx.addInitScript((v) => { if (!sessionStorage.getItem("e2e-opens")) { localStorage.setItem("lp.opens", v); sessionStorage.setItem("e2e-opens", "1"); } }, String(n));
+    const sheet = (page) => page.getByRole("dialog", { name: "Luvallplay is better in the app" });
+
+    // An iPhone, its fifth open: the App Store, in Luvallplay's green whatever the club's look.
+    const iphone = await signedIn(PEOPLE.member.email, { ...devices["iPhone 13"], bypassCSP: true });
+    await opensAt(4)(iphone.context);
+    const page = await iphone.context.newPage();
+    const problems = watch(page);
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector(ME_READY);
+    await sheet(page).waitFor();
+    assert.equal((await look(page)).primary, NAVY, "the page stays the club's");
+    assert.equal(await sheet(page).evaluate((d) => getComputedStyle(d).getPropertyValue("--primary").trim().toLowerCase()), COURT_GREEN);
+    const get = sheet(page).getByRole("link", { name: "Get it on the App Store" });
+    assert.equal(await get.getAttribute("href"), STORE.ios);
+    await page.addScriptTag({ content: axeSource });
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+    const axe = await page.evaluate(() => window.axe.run(document.querySelector("dialog.get-app"), { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] }));
+    assert.deepEqual(axe.violations.map((v) => v.id), []);
+    if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/app-get-the-app.png` });
+    await sheet(page).getByRole("button", { name: "Not now" }).click();
+    await sheet(page).waitFor({ state: "detached" });
+    // The sixth open: nothing.
+    await page.reload();
+    await page.waitForSelector(ME_READY);
+    await page.waitForTimeout(1800);
+    assert.equal(await sheet(page).count(), 0);
+    assert.equal(await page.evaluate(() => localStorage.getItem("lp.opens")), "6");
+    assert.deepEqual(problems, []);
+    await iphone.context.close();
+
+    // An Android phone: Google Play.
+    const pixel = await signedIn(PEOPLE.member.email, { ...devices["Pixel 7"] });
+    await opensAt(9)(pixel.context);
+    const p2 = await pixel.context.newPage();
+    await p2.goto(`${APP}/home`);
+    await sheet(p2).getByRole("link", { name: "Get it on Google Play" }).waitFor();
+    assert.equal(await sheet(p2).getByRole("link", { name: "Get it on Google Play" }).getAttribute("href"), STORE.android);
+    await pixel.context.close();
+
+    // A computer, its fifth open: never.
+    const desk = await signedIn(PEOPLE.member.email, { viewport: { width: 1280, height: 900 } });
+    await opensAt(4)(desk.context);
+    const p3 = await desk.context.newPage();
+    await p3.goto(`${APP}/home`);
+    await p3.waitForSelector(ME_READY);
+    await p3.waitForTimeout(1800);
+    assert.equal(await sheet(p3).count(), 0);
+    await desk.context.close();
+  });
+
+  test("APP50 · in no club yet: Home says so and points to the club finder, no club tabs, a club's space goes Home; My profile still opens; Skip to content first", async () => {
+    const { context } = await signedIn(PEOPLE.member.email, { bypassCSP: true });
+    await context.route(`${api}/clubs`, (route) => (route.request().method() === "OPTIONS" ? route.fallback() : route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ clubs: [] }) })));
+    const page = await context.newPage();
+    const problems = watch(page);
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector('[data-screen="nav_home"][data-state="empty"]');
+    await page.getByRole("heading", { name: "You're not in a club yet" }).waitFor();
+    assert.equal(await page.getByRole("link", { name: /Find a club near you/ }).getAttribute("href"), "https://luvallplay.com/en/find-a-club");
+    assert.equal(await page.locator(".shell-nav").count(), 0, "no club tabs");
+    assert.equal(await page.locator(".skeleton").count(), 0, "no endless loading");
+    await page.goto(`${APP}/player`);
+    await page.waitForURL(`${APP}/home`);
+    // The keyboard's first stop: Skip to content, which lands on the screen.
+    await page.keyboard.press("Tab");
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Skip to content");
+    await page.addScriptTag({ content: axeSource });
+    const axe = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] }));
+    assert.deepEqual(axe.violations.map((v) => v.id), []);
+    await page.locator(".top-actions .head-avatar").click();
+    await page.waitForSelector("text=Signed in as mia.member@e2e.test");
+    assert.deepEqual(problems, []);
+    await context.close();
+  });
+
+  test("APP51 · a payment that didn't go through shows on Home, with the way to fix it; a healthy membership shows nothing there", async () => {
+    const { context } = await signedIn(PEOPLE.member.email, { bypassCSP: true });
+    const page = await context.newPage();
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector(ME_READY);
+    assert.equal(await page.locator(".alert").count(), 0, "an active membership that renews: nothing to do");
+    await context.route(`${api}/clubs/three-wolves/me`, async (route) => {
+      if (route.request().method() === "OPTIONS") return route.fallback();
+      const response = await route.fetch();
+      const json = await response.json();
+      return route.fulfill({ response, json: { ...json, membership: { ...json.membership, status: "past_due" } } });
+    });
+    await page.reload();
+    await page.waitForSelector(ME_READY);
+    const alert = page.getByRole("alert").filter({ hasText: "Your last payment didn't go through" });
+    await alert.waitFor();
+    assert.equal(await alert.getByRole("link", { name: "Fix payment" }).getAttribute("href"), "/membership");
+    await page.addScriptTag({ content: axeSource });
+    const axe = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] }));
+    assert.deepEqual(axe.violations.map((v) => `${v.id} ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`), []);
+    await context.close();
   });
 
   test("APP14 · the built page carries a strict Content-Security-Policy that names only the API host, Stripe's, the tracker's models and the photo store", async () => {

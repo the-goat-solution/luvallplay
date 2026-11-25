@@ -49,3 +49,13 @@ export function initials(name: string): string {
 export function partOfDay(hour: number): "morning" | "afternoon" | "evening" {
   return hour >= 5 && hour < 12 ? "morning" : hour >= 12 && hour < 18 ? "afternoon" : "evening";
 }
+
+const SOON_MS = 14 * 24 * 3600_000;
+
+/** A membership that needs doing something about: a payment due, or ending within two weeks without renewing. */
+export function needsAttention(m: { status: string; autoRenews: boolean; next: unknown; periodEnd: string | null } | null, now = Date.now()): "past_due" | "ending" | null {
+  if (!m) return null;
+  if (m.status === "past_due") return "past_due";
+  if (!m.autoRenews && !m.next && m.periodEnd && Date.parse(m.periodEnd) - now < SOON_MS && Date.parse(m.periodEnd) >= now - 24 * 3600_000) return "ending";
+  return null;
+}

@@ -4,12 +4,14 @@
 // settings) is My profile, their picture in the top bar.
 //
 // One club: that club's Home. Several: every club together (me/Home.tsx).
-import { useClubs, useSession } from "../hooks.tsx";
+import { useClubs, useLang, useSession, useT } from "../hooks.tsx";
+import { Icon } from "../components/Icon.tsx";
 import { nextUp } from "../lib/format.ts";
 import { useMe } from "./me/data.ts";
 import { InboxPreview } from "./me/Inbox.tsx";
 import { AllClubsHome } from "./me/Home.tsx";
 import { JoinCard } from "./me/Membership.tsx";
+import { MembershipAlert } from "./me/MembershipAlert.tsx";
 import { NextUp } from "./me/NextUp.tsx";
 import { usePlace } from "./me/parts.tsx";
 import { PlayCalendar } from "./me/PlayCalendar.tsx";
@@ -48,8 +50,32 @@ function HomeSkeleton() {
 
 export default function HomeScreen() {
   const clubs = useClubs().data?.clubs ?? null;
+  if (clubs && clubs.length === 0) return <NoClub />;
   if (clubs && clubs.length > 1) return <AllClubsHome clubs={clubs} />;
   return <ClubHome />;
+}
+
+/** Signed in, but in no club yet (signed up without an invite): what this is, and the way to a club. */
+function NoClub() {
+  const session = useSession();
+  const t = useT();
+  const lang = useLang();
+  return (
+    <section className="screen stack" data-screen="nav_home" data-state="empty">
+      <Greeting firstName={session.data?.player.firstName ?? ""} />
+      <div className="card stack empty-state">
+        <span className="empty-icon"><Icon name="rackets" size={28} /></span>
+        <h2 className="title">{t("noclub_title")}</h2>
+        <p className="muted">{t("noclub_body")}</p>
+        <div>
+          <a className="button button-primary" href={`https://luvallplay.com/${lang}/find-a-club`} target="_blank" rel="noopener noreferrer">
+            {t("noclub_find")}
+            <Icon name="external" size={18} />
+          </a>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ClubHome() {
@@ -66,6 +92,7 @@ function ClubHome() {
   return (
     <section className="screen stack" data-screen="nav_home" data-state="ready">
       <Greeting firstName={session.data?.player.firstName ?? data.player.firstName} />
+      <MembershipAlert m={data.membership} />
       <div className="me-grid">
         <div className="stack">
           <NextUp day={nextUp(data.calendar)} />

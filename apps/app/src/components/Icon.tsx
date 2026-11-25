@@ -42,6 +42,9 @@ const ICONS = {
   calendar: ["M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5Z", "M4 10h16", "M8.5 3v4", "M15.5 3v4"],
   bag: ["M5.5 8h13l-1 11.5a1.5 1.5 0 0 1-1.5 1.5H8a1.5 1.5 0 0 1-1.5-1.5Z", "M9 10V7a3 3 0 0 1 6 0v3"],
   plus: ["M12 5v14", "M5 12h14"],
+  close: ["M6 6l12 12", "M18 6 6 18"],
+  download: ["M12 4v11", "m7 10 5 5 5-5", "M5 20h14"],
+  bolt: ["M13 3 5 13.5h6L10 21l8-10.5h-6Z"],
 } as const;
 
 export type IconName = keyof typeof ICONS;

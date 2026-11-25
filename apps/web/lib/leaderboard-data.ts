@@ -34,10 +34,10 @@ export type BoardSelection = {
   nextKey: string | null;
 };
 
-/** Reads ?source, ?metric (old links), ?period and ?key. */
+/** Reads ?source, ?metric (old links), ?period and ?key. Defaults: all points, all time. */
 export function selectBoard(q: BoardQuery, today: string): BoardSelection {
   const source: PointsSource = SOURCES.includes(q.source as PointsSource) ? (q.source as PointsSource) : (FROM_METRIC[q.metric ?? ""] ?? "all");
-  const period: Period = (PERIODS as string[]).includes(q.period ?? "") ? (q.period as Period) : "month";
+  const period: Period = (PERIODS as string[]).includes(q.period ?? "") ? (q.period as Period) : "lifetime";
   const current = periodRange(period, today);
   const range = periodFromKey(period, q.key) ?? current;
   const prev = period === "lifetime" ? null : periodRange(period, range.start!, -1);

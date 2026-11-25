@@ -38,6 +38,7 @@ const en = {
   nav_arena: "Arena",
   nav_vision: "{visionName}",
   nav_player: "Player",
+  nav_leaderboard: "Leaderboard",
   nav_settings: "Settings",
 
   needs_details: "Add your name in Settings so your club knows who you are.",
@@ -104,6 +105,7 @@ const vi: Messages<AppKey> = {
   nav_arena: "Đấu trường",
   nav_vision: "{visionName}",
   nav_player: "Người chơi",
+  nav_leaderboard: "Xếp hạng",
   nav_settings: "Cài đặt",
 
   needs_details: "Hãy thêm tên của bạn trong Cài đặt để câu lạc bộ biết bạn là ai.",

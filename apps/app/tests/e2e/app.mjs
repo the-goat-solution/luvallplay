@@ -289,6 +289,11 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
 
   test("APP2b · Send a new code: after a pause, said when sent, and the new code signs in", async () => {
     const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
+    // Its two code requests come from an address of their own, so they don't
+    // use up the ten per address per 15 minutes the other journeys share.
+    await context.route(`${api}/auth/email/start`, (route) =>
+      route.request().method() === "OPTIONS" ? route.fallback() : route.continue({ headers: { ...route.request().headers(), "x-forwarded-for": "203.0.113.9" } }),
+    );
     const page = await context.newPage();
     await page.clock.install();
     await page.goto(`${APP}/signin`);

@@ -43,7 +43,8 @@ try {
 
   const modules = (await db.query(`SELECT m.module_id, m.enabled FROM tenant_modules m JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1`, [slug])).rows;
   const ids = new Set(modules.map((m) => m.module_id));
-  const missing = MODULES.map((m) => m.id).filter((id) => !ids.has(id));
+  // A module the platform keeps hidden can't be switched on, so it needs no row (no row reads as off).
+  const missing = MODULES.filter((m) => m.availability !== "hidden").map((m) => m.id).filter((id) => !ids.has(id));
   const unknown = [...ids].filter((id) => !MODULES.some((m) => m.id === id));
   console.log(`Modules: ${modules.length} rows, ${modules.filter((m) => m.enabled).length} on (registry has ${MODULES.length}).`);
   if (missing.length) problems.push(`modules without a row: ${missing.join(", ")}`);

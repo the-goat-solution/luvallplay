@@ -23,6 +23,9 @@ export type PublicClub = {
   modules: readonly string[];
 };
 
+/** Every module a club could have on: not the ones the platform keeps hidden. */
+const OPEN_MODULE_IDS: string[] = MODULES.filter((m) => m.availability !== "hidden").map((m) => m.id);
+
 /** The built-in values: what a client component sees outside a provider (tests, stories). */
 export const DEFAULT_PUBLIC_CLUB: PublicClub = {
   clock: DEFAULT_CLUB_CLOCK,
@@ -34,7 +37,7 @@ export const DEFAULT_PUBLIC_CLUB: PublicClub = {
   },
   sessionCapacity: SESSION_CAPACITY,
   miniGameMaxPlayers: MINI_GAME_MAX_PLAYERS,
-  modules: MODULES.map((m) => m.id),
+  modules: OPEN_MODULE_IDS,
 };
 
 export function clockOf(config: ClubConfig): ClubClock {
@@ -52,7 +55,7 @@ export function publicClub(config: ClubConfig, enabled?: ReadonlySet<string>): P
     terms: config.terms,
     sessionCapacity: config.playDays.sessionCapacity,
     miniGameMaxPlayers: config.roundRobin.miniGameMaxPlayers,
-    modules: enabled ? [...enabled].sort() : MODULES.map((m) => m.id),
+    modules: enabled ? [...enabled].sort() : OPEN_MODULE_IDS,
   };
 }
 

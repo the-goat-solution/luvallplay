@@ -628,6 +628,13 @@ const SESSION_ENDPOINTS = [
   ["POST", "/clubs/{club}/messages"],
   ["GET", "/clubs/{club}/messages/{id}"],
   ["POST", "/clubs/{club}/messages/{id}"],
+  ["GET", "/account/profile"],
+  ["POST", "/account/details"],
+  ["POST", "/account/language"],
+  ["POST", "/account/privacy"],
+  ["POST", "/account/photo"],
+  ["DELETE", "/account/photo"],
+  ["GET", "/account/export"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -988,6 +995,63 @@ describe("API · the players' app API", () => {
       await db.query(`DELETE FROM messages WHERE thread_id IN (SELECT id FROM message_threads WHERE player_id = $1)`, [peteId]);
       await db.query(`DELETE FROM message_threads WHERE player_id = $1`, [peteId]);
       await mia.context.close();
+      await pete.context.close();
+    }
+  });
+
+  test("API12 · the account: profile, details (the phone keeps its confirmation), language, privacy, photo rules, data export", async () => {
+    const pete = await signedIn(PEOPLE.player.email);
+    const { rows } = await db.query(`SELECT id, first_name, last_name, display_name, lang, leaderboard_visible, phone, phone_e164, phone_verified_at FROM players WHERE email = $1`, [PEOPLE.player.email]);
+    const before = rows[0];
+    const call = (method, path, body) => appApi(method, path, { token: pete.token, body });
+    try {
+      await db.query(`UPDATE players SET phone = '021 555 0100', phone_e164 = '+64215550100', phone_verified_at = NOW() WHERE id = $1`, [before.id]);
+      const profile = (await call("GET", "/account/profile")).json;
+      assert.deepEqual(Object.keys(profile).sort(), ["avatarUrl", "customDisplayName", "defaultDisplayName", "displayName", "email", "firstName", "lang", "lastName", "leaderboardVisible", "phone", "phoneVerified"]);
+      assert.deepEqual([profile.email, profile.firstName, profile.defaultDisplayName, profile.customDisplayName, profile.phoneVerified], [PEOPLE.player.email, "Pete", "Pete P.", false, true]);
+
+      // Details: a chosen display name, then back to the default; the phone keeps its confirmation.
+      assert.deepEqual((await call("POST", "/account/details", { firstName: " Peter ", lastName: "Player", displayName: "Pistol Pete" })).json, { ok: true });
+      let p = (await call("GET", "/account/profile")).json;
+      assert.deepEqual([p.firstName, p.displayName, p.customDisplayName, p.phoneVerified, p.phone], ["Peter", "Pistol Pete", true, true, "021 555 0100"]);
+      await call("POST", "/account/details", { firstName: "Peter", lastName: "Player", displayName: "" });
+      p = (await call("GET", "/account/profile")).json;
+      assert.deepEqual([p.displayName, p.customDisplayName], ["Peter P.", false]);
+      for (const bad of [{}, { firstName: "", lastName: "x" }, { firstName: "x".repeat(61), lastName: "" }, { firstName: "x", lastName: "y", displayName: "z".repeat(41) }]) {
+        assert.equal((await call("POST", "/account/details", bad)).status, 400, JSON.stringify(bad).slice(0, 50));
+      }
+
+      // Language, kept on the account.
+      assert.equal((await call("POST", "/account/language", { lang: "vi" })).status, 200);
+      assert.equal((await db.query(`SELECT lang FROM players WHERE id = $1`, [before.id])).rows[0].lang, "vi");
+      assert.equal((await call("POST", "/account/language", { lang: "fr" })).status, 400);
+
+      // Privacy: off the leaderboard and back, mirrored to the club's members list.
+      assert.equal((await call("POST", "/account/privacy", { leaderboardVisible: false })).status, 200);
+      assert.equal((await db.query(`SELECT leaderboard_visible FROM players WHERE id = $1`, [before.id])).rows[0].leaderboard_visible, false);
+      assert.equal((await db.query(`SELECT leaderboard_visible FROM club_members WHERE user_id = $1`, [before.id])).rows[0]?.leaderboard_visible, false);
+      await call("POST", "/account/privacy", { leaderboardVisible: true });
+      assert.equal((await call("POST", "/account/privacy", { leaderboardVisible: "no" })).status, 400);
+
+      // Photo: a real picture reaches storage (not configured in this environment); anything else is refused.
+      const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+      assert.deepEqual([(await call("POST", "/account/photo", { image: png })).json], [{ error: "not_configured" }]);
+      for (const image of ["data:image/gif;base64,R0lGOD", "data:text/html;base64,PHNjcmlwdD4=", "https://evil.example/x.png", "data:image/png;base64,<script>", "x".repeat(10)]) {
+        assert.deepEqual([(await call("POST", "/account/photo", { image })).status], [400], image.slice(0, 30));
+      }
+      assert.deepEqual((await call("DELETE", "/account/photo")).json, { ok: true, url: null });
+
+      // Data export: the account's own records.
+      const data = await call("GET", "/account/export");
+      assert.equal(data.status, 200);
+      assert.match(JSON.stringify(data.json), new RegExp(PEOPLE.player.email.replace(".", "\\.")));
+      assert.doesNotMatch(JSON.stringify(data.json), new RegExp(PEOPLE.member.email.replace(".", "\\.")), "nobody else's data");
+    } finally {
+      await db.query(
+        `UPDATE players SET first_name = $2, last_name = $3, display_name = $4, lang = $5, leaderboard_visible = $6, phone = $7, phone_e164 = $8, phone_verified_at = $9 WHERE id = $1`,
+        [before.id, before.first_name, before.last_name, before.display_name, before.lang, before.leaderboard_visible, before.phone, before.phone_e164, before.phone_verified_at],
+      );
+      await db.query(`UPDATE club_members SET leaderboard_visible = $2 WHERE user_id = $1`, [before.id, before.leaderboard_visible]);
       await pete.context.close();
     }
   });

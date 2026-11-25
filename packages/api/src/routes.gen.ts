@@ -4,7 +4,14 @@ export const API_VERSION = "v1";
 export const API_PREFIX = "/api/v1/app";
 
 export const ROUTES = {
+  "account.details": { method: "POST", path: "/account/details", auth: "session" },
   "account.dismissWelcome": { method: "POST", path: "/account/welcome-dismissed", auth: "session" },
+  "account.export": { method: "GET", path: "/account/export", auth: "session" },
+  "account.language": { method: "POST", path: "/account/language", auth: "session" },
+  "account.photo": { method: "POST", path: "/account/photo", auth: "session" },
+  "account.privacy": { method: "POST", path: "/account/privacy", auth: "session" },
+  "account.profile": { method: "GET", path: "/account/profile", auth: "session" },
+  "account.removePhoto": { method: "DELETE", path: "/account/photo", auth: "session" },
   "auth.emailStart": { method: "POST", path: "/auth/email/start", auth: "public" },
   "auth.emailVerify": { method: "POST", path: "/auth/email/verify", auth: "public" },
   "auth.logout": { method: "POST", path: "/auth/logout", auth: "session" },

@@ -1,10 +1,15 @@
-// Settings: language, appearance, sign out, and the Club admin button.
-// The rest (details, phone, privacy, connected apps, export, delete) moves
-// in with step 3.
+// Settings (the ⚙ in the header), as on the website: the Club admin button,
+// picture, details, language, appearance, privacy, the person's data and
+// signing out. Language is kept on the account too, so the website and the
+// club's emails follow. Still to come (a separate step, as they touch
+// signing in): changing the phone number, connected apps, deleting the
+// account and opening the web admin.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, store } from "../app.ts";
 import { useCurrentClub, useLang, usePrefs, useSession, useT } from "../hooks.tsx";
+import { AccountCards } from "./settings/Account.tsx";
+import { useSaveLanguage } from "./settings/data.ts";
 import type { ThemeChoice } from "../lib/theme.ts";
 
 export default function SettingsScreen() {
@@ -15,6 +20,7 @@ export default function SettingsScreen() {
   const session = useSession();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const saveLanguage = useSaveLanguage();
 
   async function signOut(all: boolean) {
     setBusy(true);
@@ -32,11 +38,15 @@ export default function SettingsScreen() {
     <section className="screen stack" data-screen="nav_settings">
       <h1>{t("settings_title")}</h1>
       <div className="panes">
+        <AccountCards />
         <fieldset className="card stack">
           <legend>{t("settings_language")}</legend>
           {(["en", "vi"] as const).map((l) => (
             <label className="choice" key={l}>
-              <input type="radio" name="lang" value={l} checked={lang === l} onChange={() => store.set({ lang: l })} />
+              <input type="radio" name="lang" value={l} checked={lang === l} onChange={() => {
+                  store.set({ lang: l });
+                  saveLanguage.mutate(l);
+                }} />
               <span lang={l}>{t(l === "en" ? "settings_lang_en" : "settings_lang_vi")}</span>
             </label>
           ))}

@@ -8,9 +8,30 @@ type Options = { signal?: AbortSignal };
 export function createApi(transport: Transport) {
   return {
     account: {
+      /** POST /account/details (signed in) */
+      details: (body: BodyOf<"account.details">, options?: Options) =>
+        transport.call("account.details", { body, signal: options?.signal }) as Promise<ResponseOf<"account.details">>,
       /** POST /account/welcome-dismissed (signed in) */
       dismissWelcome: (body: BodyOf<"account.dismissWelcome">, options?: Options) =>
         transport.call("account.dismissWelcome", { body, signal: options?.signal }) as Promise<ResponseOf<"account.dismissWelcome">>,
+      /** GET /account/export (signed in) */
+      export: (options?: Options) =>
+        transport.call("account.export", { signal: options?.signal }) as Promise<ResponseOf<"account.export">>,
+      /** POST /account/language (signed in) */
+      language: (body: BodyOf<"account.language">, options?: Options) =>
+        transport.call("account.language", { body, signal: options?.signal }) as Promise<ResponseOf<"account.language">>,
+      /** POST /account/photo (signed in) */
+      photo: (body: BodyOf<"account.photo">, options?: Options) =>
+        transport.call("account.photo", { body, signal: options?.signal }) as Promise<ResponseOf<"account.photo">>,
+      /** POST /account/privacy (signed in) */
+      privacy: (body: BodyOf<"account.privacy">, options?: Options) =>
+        transport.call("account.privacy", { body, signal: options?.signal }) as Promise<ResponseOf<"account.privacy">>,
+      /** GET /account/profile (signed in) */
+      profile: (options?: Options) =>
+        transport.call("account.profile", { signal: options?.signal }) as Promise<ResponseOf<"account.profile">>,
+      /** DELETE /account/photo (signed in) */
+      removePhoto: (options?: Options) =>
+        transport.call("account.removePhoto", { signal: options?.signal }) as Promise<ResponseOf<"account.removePhoto">>,
     },
     auth: {
       /** POST /auth/email/start (no sign-in needed) */

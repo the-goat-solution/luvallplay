@@ -1,6 +1,36 @@
 {
   "version": "v1",
   "endpoints": {
+    "account.details": {
+      "method": "POST",
+      "path": "/account/details",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "displayName": {
+            "t": "string",
+            "nullable": true,
+            "optional": true
+          },
+          "firstName": {
+            "t": "string"
+          },
+          "lastName": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
     "account.dismissWelcome": {
       "method": "POST",
       "path": "/account/welcome-dismissed",
@@ -15,6 +45,158 @@
           "ok": {
             "t": "literal",
             "value": true
+          }
+        }
+      }
+    },
+    "account.export": {
+      "method": "GET",
+      "path": "/account/export",
+      "auth": "session",
+      "response": {
+        "t": "record",
+        "of": {
+          "t": "unknown"
+        }
+      }
+    },
+    "account.language": {
+      "method": "POST",
+      "path": "/account/language",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "lang": {
+            "t": "enum",
+            "values": [
+              "en",
+              "vi"
+            ]
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "account.photo": {
+      "method": "POST",
+      "path": "/account/photo",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "image": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "url": {
+            "t": "string",
+            "nullable": true
+          }
+        }
+      }
+    },
+    "account.privacy": {
+      "method": "POST",
+      "path": "/account/privacy",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "leaderboardVisible": {
+            "t": "boolean"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "account.profile": {
+      "method": "GET",
+      "path": "/account/profile",
+      "auth": "session",
+      "response": {
+        "t": "object",
+        "fields": {
+          "avatarUrl": {
+            "t": "string",
+            "nullable": true
+          },
+          "customDisplayName": {
+            "t": "boolean"
+          },
+          "defaultDisplayName": {
+            "t": "string"
+          },
+          "displayName": {
+            "t": "string"
+          },
+          "email": {
+            "t": "string"
+          },
+          "firstName": {
+            "t": "string"
+          },
+          "lang": {
+            "t": "enum",
+            "values": [
+              "en",
+              "vi"
+            ]
+          },
+          "lastName": {
+            "t": "string"
+          },
+          "leaderboardVisible": {
+            "t": "boolean"
+          },
+          "phone": {
+            "t": "string",
+            "nullable": true
+          },
+          "phoneVerified": {
+            "t": "boolean"
+          }
+        }
+      }
+    },
+    "account.removePhoto": {
+      "method": "DELETE",
+      "path": "/account/photo",
+      "auth": "session",
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "url": {
+            "t": "string",
+            "nullable": true
           }
         }
       }

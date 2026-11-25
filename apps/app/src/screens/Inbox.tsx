@@ -116,7 +116,7 @@ function ThreadView({ id }: { id: number }) {
   };
   return (
     <div className="stack">
-      <h2 ref={title} tabIndex={-1} className="focus-target">{thread.data.subject}</h2>
+      <h2 ref={title} tabIndex={-1} className="title focus-target">{thread.data.subject}</h2>
       {thread.data.status === "closed" && <p className="notice">{t("msg_closed")}</p>}
       <Messages thread={thread.data} />
       <form className="stack" onSubmit={submit}>

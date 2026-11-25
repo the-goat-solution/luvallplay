@@ -42,7 +42,7 @@ export function JoinPanel({ state }: { state: MembershipState }) {
   return (
     <section className="card stack join" aria-labelledby="join-title">
       <div className="stack-tight">
-        <h2 id="join-title">{t("mem_join_title")}</h2>
+        <h2 className="title" id="join-title">{t("mem_join_title")}</h2>
         <p className="muted small">{t("mem_join_sub")}</p>
       </div>
       {error && <p className="notice notice-error" role="alert">{error}</p>}

@@ -2,7 +2,7 @@
 // for both modes (build plan §6.3, decision AM). Pure and forgiving: a
 // missing or malformed value falls back token by token, so a bad theme can
 // never leave the app unstyled.
-import { COLOR_SCHEMES, DEFAULT_SCHEME, SEMANTIC_TOKENS, schemeTheme, type Theme } from "./semantic.ts";
+import { COLOR_SCHEMES, DEFAULT_SCHEME, EXTRA_TOKENS, SEMANTIC_TOKENS, schemeTheme, type Theme, type ThemeExtras } from "./semantic.ts";
 import { threeWolvesTheme } from "./three-wolves.ts";
 
 /** A font file of the club's (on its own website), for a family its tokens name. */
@@ -14,8 +14,8 @@ export type ResolvedClubTheme = {
   /** Which artwork set (rank art and so on) the club uses. */
   artSet: string;
   logoUrl: string | null;
-  light: Theme;
-  dark: Theme;
+  light: Theme & ThemeExtras;
+  dark: Theme & ThemeExtras;
   /** The files for the club's own font families (none: the families fall back to the next in their stacks). */
   fonts: ClubFont[];
 };
@@ -49,10 +49,10 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object
 // Colours and font stacks only: nothing that could close the declaration or open a url().
 const SAFE_VALUE = /^[#(),.%'"\w\s-]{1,200}$/;
 
-function overlay(base: Theme, stored: unknown): Theme {
+function overlay(base: Theme, stored: unknown): Theme & ThemeExtras {
   if (!isObj(stored)) return base;
-  const out = { ...base };
-  for (const token of SEMANTIC_TOKENS) {
+  const out: Theme & ThemeExtras = { ...base };
+  for (const token of [...SEMANTIC_TOKENS, ...EXTRA_TOKENS]) {
     const v = stored[token];
     if (typeof v === "string" && SAFE_VALUE.test(v) && !/url\s*\(/i.test(v)) out[token] = v;
   }

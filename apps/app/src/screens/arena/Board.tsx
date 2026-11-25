@@ -103,7 +103,7 @@ export function PairPanel({ me, state, t, rank, onError, lang }: { me: MeView; s
     <section className="card stack arena-me" aria-labelledby="pair-title" id="arena-me">
       <div className="card-head">
         <div>
-          <h2 id="pair-title">{pair.name || t("you_and", { name: partner.name })}</h2>
+          <h2 className="title" id="pair-title">{pair.name || t("you_and", { name: partner.name })}</h2>
           <p className="muted small">
             {t("pair_record", { w: pair.record.won, l: pair.record.lost })}
             {pair.record.streak >= 2 && <> · {t("in_a_row", { n: pair.record.streak })}</>}

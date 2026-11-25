@@ -6,6 +6,7 @@ import type { Messages } from "./format.ts";
 
 const en = {
   brand: "Luvallplay",
+  brand_tagline: "Love all, play.",
   on_luvallplay: "on Luvallplay",
   loading: "Loading…",
   retry: "Try again",
@@ -504,6 +505,7 @@ export type AppKey = keyof typeof en;
 
 const vi: Messages<AppKey> = {
   brand: "Luvallplay",
+  brand_tagline: "Love all, play.",
   on_luvallplay: "trên Luvallplay",
   loading: "Đang tải…",
   retry: "Thử lại",

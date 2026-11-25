@@ -70,7 +70,7 @@ export function ClubAdmin({ clubName, email }: { clubName: string; email: string
 
   return (
     <section className="card stack" aria-labelledby="club-admin-title">
-      <h2 id="club-admin-title">{clubName}</h2>
+      <h2 className="title" id="club-admin-title">{clubName}</h2>
       {step === "confirm" || step === "code" ? (
         <>
           <p>{t("admin_step_up", { email: email ?? "" })}</p>

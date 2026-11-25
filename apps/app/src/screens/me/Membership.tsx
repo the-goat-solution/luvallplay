@@ -26,7 +26,7 @@ export function MembershipCard({ m }: { m: Membership }) {
     <section className="card stack membership" aria-labelledby="mem-title">
       <div className="card-head">
         <div className="stack-tight">
-          <h2 id="mem-title">{t("mem_plan_line", { plan: planName(t, m.plan), day: daysName(t, m.day) })}</h2>
+          <h2 className="title" id="mem-title">{t("mem_plan_line", { plan: planName(t, m.plan), day: daysName(t, m.day) })}</h2>
           <p className="muted small">
             {m.autoRenews ? t("mem_auto_renews") : t("mem_one_time")}
             {m.method === "cash" ? ` · ${t("mem_cash")}` : m.method === "bank_transfer" ? ` · ${t("mem_bank_transfer")}` : ""}
@@ -55,7 +55,7 @@ export function JoinCard({ join }: { join: NonNullable<Me["join"]> }) {
   return (
     <section className="card stack join" aria-labelledby="join-title">
       <div className="stack-tight">
-        <h2 id="join-title">{t("mem_join_title")}</h2>
+        <h2 className="title" id="join-title">{t("mem_join_title")}</h2>
         <p className="muted">{t("mem_join_sub")}</p>
       </div>
       <ul className="plans">
@@ -75,7 +75,7 @@ export function JoinCard({ join }: { join: NonNullable<Me["join"]> }) {
         </li>
       </ul>
       {join.days.length > 0 && <p className="muted small">{join.days.map((d) => daysName(t, d)).join(" · ")}</p>}
-      <div><Link to="/membership" className="button button-primary">{t("me_join")}</Link></div>
+      <div><Link to="/membership" className="button button-accent">{t("me_join")}</Link></div>
     </section>
   );
 }

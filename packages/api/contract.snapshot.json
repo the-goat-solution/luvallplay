@@ -2728,14 +2728,30 @@
                   "on-primary": {
                     "t": "string"
                   },
+                  "on-primary-strong": {
+                    "t": "string",
+                    "optional": true
+                  },
                   "primary": {
                     "t": "string"
+                  },
+                  "primary-strong": {
+                    "t": "string",
+                    "optional": true
+                  },
+                  "success": {
+                    "t": "string",
+                    "optional": true
                   },
                   "surface": {
                     "t": "string"
                   },
                   "surface-raised": {
                     "t": "string"
+                  },
+                  "surface-sunken": {
+                    "t": "string",
+                    "optional": true
                   }
                 }
               },
@@ -2800,14 +2816,30 @@
                   "on-primary": {
                     "t": "string"
                   },
+                  "on-primary-strong": {
+                    "t": "string",
+                    "optional": true
+                  },
                   "primary": {
                     "t": "string"
+                  },
+                  "primary-strong": {
+                    "t": "string",
+                    "optional": true
+                  },
+                  "success": {
+                    "t": "string",
+                    "optional": true
                   },
                   "surface": {
                     "t": "string"
                   },
                   "surface-raised": {
                     "t": "string"
+                  },
+                  "surface-sunken": {
+                    "t": "string",
+                    "optional": true
                   }
                 }
               },

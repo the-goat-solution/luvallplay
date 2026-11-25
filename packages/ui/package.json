@@ -6,7 +6,8 @@
   "description": "Design tokens: semantic theme tokens, the 12 club colour schemes, the Luvallplay brand and the Three Wolves theme.",
   "exports": {
     ".": "./src/index.ts",
-    "./tokens.css": "./src/tokens.css"
+    "./tokens.css": "./src/tokens.css",
+    "./system.css": "./src/system.css"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

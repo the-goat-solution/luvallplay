@@ -23,6 +23,18 @@ export const SEMANTIC_TOKENS = [
 ] as const;
 export type SemanticToken = (typeof SEMANTIC_TOKENS)[number];
 export type Theme = Record<SemanticToken, string>;
+
+/**
+ * Optional tokens a theme may set; when it doesn't, system.css derives them
+ * from the ones above (so every colour scheme gets them):
+ * - primary-strong / on-primary-strong: the deep brand colour of the top bar
+ *   and the hero cards, and the text on it;
+ * - surface-sunken: tiles set into a card (stats, calendar days);
+ * - success: "active", "paid" and the like.
+ */
+export const EXTRA_TOKENS = ["primary-strong", "on-primary-strong", "surface-sunken", "success"] as const;
+export type ExtraToken = (typeof EXTRA_TOKENS)[number];
+export type ThemeExtras = Partial<Record<ExtraToken, string>>;
 export type Mode = "light" | "dark";
 
 /** One of the ready-made club colour schemes (docs/plans/assets/club-color-schemes.json). */

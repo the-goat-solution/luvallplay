@@ -9,7 +9,7 @@ export function NextUp({ day }: { day: PlayDay | null }) {
   const { t, locale, timezone } = usePlace();
   const absence = useAbsence();
   return (
-    <section className="card stack" aria-labelledby="next-up-title">
+    <section className="card stack hero next-up" aria-labelledby="next-up-title">
       <h2 id="next-up-title">{t("me_next_up")}</h2>
       {!day ? (
         <p className="muted">{t("me_next_none")}</p>

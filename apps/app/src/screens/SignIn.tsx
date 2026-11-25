@@ -53,7 +53,7 @@ export function SignInForm({ club }: { club?: string }) {
   if (step === "email") {
     return (
       <form className="card stack" onSubmit={sendCode} noValidate>
-        <h2>{t("signin_title")}</h2>
+        <h2 className="title">{t("signin_title")}</h2>
         <p className="muted">{t("signin_lead")}</p>
         <label className="field">
           <span>{t("signin_email")}</span>
@@ -68,7 +68,7 @@ export function SignInForm({ club }: { club?: string }) {
   }
   return (
     <form className="card stack" onSubmit={verify} noValidate>
-      <h2>{t("signin_code_title")}</h2>
+      <h2 className="title">{t("signin_code_title")}</h2>
       <p className="muted">{t("signin_code_lead", { email: email.trim() })}</p>
       <label className="field">
         <span>{t("signin_code")}</span>
@@ -99,13 +99,14 @@ export function SignedOutPage({ club, children }: { club: ClubConfig | null; chi
           </>
         ) : (
           <>
-            <LuvallplayMark size={56} />
+            <LuvallplayMark size={88} brand />
             <h1>{t("brand")}</h1>
+            <p className="tagline">{t("brand_tagline")}</p>
           </>
         )}
       </header>
       <main className="signed-out-main">{children}</main>
-      <footer>{club ? <OnLuvallplay /> : null}</footer>
+      <footer className="signed-out-foot">{club ? <OnLuvallplay /> : null}</footer>
     </div>
   );
 }

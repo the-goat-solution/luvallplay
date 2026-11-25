@@ -1634,7 +1634,9 @@ describe("APP · the club shop", () => {
       // The club's config changed (it has a Stripe key now). The screens saved on
       // this device hold a copy under a minute old, which the app rightly keeps
       // using for that minute; drop it, as if the minute had passed.
-      await page.evaluate(() => localStorage.removeItem("lp.cache"));
+      // Dropped as the page starts again, not before: a save that was already
+      // on its way (they're written a moment after a change) would put it back.
+      await page.addInitScript(() => localStorage.removeItem("lp.cache"));
       await page.reload();
       await page.waitForSelector(ME_READY);
       await tee.getByRole("button", { name: /M · 2 left/ }).click();

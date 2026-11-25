@@ -344,8 +344,13 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     // Next up is the earliest day across clubs, with its club.
     const next = page.locator(".next-up");
     assert.match(await next.textContent(), /Three Wolves Badminton Club/);
+<<<<<<< HEAD
     // The way in at the club she isn't a member of; memberships themselves are in My profile.
     assert.equal(await page.locator(".membership").count(), 0);
+=======
+    // One card per club: the membership at one, the way in at the other.
+    assert.match(await page.locator(".membership").textContent(), /Three Wolves Badminton Club/);
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
     assert.match(await page.locator(".join").textContent(), /Harbour Smash/);
     // One calendar: both clubs' days, each row its club's, the Harbour days bookable there.
     const days = page.locator(".days .day");
@@ -354,20 +359,29 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.equal(await days.filter({ hasText: "Harbour Smash" }).first().getByRole("button", { name: /^Book · \$10/ }).count(), 1, "Harbour's price, in its money");
     // Messages from both, the bell counts both.
     assert.match(await page.locator(".threads").first().textContent(), /New courts on Tuesdays[\s\S]*Welcome to Fridays|Welcome to Fridays[\s\S]*New courts on Tuesdays/);
+<<<<<<< HEAD
     assert.equal(await page.locator(".top-actions .badge").textContent(), "2", "the bell counts both clubs");
+=======
+    assert.equal(await page.locator(".me-head .badge").textContent(), "2");
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
     assert.equal(await page.locator('[id]').evaluateAll((els) => { const ids = els.map((e) => e.id); return ids.length - new Set(ids).size; }), 0, "no id twice on the page");
 
     // Narrowed to one club: only its things; kept after a reload.
     await filter.getByRole("button", { name: "Harbour Smash" }).click();
+<<<<<<< HEAD
     await filter.getByRole("button", { name: "Three Wolves Badminton Club" }).click();
     assert.equal(await page.locator(".join").count(), 0, "narrowed to Three Wolves: no way in to Harbour");
     await filter.getByRole("button", { name: "Harbour Smash" }).click();
     assert.equal(await page.locator(".join").count(), 1);
+=======
+    assert.equal(await page.locator(".membership").count(), 0);
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
     assert.deepEqual([...new Set(await page.locator(".days .day .club-tag-name").allTextContents())], ["Harbour Smash"]);
     await page.reload();
     await page.waitForSelector(ME_READY);
     assert.equal(await filter.getByRole("button", { name: "Harbour Smash" }).getAttribute("aria-pressed"), "true");
     await filter.getByRole("button", { name: "All clubs" }).click();
+<<<<<<< HEAD
     assert.ok((await page.locator(".days .day").count()) > 2);
 
     // My profile: one card per club, each tagged; the pill counts the memberships.
@@ -377,6 +391,9 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.match(await page.locator(".membership").textContent(), /Three Wolves Badminton Club/);
     assert.match(await page.locator(".join").textContent(), /Harbour Smash/);
     assert.deepEqual((await look(page)).look, "luvallplay");
+=======
+    assert.equal(await page.locator(".membership").count(), 1);
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
     assert.deepEqual(problems, []);
     await context.close();
   });
@@ -390,7 +407,11 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForSelector('[data-screen="nav_vision"]');
     assert.equal((await look(page)).primary, NAVY);
     // Every club's tabs, each in the words of the club it opens.
+<<<<<<< HEAD
     assert.deepEqual(await tabLabels(page), ["Home", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
+=======
+    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
 
     const picker = page.getByRole("button", { name: /Three Wolves Badminton Club, Switch club/ });
     await picker.click();
@@ -399,7 +420,11 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === "#7a1f3d");
     assert.equal(await page.locator(".shell-head .club-name").textContent(), "Harbour Smash");
     assert.equal(await page.locator(".shell-head .club-logo").count(), 0, "nothing of the last club's logo lingers");
+<<<<<<< HEAD
     assert.deepEqual(await tabLabels(page), ["Home", "Player", "Arena", "Leaderboard", "Smash Cam"]);
+=======
+    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Smash Cam"]);
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
     await page.waitForURL(`${APP}/vision`);
 
     // Harbour has no Arena: the Arena shows the club that has one, with nothing to pick.
@@ -413,7 +438,11 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === "#7a1f3d");
 
     const started = Date.now();
+<<<<<<< HEAD
     await page.locator(".shell-nav").getByRole("link", { name: "Home" }).click();
+=======
+    await page.locator(".shell-nav").getByRole("link", { name: "Me" }).click();
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
     await page.waitForFunction((green) => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === green, COURT_GREEN);
     assert.ok(Date.now() - started < 1500, "the look changes at once");
     assert.deepEqual(problems, []);

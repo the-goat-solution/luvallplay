@@ -51,7 +51,11 @@ export function MembershipCard({ m }: { m: Membership }) {
           <dd className="stat-when">{when}</dd>
         </div>
       </dl>
+<<<<<<< HEAD
       {m.next && <p className="muted small icon-line"><Icon name="check" size={16} />{t("mem_continuation", { plan: planName(t, m.next.plan), date: dayLabel(m.next.periodStart, locale, true) })}</p>}
+=======
+      {m.next && <p className="muted small">✓ {t("mem_continuation", { plan: planName(t, m.next.plan), date: dayLabel(m.next.periodStart, locale, true) })}</p>}
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
       <div><Link to="/membership" className="button" onClick={enter}>{t("me_manage")}</Link></div>
     </section>
   );

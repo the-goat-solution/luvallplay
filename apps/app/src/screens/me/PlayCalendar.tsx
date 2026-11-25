@@ -45,7 +45,11 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
       </div>
       <div className="day-text">
         <span className="visually-hidden">{dayLabel(d.date, locale, true)}: </span>
+<<<<<<< HEAD
         <strong className={ticked ? "icon-line" : undefined}>{ticked && <Icon name="check" size={16} />}{title}</strong>
+=======
+        <strong>{title}</strong>
+>>>>>>> 327cf96289e13a21370a82e5698c499f470a4b6b
         <ScopeTag quiet />
         <span className="muted small day-detail">
           {detail}

@@ -6,6 +6,7 @@
 import { useRef, useState } from "react";
 import type { AppKey } from "@luvallplay/i18n/app";
 import type { T } from "../../lib/messages.ts";
+import { LoadError } from "../../components/LoadError.tsx";
 import { useDeletePhoto, usePhotos, useSharePhoto, type PhotoStatus } from "./photos-data.ts";
 
 type JobState = "preparing" | "checking" | PhotoStatus | "failed";
@@ -31,7 +32,7 @@ export function PhotosCard({ t, playerId }: { t: T; playerId: number }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [busy, setBusy] = useState(false);
   const data = list.data;
-  if (!data) return null;
+  if (!data) return list.isError ? <LoadError compact onRetry={() => void list.refetch()} /> : null;
   const enabled = data.uploadMode !== null;
 
   const pick = (picked: FileList | null) => {

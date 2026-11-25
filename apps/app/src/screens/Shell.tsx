@@ -9,6 +9,9 @@ import { tabForPath, visibleTabs, type TabId } from "../lib/nav.ts";
 import { navKind } from "../lib/window-class.ts";
 import { focus } from "../lib/focus.ts";
 import { online } from "../lib/offline.ts";
+import { skipToken, useQuery } from "@tanstack/react-query";
+import type { ArenaState } from "./arena/data.ts";
+import { useVersus } from "./arena/versus-store.ts";
 
 // The same pictures as the website's tabs: Player a trophy, Arena crossed
 // rackets, Leaderboard a podium.
@@ -77,12 +80,25 @@ function ClubSwitcher({ clubs, current }: { clubs: Club[]; current: Club }) {
   );
 }
 
+/** On the other tabs: back to an accepted game whose "versus" splash was put off (from the board already loaded; never fetched here). */
+function MatchPill({ slug, token, t }: { slug: string | null; token: string | null; t: ReturnType<typeof useT> }) {
+  const board = useQuery<ArenaState>({ queryKey: ["arena", slug, token], queryFn: skipToken });
+  const versus = useVersus(board.data);
+  if (!versus.later) return null;
+  return (
+    <Link to="/arena" className="match-pill" data-testid="match-pill">
+      <span className="match-pill-vs" aria-hidden="true">VS</span>
+      <span>{t("match_waiting")}</span>
+    </Link>
+  );
+}
+
 export function Shell() {
   const prefs = usePrefs();
   const focused = useSyncExternalStore(focus.subscribe, focus.get);
   const connected = useSyncExternalStore(online.subscribe, online.get);
   const session = useSession();
-  const { clubs, current, config, loading } = useCurrentClub();
+  const { clubs, current, config, loading, slug } = useCurrentClub();
   useLook(config);
   const t = useT(config);
   const cls = useWindowClass();
@@ -134,6 +150,7 @@ export function Shell() {
         </ul>
       </nav>
       <main className="shell-main" id="main">
+        {config?.modules.includes("arena") && !pathname.startsWith("/arena") && <MatchPill slug={slug} token={prefs.token} t={t} />}
         {prefs.needsDetails && !onWelcome && (
           <Notice>
             {t("needs_details")} <Link to="/welcome">{t("needs_details_link")}</Link>

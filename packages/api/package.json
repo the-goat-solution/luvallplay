@@ -17,7 +17,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "generate": "node scripts/generate.ts",
-    "snapshot": "node scripts/snapshot.ts"
+    "snapshot": "node scripts/snapshot.ts",
+    "compat": "node scripts/compat.ts"
   },
   "dependencies": {
     "zod": "^3.25.67"

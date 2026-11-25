@@ -11,6 +11,7 @@ import { useArenaT } from "./arena/words.ts";
 import { useBoard, type Board, type BoardQuery, type BoardRow } from "./leaderboard/data.ts";
 import { PlayerCard } from "./leaderboard/PlayerCard.tsx";
 import { RankIcon } from "../components/RankIcon.tsx";
+import { LoadError } from "../components/LoadError.tsx";
 
 type Source = NonNullable<BoardQuery["source"]>;
 type Period = NonNullable<BoardQuery["period"]>;
@@ -90,7 +91,7 @@ export default function LeaderboardScreen() {
           ))}
         </nav>
       </header>
-      {board.isError && !b && <p className="notice notice-error" role="alert">{t("me_retry_load")}</p>}
+      {board.isError && !b && <LoadError onRetry={() => void board.refetch()} />}
       {!b ? (
         !board.isError && <div className="skeleton skeleton-tall" aria-busy="true" />
       ) : (

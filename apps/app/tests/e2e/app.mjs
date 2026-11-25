@@ -14,7 +14,7 @@ import { test, before, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -639,9 +639,11 @@ describe("APP · the inbox", () => {
 });
 
 describe("APP · screenshots", () => {
-  // For people to look at (docs/screenshots/phase-4), not compared: the visual pass compares later.
-  test("APP22 · Me at a phone and a tablet width, light and dark, member and newcomer", { skip: !process.env.E2E_SHOTS }, async () => {
+  // For people to look at, not compared pixel by pixel (fonts differ between
+  // machines): CI uploads them as the "app-screens" artifact on every run.
+  test("APP22 · every screen at the five window widths (and dark on a phone), Me for a member and a newcomer", { skip: !process.env.E2E_SHOTS }, async () => {
     const dir = process.env.E2E_SHOTS;
+    mkdirSync(dir, { recursive: true });
     for (const [who, email] of [["member", PEOPLE.member.email], ["newcomer", PEOPLE.player.email]]) {
       for (const colorScheme of ["light", "dark"]) {
         for (const width of [375, 900]) {
@@ -666,15 +668,25 @@ describe("APP · screenshots", () => {
       await context.close();
     }
     await db.query(`UPDATE message_threads SET unread_for_player = TRUE WHERE id = $1`, [id]);
-    // The Arena and the Leaderboard on a phone and a tablet.
-    for (const width of [375, 900]) {
-      const { context } = await signedIn(PEOPLE.member.email, { viewport: { width, height: width < 600 ? 812 : 1000 }, deviceScaleFactor: 2 });
+    // Every other screen at each window class's width, and dark on a phone.
+    const screens = [
+      ["/player", '[data-screen="nav_player"][data-state="ready"]'],
+      ["/arena", '[data-screen="nav_arena"][data-state="ready"]'],
+      ["/leaderboard", '[data-screen="nav_leaderboard"][data-state="ready"]'],
+      ["/membership", '[data-screen="membership"][data-state="ready"]'],
+      ["/vision", '[data-screen="nav_vision"][data-state="ready"]'],
+      ["/vision/track", '[data-testid="mode-camera"]'],
+      ["/vision/label", '[data-screen="vision-label"]'],
+      ["/settings", '[data-screen="nav_settings"] #details-title, [data-screen="nav_settings"] form'],
+    ];
+    for (const [width, colorScheme] of [...WIDTHS.map((w) => [w, "light"]), [375, "dark"]]) {
+      const { context } = await signedIn(PEOPLE.member.email, { viewport: { width, height: width < 600 ? 812 : 1000 }, deviceScaleFactor: 2, colorScheme });
       const page = await context.newPage();
-      for (const [route, screen] of [["/player", "nav_player"], ["/arena", "nav_arena"], ["/leaderboard", "nav_leaderboard"], ["/membership", "membership"]]) {
+      for (const [route, ready] of screens) {
         await page.goto(`${APP}${route}`);
-        await page.waitForSelector(`[data-screen="${screen}"][data-state="ready"]`);
-        await page.waitForTimeout(200);
-        await page.screenshot({ path: `${dir}/${route.slice(1)}-${width}.png`, fullPage: true });
+        await page.waitForSelector(ready);
+        await page.waitForTimeout(250);
+        await page.screenshot({ path: `${dir}/${route.slice(1).replace(/\//g, "-")}-${width}${colorScheme === "dark" ? "-dark" : ""}.png`, fullPage: true });
       }
       await context.close();
     }
@@ -1114,6 +1126,11 @@ describe("APP · the Arena", () => {
       if (process.env.E2E_SHOTS) await mp.screenshot({ path: `${process.env.E2E_SHOTS}/app-arena-versus.png` });
       await splash.getByRole("button", { name: /Minimize/ }).click();
       await mp.getByText("Your match is on").waitFor();
+      // On the other tabs too: a pill back to the Arena.
+      await mp.locator(".shell-nav").getByRole("link", { name: "Me" }).click();
+      await mp.waitForSelector(ME_READY);
+      await mp.getByTestId("match-pill").click();
+      await mp.waitForURL(`${APP}/arena`);
       await mp.getByRole("button", { name: "Open", exact: true }).click();
       await splash.getByRole("button", { name: "Let's go" }).click();
       await splash.waitFor({ state: "detached" });
@@ -1124,6 +1141,8 @@ describe("APP · the Arena", () => {
       await mine.getByText("Challenge accepted!").waitFor();
       await mine.getByRole("button", { name: "We're here" }).click();
       await mine.getByText("Game on!").waitFor();
+      // Tracking the game: free during the trial, as on the website.
+      await mine.getByRole("link", { name: /FREE NOW/ }).waitFor();
       // The game takes its time (the score opens a few minutes after check-in).
       await db.query(`UPDATE arena_challenges SET checked_in_at = NOW() - INTERVAL '40 minutes' WHERE id = $1`, [id]);
 
@@ -1626,6 +1645,90 @@ describe("APP · Vision", () => {
   });
 });
 
+describe("APP · every screen's states (build plan §7: loading, empty, error, offline)", () => {
+  test("APP46 · each screen whose data can't load says so, with Try again, and comes back when it works", async () => {
+    const { context } = await signedIn(PEOPLE.member.email, { viewport: { width: 1000, height: 900 } });
+    const page = await context.newPage();
+    const club = `${api}/clubs/three-wolves`;
+    // Screen → the call it can't do without (a glob), and what shows once it works.
+    const cases = [
+      ["/me", `${club}/me`, ME_READY],
+      ["/arena", `${club}/arena`, '[data-screen="nav_arena"][data-state="ready"]'],
+      ["/leaderboard", `${club}/leaderboard*`, '[data-screen="nav_leaderboard"][data-state="ready"]'],
+      ["/player", `${club}/me/stats`, '[data-screen="nav_player"][data-state="ready"]'],
+      ["/vision", `${club}/vision`, '[data-screen="nav_vision"][data-state="ready"]'],
+      ["/membership", `${club}/membership`, '[data-screen="membership"][data-state="ready"]'],
+      ["/inbox", `${club}/messages`, ".thread-link, .inbox-empty, [data-screen='inbox']"],
+      ["/settings", `${api}/account/profile`, "#details-title, [data-screen='nav_settings'] form"],
+      // Cards on Me: the shop and My photos.
+      ["/me", `${club}/shop`, ME_READY],
+      ["/me", `${club}/me/photos`, '[data-testid="my-photos"]'],
+    ];
+    const failing = { status: 500, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ error: "failed" }) };
+    try {
+      for (const [route, url, ready] of cases) {
+        const handler = (r) => (r.request().method() === "OPTIONS" ? r.fulfill({ status: 204, headers: CORS }) : r.fulfill(failing));
+        await context.route(url, handler);
+        await page.goto(`${APP}${route}`);
+        const error = page.getByTestId("load-error");
+        await error.waitFor({ timeout: 20000 }).catch((e) => {
+          throw new Error(`${route} with ${url} failing shows no error: ${e.message.split("\n")[0]}`);
+        });
+        assert.equal(await error.getAttribute("role"), "alert", route);
+        assert.match(await error.textContent(), /couldn't load this/, `${route} (${url})`);
+        await context.unroute(url, handler);
+        await error.getByRole("button", { name: "Try again" }).click();
+        await page.waitForSelector(ready);
+        await error.waitFor({ state: "detached" });
+      }
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+describe("APP · performance on a mid-range phone (build plan §4.4)", () => {
+  // CPU four times slower and a slow 4G connection (150 ms, ~1.6 Mbit/s).
+  // The limits leave room for slower CI machines; they catch regressions,
+  // not milliseconds. The numbers are printed on every run.
+  const LIMITS = { firstStart: 9000, savedStart: 4000, tab: 4500 };
+  test("APP47 · first start, a start from the saved screens, and switching tabs stay within their limits", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    await cdp.send("Network.enable");
+    await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 150, downloadThroughput: (1.6 * 1024 * 1024) / 8, uploadThroughput: (750 * 1024) / 8 });
+    const timed = async (go, ready) => {
+      const t0 = Date.now();
+      await go();
+      await page.waitForSelector(ready, { timeout: 30000 });
+      return Date.now() - t0;
+    };
+    try {
+      const firstStart = await timed(() => page.goto(`${APP}/me`), ME_READY);
+      await page.evaluate(() => navigator.serviceWorker.ready);
+      await page.waitForFunction(() => (localStorage.getItem("lp.cache") ?? "").includes('"me"'));
+      const savedStart = await timed(() => page.reload(), ME_READY);
+      const tabs = {};
+      for (const [label, ready] of [
+        ["Leaderboard", '[data-screen="nav_leaderboard"][data-state="ready"]'],
+        ["Player", '[data-screen="nav_player"][data-state="ready"]'],
+        ["Arena", '[data-screen="nav_arena"][data-state="ready"]'],
+        ["Me", ME_READY],
+      ]) {
+        tabs[label] = await timed(() => page.locator(".shell-nav").getByRole("link", { name: label }).click(), ready);
+      }
+      console.log(`APP47 timings (ms): first start ${firstStart}, saved start ${savedStart}, tabs ${JSON.stringify(tabs)}`);
+      assert.ok(firstStart < LIMITS.firstStart, `first start ${firstStart} ms`);
+      assert.ok(savedStart < LIMITS.savedStart, `start from the saved screens ${savedStart} ms`);
+      for (const [label, ms] of Object.entries(tabs)) assert.ok(ms < LIMITS.tab, `${label} ${ms} ms`);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
 describe("APP · My photos", () => {
   test("APP45 · My photos on Me: not set up without a photo store; with one, photos are prepared on the device, go straight to the store and are registered with the caption and consent", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
@@ -1817,9 +1920,9 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP10 · five widths: no sideways scroll, and the right navigation for each window class", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/vision", "/membership", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/vision", "/vision/track", "/vision/label", "/membership", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : route === "/vision" ? '[data-screen="nav_vision"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/vision/track" ? '[data-testid="mode-camera"]' : route === "/vision/label" ? '[data-screen="vision-label"]' : route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : route === "/vision" ? '[data-screen="nav_vision"][data-state="ready"]' : ".shell-nav .tab");
       for (const width of WIDTHS) {
         const height = width < 600 ? 812 : 900;
         await page.setViewportSize({ width, height });
@@ -1873,9 +1976,9 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP11 · text at 200%: still no sideways scroll on a phone, and nothing is cut off", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/vision", "/membership", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/vision", "/vision/track", "/vision/label", "/membership", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : route === "/vision" ? '[data-screen="nav_vision"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/vision/track" ? '[data-testid="mode-camera"]' : route === "/vision/label" ? '[data-screen="vision-label"]' : route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : route === "/vision" ? '[data-screen="nav_vision"][data-state="ready"]' : ".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
       const afterSize = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

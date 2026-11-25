@@ -10,6 +10,7 @@ import { Live, Mine, Open, PairPanel, Requests, Side } from "./arena/Board.tsx";
 import { TeamUp } from "./arena/TeamUp.tsx";
 import { AfterGame, RankUp, ScoreEntry } from "./arena/Dialogs.tsx";
 import { Versus, VersusPill, useVersus } from "./arena/Versus.tsx";
+import { LoadError } from "../components/LoadError.tsx";
 
 export default function ArenaScreen() {
   const { t, rank, lang } = useArenaT();
@@ -63,7 +64,7 @@ export default function ArenaScreen() {
       <div className="screen arena" data-screen="nav_arena" data-state={arena.isError ? "error" : "loading"}>
         <header className="arena-hero"><h1>{t("title")}</h1></header>
         {arena.isError ? (
-          <p className="notice notice-error" role="alert">{t("err_generic")} <button type="button" className="button button-small" onClick={() => void arena.refetch()}>↻</button></p>
+          <LoadError onRetry={() => void arena.refetch()} />
         ) : (
           <div className="skeleton skeleton-tall" aria-busy="true" />
         )}

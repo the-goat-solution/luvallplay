@@ -64,6 +64,10 @@ jobs:
         run: pnpm --filter web typecheck
       - name: Types (shared packages)
         run: pnpm --filter "./packages/*" typecheck
+      - name: Old apps keep working (the API contract against main's)
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          pnpm --filter @luvallplay/api compat
       - name: Types (Sanity Studio)
         run: pnpm --filter studio typecheck
       - name: Types (website Studio)
@@ -175,3 +179,14 @@ jobs:
           echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
       - name: Journeys (sign-in, the club's look, switching clubs, modules, layout, axe)
         run: pnpm --filter app e2e
+        env:
+          # Every screen at the five window widths, for people to look at.
+          E2E_SHOTS: ${{ github.workspace }}/app-screens
+      - name: Screenshots of every screen (the "app-screens" artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-screens
+          path: app-screens
+          if-no-files-found: ignore
+          retention-days: 14

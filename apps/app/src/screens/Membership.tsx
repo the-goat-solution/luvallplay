@@ -5,6 +5,7 @@ import { useCurrentClub, useT } from "../hooks.tsx";
 import { JoinPanel } from "./membership/JoinPanel.tsx";
 import { ManageCard } from "./membership/ManageCard.tsx";
 import { useMembership } from "./membership/data.ts";
+import { LoadError } from "../components/LoadError.tsx";
 
 export default function MembershipScreen() {
   const { config } = useCurrentClub();
@@ -18,7 +19,7 @@ export default function MembershipScreen() {
       <h1>{t("me_membership")}</h1>
       {!s ? (
         state.isError ? (
-          <p className="notice notice-error" role="alert">{t("me_retry_load")} <button type="button" className="button button-small" onClick={() => void state.refetch()}>↻</button></p>
+          <LoadError onRetry={() => void state.refetch()} />
         ) : (
           <div className="skeleton skeleton-tall" aria-busy="true" />
         )

@@ -9,6 +9,7 @@ import { Link, useLocation, useNavigate, useParams } from "@tanstack/react-route
 import { useCurrentClub, useLang, useT } from "../hooks.tsx";
 import { localeOf } from "../lib/format.ts";
 import { useReply, useStartThread, useThread, useThreads, type Thread } from "./inbox/data.ts";
+import { LoadError } from "../components/LoadError.tsx";
 
 type T = ReturnType<typeof useT>;
 
@@ -36,10 +37,7 @@ function ThreadList({ openId }: { openId: number | null }) {
   if (!threads.data) {
     return threads.isError ? (
       <div className="stack">
-        <p>{t("me_retry_load")}</p>
-        <div>
-          <button type="button" className="button" onClick={() => void threads.refetch()}>{t("retry")}</button>
-        </div>
+        <LoadError onRetry={() => void threads.refetch()} />
       </div>
     ) : (
       <p className="muted" role="status">{t("loading")}</p>

@@ -8,6 +8,21 @@ import { errorCode, pairTitle, useArenaAction, type ArenaState, type Challenge, 
 import type { ArenaT } from "./words.ts";
 import { MatchStats } from "./Stats.tsx";
 import { RankIcon } from "../../components/RankIcon.tsx";
+import { useVisionStatus } from "../vision/data.ts";
+
+/** "Set up {visionName}", with "Free now" during the tracker's free trial (as on the website). */
+function RecordStats({ id, t, hint = false }: { id: number; t: ArenaT; hint?: boolean }) {
+  const trial = !!useVisionStatus().data?.trial;
+  return (
+    <span className="stack-tight">
+      <Link to="/vision" search={{ challenge: id } as never} className="button">
+        {t("rec_stats")}
+        {trial && <em className="tag free-tag">{t("rec_stats_free")}</em>}
+      </Link>
+      {hint && <span className="muted small">{t(trial ? "rec_stats_hint_trial" : "rec_stats_hint")}</span>}
+    </span>
+  );
+}
 
 type Props = { t: ArenaT; rank: (i: number) => string; onError: (code: string) => void };
 type MeView = NonNullable<ArenaState["me"]>;
@@ -191,7 +206,7 @@ function MyChallenge({ c, t, rank, onError, onScore }: { c: Challenge; onScore: 
           <p><span className="live-dot" aria-hidden="true" /> {t("st_live")}</p>
           <div className="actions">
             <button type="button" className="button button-primary" onClick={() => onScore(c)}>{t("score_title")}</button>
-            {visionOn && <Link to="/vision" search={{ challenge: c.id } as never} className="button">{t("rec_stats")}</Link>}
+            {visionOn && <RecordStats id={c.id} t={t} />}
             <button type="button" className="button button-quiet" disabled={action.isPending} onClick={() => run({ action: "call_off", id: c.id })}>{t("call_off")}</button>
           </div>
         </>
@@ -238,6 +253,7 @@ export function Mine({ state, ...props }: { state: ArenaState; onScore: (c: Chal
 }
 
 export function Live({ state, t, rank }: { state: ArenaState } & Omit<Props, "onError">) {
+  const visionOn = !!useCurrentClub().config?.modules.includes("vision");
   if (!state.live.length) return null;
   const now = Date.parse(state.now);
   return (
@@ -254,7 +270,11 @@ export function Live({ state, t, rank }: { state: ArenaState } & Omit<Props, "on
             <span className="vs" aria-hidden="true">{t("vs")}</span>
             {c.accepting && <PairBlock pair={c.accepting} rank={rank} />}
           </div>
-          {c.tracking && <p className="muted small">{t("wv_live")} · {t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</p>}
+          {c.tracking ? (
+            <p className="muted small"><span className="live-dot" aria-hidden="true" /> {t("wv_live")} · {t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</p>
+          ) : (
+            visionOn && <RecordStats id={c.id} t={t} hint />
+          )}
         </article>
       ))}
     </section>

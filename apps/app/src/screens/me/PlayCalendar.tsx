@@ -2,7 +2,12 @@
 // membership days (with "Can't make it"), booked spots, and the days with
 // casual spots. Booking a spot is a card payment (Stripe), in a dialog; the
 // webhook books it once paid.
+//
+// With several clubs (Home), one calendar holds every club's days, each
+// row labelled with its club and acting on that club.
 import { useState } from "react";
+import { ClubScopeProvider, type Club } from "../../hooks.tsx";
+import { ScopeTag } from "../../components/ClubTag.tsx";
 import type { PlayDay } from "./data.ts";
 import { useAbsence } from "./data.ts";
 import { byMonth, dayLabel, dayTile, money, monthLabel, timeRange } from "../../lib/format.ts";
@@ -39,12 +44,14 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
       <div className="day-text">
         <span className="visually-hidden">{dayLabel(d.date, locale, true)}: </span>
         <strong>{title}</strong>
+        <ScopeTag quiet />
         <span className="muted small day-detail">
           {detail}
           {d.location ? ` · ${d.location}` : ""}
         </span>
         {saved && d.absent && <span className="small" role="status">{t("cal_absence_saved")}</span>}
         {absence.data?.queued && <span className="small muted" role="status">{t("cal_queued")}</span>}
+        {absence.isError && <span className="small notice-error" role="alert">{t("mem_err_generic")}</span>}
         {message && <span className={`small${message.ok ? "" : " notice-error"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
       </div>
       <div className="day-action">
@@ -90,24 +97,36 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
   );
 }
 
+/** One row of the calendar: a day, and with several clubs, whose it is. */
+export type CalendarRow = { club: Club | null; day: PlayDay; casualPrice: number };
+
 export function PlayCalendar({ days, casualPrice }: { days: PlayDay[]; casualPrice: number }) {
+  return <CalendarCard rows={days.map((day) => ({ club: null, day, casualPrice }))} />;
+}
+
+export function CalendarCard({ rows, sub }: { rows: CalendarRow[]; sub?: string }) {
   const { t, locale } = usePlace();
-  const absence = useAbsence();
+  const months = byMonth(rows.map((r) => ({ ...r, date: r.day.date })));
   return (
     <section className="card stack" aria-labelledby="cal-title">
       <div className="stack-tight">
         <h2 id="cal-title">{t("cal_title")}</h2>
-        <p className="muted small">{t("cal_sub")}</p>
+        <p className="muted small">{sub ?? t("cal_sub")}</p>
       </div>
-      {absence.isError && <p className="notice notice-error" role="alert">{t("mem_err_generic")}</p>}
-      {days.length === 0 && <p className="muted">{t("cal_none")}</p>}
-      {byMonth(days).map(([month, list]) => (
+      {rows.length === 0 && <p className="muted">{t("cal_none")}</p>}
+      {months.map(([month, list]) => (
         <div key={month} className="stack-tight">
           <h3 className="month">{monthLabel(month, locale)}</h3>
           <ul className="days">
-            {list.map((d) => (
-              <DayRow key={d.date} d={d} casualPrice={casualPrice} />
-            ))}
+            {list.map((r) =>
+              r.club ? (
+                <ClubScopeProvider key={`${r.club.slug}:${r.day.date}`} club={r.club}>
+                  <DayRow d={r.day} casualPrice={r.casualPrice} />
+                </ClubScopeProvider>
+              ) : (
+                <DayRow key={r.day.date} d={r.day} casualPrice={r.casualPrice} />
+              ),
+            )}
           </ul>
         </div>
       ))}

@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, store } from "../app.ts";
-import { useCurrentClub, useLang, usePrefs, useSession, useT } from "../hooks.tsx";
+import { useClubs, useCurrentClub, useLang, usePrefs, useSession, useT } from "../hooks.tsx";
 import { AccountCards } from "./settings/Account.tsx";
 import { ClubAdmin } from "./settings/ClubAdmin.tsx";
 import { ConnectedApps } from "./settings/ConnectedApps.tsx";
@@ -16,7 +16,10 @@ import type { ThemeChoice } from "../lib/theme.ts";
 
 export default function SettingsScreen() {
   const { config, current } = useCurrentClub();
-  const t = useT(config);
+  // Settings are the person's own: with several clubs, in Luvallplay's words.
+  const clubs = useClubs().data?.clubs ?? [];
+  const multi = clubs.length > 1;
+  const t = useT(multi ? null : config);
   const lang = useLang();
   const { theme } = usePrefs();
   const session = useSession();
@@ -64,7 +67,9 @@ export default function SettingsScreen() {
           ))}
         </fieldset>
         <InstallCard t={t} />
-        {current?.canOpenAdmin && <ClubAdmin clubName={current.name} email={session.data?.player.email} />}
+        {multi
+          ? clubs.filter((c) => c.canOpenAdmin).map((c) => <ClubAdmin key={c.slug} clubName={c.name} email={session.data?.player.email} apiBase={c.apiBase} />)
+          : current?.canOpenAdmin && <ClubAdmin clubName={current.name} email={session.data?.player.email} />}
         <div className="card stack">
           <h2>{t("settings_account")}</h2>
           {session.data && <p className="muted">{t("settings_signed_in_as", { email: session.data.player.email })}</p>}

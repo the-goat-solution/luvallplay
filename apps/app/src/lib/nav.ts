@@ -28,3 +28,33 @@ export function visibleTabs(modules: readonly string[] | null): Tab[] {
 export function tabForPath(pathname: string): Tab | null {
   return TABS.find((t) => pathname === t.path || pathname.startsWith(`${t.path}/`)) ?? null;
 }
+
+// ── Several clubs (hooks.tsx explains the idea) ──────────────────────────
+
+/** Home: the person's own pages, for all their clubs at once. Everything else belongs to one club. */
+export function isHomePath(pathname: string): boolean {
+  return pathname === "/" || pathname === "/me" || pathname === "/welcome" || /^\/(inbox|settings)(\/|$)/.test(pathname);
+}
+
+/** The module a club space needs (Arena, Leaderboard: "arena"; Vision: "vision"), or null when every club has it. */
+export function moduleForPath(pathname: string): string | null {
+  return tabForPath(pathname)?.module ?? null;
+}
+
+/** The tabs across clubs: a tab shows when at least one club has its module on. */
+export function visibleTabsAcross(modulesByClub: readonly (readonly string[] | null)[]): Tab[] {
+  const known = modulesByClub.filter((m): m is readonly string[] => m !== null);
+  return TABS.filter((t) => t.module === null || known.some((m) => m.includes(t.module as string)));
+}
+
+/**
+ * The club a club space shows: the chosen one when it has the space's
+ * module, else the first club (in the person's order) that has it; null
+ * when none does (yet).
+ */
+export function spaceClub<C extends { slug: string }>(clubs: readonly C[], modules: (club: C) => readonly string[] | null, chosen: string | null, module: string | null): C | null {
+  const fits = (c: C) => module === null || (modules(c)?.includes(module) ?? false);
+  const picked = clubs.find((c) => c.slug === chosen);
+  if (picked && fits(picked)) return picked;
+  return clubs.find(fits) ?? null;
+}

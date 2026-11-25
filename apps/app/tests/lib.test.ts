@@ -110,13 +110,14 @@ describe("the stylesheet's rules", () => {
     const semantic = ["primary", "on-primary", "accent", "on-accent", "surface", "surface-raised", "ink", "ink-muted", "line", "control-border", "focus", "danger", "font-display", "font-text"];
     // packages/ui/src/system.css: the design system's derived tokens, scale, elevation and motion.
     const system = [...read("../../../packages/ui/src/system.css").matchAll(/^\s*--([a-z0-9-]+):/gm)].map((m) => m[1]);
-    const local = ["nav-size", "head-size"];
+    // Set on an element by components/ClubTag.tsx: a club's own colour, beside the page's theme.
+    const local = ["nav-size", "head-size", "club", "on-club"];
     for (const t of tokens) assert.ok(semantic.includes(t) || system.includes(t) || local.includes(t), `--${t} is not a semantic or system token`);
   });
   test("the design system's colours are derived from the semantic tokens (bar the brand mark's coral and the success green)", () => {
     const sys = read("../../../packages/ui/src/system.css");
     const hex = [...new Set(sys.match(/#[0-9a-f]{3,8}\b/gi) ?? [])].sort();
-    assert.deepEqual(hex, ["#1d7a46", "#6fd39a", "#ff6b4a"]);
+    assert.deepEqual(hex, ["#18683b", "#6fd39a", "#ff6b4a"]);
   });
   test("safe areas on every edge, dynamic viewport height, reduced motion, container queries, foldables", () => {
     for (const edge of ["top", "right", "bottom", "left"]) assert.match(css, new RegExp(`env\\(safe-area-inset-${edge}\\)`), edge);
@@ -196,20 +197,21 @@ describe("storage and the persistent choices", () => {
   test("choices survive a restart; junk in storage is ignored", () => {
     const storage = memoryStorage();
     const a = createStore(storage);
-    a.set({ token: "t1", club: "three-wolves", lang: "vi", theme: "dark", needsDetails: true });
-    assert.deepEqual(createStore(storage).get(), { token: "t1", club: "three-wolves", lang: "vi", theme: "dark", needsDetails: true });
+    a.set({ token: "t1", club: "three-wolves", lang: "vi", theme: "dark", needsDetails: true, homeClub: "harbour-smash" });
+    assert.deepEqual(createStore(storage).get(), { token: "t1", club: "three-wolves", lang: "vi", theme: "dark", needsDetails: true, homeClub: "harbour-smash" });
     storage.set("lang", "fr");
     storage.set("theme", "neon");
     storage.set("club", "../etc");
-    assert.deepEqual(createStore(storage).get(), { token: "t1", club: null, lang: null, theme: "system", needsDetails: true });
+    storage.set("homeClub", "<x>");
+    assert.deepEqual(createStore(storage).get(), { token: "t1", club: null, lang: null, theme: "system", needsDetails: true, homeClub: null });
   });
 
   test("signing out removes the token and the person's club, and keeps language and appearance", () => {
     const storage = memoryStorage();
     const s = createStore(storage);
-    s.set({ token: "t1", club: "three-wolves", lang: "vi", theme: "dark", needsDetails: true });
+    s.set({ token: "t1", club: "three-wolves", lang: "vi", theme: "dark", needsDetails: true, homeClub: "three-wolves" });
     s.signOut();
-    assert.deepEqual(s.get(), { token: null, club: null, lang: "vi", theme: "dark", needsDetails: false });
+    assert.deepEqual(s.get(), { token: null, club: null, lang: "vi", theme: "dark", needsDetails: false, homeClub: null });
     assert.equal(storage.get("token"), null);
     assert.equal(storage.get("club"), null);
   });

@@ -3,9 +3,11 @@
 import { Suspense, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { store } from "../app.ts";
-import { Notice, OnLuvallplay, Splash, useLook } from "../Frame.tsx";
-import { useCurrentClub, usePrefs, useSession, useT, useWindowClass, type Club } from "../hooks.tsx";
-import { tabForPath, visibleTabs, type TabId } from "../lib/nav.ts";
+import { LuvallplayMark, Notice, OnLuvallplay, Splash, useLook } from "../Frame.tsx";
+import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, usePrefs, useSession, useT, useWindowClass, type Club, type ClubConfig } from "../hooks.tsx";
+import { isHomePath, moduleForPath, spaceClub, tabForPath, visibleTabs, visibleTabsAcross, type TabId } from "../lib/nav.ts";
+import { translator } from "../lib/messages.ts";
+import { ClubBadge } from "../components/ClubTag.tsx";
 import { navKind } from "../lib/window-class.ts";
 import { focus } from "../lib/focus.ts";
 import { online } from "../lib/offline.ts";
@@ -34,11 +36,17 @@ function Icon({ d }: { d: string }) {
   );
 }
 
-function ClubSwitcher({ clubs, current }: { clubs: Club[]; current: Club }) {
-  const t = useT();
+/**
+ * In a club's space (with two or more clubs): the club's crest and name in
+ * the top bar, a button that lists the clubs that have this space, to show
+ * another. The choice is kept for the next time.
+ */
+function SpacePicker({ clubs, current, configOf, module }: { clubs: Club[]; current: Club; configOf: (c: Club) => ClubConfig | null; module: string | null }) {
+  const t = useT(configOf(current));
   const [open, setOpen] = useState(false);
   const id = useId();
   const ref = useRef<HTMLDivElement>(null);
+  const choices = clubs.filter((c) => module === null || (configOf(c)?.modules.includes(module) ?? false));
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
@@ -51,14 +59,25 @@ function ClubSwitcher({ clubs, current }: { clubs: Club[]; current: Club }) {
       document.removeEventListener("pointerdown", close);
     };
   }, [open]);
+  const config = configOf(current);
+  const head = (
+    <>
+      {config?.theme.logoUrl ? <img className="club-logo" src={config.theme.logoUrl} alt="" width={40} height={40} /> : <ClubBadge club={current} config={config} size="head" />}
+      <span className="club-name">{current.name}</span>
+    </>
+  );
+  if (choices.length < 2) return <div className="space-title">{head}</div>;
   return (
-    <div className="switcher" ref={ref}>
-      <button className="button button-quiet" type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
-        {t("switch_club")}
+    <div className="switcher space-picker" ref={ref}>
+      <button className="space-title space-button" type="button" aria-label={`${current.name}, ${t("switch_club")}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+        {head}
+        <svg className="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </button>
       {open && (
         <ul className="switcher-list card" id={id} aria-label={t("your_clubs")}>
-          {clubs.map((c) => (
+          {choices.map((c) => (
             <li key={c.slug}>
               <button
                 className="switcher-item"
@@ -69,8 +88,13 @@ function ClubSwitcher({ clubs, current }: { clubs: Club[]; current: Club }) {
                   setOpen(false);
                 }}
               >
-                <span>{c.name}</span>
-                {c.slug === current.slug && <span className="muted">{t("switch_current")}</span>}
+                <ClubBadge club={c} config={configOf(c)} />
+                <span className="switcher-name">{c.name}</span>
+                {c.slug === current.slug && (
+                  <svg className="switcher-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-label={t("switch_current")} role="img">
+                    <path d="M5 12.5 10 17 19 7.5" />
+                  </svg>
+                )}
               </button>
             </li>
           ))}
@@ -98,9 +122,10 @@ export function Shell() {
   const focused = useSyncExternalStore(focus.subscribe, focus.get);
   const connected = useSyncExternalStore(online.subscribe, online.get);
   const session = useSession();
-  const { clubs, current, config, loading, slug } = useCurrentClub();
-  useLook(config);
-  const t = useT(config);
+  const { clubs, current, config: currentConfig, loading } = useCurrentClub();
+  const configs = useClubConfigs(clubs);
+  const clubsQuery = useClubs();
+  const lang = useLang();
   const cls = useWindowClass();
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -116,23 +141,60 @@ export function Shell() {
   }, [prefs.needsDetails, named]);
   const onWelcome = pathname === "/welcome";
 
-  const tabs = visibleTabs(config ? config.modules : null);
+  // One club: it is the app's, everywhere. Two or more: Home is all of them
+  // in Luvallplay's look; a club space is one club, in its look.
+  const list = clubs ?? [];
+  const multi = list.length > 1;
+  const home = isHomePath(pathname);
+  const configOf = (c: Club): ClubConfig | null => configs[list.indexOf(c)] ?? null;
+  const modulesOf = (c: Club) => configOf(c)?.modules ?? null;
+  const space = multi && !home ? spaceClub(list, modulesOf, prefs.club, moduleForPath(pathname)) : null;
+  const scopeClub = multi ? space : current;
+  const config = multi ? (space ? configOf(space) : null) : currentConfig;
+  useLook(config);
+  const t = useT(config);
+
+  const tabs = multi ? visibleTabsAcross(list.map(modulesOf)) : visibleTabs(currentConfig ? currentConfig.modules : null);
+  // Each tab in its club's words ("Wolf Vision" is a club's name for Vision).
+  const tabLabel = (tab: (typeof tabs)[number]) => {
+    if (!multi) return t(tab.label);
+    const target = spaceClub(list, modulesOf, prefs.club, tab.module);
+    return translator(lang, (target && configOf(target)?.terms) || null)(tab.label);
+  };
   const here = tabForPath(pathname);
-  // A screen of a module the club has off doesn't exist for this club.
-  const gone = !!config && !!here && !tabs.some((x) => x.id === here.id);
+  // A screen of a module the club (or, with several, every club) has off doesn't exist.
+  const known = multi ? configs.length > 0 && configs.every((c) => c !== null) : !!currentConfig;
+  const gone = known && !!here && !tabs.some((x) => x.id === here.id);
+  // The Arena's "your match is on" pill: the club whose Arena would open.
+  const arenaClub = multi ? spaceClub(list, modulesOf, prefs.club, "arena") : current;
+  const arenaOn = !!arenaClub && !!(multi ? configOf(arenaClub) : currentConfig)?.modules.includes("arena");
   useEffect(() => {
     if (gone) void navigate({ to: "/me", replace: true });
   }, [gone, navigate]);
 
   if (!prefs.token) return <Splash />;
-  if (!config && loading) return <Splash />;
+  // Wait for the list of clubs (it's saved on the device, so this is normally at once):
+  // one club or several decides what Home is, and nothing should flip after it shows.
+  if (clubsQuery.isPending || (!multi && !currentConfig && loading)) return <Splash />;
+
+  const screen = <Suspense fallback={<Splash />}>{gone ? null : <Outlet />}</Suspense>;
 
   return (
     <div className="shell" data-window-class={cls} data-nav={navKind(cls)} data-focus={focused ? "on" : undefined}>
-      <header className="shell-head">
-        {config?.theme.logoUrl && <img className="club-logo" src={config.theme.logoUrl} alt="" width={40} height={40} />}
-        <p className="club-name">{config?.club.name ?? t("brand")}</p>
-        {clubs && current && clubs.length > 1 && <ClubSwitcher clubs={clubs} current={current} />}
+      <header className="shell-head" data-space={multi ? (home ? "home" : "club") : undefined}>
+        {multi && home ? (
+          <p className="space-title">
+            <LuvallplayMark size={30} brand />
+            <span className="club-name">{t("brand")}</span>
+          </p>
+        ) : multi && space ? (
+          <SpacePicker clubs={list} current={space} configOf={configOf} module={moduleForPath(pathname)} />
+        ) : (
+          <>
+            {config?.theme.logoUrl && <img className="club-logo" src={config.theme.logoUrl} alt="" width={40} height={40} />}
+            <p className="club-name">{config?.club.name ?? t("brand")}</p>
+          </>
+        )}
         <Link to="/settings" className="head-icon" aria-label={t("nav_settings")} activeProps={{ "aria-current": "page" }}>
           <Icon d={SETTINGS_ICON} />
         </Link>
@@ -143,22 +205,22 @@ export function Shell() {
             <li key={tab.id}>
               <Link to={tab.path} className="tab" activeProps={{ "aria-current": "page" }}>
                 <Icon d={ICONS[tab.id]} />
-                <span>{t(tab.label)}</span>
+                <span>{tabLabel(tab)}</span>
               </Link>
             </li>
           ))}
         </ul>
       </nav>
       <main className="shell-main" id="main">
-        {config?.modules.includes("arena") && !pathname.startsWith("/arena") && <MatchPill slug={slug} token={prefs.token} t={t} />}
+        {arenaOn && !pathname.startsWith("/arena") && <MatchPill slug={arenaClub?.slug ?? null} token={prefs.token} t={t} />}
         {prefs.needsDetails && !onWelcome && (
           <Notice>
             {t("needs_details")} <Link to="/welcome">{t("needs_details_link")}</Link>
           </Notice>
         )}
-        {current?.status === "disabled" && <Notice tone="error">{t("club_disabled", { club: current.name })}</Notice>}
+        {scopeClub?.status === "disabled" && <Notice tone="error">{t("club_disabled", { club: scopeClub.name })}</Notice>}
         {!connected ? <Notice>{t("offline_saved")}</Notice> : session.isError && !session.data && <Notice tone="error">{t("offline")}</Notice>}
-        <Suspense fallback={<Splash />}>{gone ? null : <Outlet />}</Suspense>
+        {scopeClub ? <ClubScopeProvider club={scopeClub}>{screen}</ClubScopeProvider> : screen}
         <footer className="shell-foot">
           <OnLuvallplay />
         </footer>

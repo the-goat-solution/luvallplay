@@ -4,13 +4,17 @@ import type { PlayDay } from "./data.ts";
 import { useAbsence } from "./data.ts";
 import { dayLabel, timeRange } from "../../lib/format.ts";
 import { usePlace } from "./parts.tsx";
+import { ScopeTag } from "../../components/ClubTag.tsx";
 
 export function NextUp({ day }: { day: PlayDay | null }) {
   const { t, locale, timezone } = usePlace();
   const absence = useAbsence();
   return (
     <section className="card stack hero next-up" aria-labelledby="next-up-title">
-      <h2 id="next-up-title">{t("me_next_up")}</h2>
+      <div className="hero-head">
+        <h2 id="next-up-title">{t("me_next_up")}</h2>
+        <ScopeTag />
+      </div>
       {!day ? (
         <p className="muted">{t("me_next_none")}</p>
       ) : (

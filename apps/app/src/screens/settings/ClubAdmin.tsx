@@ -3,20 +3,22 @@
 // never leaves the app. Someone who signed in more than 12 hours ago
 // confirms with an emailed code first, right here, and the new session
 // replaces the old one on this device.
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@luvallplay/api/client";
 import type { AppKey } from "@luvallplay/i18n/app";
-import { api, store } from "../../app.ts";
+import { api, apiForClub, store } from "../../app.ts";
 import { useLang, useT } from "../../hooks.tsx";
 import { signInErrorKey } from "../../lib/signin-errors.ts";
 
 type Step = "idle" | "opening" | "confirm" | "code";
 
-export function ClubAdmin({ clubName, email }: { clubName: string; email: string | undefined }) {
+/** `apiBase`: with several clubs, the club's own API opens its admin. */
+export function ClubAdmin({ clubName, email, apiBase }: { clubName: string; email: string | undefined; apiBase?: string }) {
   const t = useT();
   const lang = useLang();
   const queryClient = useQueryClient();
+  const titleId = useId();
   const [step, setStep] = useState<Step>("idle");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,7 +28,7 @@ export function ClubAdmin({ clubName, email }: { clubName: string; email: string
     setError(null);
     setStep("opening");
     try {
-      const { url } = await api.account.adminHandoff({});
+      const { url } = await (apiBase ? apiForClub(apiBase) : api).account.adminHandoff({});
       window.location.assign(url);
     } catch (err) {
       const code = err instanceof ApiError ? err.code : undefined;
@@ -69,8 +71,8 @@ export function ClubAdmin({ clubName, email }: { clubName: string; email: string
   };
 
   return (
-    <section className="card stack" aria-labelledby="club-admin-title">
-      <h2 className="title" id="club-admin-title">{clubName}</h2>
+    <section className="card stack" aria-labelledby={titleId}>
+      <h2 className="title" id={titleId}>{clubName}</h2>
       {step === "confirm" || step === "code" ? (
         <>
           <p>{t("admin_step_up", { email: email ?? "" })}</p>

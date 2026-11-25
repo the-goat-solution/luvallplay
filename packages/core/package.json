@@ -17,6 +17,8 @@
     "./vietqr": "./src/vietqr.ts",
     "./vietqr-match": "./src/vietqr-match.ts",
     "./text-fold": "./src/text-fold.ts",
+    "./country-pack": "./src/country-pack.ts",
+    "./country-pack-vn": "./src/country-pack-vn.ts",
     "./entitlements": "./src/entitlements.ts",
     "./rank-art": "./src/rank-art.ts",
     "./exif-gps": "./src/exif-gps.ts"

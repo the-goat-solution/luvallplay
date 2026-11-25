@@ -1,12 +1,13 @@
 // The signed-in app: the club's look, its name and logo, the navigation for
 // the window's size, the club switcher, and the screen for the current tab.
-import { Suspense, useEffect, useId, useRef, useState } from "react";
+import { Suspense, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { store } from "../app.ts";
 import { Notice, OnLuvallplay, Splash, useLook } from "../Frame.tsx";
 import { useCurrentClub, usePrefs, useSession, useT, useWindowClass, type Club } from "../hooks.tsx";
 import { tabForPath, visibleTabs, type TabId } from "../lib/nav.ts";
 import { navKind } from "../lib/window-class.ts";
+import { focus } from "../lib/focus.ts";
 
 // The same pictures as the website's tabs: Player a trophy, Arena crossed
 // rackets, Leaderboard a podium.
@@ -77,6 +78,7 @@ function ClubSwitcher({ clubs, current }: { clubs: Club[]; current: Club }) {
 
 export function Shell() {
   const prefs = usePrefs();
+  const focused = useSyncExternalStore(focus.subscribe, focus.get);
   const session = useSession();
   const { clubs, current, config, loading } = useCurrentClub();
   useLook(config);
@@ -108,7 +110,7 @@ export function Shell() {
   if (!config && loading) return <Splash />;
 
   return (
-    <div className="shell" data-window-class={cls} data-nav={navKind(cls)}>
+    <div className="shell" data-window-class={cls} data-nav={navKind(cls)} data-focus={focused ? "on" : undefined}>
       <header className="shell-head">
         {config?.theme.logoUrl && <img className="club-logo" src={config.theme.logoUrl} alt="" width={40} height={40} />}
         <p className="club-name">{config?.club.name ?? t("brand")}</p>

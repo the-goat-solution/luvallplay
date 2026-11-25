@@ -661,6 +661,14 @@ const SESSION_ENDPOINTS = [
   ["GET", "/clubs/{club}/vision/challenges/{id}"],
   ["GET", "/clubs/{club}/vision/players"],
   ["POST", "/clubs/{club}/vision/labels"],
+  ["GET", "/clubs/{club}/vision/pass"],
+  ["POST", "/clubs/{club}/vision/pass"],
+  ["PATCH", "/clubs/{club}/vision/pass"],
+  ["POST", "/clubs/{club}/vision/stats"],
+  ["PUT", "/clubs/{club}/vision/stats"],
+  ["GET", "/clubs/{club}/vision/model"],
+  ["POST", "/clubs/{club}/vision/model"],
+  ["POST", "/clubs/{club}/vision/share"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1479,6 +1487,61 @@ describe("API · the players' app API", () => {
       } finally {
         await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'vision'`);
       }
+    } finally {
+      await mia.context.close();
+    }
+  });
+
+  test("API22 · Vision tracker calls answer as the website's: passes in the trial, stats and heartbeats, the shared model, stats by email", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const app = (method, path, body) => appApi(method, `/clubs/${CLUB}/vision${path}`, { token: mia.token, body });
+    const web = async (method, path, body) => {
+      const r = await fetch(`${base()}${path}`, {
+        method,
+        headers: { Cookie: `tw_player=${mia.token}`, Origin: base(), ...(body ? { "Content-Type": "application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, json: await r.json().catch(() => ({})) };
+    };
+    const same = async (what, a, w, pick = (j) => j.error ?? null) => {
+      const [x, y] = [await a, await w];
+      assert.deepEqual([x.status, pick(x.json)], [y.status, pick(y.json)], what);
+      return x;
+    };
+    try {
+      const trial = (await app("GET", "/pass?kind=live")).json.trial === true;
+      if (trial) {
+        await same("pass in the trial", app("GET", "/pass?kind=upload"), web("GET", "/api/wolf-vision/pass?kind=upload"), (j) => [j.trial, j.pass]);
+        await same("no buying in the trial", app("POST", "/pass", { kind: "live" }), web("POST", "/api/wolf-vision/pass", { kind: "live" }));
+        await same("starting a session in the trial", app("PATCH", "/pass", { passId: 1 }), web("PATCH", "/api/wolf-vision/pass", { passId: 1 }), (j) => j.trial);
+      } else {
+        const bought = await app("POST", "/pass", { kind: "upload" });
+        assert.deepEqual([bought.status, bought.json.testMode, bought.json.pass.status], [200, true, "paid"]);
+        assert.equal((await app("PATCH", "/pass", { passId: bought.json.pass.id })).json.pass.status, "used");
+        assert.deepEqual([(await app("PATCH", "/pass", { passId: 999999 })).status], [402]);
+      }
+      assert.equal((await app("GET", "/pass?kind=forever")).status, 400);
+
+      const stats = { challengeId: 999999, mode: "live", duration: 60, rallies: 3, longestRally: 5, avgRallyShots: 3, fastestShotKmh: null, players: [1, 2, 3, 4].map((id) => ({ playerId: id, hits: 1, distance: 2, topSpeed: 3 })) };
+      await same("stats for a missing game", app("POST", "/stats", stats), web("POST", "/api/arena/match-stats", stats));
+      await same("stats with three players", app("POST", "/stats", { ...stats, players: stats.players.slice(1) }), web("POST", "/api/arena/match-stats", { ...stats, players: stats.players.slice(1) }), (j) => j.error !== undefined);
+      const beat = { challengeId: 999999, kind: "start", rallies: 0, hits: 0, quality: 0.5 };
+      await same("a heartbeat for a missing game", app("PUT", "/stats", beat), web("PUT", "/api/arena/match-stats", beat));
+
+      const model = await same("the shared model", app("GET", "/model"), web("GET", "/api/wolf-vision/model"), (j) => j.model);
+      assert.equal(model.json.model, null);
+      const weights = { v: 1, w1: [0.1], b1: Array(16).fill(0), w2: Array(16).fill(0), b2: 0, n: 0 };
+      const update = { kind: "checker", weights, trained: 10, meta: { mode: "live", quality: 0.5, pos: 1, neg: 1 } };
+      await same("weights of the wrong size", app("POST", "/model", update), web("POST", "/api/wolf-vision/model", update), (j) => j.error !== undefined);
+
+      const players = ["Ann", "Bea", "Cat", "Dee"].map((name, i) => ({ name, team: i < 2 ? 0 : 1, hits: i, distance: 10, topSpeed: 4 }));
+      const session = { teams: ["Ann & Bea", "Cat & Dee"], duration: 300, rallies: 9, longestRally: 7, avgRallyShots: 4, fastestShotKmh: 120, players };
+      await same("nobody to email", app("POST", "/share", session), web("POST", "/api/wolf-vision/share", session), (j) => [j.ok, j.sent]);
+      const many = { ...session, players: players.map((p, i) => ({ ...p, email: `guest${i}@e2e.test` })) };
+      await same("at most three people", app("POST", "/share", many), web("POST", "/api/wolf-vision/share", many));
+      const one = { ...session, players: players.map((p, i) => (i === 3 ? { ...p, email: "dee.guest@e2e.test" } : p)) };
+      const sent = await app("POST", "/share", one);
+      assert.deepEqual([sent.status, sent.json.ok, sent.json.sent, sent.json.failed], [200, true, ["dee.guest@e2e.test"], []]);
     } finally {
       await mia.context.close();
     }

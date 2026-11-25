@@ -4615,6 +4615,131 @@
         }
       }
     },
+    "vision.beat": {
+      "method": "PUT",
+      "path": "/clubs/{club}/vision/stats",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "challengeId": {
+            "t": "number"
+          },
+          "hits": {
+            "t": "number"
+          },
+          "kind": {
+            "t": "enum",
+            "values": [
+              "start",
+              "beat",
+              "end"
+            ]
+          },
+          "quality": {
+            "t": "number"
+          },
+          "rallies": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "vision.buy": {
+      "method": "POST",
+      "path": "/clubs/{club}/vision/pass",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "challengeId": {
+            "t": "number",
+            "nullable": true,
+            "optional": true
+          },
+          "kind": {
+            "t": "enum",
+            "values": [
+              "live",
+              "upload"
+            ]
+          },
+          "returnTo": {
+            "t": "string",
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "pass": {
+            "t": "object",
+            "fields": {
+              "id": {
+                "t": "number"
+              },
+              "kind": {
+                "t": "enum",
+                "values": [
+                  "live",
+                  "upload"
+                ]
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "pending",
+                  "paid",
+                  "used"
+                ]
+              },
+              "test": {
+                "t": "boolean"
+              },
+              "usedAt": {
+                "t": "string",
+                "nullable": true
+              }
+            },
+            "optional": true
+          },
+          "testMode": {
+            "t": "boolean",
+            "optional": true
+          },
+          "url": {
+            "t": "string",
+            "optional": true
+          }
+        }
+      }
+    },
     "vision.challenge": {
       "method": "GET",
       "path": "/clubs/{club}/vision/challenges/{id}",
@@ -4780,6 +4905,145 @@
         }
       }
     },
+    "vision.model": {
+      "method": "GET",
+      "path": "/clubs/{club}/vision/model",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "model": {
+            "t": "object",
+            "fields": {
+              "createdAt": {
+                "t": "string"
+              },
+              "sessions": {
+                "t": "number"
+              },
+              "weights": {
+                "t": "object",
+                "fields": {
+                  "b1": {
+                    "t": "array",
+                    "of": {
+                      "t": "number"
+                    }
+                  },
+                  "b2": {
+                    "t": "number"
+                  },
+                  "n": {
+                    "t": "number"
+                  },
+                  "v": {
+                    "t": "literal",
+                    "value": 1
+                  },
+                  "w1": {
+                    "t": "array",
+                    "of": {
+                      "t": "number"
+                    }
+                  },
+                  "w2": {
+                    "t": "array",
+                    "of": {
+                      "t": "number"
+                    }
+                  }
+                }
+              }
+            },
+            "nullable": true
+          }
+        }
+      }
+    },
+    "vision.pass": {
+      "method": "GET",
+      "path": "/clubs/{club}/vision/pass",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "query": {
+        "t": "object",
+        "fields": {
+          "kind": {
+            "t": "enum",
+            "values": [
+              "live",
+              "upload"
+            ]
+          },
+          "session_id": {
+            "t": "string",
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "pass": {
+            "t": "object",
+            "fields": {
+              "id": {
+                "t": "number"
+              },
+              "kind": {
+                "t": "enum",
+                "values": [
+                  "live",
+                  "upload"
+                ]
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "pending",
+                  "paid",
+                  "used"
+                ]
+              },
+              "test": {
+                "t": "boolean"
+              },
+              "usedAt": {
+                "t": "string",
+                "nullable": true
+              }
+            },
+            "nullable": true
+          },
+          "priceCents": {
+            "t": "number",
+            "nullable": true
+          },
+          "testMode": {
+            "t": "boolean"
+          },
+          "trial": {
+            "t": "boolean",
+            "optional": true
+          }
+        }
+      }
+    },
     "vision.players": {
       "method": "GET",
       "path": "/clubs/{club}/vision/players",
@@ -4814,6 +5078,249 @@
                   "t": "string"
                 }
               }
+            }
+          }
+        }
+      }
+    },
+    "vision.save": {
+      "method": "POST",
+      "path": "/clubs/{club}/vision/stats",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "auto": {
+            "t": "object",
+            "fields": {
+              "accepted": {
+                "t": "number"
+              },
+              "estimated": {
+                "t": "number"
+              },
+              "inferred": {
+                "t": "number"
+              },
+              "plusMinus": {
+                "t": "number"
+              },
+              "predicted": {
+                "t": "number"
+              },
+              "quality": {
+                "t": "number"
+              }
+            },
+            "optional": true
+          },
+          "avgRallyShots": {
+            "t": "number"
+          },
+          "challengeId": {
+            "t": "number"
+          },
+          "duration": {
+            "t": "number"
+          },
+          "fastestShotKmh": {
+            "t": "number",
+            "nullable": true
+          },
+          "longestRally": {
+            "t": "number"
+          },
+          "mode": {
+            "t": "enum",
+            "values": [
+              "live",
+              "upload"
+            ]
+          },
+          "players": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "distance": {
+                  "t": "number"
+                },
+                "hits": {
+                  "t": "number"
+                },
+                "playerId": {
+                  "t": "number"
+                },
+                "topSpeed": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "rallies": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "stats": {
+            "t": "object",
+            "fields": {
+              "avgRallyShots": {
+                "t": "number"
+              },
+              "duration": {
+                "t": "number"
+              },
+              "fastestShotKmh": {
+                "t": "number",
+                "nullable": true
+              },
+              "longestRally": {
+                "t": "number"
+              },
+              "mode": {
+                "t": "enum",
+                "values": [
+                  "live",
+                  "upload"
+                ]
+              },
+              "players": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "distance": {
+                      "t": "number"
+                    },
+                    "hits": {
+                      "t": "number"
+                    },
+                    "playerId": {
+                      "t": "number"
+                    },
+                    "topSpeed": {
+                      "t": "number"
+                    }
+                  }
+                }
+              },
+              "rallies": {
+                "t": "number"
+              },
+              "recordedAt": {
+                "t": "string"
+              },
+              "recordedBy": {
+                "t": "object",
+                "fields": {
+                  "id": {
+                    "t": "number"
+                  },
+                  "name": {
+                    "t": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "vision.share": {
+      "method": "POST",
+      "path": "/clubs/{club}/vision/share",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "avgRallyShots": {
+            "t": "number"
+          },
+          "duration": {
+            "t": "number"
+          },
+          "fastestShotKmh": {
+            "t": "number",
+            "nullable": true
+          },
+          "longestRally": {
+            "t": "number"
+          },
+          "players": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "distance": {
+                  "t": "number"
+                },
+                "email": {
+                  "t": "string",
+                  "optional": true
+                },
+                "hits": {
+                  "t": "number"
+                },
+                "name": {
+                  "t": "string"
+                },
+                "team": {
+                  "t": "unknown"
+                },
+                "topSpeed": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "rallies": {
+            "t": "number"
+          },
+          "teams": {
+            "t": "unknown"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "failed": {
+            "t": "array",
+            "of": {
+              "t": "string"
+            }
+          },
+          "ok": {
+            "t": "boolean"
+          },
+          "sent": {
+            "t": "array",
+            "of": {
+              "t": "string"
             }
           }
         }
@@ -4897,6 +5404,161 @@
           },
           "trialEnds": {
             "t": "string"
+          }
+        }
+      }
+    },
+    "vision.train": {
+      "method": "POST",
+      "path": "/clubs/{club}/vision/model",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "kind": {
+            "t": "literal",
+            "value": "checker"
+          },
+          "meta": {
+            "t": "object",
+            "fields": {
+              "mode": {
+                "t": "enum",
+                "values": [
+                  "live",
+                  "upload"
+                ]
+              },
+              "neg": {
+                "t": "number"
+              },
+              "pos": {
+                "t": "number"
+              },
+              "quality": {
+                "t": "number"
+              }
+            }
+          },
+          "trained": {
+            "t": "number"
+          },
+          "weights": {
+            "t": "object",
+            "fields": {
+              "b1": {
+                "t": "array",
+                "of": {
+                  "t": "number"
+                }
+              },
+              "b2": {
+                "t": "number"
+              },
+              "n": {
+                "t": "number"
+              },
+              "v": {
+                "t": "literal",
+                "value": 1
+              },
+              "w1": {
+                "t": "array",
+                "of": {
+                  "t": "number"
+                }
+              },
+              "w2": {
+                "t": "array",
+                "of": {
+                  "t": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "merged": {
+            "t": "boolean"
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "stored": {
+            "t": "boolean"
+          }
+        }
+      }
+    },
+    "vision.use": {
+      "method": "PATCH",
+      "path": "/clubs/{club}/vision/pass",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "passId": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "pass": {
+            "t": "object",
+            "fields": {
+              "id": {
+                "t": "number"
+              },
+              "kind": {
+                "t": "enum",
+                "values": [
+                  "live",
+                  "upload"
+                ]
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "pending",
+                  "paid",
+                  "used"
+                ]
+              },
+              "test": {
+                "t": "boolean"
+              },
+              "usedAt": {
+                "t": "string",
+                "nullable": true
+              }
+            },
+            "nullable": true
+          },
+          "trial": {
+            "t": "boolean",
+            "optional": true
           }
         }
       }

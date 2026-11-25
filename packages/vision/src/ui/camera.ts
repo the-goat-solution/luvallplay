@@ -5,7 +5,7 @@
 // prefer the single physical lens the assistant chose. Labels are localised,
 // so the assistant can also pick from the list; a zoom constraint is the
 // fallback where only a virtual multi-lens camera is exposed.
-import type { LensPreset } from "@/lib/ma/lens";
+import type { LensPreset } from "../engine/lens";
 
 export function isPhone(): boolean {
   if (typeof navigator === "undefined") return false;

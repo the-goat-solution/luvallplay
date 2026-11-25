@@ -26,6 +26,9 @@ importers:
       '@luvallplay/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@luvallplay/vision':
+        specifier: workspace:*
+        version: link:../../packages/vision
       '@tanstack/react-query':
         specifier: ^5.108.4
         version: 5.108.4(@types/react@19.3.0)(react@19.3.1)
@@ -189,6 +192,9 @@ importers:
       '@luvallplay/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@luvallplay/vision':
+        specifier: workspace:*
+        version: link:../../packages/vision
       '@mediapipe/tasks-vision':
         specifier: ^0.10.35
         version: 0.10.35
@@ -337,6 +343,22 @@ importers:
 
   packages/ui:
     devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/vision:
+    dependencies:
+      '@mediapipe/tasks-vision':
+        specifier: ^0.10.35
+        version: 0.10.35
+    devDependencies:
+      '@types/react':
+        specifier: ^19.1.6
+        version: 19.3.0
+      react:
+        specifier: ^19.1.0
+        version: 19.3.1
       typescript:
         specifier: ^5
         version: 5.9.3

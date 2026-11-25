@@ -3,13 +3,13 @@
 // other frame, never more than half the main thread), computes colour
 // fingerprints, collects impact sounds, and feeds lib/ma/engine.ts.
 import type { ObjectDetector } from "@mediapipe/tasks-vision";
-import type { Detection } from "@/lib/match-analyzer";
-import { MatchEngine } from "@/lib/ma/engine";
-import { OnsetDetector, onsetsFromSamples, type Onset } from "@/lib/ma/audio";
-import { partLooks, toGray } from "@/lib/ma/imaging";
-import type { MatchSim, SimFrame } from "@/lib/ma/sim";
+import type { Detection } from "../match-analyzer";
+import { MatchEngine } from "../engine/engine";
+import { OnsetDetector, onsetsFromSamples, type Onset } from "../engine/audio";
+import { partLooks, toGray } from "../engine/imaging";
+import type { MatchSim, SimFrame } from "../engine/sim";
 import { detectPeople } from "./detector";
-import { fromCrop, mergeDetections } from "@/lib/ma/detections";
+import { fromCrop, mergeDetections } from "../engine/detections";
 import type { PoseRunner } from "./pose";
 
 /** Analysis frame width: enough for a shuttle at the far baseline, light enough for an iPhone 14. */

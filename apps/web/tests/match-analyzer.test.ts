@@ -24,7 +24,7 @@ import {
   type PlayerMemory,
   type Pt,
   type Sample,
-} from "../lib/match-analyzer.ts";
+} from "../../../packages/vision/src/match-analyzer.ts";
 
 const close = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
 
@@ -314,7 +314,7 @@ test("rally readout and match summary", () => {
 });
 
 test("calibration from any four or more court points, not just the corners", async () => {
-  const { courtHomographyFromTaps, courtLandmarks, landmarkId } = await import("../lib/match-analyzer.ts");
+  const { courtHomographyFromTaps, courtLandmarks, landmarkId } = await import("../../../packages/vision/src/match-analyzer.ts");
   const truth = courtHomography(TAPS)!;
   // Net posts and the near short service line corners: the near baseline is out of shot.
   const picks = [{ x: 0, y: 6.7 }, { x: 6.1, y: 6.7 }, { x: 0, y: 4.72 }, { x: 6.1, y: 4.72 }];

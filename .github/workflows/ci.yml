@@ -80,7 +80,8 @@ jobs:
   # budgets and the forms end to end, against a production build.
   site:
     name: Website (types, lint, tests, build, gate R)
-    runs-on: ubuntu-latest
+    # Pinned: Playwright's --with-deps can't install its fonts on ubuntu-26.04 yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:
@@ -130,7 +131,8 @@ jobs:
   # the page's Content-Security-Policy are the real ones.
   app:
     name: Players' app (types, tests, build, budget, journeys)
-    runs-on: ubuntu-latest
+    # Pinned: Playwright's --with-deps can't install its fonts on ubuntu-26.04 yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:

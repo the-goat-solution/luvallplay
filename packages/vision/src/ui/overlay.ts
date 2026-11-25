@@ -2,11 +2,11 @@
 // court style (coral vs teal corners, floodlight yellow for the shuttle and
 // highlights, navy glass panels, Copperplate for the brand). Drawn in video
 // pixels on top of the camera frame; the caller sets the canvas transform.
-import { COURT, courtLines, formatClock, type Box, type Pt, type RallyReadout } from "@/lib/match-analyzer";
-import { courtToImage, projectSegment, type CourtCamera } from "@/lib/ma/lens";
-import type { Hit } from "@/lib/ma/hits";
-import type { QualityFactors } from "@/lib/ma/quality";
-import type { ShuttlePoint } from "@/lib/ma/shuttle";
+import { COURT, courtLines, formatClock, type Box, type Pt, type RallyReadout } from "../match-analyzer";
+import { courtToImage, projectSegment, type CourtCamera } from "../engine/lens";
+import type { Hit } from "../engine/hits";
+import type { QualityFactors } from "../engine/quality";
+import type { ShuttlePoint } from "../engine/shuttle";
 
 /** Posting pair: coral + soft coral; accepting pair: teal + soft teal (the Arena's two corners). */
 export const PLAYER_COLORS = ["#ff6b57", "#ffb4a6", "#2fd4b5", "#a4f2e2"];

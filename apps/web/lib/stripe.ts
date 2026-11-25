@@ -312,3 +312,32 @@ export async function createMembershipSubscription(input: {
   await stripe.paymentIntents.update(pi.id, { receipt_email: input.email });
   return { subscriptionId: subscription.id, clientSecret: pi.clientSecret };
 }
+
+/** A Checkout page for one tracker pass (the players' app; the website's pass route has its own). */
+export async function createVisionCheckout(input: {
+  kind: "live" | "upload";
+  amountCents: number;
+  name: string;
+  description: string;
+  email: string;
+  passId: number;
+  playerId: number;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<{ id: string; url: string | null }> {
+  const cs = await getStripe().checkout.sessions.create({
+    mode: "payment",
+    line_items: [{ quantity: 1, price_data: { currency: clubCurrencyLower(), unit_amount: input.amountCents, product_data: { name: input.name, description: input.description } } }],
+    customer_email: input.email,
+    metadata: { type: "wolf_vision", kind: input.kind, passId: String(input.passId), playerId: String(input.playerId) },
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+  });
+  return { id: cs.id, url: cs.url };
+}
+
+/** Whether a tracker pass's Checkout was paid. */
+export async function visionCheckoutPaid(sessionId: string): Promise<boolean> {
+  const cs = await getStripe().checkout.sessions.retrieve(sessionId);
+  return cs.payment_status === "paid" && cs.metadata?.type === "wolf_vision";
+}

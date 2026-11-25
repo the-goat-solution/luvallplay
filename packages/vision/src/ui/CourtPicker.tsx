@@ -1,6 +1,6 @@
 "use client";
 
-import { COURT, courtLandmarks, courtLines, landmarkId, type CourtTap, type Pt } from "@/lib/match-analyzer";
+import { COURT, courtLandmarks, courtLines, landmarkId, type CourtTap, type Pt } from "../match-analyzer";
 
 /** The four outer corners, asked for first: near baseline left, right, then far right, far left. */
 export const DEFAULT_CORNERS: Pt[] = [

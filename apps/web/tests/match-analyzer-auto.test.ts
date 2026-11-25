@@ -1,16 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { COURT, applyHomography, courtLandmarks, solveHomography, type Pt } from "../lib/match-analyzer.ts";
-import { distort, fitCamera, imageToCourt, courtToImage, makeLens, undistort } from "../lib/ma/lens.ts";
-import { hungarian } from "../lib/ma/hungarian.ts";
-import { estimateShift, projections, toGray } from "../lib/ma/imaging.ts";
-import { IdentityTracker, type PersonObs } from "../lib/ma/identity.ts";
-import { HitFusion, acceptThreshold, expectedRecall, rhythmScore, type FusionContext } from "../lib/ma/hits.ts";
-import { cameraFromHomography, fitFromPoint, project3, rayNearPlayer } from "../lib/ma/flight.ts";
-import { OnsetDetector } from "../lib/ma/audio.ts";
-import { combineQuality } from "../lib/ma/quality.ts";
-import { MatchSim } from "../lib/ma/sim.ts";
-import { runSim } from "../lib/ma/simrun.ts";
+import { COURT, applyHomography, courtLandmarks, solveHomography, type Pt } from "../../../packages/vision/src/match-analyzer.ts";
+import { distort, fitCamera, imageToCourt, courtToImage, makeLens, undistort } from "../../../packages/vision/src/engine/lens.ts";
+import { hungarian } from "../../../packages/vision/src/engine/hungarian.ts";
+import { estimateShift, projections, toGray } from "../../../packages/vision/src/engine/imaging.ts";
+import { IdentityTracker, type PersonObs } from "../../../packages/vision/src/engine/identity.ts";
+import { HitFusion, acceptThreshold, expectedRecall, rhythmScore, type FusionContext } from "../../../packages/vision/src/engine/hits.ts";
+import { cameraFromHomography, fitFromPoint, project3, rayNearPlayer } from "../../../packages/vision/src/engine/flight.ts";
+import { OnsetDetector } from "../../../packages/vision/src/engine/audio.ts";
+import { combineQuality } from "../../../packages/vision/src/engine/quality.ts";
+import { MatchSim } from "../../../packages/vision/src/engine/sim.ts";
+import { runSim } from "../../../packages/vision/src/engine/simrun.ts";
 
 const close = (a: number, b: number, eps: number) => assert.ok(Math.abs(a - b) <= eps, `${a} ≉ ${b} (±${eps})`);
 
@@ -221,7 +221,7 @@ test("court geometry sanity: the net is in the middle", () => {
 });
 
 test("calibration: taps on the court mat's edge instead of the lines are flagged (real broadcast taps)", async () => {
-  const { suspectTap } = await import("../lib/ma/lens.ts");
+  const { suspectTap } = await import("../../../packages/vision/src/engine/lens.ts");
   const mk = (a: number[][]) => a.map(([x, y, ix, iy]) => ({ court: { x, y }, image: { x: ix, y: iy } }));
   // All England 2026, Birmingham (1920×1080): outer corners, the near T, singles corners.
   const good = mk([[0, 0, 414, 1018], [6.1, 0, 1506, 1019], [0, 13.4, 607, 589], [6.1, 13.4, 1316, 589], [3.05, 4.72, 963, 822], [0.46, 0, 500, 1018], [5.64, 0, 1422, 1018]]);
@@ -239,7 +239,7 @@ test("calibration: taps on the court mat's edge instead of the lines are flagged
 });
 
 test("shuttle candidates: feet are masked, an isolated blob in flight is kept, the racket zone stays open", async () => {
-  const { shuttleCandidates } = await import("../lib/ma/shuttle.ts");
+  const { shuttleCandidates } = await import("../../../packages/vision/src/engine/shuttle.ts");
   const blob = (x: number, y: number, area = 4) => ({ x, y, area, minX: x - 1, maxX: x + 1, minY: y - 1, maxY: y + 1, bright: 200 });
   const player: [number, number, number, number] = [200, 100, 60, 150]; // analysis px = video px here
   const out = shuttleCandidates([blob(205, 245), blob(400, 60), blob(205, 120)], 1, [player], 640 * 360);

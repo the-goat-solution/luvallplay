@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { checkRateLimit } from "@/lib/security";
-import { SHUTTLE_CHECKER } from "@/lib/ma/models/shuttle-checker";
+import { SHUTTLE_CHECKER } from "@luvallplay/vision/checker-model";
 import { checkerUpdateSchema, latestModel, submitCheckerUpdate } from "@/lib/wolf-vision-db";
 
 // Wolf Vision auto-training. GET: the current shared weights of the AI shuttle

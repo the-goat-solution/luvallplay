@@ -17,9 +17,9 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 | 5a. Player tab | **Merged** | #136, see §1a |
 | 5b. Shop (card payments through Stripe) | **Merged** | #137, see §1a |
 | 5c. Membership: join, renew, change, cancel, billing; casual booking | **Merged** | #138 (into #137), see §1a |
-| 6a. Vision: tab shell and labelling tool | **PR open** | see §1a |
-| 6b. Vision: upload-video analysis (shared package, WebAssembly) | Not started | |
-| 6c. Vision: live camera, heartbeat, recording, passes | Not started (before the trial ends, 1 Mar 2027) | |
+| 6a. Vision: tab shell and labelling tool | **PR open** | #139, see §1a |
+| 6b. Vision: upload-video analysis (shared package, WebAssembly) | **PR open, needs the owner's OK** (moves the website's tracker code) | see §1a |
+| 6c. Vision: live camera, heartbeat, recording, passes | **Same PR as 6b** | see §1a |
 | 7. Offline and PWA | Not started | |
 | 8. Responsive and visual pass, performance, old-client tests, docs | Not started | |
 
@@ -38,7 +38,8 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - **Player (5a)**: `player.stats`; app `apps/app/src/screens/Player.tsx`, `src/screens/player/*` (data, Charts, RankCard). Rank art not yet.
 - **Shop (5b)**: `shop.*`; server `apps/web/lib/app-shop.ts`; app `src/screens/shop/*`, `src/components/CardPayment.tsx`, `src/lib/stripe.ts`. Stripe's hosts are in `apps/app/vite.config.ts`.
 - **Membership (5c)**: `membership.*`, `play.book`; server `apps/web/lib/app-membership.ts` (join and booking mirror `app/api/create-subscription` and `app/api/create-payment-intent`: keep in step); app `src/screens/Membership.tsx`, `src/screens/membership/*`, booking in `src/screens/me/PlayCalendar.tsx`.
-- **Vision (6a)**: `vision.*`; server `apps/web/lib/app-vision.ts`; app `src/screens/Vision.tsx`, `src/screens/VisionLabel.tsx`, `src/screens/vision/data.ts`. Parts 2 and 3: see the build plan row 6a for the plan (analysis code to a shared package; CSP adds 'wasm-unsafe-eval' and storage.googleapis.com; pass checkout needs an app return URL).
+- **Vision (6a)**: `vision.*`; server `apps/web/lib/app-vision.ts`; app `src/screens/Vision.tsx`, `src/screens/VisionLabel.tsx`, `src/screens/vision/data.ts`.
+- **Vision (6b and 6c, one step)**: the tracker (engine, screens, labelling tool) moved from `apps/web/lib/ma`, `lib/match-analyzer.ts`, `lib/wolf-vision-trial.ts` and `components/match-analyzer/*` into **`packages/vision`** (`@luvallplay/vision`). It imports nothing from the website: a `VisionHostProvider` (`src/host.tsx`) gives it the language, the club's words, links, full screen and a **transport** for its seven server calls (challenge, pass, stats, model, share, players, labels). The website wraps it in `components/match-analyzer/host.tsx` (its existing `/api/...` routes, unchanged URLs and behaviour; `lib/wolf-vision-trial.ts` re-exports the package). The app shows the same tracker at `/vision/track` (`src/screens/VisionTrack.tsx`) on the new endpoints `vision.pass`, `vision.buy`, `vision.use`, `vision.save`, `vision.beat`, `vision.model`, `vision.train`, `vision.share`, which answer as the website's routes (journey API22 compares them). The stats email is shared (`apps/web/lib/wolf-vision-share.ts`); the app's pass checkout is in `lib/stripe.ts` (`createVisionCheckout`, `visionCheckoutPaid`) and returns to the app's `/vision`. **Known gap**: the tracker's own text (`packages/vision/src/ui/copy.ts`) is still the website's ("Wolf 1", "Pack A", "shuttle", NZ$ prices); it must become club- and sport-neutral, with prices from the API, before another club turns Vision on.
 - **Not on Me yet**: My photos and My photos (with the Player step).
 - **Words**: Me words are in the app's own dictionary (`packages/i18n/src/app.ts`), copied from the website's wording without the club's name or "$" (the website's `profile` dictionary still has both typed in).
 

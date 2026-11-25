@@ -1447,7 +1447,7 @@ describe("APP · membership and casual booking", () => {
 });
 
 describe("APP · Vision", () => {
-  test("APP40 · the Vision tab: the free trial with its dates and prices, the tracker on the club's website, a challenge that isn't there; the labelling tool marks hits by key and saves them", async () => {
+  test("APP40 · the Vision tab: the free trial with its dates and prices, the tracker in the app, a challenge that isn't there; the labelling tool marks hits by key and saves them", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
     const problems = watch(page);
@@ -1459,12 +1459,12 @@ describe("APP · Vision", () => {
       assert.match(await page.locator(".trial").textContent(), /days left of the free trial|Last day of the free trial/);
       assert.match(await page.locator(".trial").textContent(), /From 1 March 2027: \$5(\.00)? a live match, \$2(\.00)? a video\./);
       const camera = page.getByRole("link", { name: /^Phone camera/ });
-      assert.equal(await camera.getAttribute("href"), `${env.base}/profile/wolf-vision`);
-      assert.equal(await camera.getAttribute("target"), "_blank");
+      assert.equal(await camera.getAttribute("href"), "/vision/track");
+      assert.equal(await camera.getAttribute("target"), null);
 
       await page.goto(`${APP}/vision?challenge=999999`);
       await page.getByText("This challenge could not be found.").waitFor();
-      assert.equal(await page.getByRole("link", { name: /^Analyse a video/ }).getAttribute("href"), `${env.base}/profile/wolf-vision?challenge=999999`);
+      assert.equal(await page.getByRole("link", { name: /^Analyse a video/ }).getAttribute("href"), "/vision/track?challenge=999999");
       problems.length = 0; // the 404 for the missing challenge is expected
 
       await page.getByRole("link", { name: "Open the labelling tool" }).click();
@@ -1486,6 +1486,49 @@ describe("APP · Vision", () => {
       assert.deepEqual(row.hits.map((h) => [h.player, h.rally]), [[0, 0], [3, 1]]);
       await db.query(`DELETE FROM wv_labels WHERE id = $1`, [row.id]);
       assert.deepEqual(problems.filter((p) => !/MEDIA_ERR|media|video|Failed to load resource/i.test(p)), []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("APP41 · the tracker in the app: the club's words and language, its calls on the club's API, full screen during a session, a challenge that isn't there", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const calls = [];
+    page.on("request", (r) => r.url().includes("/api/") && calls.push(`${r.method()} ${new URL(r.url()).pathname}`));
+    try {
+      await page.goto(`${APP}/vision`);
+      await page.waitForSelector('[data-screen="nav_vision"][data-state="ready"]');
+      await page.getByRole("link", { name: /^Phone camera/ }).click();
+      await page.waitForURL(`${APP}/vision/track`);
+      await page.getByTestId("mode-camera").waitFor();
+      const banner = await page.getByTestId("trial-banner").textContent();
+      assert.match(banner, /Wolf Vision is free until 28 February 2027/);
+      assert.ok(await page.locator(".shell-nav").isVisible(), "the tabs stay until a session starts");
+
+      // Its language switch is the app's.
+      await page.getByRole("button", { name: "VI", exact: true }).click();
+      await page.getByTestId("trial-banner").filter({ hasText: "miễn phí đến hết 28 tháng 2 năm 2027" }).waitFor();
+      assert.equal(await page.evaluate(() => localStorage.getItem("lp.lang")), "vi");
+      await page.getByRole("button", { name: "EN", exact: true }).click();
+      await page.getByTestId("trial-banner").filter({ hasText: "is free until" }).waitFor();
+
+      // A session takes the whole screen; leaving gives the tabs back.
+      await page.goto(`${APP}/vision/track?demo=1`);
+      await page.getByTestId("stage").waitFor();
+      await page.waitForSelector('.shell[data-focus="on"]');
+      assert.equal(await page.locator(".shell-nav").isVisible(), false);
+      await page.getByTestId("wv-exit").click();
+      // Asks first only while tracking is running.
+      if (await page.getByTestId("exit-modal").isVisible()) await page.getByTestId("exit-confirm").click();
+      await page.waitForSelector(".shell:not([data-focus])");
+
+      await page.goto(`${APP}/vision/track?challenge=999999`);
+      await page.getByText("This challenge could not be found.").waitFor();
+      assert.ok(calls.some((c) => /^GET \/api\/v1\/app\/clubs\/[^/]+\/vision\/challenges\/999999$/.test(c)), calls.join("\n"));
+      assert.deepEqual(calls.filter((c) => /\/api\/(arena|wolf-vision)\//.test(c)), [], "only the app API");
+      assert.deepEqual(problems.filter((p) => !/404|MEDIA_ERR|media|video|Failed to load resource/i.test(p)), []);
     } finally {
       await context.close();
     }
@@ -1610,20 +1653,22 @@ describe("APP · accessibility and the page's rules", () => {
     assert.deepEqual(problems, []);
   });
 
-  test("APP14 · the built page carries a strict Content-Security-Policy that names only the API host and Stripe's", async () => {
+  test("APP14 · the built page carries a strict Content-Security-Policy that names only the API host, Stripe's and the tracker's models", async () => {
     const html = await (await fetch(`${APP}/signin`)).text();
     const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1] ?? "";
     assert.match(csp, /default-src 'self'/);
-    // Stripe's published hosts, for the card form (loaded only on a payment step).
-    assert.match(csp, /script-src 'self' https:\/\/js\.stripe\.com(;|$)/);
+    // Stripe's published hosts, for the card form (loaded only on a payment step);
+    // WebAssembly (the tracker's runtime) may compile, but no script may eval.
+    assert.match(csp, /script-src 'self' 'wasm-unsafe-eval' https:\/\/js\.stripe\.com(;|$)/);
     assert.match(csp, /frame-src https:\/\/js\.stripe\.com https:\/\/hooks\.stripe\.com(;|$)/);
     assert.match(csp, /style-src 'self'(;|$)/);
-    // Videos chosen on the device only (the labelling tool).
+    // Videos chosen on the device only (the tracker and the labelling tool).
     assert.match(csp, /media-src 'self' blob:(;|$)/);
-    assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com https://api\\.stripe\\.com(;|$)`));
-    assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|\*/);
+    assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com https://api\\.stripe\\.com https://storage\\.googleapis\\.com(;|$)`));
+    assert.match(csp, /worker-src 'self' blob:(;|$)/);
+    assert.doesNotMatch(csp, /unsafe-inline|'unsafe-eval'|\*/);
     // Images from any https host (club logos, photos in Blob storage); nothing else is widened.
-    assert.match(csp, /img-src 'self' data: https: /);
+    assert.match(csp, /img-src 'self' data: blob: https: /);
     assert.doesNotMatch(csp.match(/connect-src[^;]*/)[0], /https:(\s|$)/);
     assert.doesNotMatch(html, /<script(?![^>]+src=)[^>]*>/);
     // And it bites: a request to any other host is refused by the page itself.

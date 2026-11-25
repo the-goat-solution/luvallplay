@@ -131,6 +131,15 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs
 # 2. Merge the pull request.
 ```
 
+## 2d. Step 5, agreed shape (not built yet)
+
+Agreed with the coordinating thread on 25 Nov; each shared change is its own `[lane J]` pull request and needs your OK before merging, because it touches booking and payments.
+
+- **A child's booking takes a place through the same counter as an adult's.** `lib/db.ts` gets two small helpers taken out of today's code (`claimSessionSpot`, `releaseSessionSpot`), after lane H's replay fix (#167) is on `main`. Adults' behaviour must be provably unchanged (the golden master and booking tests pass untouched). Lane H reviews.
+- **`lib/juniors/bookings.ts`** (lane J): the child's booking row first, then the place, in one transaction, so a full day or a repeated payment event can never count twice.
+- **Paying:** a new payment type `junior` through the payments interface, and one thin branch in the Stripe webhook that calls into `lib/juniors`, after lane W's payments-interface work lands. Lane W reviews.
+- **Rosters and headcount emails don't name children until step 6.** A booked child takes a place on the day, and the play-day page shows a count ("+2 juniors"), but the existing roster, headcount emails and stats read adults' bookings only and stay that way. Children are named only on the junior roster (step 6), which is limited to the people who need it.
+
 ## 3. Decisions waiting for you
 
 | # | Question | What I'll build unless you say otherwise |

@@ -94,22 +94,33 @@ async function api(token, body) {
   return { status: r.status, json };
 }
 
-/** Requests a page hasn't had an answer to yet, so a page that never settles can say what it is waiting for. */
-const inFlight = new WeakMap();
+/** What a page has asked for lately, so a page that never settles can say what kept it busy. */
+const traffic = new WeakMap();
 function watchRequests(page) {
-  if (inFlight.has(page)) return;
-  const pending = new Set();
-  inFlight.set(page, pending);
-  page.on("request", (r) => pending.add(r));
-  for (const done of ["requestfinished", "requestfailed"]) page.on(done, (r) => pending.delete(r));
+  if (traffic.has(page)) return;
+  const seen = { pending: new Set(), recent: [] };
+  traffic.set(page, seen);
+  page.on("request", (r) => {
+    seen.pending.add(r);
+    seen.recent.push([Date.now(), `${r.method()} ${r.url()}`]);
+    if (seen.recent.length > 400) seen.recent.shift();
+  });
+  for (const done of ["requestfinished", "requestfailed"]) page.on(done, (r) => seen.pending.delete(r));
 }
 
 async function shot(page, name) {
   // Fully loaded (no loading skeleton) and no sheet still animating in.
   watchRequests(page);
+  const asked = Date.now();
   await page.waitForLoadState("networkidle").catch((err) => {
-    const waiting = [...inFlight.get(page)].map((r) => `${r.method()} ${r.url()}`);
-    throw new Error(`${name}: the page never went quiet (${err.message.split("\n")[0]}). Still waiting for: ${waiting.join(", ") || "nothing started since this screenshot was asked for"}`);
+    const seen = traffic.get(page);
+    const waiting = [...seen.pending].map((r) => `${r.method()} ${r.url()}`);
+    const during = seen.recent.filter(([at]) => at >= asked).map(([at, what]) => `+${at - asked}ms ${what}`);
+    throw new Error(
+      `${name}: the page never went quiet (${err.message.split("\n")[0]}) at ${page.url()}.\n` +
+        `Unanswered: ${waiting.join(", ") || "none"}.\n` +
+        `${during.length} requests while waiting${during.length > 40 ? " (the last 40)" : ""}:\n${during.slice(-40).join("\n")}`,
+    );
   });
   await page.waitForTimeout(400);
   for (const w of WIDTHS) {

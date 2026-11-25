@@ -80,6 +80,7 @@ async function signedIn(email, viewport = PHONE) {
   );
   const context = await browser.newContext({ viewport, baseURL: base() });
   await context.addCookies([{ name: "tw_player", value: token, url: base() }]);
+  context.on("page", watchRequests);
   return { context, token };
 }
 
@@ -93,9 +94,23 @@ async function api(token, body) {
   return { status: r.status, json };
 }
 
+/** Requests a page hasn't had an answer to yet, so a page that never settles can say what it is waiting for. */
+const inFlight = new WeakMap();
+function watchRequests(page) {
+  if (inFlight.has(page)) return;
+  const pending = new Set();
+  inFlight.set(page, pending);
+  page.on("request", (r) => pending.add(r));
+  for (const done of ["requestfinished", "requestfailed"]) page.on(done, (r) => pending.delete(r));
+}
+
 async function shot(page, name) {
   // Fully loaded (no loading skeleton) and no sheet still animating in.
-  await page.waitForLoadState("networkidle");
+  watchRequests(page);
+  await page.waitForLoadState("networkidle").catch((err) => {
+    const waiting = [...inFlight.get(page)].map((r) => `${r.method()} ${r.url()}`);
+    throw new Error(`${name}: the page never went quiet (${err.message.split("\n")[0]}). Still waiting for: ${waiting.join(", ") || "nothing started since this screenshot was asked for"}`);
+  });
   await page.waitForTimeout(400);
   for (const w of WIDTHS) {
     await page.setViewportSize({ width: w, height: w < 600 ? 812 : 900 });

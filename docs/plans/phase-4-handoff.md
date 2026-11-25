@@ -16,7 +16,7 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 | 4. Arena and Leaderboard | **Merged** | #135, see §1a |
 | 5a. Player tab | **Merged** | #136, see §1a |
 | 5b. Shop (card payments through Stripe) | **PR open; merge needs the owner's OK** (payments) | see §1a |
-| 5c. Membership: join, renew, change, cancel, billing; casual booking | In progress | |
+| 5c. Membership: join, renew, change, cancel, billing; casual booking | **PR open; merge needs the owner's OK** (payments) | see §1a |
 | 6. Vision | Not started | |
 | 7. Offline and PWA | Not started | |
 | 8. Responsive and visual pass, performance, old-client tests, docs | Not started | |
@@ -35,6 +35,7 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - **Leaderboard (4)**: `leaderboard.board`, `leaderboard.player`; server `apps/web/lib/app-leaderboard.ts`; app `apps/app/src/screens/Leaderboard.tsx`, `src/screens/leaderboard/*`. Rank icons not yet.
 - **Player (5a)**: `player.stats`; app `apps/app/src/screens/Player.tsx`, `src/screens/player/*` (data, Charts, RankCard). Rank art not yet.
 - **Shop (5b)**: `shop.*`; server `apps/web/lib/app-shop.ts`; app `src/screens/shop/*`, `src/components/CardPayment.tsx`, `src/lib/stripe.ts`. Stripe's hosts are in `apps/app/vite.config.ts`.
+- **Membership (5c)**: `membership.*`, `play.book`; server `apps/web/lib/app-membership.ts` (join and booking mirror `app/api/create-subscription` and `app/api/create-payment-intent`: keep in step); app `src/screens/Membership.tsx`, `src/screens/membership/*`, booking in `src/screens/me/PlayCalendar.tsx`.
 - **Not on Me yet**: My photos and My photos (with the Player step).
 - **Words**: Me words are in the app's own dictionary (`packages/i18n/src/app.ts`), copied from the website's wording without the club's name or "$" (the website's `profile` dictionary still has both typed in).
 

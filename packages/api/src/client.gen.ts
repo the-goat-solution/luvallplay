@@ -108,6 +108,23 @@ export function createApi(transport: Transport) {
       home: (params: ParamsOf<"me.home">, options?: Options) =>
         transport.call("me.home", { params, signal: options?.signal }) as Promise<ResponseOf<"me.home">>,
     },
+    membership: {
+      /** POST /clubs/{club}/membership (signed in) */
+      action: (params: ParamsOf<"membership.action">, body: BodyOf<"membership.action">, options?: Options) =>
+        transport.call("membership.action", { params, body, signal: options?.signal }) as Promise<ResponseOf<"membership.action">>,
+      /** GET /clubs/{club}/membership/billing (signed in) */
+      billing: (params: ParamsOf<"membership.billing">, options?: Options) =>
+        transport.call("membership.billing", { params, signal: options?.signal }) as Promise<ResponseOf<"membership.billing">>,
+      /** POST /clubs/{club}/membership/join (signed in) */
+      join: (params: ParamsOf<"membership.join">, body: BodyOf<"membership.join">, options?: Options) =>
+        transport.call("membership.join", { params, body, signal: options?.signal }) as Promise<ResponseOf<"membership.join">>,
+      /** POST /clubs/{club}/membership/portal (signed in) */
+      portal: (params: ParamsOf<"membership.portal">, body: BodyOf<"membership.portal">, options?: Options) =>
+        transport.call("membership.portal", { params, body, signal: options?.signal }) as Promise<ResponseOf<"membership.portal">>,
+      /** GET /clubs/{club}/membership (signed in) */
+      state: (params: ParamsOf<"membership.state">, options?: Options) =>
+        transport.call("membership.state", { params, signal: options?.signal }) as Promise<ResponseOf<"membership.state">>,
+    },
     messages: {
       /** GET /clubs/{club}/messages (signed in) */
       list: (params: ParamsOf<"messages.list">, options?: Options) =>
@@ -121,6 +138,11 @@ export function createApi(transport: Transport) {
       /** GET /clubs/{club}/messages/{id} (signed in) */
       thread: (params: ParamsOf<"messages.thread">, options?: Options) =>
         transport.call("messages.thread", { params, signal: options?.signal }) as Promise<ResponseOf<"messages.thread">>,
+    },
+    play: {
+      /** POST /clubs/{club}/me/book (signed in) */
+      book: (params: ParamsOf<"play.book">, body: BodyOf<"play.book">, options?: Options) =>
+        transport.call("play.book", { params, body, signal: options?.signal }) as Promise<ResponseOf<"play.book">>,
     },
     player: {
       /** GET /clubs/{club}/me/stats (signed in) */

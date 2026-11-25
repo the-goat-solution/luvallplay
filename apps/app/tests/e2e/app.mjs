@@ -383,14 +383,13 @@ describe("APP · Me (the home tab)", () => {
     assert.equal(await nextCard.locator(".next-date").textContent(), await dayKey(page, next.date));
     assert.match(await nextCard.textContent(), /Pioneer Stadium/);
     assert.match(await nextCard.textContent(), /Included in your membership/);
-    // Membership: plan and day, status, days left, and the way to manage it on the club's website.
+    // Membership: plan and day, status, days left, and the way to manage it (the Membership screen).
     const card = page.locator(".membership");
     assert.equal(await card.getByRole("heading").textContent(), "Monthly · Fridays");
     assert.equal(await card.locator(".status").textContent(), "Active");
     assert.equal(await card.locator(".stat-value").textContent(), String(data.membership.daysLeft));
     const manage = card.getByRole("link", { name: /Manage membership/ });
-    assert.equal(await manage.getAttribute("href"), `${env.base}/profile`);
-    assert.equal(await manage.getAttribute("target"), "_blank");
+    assert.equal(await manage.getAttribute("href"), "/membership");
     assert.equal(await page.locator(".join").count(), 0, "no join card for a member");
     // Calendar: every play day, her Fridays marked as hers.
     assert.equal(await page.locator(".day").count(), data.calendar.length);
@@ -455,7 +454,7 @@ describe("APP · Me (the home tab)", () => {
   });
 
   test("APP18 · not a member: the join card in the club's money, the welcome card, and Done keeps it away", async () => {
-    const { context } = await signedIn(PEOPLE.player.email);
+    const { context, token } = await signedIn(PEOPLE.player.email);
     const { rows } = await db.query(`SELECT id, welcome_card_dismissed_at FROM players WHERE email = $1`, [PEOPLE.player.email]);
     const page = await context.newPage();
     try {
@@ -468,10 +467,11 @@ describe("APP · Me (the home tab)", () => {
       assert.match(await join.textContent(), /\$33\s*\/ 4 weeks/);
       assert.match(await join.textContent(), /\$85\s*\/ 12 weeks/);
       assert.match(await join.locator(".plan-best").textContent(), /Best value/);
-      assert.equal(await join.getByRole("link", { name: /Choose your plan/ }).getAttribute("href"), `${env.base}/profile`);
+      assert.equal(await join.getByRole("link", { name: /Choose your plan/ }).getAttribute("href"), "/membership");
       assert.match(await page.getByRole("region", { name: "Next up" }).textContent(), /Nothing booked yet/);
       // A day with casual spots offers a booking, in the club's money.
-      if (await page.locator(".day").count()) assert.ok((await page.getByRole("link", { name: /Book · \$10/ }).count()) >= 0);
+      const casual = (await (await fetch(`${api}/clubs/three-wolves/me`, { headers: { Authorization: `Bearer ${token}` } })).json()).calendar.filter((d) => !d.included && !d.booked && d.bookable && !d.paused && !d.closed && d.spots > 0);
+      assert.equal(await page.getByRole("button", { name: /^Book · \$10/ }).count(), casual.length, "Book on every day with casual spots, in the club's money");
       await page.locator(".welcome").getByRole("button", { name: "Done" }).click();
       await page.locator(".welcome").waitFor({ state: "detached" });
       for (let i = 0; i < 20; i++) {
@@ -669,7 +669,7 @@ describe("APP · screenshots", () => {
     for (const width of [375, 900]) {
       const { context } = await signedIn(PEOPLE.member.email, { viewport: { width, height: width < 600 ? 812 : 1000 }, deviceScaleFactor: 2 });
       const page = await context.newPage();
-      for (const [route, screen] of [["/player", "nav_player"], ["/arena", "nav_arena"], ["/leaderboard", "nav_leaderboard"]]) {
+      for (const [route, screen] of [["/player", "nav_player"], ["/arena", "nav_arena"], ["/leaderboard", "nav_leaderboard"], ["/membership", "membership"]]) {
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(`[data-screen="${screen}"][data-state="ready"]`);
         await page.waitForTimeout(200);
@@ -1260,24 +1260,32 @@ async function seedShop(db, { cash = true } = {}) {
   };
 }
 
+// Stripe's script, stood in for: the card fields mount, and paying succeeds.
+const FAKE_STRIPE = `window.Stripe = function () {
+  return {
+    elements: function () {
+      return { create: function () {
+        var ready = null;
+        return {
+          on: function (e, cb) { if (e === "ready") ready = cb; },
+          mount: function (el) { var d = document.createElement("div"); d.className = "fake-card-fields"; d.textContent = "4242 4242 4242 4242"; el.appendChild(d); setTimeout(function () { ready && ready(); }, 20); },
+          destroy: function () {}
+        };
+      } };
+    },
+    confirmPayment: function () { window.__paid = (window.__paid || 0) + 1; return Promise.resolve({ paymentIntent: { id: "pi_test", status: "succeeded" } }); },
+    confirmSetup: function () { return Promise.resolve({ setupIntent: { id: "seti_test", status: "succeeded" } }); }
+  };
+};`;
+
+/** Stripe for one browser context: the club's key in its config, and Stripe's script stood in for. */
+async function withStripe(context) {
+  const base = await realConfig();
+  await serveJson(context, `${api}/clubs/three-wolves/config`, () => ({ ...base, club: { ...base.club, stripeKey: "pk_test_e2e" } }));
+  await context.route("https://js.stripe.com/v3/", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_STRIPE }));
+}
+
 describe("APP · the club shop", () => {
-  // Stripe's script, stood in for: the card fields mount, and paying succeeds.
-  const FAKE_STRIPE = `window.Stripe = function () {
-    return {
-      elements: function () {
-        return { create: function () {
-          var ready = null;
-          return {
-            on: function (e, cb) { if (e === "ready") ready = cb; },
-            mount: function (el) { var d = document.createElement("div"); d.className = "fake-card-fields"; d.textContent = "4242 4242 4242 4242"; el.appendChild(d); setTimeout(function () { ready && ready(); }, 20); },
-            destroy: function () {}
-          };
-        } };
-      },
-      confirmPayment: function () { window.__paid = (window.__paid || 0) + 1; return Promise.resolve({ paymentIntent: { id: "pi_test", status: "succeeded" } }); },
-      confirmSetup: function () { return Promise.resolve({ setupIntent: { id: "seti_test", status: "succeeded" } }); }
-    };
-  };`;
 
   test("APP37 · the shop on Me: fits and sizes with stock, a cash reservation and its cancelling, and paying by card through Stripe's form", async () => {
     const shop = await seedShop(db);
@@ -1306,9 +1314,7 @@ describe("APP · the club shop", () => {
       assert.equal((await db.query(`SELECT reserved FROM shop_variants WHERE id = $1`, [shop.men])).rows[0].reserved, 0);
 
       // By card: the club's Stripe key, Stripe's form, the payment, then the order shows as paid.
-      const base = await realConfig();
-      await serveJson(context, `${api}/clubs/three-wolves/config`, () => ({ ...base, club: { ...base.club, stripeKey: "pk_test_e2e" } }));
-      await context.route("https://js.stripe.com/v3/", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_STRIPE }));
+      await withStripe(context);
       const order = { id: 999001, status: "pending_payment", method: "card", totalCents: 4500, holdExpiresAt: null, paidAt: null, collectedAt: null, createdAt: new Date().toISOString(), items: [{ label: "E2E Tee · Men's M", qty: 1, unitPriceCents: 4500 }] };
       await context.route(`${api}/clubs/three-wolves/shop/orders`, (route) =>
         route.request().method() === "POST" ? route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ order, clientSecret: "pi_test_secret_e2e", playDay: null }) }) : route.fallback(),
@@ -1337,15 +1343,118 @@ describe("APP · the club shop", () => {
   });
 });
 
+describe("APP · membership and casual booking", () => {
+  const json = (body, status = 200) => ({ status, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify(body) });
+  const MEM = '[data-screen="membership"][data-state="ready"]';
+
+  test("APP38 · a member manages their membership in the app: billing, an upgrade, and turning auto-renew off through the four steps", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    await serveJson(context, `${api}/clubs/three-wolves/membership/billing`, () => ({
+      card: { brand: "visa", last4: "4242", expMonth: 4, expYear: 2029 },
+      nextCharge: { date: "2026-12-18", amountCents: 4000 },
+      pendingChange: null,
+      receipts: [{ date: "2026-11-20", amountCents: 4000, description: "Monthly membership", url: null, refunded: false }],
+    }));
+    const sent = [];
+    await context.route(`${api}/clubs/three-wolves/membership`, (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      const body = route.request().postDataJSON();
+      sent.push(body);
+      return route.fulfill(json(body.action === "change" ? { ok: true, from: "2026-12-18" } : { ok: true, endsOn: "2026-12-18" }));
+    });
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/me`);
+      await page.waitForSelector(ME_READY);
+      await page.getByRole("link", { name: "Manage membership" }).click();
+      await page.waitForURL(`${APP}/membership`);
+      await page.waitForSelector(MEM);
+      await page.getByText("VISA •••• 4242 · 04/29").waitFor();
+      await page.getByText("Receipts (1)").waitFor();
+      assert.equal(await page.getByRole("button", { name: "Update card" }).count(), 1);
+
+      await page.getByRole("button", { name: /Upgrade to Quarterly/ }).click();
+      await page.getByRole("dialog").getByRole("button", { name: /^Upgrade from/ }).click();
+      await page.getByRole("status").filter({ hasText: "You'll switch to Quarterly on" }).waitFor();
+      assert.deepEqual(sent.at(-1), { action: "change", plan: "quarterly", day: "friday" });
+
+      await page.getByRole("button", { name: "Turn off auto-renew" }).click();
+      const leave = page.getByRole("dialog", { name: "Turn off auto-renew" });
+      await leave.getByText("Step 1 of 4").waitFor();
+      await leave.getByRole("button", { name: "Continue" }).click();
+      await leave.getByRole("button", { name: "No thanks, continue" }).click();
+      const next = leave.getByRole("button", { name: "Continue" });
+      assert.equal(await next.isDisabled(), true, "a reason first");
+      await leave.getByLabel("Not enough time / schedule changed").check();
+      await next.click();
+      await leave.getByRole("button", { name: "Turn off auto-renew" }).click();
+      await leave.getByRole("status").filter({ hasText: "Your membership ends on" }).waitFor();
+      assert.deepEqual(sent.at(-1), { action: "cancel", reason: "time" });
+      assert.deepEqual(problems, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("APP39 · joining in the app (plan, billing, Stripe) and booking a casual spot from Me's calendar", async () => {
+    const { context } = await signedIn(PEOPLE.player.email);
+    await withStripe(context);
+    let joined;
+    await context.route(`${api}/clubs/three-wolves/membership/join`, (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      joined = route.request().postDataJSON();
+      return route.fulfill(json({ clientSecret: "pi_join_secret_e2e", periodStart: "2026-12-04" }));
+    });
+    let booked;
+    await context.route(`${api}/clubs/three-wolves/me/book`, (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      booked = route.request().postDataJSON();
+      return route.fulfill(json({ clientSecret: "pi_book_secret_e2e", periodStart: null }));
+    });
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/me`);
+      await page.waitForSelector(ME_READY);
+      // A casual spot, if one is open on Pete's calendar.
+      const book = page.getByRole("button", { name: /^Book · / }).first();
+      if (await book.count()) {
+        await book.click();
+        const dialog = page.getByRole("dialog", { name: "Book a casual session" });
+        await dialog.locator(".fake-card-fields").waitFor();
+        await dialog.getByRole("button", { name: /^Pay / }).click();
+        await page.getByRole("status").filter({ hasText: "You're booked for" }).waitFor();
+        assert.match(booked.date, /^\d{4}-\d{2}-\d{2}$/);
+      }
+
+      await page.getByRole("link", { name: "Choose your plan" }).click();
+      await page.waitForURL(`${APP}/membership`);
+      await page.getByRole("heading", { name: "Become a member" }).waitFor();
+      await page.getByRole("button", { name: /^Monthly/ }).click();
+      await page.getByLabel(/^Pay once/).check();
+      await page.getByRole("button", { name: /^Continue to payment · / }).click();
+      await page.locator(".fake-card-fields").waitFor();
+      await page.getByRole("button", { name: /^Pay / }).click();
+      await page.getByRole("status").filter({ hasText: "Your membership starts" }).waitFor();
+      assert.equal(joined.plan, "monthly");
+      assert.equal(joined.recurring, false);
+      assert.deepEqual(problems, []);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
 describe("APP · layout (build plan §4.4)", () => {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
   test("APP10 · five widths: no sideways scroll, and the right navigation for each window class", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/membership", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : ".shell-nav .tab");
       for (const width of WIDTHS) {
         const height = width < 600 ? 812 : 900;
         await page.setViewportSize({ width, height });
@@ -1399,9 +1508,9 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP11 · text at 200%: still no sideways scroll on a phone, and nothing is cut off", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/membership", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : route === "/membership" ? '[data-screen="membership"][data-state="ready"]' : ".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
       const afterSize = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
@@ -1440,7 +1549,7 @@ describe("APP · accessibility and the page's rules", () => {
       // axe is injected by the test, which the page's own CSP would (rightly) refuse.
       const { context } = await signedIn(PEOPLE.admin.email, { colorScheme, bypassCSP: true });
       const anon = await browser.newContext({ viewport: PHONE, colorScheme, bypassCSP: true });
-      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/arena", '[data-screen="nav_arena"]']]) {
+      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/membership", '[data-screen="membership"][data-state="ready"]'], [context, "/arena", '[data-screen="nav_arena"]']]) {
         const page = await ctx.newPage();
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);

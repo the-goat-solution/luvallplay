@@ -25,6 +25,11 @@ export function getStripe(): Stripe {
   return stripe;
 }
 
+/** For tests: use this client instead of one made from the key (null: from the key again). */
+export function setStripeForTests(client: Stripe | null): void {
+  stripe = client;
+}
+
 /** Client secret for Payment Element — supports Basil (confirmation_secret) and legacy invoices. */
 export function getSubscriptionPaymentClientSecret(
   subscription: Stripe.Subscription,

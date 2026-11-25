@@ -25,6 +25,7 @@ const LABELS: Record<string, string> = {
   "export.shop": "Downloaded the shop export",
   "export.jersey": "Downloaded the jersey export",
   "finance.receipt_view": "Opened a receipt",
+  "shop.refund": "Refunded a shop order",
 };
 
 const OUTCOME: Record<string, string> = { refused: "not done", failed: "failed" };

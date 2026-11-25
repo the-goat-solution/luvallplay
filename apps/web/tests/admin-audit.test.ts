@@ -18,7 +18,7 @@ function harness(ctx: AdminContext | null = OWNER) {
 
 test("an export (GET) is logged, with its filter and the outcome", async () => {
   const { rows, deps } = harness();
-  const GET = auditedRoute("export.shop", async () => new Response("xlsx"), deps);
+  const GET = auditedRoute("export.shop", async () => new Response("xlsx"), { deps });
   await GET(new Request("http://club.test/api/admin/shop/export?orders=all&q=mia"));
   assert.deepEqual(rows, [{ action: "export.shop", target: "/api/admin/shop/export", outcome: "ok", meta: { status: 200, fields: { orders: "all" } } }]);
 });
@@ -31,7 +31,7 @@ test("a POST keeps the id it acted on; the handler still reads the body", async 
       const body = (await request.json()) as { membershipId: number };
       return Response.json({ ok: true, id: body.membershipId });
     },
-    deps,
+    { deps },
   );
   const res = await POST(new Request("http://club.test/api/admin/cancel-membership", { method: "POST", body: JSON.stringify({ membershipId: 42, medicalNotes: "asthma", reason: "moved" }) }));
   assert.deepEqual(await res.json(), { ok: true, id: 42 });
@@ -40,15 +40,15 @@ test("a POST keeps the id it acted on; the handler still reads the body", async 
 
 test("outcome follows the answer: refused for 4xx, failed for 5xx and for a thrown error", async () => {
   const { rows, deps } = harness();
-  await auditedRoute("payment.retry", async () => Response.json({ error: "Membership not found" }, { status: 404 }), deps)(new Request("http://club.test/x", { method: "POST" }));
-  await auditedRoute("stripe.sync", async () => Response.json({ error: "Stripe is down" }, { status: 502 }), deps)(new Request("http://club.test/x", { method: "POST" }));
-  await assert.rejects(auditedRoute("stripe.sync", async () => Promise.reject(new Error("boom")), deps)(new Request("http://club.test/x", { method: "POST" })), /boom/);
+  await auditedRoute("payment.retry", async () => Response.json({ error: "Membership not found" }, { status: 404 }), { deps })(new Request("http://club.test/x", { method: "POST" }));
+  await auditedRoute("stripe.sync", async () => Response.json({ error: "Stripe is down" }, { status: 502 }), { deps })(new Request("http://club.test/x", { method: "POST" }));
+  await assert.rejects(auditedRoute("stripe.sync", async () => Promise.reject(new Error("boom")), { deps })(new Request("http://club.test/x", { method: "POST" })), /boom/);
   assert.deepEqual(rows.map((r) => [r.action, r.outcome, r.meta?.status]), [["payment.retry", "refused", 404], ["stripe.sync", "failed", 502], ["stripe.sync", "failed", undefined]]);
 });
 
 test("someone who isn't a signed-in admin writes no row (the handler refuses them)", async () => {
   const { rows, deps } = harness(null);
-  const res = await auditedRoute("export.finance", async () => Response.json({ error: "Unauthorized" }, { status: 401 }), deps)(new Request("http://club.test/x"));
+  const res = await auditedRoute("export.finance", async () => Response.json({ error: "Unauthorized" }, { status: 401 }), { deps })(new Request("http://club.test/x"));
   assert.equal(res.status, 401);
   assert.deepEqual(rows, []);
 });
@@ -90,4 +90,78 @@ test("the audit log says when an action wasn't done", () => {
   assert.equal(auditOutcomeNote({}), "", "older rows have no outcome");
   assert.equal(auditOutcomeNote({ outcome: "refused", reason: "Bank matching needs Finance & reports turned on first." }), "not done: Bank matching needs Finance & reports turned on first.");
   assert.equal(auditOutcomeNote({ outcome: "failed" }), "failed");
+});
+
+// ---------------------------------------------------------------------------
+// Per-action step-up (audit H8)
+// ---------------------------------------------------------------------------
+
+test("step-up: a sensitive route needs a code entered in the last five minutes", async () => {
+  const { ACTION_STEP_UP_MAX_AGE_MS, STEP_UP_MAX_AGE_MS, isActionStepUpFresh, isStepUpFresh } = await import("@luvallplay/auth");
+  assert.equal(ACTION_STEP_UP_MAX_AGE_MS, 5 * 60 * 1000);
+  const now = Date.now();
+  assert.equal(isActionStepUpFresh(new Date(now - 4 * 60_000), now), true);
+  assert.equal(isActionStepUpFresh(new Date(now - 6 * 60_000), now), false);
+  assert.equal(isActionStepUpFresh(new Date(now + 3_600_000), now), false, "a session from the future is not trusted");
+  assert.equal(isActionStepUpFresh(null, now), false);
+  // Opening admin is unchanged: 12 hours.
+  assert.equal(isStepUpFresh(new Date(now - 6 * 60_000), now), true);
+  assert.equal(isStepUpFresh(new Date(now - STEP_UP_MAX_AGE_MS - 1000), now), false);
+
+  const stale = { ...OWNER, signedInAt: new Date(now - 6 * 60_000) } as AdminContext;
+  let ran = 0;
+  const handler = async () => {
+    ran++;
+    return new Response("done");
+  };
+
+  // Fresh: runs.
+  const fresh = harness({ ...OWNER, signedInAt: new Date(now - 60_000) } as AdminContext);
+  assert.equal((await auditedRoute("membership.cancel", handler, { stepUp: true, deps: fresh.deps })(new Request("http://club.test/api/admin/cancel-membership", { method: "POST" }))).status, 200);
+  assert.equal(ran, 1);
+
+  // Stale, from a button (fetch): 401 step_up, the handler never runs, and the refusal is on record.
+  const a = harness(stale);
+  const res = await auditedRoute("membership.cancel", handler, { stepUp: true, deps: a.deps })(new Request("http://club.test/api/admin/cancel-membership", { method: "POST", body: JSON.stringify({ membershipId: 9 }) }));
+  assert.deepEqual([res.status, await res.json()], [401, { error: "step_up", scope: "action" }]);
+  assert.equal(ran, 1);
+  assert.deepEqual(a.rows, [{ action: "membership.cancel", target: "9", outcome: "refused", reason: "asked for a fresh sign-in code", meta: { status: 401, fields: { membershipId: "9" } } }]);
+
+  // Stale, an export link clicked on an admin page: to the code screen, then back to that page.
+  const b = harness(stale);
+  const nav = await auditedRoute("export.shop", handler, { stepUp: true, deps: b.deps })(
+    new Request("http://club.test/api/admin/shop/export?orders=all", { headers: { accept: "text/html,application/xhtml+xml", referer: "http://club.test/admin/shop?orders=all" } }),
+  );
+  assert.equal(nav.status, 303);
+  assert.equal(nav.headers.get("location"), "http://club.test/login?stepup=action&next=%2Fadmin%2Fshop%3Forders%3Dall");
+  // A referer from somewhere else is never followed.
+  const c = harness(stale);
+  const away = await auditedRoute("export.shop", handler, { stepUp: true, deps: c.deps })(
+    new Request("http://club.test/api/admin/shop/export", { headers: { accept: "text/html", referer: "http://evil.test/admin/shop" } }),
+  );
+  assert.equal(away.headers.get("location"), "http://club.test/login?stepup=action&next=%2Fadmin");
+  assert.equal(ran, 1, "nothing ran without a fresh code");
+
+  // Without stepUp (a receipt, a free month) an older sign-in is enough, as before.
+  const d = harness(stale);
+  assert.equal((await auditedRoute("finance.receipt_view", handler, { deps: d.deps })(new Request("http://club.test/x"))).status, 200);
+});
+
+test("step-up: every sensitive admin action asks for the fresh code", () => {
+  const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
+  // Routes: cancellations and every export.
+  for (const route of ["cancel-membership", "finance/export", "shop/export", "jersey/export"]) {
+    assert.match(read(`../app/api/admin/${route}/route.ts`), /\}, \{ stepUp: true \}\);/, route);
+  }
+  // Server actions: module switches and locks, admins, platform staff, refunds.
+  const actions: [string, string[]][] = [
+    ["../app/admin/(console)/settings/modules/page.tsx", ["module.switch", "module.lock"]],
+    ["../app/admin/(console)/people/admins/page.tsx", ["admin.granted", "admin.role_changed", "admin.removed"]],
+    ["../app/admin/(console)/platform/admins/page.tsx", ["platform.granted", "platform.removed"]],
+    ["../app/admin/(console)/shop/page.tsx", ["shop.refund"]],
+  ];
+  for (const [file, codes] of actions) {
+    const src = read(file);
+    for (const code of codes) assert.ok(src.includes(`requireFreshAdminActor(PATH, "${code}"`) || src.includes(`requireFreshAdminActor("/admin/shop", "${code}"`), `${file}: ${code}`);
+  }
 });

@@ -663,6 +663,18 @@ describe("APP · screenshots", () => {
       await context.close();
     }
     await db.query(`UPDATE message_threads SET unread_for_player = TRUE WHERE id = $1`, [id]);
+    // The Arena and the Leaderboard on a phone and a tablet.
+    for (const width of [375, 900]) {
+      const { context } = await signedIn(PEOPLE.member.email, { viewport: { width, height: width < 600 ? 812 : 1000 }, deviceScaleFactor: 2 });
+      const page = await context.newPage();
+      for (const [route, screen] of [["/arena", "nav_arena"], ["/leaderboard", "nav_leaderboard"]]) {
+        await page.goto(`${APP}${route}`);
+        await page.waitForSelector(`[data-screen="${screen}"][data-state="ready"]`);
+        await page.waitForTimeout(200);
+        await page.screenshot({ path: `${dir}/${route.slice(1)}-${width}.png`, fullPage: true });
+      }
+      await context.close();
+    }
   });
 });
 
@@ -1137,6 +1149,46 @@ describe("APP · the Arena", () => {
   });
 });
 
+describe("APP · the Leaderboard", () => {
+  const READY = '[data-screen="nav_leaderboard"][data-state="ready"]';
+
+  test("APP35 · the Leaderboard: the board as the API has it, periods and sources, a player's card whose Challenge opens the Arena", async () => {
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      const board = await (await fetch(`${api}/clubs/three-wolves/leaderboard`, { headers: { Authorization: `Bearer ${token}` } })).json();
+      await page.goto(`${APP}/leaderboard`);
+      await page.waitForSelector(READY);
+      await page.getByRole("heading", { name: "Leaderboard", level: 1 }).waitFor();
+      assert.equal(await page.locator(".board:not(.board-pinned) .board-row").count(), Math.min(50, board.rows.length));
+      if (board.rows.length) assert.match(await page.locator(".board-row").first().textContent(), new RegExp(board.rows[0].name));
+
+      await page.getByRole("button", { name: "Month", exact: true }).click();
+      await page.getByRole("heading", { level: 2, name: new RegExp(String(new Date().getFullYear())) }).waitFor();
+      assert.equal(await page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed"), "true");
+      await page.getByRole("button", { name: "Previous" }).click();
+      await page.waitForFunction(() => document.querySelector('[aria-label="Next"]') && !document.querySelector('[aria-label="Next"]').disabled);
+      await page.getByRole("button", { name: "Play days" }).click();
+      await page.waitForFunction(() => document.querySelector(".chip-button[aria-pressed='true']")?.textContent === "Play days");
+
+      await page.getByRole("button", { name: "All time" }).click();
+      await page.getByRole("button", { name: "All points" }).click();
+      const other = board.rows.find((r) => r.playerId !== board.me.id);
+      if (other) {
+        await page.locator(".board-row", { hasText: other.name }).first().getByRole("button").click();
+        const card = page.getByRole("dialog", { name: other.name });
+        await card.getByText("Recent form").waitFor();
+        await card.getByRole("button", { name: /^(Challenge|Accept their challenge)$/ }).click();
+        await page.waitForURL(`${APP}/arena`);
+      }
+      assert.deepEqual(problems, []);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
 describe("APP · layout (build plan §4.4)", () => {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
@@ -1145,7 +1197,7 @@ describe("APP · layout (build plan §4.4)", () => {
     const page = await context.newPage();
     for (const route of ["/me", "/inbox", "/arena", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : ".shell-nav .tab");
       for (const width of WIDTHS) {
         const height = width < 600 ? 812 : 900;
         await page.setViewportSize({ width, height });
@@ -1201,7 +1253,7 @@ describe("APP · layout (build plan §4.4)", () => {
     const page = await context.newPage();
     for (const route of ["/me", "/inbox", "/arena", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : ".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
       const afterSize = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

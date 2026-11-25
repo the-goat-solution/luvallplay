@@ -202,6 +202,18 @@ export const ENDPOINTS = define({
     params: S.clubParams, body: S.arenaActionRequest, response: S.arenaActionResponse,
     rateLimit: { limit: 60, windowMs: MIN },
   },
+  // The Leaderboard tab: the points board for a source and period, and one
+  // player's card (someone who hides from the board is 404, except to themselves).
+  "leaderboard.board": {
+    method: "GET", path: "/clubs/{club}/leaderboard", auth: "session", scope: "club", module: "arena",
+    params: S.clubParams, query: S.boardQuery, response: S.boardResponse,
+    rateLimit: { limit: 120, windowMs: MIN },
+  },
+  "leaderboard.player": {
+    method: "GET", path: "/clubs/{club}/players/{id}", auth: "session", scope: "club", module: "arena",
+    params: S.playerParams, response: S.playerCardResponse,
+    rateLimit: { limit: 120, windowMs: MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

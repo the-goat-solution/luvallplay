@@ -6,7 +6,7 @@ import { errorCode, pairTitle, useArenaAction, type ArenaState, type Challenge }
 import type { ArenaT } from "./words.ts";
 
 /** A modal <dialog> that opens with its content and closes with Escape. */
-function Dialog({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+export function Dialog({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current;

@@ -29,6 +29,8 @@ export const ROUTES = {
   "integrations.deleteWebhook": { method: "DELETE", path: "/account/integrations/webhooks/{id}", auth: "session" },
   "integrations.list": { method: "GET", path: "/account/integrations", auth: "session" },
   "integrations.revokeToken": { method: "DELETE", path: "/account/integrations/tokens/{id}", auth: "session" },
+  "leaderboard.board": { method: "GET", path: "/clubs/{club}/leaderboard", auth: "session" },
+  "leaderboard.player": { method: "GET", path: "/clubs/{club}/players/{id}", auth: "session" },
   "me.absence": { method: "POST", path: "/clubs/{club}/me/absence", auth: "session" },
   "me.home": { method: "GET", path: "/clubs/{club}/me", auth: "session" },
   "messages.list": { method: "GET", path: "/clubs/{club}/messages", auth: "session" },

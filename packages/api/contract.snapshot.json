@@ -2967,6 +2967,263 @@
         }
       }
     },
+    "leaderboard.board": {
+      "method": "GET",
+      "path": "/clubs/{club}/leaderboard",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "query": {
+        "t": "object",
+        "fields": {
+          "key": {
+            "t": "string",
+            "optional": true
+          },
+          "period": {
+            "t": "enum",
+            "values": [
+              "month",
+              "quarter",
+              "year",
+              "lifetime"
+            ],
+            "optional": true
+          },
+          "source": {
+            "t": "enum",
+            "values": [
+              "all",
+              "challenges",
+              "play",
+              "rr"
+            ],
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "isCurrent": {
+            "t": "boolean"
+          },
+          "me": {
+            "t": "object",
+            "fields": {
+              "hiddenRank": {
+                "t": "number",
+                "nullable": true
+              },
+              "id": {
+                "t": "number"
+              },
+              "ladder": {
+                "t": "object",
+                "fields": {
+                  "index": {
+                    "t": "number"
+                  },
+                  "wpTotal": {
+                    "t": "number"
+                  }
+                },
+                "nullable": true
+              },
+              "visible": {
+                "t": "boolean"
+              }
+            }
+          },
+          "nextKey": {
+            "t": "string",
+            "nullable": true
+          },
+          "period": {
+            "t": "enum",
+            "values": [
+              "month",
+              "quarter",
+              "year",
+              "lifetime"
+            ]
+          },
+          "prevKey": {
+            "t": "string",
+            "nullable": true
+          },
+          "range": {
+            "t": "object",
+            "fields": {
+              "end": {
+                "t": "string",
+                "nullable": true
+              },
+              "key": {
+                "t": "string"
+              },
+              "period": {
+                "t": "enum",
+                "values": [
+                  "month",
+                  "quarter",
+                  "year",
+                  "lifetime"
+                ]
+              },
+              "start": {
+                "t": "string",
+                "nullable": true
+              }
+            }
+          },
+          "rows": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "avatarUrl": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "challenges": {
+                  "t": "number"
+                },
+                "index": {
+                  "t": "number"
+                },
+                "initials": {
+                  "t": "string"
+                },
+                "name": {
+                  "t": "string"
+                },
+                "play": {
+                  "t": "number"
+                },
+                "playerId": {
+                  "t": "number"
+                },
+                "rank": {
+                  "t": "number"
+                },
+                "rr": {
+                  "t": "number"
+                },
+                "seat": {
+                  "t": "enum",
+                  "values": [
+                    "alpha",
+                    "silver"
+                  ],
+                  "nullable": true
+                },
+                "tarnishing": {
+                  "t": "boolean"
+                },
+                "value": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "source": {
+            "t": "enum",
+            "values": [
+              "all",
+              "challenges",
+              "play",
+              "rr"
+            ]
+          }
+        }
+      }
+    },
+    "leaderboard.player": {
+      "method": "GET",
+      "path": "/clubs/{club}/players/{id}",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "card": {
+            "t": "object",
+            "fields": {
+              "avatarUrl": {
+                "t": "string",
+                "nullable": true
+              },
+              "form": {
+                "t": "array",
+                "of": {
+                  "t": "enum",
+                  "values": [
+                    "W",
+                    "L"
+                  ]
+                }
+              },
+              "id": {
+                "t": "number"
+              },
+              "initials": {
+                "t": "string"
+              },
+              "isMe": {
+                "t": "boolean"
+              },
+              "name": {
+                "t": "string"
+              },
+              "openChallengeId": {
+                "t": "number",
+                "nullable": true
+              },
+              "partner": {
+                "t": "boolean"
+              },
+              "rankIndex": {
+                "t": "number"
+              },
+              "seat": {
+                "t": "enum",
+                "values": [
+                  "alpha",
+                  "silver"
+                ],
+                "nullable": true
+              },
+              "tarnishing": {
+                "t": "boolean"
+              },
+              "wp90": {
+                "t": "number"
+              },
+              "wpTotal": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
+    },
     "me.absence": {
       "method": "POST",
       "path": "/clubs/{club}/me/absence",

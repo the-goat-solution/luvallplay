@@ -92,6 +92,14 @@ export function createApi(transport: Transport) {
       revokeToken: (params: ParamsOf<"integrations.revokeToken">, options?: Options) =>
         transport.call("integrations.revokeToken", { params, signal: options?.signal }) as Promise<ResponseOf<"integrations.revokeToken">>,
     },
+    leaderboard: {
+      /** GET /clubs/{club}/leaderboard (signed in) */
+      board: (params: ParamsOf<"leaderboard.board">, query: QueryOf<"leaderboard.board">, options?: Options) =>
+        transport.call("leaderboard.board", { params, query, signal: options?.signal }) as Promise<ResponseOf<"leaderboard.board">>,
+      /** GET /clubs/{club}/players/{id} (signed in) */
+      player: (params: ParamsOf<"leaderboard.player">, options?: Options) =>
+        transport.call("leaderboard.player", { params, signal: options?.signal }) as Promise<ResponseOf<"leaderboard.player">>,
+    },
     me: {
       /** POST /clubs/{club}/me/absence (signed in) */
       absence: (params: ParamsOf<"me.absence">, body: BodyOf<"me.absence">, options?: Options) =>

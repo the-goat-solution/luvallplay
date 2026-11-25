@@ -31,6 +31,6 @@ export const REDIRECTS: Redirect[] = [
   { source: "/profile/me", destination: "/profile", permanent: true },
   // The full leaderboard lives in the Arena; the public page became a
   // first-names-only teaser on the club home page.
-  { source: "/leaderboard", destination: "/profile/arena?tab=leaderboard", permanent: true, has: SIGNED_IN },
+  { source: "/leaderboard", destination: "/profile/leaderboard", permanent: true, has: SIGNED_IN },
   { source: "/leaderboard", destination: "/#leaderboard", permanent: true, missing: SIGNED_IN },
 ];

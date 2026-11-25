@@ -250,7 +250,7 @@ export const arena = defineModule({
   plan: "free",
   name: { en: "Arena", vi: "Đấu Trường" },
   liveActivity: "challenges in progress",
-  app: { tabs: ["arena"], routes: ["/profile/arena", "/challenges"] },
+  app: { tabs: ["arena", "leaderboard"], routes: ["/profile/arena", "/profile/leaderboard", "/challenges"] },
   admin: { nav: [{ group: "Play", href: "/admin/challenges" }] },
   site: { sections: ["leaderboard-teaser"] },
 });

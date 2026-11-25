@@ -458,34 +458,38 @@ describe("G · Arena", () => {
     for (const x of [a, b, c, d]) await x.context.close();
   });
 
-  test("G2 · leaderboard in Arena: filters, player card, challenge from card, opt-out respected", async () => {
+  test("G2 · Leaderboard tab: filters, player card, challenge from card, opt-out respected", async () => {
     const mia = await signedIn(PEOPLE.member.email);
     const page = await mia.context.newPage();
-    await page.goto("/profile/arena?tab=leaderboard");
+    await page.goto("/profile/leaderboard");
     await page.getByRole("heading", { name: /leaderboard/i }).first().waitFor();
     // Hidden players never appear.
     assert.equal(await page.getByText("Hana").count(), 0, "opted-out player is not listed");
-    // Filters keep you in the Arena.
-    await page.getByRole("link", { name: /challenges/i }).nth(1).click();
-    await page.waitForURL(/tab=leaderboard.*source=challenges|source=challenges.*tab=leaderboard/);
-    await page.goto("/profile/arena?tab=leaderboard");
+    // Filters keep you on the Leaderboard tab.
+    await page.getByRole("link", { name: /challenges/i }).first().click();
+    await page.waitForURL(/\/profile\/leaderboard\?.*source=challenges/);
+    await page.goto("/profile/leaderboard");
     // Player card from a row.
     await page.locator("li[role=button]", { hasText: "Olivia" }).first().click();
     const dialog = page.getByRole("dialog");
     await dialog.getByText(/WP all time/).waitFor();
     await dialog.getByText(/Recent form/).waitFor();
     await dialog.getByRole("button", { name: /challenge/i }).click();
-    await page.waitForURL(/tab=challenges/);
+    await page.waitForURL(/\/profile\/arena/);
     await shot(page, "arena-challenges-from-card");
-    await page.goto("/profile/arena?tab=leaderboard");
-    await shot(page, "arena-leaderboard");
+    await page.goto("/profile/leaderboard");
+    await shot(page, "leaderboard");
+    // The ladder lives on the Player tab; old Arena segment links still land.
     await page.goto("/profile/arena?tab=ranks");
+    await page.waitForURL(/\/profile\/player$/);
     await page.getByRole("heading", { name: "The ladder" }).waitFor();
-    await shot(page, "arena-ranks");
+    await shot(page, "player-ranks");
+    await page.goto("/profile/arena?tab=leaderboard&period=year");
+    await page.waitForURL(/\/profile\/leaderboard\?period=year$/);
     // The hidden player sees their own rank only.
     const hana = await signedIn(PEOPLE.hidden.email);
     const hp = await hana.context.newPage();
-    await hp.goto("/profile/arena?tab=leaderboard");
+    await hp.goto("/profile/leaderboard");
     assert.ok((await hp.getByText(/hidden/i).count()) > 0, "hidden player gets the 'you are hidden' note");
     await mia.context.close();
     await hana.context.close();
@@ -900,8 +904,8 @@ describe("Old URLs and layouts", () => {
       ["/profile/account?thread=3", "/profile?thread=3", cookie],
       ["/profile/membership", "/profile", cookie],
       ["/profile/me", "/profile", cookie],
-      ["/leaderboard", "/profile/arena?tab=leaderboard", cookie],
-      ["/leaderboard?source=challenges&period=year", "/profile/arena?tab=leaderboard&source=challenges&period=year", cookie],
+      ["/leaderboard", "/profile/leaderboard", cookie],
+      ["/leaderboard?source=challenges&period=year", "/profile/leaderboard?source=challenges&period=year", cookie],
       ["/leaderboard", "/#leaderboard", null],
     ];
     for (const [from, to, c] of cases) {

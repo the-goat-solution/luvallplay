@@ -57,7 +57,7 @@ export function PlayerCardSheet({ playerId, onClose }: { playerId: number | null
   const challenge = async () => {
     if (!card) return;
     if (!card.openChallengeId) {
-      router.push(`/profile/arena?tab=challenges&vs=${card.id}`);
+      router.push(`/profile/arena?vs=${card.id}`);
       onClose();
       return;
     }
@@ -82,7 +82,7 @@ export function PlayerCardSheet({ playerId, onClose }: { playerId: number | null
       setError(text);
       return;
     }
-    router.push("/profile/arena?tab=challenges");
+    router.push("/profile/arena");
     onClose();
   };
 

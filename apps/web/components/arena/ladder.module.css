@@ -1,0 +1,37 @@
+/* The rank ladder on the Player tab. */
+.ladder {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+.ladder li {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 8px;
+  border-radius: 10px;
+}
+.ladder li small {
+  color: var(--text-mid);
+  font-size: 12.5px;
+}
+.ladder li em {
+  grid-column: 2 / -1;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bronze-dark);
+  margin-top: -6px;
+}
+.tierName {
+  font-weight: 600;
+  color: var(--navy-dark);
+}
+.here {
+  background: #fffaf0;
+  box-shadow: inset 3px 0 0 var(--bronze);
+}

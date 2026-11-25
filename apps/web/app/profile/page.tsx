@@ -7,6 +7,8 @@ import { getCurrentMembership, playDaysLeft, type MemberView } from "@/lib/membe
 import { getQuickStats } from "@/lib/stats-db";
 import { listShopProductsForPlayer, listOrdersForPlayer } from "@/lib/shop-db";
 import { listThreadsForPlayer } from "@/lib/messages-db";
+import { listPhotosForPlayer } from "@/lib/photos-db";
+import { publicBlobUploadMode } from "@/lib/public-blob";
 import { calendarFor, nextUp } from "@/lib/me-data";
 import { db } from "@/lib/admin-access";
 import { getAccess, hasAdminAccess } from "@/lib/admin-roles";
@@ -18,13 +20,15 @@ import { WelcomeCard } from "@/components/profile/AccountSections";
 import { MeHeader, type MembershipPill } from "@/components/profile/me/MeHeader";
 import { NextUpCard } from "@/components/profile/me/NextUpCard";
 import { InboxPreview } from "@/components/profile/me/InboxPreview";
+import { PhotosPanel } from "@/components/profile/player/PhotosPanel";
 import m from "@/components/profile/me/me.module.css";
 import { clubMajor } from "@/lib/money";
 
-// Me (home tab): "What's my status, and what's next?" Account and Membership
-// in one page (build plan §2.2). Settings are one tap away (⚙), the inbox is
-// behind the bell. The home-screen app opens here (manifest start_url), and
-// the old /profile/account and /profile/membership redirect here.
+// Me (home tab): "What's my status, and what's next?" Account, Membership
+// and My photos in one page (build plan §2.2). Settings are one tap away
+// (⚙), the inbox is behind the bell. The home-screen app opens here
+// (manifest start_url), and the old /profile/account and
+// /profile/membership redirect here.
 
 function pillFor(mem: MemberView | null): MembershipPill {
   if (!mem) return { kind: "none" };
@@ -43,19 +47,19 @@ export default async function MePage() {
     hasDb ? getAccess(db, player.id, player.email).catch(() => null) : Promise.resolve(null),
     hasDb ? listThreadsForPlayer(player.id) : Promise.resolve([]),
   ]);
-  const [daysLeft, quick, calendar, products, orders] = await Promise.all([
+  // A module that is off takes its card off the Me page (its data is kept).
+  const on = await enabledModules(sql);
+  const [daysLeft, quick, calendar, products, orders, photos] = await Promise.all([
     membership ? playDaysLeft(membership) : Promise.resolve(0),
     getQuickStats(player),
     hasDb ? calendarFor(player.email, membership, pausedDays) : Promise.resolve([]),
     listShopProductsForPlayer(),
     listOrdersForPlayer(player.id),
+    on.has("gallery") ? listPhotosForPlayer(player.id) : Promise.resolve([]),
   ]);
   const prices = { monthly: clubMajor(MONTHLY_PRICE_CENTS), quarterly: clubMajor(QUARTERLY_PRICE_CENTS) };
   const contact = { firstName: player.firstName, lastName: player.lastName, email: player.email, phone: player.phone ?? "" };
   const initials = `${player.firstName.trim()[0] ?? player.email[0] ?? "?"}${player.lastName.trim()[0] ?? ""}`.toUpperCase();
-
-  // A module that is off takes its card off the Me page (its data is kept).
-  const on = await enabledModules(sql);
 
   return (
     <>
@@ -88,6 +92,7 @@ export default async function MePage() {
           {on.has("shop") && <ShopSection products={products} orders={orders} />}
           <InboxPreview threads={threads} />
           {!player.welcomeCardDismissed && <WelcomeCard firstName={player.firstName} />}
+          {on.has("gallery") && <PhotosPanel photos={photos} playerId={player.id} uploadMode={publicBlobUploadMode()} />}
         </div>
       </div>
     </>

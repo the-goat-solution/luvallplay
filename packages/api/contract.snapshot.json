@@ -3677,6 +3677,171 @@
           }
         }
       }
+    },
+    "player.stats": {
+      "method": "GET",
+      "path": "/clubs/{club}/me/stats",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "attended": {
+            "t": "object",
+            "fields": {
+              "lifetime": {
+                "t": "number"
+              },
+              "month": {
+                "t": "number"
+              },
+              "quarter": {
+                "t": "number"
+              },
+              "year": {
+                "t": "number"
+              }
+            }
+          },
+          "attendedDates": {
+            "t": "array",
+            "of": {
+              "t": "string"
+            }
+          },
+          "clubDates": {
+            "t": "array",
+            "of": {
+              "t": "string"
+            }
+          },
+          "ranks": {
+            "t": "object",
+            "fields": {
+              "lifetime": {
+                "t": "object",
+                "fields": {
+                  "attendance": {
+                    "t": "number",
+                    "nullable": true
+                  },
+                  "rr": {
+                    "t": "number",
+                    "nullable": true
+                  }
+                }
+              },
+              "month": {
+                "t": "object",
+                "fields": {
+                  "attendance": {
+                    "t": "number",
+                    "nullable": true
+                  },
+                  "rr": {
+                    "t": "number",
+                    "nullable": true
+                  }
+                }
+              },
+              "quarter": {
+                "t": "object",
+                "fields": {
+                  "attendance": {
+                    "t": "number",
+                    "nullable": true
+                  },
+                  "rr": {
+                    "t": "number",
+                    "nullable": true
+                  }
+                }
+              },
+              "year": {
+                "t": "object",
+                "fields": {
+                  "attendance": {
+                    "t": "number",
+                    "nullable": true
+                  },
+                  "rr": {
+                    "t": "number",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          },
+          "rr": {
+            "t": "object",
+            "fields": {
+              "bestPlacing": {
+                "t": "number",
+                "nullable": true
+              },
+              "days": {
+                "t": "number"
+              },
+              "losses": {
+                "t": "number"
+              },
+              "points": {
+                "t": "number"
+              },
+              "wins": {
+                "t": "number"
+              }
+            }
+          },
+          "rrHistory": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "date": {
+                  "t": "string"
+                },
+                "diff": {
+                  "t": "number"
+                },
+                "losses": {
+                  "t": "number"
+                },
+                "placing": {
+                  "t": "number"
+                },
+                "points": {
+                  "t": "number"
+                },
+                "teams": {
+                  "t": "number"
+                },
+                "wins": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "streak": {
+            "t": "object",
+            "fields": {
+              "best": {
+                "t": "number"
+              },
+              "current": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

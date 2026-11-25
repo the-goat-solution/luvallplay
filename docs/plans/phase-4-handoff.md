@@ -13,8 +13,9 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 | 3b. Inbox | **PR open** | #132, see §1a |
 | 3c. Settings, part A (account, no sign-in changes) | **Merged** | #133, see §1a |
 | 3c. Settings, part B (admin handoff, delete, connected apps, name step) | **Merged** | #134, see §1a |
-| 4. Arena and Leaderboard | **PR open** (#135) | see §1a |
-| 5. Player, shop orders, membership and cancel flows | Not started | |
+| 4. Arena and Leaderboard | **Merged** | #135, see §1a |
+| 5a. Player tab | **PR open** | see §1a |
+| 5b. Shop orders, membership and cancel flows | Not started | |
 | 6. Vision | Not started | |
 | 7. Offline and PWA | Not started | |
 | 8. Responsive and visual pass, performance, old-client tests, docs | Not started | |
@@ -31,6 +32,7 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - **Settings part B (3c)**: `account.adminHandoff`, `account.delete`, `integrations.*`; app `settings/ClubAdmin.tsx`, `settings/ConnectedApps.tsx`, `screens/Welcome.tsx`. **Phone change and text-message sign-in are left for the native app** (owner's decision, 25 Nov: reCAPTCHA vs the app's Content-Security-Policy).
 - **Arena (4)**: `arena.state`, `arena.action`; server `apps/web/lib/app-arena.ts`; app `apps/app/src/screens/Arena.tsx`, `src/screens/arena/*` (words, data, TeamUp, Board, Dialogs). Not yet: match stats, Wolf Vision links, player card, versus splash.
 - **Leaderboard (4)**: `leaderboard.board`, `leaderboard.player`; server `apps/web/lib/app-leaderboard.ts`; app `apps/app/src/screens/Leaderboard.tsx`, `src/screens/leaderboard/*`. Rank icons not yet.
+- **Player (5a)**: `player.stats`; app `apps/app/src/screens/Player.tsx`, `src/screens/player/*` (data, Charts, RankCard). Rank art not yet.
 - **Not on Me yet**: the shop (step 5) and My photos (with the Player step).
 - **Words**: Me words are in the app's own dictionary (`packages/i18n/src/app.ts`), copied from the website's wording without the club's name or "$" (the website's `profile` dictionary still has both typed in).
 
@@ -68,7 +70,7 @@ For each screen: add endpoints to the contract, add route files with `appRoute`,
 
 1. ~~**Me**~~: done in step 3a, except the shop and My photos (see §1a).
 2. **Settings** is done except **phone change and text-message sign-in**, which the owner decided to leave for the native app (Capacitor), because reCAPTCHA doesn't fit the app's Content-Security-Policy (the API has `auth.smsStart`/`smsVerify`; `SignIn.tsx` has the extension point).
-3. ~~**Arena**~~: done in step 4, except match stats and Wolf Vision links (Vision step) and the player card (with the Leaderboard). The **Leaderboard** is done too. Next is the **Player** tab (rank ladder, kit bag, achievements, My photos).
+3. ~~**Arena**~~: done in step 4, except match stats and Wolf Vision links (Vision step) and the player card (with the Leaderboard). The **Leaderboard** is done too. The **Player** tab is done too (5a). My photos is on the website's Me page; it joins the app's Me with the shop.
 4. **Player, shop orders, membership and cancel flows**. Payments stay on the existing Stripe flows; show money through `@luvallplay/core/money`. Load Stripe only when used.
 5. **Vision**: set-up, analyzer (MediaPipe lazy-loaded), labelling.
 6. **Offline and PWA**: app-shell service worker, persisted query cache, queued writes (for example "I can't make it"), offline banner, update prompt, manifest.

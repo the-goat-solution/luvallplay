@@ -667,7 +667,7 @@ describe("APP · screenshots", () => {
     for (const width of [375, 900]) {
       const { context } = await signedIn(PEOPLE.member.email, { viewport: { width, height: width < 600 ? 812 : 1000 }, deviceScaleFactor: 2 });
       const page = await context.newPage();
-      for (const [route, screen] of [["/arena", "nav_arena"], ["/leaderboard", "nav_leaderboard"]]) {
+      for (const [route, screen] of [["/player", "nav_player"], ["/arena", "nav_arena"], ["/leaderboard", "nav_leaderboard"]]) {
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(`[data-screen="${screen}"][data-state="ready"]`);
         await page.waitForTimeout(200);
@@ -1189,15 +1189,56 @@ describe("APP · the Leaderboard", () => {
   });
 });
 
+describe("APP · the Player tab", () => {
+  test("APP36 · Player: the rank card, kit bag and achievements, play stats as the API has them, the 26 weeks, history and the ladder; no rank without the Arena", async () => {
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      const stats = await (await fetch(`${api}/clubs/three-wolves/me/stats`, { headers: { Authorization: `Bearer ${token}` } })).json();
+      await page.goto(`${APP}/player`);
+      await page.waitForSelector('[data-screen="nav_player"][data-state="ready"]');
+      await page.getByRole("heading", { name: "Wolf Points", level: 2 }).waitFor();
+      await page.getByRole("heading", { name: "Kit bag" }).waitFor();
+      await page.getByRole("heading", { name: "Achievements" }).waitFor();
+      const allTime = page.locator(".stat", { hasText: "Play days · All time" });
+      assert.equal(await allTime.locator("dd").textContent(), String(stats.attended.lifetime));
+      assert.match(await page.locator(".stat-feature dd").textContent(), new RegExp(`${stats.streak.current}$`));
+      await page.getByRole("img", { name: "Last 26 weeks" }).waitFor();
+      assert.equal(await page.locator("#history-title ~ ul li").count(), Math.min(40, new Set([...stats.attendedDates, ...stats.rrHistory.map((r) => r.date)]).size));
+      await page.getByRole("heading", { name: "The ladder" }).waitFor();
+      assert.equal(await page.locator(".ladder [aria-current]").count(), 1, "your tier is marked");
+      // A kit item says what it takes.
+      await page.locator(".kit button").nth(1).click();
+      assert.match(await page.locator("#kit-title ~ p").textContent(), /\d+ WP$/);
+      assert.deepEqual(problems, []);
+
+      await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'arena'`);
+      try {
+        const p2 = await context.newPage();
+        await p2.goto(`${APP}/player`);
+        await p2.waitForSelector('[data-screen="nav_player"][data-state="ready"]');
+        assert.equal(await p2.getByRole("heading", { name: "Kit bag" }).count(), 0);
+        assert.equal(await p2.getByRole("heading", { name: "The ladder" }).count(), 0);
+        assert.equal(await p2.getByRole("link", { name: /See the leaderboard/ }).count(), 0);
+      } finally {
+        await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'arena'`);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+});
+
 describe("APP · layout (build plan §4.4)", () => {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
   test("APP10 · five widths: no sideways scroll, and the right navigation for each window class", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/arena", "/leaderboard", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : ".shell-nav .tab");
       for (const width of WIDTHS) {
         const height = width < 600 ? 812 : 900;
         await page.setViewportSize({ width, height });
@@ -1251,9 +1292,9 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP11 · text at 200%: still no sideways scroll on a phone, and nothing is cut off", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/inbox", "/arena", "/leaderboard", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/player", "/arena", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : route === "/arena" ? '[data-screen="nav_arena"][data-state="ready"]' : route === "/leaderboard" ? '[data-screen="nav_leaderboard"][data-state="ready"]' : route === "/player" ? '[data-screen="nav_player"][data-state="ready"]' : ".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
       const afterSize = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

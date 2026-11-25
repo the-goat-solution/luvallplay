@@ -214,6 +214,12 @@ export const ENDPOINTS = define({
     params: S.playerParams, response: S.playerCardResponse,
     rateLimit: { limit: 120, windowMs: MIN },
   },
+  // The Player tab: play days, streak, round robin, board places, history.
+  "player.stats": {
+    method: "GET", path: "/clubs/{club}/me/stats", auth: "session", scope: "club",
+    params: S.clubParams, response: S.playerStatsResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

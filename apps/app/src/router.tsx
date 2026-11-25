@@ -38,11 +38,12 @@ const shell = createRoute({
 
 const me = createRoute({ getParentRoute: () => shell, path: "/me", component: lazyRouteComponent(() => import("./screens/Me.tsx")) });
 const arena = createRoute({ getParentRoute: () => shell, path: "/arena", component: lazyRouteComponent(() => import("./screens/Arena.tsx")) });
+const leaderboard = createRoute({ getParentRoute: () => shell, path: "/leaderboard", component: lazyRouteComponent(() => import("./screens/Leaderboard.tsx")) });
 const vision = createRoute({ getParentRoute: () => shell, path: "/vision", component: lazyRouteComponent(() => import("./screens/Vision.tsx")) });
 const player = createRoute({ getParentRoute: () => shell, path: "/player", component: lazyRouteComponent(() => import("./screens/Player.tsx")) });
 const settings = createRoute({ getParentRoute: () => shell, path: "/settings", component: lazyRouteComponent(() => import("./screens/Settings.tsx")) });
 
-const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([me, arena, vision, player, settings])]);
+const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([me, player, arena, leaderboard, vision, settings])]);
 
 export const router = createRouter({
   routeTree,

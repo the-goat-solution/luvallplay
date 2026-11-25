@@ -132,21 +132,25 @@ describe("the stylesheet's rules", () => {
 
 describe("tabs and modules", () => {
   const ids = (modules: string[] | null) => visibleTabs(modules).map((t) => t.id);
-  test("every module on: all five tabs, in order", () => {
-    assert.deepEqual(ids(["arena", "vision", "memberships"]), ["me", "arena", "vision", "player", "settings"]);
+  test("every module on: all five tabs, in the website's order", () => {
+    assert.deepEqual(ids(["arena", "vision", "memberships"]), ["me", "player", "arena", "leaderboard", "vision"]);
   });
-  test("a module that is off takes its tab away; Me, Player and Settings are always there", () => {
-    assert.deepEqual(ids(["vision"]), ["me", "vision", "player", "settings"]);
-    assert.deepEqual(ids(["arena"]), ["me", "arena", "player", "settings"]);
-    assert.deepEqual(ids([]), ["me", "player", "settings"]);
+  test("a module that is off takes its tabs away (the Arena takes the Leaderboard with it); Me and Player are always there", () => {
+    assert.deepEqual(ids(["vision"]), ["me", "player", "vision"]);
+    assert.deepEqual(ids(["arena"]), ["me", "player", "arena", "leaderboard"]);
+    assert.deepEqual(ids([]), ["me", "player"]);
   });
   test("before the club's modules are known, a module's tab isn't shown", () => {
-    assert.deepEqual(ids(null), ["me", "player", "settings"]);
+    assert.deepEqual(ids(null), ["me", "player"]);
+  });
+  test("Settings is not a tab (it is the header's ⚙)", () => {
+    assert.equal(tabForPath("/settings"), null);
   });
   test("a path maps to its tab", () => {
     assert.equal(tabForPath("/arena")?.id, "arena");
     assert.equal(tabForPath("/arena/challenges")?.id, "arena");
     assert.equal(tabForPath("/arenas"), null);
+    assert.equal(tabForPath("/leaderboard")?.id, "leaderboard");
     assert.equal(tabForPath("/signin"), null);
   });
   test("every tab's label exists in both languages", () => {

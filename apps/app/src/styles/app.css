@@ -151,6 +151,13 @@ fieldset.card > legend { padding: 0 0.25rem; }
 }
 .club-name { font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; flex: 1; min-width: 0; }
 .shell-head .button-quiet { color: var(--on-primary); }
+/* Settings: a ⚙ in the header (not a tab, as on the club website). */
+.head-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 2.75rem; height: 2.75rem; border-radius: 50%;
+  color: var(--on-primary);
+}
+.head-icon[aria-current="page"] { background: color-mix(in srgb, var(--on-primary) 18%, transparent); }
 
 .shell-main {
   grid-area: main;
@@ -177,9 +184,10 @@ fieldset.card > legend { padding: 0 0.25rem; }
 .tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.125rem;
   min-height: var(--nav-size); min-width: 2.75rem;
-  padding: 0.25rem;
+  padding: 0.25rem 0.125rem;
   color: var(--ink-muted); text-decoration: none;
-  font-size: 0.75rem; font-weight: 600; text-align: center;
+  /* Scales with the phone's width so five labels ("Leaderboard" the longest) fit on one line. */
+  font-size: clamp(0.5625rem, 2.7vw, 0.75rem); font-weight: 600; text-align: center;
 }
 .tab svg { flex: none; }
 .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -200,7 +208,7 @@ html[data-theme="dark"] .tab[aria-current="page"] { color: var(--ink); text-deco
     padding: 0.5rem 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
   .shell-nav ul { flex-direction: column; gap: 0.25rem; }
-  .tab { min-height: 4rem; }
+  .tab { min-height: 4rem; padding: 0.25rem; font-size: 0.75rem; }
   .shell-main { padding-bottom: max(1rem, env(safe-area-inset-bottom)); padding-left: 1.5rem; padding-right: max(1.5rem, env(safe-area-inset-right)); }
 }
 

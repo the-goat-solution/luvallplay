@@ -8,18 +8,23 @@ import { useCurrentClub, usePrefs, useSession, useT, useWindowClass, type Club }
 import { tabForPath, visibleTabs, type TabId } from "../lib/nav.ts";
 import { navKind } from "../lib/window-class.ts";
 
+// The same pictures as the website's tabs: Player a trophy, Arena crossed
+// rackets, Leaderboard a podium.
 const ICONS: Record<TabId, string> = {
   me: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0",
-  arena: "M7 4h10v4a5 5 0 0 1-10 0V4Zm5 9v4m-4 3h8M7 6H4a3 3 0 0 0 3 4m10-4h3a3 3 0 0 1-3 4",
+  player: "M7 4h10v4a5 5 0 0 1-10 0V4Zm5 9v4m-4 3h8M7 6H4a3 3 0 0 0 3 4m10-4h3a3 3 0 0 1-3 4",
+  arena: "M4 4l9 9M20 4l-9 9M11 15l-5 5M13 15l5 5M3.5 3.5a2.4 3.2 -45 1 0 4.2 4.2a2.4 3.2 -45 1 0-4.2-4.2ZM16.3 3.5a2.4 3.2 45 1 0 4.2 4.2a2.4 3.2 45 1 0-4.2-4.2Z",
+  leaderboard: "M3 21h18M9 21V8h6v13M3 21v-8h6M15 21V11h6v10",
   vision: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
-  player: "M4 20V10m6 10V4m6 16v-7m4 7H2",
-  settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-3 2-1-2-4-2 1-2-1-.5-2h-4L11 6 9 7 7 6 5 10l2 1v2l-2 1 2 4 2-1 2 1 .5 2h4l.5-2 2-1 2 1 2-4-2-1Z",
 };
+const SETTINGS_ICON =
+  "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-3 2-1-2-4-2 1-2-1-.5-2h-4L11 6 9 7 7 6 5 10l2 1v2l-2 1 2 4 2-1 2 1 .5 2h4l.5-2 2-1 2 1 2-4-2-1Z";
 
-function TabIcon({ id }: { id: TabId }) {
+
+function Icon({ d }: { d: string }) {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d={ICONS[id]} />
+      <path d={d} />
     </svg>
   );
 }
@@ -102,13 +107,16 @@ export function Shell() {
         {config?.theme.logoUrl && <img className="club-logo" src={config.theme.logoUrl} alt="" width={40} height={40} />}
         <p className="club-name">{config?.club.name ?? t("brand")}</p>
         {clubs && current && clubs.length > 1 && <ClubSwitcher clubs={clubs} current={current} />}
+        <Link to="/settings" className="head-icon" aria-label={t("nav_settings")} activeProps={{ "aria-current": "page" }}>
+          <Icon d={SETTINGS_ICON} />
+        </Link>
       </header>
       <nav className="shell-nav" aria-label={t("nav_label")}>
         <ul>
           {tabs.map((tab) => (
             <li key={tab.id}>
               <Link to={tab.path} className="tab" activeProps={{ "aria-current": "page" }}>
-                <TabIcon id={tab.id} />
+                <Icon d={ICONS[tab.id]} />
                 <span>{t(tab.label)}</span>
               </Link>
             </li>

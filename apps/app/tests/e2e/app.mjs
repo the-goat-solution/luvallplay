@@ -198,7 +198,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.equal(await page.locator('meta[name="theme-color"]').getAttribute("content"), NAVY);
     await page.waitForSelector("text=Hi Mia");
     // The club's own word for Vision is on the tab; the frame's mark stays.
-    assert.deepEqual(await tabLabels(page), ["Me", "Arena", "Wolf Vision", "Player", "Settings"]);
+    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
     assert.match(await page.locator(".shell-foot").textContent(), /on Luvallplay/);
     const fonts = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--font-display"));
     assert.match(fonts, /Copperplate/);
@@ -303,7 +303,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.equal(await page.locator(".club-name").textContent(), "Harbour Smash");
     // That club has the Arena off: the tab is gone and so is the screen we were on.
     await page.waitForURL(`${APP}/me`);
-    assert.deepEqual(await tabLabels(page), ["Me", "Smash Cam", "Player", "Settings"]);
+    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Smash Cam"]);
     await page.goto(`${APP}/arena`);
     await page.waitForURL(`${APP}/me`);
     assert.equal((await look(page)).primary, "#7a1f3d", "the choice of club survives a reload");
@@ -314,7 +314,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.getByRole("button", { name: "Three Wolves Badminton Club" }).click();
     await page.waitForFunction((navy) => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === navy, NAVY);
     assert.ok(Date.now() - started < 1500, "the look changes at once");
-    assert.deepEqual(await tabLabels(page), ["Me", "Arena", "Wolf Vision", "Player", "Settings"]);
+    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
     assert.deepEqual(problems, []);
     await context.close();
   });
@@ -326,7 +326,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     const page = await context.newPage();
     await page.goto(`${APP}/me`);
     await page.waitForSelector("text=Hi Mia");
-    assert.deepEqual(await tabLabels(page), ["Me", "Arena", "Player", "Settings"]);
+    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard"]);
     await page.goto(`${APP}/vision`);
     await page.waitForURL(`${APP}/me`);
     await page.goto(`${APP}/arena`);
@@ -356,7 +356,7 @@ describe("APP · settings", () => {
     await page.waitForSelector("text=Signed in as");
     await page.getByLabel("Tiếng Việt").check();
     await page.waitForSelector("text=Cài đặt");
-    assert.deepEqual(await tabLabels(page), ["Tôi", "Đấu trường", "Wolf Vision", "Người chơi", "Cài đặt"]);
+    assert.deepEqual(await tabLabels(page), ["Tôi", "Người chơi", "Đấu trường", "Xếp hạng", "Wolf Vision"]);
     assert.equal((await look(page)).lang, "vi");
     assert.match(await page.locator(".shell-foot").textContent(), /trên Luvallplay/);
     await page.reload();
@@ -419,7 +419,7 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP10 · five widths: no sideways scroll, and the right navigation for each window class", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/settings"]) {
+    for (const route of ["/me", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
       await page.waitForSelector(".shell-nav .tab");
       for (const width of WIDTHS) {
@@ -438,11 +438,14 @@ describe("APP · layout (build plan §4.4)", () => {
         }
         // Touch targets: every tab and every control is at least 44px tall.
         const small = await page.evaluate(() =>
-          [...document.querySelectorAll(".tab, .button, .choice, .field input")]
+          [...document.querySelectorAll(".tab, .head-icon, .button, .choice, .field input")]
             .map((el) => ({ what: el.textContent?.trim().slice(0, 30), h: el.getBoundingClientRect().height }))
             .filter((x) => x.h > 0 && x.h < 44),
         );
         assert.deepEqual(small, [], `${route} at ${width}px has small touch targets`);
+        // Every tab's label is shown in full ("Leaderboard" is the longest).
+        const cut = await page.evaluate(() => [...document.querySelectorAll(".shell-nav .tab span")].filter((el) => el.scrollWidth > el.clientWidth + 0.5).map((el) => el.textContent));
+        assert.deepEqual(cut, [], `${route} at ${width}px cuts tab labels off`);
       }
     }
     // Wide screens put settings groups side by side (a container query on the screen, not the window).
@@ -472,7 +475,7 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP11 · text at 200%: still no sideways scroll on a phone, and nothing is cut off", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/settings"]) {
+    for (const route of ["/me", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
       await page.waitForSelector(".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

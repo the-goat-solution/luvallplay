@@ -2,15 +2,18 @@
 // takes its screens away: build plan §6.2.3).
 import type { AppKey } from "@luvallplay/i18n/app";
 
-export type TabId = "me" | "arena" | "vision" | "player" | "settings";
+export type TabId = "me" | "player" | "arena" | "leaderboard" | "vision";
 export type Tab = { id: TabId; path: `/${TabId}`; label: AppKey; module: string | null };
 
+// The same tabs, in the same order, as the club website's My Profile:
+// Me · Player · Arena · Leaderboard · Vision. Settings isn't a tab; it is
+// the ⚙ button in the header (as on the website, where it sits behind Me).
 export const TABS: readonly Tab[] = [
   { id: "me", path: "/me", label: "nav_me", module: null },
-  { id: "arena", path: "/arena", label: "nav_arena", module: "arena" },
-  { id: "vision", path: "/vision", label: "nav_vision", module: "vision" },
   { id: "player", path: "/player", label: "nav_player", module: null },
-  { id: "settings", path: "/settings", label: "nav_settings", module: null },
+  { id: "arena", path: "/arena", label: "nav_arena", module: "arena" },
+  { id: "leaderboard", path: "/leaderboard", label: "nav_leaderboard", module: "arena" },
+  { id: "vision", path: "/vision", label: "nav_vision", module: "vision" },
 ];
 
 /**

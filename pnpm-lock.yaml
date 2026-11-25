@@ -35,6 +35,9 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.46
         version: 1.170.46(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@vercel/blob':
+        specifier: ^2.8.1
+        version: 2.9.0
       jsqr:
         specifier: ^1.4.0
         version: 1.4.0

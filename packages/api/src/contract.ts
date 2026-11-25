@@ -351,6 +351,27 @@ export const ENDPOINTS = define({
     params: S.clubParams, body: S.visionShareRequest, response: S.visionShareResponse,
     rateLimit: { limit: 12, windowMs: 24 * 60 * MIN },
   },
+  // My photos (module gallery): the website's /api/profile/photos routes.
+  "photos.list": {
+    method: "GET", path: "/clubs/{club}/me/photos", auth: "session", scope: "club", module: "gallery",
+    params: S.clubParams, response: S.photosResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "photos.upload": {
+    method: "POST", path: "/clubs/{club}/me/photos/upload", auth: "session", scope: "club", module: "gallery",
+    params: S.clubParams, body: S.photoUploadRequest, response: S.photoUploadResponse,
+    rateLimit: { limit: 120, windowMs: MIN },
+  },
+  "photos.add": {
+    method: "POST", path: "/clubs/{club}/me/photos", auth: "session", scope: "club", module: "gallery",
+    params: S.clubParams, body: S.photoAddRequest, response: S.photoAddResponse,
+    rateLimit: { limit: 40, windowMs: MIN },
+  },
+  "photos.delete": {
+    method: "DELETE", path: "/clubs/{club}/me/photos/{id}", auth: "session", scope: "club", module: "gallery",
+    params: S.photoParams, response: S.okResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

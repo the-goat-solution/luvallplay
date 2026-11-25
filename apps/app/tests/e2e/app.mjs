@@ -177,6 +177,7 @@ async function withSecondClub(context) {
   });
   // Its shop: open, nothing in it yet.
   await serveJson(context, `${api}/clubs/harbour-smash/shop`, async () => ({ products: [], orders: [], cash: false }));
+  await serveJson(context, `${api}/clubs/harbour-smash/me/photos`, async () => ({ photos: [], uploadMode: null, perDay: 20 }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1625,6 +1626,91 @@ describe("APP · Vision", () => {
   });
 });
 
+describe("APP · My photos", () => {
+  test("APP45 · My photos on Me: not set up without a photo store; with one, photos are prepared on the device, go straight to the store and are registered with the caption and consent", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const miaId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.member.email])).rows[0].id;
+    try {
+      // The real API: no photo store in this environment.
+      await page.goto(`${APP}/me`);
+      await page.waitForSelector(ME_READY);
+      await page.getByTestId("my-photos").getByText("Photo sharing isn't set up yet.").waitFor();
+
+      // A store connected (stood in for): the upload handshake, the store's upload API, and registering.
+      const base = `${env.base}/api/v1/app/clubs/three-wolves/me/photos`;
+      const added = [];
+      const handshakes = [];
+      const stored = [];
+      const cors = { ...CORS, "access-control-allow-methods": "GET, POST, DELETE, OPTIONS" };
+      await context.route(base, async (route) => {
+        const r = route.request();
+        if (r.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+        if (r.method() === "POST") {
+          added.push(r.postDataJSON());
+          return route.fulfill({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify({ ok: true, id: 70 + added.length, status: "needs_review" }) });
+        }
+        return route.fulfill({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify({ photos: [], uploadMode: "token", perDay: 20 }) });
+      });
+      await context.route(`${base}/upload`, async (route) => {
+        const r = route.request();
+        if (r.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+        handshakes.push({ body: r.postDataJSON(), auth: r.headers()["authorization"] });
+        return route.fulfill({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify({ type: "blob.generate-client-token", clientToken: "vercel_blob_client_e2estore_dGVzdA" }) });
+      });
+      await context.route("https://vercel.com/api/blob/**", async (route) => {
+        const r = route.request();
+        const open = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "PUT, POST, OPTIONS", "access-control-expose-headers": "*" };
+        if (r.method() === "OPTIONS") return route.fulfill({ status: 204, headers: open });
+        const pathname = new URL(r.url()).searchParams.get("pathname");
+        stored.push(pathname);
+        const url = `https://e2estore.public.blob.vercel-storage.com/${pathname}`;
+        return route.fulfill({ status: 200, headers: { ...open, "content-type": "application/json" }, body: JSON.stringify({ url, downloadUrl: `${url}?download=1`, pathname, contentType: "image/webp", contentDisposition: "inline" }) });
+      });
+      await page.reload();
+      await page.waitForSelector(ME_READY);
+      const card = page.getByTestId("my-photos");
+      await card.getByRole("button", { name: "Choose photos" }).waitFor();
+      const png = Buffer.from(
+        await page.evaluate(() => {
+          const c = document.createElement("canvas");
+          c.width = c.height = 64;
+          const x = c.getContext("2d");
+          x.fillStyle = "#3a6";
+          x.fillRect(0, 0, 64, 64);
+          return c.toDataURL("image/png").split(",")[1];
+        }),
+        "base64",
+      );
+      await page.getByTestId("photo-library").setInputFiles([
+        { name: "net.png", mimeType: "image/png", buffer: png },
+        { name: "rally.png", mimeType: "image/png", buffer: png },
+      ]);
+      await card.getByText("2 photo(s) selected").waitFor();
+      await card.getByLabel("Caption (optional)").fill("Club night");
+      const share = card.getByRole("button", { name: "Share 2 photo(s)" });
+      assert.equal(await share.isDisabled(), true, "not without the consent line");
+      await card.getByRole("checkbox").check();
+      await share.click();
+      await page.waitForFunction(() => document.querySelectorAll(".photo-jobs li .photo-wait").length === 2 && [...document.querySelectorAll(".photo-jobs li span")].every((s) => s.textContent === "Under review"));
+
+      assert.equal(added.length, 2);
+      for (const a of added) {
+        assert.deepEqual([a.consent, a.caption, a.width, a.height], [true, "Club night", 64, 64]);
+        for (const k of ["originalUrl", "displayUrl", "thumbUrl"]) assert.match(a[k], new RegExp(`^https://e2estore\\.public\\.blob\\.vercel-storage\\.com/photos/${miaId}/`));
+      }
+      assert.equal(handshakes.length, 6, "three files a photo: original, display copy, thumbnail");
+      assert.ok(handshakes.every((h) => /^Bearer /.test(h.auth ?? "")), "the handshake carries the session");
+      assert.ok(handshakes.every((h) => h.body.payload.pathname.startsWith(`photos/${miaId}/`)));
+      assert.deepEqual(stored.map((p) => p.replace(/^.*-(original|display|thumb)\..*$/, "$1")).sort(), ["display", "display", "original", "original", "thumb", "thumb"]);
+      assert.deepEqual(problems.filter((p) => !/Failed to load resource/i.test(p)), []);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
 describe("APP · offline and installing (build plan §4.1)", () => {
   const meFor = async (token) => (await fetch(`${env.base}/api/v1/app/clubs/three-wolves/me`, { headers: { authorization: `Bearer ${token}` } })).json();
 
@@ -1843,7 +1929,7 @@ describe("APP · accessibility and the page's rules", () => {
     assert.deepEqual(problems, []);
   });
 
-  test("APP14 · the built page carries a strict Content-Security-Policy that names only the API host, Stripe's and the tracker's models", async () => {
+  test("APP14 · the built page carries a strict Content-Security-Policy that names only the API host, Stripe's, the tracker's models and the photo store", async () => {
     const html = await (await fetch(`${APP}/signin`)).text();
     const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1] ?? "";
     assert.match(csp, /default-src 'self'/);
@@ -1854,9 +1940,10 @@ describe("APP · accessibility and the page's rules", () => {
     assert.match(csp, /style-src 'self'(;|$)/);
     // Videos chosen on the device only (the tracker and the labelling tool).
     assert.match(csp, /media-src 'self' blob:(;|$)/);
-    assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com https://api\\.stripe\\.com https://storage\\.googleapis\\.com(;|$)`));
+    assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com https://api\\.stripe\\.com https://storage\\.googleapis\\.com https://vercel\\.com/api/blob/ https://\\*\\.public\\.blob\\.vercel-storage\\.com(;|$)`));
     assert.match(csp, /worker-src 'self' blob:(;|$)/);
-    assert.doesNotMatch(csp, /unsafe-inline|'unsafe-eval'|\*/);
+    // The one wildcard is the photo store's own host (its name carries the store's id).
+    assert.doesNotMatch(csp.replace("https://*.public.blob.vercel-storage.com", ""), /unsafe-inline|'unsafe-eval'|\*/);
     // Images from any https host (club logos, photos in Blob storage); nothing else is widened.
     assert.match(csp, /img-src 'self' data: blob: https: /);
     assert.doesNotMatch(csp.match(/connect-src[^;]*/)[0], /https:(\s|$)/);

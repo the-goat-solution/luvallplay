@@ -15,7 +15,8 @@
     "./money": "./src/money.ts",
     "./payments": "./src/payments.ts",
     "./entitlements": "./src/entitlements.ts",
-    "./rank-art": "./src/rank-art.ts"
+    "./rank-art": "./src/rank-art.ts",
+    "./exif-gps": "./src/exif-gps.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

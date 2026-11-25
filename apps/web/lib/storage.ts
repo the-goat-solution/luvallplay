@@ -14,7 +14,7 @@
 // contract tests (tests/storage.test.ts → storageContract).
 //
 // Still provider-specific, on purpose, until that provider exists:
-//   - browser-direct photo uploads (app/api/profile/photos/upload): the
+//   - browser-direct photo uploads (lib/photos-service.ts, for the website and the app): the
 //     upload handshake is the provider's own protocol;
 //   - finance receipts (lib/finance-receipts.ts): a private store with its
 //     own signed reads.

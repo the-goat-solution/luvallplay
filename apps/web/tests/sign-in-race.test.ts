@@ -129,17 +129,17 @@ describe("sign-in codes at the same moment", { skip: !BASE_URL && !REQUIRE_DB ? 
 
   test("the per-email limit is in the database: 20 typed codes in an hour across fresh codes, then even the right code waits; other people aren't affected", async () => {
     const email = freshEmail();
-    for (let k = 0; k < 20 / auth.CODE_MAX_ATTEMPTS; k++) {
+    for (let k = 0; k < auth.CODE_ATTEMPTS_PER_HOUR / auth.CODE_MAX_ATTEMPTS; k++) {
       const code = await issue(email);
       const results = await Promise.all(Array.from({ length: 12 }, (_, i) => auth.verifyEmailCode(email, wrong(code, i))));
       assert.ok(results.every((r) => !r.ok));
       // Past "3 codes in 15 minutes", still inside the hour.
       await c.query(`UPDATE auth_codes SET created_at = NOW() - INTERVAL '16 minutes' WHERE email = $1 AND created_at > NOW() - INTERVAL '15 minutes'`, [email]);
     }
-    assert.equal(await attempts(email), 20);
+    assert.equal(await attempts(email), auth.CODE_ATTEMPTS_PER_HOUR);
     const fresh = await issue(email);
     assert.deepEqual(await auth.verifyEmailCode(email, fresh), { ok: false, reason: "too_many_attempts" });
-    assert.equal(await attempts(email), 20, "nothing was compared");
+    assert.equal(await attempts(email), auth.CODE_ATTEMPTS_PER_HOUR, "nothing was compared");
     // Someone else signs in as usual.
     const other = freshEmail();
     assert.deepEqual(await auth.verifyEmailCode(other, await issue(other)), { ok: true, email: other });
@@ -153,7 +153,7 @@ describe("sign-in codes at the same moment", { skip: !BASE_URL && !REQUIRE_DB ? 
     await c.query(
       `INSERT INTO auth_codes (email, code_hash, link_token_hash, attempts, expires_at, consumed_at, created_at)
        SELECT $1, 'x', 'day-' || g, 5, NOW() - INTERVAL '2 hours', NULL, NOW() - INTERVAL '3 hours' FROM generate_series(1, $2::int) g`,
-      [email, 50 / 5],
+      [email, auth.CODE_ATTEMPTS_PER_DAY / 5],
     );
     assert.deepEqual(await auth.verifyEmailCode(email, await issue(email)), { ok: false, reason: "too_many_attempts" });
     await age(email, "22 hours");

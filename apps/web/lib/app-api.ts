@@ -175,8 +175,8 @@ export type Ctx<K extends EndpointId> = {
 type Handler<K extends EndpointId> = (ctx: Ctx<K>) => Promise<ResponseOf<K> | AppApiError>;
 type RouteArgs = { params?: Promise<Record<string, string | string[] | undefined>> };
 type Options = {
-  /** The rate-limit bucket, when it should be shared with another surface (e.g. the web's sign-in routes). */
-  rateKey?: (ip: string) => string;
+  /** The rate-limit bucket, when it should be shared with another surface (e.g. the web's sign-in or message routes). */
+  rateKey?: (ip: string, session: AppSession | null) => string;
   /** The error code for a body that doesn't validate (default "bad_request"). */
   badRequestCode?: string;
 };
@@ -197,7 +197,7 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
       if (session?.via === "cookie" && endpoint.method !== "GET" && !cookieWriteAllowed(request)) return error(request, fail(403, "bad_origin"));
 
       const { limit, windowMs } = endpoint.rateLimit;
-      const key = options.rateKey ? options.rateKey(ip) : `app:${id}:${session ? `p${session.player.id}` : ip}`;
+      const key = options.rateKey ? options.rateKey(ip, session) : `app:${id}:${session ? `p${session.player.id}` : ip}`;
       if (!checkRateLimit(key, limit, windowMs)) return error(request, fail(429, "rate_limited"));
 
       const bad = fail(400, options.badRequestCode ?? "bad_request");

@@ -824,6 +824,214 @@
           }
         }
       }
+    },
+    "messages.list": {
+      "method": "GET",
+      "path": "/clubs/{club}/messages",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "threads": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "id": {
+                  "t": "number"
+                },
+                "lastMessageAt": {
+                  "t": "string"
+                },
+                "lastSender": {
+                  "t": "enum",
+                  "values": [
+                    "player",
+                    "admin"
+                  ]
+                },
+                "preview": {
+                  "t": "string"
+                },
+                "status": {
+                  "t": "enum",
+                  "values": [
+                    "open",
+                    "closed"
+                  ]
+                },
+                "subject": {
+                  "t": "string"
+                },
+                "unread": {
+                  "t": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "messages.reply": {
+      "method": "POST",
+      "path": "/clubs/{club}/messages/{id}",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "body": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "message": {
+            "t": "object",
+            "fields": {
+              "body": {
+                "t": "string"
+              },
+              "createdAt": {
+                "t": "string"
+              },
+              "id": {
+                "t": "number"
+              },
+              "sender": {
+                "t": "enum",
+                "values": [
+                  "player",
+                  "admin"
+                ]
+              }
+            }
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "messages.start": {
+      "method": "POST",
+      "path": "/clubs/{club}/messages",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "body": {
+            "t": "string"
+          },
+          "subject": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "id": {
+            "t": "number"
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "messages.thread": {
+      "method": "GET",
+      "path": "/clubs/{club}/messages/{id}",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "thread": {
+            "t": "object",
+            "fields": {
+              "id": {
+                "t": "number"
+              },
+              "messages": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "body": {
+                      "t": "string"
+                    },
+                    "createdAt": {
+                      "t": "string"
+                    },
+                    "id": {
+                      "t": "number"
+                    },
+                    "sender": {
+                      "t": "enum",
+                      "values": [
+                        "player",
+                        "admin"
+                      ]
+                    }
+                  }
+                }
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "open",
+                  "closed"
+                ]
+              },
+              "subject": {
+                "t": "string"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

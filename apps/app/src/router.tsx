@@ -41,9 +41,14 @@ const arena = createRoute({ getParentRoute: () => shell, path: "/arena", compone
 const leaderboard = createRoute({ getParentRoute: () => shell, path: "/leaderboard", component: lazyRouteComponent(() => import("./screens/Leaderboard.tsx")) });
 const vision = createRoute({ getParentRoute: () => shell, path: "/vision", component: lazyRouteComponent(() => import("./screens/Vision.tsx")) });
 const player = createRoute({ getParentRoute: () => shell, path: "/player", component: lazyRouteComponent(() => import("./screens/Player.tsx")) });
+// The inbox isn't a tab (as on the website, where it opens from Me's bell).
+const inboxScreen = lazyRouteComponent(() => import("./screens/Inbox.tsx"));
+const inbox = createRoute({ getParentRoute: () => shell, path: "/inbox", component: inboxScreen });
+const inboxNew = createRoute({ getParentRoute: () => shell, path: "/inbox/new", component: inboxScreen });
+const inboxThread = createRoute({ getParentRoute: () => shell, path: "/inbox/$id", component: inboxScreen });
 const settings = createRoute({ getParentRoute: () => shell, path: "/settings", component: lazyRouteComponent(() => import("./screens/Settings.tsx")) });
 
-const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([me, player, arena, leaderboard, vision, settings])]);
+const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([me, player, arena, leaderboard, vision, settings, inbox, inboxNew, inboxThread])]);
 
 export const router = createRouter({
   routeTree,

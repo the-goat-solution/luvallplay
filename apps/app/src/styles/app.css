@@ -42,6 +42,8 @@ img { max-width: 100%; height: auto; }
 }
 
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+/* Headings the app moves focus to (so screen readers announce the new view) aren't controls: no ring. */
+.focus-target:focus, .focus-target:focus-visible { outline: none; }
 
 .card {
   background: var(--surface-raised);
@@ -281,6 +283,7 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
   font-size: 0.75rem; font-weight: 700;
 }
 .icon-button {
+  text-decoration: none;
   position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 2.75rem; height: 2.75rem; border-radius: 50%;
   border: 1px solid var(--line); background: var(--surface-raised); color: var(--ink); cursor: pointer;
@@ -295,6 +298,35 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
 .skeleton-tall { min-height: 16rem; }
 @media (prefers-reduced-motion: no-preference) {
   .skeleton { animation: pulse 1.4s ease-in-out infinite; }
+}
+
+.field textarea {
+  min-height: 6rem; padding: 0.5rem 0.75rem; resize: vertical;
+  border-radius: 0.75rem; border: 1px solid var(--control-border);
+  background: var(--surface-raised); color: var(--ink); font: inherit; width: 100%;
+}
+
+/* ── The inbox ─────────────────────────────────────────────────────────── */
+.inbox { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.back { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--ink); font-weight: 600; }
+.thread-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; min-width: 0; }
+.thread-top strong { min-width: 0; }
+.thread-top .small { flex: none; }
+.thread-link[aria-current] { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.messages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.message { max-width: 85%; padding: 0.5rem 0.75rem; border-radius: 1rem; background: var(--surface); border: 1px solid var(--line); }
+.message-player { align-self: flex-end; background: color-mix(in srgb, var(--primary) 12%, var(--surface-raised)); }
+.message-who { display: block; color: var(--ink-muted); font-weight: 600; }
+.message-body { white-space: pre-wrap; }
+/* A phone: one pane at a time. */
+@container screen (max-width: 43.99rem) {
+  [data-open="detail"] .inbox-list { display: none; }
+  [data-open="list"] .inbox-detail { display: none; }
+}
+/* Wide enough: the list and the conversation side by side, no way back needed. */
+@container screen (min-width: 44rem) {
+  .inbox { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+  .inbox-detail .back { display: none; }
 }
 
 /* ── Me ───────────────────────────────────────────────────────────────── */
@@ -385,8 +417,6 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
 a.thread-link:hover { background: var(--surface); }
 .thread-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .unread-dot { display: inline-block; width: 0.5rem; height: 0.5rem; margin-right: 0.375rem; border-radius: 50%; background: var(--danger); vertical-align: middle; }
-#inbox:focus { outline: none; }
-#inbox:focus-visible { outline: 3px solid var(--focus); }
 
 .welcome { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .welcome h2 { color: var(--on-primary); }

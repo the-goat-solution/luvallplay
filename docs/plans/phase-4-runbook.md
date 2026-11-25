@@ -80,6 +80,10 @@ The older `/api/v1/*` routes (personal access keys, shared with the MCP server) 
 | `GET /clubs/{club}/me` | signed in | The Me tab in one answer (so it opens from the cache at once): name and initials, the membership (plan, day, status, dates, days left, a paid follow-on) or the prices to join, the casual price, streak and month rank, the next five weeks of play days as this person sees them, the inbox's unread count and three latest conversations, and whether to show the welcome card. Memberships off: no membership and no join prices. |
 | `POST /clubs/{club}/me/absence` | signed in | "Can't make it" (`{date, absent: true}`) and "I can come after all" (`absent: false`), as the web's `/api/profile/absence`: frees the spot and tells the waitlist. Past days (`past`), non-members (`no_membership`) and impossible dates (`bad_request`) are refused. |
 | `POST /account/welcome-dismissed` | signed in | The welcome card's Done; kept on the account. |
+| `GET /clubs/{club}/messages` | signed in | The person's conversations with the club (subject, preview, unread, open or closed, who wrote last). |
+| `POST /clubs/{club}/messages` | signed in | Start a conversation (`{subject, body}`); the club's admins are emailed. Same limit as the web (10 an hour, one bucket for both). |
+| `GET /clubs/{club}/messages/{id}` | signed in | One conversation; reading it marks it read. Somebody else's, or an id that can't exist, is `404 not_found`. |
+| `POST /clubs/{club}/messages/{id}` | signed in | Reply (`{body}`); reopens a closed conversation; the admins are emailed. Same limit as the web (30 an hour). |
 
 **Rules the wrapper applies to every route**
 
@@ -139,6 +143,7 @@ Sign in with an email; without `RESEND_API_KEY` the code is printed in the API's
 | The signed-in shell: the club's look, name and logo, navigation, club switcher | `src/screens/Shell.tsx` |
 | Tabs (Me, Player, Arena, Leaderboard, Vision, as on the website), each its own chunk; Settings behind the ⚙ in the header | `src/router.tsx`, `src/screens/*.tsx` |
 | Me: header, next up, membership or join, play calendar, inbox preview, welcome card | `src/screens/Me.tsx`, `src/screens/me/*` |
+| The inbox: list, conversation, new message | `src/screens/Inbox.tsx`, `src/screens/inbox/data.ts` |
 | Dates, times and money in the club's country, time zone and currency | `src/lib/format.ts` |
 | Theme → CSS custom properties, light and dark | `src/lib/theme.ts` |
 | Window classes and the navigation for each | `src/lib/window-class.ts`, `src/styles/app.css` |
@@ -156,11 +161,15 @@ The website's Me page (`apps/web/app/profile/page.tsx`), card for card, from one
 - **Next up**: the first play day they're in, with **Can't make it** on a membership day.
 - **Membership** (plan · day, status, days left, renews or ends, a paid follow-on) or **Become a member** (both plans in the club's money). Hidden when the club has Memberships off.
 - **Play calendar**: five weeks by month; their days marked, Can't make it on each, casual spots left, paused and closed days.
-- **Messages**: the three latest conversations; **Welcome card** for a new account, until Done.
+- **Messages**: the three latest conversations, each opening in the inbox; **Welcome card** for a new account, until Done.
 
 Can't make it and Done change the screen at once and are put back (with a message) if the server refuses them.
 
-**Opens on the club's website for now** (a link that says so; the app has no card payments or inbox yet): managing or joining a membership and booking a casual spot (the membership and shop step), and reading or replying to messages (the inbox step). The address comes from the club's config (`webUrl`).
+**Opens on the club's website for now** (a link that says so; the app has no card payments yet): managing or joining a membership and booking a casual spot (the membership and shop step). The address comes from the club's config (`webUrl`).
+
+**Inbox (step 3b)**
+
+`/inbox` (the list), `/inbox/new` (a new message) and `/inbox/<id>` (one conversation), opened from Me's bell and Messages card; not a tab, as on the website. On a phone the list and a conversation are one screen each with "All messages" to go back; when the screen is wide enough (a container query) they sit side by side. An open conversation refreshes every 20 seconds while it is on screen, as on the website; reading it updates the list and Me's bell. A refused send keeps what was written and says why (too many messages, or try again).
 
 **Not on Me yet**: the **shop** (with the shop step) and **My photos** (with the Player step).
 
@@ -190,7 +199,7 @@ Safe areas on every edge, `dvh`, 44px touch targets, rem type (text scales to 20
 | `VITE_API_BASE` | The home API host, for example `https://api.luvallplay.com`. Empty means the app's own origin. |
 | `VITE_API_HOSTS` | More API hosts (other regions), space or comma separated. |
 
-These, plus `https://api.luvallplay.com`, are the only hosts the built page may reach: the build writes them into the page's Content-Security-Policy (`connect-src`, `img-src`), and the app only sends a session token to a host on that list. The API must allow the app's origin in turn (`APP_ORIGINS`, §2).
+These, plus `https://api.luvallplay.com`, are the only hosts the built page may talk to: the build writes them into the page's Content-Security-Policy (`connect-src`), and the app only sends a session token to a host on that list. Images may come from any `https:` host (a club's logo on its own site, profile photos in Blob storage); an image can't read the page or carry the token. The API must allow the app's origin in turn (`APP_ORIGINS`, §2).
 
 **Tests**
 
@@ -203,7 +212,7 @@ pnpm --filter app build && pnpm --filter app budget
 
 - `tests/lib.test.ts`: theme to custom properties (and what it refuses), window classes, tabs and modules, storage, which host gets the token, messages complete in both languages and sport-neutral, the stylesheet's rules.
 - `tests/format.test.ts`: dates in the club's country and time zone, money in minor units, months, next up, and the Me words complete in Vietnamese with no club name or currency typed in.
-- `tests/e2e/app.mjs` (APP1 to APP21): the real API on a fresh local Postgres, the app built and served on its own origin. Sign in by email code; Luvallplay's look before, the club's after; an invite link applies the club's look first; switching clubs changes look, words and tabs at once (the second club is simulated in the browser, since one deployment serves one club); a module that is off; a refused token; languages; light and dark; the Club admin button; five widths with the right navigation and no sideways scroll; text at 200%; reduced motion; axe in light and dark; the Content-Security-Policy; screens as separate chunks. Me (APP16 to APP21): a member's Me matches the API's own answer card for card; Can't make it flips at once, is saved, survives a reload and undoes, and a refused one is put back; a newcomer sees the join card in the club's money and the welcome card, and Done stays done; Memberships off hides both cards; Me in Vietnamese; Me that can't load offers Try again. APP22 takes screenshots (`E2E_SHOTS=<folder>`) for people to look at.
+- `tests/e2e/app.mjs` (APP1 to APP21): the real API on a fresh local Postgres, the app built and served on its own origin. Sign in by email code; Luvallplay's look before, the club's after; an invite link applies the club's look first; switching clubs changes look, words and tabs at once (the second club is simulated in the browser, since one deployment serves one club); a module that is off; a refused token; languages; light and dark; the Club admin button; five widths with the right navigation and no sideways scroll; text at 200%; reduced motion; axe in light and dark; the Content-Security-Policy; screens as separate chunks. Me (APP16 to APP21): a member's Me matches the API's own answer card for card; Can't make it flips at once, is saved, survives a reload and undoes, and a refused one is put back; a newcomer sees the join card in the club's money and the welcome card, and Done stays done; Memberships off hides both cards; Me in Vietnamese; Me that can't load offers Try again. The inbox (APP23 to APP25): from Me to a conversation and back on a phone, reply, and the bell catches up; a new message side by side on a tablet, and the admins are emailed; a refused send keeps the text and says why; a conversation that isn't yours isn't there. APP22 takes screenshots (`E2E_SHOTS=<folder>`) for people to look at.
 - CI job "Players' app" runs all of it.
 
 **Performance budget**
@@ -214,10 +223,8 @@ The app shell (the entry script and what it preloads) must stay at or under **15
 
 - Project **`luvallplay-app`** (`prj_ZjHXLpD1IUVPgpWsED5bkKXdeuk9`), root `apps/app`, framework Vite, connected to this repository, with the §1 ignore rule as its Ignored Build Step and in `apps/app/vercel.json`.
 - **`app.luvallplay.com`** is attached to it and verified. luvallplay.com's DNS is on Vercel's name servers, so Vercel created the record itself: **no DNS step is needed**. If the DNS ever moves away from Vercel, the records are: CNAME `app` → `0614f58185a129ba.vercel-dns-017.com.` (older value `cname.vercel-dns.com.`), or A `216.198.79.1` and `64.29.17.1`.
-- **The project is paused** (24 Nov 2026). Vercel promotes a new project's very first deployment to production whatever its branch, so the first push after the project was created put an unmerged build of the shell on `app.luvallplay.com` for a few minutes. It could not sign anyone in (no API host was set) and touched no data. The project was paused straight away; the address now answers "deployment paused" (503). **Unpause it** (Vercel → luvallplay-app → Settings → General, or ask Claude) once `apps/app` is on `main` and its production build is the one you want there. From the second deployment on, only `main` deploys to production.
-- **Before the app can sign anyone in on that address**, two settings are needed (ask before changing production settings):
-  1. On `luvallplay-app`: `VITE_API_BASE` = the host that serves the API (today the Three Wolves web host), for Production and Preview.
-  2. On `three-wolves-badminton`: nothing for the real address (`https://app.luvallplay.com` is in the API's built-in allow-list). Only if a `*.vercel.app` preview of the app should be able to sign in, add that exact origin to `APP_ORIGINS`.
+- **Live since 25 Nov 2026.** `VITE_API_BASE` = `https://www.threewolvesbadminton.org` (Production and Preview) is set on `luvallplay-app`, the project was unpaused and `main` deployed to production; `app.luvallplay.com` serves it. Checked: the page's policy names the API host, and the API answers the app's origin (preflight 204, the club's config with `Access-Control-Allow-Origin: https://app.luvallplay.com`). Nobody is pointed at it yet; the cutover is a separate step. (It was paused on 24 Nov because Vercel promoted the project's very first deployment, from a feature branch, to production.)
+- On `three-wolves-badminton` nothing was needed: `https://app.luvallplay.com` is in the API's built-in allow-list. Only if a `*.vercel.app` preview of the app should be able to sign in, add that exact origin to `APP_ORIGINS` there.
 
 **Not yet**
 

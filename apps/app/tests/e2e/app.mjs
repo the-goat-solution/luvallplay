@@ -394,12 +394,11 @@ describe("APP · Me (the home tab)", () => {
     assert.equal(await page.locator(".day").count(), data.calendar.length);
     assert.equal(await page.locator(".day-yours").count(), data.calendar.filter((d) => d.included && !d.absent).length);
     assert.ok((await page.locator(".month").count()) >= 1);
-    // Inbox: the club's unread message; the bell takes you to it.
+    // Inbox: the club's unread message, opening in the app's inbox; so does the bell.
     const thread = page.locator(".thread.unread").first();
     assert.match(await thread.textContent(), /Welcome to Fridays/);
-    assert.equal(await thread.locator("a").getAttribute("href"), `${env.base}/profile?thread=${data.inbox.latest[0].id}`);
-    await page.locator(".me-head .icon-button").click();
-    await page.waitForFunction(() => document.activeElement?.id === "inbox");
+    assert.equal(await thread.locator("a").getAttribute("href"), `/inbox/${data.inbox.latest[0].id}`);
+    assert.equal(await page.locator(".me-head .icon-button").getAttribute("href"), "/inbox");
     assert.equal(await page.locator(".welcome").count(), 0);
     assert.deepEqual(problems, []);
     await context.close();
@@ -534,6 +533,108 @@ describe("APP · Me (the home tab)", () => {
   });
 });
 
+describe("APP · the inbox", () => {
+  const threadId = async () => (await db.query(`SELECT t.id FROM message_threads t JOIN players p ON p.id = t.player_id WHERE p.email = $1 AND t.subject = 'Welcome to Fridays'`, [PEOPLE.member.email])).rows[0].id;
+  const restore = async (id) => {
+    await db.query(`DELETE FROM messages WHERE thread_id = $1 AND sender = 'player'`, [id]);
+    await db.query(`UPDATE message_threads SET unread_for_player = TRUE, status = 'open' WHERE id = $1`, [id]);
+  };
+
+  test("APP23 · from Me to a conversation and back: read, reply, and the bell catches up (phone)", async () => {
+    const id = await threadId();
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/me`);
+      await page.waitForSelector(ME_READY);
+      await page.locator(".thread.unread a").first().click();
+      await page.waitForURL(`${APP}/inbox/${id}`);
+      await page.getByRole("heading", { name: "Welcome to Fridays", level: 2 }).waitFor();
+      // The club's message, signed with the club's name; on a phone the list steps aside.
+      assert.match(await page.locator(".message-admin").textContent(), /Three Wolves Badminton Club.*See you at Pioneer on Friday!/s);
+      assert.equal(await page.locator(".inbox-list").isVisible(), false);
+      await page.waitForFunction(() => document.activeElement?.tagName === "H2", null, { timeout: 5000 });
+      // Reply.
+      await page.getByPlaceholder("Write a message…").fill("Thanks, see you there");
+      await page.getByRole("button", { name: "Send" }).click();
+      await page.locator(".message-player", { hasText: "Thanks, see you there" }).waitFor();
+      assert.equal(await page.getByPlaceholder("Write a message…").inputValue(), "", "the box empties once sent");
+      const saved = await db.query(`SELECT body FROM messages WHERE thread_id = $1 AND sender = 'player'`, [id]);
+      assert.deepEqual(saved.rows.map((r) => r.body), ["Thanks, see you there"]);
+      // Back to the list: read now, and Me's bell has nothing unread.
+      await page.getByRole("link", { name: "All messages" }).click();
+      await page.waitForURL(`${APP}/inbox`);
+      assert.equal(await page.locator(".thread.unread").count(), 0);
+      assert.match(await page.locator(".thread-preview").first().textContent(), /^You: Thanks, see you there/);
+      await page.locator(".shell-nav").getByRole("link", { name: "Me", exact: true }).click();
+      await page.waitForSelector(ME_READY);
+      await page.waitForFunction(() => document.querySelector(".me-head .icon-button")?.getAttribute("aria-label") === "Inbox");
+      assert.deepEqual(problems, []);
+    } finally {
+      await restore(id);
+      await context.close();
+    }
+  });
+
+  test("APP24 · a new message: written, sent, opened; the club's admins are emailed", async () => {
+    const { context } = await signedIn(PEOPLE.player.email, { viewport: { width: 900, height: 900 } });
+    const page = await context.newPage();
+    const peteId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.player.email])).rows[0].id;
+    try {
+      await page.goto(`${APP}/inbox`);
+      await page.getByText("No messages yet.").waitFor();
+      // Wide: the list and the other pane side by side.
+      assert.ok(await page.locator(".inbox-list").isVisible());
+      assert.match(await page.locator(".inbox-detail").textContent(), /Choose a conversation/);
+      await page.getByRole("link", { name: "New message" }).click();
+      await page.getByLabel("Subject").fill("Jersey size");
+      await page.getByLabel("Message").fill("Do you have XL?");
+      await fetch(`${env.base}/api/dev/outbox`, { method: "DELETE" });
+      await page.getByRole("button", { name: "Send" }).click();
+      await page.waitForURL(/\/inbox\/\d+$/);
+      await page.getByRole("heading", { name: "Jersey size", level: 2 }).waitFor();
+      await page.locator(".message-player", { hasText: "Do you have XL?" }).waitFor();
+      await page.locator(".thread-link", { hasText: "Jersey size" }).waitFor();
+      assert.match(await page.locator(".thread-link[aria-current]").textContent(), /Jersey size/, "the open conversation is marked in the list");
+      const row = (await db.query(`SELECT subject, started_by FROM message_threads WHERE player_id = $1`, [peteId])).rows;
+      assert.deepEqual(row, [{ subject: "Jersey size", started_by: "player" }]);
+      const mail = (await (await fetch(`${env.base}/api/dev/outbox`)).json()).mail;
+      assert.ok(mail.some((m) => /Jersey size/.test(m.subject)), "the admins hear about it");
+    } finally {
+      await db.query(`DELETE FROM messages WHERE thread_id IN (SELECT id FROM message_threads WHERE player_id = $1)`, [peteId]);
+      await db.query(`DELETE FROM message_threads WHERE player_id = $1`, [peteId]);
+      await context.close();
+    }
+  });
+
+  test("APP25 · a refused send keeps what was written and says why; a conversation that isn't yours isn't there", async () => {
+    const id = await threadId();
+    const { context } = await signedIn(PEOPLE.member.email);
+    await context.route(`${api}/clubs/three-wolves/messages/${id}`, (route) =>
+      route.request().method() === "POST"
+        ? route.fulfill({ status: 429, headers: { ...CORS, "content-type": "application/json" }, body: '{"error":"rate_limited"}' })
+        : route.fallback(),
+    );
+    const page = await context.newPage();
+    try {
+      await page.goto(`${APP}/inbox/${id}`);
+      await page.getByPlaceholder("Write a message…").fill("Hello again");
+      await page.getByRole("button", { name: "Send" }).click();
+      await page.getByRole("alert").filter({ hasText: "You've sent a lot of messages" }).waitFor();
+      assert.equal(await page.getByPlaceholder("Write a message…").inputValue(), "Hello again");
+      // Pete's conversations aren't Mia's: an id that isn't hers shows nothing of it.
+      await page.goto(`${APP}/inbox/999999`);
+      await page.getByText("That conversation isn't here.").waitFor();
+      await page.goto(`${APP}/inbox/not-a-number`);
+      await page.getByText("That conversation isn't here.").waitFor();
+    } finally {
+      await restore(id);
+      await context.close();
+    }
+  });
+});
+
 describe("APP · screenshots", () => {
   // For people to look at (docs/screenshots/phase-4), not compared: the visual pass compares later.
   test("APP22 · Me at a phone and a tablet width, light and dark, member and newcomer", { skip: !process.env.E2E_SHOTS }, async () => {
@@ -551,6 +652,17 @@ describe("APP · screenshots", () => {
         }
       }
     }
+    // The inbox: a conversation on a phone, and list beside it on a tablet.
+    const id = (await db.query(`SELECT t.id FROM message_threads t JOIN players p ON p.id = t.player_id WHERE p.email = $1`, [PEOPLE.member.email])).rows[0].id;
+    for (const width of [375, 900]) {
+      const { context } = await signedIn(PEOPLE.member.email, { viewport: { width, height: width < 600 ? 812 : 1000 }, deviceScaleFactor: 2 });
+      const page = await context.newPage();
+      await page.goto(`${APP}/inbox/${id}`);
+      await page.locator(".message").first().waitFor();
+      await page.screenshot({ path: `${dir}/inbox-${width}.png` });
+      await context.close();
+    }
+    await db.query(`UPDATE message_threads SET unread_for_player = TRUE WHERE id = $1`, [id]);
   });
 });
 
@@ -625,9 +737,9 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP10 · five widths: no sideways scroll, and the right navigation for each window class", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/leaderboard", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : ".shell-nav .tab");
       for (const width of WIDTHS) {
         const height = width < 600 ? 812 : 900;
         await page.setViewportSize({ width, height });
@@ -644,7 +756,7 @@ describe("APP · layout (build plan §4.4)", () => {
         }
         // Touch targets: every tab and every control is at least 44px tall.
         const small = await page.evaluate(() =>
-          [...document.querySelectorAll(".tab, .head-icon, .icon-button, .button, .choice, .field input, .thread-link")]
+          [...document.querySelectorAll(".tab, .head-icon, .icon-button, .button, .choice, .field input, .thread-link, .back")]
             .map((el) => ({ what: el.textContent?.trim().slice(0, 30), h: el.getBoundingClientRect().height }))
             .filter((x) => x.h > 0 && x.h < 44),
         );
@@ -681,9 +793,9 @@ describe("APP · layout (build plan §4.4)", () => {
   test("APP11 · text at 200%: still no sideways scroll on a phone, and nothing is cut off", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    for (const route of ["/me", "/leaderboard", "/settings"]) {
+    for (const route of ["/me", "/inbox", "/leaderboard", "/settings"]) {
       await page.goto(`${APP}${route}`);
-      await page.waitForSelector(route === "/me" ? ME_READY : ".shell-nav .tab");
+      await page.waitForSelector(route === "/me" ? ME_READY : route === "/inbox" ? ".thread-link" : ".shell-nav .tab");
       const before = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
       const afterSize = await page.locator("h1").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
@@ -722,7 +834,7 @@ describe("APP · accessibility and the page's rules", () => {
       // axe is injected by the test, which the page's own CSP would (rightly) refuse.
       const { context } = await signedIn(PEOPLE.admin.email, { colorScheme, bypassCSP: true });
       const anon = await browser.newContext({ viewport: PHONE, colorScheme, bypassCSP: true });
-      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/settings", "text=Signed in as"], [context, "/arena", '[data-screen="nav_arena"]']]) {
+      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/arena", '[data-screen="nav_arena"]']]) {
         const page = await ctx.newPage();
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);
@@ -745,6 +857,9 @@ describe("APP · accessibility and the page's rules", () => {
     assert.match(csp, /style-src 'self'(;|$)/);
     assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com`));
     assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|\*/);
+    // Images from any https host (club logos, photos in Blob storage); nothing else is widened.
+    assert.match(csp, /img-src 'self' data: https: /);
+    assert.doesNotMatch(csp.match(/connect-src[^;]*/)[0], /https:(\s|$)/);
     assert.doesNotMatch(html, /<script(?![^>]+src=)[^>]*>/);
     // And it bites: a request to any other host is refused by the page itself.
     const context = await browser.newContext({ viewport: PHONE });

@@ -624,10 +624,14 @@ const SESSION_ENDPOINTS = [
   ["GET", "/clubs/{club}/me"],
   ["POST", "/clubs/{club}/me/absence"],
   ["POST", "/account/welcome-dismissed"],
+  ["GET", "/clubs/{club}/messages"],
+  ["POST", "/clubs/{club}/messages"],
+  ["GET", "/clubs/{club}/messages/{id}"],
+  ["POST", "/clubs/{club}/messages/{id}"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
-const filled = (path) => path.replace("{club}", CLUB);
+const filled = (path) => path.replace("{club}", CLUB).replace("{id}", "1");
 
 async function appApi(method, path, { token, body, headers = {}, raw } = {}) {
   const r = await fetch(`${base()}${APP_API}${path}`, {
@@ -924,6 +928,66 @@ describe("API · the players' app API", () => {
     } finally {
       // Other journeys meet Pete's welcome card.
       await db.query(`UPDATE players SET welcome_card_dismissed_at = $2 WHERE id = $1`, [rows[0].id, rows[0].welcome_card_dismissed_at]);
+      await pete.context.close();
+    }
+  });
+
+  test("API11 · messages: list, read (marks read), start and reply (the club hears), only your own, bad input refused", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const pete = await signedIn(PEOPLE.player.email);
+    const peteId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.player.email])).rows[0].id;
+    const path = (p) => `/clubs/${CLUB}/messages${p}`;
+    const list = (s) => appApi("GET", path(""), { token: s.token });
+    try {
+      // Mia's list: the club's message, unread, written by the club.
+      const mine = (await list(mia)).json.threads;
+      const welcome = mine.find((t) => t.subject === "Welcome to Fridays");
+      assert.ok(welcome, JSON.stringify(mine));
+      assert.deepEqual([welcome.unread, welcome.status, welcome.lastSender], [true, "open", "admin"]);
+      assert.deepEqual(Object.keys(welcome).sort(), ["id", "lastMessageAt", "lastSender", "preview", "status", "subject", "unread"]);
+      // Reading it marks it read.
+      const read = await appApi("GET", path(`/${welcome.id}`), { token: mia.token });
+      assert.equal(read.status, 200);
+      assert.equal(read.json.thread.subject, "Welcome to Fridays");
+      assert.deepEqual(read.json.thread.messages.map((m) => [m.sender, m.body]), [["admin", "See you at Pioneer on Friday!"]]);
+      assert.equal((await list(mia)).json.threads.find((t) => t.id === welcome.id).unread, false);
+      // Somebody else's conversation doesn't exist for Pete, to read or to answer.
+      assert.deepEqual([(await appApi("GET", path(`/${welcome.id}`), { token: pete.token })).status], [404]);
+      const intrude = await appApi("POST", path(`/${welcome.id}`), { token: pete.token, body: { body: "hello" } });
+      assert.deepEqual([intrude.status, intrude.json], [404, { error: "not_found" }]);
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM messages WHERE thread_id = $1`, [welcome.id])).rows[0].n, 1);
+
+      // Pete starts a conversation; the club's admins are emailed.
+      await clearOutbox();
+      const started = await appApi("POST", path(""), { token: pete.token, body: { subject: "  Jersey size  ", body: "Do you have XL?" } });
+      assert.equal(started.status, 200, JSON.stringify(started.json));
+      const id = started.json.id;
+      const row = (await db.query(`SELECT player_id, subject, unread_for_admin, started_by FROM message_threads WHERE id = $1`, [id])).rows[0];
+      assert.deepEqual([row.player_id, row.subject, row.unread_for_admin, row.started_by], [peteId, "Jersey size", true, "player"]);
+      const mail = (await (await fetch(`${base()}/api/dev/outbox`)).json()).mail;
+      assert.ok(mail.some((m) => /Message from Pete Player: Jersey size/.test(m.subject)), "the admins hear about it");
+      // A closed conversation reopens when he replies.
+      await db.query(`UPDATE message_threads SET status = 'closed' WHERE id = $1`, [id]);
+      const reply = await appApi("POST", path(`/${id}`), { token: pete.token, body: { body: "Or L is fine" } });
+      assert.equal(reply.status, 200);
+      assert.deepEqual([reply.json.message.sender, reply.json.message.body], ["player", "Or L is fine"]);
+      const thread = (await appApi("GET", path(`/${id}`), { token: pete.token })).json.thread;
+      assert.deepEqual([thread.status, thread.messages.map((m) => m.body)], ["open", ["Do you have XL?", "Or L is fine"]]);
+
+      // Bad input: 400 for a body that doesn't fit, 404 for a conversation id that can't exist.
+      for (const body of [{}, { subject: "", body: "x" }, { subject: "x", body: "" }, { subject: "x".repeat(121), body: "x" }, { subject: "x", body: "x".repeat(4001) }, { subject: ["x"], body: "x" }]) {
+        const r = await appApi("POST", path(""), { token: pete.token, body });
+        assert.deepEqual([r.status, r.json], [400, { error: "bad_request" }], JSON.stringify(body).slice(0, 60));
+      }
+      for (const bad of ["abc", "0", "-1", "1.5", "99999999999"]) {
+        assert.equal((await appApi("GET", path(`/${bad}`), { token: pete.token })).status, 404, bad);
+      }
+      assert.deepEqual([(await appApi("POST", path(`/${id}`), { token: pete.token, body: { body: "   " } })).status], [400]);
+    } finally {
+      await db.query(`UPDATE message_threads SET unread_for_player = TRUE WHERE player_id = (SELECT id FROM players WHERE email = $1) AND subject = 'Welcome to Fridays'`, [PEOPLE.member.email]);
+      await db.query(`DELETE FROM messages WHERE thread_id IN (SELECT id FROM message_threads WHERE player_id = $1)`, [peteId]);
+      await db.query(`DELETE FROM message_threads WHERE player_id = $1`, [peteId]);
+      await mia.context.close();
       await pete.context.close();
     }
   });

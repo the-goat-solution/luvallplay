@@ -48,6 +48,20 @@ export function createApi(transport: Transport) {
       home: (params: ParamsOf<"me.home">, options?: Options) =>
         transport.call("me.home", { params, signal: options?.signal }) as Promise<ResponseOf<"me.home">>,
     },
+    messages: {
+      /** GET /clubs/{club}/messages (signed in) */
+      list: (params: ParamsOf<"messages.list">, options?: Options) =>
+        transport.call("messages.list", { params, signal: options?.signal }) as Promise<ResponseOf<"messages.list">>,
+      /** POST /clubs/{club}/messages/{id} (signed in) */
+      reply: (params: ParamsOf<"messages.reply">, body: BodyOf<"messages.reply">, options?: Options) =>
+        transport.call("messages.reply", { params, body, signal: options?.signal }) as Promise<ResponseOf<"messages.reply">>,
+      /** POST /clubs/{club}/messages (signed in) */
+      start: (params: ParamsOf<"messages.start">, body: BodyOf<"messages.start">, options?: Options) =>
+        transport.call("messages.start", { params, body, signal: options?.signal }) as Promise<ResponseOf<"messages.start">>,
+      /** GET /clubs/{club}/messages/{id} (signed in) */
+      thread: (params: ParamsOf<"messages.thread">, options?: Options) =>
+        transport.call("messages.thread", { params, signal: options?.signal }) as Promise<ResponseOf<"messages.thread">>,
+    },
   };
 }
 

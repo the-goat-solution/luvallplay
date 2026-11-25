@@ -1,47 +1,34 @@
-// The latest conversations with the club. Reading and replying move into the
-// app with the inbox step; until then a conversation opens on the club's
-// website (?thread= opens it there, as message emails do).
-import { forwardRef } from "react";
+// The three latest conversations with the club; each opens in the inbox.
+import { Link } from "@tanstack/react-router";
 import type { Me } from "./data.ts";
-import { usePlace, webHref, WebsiteLink } from "./parts.tsx";
+import { usePlace } from "./parts.tsx";
 
-export const InboxPreview = forwardRef<HTMLElement, { inbox: Me["inbox"] }>(function InboxPreview({ inbox }, ref) {
-  const { t, webUrl } = usePlace();
-  const all = webHref(webUrl, "/profile?inbox=1");
+export function InboxPreview({ inbox }: { inbox: Me["inbox"] }) {
+  const { t } = usePlace();
   return (
-    <section className="card stack" id="inbox" aria-labelledby="inbox-title" ref={ref} tabIndex={-1}>
+    <section className="card stack" aria-labelledby="inbox-title">
       <h2 id="inbox-title">{t("me_inbox_preview")}</h2>
       {inbox.latest.length === 0 ? (
         <p className="muted">{t("me_inbox_none")}</p>
       ) : (
         <ul className="threads">
-          {inbox.latest.map((th) => {
-            const href = webHref(webUrl, `/profile?thread=${th.id}`);
-            const body = (
-              <>
+          {inbox.latest.map((th) => (
+            <li key={th.id} className={th.unread ? "thread unread" : "thread"}>
+              <Link className="thread-link" to="/inbox/$id" params={{ id: String(th.id) }}>
                 <strong>
                   {th.unread && <span className="unread-dot" aria-hidden="true" />}
                   {th.subject}
-                  {th.unread && <span className="visually-hidden"> ({t("me_inbox_unread", { n: 1 })})</span>}
+                  {th.unread && <span className="visually-hidden"> ({t("msg_new_badge")})</span>}
                 </strong>
                 <span className="muted small thread-preview">{th.preview}</span>
-              </>
-            );
-            return (
-              <li key={th.id} className={th.unread ? "thread unread" : "thread"}>
-                {href ? (
-                  <a className="thread-link" href={href} target="_blank" rel="noopener noreferrer">
-                    {body}
-                  </a>
-                ) : (
-                  <div className="thread-link">{body}</div>
-                )}
-              </li>
-            );
-          })}
+              </Link>
+            </li>
+          ))}
         </ul>
       )}
-      {all && <WebsiteLink href={all}>{t("me_inbox_open")}</WebsiteLink>}
+      <Link to="/inbox" className="button">
+        {t("me_inbox_open")}
+      </Link>
     </section>
   );
-});
+}

@@ -1,5 +1,6 @@
 // The top of Me: picture or initials, name, the membership pill and the
-// inbox bell with its unread count, as on the website.
+// inbox bell with its unread count (it opens the inbox), as on the website.
+import { Link } from "@tanstack/react-router";
 import type { Me } from "./data.ts";
 import { dayLabel } from "../../lib/format.ts";
 import { usePlace } from "./parts.tsx";
@@ -13,7 +14,7 @@ function pillText(me: Me, t: ReturnType<typeof usePlace>["t"], locale: string): 
   return end ? { text: t("me_pill_ends", { date: dayLabel(end, locale) }), active: true } : { text: t("me_pill_active"), active: true };
 }
 
-export function MeHeader({ me, onOpenInbox }: { me: Me; onOpenInbox: () => void }) {
+export function MeHeader({ me }: { me: Me }) {
   const { t, locale } = usePlace();
   const name = `${me.player.firstName} ${me.player.lastName}`.trim() || me.player.displayName;
   const pill = pillText(me, t, locale);
@@ -27,10 +28,9 @@ export function MeHeader({ me, onOpenInbox }: { me: Me; onOpenInbox: () => void 
         <h1>{name}</h1>
         <span className={`pill${pill.active ? " pill-active" : ""}`}>{pill.text}</span>
       </div>
-      <button
-        type="button"
+      <Link
+        to="/inbox"
         className="icon-button"
-        onClick={onOpenInbox}
         aria-label={unread > 0 ? `${t("me_inbox")}, ${t("me_inbox_unread", { n: unread })}` : t("me_inbox")}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
@@ -38,7 +38,7 @@ export function MeHeader({ me, onOpenInbox }: { me: Me; onOpenInbox: () => void 
           <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
         </svg>
         {unread > 0 && <span className="badge" aria-hidden="true">{unread > 9 ? "9+" : unread}</span>}
-      </button>
+      </Link>
     </header>
   );
 }

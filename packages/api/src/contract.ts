@@ -92,6 +92,27 @@ export const ENDPOINTS = define({
     params: S.clubParams, body: S.absenceRequest, response: S.okResponse,
     rateLimit: { limit: 30, windowMs: MIN },
   },
+  // ── Messages (the inbox) ─────────────────────────────────────────────────
+  "messages.list": {
+    method: "GET", path: "/clubs/{club}/messages", auth: "session", scope: "club",
+    params: S.clubParams, response: S.threadsResponse,
+    rateLimit: { limit: 120, windowMs: MIN },
+  },
+  "messages.start": {
+    method: "POST", path: "/clubs/{club}/messages", auth: "session", scope: "club",
+    params: S.clubParams, body: S.newThreadRequest, response: S.newThreadResponse,
+    rateLimit: { limit: 10, windowMs: 60 * MIN },
+  },
+  "messages.thread": {
+    method: "GET", path: "/clubs/{club}/messages/{id}", auth: "session", scope: "club",
+    params: S.threadParams, response: S.threadResponse,
+    rateLimit: { limit: 120, windowMs: MIN },
+  },
+  "messages.reply": {
+    method: "POST", path: "/clubs/{club}/messages/{id}", auth: "session", scope: "club",
+    params: S.threadParams, body: S.replyRequest, response: S.replyResponse,
+    rateLimit: { limit: 30, windowMs: 60 * MIN },
+  },
   // ── The account (the same in every club) ────────────────────────────────
   "account.dismissWelcome": {
     method: "POST", path: "/account/welcome-dismissed", auth: "session", scope: "account",

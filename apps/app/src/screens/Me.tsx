@@ -4,8 +4,8 @@
 // welcome card beside them. Cards for modules the club has off aren't there.
 //
 // Not here yet (later steps): the shop and My photos (with the shop and
-// Player steps), and paying in the app (the membership step).
-import { useRef } from "react";
+// Player steps), and paying in the app (the membership step). The inbox is
+// its own screen (/inbox), opened from the bell and the Messages card.
 import { useSession } from "../hooks.tsx";
 import { nextUp } from "../lib/format.ts";
 import { useMe } from "./me/data.ts";
@@ -46,7 +46,6 @@ function Loading() {
 export default function MeScreen() {
   const { t } = usePlace();
   const me = useMe();
-  const inboxRef = useRef<HTMLElement>(null);
 
   if (!me.data) {
     return (
@@ -68,16 +67,10 @@ export default function MeScreen() {
   }
 
   const data = me.data;
-  const openInbox = () => {
-    const el = inboxRef.current;
-    if (!el) return;
-    el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
-    el.focus({ preventScroll: true });
-  };
 
   return (
     <section className="screen stack" data-screen="nav_me" data-state="ready">
-      <MeHeader me={data} onOpenInbox={openInbox} />
+      <MeHeader me={data} />
       <div className="me-grid">
         <div className="stack">
           <NextUp day={nextUp(data.calendar)} />
@@ -85,7 +78,7 @@ export default function MeScreen() {
           <PlayCalendar days={data.calendar} casualPrice={data.casualPrice} />
         </div>
         <div className="stack">
-          <InboxPreview inbox={data.inbox} ref={inboxRef} />
+          <InboxPreview inbox={data.inbox} />
           {data.welcome && <WelcomeCard firstName={data.player.firstName} />}
         </div>
       </div>

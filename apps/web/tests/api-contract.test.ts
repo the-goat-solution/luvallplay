@@ -127,7 +127,7 @@ describe("contract ↔ routes", () => {
       const src = readFileSync(file, "utf8");
       assert.ok(src.includes(`appRoute(\n  "${id}"`) || src.includes(`appRoute("${id}"`), `${id}: ${file} doesn't call appRoute("${id}")`);
       assert.match(src, new RegExp(`export (const|async function) ${e.method}\\b`), `${id}: ${file} doesn't export ${e.method}`);
-      assert.match(src, /export const OPTIONS = route\.preflight;/, `${id}: no preflight`);
+      assert.match(src, /export const OPTIONS = \w+\.preflight;/, `${id}: no preflight`);
     }
   });
 

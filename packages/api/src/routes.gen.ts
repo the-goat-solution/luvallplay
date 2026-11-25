@@ -15,6 +15,10 @@ export const ROUTES = {
   "clubs.list": { method: "GET", path: "/clubs", auth: "session" },
   "me.absence": { method: "POST", path: "/clubs/{club}/me/absence", auth: "session" },
   "me.home": { method: "GET", path: "/clubs/{club}/me", auth: "session" },
+  "messages.list": { method: "GET", path: "/clubs/{club}/messages", auth: "session" },
+  "messages.reply": { method: "POST", path: "/clubs/{club}/messages/{id}", auth: "session" },
+  "messages.start": { method: "POST", path: "/clubs/{club}/messages", auth: "session" },
+  "messages.thread": { method: "GET", path: "/clubs/{club}/messages/{id}", auth: "session" },
 } as const;
 
 export type RouteId = keyof typeof ROUTES;

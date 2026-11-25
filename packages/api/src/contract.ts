@@ -304,6 +304,47 @@ export const ENDPOINTS = define({
     params: S.clubParams, body: S.visionLabelsRequest, response: S.visionLabelsResponse,
     rateLimit: { limit: 20, windowMs: 60 * MIN },
   },
+  // The tracker itself (the same calls as the website's tracker).
+  "vision.pass": {
+    method: "GET", path: "/clubs/{club}/vision/pass", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, query: S.visionPassQuery, response: S.visionPassResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "vision.buy": {
+    method: "POST", path: "/clubs/{club}/vision/pass", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, body: S.visionBuyRequest, response: S.visionBuyResponse,
+    rateLimit: { limit: 10, windowMs: MIN },
+  },
+  "vision.use": {
+    method: "PATCH", path: "/clubs/{club}/vision/pass", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, body: S.visionUseRequest, response: S.visionUseResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  "vision.save": {
+    method: "POST", path: "/clubs/{club}/vision/stats", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, body: S.visionStatsRequest, response: S.visionStatsResponse,
+    rateLimit: { limit: 20, windowMs: MIN },
+  },
+  "vision.beat": {
+    method: "PUT", path: "/clubs/{club}/vision/stats", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, body: S.visionBeatRequest, response: S.okResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  "vision.model": {
+    method: "GET", path: "/clubs/{club}/vision/model", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, response: S.visionModelResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "vision.train": {
+    method: "POST", path: "/clubs/{club}/vision/model", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, body: S.visionTrainRequest, response: S.visionTrainResponse,
+    rateLimit: { limit: 6, windowMs: 60 * MIN },
+  },
+  "vision.share": {
+    method: "POST", path: "/clubs/{club}/vision/share", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, body: S.visionShareRequest, response: S.visionShareResponse,
+    rateLimit: { limit: 12, windowMs: 24 * 60 * MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

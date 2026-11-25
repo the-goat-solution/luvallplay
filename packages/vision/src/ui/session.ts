@@ -7,8 +7,8 @@
 //   • FrameStats + Throttle: what the camera really delivers, what we manage
 //     to analyse, and an automatic slow-down of the person detector when the
 //     phone falls behind (heat, an older phone, a busy main thread).
-import type { CourtTap } from "@/lib/match-analyzer";
-import type { LensPreset } from "@/lib/ma/lens";
+import type { CourtTap } from "../match-analyzer";
+import type { LensPreset } from "../engine/lens";
 
 // ── Recording ─────────────────────────────────────────────────────────────
 

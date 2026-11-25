@@ -15,6 +15,9 @@ const DEFAULT_API_HOSTS = ["https://api.luvallplay.com"];
 // payment step loads it.
 const STRIPE = { script: "https://js.stripe.com", frame: "https://js.stripe.com https://hooks.stripe.com", connect: "https://api.stripe.com" };
 
+// The tracker's person and pose models, downloaded on its screen only.
+const MODELS = "https://storage.googleapis.com";
+
 function apiHosts(env: Record<string, string>): string[] {
   const listed = (env.VITE_API_HOSTS ?? "").split(/[\s,]+/).filter(Boolean);
   const all = [env.VITE_API_BASE, ...listed, ...DEFAULT_API_HOSTS].filter((h): h is string => !!h && /^https?:\/\/[^\s/'";]+$/.test(h));
@@ -30,14 +33,17 @@ function csp(env: Record<string, string>): Plugin {
       const hosts = apiHosts(env).join(" ");
       const policy = [
         "default-src 'self'",
-        // Stripe's card form (Payment Element), loaded only on a payment step.
-        `script-src 'self' ${STRIPE.script}`,
+        // Stripe's card form (Payment Element), loaded only on a payment step;
+        // the tracker's WebAssembly runtime (served from /mediapipe).
+        `script-src 'self' 'wasm-unsafe-eval' ${STRIPE.script}`,
         "style-src 'self'",
-        `img-src 'self' data: https: ${hosts}`,
+        `img-src 'self' data: blob: https: ${hosts}`,
         "font-src 'self'",
-        // Videos chosen on the device (the labelling tool plays them from a blob: address).
+        // Videos chosen on the device (the tracker and the labelling tool play them from a blob: address).
         "media-src 'self' blob:",
-        `connect-src 'self' ${hosts} ${STRIPE.connect}`,
+        // The tracker's detection models (Google's MediaPipe model storage).
+        `connect-src 'self' ${hosts} ${STRIPE.connect} ${MODELS}`,
+        "worker-src 'self' blob:",
         `frame-src ${STRIPE.frame}`,
         "base-uri 'self'",
         "form-action 'self'",

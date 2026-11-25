@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ShuttleChecker, averageWeights, N_FEATURES } from "../lib/ma/checker.ts";
-import { fromCrop, mergeDetections } from "../lib/ma/detections.ts";
-import { MatchEngine, type PoseKeypoints } from "../lib/ma/engine.ts";
-import { fitCamera, LENS_PRIOR } from "../lib/ma/lens.ts";
-import { MatchSim } from "../lib/ma/sim.ts";
-import { SHUTTLE_CHECKER } from "../lib/ma/models/shuttle-checker.ts";
-import { addTotals, totalsAsSummary, Throttle } from "../components/match-analyzer/session.ts";
+import { ShuttleChecker, averageWeights, N_FEATURES } from "../../../packages/vision/src/engine/checker.ts";
+import { fromCrop, mergeDetections } from "../../../packages/vision/src/engine/detections.ts";
+import { MatchEngine, type PoseKeypoints } from "../../../packages/vision/src/engine/engine.ts";
+import { fitCamera, LENS_PRIOR } from "../../../packages/vision/src/engine/lens.ts";
+import { MatchSim } from "../../../packages/vision/src/engine/sim.ts";
+import { SHUTTLE_CHECKER } from "../../../packages/vision/src/engine/models/shuttle-checker.ts";
+import { addTotals, totalsAsSummary, Throttle } from "../../../packages/vision/src/ui/session.ts";
 
 test("resume: totals of two parts add up (hits, distance, rallies, average, fastest)", () => {
   const part = (hits: number[], rallies: number, avg: number, fast: number | null, dur: number) => ({
@@ -122,7 +122,7 @@ test("far-court crop: from behind a baseline it covers the far half and is much 
 });
 
 test("free trial: free through 28 Feb 2027 in New Zealand, paid from 1 March", async () => {
-  const { isTrial, trialDaysLeft } = await import("../lib/wolf-vision-trial.ts");
+  const { isTrial, trialDaysLeft } = await import("../../../packages/vision/src/trial.ts");
   assert.ok(isTrial(Date.parse("2026-11-19T10:00:00Z")));
   assert.ok(isTrial(Date.parse("2027-02-28T23:59:00+13:00")), "last minute of 28 Feb in NZ is still free");
   assert.ok(!isTrial(Date.parse("2027-03-01T00:00:00+13:00")), "paywall from midnight 1 March NZ");

@@ -1,6 +1,6 @@
 import { sql } from "./database";
 import { z } from "zod";
-import { averageWeights, N_FEATURES, type CheckerWeights } from "./ma/checker";
+import { averageWeights, N_FEATURES, type CheckerWeights } from "@luvallplay/vision/engine/checker";
 
 // Wolf Vision server data:
 //   • passes: the paywall ($2 NZD to analyse an upload, $5 NZD for a live

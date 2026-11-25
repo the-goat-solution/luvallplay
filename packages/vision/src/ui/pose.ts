@@ -5,8 +5,8 @@
 // Two players per detector frame, in turn: each player gets a pose several
 // times a second without doubling the phone's load.
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
-import type { Box } from "@/lib/match-analyzer";
-import type { PoseKeypoints } from "@/lib/ma/engine";
+import type { Box } from "../match-analyzer";
+import type { PoseKeypoints } from "../engine/engine";
 
 const WASM_BASE = "/mediapipe";
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";

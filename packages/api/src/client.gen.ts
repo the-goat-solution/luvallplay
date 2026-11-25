@@ -164,18 +164,42 @@ export function createApi(transport: Transport) {
         transport.call("shop.order", { params, body, signal: options?.signal }) as Promise<ResponseOf<"shop.order">>,
     },
     vision: {
+      /** PUT /clubs/{club}/vision/stats (signed in) */
+      beat: (params: ParamsOf<"vision.beat">, body: BodyOf<"vision.beat">, options?: Options) =>
+        transport.call("vision.beat", { params, body, signal: options?.signal }) as Promise<ResponseOf<"vision.beat">>,
+      /** POST /clubs/{club}/vision/pass (signed in) */
+      buy: (params: ParamsOf<"vision.buy">, body: BodyOf<"vision.buy">, options?: Options) =>
+        transport.call("vision.buy", { params, body, signal: options?.signal }) as Promise<ResponseOf<"vision.buy">>,
       /** GET /clubs/{club}/vision/challenges/{id} (signed in) */
       challenge: (params: ParamsOf<"vision.challenge">, options?: Options) =>
         transport.call("vision.challenge", { params, signal: options?.signal }) as Promise<ResponseOf<"vision.challenge">>,
       /** POST /clubs/{club}/vision/labels (signed in) */
       labels: (params: ParamsOf<"vision.labels">, body: BodyOf<"vision.labels">, options?: Options) =>
         transport.call("vision.labels", { params, body, signal: options?.signal }) as Promise<ResponseOf<"vision.labels">>,
+      /** GET /clubs/{club}/vision/model (signed in) */
+      model: (params: ParamsOf<"vision.model">, options?: Options) =>
+        transport.call("vision.model", { params, signal: options?.signal }) as Promise<ResponseOf<"vision.model">>,
+      /** GET /clubs/{club}/vision/pass (signed in) */
+      pass: (params: ParamsOf<"vision.pass">, query: QueryOf<"vision.pass">, options?: Options) =>
+        transport.call("vision.pass", { params, query, signal: options?.signal }) as Promise<ResponseOf<"vision.pass">>,
       /** GET /clubs/{club}/vision/players (signed in) */
       players: (params: ParamsOf<"vision.players">, options?: Options) =>
         transport.call("vision.players", { params, signal: options?.signal }) as Promise<ResponseOf<"vision.players">>,
+      /** POST /clubs/{club}/vision/stats (signed in) */
+      save: (params: ParamsOf<"vision.save">, body: BodyOf<"vision.save">, options?: Options) =>
+        transport.call("vision.save", { params, body, signal: options?.signal }) as Promise<ResponseOf<"vision.save">>,
+      /** POST /clubs/{club}/vision/share (signed in) */
+      share: (params: ParamsOf<"vision.share">, body: BodyOf<"vision.share">, options?: Options) =>
+        transport.call("vision.share", { params, body, signal: options?.signal }) as Promise<ResponseOf<"vision.share">>,
       /** GET /clubs/{club}/vision (signed in) */
       status: (params: ParamsOf<"vision.status">, query: QueryOf<"vision.status">, options?: Options) =>
         transport.call("vision.status", { params, query, signal: options?.signal }) as Promise<ResponseOf<"vision.status">>,
+      /** POST /clubs/{club}/vision/model (signed in) */
+      train: (params: ParamsOf<"vision.train">, body: BodyOf<"vision.train">, options?: Options) =>
+        transport.call("vision.train", { params, body, signal: options?.signal }) as Promise<ResponseOf<"vision.train">>,
+      /** PATCH /clubs/{club}/vision/pass (signed in) */
+      use: (params: ParamsOf<"vision.use">, body: BodyOf<"vision.use">, options?: Options) =>
+        transport.call("vision.use", { params, body, signal: options?.signal }) as Promise<ResponseOf<"vision.use">>,
     },
   };
 }

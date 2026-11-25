@@ -1,7 +1,7 @@
 // The Vision tab (the club's match tracker), as the website's start screen:
 // the challenge being tracked (from the Arena), the free trial or prices,
 // filming live or analysing a video, how it works, and helping train it.
-// The tracker itself opens on the club's website until it moves into the app.
+// The tracker itself is the next screen (/vision/track).
 import { Link } from "@tanstack/react-router";
 import { useCurrentClub, useT } from "../hooks.tsx";
 import { money } from "../lib/format.ts";
@@ -31,7 +31,7 @@ function Teams({ c, vs }: { c: VisionChallenge; vs: string }) {
 export default function VisionScreen() {
   const { config } = useCurrentClub();
   const t = useT(config);
-  const { locale, currency, timezone, webUrl } = usePlace();
+  const { locale, currency, timezone } = usePlace();
   const challengeId = Number(new URLSearchParams(window.location.search).get("challenge")) || null;
   const status = useVisionStatus();
   const challenge = useVisionChallenge(challengeId);
@@ -42,7 +42,7 @@ export default function VisionScreen() {
   const daysLeft = s ? Math.max(0, Math.ceil((ends - Date.now()) / DAY)) : 0;
   const live = s ? money(s.prices.live, currency) : "";
   const upload = s ? money(s.prices.upload, currency) : "";
-  const tracker = webUrl ? `${webUrl.replace(/\/+$/, "")}/profile/wolf-vision${challengeId ? `?challenge=${challengeId}` : ""}` : null;
+  const search = (challengeId ? { challenge: challengeId } : {}) as never;
 
   const mode = (title: string, sub: string, price: string) => (
     <div className="card stack mode">
@@ -52,11 +52,9 @@ export default function VisionScreen() {
       </div>
       <p className="muted small">{sub}</p>
       <p className="small">{s?.trial ? t("vision_then", { price }) : price}</p>
-      {tracker && (
-        <div>
-          <a className="button button-primary link-out" href={tracker} target="_blank" rel="noopener noreferrer">{title} ↗</a>
-        </div>
-      )}
+      <div>
+        <Link to="/vision/track" search={search} className="button button-primary">{title}</Link>
+      </div>
     </div>
   );
 
@@ -96,7 +94,6 @@ export default function VisionScreen() {
             {mode(t("vision_camera_title"), t("vision_camera_sub"), t("vision_price_live", { price: live }))}
             {mode(t("vision_video_title"), t("vision_video_sub"), t("vision_price_upload", { price: upload }))}
           </div>
-          {tracker && <p className="muted small">{t("vision_opens_web")}</p>}
         </>
       )}
       <section className="card stack" aria-labelledby="vision-about">

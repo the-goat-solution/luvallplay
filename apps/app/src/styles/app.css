@@ -585,3 +585,21 @@ progress { width: 100%; height: 0.5rem; accent-color: var(--primary); }
 .slot-1.label-dot { background: var(--accent); }
 .slot-2.label-dot { background: var(--danger); }
 .slot-3.label-dot { background: var(--ink-muted); }
+
+/* ── Full screen (the tracker during a session) ────────────────────────── */
+.shell[data-focus="on"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  grid-template-areas: "main";
+}
+.shell[data-focus="on"] .shell-head,
+.shell[data-focus="on"] .shell-nav,
+.shell[data-focus="on"] .shell-foot { display: none; }
+.shell[data-focus="on"] .shell-main { padding: 0; max-width: none; }
+
+/* The tracker brings its own night-court look; the club's fonts are used. */
+.tracker { --font-sans: var(--font-text); --tabbar-h: 0px; margin: -1rem calc(-1 * max(1rem, env(safe-area-inset-right))) 0 calc(-1 * max(1rem, env(safe-area-inset-left))); }
+.shell[data-focus="on"] .tracker { margin: 0; }
+@media (min-width: 600px) {
+  .tracker { margin: -1rem calc(-1 * max(1.5rem, env(safe-area-inset-right))) 0 -1.5rem; }
+}

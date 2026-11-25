@@ -5,19 +5,22 @@
   "type": "module",
   "description": "The Luvallplay players' app: a client-side app on the typed API (packages/api), built to static files.",
   "scripts": {
+    "predev": "node ../../packages/vision/scripts/copy-mediapipe.mjs public",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.ts",
     "budget": "node scripts/check-budget.mjs",
-    "e2e": "node --test --test-concurrency=1 --test-timeout=240000 tests/e2e/app.mjs"
+    "e2e": "node --test --test-concurrency=1 --test-timeout=240000 tests/e2e/app.mjs",
+    "prebuild": "node ../../packages/vision/scripts/copy-mediapipe.mjs public"
   },
   "dependencies": {
     "@luvallplay/api": "workspace:*",
     "@luvallplay/core": "workspace:*",
     "@luvallplay/i18n": "workspace:*",
     "@luvallplay/ui": "workspace:*",
+    "@luvallplay/vision": "workspace:*",
     "@tanstack/react-query": "^5.108.4",
     "@tanstack/react-router": "^1.170.46",
     "jsqr": "^1.4.0",

@@ -1,0 +1,30 @@
+{
+  "name": "@luvallplay/vision",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The court tracker: the tracking engine, its screens and the labelling tool, shown by the website and the players' app through a host adapter.",
+  "exports": {
+    "./ui": "./src/ui/index.ts",
+    "./host": "./src/host.tsx",
+    "./engine/*": "./src/engine/*.ts",
+    "./checker-model": "./src/engine/models/shuttle-checker.ts",
+    "./match-analyzer": "./src/match-analyzer.ts",
+    "./trial": "./src/trial.ts",
+    "./types": "./src/types.ts"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.35"
+  },
+  "peerDependencies": {
+    "react": "^19.1.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.6",
+    "react": "^19.1.0",
+    "typescript": "^5"
+  }
+}

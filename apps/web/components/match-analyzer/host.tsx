@@ -1,0 +1,56 @@
+"use client";
+
+// The website's side of the tracker (packages/vision): its own /api routes,
+// the language switch, the club's words, its links and the profile app's
+// full-screen mode. The tracker itself lives in @luvallplay/vision, shared
+// with the players' app.
+import { useContext, useMemo, type ReactNode } from "react";
+import { VisionHostProvider, type VisionEndpoint, type VisionHost, type VisionTransport } from "@luvallplay/vision/host";
+import { termed, visionName } from "@/lib/club-terms";
+import { useLanguage } from "@/context/LanguageContext";
+import { ProfileFocusContext } from "@/components/profile/focus";
+
+const PATHS: Record<VisionEndpoint, string> = {
+  challenge: "/api/arena/match-stats",
+  stats: "/api/arena/match-stats",
+  pass: "/api/wolf-vision/pass",
+  model: "/api/wolf-vision/model",
+  share: "/api/wolf-vision/share",
+  players: "/api/wolf-vision/players",
+  labels: "/api/wolf-vision/labels",
+};
+
+export const webTransport: VisionTransport = (endpoint, { method = "GET", query, body, keepalive } = {}) => {
+  const q = query ? `?${new URLSearchParams(query)}` : "";
+  return fetch(`${PATHS[endpoint]}${q}`, {
+    method,
+    ...(method === "GET" ? { cache: "no-store" as const } : {}),
+    ...(keepalive ? { keepalive } : {}),
+    ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+  });
+};
+
+const LINKS: VisionHost["links"] = {
+  arena: "/profile/arena",
+  tracker: "/profile/wolf-vision",
+  label: "/profile/wolf-vision/label",
+  signIn: (next) => `/login?next=${encodeURIComponent(next)}`,
+};
+
+export function WebVisionHost({ children }: { children: ReactNode }) {
+  const { lang, setLang } = useLanguage();
+  const onFocus = useContext(ProfileFocusContext) ?? undefined;
+  const host = useMemo<VisionHost>(
+    () => ({
+      lang,
+      setLang,
+      termed: (copy, l) => termed(copy as object, l) as typeof copy,
+      visionName: visionName(),
+      transport: webTransport,
+      links: LINKS,
+      onFocus,
+    }),
+    [lang, setLang, onFocus],
+  );
+  return <VisionHostProvider host={host}>{children}</VisionHostProvider>;
+}

@@ -2,7 +2,7 @@
 // MediaPipe's object detector (EfficientDet-Lite0, COCO "person" class, GPU
 // where available). Frames never leave the phone; only boxes are kept.
 import type { ObjectDetector } from "@mediapipe/tasks-vision";
-import type { Detection } from "@/lib/match-analyzer";
+import type { Detection } from "../match-analyzer";
 
 /** Served from our own domain; copied there by scripts/copy-mediapipe.mjs. */
 const WASM_BASE = "/mediapipe";

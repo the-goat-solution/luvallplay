@@ -26,9 +26,9 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 const NOT_MONEY: Record<string, [count: number, what: string]> = {
   "apps/web/app/admin/(console)/setup/page.tsx": [1, "storage used, as a percentage"],
   "apps/web/app/admin/(console)/photos/page.tsx": [1, "storage used, as a percentage"],
-  "apps/web/lib/ma/hits.ts": [1, "rounding a measurement to two decimals"],
-  "apps/web/lib/ma/shuttle.ts": [1, "a heat-map weight"],
-  "apps/web/lib/ma/engine.ts": [1, "rounding a quality score to two decimals"],
+  "packages/vision/src/engine/hits.ts": [1, "rounding a measurement to two decimals"],
+  "packages/vision/src/engine/shuttle.ts": [1, "a heat-map weight"],
+  "packages/vision/src/engine/engine.ts": [1, "rounding a quality score to two decimals"],
   "apps/web/components/mini-game/MiniGame.tsx": [1, "progress bar width"],
   "apps/web/components/admin/finance/MonthlyChart.tsx": [1, "tooltip position, as a percentage"],
   "apps/web/components/Schedule.tsx": [1, "spots bar width"],
@@ -36,9 +36,9 @@ const NOT_MONEY: Record<string, [count: number, what: string]> = {
   "apps/web/components/profile/player/PlayerStatsView.tsx": [1, "win rate"],
   "apps/web/components/arena/ArenaView.tsx": [1, "rank progress bar"],
   "apps/web/components/arena/RankCard.tsx": [1, "rank progress bar"],
-  "apps/web/components/match-analyzer/copy.ts": [2, "capture quality, as a percentage"],
-  "apps/web/components/match-analyzer/MatchAnalyzer.tsx": [6, "scores and quality, as percentages"],
-  "apps/web/components/match-analyzer/overlay.ts": [4, "confidence, as percentages"],
+  "packages/vision/src/ui/copy.ts": [2, "capture quality, as a percentage"],
+  "packages/vision/src/ui/MatchAnalyzer.tsx": [6, "scores and quality, as percentages"],
+  "packages/vision/src/ui/overlay.ts": [4, "confidence, as percentages"],
   "apps/web/components/leaderboard/LeaderboardView.tsx": [1, "ladder progress bar"],
 };
 

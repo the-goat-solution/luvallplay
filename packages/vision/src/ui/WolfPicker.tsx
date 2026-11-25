@@ -6,20 +6,24 @@
 // the match).
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Wolf } from "./session";
+import { useTransport, type VisionTransport } from "../host";
 import s from "./analyzer.module.css";
 
 export type WolfChoice = { id: number; name: string; avatarUrl: string | null; me: boolean };
 
-let cached: Promise<WolfChoice[]> | null = null;
-function loadWolves(): Promise<WolfChoice[]> {
+/** The list, once per server (the website and the app each have their own). */
+const cache = new WeakMap<VisionTransport, Promise<WolfChoice[]>>();
+function loadWolves(transport: VisionTransport): Promise<WolfChoice[]> {
+  let cached = cache.get(transport);
   if (!cached) {
-    cached = fetch("/api/wolf-vision/players", { cache: "no-store" })
+    cached = transport("players")
       .then((r) => (r.ok ? r.json() : { players: [] }))
       .then((j: { players?: WolfChoice[] }) => j.players ?? [])
       .catch(() => {
-        cached = null;
+        cache.delete(transport);
         return [];
       });
+    cache.set(transport, cached);
   }
   return cached;
 }
@@ -80,14 +84,15 @@ export function WolfPicker({
   const [email, setEmail] = useState(current?.email ?? "");
   const [bad, setBad] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const transport = useTransport();
 
   useEffect(() => {
     let alive = true;
-    void loadWolves().then((w) => alive && setWolves(w));
+    void loadWolves(transport).then((w) => alive && setWolves(w));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [transport]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);

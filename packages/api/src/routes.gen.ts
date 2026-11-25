@@ -48,10 +48,18 @@ export const ROUTES = {
   "shop.confirm": { method: "POST", path: "/clubs/{club}/shop/orders/{id}/confirm", auth: "session" },
   "shop.list": { method: "GET", path: "/clubs/{club}/shop", auth: "session" },
   "shop.order": { method: "POST", path: "/clubs/{club}/shop/orders", auth: "session" },
+  "vision.beat": { method: "PUT", path: "/clubs/{club}/vision/stats", auth: "session" },
+  "vision.buy": { method: "POST", path: "/clubs/{club}/vision/pass", auth: "session" },
   "vision.challenge": { method: "GET", path: "/clubs/{club}/vision/challenges/{id}", auth: "session" },
   "vision.labels": { method: "POST", path: "/clubs/{club}/vision/labels", auth: "session" },
+  "vision.model": { method: "GET", path: "/clubs/{club}/vision/model", auth: "session" },
+  "vision.pass": { method: "GET", path: "/clubs/{club}/vision/pass", auth: "session" },
   "vision.players": { method: "GET", path: "/clubs/{club}/vision/players", auth: "session" },
+  "vision.save": { method: "POST", path: "/clubs/{club}/vision/stats", auth: "session" },
+  "vision.share": { method: "POST", path: "/clubs/{club}/vision/share", auth: "session" },
   "vision.status": { method: "GET", path: "/clubs/{club}/vision", auth: "session" },
+  "vision.train": { method: "POST", path: "/clubs/{club}/vision/model", auth: "session" },
+  "vision.use": { method: "PATCH", path: "/clubs/{club}/vision/pass", auth: "session" },
 } as const;
 
 export type RouteId = keyof typeof ROUTES;

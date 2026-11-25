@@ -52,7 +52,7 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 
 - Team "Timba Le's projects" (`team_4ZLaiQ8NFFhJslfVJEANgxVH`). Projects: `three-wolves-badminton` (`apps/web`), `luvallplay-site` (`apps/site`), `luvallplay-app` (`apps/app`, `prj_ZjHXLpD1IUVPgpWsED5bkKXdeuk9`).
 - `app.luvallplay.com` is attached to `luvallplay-app` and verified. DNS is on Vercel's name servers, so no DNS step is needed.
-- **`luvallplay-app` is paused.** Its very first deployment was promoted to production from a feature branch, so it was paused to keep unmerged code off the address. While paused, every deployment of that project shows as "Deployment was blocked" (a red Vercel status on PRs; not a code failure).
+- **`luvallplay-app` is live since 25 Nov 2026** (it was paused). Its very first deployment was promoted to production from a feature branch, so it was paused to keep unmerged code off the address. While paused, every deployment of that project shows as "Deployment was blocked" (a red Vercel status on PRs; not a code failure).
 - **To bring the address up (ask the owner first, it changes production settings):** set `VITE_API_BASE` on `luvallplay-app` to the Three Wolves web host (Production and Preview), unpause the project, redeploy from `main`, then check that the page loads and sign-in works. `https://app.luvallplay.com` is already in the API's CORS allow-list.
 
 ## 4. What to build next, in order

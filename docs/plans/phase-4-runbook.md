@@ -199,7 +199,7 @@ Safe areas on every edge, `dvh`, 44px touch targets, rem type (text scales to 20
 | `VITE_API_BASE` | The home API host, for example `https://api.luvallplay.com`. Empty means the app's own origin. |
 | `VITE_API_HOSTS` | More API hosts (other regions), space or comma separated. |
 
-These, plus `https://api.luvallplay.com`, are the only hosts the built page may reach: the build writes them into the page's Content-Security-Policy (`connect-src`, `img-src`), and the app only sends a session token to a host on that list. The API must allow the app's origin in turn (`APP_ORIGINS`, §2).
+These, plus `https://api.luvallplay.com`, are the only hosts the built page may talk to: the build writes them into the page's Content-Security-Policy (`connect-src`), and the app only sends a session token to a host on that list. Images may come from any `https:` host (a club's logo on its own site, profile photos in Blob storage); an image can't read the page or carry the token. The API must allow the app's origin in turn (`APP_ORIGINS`, §2).
 
 **Tests**
 
@@ -223,10 +223,8 @@ The app shell (the entry script and what it preloads) must stay at or under **15
 
 - Project **`luvallplay-app`** (`prj_ZjHXLpD1IUVPgpWsED5bkKXdeuk9`), root `apps/app`, framework Vite, connected to this repository, with the §1 ignore rule as its Ignored Build Step and in `apps/app/vercel.json`.
 - **`app.luvallplay.com`** is attached to it and verified. luvallplay.com's DNS is on Vercel's name servers, so Vercel created the record itself: **no DNS step is needed**. If the DNS ever moves away from Vercel, the records are: CNAME `app` → `0614f58185a129ba.vercel-dns-017.com.` (older value `cname.vercel-dns.com.`), or A `216.198.79.1` and `64.29.17.1`.
-- **The project is paused** (24 Nov 2026). Vercel promotes a new project's very first deployment to production whatever its branch, so the first push after the project was created put an unmerged build of the shell on `app.luvallplay.com` for a few minutes. It could not sign anyone in (no API host was set) and touched no data. The project was paused straight away; the address now answers "deployment paused" (503). **Unpause it** (Vercel → luvallplay-app → Settings → General, or ask Claude) once `apps/app` is on `main` and its production build is the one you want there. From the second deployment on, only `main` deploys to production.
-- **Before the app can sign anyone in on that address**, two settings are needed (ask before changing production settings):
-  1. On `luvallplay-app`: `VITE_API_BASE` = the host that serves the API (today the Three Wolves web host), for Production and Preview.
-  2. On `three-wolves-badminton`: nothing for the real address (`https://app.luvallplay.com` is in the API's built-in allow-list). Only if a `*.vercel.app` preview of the app should be able to sign in, add that exact origin to `APP_ORIGINS`.
+- **Live since 25 Nov 2026.** `VITE_API_BASE` = `https://www.threewolvesbadminton.org` (Production and Preview) is set on `luvallplay-app`, the project was unpaused and `main` deployed to production; `app.luvallplay.com` serves it. Checked: the page's policy names the API host, and the API answers the app's origin (preflight 204, the club's config with `Access-Control-Allow-Origin: https://app.luvallplay.com`). Nobody is pointed at it yet; the cutover is a separate step. (It was paused on 24 Nov because Vercel promoted the project's very first deployment, from a feature branch, to production.)
+- On `three-wolves-badminton` nothing was needed: `https://app.luvallplay.com` is in the API's built-in allow-list. Only if a `*.vercel.app` preview of the app should be able to sign in, add that exact origin to `APP_ORIGINS` there.
 
 **Not yet**
 

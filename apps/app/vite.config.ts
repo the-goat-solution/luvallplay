@@ -1,7 +1,10 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
-// The API hosts the built app may talk to (CSP connect-src and img-src).
+// The API hosts the built app may talk to (CSP connect-src). Images may come
+// from any https host (a club's logo on its own site, profile photos in
+// Blob storage): an image can't read the page or send the session token,
+// which only ever goes to connect-src.
 // VITE_API_BASE is the home API host ("" = the app's own origin);
 // VITE_API_HOSTS adds more (space or comma separated), for example other
 // regions' hosts. Keep this list short: it is the app's whole network reach.
@@ -24,7 +27,7 @@ function csp(env: Record<string, string>): Plugin {
         "default-src 'self'",
         "script-src 'self'",
         "style-src 'self'",
-        `img-src 'self' data: ${hosts}`,
+        `img-src 'self' data: https: ${hosts}`,
         "font-src 'self'",
         `connect-src 'self' ${hosts}`,
         "base-uri 'self'",

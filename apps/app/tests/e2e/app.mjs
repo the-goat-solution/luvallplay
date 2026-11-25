@@ -857,6 +857,9 @@ describe("APP · accessibility and the page's rules", () => {
     assert.match(csp, /style-src 'self'(;|$)/);
     assert.match(csp, new RegExp(`connect-src 'self' ${env.base.replace(/[.:/]/g, "\\$&")} https://api\\.luvallplay\\.com`));
     assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|\*/);
+    // Images from any https host (club logos, photos in Blob storage); nothing else is widened.
+    assert.match(csp, /img-src 'self' data: https: /);
+    assert.doesNotMatch(csp.match(/connect-src[^;]*/)[0], /https:(\s|$)/);
     assert.doesNotMatch(html, /<script(?![^>]+src=)[^>]*>/);
     // And it bites: a request to any other host is refused by the page itself.
     const context = await browser.newContext({ viewport: PHONE });

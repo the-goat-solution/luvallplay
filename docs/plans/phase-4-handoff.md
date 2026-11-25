@@ -21,6 +21,7 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 | 6b. Vision: upload-video analysis (shared package, WebAssembly) | **PR open**, approved to merge when green | #140, see §1a |
 | 6c. Vision: live camera, heartbeat, recording, passes | **Same PR as 6b** | #140 |
 | 7. Offline and PWA | **PR open** (on top of #140) | see §1a |
+| Parity: rank art, versus splash, match stats, player card to the Arena | **PR open** | see §1a |
 | 8. Responsive and visual pass, performance, old-client tests, docs | Not started | |
 
 `main` has steps 0 to 2. Since this file was first written, `main` also gained (from other threads): the website's profile tabs became **Me, Player, Arena, Leaderboard, Vision** with Settings behind a ⚙ (the app follows: same tabs, a new Leaderboard placeholder owned by the Arena module), **My photos moved onto the website's Me page**, and Phase 3b step 1 (junior profiles, PR #119) merged. No schema change was made. No existing `apps/web` route, page or sign-in function was changed. Nobody was signed out.
@@ -33,9 +34,9 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - **Inbox (3b)**: `messages.*` endpoints and `apps/app/src/screens/Inbox.tsx` (`/inbox`, `/inbox/new`, `/inbox/<id>`); Me's bell and Messages card open it.
 - **Settings part A (3c)**: `account.profile`, `details`, `language`, `privacy`, `photo` (POST and DELETE), `export`; server code `apps/web/lib/app-account.ts`; app `apps/app/src/screens/Settings.tsx`, `src/screens/settings/*`, `src/lib/photo.ts`.
 - **Settings part B (3c)**: `account.adminHandoff`, `account.delete`, `integrations.*`; app `settings/ClubAdmin.tsx`, `settings/ConnectedApps.tsx`, `screens/Welcome.tsx`. **Phone change and text-message sign-in are left for the native app** (owner's decision, 25 Nov: reCAPTCHA vs the app's Content-Security-Policy).
-- **Arena (4)**: `arena.state`, `arena.action`; server `apps/web/lib/app-arena.ts`; app `apps/app/src/screens/Arena.tsx`, `src/screens/arena/*` (words, data, TeamUp, Board, Dialogs). Not yet: match stats, Wolf Vision links, player card, versus splash.
-- **Leaderboard (4)**: `leaderboard.board`, `leaderboard.player`; server `apps/web/lib/app-leaderboard.ts`; app `apps/app/src/screens/Leaderboard.tsx`, `src/screens/leaderboard/*`. Rank icons not yet.
-- **Player (5a)**: `player.stats`; app `apps/app/src/screens/Player.tsx`, `src/screens/player/*` (data, Charts, RankCard). Rank art not yet.
+- **Arena (4)**: `arena.state`, `arena.action`; server `apps/web/lib/app-arena.ts`; app `apps/app/src/screens/Arena.tsx`, `src/screens/arena/*` (words, data, TeamUp, Board, Dialogs). Since step 7: the rank art (`apps/app/src/components/RankIcon.tsx`, drawings moved to `packages/core/src/rank-art.ts`), the versus splash (`arena/Versus.tsx`), match stats from the feed (`arena/Stats.tsx`, endpoint `arena.matchStats`) and `/arena?vs=<id>`.
+- **Leaderboard (4)**: `leaderboard.board`, `leaderboard.player`; server `apps/web/lib/app-leaderboard.ts`; app `apps/app/src/screens/Leaderboard.tsx`, `src/screens/leaderboard/*`. With rank icons.
+- **Player (5a)**: `player.stats`; app `apps/app/src/screens/Player.tsx`, `src/screens/player/*` (data, Charts, RankCard). With the rank art.
 - **Shop (5b)**: `shop.*`; server `apps/web/lib/app-shop.ts`; app `src/screens/shop/*`, `src/components/CardPayment.tsx`, `src/lib/stripe.ts`. Stripe's hosts are in `apps/app/vite.config.ts`.
 - **Membership (5c)**: `membership.*`, `play.book`; server `apps/web/lib/app-membership.ts` (join and booking mirror `app/api/create-subscription` and `app/api/create-payment-intent`: keep in step); app `src/screens/Membership.tsx`, `src/screens/membership/*`, booking in `src/screens/me/PlayCalendar.tsx`.
 - **Vision (6a)**: `vision.*`; server `apps/web/lib/app-vision.ts`; app `src/screens/Vision.tsx`, `src/screens/VisionLabel.tsx`, `src/screens/vision/data.ts`.

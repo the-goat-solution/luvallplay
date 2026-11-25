@@ -1208,6 +1208,118 @@
         }
       }
     },
+    "arena.matchStats": {
+      "method": "GET",
+      "path": "/clubs/{club}/arena/challenges/{id}/stats",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "setup": {
+            "t": "object",
+            "fields": {
+              "challengeId": {
+                "t": "number"
+              },
+              "score": {
+                "t": "object",
+                "fields": {
+                  "accepting": {
+                    "t": "number",
+                    "nullable": true
+                  },
+                  "posting": {
+                    "t": "number",
+                    "nullable": true
+                  }
+                },
+                "nullable": true
+              },
+              "status": {
+                "t": "string"
+              },
+              "teams": {
+                "t": "unknown"
+              }
+            }
+          },
+          "stats": {
+            "t": "object",
+            "fields": {
+              "avgRallyShots": {
+                "t": "number"
+              },
+              "duration": {
+                "t": "number"
+              },
+              "fastestShotKmh": {
+                "t": "number",
+                "nullable": true
+              },
+              "longestRally": {
+                "t": "number"
+              },
+              "mode": {
+                "t": "enum",
+                "values": [
+                  "live",
+                  "upload"
+                ]
+              },
+              "players": {
+                "t": "array",
+                "of": {
+                  "t": "object",
+                  "fields": {
+                    "distance": {
+                      "t": "number"
+                    },
+                    "hits": {
+                      "t": "number"
+                    },
+                    "playerId": {
+                      "t": "number"
+                    },
+                    "topSpeed": {
+                      "t": "number"
+                    }
+                  }
+                }
+              },
+              "rallies": {
+                "t": "number"
+              },
+              "recordedAt": {
+                "t": "string"
+              },
+              "recordedBy": {
+                "t": "object",
+                "fields": {
+                  "id": {
+                    "t": "number"
+                  },
+                  "name": {
+                    "t": "string"
+                  }
+                }
+              }
+            },
+            "nullable": true
+          }
+        }
+      }
+    },
     "arena.state": {
       "method": "GET",
       "path": "/clubs/{club}/arena",

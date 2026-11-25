@@ -1,7 +1,7 @@
 // The Arena tab, as on the website: pair up, throw down challenges, take
 // others on, play, enter and confirm scores, and see the crown and the feed.
-// The board refreshes every 5 seconds while the tab is on screen. Match
-// stats and Wolf Vision links join with the Vision step.
+// The board refreshes every 5 seconds while the tab is on screen. A game
+// you're in that was just accepted opens with the "versus" splash.
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useArena, useArenaAction, errorCode, type Challenge } from "./arena/data.ts";
@@ -9,6 +9,7 @@ import { useArenaT } from "./arena/words.ts";
 import { Live, Mine, Open, PairPanel, Requests, Side } from "./arena/Board.tsx";
 import { TeamUp } from "./arena/TeamUp.tsx";
 import { AfterGame, RankUp, ScoreEntry } from "./arena/Dialogs.tsx";
+import { Versus, VersusPill, useVersus } from "./arena/Versus.tsx";
 
 export default function ArenaScreen() {
   const { t, rank, lang } = useArenaT();
@@ -19,6 +20,7 @@ export default function ArenaScreen() {
   const [scoring, setScoring] = useState<Challenge | null>(null);
   const timer = useRef(0);
   const state = arena.data;
+  const versus = useVersus(state);
 
   const toast = (ok: boolean, text: string) => {
     setMessage({ ok, text });
@@ -42,6 +44,18 @@ export default function ArenaScreen() {
     if (!/^\d{12}$/.test(code)) return onError("bad_code");
     if (state.me?.pair && !window.confirm(t("replaces_pair"))) return;
     action.mutate({ action: "pair_join", code }, { onSuccess: () => toast(true, t("joined")), onError: (e) => onError(errorCode(e)) });
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // From a player's card (/arena?vs=<player id>): their open challenge, or a hint to post one they can accept.
+  const vsRan = useRef(false);
+  useEffect(() => {
+    const vs = Number(new URLSearchParams(window.location.search).get("vs"));
+    if (!vs || vsRan.current || !state) return;
+    vsRan.current = true;
+    void navigate({ to: "/arena", replace: true });
+    const theirs = state.open.find((c) => c.posting.players.some((p) => p.id === vs));
+    requestAnimationFrame(() => document.getElementById(theirs ? `challenge-${theirs.id}` : "arena-me")?.scrollIntoView({ block: "center" }));
+    if (!theirs) toast(true, t("vs_hint"));
   }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!state) {
@@ -73,6 +87,8 @@ export default function ArenaScreen() {
         </p>
         {state.sandbox && <p className="notice">{t("sandbox")}</p>}
       </header>
+      {versus.show && <Versus c={versus.show} t={t} onGo={() => versus.go(versus.show!.id)} onLater={() => versus.putOff(versus.show!.id)} />}
+      {versus.later && <VersusPill c={versus.later} t={t} onOpen={() => versus.reopen(versus.later!.id)} />}
       <div aria-live="polite" className="toast-area">
         {message && <p className={`notice${message.ok ? "" : " notice-error"}`} role={message.ok ? "status" : "alert"}>{message.text}</p>}
       </div>

@@ -47,3 +47,9 @@ export function errorCode(err: unknown): string {
 }
 
 export const pairTitle = (p: Pair) => p.name || `${p.players[0].name} & ${p.players[1].name}`;
+
+/** A game's tracked stats (opened from the feed). */
+export function useMatchStats(id: number) {
+  const { slug, ready, api } = useArenaApi();
+  return useQuery({ queryKey: ["arena-stats", slug, id], queryFn: ({ signal }) => api.arena.matchStats({ club: slug, id }, { signal }), enabled: ready, retry: false, staleTime: 60_000 });
+}

@@ -6,6 +6,8 @@ import { useCurrentClub } from "../../hooks.tsx";
 import { localeOf } from "../../lib/format.ts";
 import { errorCode, pairTitle, useArenaAction, type ArenaState, type Challenge, type Chip, type Pair } from "./data.ts";
 import type { ArenaT } from "./words.ts";
+import { MatchStats } from "./Stats.tsx";
+import { RankIcon } from "../../components/RankIcon.tsx";
 
 type Props = { t: ArenaT; rank: (i: number) => string; onError: (code: string) => void };
 type MeView = NonNullable<ArenaState["me"]>;
@@ -14,7 +16,10 @@ const HOUR = 3_600_000;
 function Person({ p, rank }: { p: Chip; rank: (i: number) => string }) {
   return (
     <span className="person">
-      <span className="avatar avatar-small" aria-hidden="true">{p.initials}</span>
+      <span className="board-face">
+        <span className="avatar avatar-small" aria-hidden="true">{p.initials}</span>
+        <RankIcon index={p.rank} px={20} className="board-face-rank" />
+      </span>
       <span className="person-text">
         <strong>{p.name}</strong>
         <span className="muted small">{rank(p.rank)}</span>
@@ -314,8 +319,10 @@ export function Open({ state, ...props }: { state: ArenaState } & Props) {
 export function Side({ state, t, rank, lang }: { state: ArenaState; lang: string } & Omit<Props, "onError">) {
   const now = Date.parse(state.now);
   const when = (iso: string) => new Date(iso).toLocaleString(localeOf(lang, ""), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const [statsFor, setStatsFor] = useState<number | null>(null);
   return (
     <div className="stack">
+      {statsFor !== null && <MatchStats id={statsFor} t={t} onClose={() => setStatsFor(null)} />}
       <section className="card stack crown" aria-labelledby="crown-title">
         <h2 id="crown-title">👑 {t("crown")}</h2>
         {state.crown ? (
@@ -358,6 +365,11 @@ export function Side({ state, t, rank, lang }: { state: ArenaState; lang: string
                     {when(f.at)}
                     {f.kind === "result" && f.stickers.map((s) => <span key={s} className="tag">{t(`st_${s}` as Parameters<ArenaT>[0])}</span>)}
                   </span>
+                  {f.kind === "result" && f.hasStats && (
+                    <span>
+                      <button type="button" className="button button-small" aria-haspopup="dialog" onClick={() => setStatsFor(f.id)}>{t("stats_btn")}</button>
+                    </span>
+                  )}
                 </span>
               </li>
             ))}

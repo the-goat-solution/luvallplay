@@ -669,6 +669,7 @@ const SESSION_ENDPOINTS = [
   ["GET", "/clubs/{club}/vision/model"],
   ["POST", "/clubs/{club}/vision/model"],
   ["POST", "/clubs/{club}/vision/share"],
+  ["GET", "/clubs/{club}/arena/challenges/{id}/stats"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";

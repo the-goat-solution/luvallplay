@@ -7,6 +7,7 @@ import { useArenaT } from "../arena/words.ts";
 import { useCurrentClub, useT } from "../../hooks.tsx";
 import { usePlayerCard } from "./data.ts";
 import { useState } from "react";
+import { RankIcon } from "../../components/RankIcon.tsx";
 
 export function PlayerCard({ id, onClose }: { id: number; onClose: () => void }) {
   const { config } = useCurrentClub();
@@ -31,12 +32,12 @@ export function PlayerCard({ id, onClose }: { id: number; onClose: () => void })
           },
         },
       );
-    } else void navigate({ to: "/arena" });
+    } else void navigate({ to: "/arena", search: { vs: c.id } as never });
   };
   return (
     <Dialog label={c?.name ?? t("card_close")} onClose={onClose}>
       {card.isError ? (
-        <p>{t("card_hidden")}</p>
+        <p>{(card.error as { status?: number }).status === 404 ? t("card_hidden") : t("err_generic")}</p>
       ) : !c ? (
         <div className="skeleton skeleton-short" aria-busy="true" />
       ) : (
@@ -45,7 +46,10 @@ export function PlayerCard({ id, onClose }: { id: number; onClose: () => void })
             <div className="avatar" aria-hidden="true">{c.avatarUrl ? <img src={c.avatarUrl} alt="" width={64} height={64} /> : c.initials}</div>
             <div className="me-who">
               <h2>{c.name}</h2>
-              <span className="pill">{rank(c.rankIndex)}</span>
+              <span className="pill seat-pill">
+                <RankIcon index={c.rankIndex} seat={c.seat} tarnished={c.tarnishing} px={28} />
+                {rank(c.rankIndex)}
+              </span>
               {c.seat && <span className="pill pill-active">{tl(c.seat === "alpha" ? "lb_alpha" : "lb_silver")}</span>}
             </div>
           </div>

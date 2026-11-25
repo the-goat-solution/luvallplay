@@ -3,7 +3,7 @@
 // Sydney ones").
 //
 // The contract and the round trip run against a real S3-compatible server
-// (MinIO in CI: S3_TEST_ENDPOINT, with STORAGE_REQUIRE_S3=1 so they can't be
+// (in CI: S3_TEST_ENDPOINT, with STORAGE_REQUIRE_S3=1 so they can't be
 // skipped silently). The signing and the request shapes are also tested
 // without a server.
 
@@ -148,12 +148,12 @@ test("a refusal from the store is an error that names the status, not a silent s
 
 const ENDPOINT = process.env.S3_TEST_ENDPOINT?.replace(/\/+$/, "");
 const REQUIRE = process.env.STORAGE_REQUIRE_S3 === "1";
-const skip = !ENDPOINT && !REQUIRE ? "set S3_TEST_ENDPOINT (an S3-compatible server, e.g. MinIO)" : false;
+const skip = !ENDPOINT && !REQUIRE ? "set S3_TEST_ENDPOINT (an S3-compatible server)" : false;
 const live: S3Config = {
   endpoint: ENDPOINT ?? "http://127.0.0.1:9000",
   bucket: `contract-${process.pid}`,
-  accessKeyId: process.env.S3_TEST_ACCESS_KEY_ID ?? "minioadmin",
-  secretAccessKey: process.env.S3_TEST_SECRET_ACCESS_KEY ?? "minioadmin",
+  accessKeyId: process.env.S3_TEST_ACCESS_KEY_ID ?? "testaccess",
+  secretAccessKey: process.env.S3_TEST_SECRET_ACCESS_KEY ?? "testsecret",
   region: "us-east-1",
   // What the public would use: a CDN name in front of the bucket.
   publicUrl: "https://files.luvallplay.test",

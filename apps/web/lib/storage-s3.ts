@@ -137,7 +137,7 @@ export function s3Storage(options: Options = {}): S3Storage {
   const now = options.now ?? (() => new Date());
 
   const request = async (c: S3Config, method: string, key: string, body?: Buffer, headers: Record<string, string> = {}) => {
-    // Path-style addressing (endpoint/bucket/key): what MinIO and most compatible stores expect.
+    // Path-style addressing (endpoint/bucket/key): what most S3-compatible stores expect.
     const url = `${c.endpoint}/${c.bucket}/${encodeKey(key)}`;
     const payloadHash = sha256Hex(body ?? "");
     const signed = signS3Request({ method, url, headers, payloadHash, accessKeyId: c.accessKeyId, secretAccessKey: c.secretAccessKey, region: c.region, now: now() });

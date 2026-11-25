@@ -163,6 +163,20 @@ export function createApi(transport: Transport) {
       order: (params: ParamsOf<"shop.order">, body: BodyOf<"shop.order">, options?: Options) =>
         transport.call("shop.order", { params, body, signal: options?.signal }) as Promise<ResponseOf<"shop.order">>,
     },
+    vision: {
+      /** GET /clubs/{club}/vision/challenges/{id} (signed in) */
+      challenge: (params: ParamsOf<"vision.challenge">, options?: Options) =>
+        transport.call("vision.challenge", { params, signal: options?.signal }) as Promise<ResponseOf<"vision.challenge">>,
+      /** POST /clubs/{club}/vision/labels (signed in) */
+      labels: (params: ParamsOf<"vision.labels">, body: BodyOf<"vision.labels">, options?: Options) =>
+        transport.call("vision.labels", { params, body, signal: options?.signal }) as Promise<ResponseOf<"vision.labels">>,
+      /** GET /clubs/{club}/vision/players (signed in) */
+      players: (params: ParamsOf<"vision.players">, options?: Options) =>
+        transport.call("vision.players", { params, signal: options?.signal }) as Promise<ResponseOf<"vision.players">>,
+      /** GET /clubs/{club}/vision (signed in) */
+      status: (params: ParamsOf<"vision.status">, query: QueryOf<"vision.status">, options?: Options) =>
+        transport.call("vision.status", { params, query, signal: options?.signal }) as Promise<ResponseOf<"vision.status">>,
+    },
   };
 }
 

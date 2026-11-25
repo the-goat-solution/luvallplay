@@ -282,6 +282,28 @@ export const ENDPOINTS = define({
     params: S.clubParams, body: S.bookRequest, response: S.paymentStartResponse,
     rateLimit: { limit: 10, windowMs: MIN },
   },
+  // Vision (module vision): the trial or a pass, a challenge's teams and
+  // saved stats, the players to put on court, and the labelling set.
+  "vision.status": {
+    method: "GET", path: "/clubs/{club}/vision", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, query: S.visionStatusQuery, response: S.visionStatusResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "vision.challenge": {
+    method: "GET", path: "/clubs/{club}/vision/challenges/{id}", auth: "session", scope: "club", module: "vision",
+    params: S.visionChallengeParams, response: S.visionChallengeResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "vision.players": {
+    method: "GET", path: "/clubs/{club}/vision/players", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, response: S.visionPlayersResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
+  "vision.labels": {
+    method: "POST", path: "/clubs/{club}/vision/labels", auth: "session", scope: "club", module: "vision",
+    params: S.clubParams, body: S.visionLabelsRequest, response: S.visionLabelsResponse,
+    rateLimit: { limit: 20, windowMs: 60 * MIN },
+  },
   "account.export": {
     method: "GET", path: "/account/export", auth: "session", scope: "account",
     response: S.exportResponse,

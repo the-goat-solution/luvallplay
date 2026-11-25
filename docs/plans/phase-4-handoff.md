@@ -15,9 +15,11 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 | 3c. Settings, part B (admin handoff, delete, connected apps, name step) | **Merged** | #134, see §1a |
 | 4. Arena and Leaderboard | **Merged** | #135, see §1a |
 | 5a. Player tab | **Merged** | #136, see §1a |
-| 5b. Shop (card payments through Stripe) | **PR open; merge needs the owner's OK** (payments) | see §1a |
-| 5c. Membership: join, renew, change, cancel, billing; casual booking | **PR open; merge needs the owner's OK** (payments) | see §1a |
-| 6. Vision | Not started | |
+| 5b. Shop (card payments through Stripe) | **Merged** | #137, see §1a |
+| 5c. Membership: join, renew, change, cancel, billing; casual booking | **Merged** | #138 (into #137), see §1a |
+| 6a. Vision: tab shell and labelling tool | **PR open** | see §1a |
+| 6b. Vision: upload-video analysis (shared package, WebAssembly) | Not started | |
+| 6c. Vision: live camera, heartbeat, recording, passes | Not started (before the trial ends, 1 Mar 2027) | |
 | 7. Offline and PWA | Not started | |
 | 8. Responsive and visual pass, performance, old-client tests, docs | Not started | |
 
@@ -36,6 +38,7 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - **Player (5a)**: `player.stats`; app `apps/app/src/screens/Player.tsx`, `src/screens/player/*` (data, Charts, RankCard). Rank art not yet.
 - **Shop (5b)**: `shop.*`; server `apps/web/lib/app-shop.ts`; app `src/screens/shop/*`, `src/components/CardPayment.tsx`, `src/lib/stripe.ts`. Stripe's hosts are in `apps/app/vite.config.ts`.
 - **Membership (5c)**: `membership.*`, `play.book`; server `apps/web/lib/app-membership.ts` (join and booking mirror `app/api/create-subscription` and `app/api/create-payment-intent`: keep in step); app `src/screens/Membership.tsx`, `src/screens/membership/*`, booking in `src/screens/me/PlayCalendar.tsx`.
+- **Vision (6a)**: `vision.*`; server `apps/web/lib/app-vision.ts`; app `src/screens/Vision.tsx`, `src/screens/VisionLabel.tsx`, `src/screens/vision/data.ts`. Parts 2 and 3: see the build plan row 6a for the plan (analysis code to a shared package; CSP adds 'wasm-unsafe-eval' and storage.googleapis.com; pass checkout needs an app return URL).
 - **Not on Me yet**: My photos and My photos (with the Player step).
 - **Words**: Me words are in the app's own dictionary (`packages/i18n/src/app.ts`), copied from the website's wording without the club's name or "$" (the website's `profile` dictionary still has both typed in).
 

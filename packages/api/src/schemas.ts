@@ -751,3 +751,50 @@ export const portalResponse = z.object({ url: z.string().url() });
 export const joinRequest = z.object({ plan: tier, day: membershipDay, recurring: z.boolean() });
 export const paymentStartResponse = z.object({ clientSecret: z.string(), periodStart: z.string().nullable() });
 export const bookRequest = z.object({ date: dateKeySchema });
+
+// ── Vision (the club's match tracker) ──────────────────────────────────────
+export const visionStatusQuery = z.object({ kind: z.enum(["live", "upload"]).optional() });
+export const visionStatusResponse = z.object({
+  /** Free for everyone until trialEnds. */
+  trial: z.boolean(),
+  trialEnds: z.string(),
+  /** A pass ready to use for this kind (after the trial). */
+  pass: z.object({ id: z.number().int(), kind: z.enum(["live", "upload"]), status: z.enum(["pending", "paid", "used"]), test: z.boolean(), usedAt: z.string().nullable() }).nullable(),
+  /** Minor units: what a live match and a video cost after the trial. */
+  prices: z.object({ live: z.number().int(), upload: z.number().int() }),
+  testMode: z.boolean(),
+});
+const matchPlayer = z.object({ id: z.number().int(), name: z.string(), avatarUrl: z.string().nullable().optional() });
+const team = z.object({ name: z.string(), players: z.tuple([matchPlayer, matchPlayer]) });
+const statsPlayer = z.object({ playerId: z.number().int(), hits: z.number(), distance: z.number(), topSpeed: z.number() });
+export const visionChallengeResponse = z.object({
+  setup: z.object({
+    challengeId: z.number().int(),
+    status: z.string(),
+    teams: z.tuple([team, team]),
+    score: z.object({ posting: z.number().int().nullable(), accepting: z.number().int().nullable() }).nullable(),
+  }),
+  /** Stats already saved for this game, if any. */
+  stats: z.object({
+    mode: z.enum(["live", "upload"]),
+    duration: z.number(),
+    rallies: z.number().int(),
+    longestRally: z.number().int(),
+    avgRallyShots: z.number(),
+    fastestShotKmh: z.number().nullable(),
+    players: z.array(statsPlayer),
+    recordedBy: z.object({ id: z.number().int(), name: z.string() }),
+    recordedAt: z.string(),
+  }).passthrough().nullable(),
+});
+export const visionChallengeParams = clubParams.extend({ id: z.coerce.number().int().positive().max(2147483647) });
+export const visionPlayersResponse = z.object({
+  players: z.array(z.object({ id: z.number().int(), name: z.string(), avatarUrl: z.string().nullable(), me: z.boolean() })),
+});
+/** Hits marked by hand on a match video (time and who hit, as the camera sees them: 0 near-left … 3 far-right). */
+export const visionLabelsRequest = z.object({
+  videoName: z.string().min(1).max(200),
+  duration: z.number().min(0).max(4 * 3600),
+  hits: z.array(z.object({ t: z.number().min(0), player: z.number().int().min(0).max(3), rally: z.number().int().min(0) })).max(10000),
+});
+export const visionLabelsResponse = z.object({ ok: z.literal(true), id: z.number().int() });

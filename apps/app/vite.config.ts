@@ -35,6 +35,8 @@ function csp(env: Record<string, string>): Plugin {
         "style-src 'self'",
         `img-src 'self' data: https: ${hosts}`,
         "font-src 'self'",
+        // Videos chosen on the device (the labelling tool plays them from a blob: address).
+        "media-src 'self' blob:",
         `connect-src 'self' ${hosts} ${STRIPE.connect}`,
         `frame-src ${STRIPE.frame}`,
         "base-uri 'self'",

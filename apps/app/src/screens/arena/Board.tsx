@@ -1,6 +1,8 @@
 // The Arena board's cards: your pair (or a request), your challenges, games
 // live now, open challenges, and the crown, feed and hot streak.
 import { useState, type FormEvent } from "react";
+import { Link } from "@tanstack/react-router";
+import { useCurrentClub } from "../../hooks.tsx";
 import { localeOf } from "../../lib/format.ts";
 import { errorCode, pairTitle, useArenaAction, type ArenaState, type Challenge, type Chip, type Pair } from "./data.ts";
 import type { ArenaT } from "./words.ts";
@@ -159,6 +161,7 @@ function MyChallenge({ c, t, rank, onError, onScore }: { c: Challenge; onScore: 
   const action = useArenaAction();
   const run = (a: Parameters<typeof action.mutate>[0]) => action.mutate(a, { onError: (e) => onError(errorCode(e)) });
   const [disputing, setDisputing] = useState(false);
+  const visionOn = !!useCurrentClub().config?.modules.includes("vision");
   const [note, setNote] = useState("");
   const them = c.mySide === "posting" ? c.accepting : c.posting;
   const names = them ? pairTitle(them) : "";
@@ -183,6 +186,7 @@ function MyChallenge({ c, t, rank, onError, onScore }: { c: Challenge; onScore: 
           <p><span className="live-dot" aria-hidden="true" /> {t("st_live")}</p>
           <div className="actions">
             <button type="button" className="button button-primary" onClick={() => onScore(c)}>{t("score_title")}</button>
+            {visionOn && <Link to="/vision" search={{ challenge: c.id } as never} className="button">{t("rec_stats")}</Link>}
             <button type="button" className="button button-quiet" disabled={action.isPending} onClick={() => run({ action: "call_off", id: c.id })}>{t("call_off")}</button>
           </div>
         </>

@@ -657,6 +657,10 @@ const SESSION_ENDPOINTS = [
   ["POST", "/clubs/{club}/membership/portal"],
   ["POST", "/clubs/{club}/membership/join"],
   ["POST", "/clubs/{club}/me/book"],
+  ["GET", "/clubs/{club}/vision"],
+  ["GET", "/clubs/{club}/vision/challenges/{id}"],
+  ["GET", "/clubs/{club}/vision/players"],
+  ["POST", "/clubs/{club}/vision/labels"],
 ];
 const POST_ENDPOINTS = ["/auth/email/start", "/auth/email/verify", "/auth/sms/start", "/auth/sms/verify"];
 const CLUB = "three-wolves";
@@ -1441,6 +1445,42 @@ describe("API · the players' app API", () => {
     } finally {
       await mia.context.close();
       await pete.context.close();
+    }
+  });
+
+  test("API21 · Vision: the free trial and prices, a challenge to track, the players (no emails), the labelling set, off with its module", async () => {
+    const mia = await signedIn(PEOPLE.member.email);
+    const call = (method, path, body) => appApi(method, `/clubs/${CLUB}${path}`, { token: mia.token, body });
+    const miaId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.member.email])).rows[0].id;
+    try {
+      const status = await call("GET", "/vision?kind=live");
+      assert.equal(status.status, 200);
+      assert.equal(status.json.trial, Date.now() < Date.parse(status.json.trialEnds));
+      assert.ok(status.json.prices.live > status.json.prices.upload && status.json.prices.upload > 0);
+      assert.equal((await call("GET", "/vision?kind=forever")).status, 400);
+
+      const missing = await call("GET", "/vision/challenges/999999");
+      assert.deepEqual([missing.status, missing.json.error], [404, "not_found"]);
+
+      const players = (await call("GET", "/vision/players")).json.players;
+      assert.ok(players.some((p) => p.id === miaId && p.me === true));
+      assert.equal(JSON.stringify(players).includes("@"), false, "no emails");
+
+      const saved = await call("POST", "/vision/labels", { videoName: "match.mp4", duration: 120, hits: [{ t: 1.5, player: 0, rally: 0 }, { t: 2.25, player: 3, rally: 0 }] });
+      assert.equal(saved.status, 200);
+      const row = (await db.query(`SELECT player_id, video_name, hits FROM wv_labels WHERE id = $1`, [saved.json.id])).rows[0];
+      assert.deepEqual([row.player_id, row.video_name, row.hits.length], [miaId, "match.mp4", 2]);
+      await db.query(`DELETE FROM wv_labels WHERE id = $1`, [saved.json.id]);
+      assert.equal((await call("POST", "/vision/labels", { videoName: "x", duration: 1, hits: [{ t: 1, player: 4, rally: 0 }] })).status, 400);
+
+      await db.query(`UPDATE tenant_modules SET enabled = FALSE WHERE tenant_id = 1 AND module_id = 'vision'`);
+      try {
+        assert.deepEqual([(await call("GET", "/vision")).status, (await call("GET", "/vision")).json.error], [404, "module_off"]);
+      } finally {
+        await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE tenant_id = 1 AND module_id = 'vision'`);
+      }
+    } finally {
+      await mia.context.close();
     }
   });
 

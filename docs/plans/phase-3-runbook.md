@@ -510,8 +510,8 @@ To read the gate once it has restarted: `node --import ./tests/register.mjs scri
 
 | Step | Migration | Booked by | State |
 |---|---|---|---|
-| 1 | `0012_junior_activity` (additive: two empty tables) | Lane T (written by Phase 3b; lane J waits on it) | Approved by the owner 25 Nov. **Not run**: needs a free Neon branch for the restore point and database access for the lane's session |
-| 2 | `0013_terms_players` (one row: three keys added to Three Wolves' terms) | Lane T (written by Phase 4) | Approved 25 Nov. **Not run, and not yet rehearsed on a copy of production** (it had no expectations file; written 25 Nov). After step 1, with its own rehearsal, snapshot, diff and drift check |
+| 1 | `0012_junior_activity` (additive: two empty tables) | Lane T (written by Phase 3b; lane J waits on it) | Approved by the owner 25 Nov. **Rehearsed again 25 Nov, alone with `--to 0012`, on a fresh copy of production: 19 accounts, 0 problems, 3.3 s, views identical, no drift, verify consistent** (`docs/rehearsals/2026-11-phase3b-junior-activity.md`). **Not run on production yet**: waiting for the owner's go-ahead in the lane's thread |
+| 2 | `0013_terms_players` (one row: three keys added to Three Wolves' terms) | Lane T (written by Phase 4) | Approved 25 Nov. **Rehearsed 25 Nov, alone with `--to 0013`, on the same copy after `0012`: 19 accounts, 0 problems, 1.4 s, views identical, no drift, verify consistent** (`docs/rehearsals/2026-11-phase4-terms-players.md`). **Not run on production yet.** After step 1, with its own restore point, snapshot, diff and drift check |
 
 How each runs (test plan §4.4), with `--to` so nothing else rides along:
 
@@ -536,4 +536,4 @@ pnpm db:drift                                                     # must say: No
 
 ### 13.3 Restore-point branches (Neon free plan: 10 per project)
 
-The project is at 10 of 10 (§12): `main`, `rehearsal-phase-3`, and eight restore points. Each new data step needs one free slot, and step 12 (destructive) needs a fresh restore point of its own. **No branch is deleted without the owner naming it.** Asked 25 Nov; the candidates are the oldest, whose watch periods ended long ago: `pre-phase-1`, `pre-phase-2-data`, `pre-phase-2-data-run`. Note from the audit: the restore points for `0008`, `0009` and `0010` were the rehearsal branch, reset since, so they no longer exist as restore points.
+**Checked through the Neon API on 25 Nov, 20:13 UTC: the project has 5 branches, not 10**: `main`, `rehearsal-phase-3`, and three restore points (`pre-phase-3-tenants`, `pre-phase-3-user-id-links`, `pre-phase-3-tenant-keys-contract`). The Phase 1 and Phase 2 restore points and two of Phase 3's are already gone, so the restore points for `0012` and `0013` fit and nothing needs deleting first. Step 12 (destructive) needs a fresh restore point of its own. **No branch is deleted without the owner naming it.** Note from the audit: the restore points for `0008`, `0009` and `0010` were the rehearsal branch, reset since, so they no longer exist as restore points.

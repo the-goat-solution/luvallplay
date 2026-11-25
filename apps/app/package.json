@@ -13,7 +13,8 @@
     "test": "node --test tests/*.test.ts",
     "budget": "node scripts/check-budget.mjs",
     "e2e": "node --test --test-concurrency=1 --test-timeout=240000 tests/e2e/app.mjs",
-    "prebuild": "node ../../packages/vision/scripts/copy-mediapipe.mjs public"
+    "prebuild": "node ../../packages/vision/scripts/copy-mediapipe.mjs public",
+    "icons": "node scripts/icons.mjs"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",

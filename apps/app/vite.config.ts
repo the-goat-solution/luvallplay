@@ -70,7 +70,7 @@ function serviceWorker(): Plugin {
     apply: "build",
     generateBundle(_options, bundle) {
       const files = Object.keys(bundle).filter((f) => /\.(js|css)$/.test(f)).map((f) => `/${f}`);
-      const assets = ["/", "/icon.svg", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png", ...files.sort()];
+      const assets = ["/", "/icon.svg", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-192.png", "/icon-maskable-512.png", "/icon-monochrome-512.png", "/apple-touch-icon.png", "/favicon.ico", ...files.sort()];
       const version = createHash("sha256").update(assets.join("\n")).digest("hex").slice(0, 12);
       const source = readFileSync(new URL("./sw/sw.js", import.meta.url), "utf8");
       this.emitFile({

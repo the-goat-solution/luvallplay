@@ -3,7 +3,8 @@
 // removed, a display copy and a thumbnail made), uploaded straight to the
 // club's photo store, and checked. Your photos below with where they are
 // (in the Gallery, under review, can't be shared, hidden), and delete.
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { ScopeTag } from "../../components/ClubTag.tsx";
 import type { AppKey } from "@luvallplay/i18n/app";
 import type { T } from "../../lib/messages.ts";
 import { LoadError } from "../../components/LoadError.tsx";
@@ -20,7 +21,9 @@ const STATUS: Record<PhotoStatus, [AppKey, string]> = {
   hidden: ["ph_status_hidden", "bad"],
 };
 
-export function PhotosCard({ t, playerId }: { t: T; playerId: number }) {
+/** `onlyWhenOn`: Home with several clubs leaves out a club whose photo sharing isn't set up. */
+export function PhotosCard({ t, playerId, onlyWhenOn = false }: { t: T; playerId: number; onlyWhenOn?: boolean }) {
+  const titleId = useId();
   const list = usePhotos();
   const remove = useDeletePhoto();
   const share = useSharePhoto();
@@ -34,6 +37,7 @@ export function PhotosCard({ t, playerId }: { t: T; playerId: number }) {
   const data = list.data;
   if (!data) return list.isError ? <LoadError compact onRetry={() => void list.refetch()} /> : null;
   const enabled = data.uploadMode !== null;
+  if (onlyWhenOn && !enabled) return null;
 
   const pick = (picked: FileList | null) => {
     if (!picked) return;
@@ -63,8 +67,9 @@ export function PhotosCard({ t, playerId }: { t: T; playerId: number }) {
     s === "preparing" ? t("ph_preparing") : s === "checking" ? t("ph_checking") : s === "approved" ? `✓ ${t("ph_done_shared")}` : s === "needs_review" || s === "pending" ? t("ph_done_review") : s === "rejected" || s === "hidden" ? t("ph_done_blocked") : t("ph_failed");
 
   return (
-    <section className="card stack" aria-labelledby="photos-title" data-testid="my-photos">
-      <h2 id="photos-title">{t("ph_title")}</h2>
+    <section className="card stack" aria-labelledby={titleId} data-testid="my-photos">
+      <ScopeTag />
+      <h2 id={titleId}>{t("ph_title")}</h2>
       <p className="muted small">{t("ph_sub")}</p>
       {!enabled ? (
         <p className="muted">{t("ph_not_configured")}</p>

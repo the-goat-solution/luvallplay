@@ -12,21 +12,25 @@ export type Prefs = {
   theme: ThemeChoice;
   /** The account has no name yet (told at sign-in). */
   needsDetails: boolean;
+  /** With several clubs: the one Home is narrowed to (its slug), or null for all of them. */
+  homeClub: string | null;
 };
 
-const DEFAULTS: Prefs = { token: null, club: null, lang: null, theme: "system", needsDetails: false };
+const DEFAULTS: Prefs = { token: null, club: null, lang: null, theme: "system", needsDetails: false, homeClub: null };
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 function read(storage: KeyValue): Prefs {
   const lang = storage.get("lang");
   const theme = storage.get("theme");
   const club = storage.get("club");
+  const homeClub = storage.get("homeClub");
   return {
     token: storage.get("token") || null,
     club: club && SLUG.test(club) ? club : null,
     lang: lang === "en" || lang === "vi" ? lang : null,
     theme: theme === "light" || theme === "dark" ? theme : "system",
     needsDetails: storage.get("needsDetails") === "1",
+    homeClub: homeClub && SLUG.test(homeClub) ? homeClub : null,
   };
 }
 
@@ -59,6 +63,6 @@ export function createStore(storage: KeyValue): Store {
       listeners.add(listener);
       return () => void listeners.delete(listener);
     },
-    signOut: () => set({ token: null, club: null, needsDetails: false }),
+    signOut: () => set({ token: null, club: null, needsDetails: false, homeClub: null }),
   };
 }

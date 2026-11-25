@@ -6,7 +6,8 @@
 // The shop and My photos (with the Gallery on) sit in the second column.
 // The inbox is its own screen (/inbox), opened from the bell and the
 // Messages card.
-import { useSession } from "../hooks.tsx";
+import { useClubs, useSession } from "../hooks.tsx";
+import { Home } from "./me/Home.tsx";
 import { nextUp } from "../lib/format.ts";
 import { useMe } from "./me/data.ts";
 import { InboxPreview } from "./me/Inbox.tsx";
@@ -46,7 +47,14 @@ function Loading() {
   );
 }
 
+/** One club: that club's Me. Several: Home, all of them together. */
 export default function MeScreen() {
+  const clubs = useClubs().data?.clubs ?? null;
+  if (clubs && clubs.length > 1) return <Home clubs={clubs} />;
+  return <ClubMe />;
+}
+
+function ClubMe() {
   const { t } = usePlace();
   const me = useMe();
   const session = useSession();

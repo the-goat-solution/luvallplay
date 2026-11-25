@@ -14,7 +14,7 @@
   --on-primary-strong: var(--on-primary);
   /* Tiles set into a card: stats, calendar days, chips at rest. */
   --surface-sunken: color-mix(in oklab, var(--surface) 95%, var(--ink));
-  --success: #1d7a46;
+  --success: #18683b;
   /* Headings and card titles wear the club's colour on light surfaces. */
   --heading: var(--primary);
   /* Tints for selected and hovered things, and soft badges. */

@@ -43,9 +43,12 @@ const vision = createRoute({ getParentRoute: () => shell, path: "/vision", compo
 const player = createRoute({ getParentRoute: () => shell, path: "/player", component: lazyRouteComponent(() => import("./screens/Player.tsx")) });
 // The inbox isn't a tab (as on the website, where it opens from Me's bell).
 const inboxScreen = lazyRouteComponent(() => import("./screens/Inbox.tsx"));
-const inbox = createRoute({ getParentRoute: () => shell, path: "/inbox", component: inboxScreen });
-const inboxNew = createRoute({ getParentRoute: () => shell, path: "/inbox/new", component: inboxScreen });
-const inboxThread = createRoute({ getParentRoute: () => shell, path: "/inbox/$id", component: inboxScreen });
+// With several clubs, a conversation is one club's: ?club=<slug> says whose.
+const clubSearch = (search: Record<string, unknown>): { club?: string } =>
+  typeof search.club === "string" && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(search.club) ? { club: search.club } : {};
+const inbox = createRoute({ getParentRoute: () => shell, path: "/inbox", component: inboxScreen, validateSearch: clubSearch });
+const inboxNew = createRoute({ getParentRoute: () => shell, path: "/inbox/new", component: inboxScreen, validateSearch: clubSearch });
+const inboxThread = createRoute({ getParentRoute: () => shell, path: "/inbox/$id", component: inboxScreen, validateSearch: clubSearch });
 const welcome = createRoute({ getParentRoute: () => shell, path: "/welcome", component: lazyRouteComponent(() => import("./screens/Welcome.tsx")) });
 const membership = createRoute({ getParentRoute: () => shell, path: "/membership", component: lazyRouteComponent(() => import("./screens/Membership.tsx")) });
 const visionTrack = createRoute({ getParentRoute: () => shell, path: "/vision/track", component: lazyRouteComponent(() => import("./screens/VisionTrack.tsx")) });

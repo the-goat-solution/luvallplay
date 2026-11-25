@@ -72,6 +72,18 @@ Written 24 Nov 2026 for whoever continues Phase 4; updated 25 Nov 2026 after ste
 - `apps/web/tests/e2e/journeys.mjs`: group "API" (API1 to API7) and T1 (tenant isolation) cover the new routes. This file is not run in CI; run it locally.
 - `apps/app/tests/*.test.ts` (29) and `apps/app/tests/e2e/app.mjs` (APP1 to APP15, with axe). CI job "Players' app" runs these.
 
+## 2a. Design system and several clubs
+
+**Design system.** `packages/ui/src/system.css`, on the semantic tokens: derived roles (`primary-strong`, `surface-sunken`, `success`, soft tints), brand-tinted elevation, radii, type scale and motion. A theme may set the four optional tokens (`EXTRA_TOKENS` in `semantic.ts`; optional in the contract); Three Wolves sets its website's navy-dark and cream-dark. The app's CSS uses only semantic and system tokens (`apps/app/tests/lib.test.ts` checks it).
+
+**Several clubs** (two or more in `clubs.list`; one club sees no change):
+- **Home**: `/me`, `/inbox*`, `/settings`, `/welcome` (`isHomePath` in `apps/app/src/lib/nav.ts`). Luvallplay's look; every club's Me brought together (`screens/me/Home.tsx`, merging in `lib/home.ts`): next up across clubs, one membership card per club, one calendar, the latest messages, each club's shop and photos (when on). A filter (all clubs or one) is kept on the device (`homeClub`).
+- **Club spaces**: every other screen (Player, Arena, Leaderboard, Vision, Membership). The club's look; the top bar is the club's crest and name, a picker of the clubs that have that space; the choice is kept (`club`). A club without the space's module is never shown there (`spaceClub`). Tabs are the union across clubs, each in the words of the club it opens.
+- **Club scope**: `ClubScopeProvider` (hooks.tsx). Inside it `useCurrentClub()` is that club, so a card or row on Home acts on its own club (absence, booking, payment, shop, photos, messages). `ScopeTag` labels it.
+- **Inbox**: one list across clubs; a conversation is `/inbox/<id>?club=<slug>`; a new message starts by choosing the club.
+- **Settings**: Club admin for each club the person administers, through that club's API.
+- Journeys APP4, APP4b, APP4c and APP13b (axe) use a synthetic second club, Harbour Smash (`withSecondClub` in `apps/app/tests/e2e/app.mjs`).
+
 ## 3. Vercel state (needs the owner)
 
 - Team "Timba Le's projects" (`team_4ZLaiQ8NFFhJslfVJEANgxVH`). Projects: `three-wolves-badminton` (`apps/web`), `luvallplay-site` (`apps/site`), `luvallplay-app` (`apps/app`, `prj_ZjHXLpD1IUVPgpWsED5bkKXdeuk9`).

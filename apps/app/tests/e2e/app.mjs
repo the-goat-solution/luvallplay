@@ -153,6 +153,15 @@ async function serveJson(context, url, makeBody) {
 const realConfig = async () => (await fetch(`${api}/clubs/three-wolves/config`)).json();
 
 /** A synthetic second club for one browser context: listed beside Three Wolves, with its own look and no Arena. */
+// Harbour Smash's play days: Tuesdays with casual spots, two weeks out, and a conversation.
+const tuesdayIn = (weeks) => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + ((2 - d.getUTCDay() + 7) % 7 || 7) + 7 * weeks);
+  return d.toISOString().slice(0, 10);
+};
+const HARBOUR_DAYS = [0, 1].map((w) => ({ date: tuesdayIn(w), startTime: `${tuesdayIn(w)}T05:30:00Z`, endTime: `${tuesdayIn(w)}T07:30:00Z`, location: "Harbour Hall", included: false, booked: false, absent: false, paused: false, closed: false, bookable: true, spots: 6 - w }));
+const HARBOUR_THREAD = { id: 1, subject: "New courts on Tuesdays", preview: "From next week we have two more courts.", unread: true, lastMessageAt: new Date().toISOString() };
+
 async function withSecondClub(context) {
   const base = await realConfig();
   const second = {
@@ -175,9 +184,20 @@ async function withSecondClub(context) {
     if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
     const auth = route.request().headers().authorization;
     const mine = await (await fetch(`${api}/clubs/three-wolves/me`, { headers: { authorization: auth } })).json();
-    const body = { ...mine, membership: null, join: { monthly: 4000, quarterly: 11000, days: ["tuesday"] }, calendar: [], inbox: { unread: 0, latest: [] } };
+    const body = { ...mine, membership: null, join: { monthly: 4000, quarterly: 11000, days: ["tuesday"] }, calendar: HARBOUR_DAYS, inbox: { unread: 1, latest: [HARBOUR_THREAD] }, welcome: false };
     return route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json", "cache-control": "no-store" }, body: JSON.stringify(body) });
   });
+  await serveJson(context, `${api}/clubs/harbour-smash/messages`, async () => ({ threads: [{ ...HARBOUR_THREAD, status: "open", lastSender: "admin" }] }));
+  await serveJson(context, `${api}/clubs/harbour-smash/messages/1`, async () => ({ thread: { id: 1, subject: HARBOUR_THREAD.subject, status: "open", messages: [{ id: 1, sender: "admin", body: HARBOUR_THREAD.preview, createdAt: HARBOUR_THREAD.lastMessageAt }] } }));
+  // Its Player and Vision: the same person's, as Three Wolves answers them (the shapes are what matter here).
+  const mirror = async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+    const url = route.request().url().replace("/clubs/harbour-smash/", "/clubs/three-wolves/");
+    const answer = await fetch(url, { headers: { authorization: route.request().headers().authorization } });
+    return route.fulfill({ status: answer.status, headers: { ...CORS, "content-type": "application/json", "cache-control": "no-store" }, body: await answer.text() });
+  };
+  await context.route(`${api}/clubs/harbour-smash/me/stats`, mirror);
+  await context.route(new RegExp(`^${api.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/clubs/harbour-smash/vision(\\?.*)?$`), mirror);
   // Its shop: open, nothing in it yet.
   await serveJson(context, `${api}/clubs/harbour-smash/shop`, async () => ({ products: [], orders: [], cash: false }));
   await serveJson(context, `${api}/clubs/harbour-smash/me/photos`, async () => ({ photos: [], uploadMode: null, perDay: 20 }));
@@ -304,34 +324,113 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await context.close();
   });
 
-  test("APP4 · switching clubs changes the look, the name, the words and the tabs at once, and back", async () => {
+  test("APP4 · several clubs: Home brings them together in Luvallplay's look, each item tagged with its club; the filter narrows it and is kept", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     await withSecondClub(context);
     const page = await context.newPage();
     const problems = watch(page);
-    await page.goto(`${APP}/arena`);
-    await page.waitForSelector('[data-screen="nav_arena"]');
-    assert.equal((await look(page)).primary, NAVY);
+    await page.goto(`${APP}/me`);
+    await page.waitForSelector(`${ME_READY}[data-home="clubs"]`);
+    assert.deepEqual(await look(page), { primary: COURT_GREEN, look: "luvallplay", mode: "light", lang: "en" }, "Home is Luvallplay's, not one club's");
+    assert.equal(await page.locator(".shell-head .club-name").textContent(), "Luvallplay");
+    assert.equal(await page.getByRole("button", { name: "Switch club" }).count(), 0, "no switching on Home");
 
-    await page.getByRole("button", { name: "Switch club" }).click();
-    assert.deepEqual(await page.locator(".switcher-item > span:first-child").allTextContents(), ["Three Wolves Badminton Club", "Harbour Smash"]);
+    const filter = page.getByRole("group", { name: "Show" });
+    const names = (buttons) => buttons.evaluateAll((els) => els.map((b) => (b.querySelector(".club-tag-name") ?? b).textContent.trim()));
+    assert.deepEqual(await names(filter.getByRole("button")), ["All clubs", "Three Wolves Badminton Club", "Harbour Smash"]);
+    // Next up is the earliest day across clubs, with its club.
+    const next = page.locator(".next-up");
+    assert.match(await next.textContent(), /Three Wolves Badminton Club/);
+    // One card per club: the membership at one, the way in at the other.
+    assert.match(await page.locator(".membership").textContent(), /Three Wolves Badminton Club/);
+    assert.match(await page.locator(".join").textContent(), /Harbour Smash/);
+    // One calendar: both clubs' days, each row its club's, the Harbour days bookable there.
+    const days = page.locator(".days .day");
+    const clubOfRow = await days.evaluateAll((rows) => rows.map((r) => r.querySelector(".club-tag-name")?.textContent));
+    assert.ok(clubOfRow.includes("Harbour Smash") && clubOfRow.includes("Three Wolves Badminton Club"), JSON.stringify(clubOfRow));
+    assert.equal(await days.filter({ hasText: "Harbour Smash" }).first().getByRole("button", { name: /^Book · \$10/ }).count(), 1, "Harbour's price, in its money");
+    // Messages from both, the bell counts both.
+    assert.match(await page.locator(".threads").first().textContent(), /New courts on Tuesdays[\s\S]*Welcome to Fridays|Welcome to Fridays[\s\S]*New courts on Tuesdays/);
+    assert.equal(await page.locator(".me-head .badge").textContent(), "2");
+    assert.equal(await page.locator('[id]').evaluateAll((els) => { const ids = els.map((e) => e.id); return ids.length - new Set(ids).size; }), 0, "no id twice on the page");
+
+    // Narrowed to one club: only its things; kept after a reload.
+    await filter.getByRole("button", { name: "Harbour Smash" }).click();
+    assert.equal(await page.locator(".membership").count(), 0);
+    assert.deepEqual([...new Set(await page.locator(".days .day .club-tag-name").allTextContents())], ["Harbour Smash"]);
+    await page.reload();
+    await page.waitForSelector(ME_READY);
+    assert.equal(await filter.getByRole("button", { name: "Harbour Smash" }).getAttribute("aria-pressed"), "true");
+    await filter.getByRole("button", { name: "All clubs" }).click();
+    assert.equal(await page.locator(".membership").count(), 1);
+    assert.deepEqual(problems, []);
+    await context.close();
+  });
+
+  test("APP4b · several clubs: a club's space wears its look and is picked in the top bar; a club without the space isn't offered; back on Home it's Luvallplay's at once", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    await withSecondClub(context);
+    const page = await context.newPage();
+    const problems = watch(page);
+    await page.goto(`${APP}/vision`);
+    await page.waitForSelector('[data-screen="nav_vision"]');
+    assert.equal((await look(page)).primary, NAVY);
+    // Every club's tabs, each in the words of the club it opens.
+    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
+
+    const picker = page.getByRole("button", { name: /Three Wolves Badminton Club, Switch club/ });
+    await picker.click();
+    assert.deepEqual(await page.locator(".switcher-item .switcher-name").allTextContents(), ["Three Wolves Badminton Club", "Harbour Smash"]);
     await page.getByRole("button", { name: "Harbour Smash" }).click();
     await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === "#7a1f3d");
-    assert.equal(await page.locator(".club-name").textContent(), "Harbour Smash");
-    // That club has the Arena off: the tab is gone and so is the screen we were on.
-    await page.waitForURL(`${APP}/me`);
-    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Smash Cam"]);
-    await page.goto(`${APP}/arena`);
-    await page.waitForURL(`${APP}/me`);
-    assert.equal((await look(page)).primary, "#7a1f3d", "the choice of club survives a reload");
-    assert.equal(await page.locator(".club-logo").count(), 0, "nothing of the last club's logo lingers");
+    assert.equal(await page.locator(".shell-head .club-name").textContent(), "Harbour Smash");
+    assert.equal(await page.locator(".shell-head .club-logo").count(), 0, "nothing of the last club's logo lingers");
+    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Smash Cam"]);
+    await page.waitForURL(`${APP}/vision`);
 
-    await page.getByRole("button", { name: "Switch club" }).click();
+    // Harbour has no Arena: the Arena shows the club that has one, with nothing to pick.
+    await page.locator(".shell-nav").getByRole("link", { name: "Arena" }).click();
+    await page.waitForSelector('[data-screen="nav_arena"]');
+    assert.equal((await look(page)).primary, NAVY);
+    assert.equal(await page.getByRole("button", { name: /Switch club/ }).count(), 0);
+
+    // Player: the last club picked (Harbour) is kept.
+    await page.locator(".shell-nav").getByRole("link", { name: "Player" }).click();
+    await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === "#7a1f3d");
+
     const started = Date.now();
-    await page.getByRole("button", { name: "Three Wolves Badminton Club" }).click();
-    await page.waitForFunction((navy) => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === navy, NAVY);
+    await page.locator(".shell-nav").getByRole("link", { name: "Me" }).click();
+    await page.waitForFunction((green) => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === green, COURT_GREEN);
     assert.ok(Date.now() - started < 1500, "the look changes at once");
-    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
+    assert.deepEqual(problems, []);
+    await context.close();
+  });
+
+  test("APP4c · several clubs: one inbox for all of them; a conversation is its club's; a new message starts with the club", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    await withSecondClub(context);
+    const page = await context.newPage();
+    const problems = watch(page);
+    await page.goto(`${APP}/inbox`);
+    const list = page.locator(".inbox-list");
+    await list.getByText("New courts on Tuesdays").waitFor();
+    await list.getByText("Welcome to Fridays").waitFor();
+    await list.getByRole("link", { name: /New courts on Tuesdays/ }).click();
+    await page.waitForURL(/\/inbox\/1\?club=harbour-smash$/);
+    const detail = page.locator(".inbox-detail");
+    await detail.getByText("From next week we have two more courts.").waitFor();
+    assert.match(await detail.locator(".message-who").first().textContent(), /^Harbour Smash/, "the club's own name on its messages");
+    assert.match(await detail.textContent(), /Harbour Smash/);
+
+    await page.goto(`${APP}/inbox/new`);
+    const pick = page.locator(".pick-club");
+    await pick.waitFor();
+    assert.deepEqual(await pick.locator(".club-tag-name").allTextContents(), ["Three Wolves Badminton Club", "Harbour Smash"]);
+    await pick.getByRole("link", { name: /Harbour Smash/ }).click();
+    await page.waitForURL(/\/inbox\/new\?club=harbour-smash$/);
+    assert.equal(await page.locator(".compose-to .club-tag-name").textContent(), "Harbour Smash");
+    assert.match(await page.locator(".compose-to").textContent(), /^Write to/);
+    assert.equal(await page.getByLabel("Subject").count(), 1);
     assert.deepEqual(problems, []);
     await context.close();
   });
@@ -2073,6 +2172,34 @@ describe("APP · accessibility and the page's rules", () => {
       }
       await context.close();
       await anon.close();
+    }
+    assert.deepEqual(problems, []);
+  });
+
+  test("APP13b · axe with several clubs: Home, its filter narrowed, the inbox, a new message's club, a club's space with its picker open; light and dark", async () => {
+    const problems = [];
+    for (const colorScheme of ["light", "dark"]) {
+      const { context } = await signedIn(PEOPLE.member.email, { colorScheme, bypassCSP: true });
+      await withSecondClub(context);
+      for (const [route, ready, act] of [
+        ["/me", `${ME_READY}[data-home="clubs"]`, null],
+        ["/me", `${ME_READY}[data-home="clubs"]`, (p) => p.getByRole("group", { name: "Show" }).getByRole("button", { name: "Harbour Smash" }).click()],
+        ["/inbox", ".inbox-list .thread", null],
+        ["/inbox/new", ".pick-club", null],
+        ["/vision", '[data-screen="nav_vision"][data-state="ready"]', (p) => p.getByRole("button", { name: /Switch club/ }).click()],
+      ]) {
+        const page = await context.newPage();
+        await page.goto(`${APP}${route}`);
+        await page.waitForSelector(ready);
+        if (act) await act(page);
+        // Measure the settled page: a colour mid-transition (a chip turning to its pressed colour) isn't what anyone reads.
+        await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+        await page.addScriptTag({ content: axeSource });
+        const result = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] }));
+        for (const v of result.violations) problems.push(`${route}${act ? "+" : ""} (${colorScheme}): ${v.id} [${v.impact}] ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(" | ")}`);
+        await page.close();
+      }
+      await context.close();
     }
     assert.deepEqual(problems, []);
   });

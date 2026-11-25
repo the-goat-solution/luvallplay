@@ -1,7 +1,8 @@
 // The club shop on Me, as on the website: pick a fit and size, then pay by
 // card (Stripe, the item held 15 minutes meanwhile) or reserve and pay cash
 // at your next play day; your orders below.
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
+import { ScopeTag } from "../../components/ClubTag.tsx";
 import { useCurrentClub, useLang, useT } from "../../hooks.tsx";
 import { dayLabel, localeOf, money } from "../../lib/format.ts";
 import { CardPayment } from "../../components/CardPayment.tsx";
@@ -151,6 +152,7 @@ function OrderRow({ o }: { o: Order }) {
 }
 
 export function ShopSection() {
+  const titleId = useId();
   const { config } = useCurrentClub();
   const t = useT(config);
   const shop = useShop();
@@ -158,9 +160,10 @@ export function ShopSection() {
   if (config?.modules.includes("shop") && !s && shop.isError) return <LoadError compact onRetry={() => void shop.refetch()} />;
   if (!config?.modules.includes("shop") || !s || (s.products.length === 0 && s.orders.length === 0)) return null;
   return (
-    <section className="stack" aria-labelledby="shop-title" id="shop">
-      <div>
-        <h2 id="shop-title">{t("shop_title")}</h2>
+    <section className="stack" aria-labelledby={titleId}>
+      <div className="stack-tight">
+        <ScopeTag />
+        <h2 id={titleId}>{t("shop_title")}</h2>
         <p className="muted small">{t("shop_sub")}</p>
       </div>
       {s.products.map((p) => <ProductCard key={p.id} p={p} cash={s.cash} />)}

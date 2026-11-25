@@ -3,6 +3,9 @@
 import type { Me } from "./data.ts";
 import { dayLabel, money } from "../../lib/format.ts";
 import { Link } from "@tanstack/react-router";
+import { useId } from "react";
+import { useEnterClub } from "../../hooks.tsx";
+import { ScopeTag } from "../../components/ClubTag.tsx";
 import { daysName, planName, usePlace } from "./parts.tsx";
 
 type Membership = NonNullable<Me["membership"]>;
@@ -16,6 +19,8 @@ const STATUS = {
 
 export function MembershipCard({ m }: { m: Membership }) {
   const { t, locale } = usePlace();
+  const id = useId();
+  const enter = useEnterClub();
   const when =
     m.status === "upcoming"
       ? t("mem_starts_on", { date: dayLabel(m.periodStart, locale) })
@@ -23,10 +28,11 @@ export function MembershipCard({ m }: { m: Membership }) {
         ? t("mem_renews_on", { date: dayLabel(m.periodEnd, locale) })
         : t("mem_ends_on", { date: dayLabel(m.periodEnd, locale) });
   return (
-    <section className="card stack membership" aria-labelledby="mem-title">
+    <section className="card stack membership" aria-labelledby={id}>
+      <ScopeTag />
       <div className="card-head">
         <div className="stack-tight">
-          <h2 className="title" id="mem-title">{t("mem_plan_line", { plan: planName(t, m.plan), day: daysName(t, m.day) })}</h2>
+          <h2 className="title" id={id}>{t("mem_plan_line", { plan: planName(t, m.plan), day: daysName(t, m.day) })}</h2>
           <p className="muted small">
             {m.autoRenews ? t("mem_auto_renews") : t("mem_one_time")}
             {m.method === "cash" ? ` · ${t("mem_cash")}` : m.method === "bank_transfer" ? ` · ${t("mem_bank_transfer")}` : ""}
@@ -45,17 +51,20 @@ export function MembershipCard({ m }: { m: Membership }) {
         </div>
       </dl>
       {m.next && <p className="muted small">✓ {t("mem_continuation", { plan: planName(t, m.next.plan), date: dayLabel(m.next.periodStart, locale, true) })}</p>}
-      <div><Link to="/membership" className="button">{t("me_manage")}</Link></div>
+      <div><Link to="/membership" className="button" onClick={enter}>{t("me_manage")}</Link></div>
     </section>
   );
 }
 
 export function JoinCard({ join }: { join: NonNullable<Me["join"]> }) {
   const { t, currency } = usePlace();
+  const id = useId();
+  const enter = useEnterClub();
   return (
-    <section className="card stack join" aria-labelledby="join-title">
+    <section className="card stack join" aria-labelledby={id}>
+      <ScopeTag />
       <div className="stack-tight">
-        <h2 className="title" id="join-title">{t("mem_join_title")}</h2>
+        <h2 className="title" id={id}>{t("mem_join_title")}</h2>
         <p className="muted">{t("mem_join_sub")}</p>
       </div>
       <ul className="plans">
@@ -75,7 +84,7 @@ export function JoinCard({ join }: { join: NonNullable<Me["join"]> }) {
         </li>
       </ul>
       {join.days.length > 0 && <p className="muted small">{join.days.map((d) => daysName(t, d)).join(" · ")}</p>}
-      <div><Link to="/membership" className="button button-accent">{t("me_join")}</Link></div>
+      <div><Link to="/membership" className="button button-accent" onClick={enter}>{t("me_join")}</Link></div>
     </section>
   );
 }

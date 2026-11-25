@@ -1,9 +1,10 @@
 // Dates, times and money for people (src/lib/format.ts), and the Me tab's
 // small rules that must match the website's.
+import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { app } from "@luvallplay/i18n/app";
-import { byMonth, dayLabel, dayTile, localeOf, money, monthLabel, nextUp, timeRange } from "../src/lib/format.ts";
+import { byMonth, dayLabel, deviceCountry, dayTile, localeOf, money, monthLabel, nextUp, timeRange } from "../src/lib/format.ts";
 
 test("locale: Vietnamese as in Vietnam; English as in the club's country", () => {
   assert.equal(localeOf("vi", "NZ"), "vi-VN");
@@ -51,5 +52,21 @@ test("every Me word has a Vietnamese wording, and no club name or currency is ty
     const vi = (app.vi as Record<string, string>)[k];
     assert.ok(vi && vi.trim(), `vi.${k}`);
     for (const text of [(app.en as Record<string, string>)[k], vi]) assert.doesNotMatch(text, /Three Wolves|Wolf|\$\d|NZD/, k);
+  }
+});
+
+test("before a club's own country and money are known, nothing of another club's is assumed", () => {
+  assert.equal(deviceCountry("en-AU"), "AU");
+  assert.equal(deviceCountry("vi-VN"), "VN");
+  assert.equal(deviceCountry("en"), "");
+  assert.equal(deviceCountry(""), "");
+  assert.equal(localeOf("en", ""), "en");
+  assert.equal(money(500, ""), "", "no amount without a currency");
+});
+
+test("no screen falls back to New Zealand or its dollar", () => {
+  const dir = new URL("../src/", import.meta.url);
+  for (const f of (readdirSync(dir, { recursive: true }) as string[]).filter((x) => /\.tsx?$/.test(x))) {
+    assert.doesNotMatch(readFileSync(new URL(f, dir), "utf8"), /\?\? "NZD?"|localeOf\([^)]*"NZ"\)/, f);
   }
 });

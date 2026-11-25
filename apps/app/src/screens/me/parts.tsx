@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { useCurrentClub, useLang, useT } from "../../hooks.tsx";
-import { localeOf } from "../../lib/format.ts";
+import { deviceCountry, localeOf } from "../../lib/format.ts";
 import { Icon } from "../../components/Icon.tsx";
 
 export function usePlace() {
@@ -14,9 +14,9 @@ export function usePlace() {
   const club = config?.club;
   return {
     t,
-    locale: localeOf(lang, club?.country ?? "NZ"),
+    locale: localeOf(lang, club?.country ?? deviceCountry()),
     timezone: club?.timezone ?? "UTC",
-    currency: club?.currency ?? "NZD",
+    currency: club?.currency ?? "",
     webUrl: club?.webUrl ?? null,
     clubName: club?.name ?? "",
   };

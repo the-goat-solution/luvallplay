@@ -1,6 +1,6 @@
 // Sign-in: email, then the 6-digit code (the same codes as the web).
 // Text-message sign-in plugs in here later (api.auth.smsStart / smsVerify).
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, store } from "../app.ts";
@@ -8,6 +8,8 @@ import { signInErrorKey as errorKey } from "../lib/signin-errors.ts";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { LuvallplayMark, Notice, OnLuvallplay, useLook } from "../Frame.tsx";
 import { useLang, useT, type ClubConfig } from "../hooks.tsx";
+
+const RESEND_WAIT_S = 30;
 
 /** The form itself; `club` is set on a club's invite link (the club to open after sign-in). */
 export function SignInForm({ club }: { club?: string }) {
@@ -20,6 +22,30 @@ export function SignInForm({ club }: { club?: string }) {
   const [step, setStep] = useState<"email" | "code">("email");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AppKey | null>(null);
+  // "Send a new code": after a pause (the email may just be slow), and said when sent.
+  const [wait, setWait] = useState(0);
+  const [resent, setResent] = useState(false);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const timer = setTimeout(() => setWait((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [wait]);
+
+  async function resend() {
+    setBusy(true);
+    setError(null);
+    setResent(false);
+    try {
+      await api.auth.emailStart({ email, lang });
+      setCode("");
+      setResent(true);
+      setWait(RESEND_WAIT_S);
+    } catch (err) {
+      setError(errorKey(err, "signin_err_send"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function sendCode(e: FormEvent) {
     e.preventDefault();
@@ -27,6 +53,8 @@ export function SignInForm({ club }: { club?: string }) {
     setError(null);
     try {
       await api.auth.emailStart({ email, lang });
+      setResent(false);
+      setWait(RESEND_WAIT_S);
       setStep("code");
     } catch (err) {
       setError(errorKey(err, "signin_err_invalid_email"));
@@ -75,8 +103,12 @@ export function SignInForm({ club }: { club?: string }) {
         <input className="code-input" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6} required autoFocus value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
       </label>
       {error && <Notice tone="error">{t(error)}</Notice>}
+      {resent && !error && <Notice>{t("signin_resent", { email: email.trim() })}</Notice>}
       <button className="button button-primary" type="submit" disabled={busy || code.length < 6}>
         {busy ? t("signin_verifying") : t("signin_verify")}
+      </button>
+      <button className="button button-quiet" type="button" disabled={busy || wait > 0} onClick={() => void resend()}>
+        {wait > 0 ? t("signin_resend_wait", { s: wait }) : t("signin_resend")}
       </button>
       <button className="button button-quiet" type="button" onClick={() => { setStep("email"); setCode(""); setError(null); }}>
         {t("signin_change_email")}

@@ -17,7 +17,7 @@ function ProductCard({ p, cash }: { p: Product; cash: boolean }) {
   const t = useT(config);
   const lang = useLang();
   const { order, confirm, cancel } = useShopActions();
-  const currency = config?.club.currency ?? "NZD";
+  const currency = config?.club.currency ?? "";
   const fits = p.hasFit ? (["men", "women"] as const) : (["unisex"] as const);
   const [fit, setFit] = useState<(typeof fits)[number]>(fits[0]);
   const sizes = useMemo(() => p.variants.filter((v) => v.fit === fit).sort((a, b) => SIZE_ORDER.indexOf(a.size) - SIZE_ORDER.indexOf(b.size)), [p, fit]);
@@ -132,7 +132,7 @@ function OrderRow({ o }: { o: Order }) {
   const t = useT(config);
   const lang = useLang();
   const { cancel } = useShopActions();
-  const price = money(o.totalCents, config?.club.currency ?? "NZD");
+  const price = money(o.totalCents, config?.club.currency ?? "");
   const until = o.holdExpiresAt ? new Date(o.holdExpiresAt).toLocaleDateString(localeOf(lang, config?.club.country ?? ""), { weekday: "short", day: "numeric", month: "short" }) : "";
   return (
     <li className="row">

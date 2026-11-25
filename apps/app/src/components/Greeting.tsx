@@ -2,7 +2,7 @@
 // date, so the app opens like it knows who's there and when.
 import type { AppKey } from "@luvallplay/i18n/app";
 import { useLang, useT } from "../hooks.tsx";
-import { localeOf } from "../lib/format.ts";
+import { deviceCountry, localeOf } from "../lib/format.ts";
 import { partOfDay } from "../lib/home.ts";
 
 export function Greeting({ firstName, country }: { firstName: string; country?: string }) {
@@ -11,7 +11,7 @@ export function Greeting({ firstName, country }: { firstName: string; country?: 
   const now = new Date();
   const part = partOfDay(now.getHours());
   const name = firstName.trim();
-  const today = now.toLocaleDateString(localeOf(lang, country ?? "NZ"), { weekday: "long", day: "numeric", month: "long" });
+  const today = now.toLocaleDateString(localeOf(lang, country ?? deviceCountry()), { weekday: "long", day: "numeric", month: "long" });
   return (
     <header className="greeting">
       <p className="greeting-date">{today}</p>

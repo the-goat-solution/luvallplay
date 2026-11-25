@@ -16,6 +16,15 @@ export function localeOf(lang: string, country: string): string {
   }
 }
 
+/**
+ * The country to write English for while a club's own isn't known yet (its
+ * config still loading, or screens that belong to no club): the device's, so
+ * no club's country is assumed. "" when the device doesn't say (plain "en").
+ */
+export function deviceCountry(language: string | undefined = typeof navigator === "undefined" ? undefined : navigator.language): string {
+  return /^[a-z]{2,3}-([A-Za-z]{2})\b/.exec(language ?? "")?.[1]?.toUpperCase() ?? "";
+}
+
 /** "Fri 12 Dec" from a club day. The day is already the club's, so it's formatted as UTC (no shift). */
 export function dayLabel(dateKey: string | null | undefined, locale: string, withYear = false): string {
   if (!dateKey) return "";
@@ -49,6 +58,8 @@ export function timeRange(start: string | null, end: string | null, locale: stri
 
 /** 3300 NZD → "$33"; 1050 → "$10.50"; 50000 VND → "50.000 ₫". */
 export function money(minor: number, currency: string): string {
+  // No currency known (the club's config hasn't arrived): no amount, never another club's money.
+  if (!currency) return "";
   return formatMoney(minor, currency, { trimZeros: true, group: true });
 }
 

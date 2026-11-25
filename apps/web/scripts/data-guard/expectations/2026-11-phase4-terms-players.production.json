@@ -1,0 +1,29 @@
+{
+  "change": "2026-11-phase4-terms-players (production run)",
+  "description": "Phase 4 (handoff §1a): Three Wolves' row in tenants gets its words for a player and a pair, for the shared match tracker: terms.player_name, terms.players_name, terms.pair_name (Wolf, Wolves, Pack) and the Vietnamese ones under terms.localized.vi (Sói, Sói, Bầy). They are the words the club's website already shows. One row of one platform table changes; keys are added, nothing is removed or renamed. No account, email, phone, session, role, membership or club-owned row may change. Live traffic keeps writing while the migration runs, so the tables below are listed as volatile.",
+  "volatile": [
+    "player_sessions",
+    "players.claimed_at",
+    "player_settings",
+    "player_events",
+    "message_threads",
+    "messages",
+    "finance_sync_state",
+    "admin_audit_log",
+    "admin_handoffs",
+    "admin_invites",
+    "auth_codes",
+    "sms_sends",
+    "usage_counters"
+  ],
+  "allowChangedColumns": [
+    {
+      "target": "tenants.terms",
+      "reason": "The one intended change: Three Wolves' row gains the words for a player and a pair. tenants has one row."
+    },
+    {
+      "target": "tenants.updated_at",
+      "reason": "Set to now() by the same UPDATE."
+    }
+  ]
+}

@@ -2192,6 +2192,8 @@ describe("APP · accessibility and the page's rules", () => {
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);
         if (act) await act(page);
+        // Measure the settled page: a colour mid-transition (a chip turning to its pressed colour) isn't what anyone reads.
+        await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
         await page.addScriptTag({ content: axeSource });
         const result = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] }));
         for (const v of result.violations) problems.push(`${route}${act ? "+" : ""} (${colorScheme}): ${v.id} [${v.impact}] ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(" | ")}`);

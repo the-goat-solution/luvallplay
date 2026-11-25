@@ -1,10 +1,10 @@
 // The Me tab's data: one query for the whole screen (so it opens from the
 // cache at once), and its two changes, applied on screen straight away and
 // put back if the club's server refuses them.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub, storage } from "../../app.ts";
-import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { useCurrentClub, usePrefs, type Club } from "../../hooks.tsx";
 import { enqueue } from "../../lib/offline.ts";
 
 export type Me = ResponseOf<"me.home">;
@@ -84,4 +84,21 @@ export function useDismissWelcome() {
       if (before) queryClient.setQueryData<Me>(key, { ...before, welcome: false });
     },
   });
+}
+
+/**
+ * Unread messages across the person's clubs, for the bell in the top bar:
+ * from each club's Me (the same queries Home uses, so they share the cache).
+ */
+export function useUnread(clubs: readonly Club[] | null): number {
+  const { token } = usePrefs();
+  const results = useQueries({
+    queries: (clubs ?? []).map((c) => ({
+      queryKey: meKey(c.slug, token),
+      queryFn: ({ signal }: { signal: AbortSignal }) => apiForClub(c.apiBase).me.home({ club: c.slug }, { signal }),
+      enabled: !!token,
+      staleTime: 30_000,
+    })),
+  });
+  return results.reduce((n, r) => n + (r.data?.inbox.unread ?? 0), 0);
 }

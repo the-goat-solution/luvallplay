@@ -20,7 +20,7 @@ export function InviteScreen() {
   useEffect(() => {
     if (token && slug) {
       store.set({ club: slug });
-      void navigate({ to: "/me", replace: true });
+      void navigate({ to: "/home", replace: true });
     }
   }, [token, slug, navigate]);
 

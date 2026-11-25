@@ -7,6 +7,7 @@ import { api, apiForClub, storage, store } from "./app.ts";
 import { pickLang, translator, type Lang, type T } from "./lib/messages.ts";
 import type { Prefs } from "./lib/store.ts";
 import { resolveMode, type Mode } from "./lib/theme.ts";
+import { withProductRules } from "./lib/modules.ts";
 import { windowClass, type WindowClass } from "./lib/window-class.ts";
 
 export type ClubConfig = ResponseOf<"clubs.config">;
@@ -31,7 +32,7 @@ function remembered(slug: string): ClubConfig | undefined {
   try {
     const raw = storage.get(`config.${slug}`);
     const parsed = raw ? (JSON.parse(raw) as ClubConfig) : undefined;
-    return parsed?.club?.slug === slug && parsed.theme?.light && parsed.theme?.dark ? parsed : undefined;
+    return parsed?.club?.slug === slug && parsed.theme?.light && parsed.theme?.dark && Array.isArray(parsed.modules) ? withProductRules({ ...parsed, club: { ...parsed.club, sports: parsed.club.sports ?? [] } }) : undefined;
   } catch {
     return undefined;
   }
@@ -41,7 +42,7 @@ function remembered(slug: string): ClubConfig | undefined {
 export function useClubConfig(slug: string | null, apiBase?: string) {
   const query = useQuery({
     queryKey: ["config", slug],
-    queryFn: ({ signal }) => apiForClub(apiBase).clubs.config({ club: slug as string }, { signal }),
+    queryFn: async ({ signal }) => withProductRules(await apiForClub(apiBase).clubs.config({ club: slug as string }, { signal })),
     enabled: !!slug,
     staleTime: 60_000,
     initialData: () => (slug ? remembered(slug) : undefined),
@@ -84,7 +85,7 @@ export function useClubConfigs(clubs: readonly Club[] | null): (ClubConfig | nul
   const results = useQueries({
     queries: (clubs ?? []).map((c) => ({
       queryKey: ["config", c.slug],
-      queryFn: ({ signal }: { signal: AbortSignal }) => apiForClub(c.apiBase).clubs.config({ club: c.slug }, { signal }),
+      queryFn: async ({ signal }: { signal: AbortSignal }) => withProductRules(await apiForClub(c.apiBase).clubs.config({ club: c.slug }, { signal })),
       staleTime: 60_000,
       initialData: () => remembered(c.slug),
       initialDataUpdatedAt: 0,

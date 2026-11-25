@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isValidGameScore, nextRank, LADDER } from "@luvallplay/core/ranks";
 import { errorCode, pairTitle, useArenaAction, type ArenaState, type Challenge } from "./data.ts";
 import type { ArenaT } from "./words.ts";
+import { Icon } from "../../components/Icon.tsx";
 
 /** A modal <dialog> that opens with its content and closes with Escape. */
 export function Dialog({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
@@ -82,7 +83,7 @@ export function AfterGame({ a, me, t, rank, onError }: { a: After; me: NonNullab
   const parts: [string, number][] = [["pts_gk", a.giantKiller], ["pts_nr", a.newRival], ["pts_hs", a.hotStreak], ["pts_cb", a.crownBounty]];
   return (
     <Dialog label={a.won ? t("victory") : t("good_game")} onClose={() => undefined}>
-      <h2>{a.won ? `🏆 ${t("victory")}` : t("good_game")}</h2>
+      <h2 className="icon-title">{a.won && <Icon name="trophy" size={26} />}{a.won ? t("victory") : t("good_game")}</h2>
       <p className="score-big">{a.retired ? t("retired_note") : `${a.scoreFor ?? 0}–${a.scoreAgainst ?? 0}`} · {pairTitle(a.opponents)}</p>
       {a.won ? (
         <>
@@ -143,7 +144,7 @@ export function RankUp({ to, t, rank, onError }: { to: number; t: ArenaT; rank: 
   };
   return (
     <Dialog label={t("rankup")} onClose={() => undefined}>
-      <h2>⬆️ {t("rankup")}</h2>
+      <h2 className="icon-title"><Icon name="rankUp" size={26} />{t("rankup")}</h2>
       <p>{t("rankup_body")}</p>
       <p className="score-big">{rank(to)}</p>
       <div className="actions">

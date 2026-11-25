@@ -15,6 +15,7 @@ import { usePlace } from "./parts.tsx";
 import { CardPayment } from "../../components/CardPayment.tsx";
 import { Dialog } from "../arena/Dialogs.tsx";
 import { useBook, useRefreshSoon } from "../membership/data.ts";
+import { Icon } from "../../components/Icon.tsx";
 
 function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
   const { t, locale, timezone, currency } = usePlace();
@@ -27,7 +28,8 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
   const tile = dayTile(d.date, locale);
   const time = timeRange(d.startTime, d.endTime, locale, timezone);
   const yours = d.included || d.booked;
-  const title = d.included ? (d.absent ? t("cal_absent") : `✓ ${t("cal_included")}`) : d.booked ? `✓ ${t("cal_booked")}` : time || dayLabel(d.date, locale);
+  const title = d.included ? (d.absent ? t("cal_absent") : t("cal_included")) : d.booked ? t("cal_booked") : time || dayLabel(d.date, locale);
+  const ticked = (d.included && !d.absent) || d.booked;
   const detail = yours ? time : d.paused ? t("cal_paused") : d.closed ? t("cal_closed") : d.spots > 0 ? t("cal_spots", { n: d.spots }) : t("cal_full");
   const canBook = !yours && d.bookable && !d.paused && !d.closed && d.spots > 0;
   const price = money(casualPrice, currency);
@@ -43,7 +45,7 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
       </div>
       <div className="day-text">
         <span className="visually-hidden">{dayLabel(d.date, locale, true)}: </span>
-        <strong>{title}</strong>
+        <strong className={ticked ? "icon-line" : undefined}>{ticked && <Icon name="check" size={16} />}{title}</strong>
         <ScopeTag quiet />
         <span className="muted small day-detail">
           {detail}
@@ -83,7 +85,7 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
           <CardPayment
             clientSecret={paying}
             label={t("mem_pay", { amount: price })}
-            returnPath="/me"
+            returnPath="/home"
             onDone={() => {
               setPaying(null);
               setMessage({ ok: true, text: t("cal_booked_done", { date: dayLabel(d.date, locale) }) });

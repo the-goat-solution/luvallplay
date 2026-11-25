@@ -26,7 +26,7 @@ const OUT = "dist-e2e";
 
 // Playwright is preinstalled globally (resolved through NODE_PATH, which only require() uses).
 const require = createRequire(import.meta.url);
-const { chromium } = require("playwright");
+const { chromium, devices } = require("playwright");
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const pg = createRequire(path.join(WEB_DIR, "package.json"))("pg");
 
@@ -36,6 +36,7 @@ const NAVY_DARK_MODE = "#1e5a8a";
 const WIDTHS = [320, 375, 600, 840, 1200];
 const NAV_AT = { 320: "bar", 375: "bar", 600: "rail", 840: "rail", 1200: "sidebar" };
 const PHONE = { width: 375, height: 812 };
+const STORE = { ios: "https://apps.apple.com/app/luvallplay/id0000000000", android: "https://play.google.com/store/apps/details?id=com.luvallplay.app" };
 
 let env;
 let PEOPLE;
@@ -53,7 +54,8 @@ before(async () => {
   env = await e2e.startEnv({ log: () => {} });
   api = `${env.base}/api/v1/app`;
 
-  const build = spawnSync("npx", ["vite", "build", "--outDir", OUT, "--emptyOutDir"], { cwd: APP_DIR, encoding: "utf8", env: { ...process.env, VITE_API_BASE: env.base } });
+  // Store links as if the store apps were live, so "Get the app" can be seen (APP49); computers never get it.
+  const build = spawnSync("npx", ["vite", "build", "--outDir", OUT, "--emptyOutDir"], { cwd: APP_DIR, encoding: "utf8", env: { ...process.env, VITE_API_BASE: env.base, VITE_APP_STORE_URL: STORE.ios, VITE_PLAY_STORE_URL: STORE.android } });
   assert.equal(build.status, 0, `app build failed:\n${build.stdout}\n${build.stderr}`);
   preview = spawn("npx", ["vite", "preview", "--outDir", OUT, "--port", String(APP_PORT), "--strictPort"], { cwd: APP_DIR, stdio: "ignore", detached: true });
   for (let i = 0; ; i++) {
@@ -128,7 +130,9 @@ const look = (page) =>
 const tabLabels = (page) => page.locator(".shell-nav .tab span").allTextContents();
 
 /** The Me screen with its data (not the loading skeleton). */
-const ME_READY = '[data-screen="nav_me"][data-state="ready"]';
+const ME_READY = '[data-screen="nav_home"][data-state="ready"]';
+/** My profile with the membership loaded (the pill says what it is). */
+const PROFILE_READY = '[data-screen="nav_profile"] .profile-head .pill';
 
 /** Console errors and failed requests, so a CSP or CORS refusal fails the journey. */
 function watch(page) {
@@ -226,7 +230,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.getByLabel("6-digit code").fill(await outboxCode(PEOPLE.member.email));
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    await page.waitForURL(`${APP}/me`);
+    await page.waitForURL(`${APP}/home`);
     await page.waitForSelector(".shell");
     await page.waitForFunction((navy) => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === navy, NAVY);
     assert.deepEqual(await look(page), { primary: NAVY, look: "club", mode: "light", lang: "en" });
@@ -235,7 +239,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.equal(await page.locator('meta[name="theme-color"]').getAttribute("content"), NAVY);
     await page.waitForSelector(ME_READY);
     // The club's own word for Vision is on the tab; the frame's mark stays.
-    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
+    assert.deepEqual(await tabLabels(page), ["Home", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
     assert.match(await page.locator(".shell-foot").textContent(), /on Luvallplay/);
     const fonts = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--font-display"));
     assert.match(fonts, /Copperplate/);
@@ -249,7 +253,8 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForSelector(ME_READY);
     assert.equal((await look(page)).primary, NAVY);
 
-    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("link", { name: "My profile" }).click();
+    await page.waitForURL(`${APP}/profile`);
     await page.waitForSelector("text=Signed in as mia.member@e2e.test");
     assert.equal(await page.getByRole("button", { name: "Club admin" }).count(), 0);
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
@@ -300,7 +305,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.equal((await look(page)).primary, NAVY, "the club's look stays through sign-in");
     await page.getByLabel("6-digit code").fill(await outboxCode(PEOPLE.player.email));
     await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL(`${APP}/me`);
+    await page.waitForURL(`${APP}/home`);
     await page.waitForSelector(ME_READY);
     assert.equal(await page.evaluate(() => localStorage.getItem("lp.club")), "three-wolves");
     assert.equal((await look(page)).primary, NAVY);
@@ -308,7 +313,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
 
     // Already signed in: the link goes straight to the club.
     await page.goto(`${APP}/c/three-wolves`);
-    await page.waitForURL(`${APP}/me`);
+    await page.waitForURL(`${APP}/home`);
     await context.close();
   });
 
@@ -341,8 +346,8 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     // Next up is the earliest day across clubs, with its club.
     const next = page.locator(".next-up");
     assert.match(await next.textContent(), /Three Wolves Badminton Club/);
-    // One card per club: the membership at one, the way in at the other.
-    assert.match(await page.locator(".membership").textContent(), /Three Wolves Badminton Club/);
+    // The way in at the club she isn't a member of; memberships themselves are in My profile.
+    assert.equal(await page.locator(".membership").count(), 0);
     assert.match(await page.locator(".join").textContent(), /Harbour Smash/);
     // One calendar: both clubs' days, each row its club's, the Harbour days bookable there.
     const days = page.locator(".days .day");
@@ -351,18 +356,29 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.equal(await days.filter({ hasText: "Harbour Smash" }).first().getByRole("button", { name: /^Book · \$10/ }).count(), 1, "Harbour's price, in its money");
     // Messages from both, the bell counts both.
     assert.match(await page.locator(".threads").first().textContent(), /New courts on Tuesdays[\s\S]*Welcome to Fridays|Welcome to Fridays[\s\S]*New courts on Tuesdays/);
-    assert.equal(await page.locator(".me-head .badge").textContent(), "2");
+    assert.equal(await page.locator(".top-actions .badge").textContent(), "2", "the bell counts both clubs");
     assert.equal(await page.locator('[id]').evaluateAll((els) => { const ids = els.map((e) => e.id); return ids.length - new Set(ids).size; }), 0, "no id twice on the page");
 
     // Narrowed to one club: only its things; kept after a reload.
     await filter.getByRole("button", { name: "Harbour Smash" }).click();
-    assert.equal(await page.locator(".membership").count(), 0);
+    await filter.getByRole("button", { name: "Three Wolves Badminton Club" }).click();
+    assert.equal(await page.locator(".join").count(), 0, "narrowed to Three Wolves: no way in to Harbour");
+    await filter.getByRole("button", { name: "Harbour Smash" }).click();
+    assert.equal(await page.locator(".join").count(), 1);
     assert.deepEqual([...new Set(await page.locator(".days .day .club-tag-name").allTextContents())], ["Harbour Smash"]);
     await page.reload();
     await page.waitForSelector(ME_READY);
     assert.equal(await filter.getByRole("button", { name: "Harbour Smash" }).getAttribute("aria-pressed"), "true");
     await filter.getByRole("button", { name: "All clubs" }).click();
-    assert.equal(await page.locator(".membership").count(), 1);
+    assert.ok((await page.locator(".days .day").count()) > 2);
+
+    // My profile: one card per club, each tagged; the pill counts the memberships.
+    await page.locator(".top-actions .head-avatar").click();
+    await page.waitForSelector(PROFILE_READY);
+    assert.equal(await page.locator(".profile-head .pill").textContent(), "Member at 1 of 2 clubs");
+    assert.match(await page.locator(".membership").textContent(), /Three Wolves Badminton Club/);
+    assert.match(await page.locator(".join").textContent(), /Harbour Smash/);
+    assert.deepEqual((await look(page)).look, "luvallplay");
     assert.deepEqual(problems, []);
     await context.close();
   });
@@ -376,7 +392,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForSelector('[data-screen="nav_vision"]');
     assert.equal((await look(page)).primary, NAVY);
     // Every club's tabs, each in the words of the club it opens.
-    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
+    assert.deepEqual(await tabLabels(page), ["Home", "Player", "Arena", "Leaderboard", "Wolf Vision"]);
 
     const picker = page.getByRole("button", { name: /Three Wolves Badminton Club, Switch club/ });
     await picker.click();
@@ -385,7 +401,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === "#7a1f3d");
     assert.equal(await page.locator(".shell-head .club-name").textContent(), "Harbour Smash");
     assert.equal(await page.locator(".shell-head .club-logo").count(), 0, "nothing of the last club's logo lingers");
-    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard", "Smash Cam"]);
+    assert.deepEqual(await tabLabels(page), ["Home", "Player", "Arena", "Leaderboard", "Smash Cam"]);
     await page.waitForURL(`${APP}/vision`);
 
     // Harbour has no Arena: the Arena shows the club that has one, with nothing to pick.
@@ -399,7 +415,7 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === "#7a1f3d");
 
     const started = Date.now();
-    await page.locator(".shell-nav").getByRole("link", { name: "Me" }).click();
+    await page.locator(".shell-nav").getByRole("link", { name: "Home" }).click();
     await page.waitForFunction((green) => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim().toLowerCase() === green, COURT_GREEN);
     assert.ok(Date.now() - started < 1500, "the look changes at once");
     assert.deepEqual(problems, []);
@@ -435,6 +451,20 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await context.close();
   });
 
+  test("APP5b · Vision is for badminton clubs: a club that plays another sport has no Vision tab and no Vision screen, whatever it switched on", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const base = await realConfig();
+    assert.ok(base.modules.includes("vision") && base.club.sports.includes("badminton"), "Three Wolves plays badminton and has Vision on");
+    await serveJson(context, `${api}/clubs/three-wolves/config`, async () => ({ ...base, club: { ...base.club, sports: ["tennis"] } }));
+    const page = await context.newPage();
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector(ME_READY);
+    assert.deepEqual(await tabLabels(page), ["Home", "Player", "Arena", "Leaderboard"]);
+    await page.goto(`${APP}/vision`);
+    await page.waitForURL(`${APP}/home`);
+    await context.close();
+  });
+
   test("APP5 · a module the club has off: its tab and its screen are gone; the others stay", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const base = await realConfig();
@@ -442,9 +472,9 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     const page = await context.newPage();
     await page.goto(`${APP}/me`);
     await page.waitForSelector(ME_READY);
-    assert.deepEqual(await tabLabels(page), ["Me", "Player", "Arena", "Leaderboard"]);
+    assert.deepEqual(await tabLabels(page), ["Home", "Player", "Arena", "Leaderboard"]);
     await page.goto(`${APP}/vision`);
-    await page.waitForURL(`${APP}/me`);
+    await page.waitForURL(`${APP}/home`);
     await page.goto(`${APP}/arena`);
     await page.waitForSelector('[data-screen="nav_arena"]');
     await context.close();
@@ -476,23 +506,18 @@ describe("APP · Me (the home tab)", () => {
     await page.goto(`${APP}/me`);
     await page.waitForSelector(ME_READY);
     const data = await meFor(token);
-    // Header: name, pill, bell with the unread count.
-    assert.equal(await page.locator(".me-head h1").textContent(), "Mia Member");
-    assert.equal(await page.locator(".me-head .pill").textContent(), `Active · renews ${await dayKey(page, data.membership.periodEnd)}`);
-    assert.equal(await page.locator(".me-head .icon-button").getAttribute("aria-label"), `Inbox, ${data.inbox.unread} unread`);
+    // The greeting (no picture on Home: it's in the top bar), and the bell with the unread count.
+    assert.match(await page.locator(".greeting h1").textContent(), /^Good (morning|afternoon|evening), Mia$/);
+    assert.equal(await page.locator("[data-screen=nav_home] .avatar").count(), 0);
+    assert.equal(await page.locator(".top-actions .head-icon").getAttribute("aria-label"), `Inbox, ${data.inbox.unread} unread`);
+    assert.equal(await page.locator(".top-actions .head-avatar").getAttribute("href"), "/profile");
     // Next up: her first Friday, included in her membership.
     const next = data.calendar.find((d) => !d.paused && (d.booked || d.included));
     const nextCard = page.getByRole("region", { name: "Next up" });
     assert.equal(await nextCard.locator(".next-date").textContent(), await dayKey(page, next.date));
     assert.match(await nextCard.textContent(), /Pioneer Stadium/);
     assert.match(await nextCard.textContent(), /Included in your membership/);
-    // Membership: plan and day, status, days left, and the way to manage it (the Membership screen).
-    const card = page.locator(".membership");
-    assert.equal(await card.getByRole("heading").textContent(), "Monthly · Fridays");
-    assert.equal(await card.locator(".status").textContent(), "Active");
-    assert.equal(await card.locator(".stat-value").textContent(), String(data.membership.daysLeft));
-    const manage = card.getByRole("link", { name: /Manage membership/ });
-    assert.equal(await manage.getAttribute("href"), "/membership");
+    assert.equal(await page.locator(".membership").count(), 0, "the membership is in My profile");
     assert.equal(await page.locator(".join").count(), 0, "no join card for a member");
     // Calendar: every play day, her Fridays marked as hers.
     assert.equal(await page.locator(".day").count(), data.calendar.length);
@@ -502,8 +527,20 @@ describe("APP · Me (the home tab)", () => {
     const thread = page.locator(".thread.unread").first();
     assert.match(await thread.textContent(), /Welcome to Fridays/);
     assert.equal(await thread.locator("a").getAttribute("href"), `/inbox/${data.inbox.latest[0].id}`);
-    assert.equal(await page.locator(".me-head .icon-button").getAttribute("href"), "/inbox");
+    assert.equal(await page.locator(".top-actions .head-icon").getAttribute("href"), "/inbox");
     assert.equal(await page.locator(".welcome").count(), 0);
+    // My profile (her picture in the top bar): name, the membership pill, and the membership: plan and day, status, days left, Manage.
+    await page.locator(".top-actions .head-avatar").click();
+    await page.waitForSelector(PROFILE_READY);
+    assert.equal(await page.locator(".profile-head h1").textContent(), "Mia Member");
+    assert.equal(await page.locator(".profile-head .pill").textContent(), `Active · renews ${await dayKey(page, data.membership.periodEnd)}`);
+    const card = page.locator(".membership");
+    assert.equal(await card.getByRole("heading").textContent(), "Monthly · Fridays");
+    assert.equal(await card.locator(".status").textContent(), "Active");
+    assert.equal(await card.locator(".stat-value").textContent(), String(data.membership.daysLeft));
+    const manage = card.getByRole("link", { name: /Manage membership/ });
+    assert.equal(await manage.getAttribute("href"), "/membership");
+    assert.equal(await page.locator(".join").count(), 0, "no join card for a member");
     assert.deepEqual(problems, []);
     await context.close();
   });
@@ -563,7 +600,6 @@ describe("APP · Me (the home tab)", () => {
     try {
       await page.goto(`${APP}/me`);
       await page.waitForSelector(ME_READY);
-      assert.equal(await page.locator(".me-head .pill").textContent(), "Not a member yet");
       assert.equal(await page.locator(".membership").count(), 0);
       const join = page.locator(".join");
       assert.match(await join.textContent(), /Become a member/);
@@ -613,10 +649,13 @@ describe("APP · Me (the home tab)", () => {
     const page = await context.newPage();
     await page.goto(`${APP}/me`);
     await page.waitForSelector(ME_READY);
-    assert.equal(await page.locator(".membership").getByRole("heading").textContent(), "Hàng tháng · Thứ Sáu");
     await page.getByRole("heading", { name: "Sắp tới" }).waitFor();
     await page.getByRole("heading", { name: "Lịch chơi" }).waitFor();
-    assert.match(await page.locator(".me-head .pill").textContent(), /^Đang hoạt động · gia hạn /);
+    assert.match(await page.locator(".greeting h1").textContent(), /^Chào buổi (sáng|chiều|tối), Mia$/);
+    await page.goto(`${APP}/profile`);
+    await page.waitForSelector(PROFILE_READY);
+    assert.equal(await page.locator(".membership").getByRole("heading").textContent(), "Hàng tháng · Thứ Sáu");
+    assert.match(await page.locator(".profile-head .pill").textContent(), /^Đang hoạt động · gia hạn /);
     await context.close();
   });
 
@@ -630,7 +669,7 @@ describe("APP · Me (the home tab)", () => {
     );
     const page = await context.newPage();
     await page.goto(`${APP}/me`);
-    await page.waitForSelector('[data-screen="nav_me"][data-state="error"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-screen="nav_home"][data-state="error"]', { timeout: 15_000 });
     fail = false;
     await page.getByRole("button", { name: "Try again" }).click();
     await page.waitForSelector(ME_READY);
@@ -667,14 +706,14 @@ describe("APP · the inbox", () => {
       assert.equal(await page.getByPlaceholder("Write a message…").inputValue(), "", "the box empties once sent");
       const saved = await db.query(`SELECT body FROM messages WHERE thread_id = $1 AND sender = 'player'`, [id]);
       assert.deepEqual(saved.rows.map((r) => r.body), ["Thanks, see you there"]);
-      // Back to the list: read now, and Me's bell has nothing unread.
+      // Back to the list: read now, and the bell has nothing unread.
       await page.getByRole("link", { name: "All messages" }).click();
       await page.waitForURL(`${APP}/inbox`);
       assert.equal(await page.locator(".thread.unread").count(), 0);
       assert.match(await page.locator(".thread-preview").first().textContent(), /^You: Thanks, see you there/);
-      await page.locator(".shell-nav").getByRole("link", { name: "Me", exact: true }).click();
+      await page.locator(".shell-nav").getByRole("link", { name: "Home", exact: true }).click();
       await page.waitForSelector(ME_READY);
-      await page.waitForFunction(() => document.querySelector(".me-head .icon-button")?.getAttribute("aria-label") === "Inbox");
+      await page.waitForFunction(() => document.querySelector(".top-actions .head-icon")?.getAttribute("aria-label") === "Inbox");
       assert.deepEqual(problems, []);
     } finally {
       await restore(id);
@@ -803,7 +842,7 @@ describe("APP · settings", () => {
     await page.waitForSelector("text=Signed in as");
     await page.getByLabel("Tiếng Việt").check();
     await page.waitForSelector("text=Cài đặt");
-    assert.deepEqual(await tabLabels(page), ["Tôi", "Người chơi", "Đấu trường", "Xếp hạng", "Wolf Vision"]);
+    assert.deepEqual(await tabLabels(page), ["Trang chủ", "Người chơi", "Đấu trường", "Xếp hạng", "Wolf Vision"]);
     assert.equal((await look(page)).lang, "vi");
     assert.match(await page.locator(".shell-foot").textContent(), /trên Luvallplay/);
     await page.reload();
@@ -917,10 +956,13 @@ describe("APP · settings: the account", () => {
       await form.getByRole("status").filter({ hasText: "Saved" }).waitFor();
       const after = await playerRow(PEOPLE.player.email);
       assert.deepEqual([after.first_name, after.last_name, after.display_name], ["Peter", "Player-Smith", "Pistol Pete"]);
-      // Me follows at once (no reload).
-      await page.locator(".shell-nav").getByRole("link", { name: "Me", exact: true }).click();
+      // Home and My profile follow at once (no reload).
+      await page.locator(".shell-nav").getByRole("link", { name: "Home", exact: true }).click();
       await page.waitForSelector(ME_READY);
-      assert.equal(await page.locator(".me-head h1").textContent(), "Peter Player-Smith");
+      assert.match(await page.locator(".greeting h1").textContent(), /, Peter$/);
+      await page.goto(`${APP}/profile`);
+      await page.waitForSelector(".profile-head h1");
+      await page.waitForFunction(() => document.querySelector(".profile-head h1")?.textContent === "Peter Player-Smith");
       // Clearing the display name goes back to the default.
       await page.goto(`${APP}/settings`);
       await page.getByLabel("Display name").fill("");
@@ -974,7 +1016,7 @@ describe("APP · settings: the account", () => {
     const before = await playerRow(PEOPLE.member.email);
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
-    const photo = page.locator("section", { has: page.getByRole("heading", { name: "Profile picture" }) });
+    const photo = page.locator("section.card", { has: page.getByRole("heading", { name: "Profile picture" }) });
     try {
       await page.goto(`${APP}/settings`);
       // This local server has no picture storage: the real answer.
@@ -1095,7 +1137,7 @@ describe("APP · settings: the account", () => {
       await a.page.getByLabel("First name").fill("Nina");
       await a.page.getByLabel("Last name").fill("New");
       await a.page.getByRole("button", { name: "Continue" }).click();
-      await a.page.waitForURL(`${APP}/me`);
+      await a.page.waitForURL(`${APP}/home`);
       await a.page.waitForSelector(ME_READY);
       assert.equal(await a.page.getByText("Add your name so your club knows who you are.").count(), 0);
       assert.deepEqual((await db.query(`SELECT first_name, last_name FROM players WHERE email = $1`, [first])).rows[0], { first_name: "Nina", last_name: "New" });
@@ -1103,12 +1145,12 @@ describe("APP · settings: the account", () => {
 
       const b = await signUp(second);
       await b.page.getByRole("link", { name: "Cancel" }).click();
-      await b.page.waitForURL(`${APP}/me`);
+      await b.page.waitForURL(`${APP}/home`);
       await b.page.getByRole("link", { name: "Add my name" }).click();
       await b.page.waitForURL(`${APP}/welcome`);
       await b.page.getByLabel("First name").fill("Ned");
       await b.page.getByRole("button", { name: "Continue" }).click();
-      await b.page.waitForURL(`${APP}/me`);
+      await b.page.waitForURL(`${APP}/home`);
       assert.equal(await b.page.getByRole("link", { name: "Add my name" }).count(), 0);
       await b.context.close();
     } finally {
@@ -1229,7 +1271,7 @@ describe("APP · the Arena", () => {
       await splash.getByRole("button", { name: /Minimize/ }).click();
       await mp.getByText("Your match is on").waitFor();
       // On the other tabs too: a pill back to the Arena.
-      await mp.locator(".shell-nav").getByRole("link", { name: "Me" }).click();
+      await mp.locator(".shell-nav").getByRole("link", { name: "Home" }).click();
       await mp.waitForSelector(ME_READY);
       await mp.getByTestId("match-pill").click();
       await mp.waitForURL(`${APP}/arena`);
@@ -1581,8 +1623,8 @@ describe("APP · membership and casual booking", () => {
     const page = await context.newPage();
     const problems = watch(page);
     try {
-      await page.goto(`${APP}/me`);
-      await page.waitForSelector(ME_READY);
+      await page.goto(`${APP}/profile`);
+      await page.waitForSelector(PROFILE_READY);
       await page.getByRole("link", { name: "Manage membership" }).click();
       await page.waitForURL(`${APP}/membership`);
       await page.waitForSelector(MEM);
@@ -1771,7 +1813,7 @@ describe("APP · every screen's states (build plan §7: loading, empty, error, o
       ["/settings", `${api}/account/profile`, "#details-title, [data-screen='nav_settings'] form"],
       // Cards on Me: the shop and My photos.
       ["/me", `${club}/shop`, ME_READY],
-      ["/me", `${club}/me/photos`, '[data-testid="my-photos"]'],
+      ["/profile", `${club}/me/photos`, '[data-testid="my-photos"]'],
     ];
     const failing = { status: 500, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ error: "failed" }) };
     try {
@@ -1878,8 +1920,7 @@ describe("APP · My photos", () => {
     const miaId = (await db.query(`SELECT id FROM players WHERE email = $1`, [PEOPLE.member.email])).rows[0].id;
     try {
       // The real API: no photo store in this environment.
-      await page.goto(`${APP}/me`);
-      await page.waitForSelector(ME_READY);
+      await page.goto(`${APP}/profile`);
       await page.getByTestId("my-photos").getByText("Photo sharing isn't set up yet.").waitFor();
 
       // A store connected (stood in for): the upload handshake, the store's upload API, and registering.
@@ -1913,7 +1954,7 @@ describe("APP · My photos", () => {
         return route.fulfill({ status: 200, headers: { ...open, "content-type": "application/json" }, body: JSON.stringify({ url, downloadUrl: `${url}?download=1`, pathname, contentType: "image/webp", contentDisposition: "inline" }) });
       });
       await page.reload();
-      await page.waitForSelector(ME_READY);
+      await page.waitForSelector('[data-testid="my-photos"]');
       const card = page.getByTestId("my-photos");
       await card.getByRole("button", { name: "Choose photos" }).waitFor();
       const png = Buffer.from(
@@ -2024,7 +2065,7 @@ describe("APP · offline and installing (build plan §4.1)", () => {
     assert.equal((await fetch(`${APP}/favicon.ico`)).status, 200);
     const sw = await (await fetch(`${APP}/sw.js`)).text();
     const assets = JSON.parse(sw.match(/const ASSETS = (\[.*?\]);/)[1]);
-    assert.ok(assets.some((a) => /\/assets\/Me-.*\.js$/.test(a)) && assets.some((a) => /\/assets\/index-.*\.js$/.test(a)), "the screens are kept on the device");
+    assert.ok(assets.some((a) => /\/assets\/Home-.*\.js$/.test(a)) && assets.some((a) => /\/assets\/index-.*\.js$/.test(a)), "the screens are kept on the device");
     assert.equal(assets.some((a) => a.startsWith("/mediapipe/") || a.startsWith("/api/")), false);
     for (const icon of manifest.icons) assert.ok(assets.includes(icon.src), `${icon.src} is kept on the device`);
 
@@ -2204,6 +2245,106 @@ describe("APP · accessibility and the page's rules", () => {
     assert.deepEqual(problems, []);
   });
 
+  test("APP49 · Get the app: on a phone's browser every fifth open, in Luvallplay's look, the phone's own store; Not now closes it; never on a computer", async () => {
+    const opensAt = (n) => (ctx) => ctx.addInitScript((v) => { if (!sessionStorage.getItem("e2e-opens")) { localStorage.setItem("lp.opens", v); sessionStorage.setItem("e2e-opens", "1"); } }, String(n));
+    const sheet = (page) => page.getByRole("dialog", { name: "Luvallplay is better in the app" });
+
+    // An iPhone, its fifth open: the App Store, in Luvallplay's green whatever the club's look.
+    const iphone = await signedIn(PEOPLE.member.email, { ...devices["iPhone 13"], bypassCSP: true });
+    await opensAt(4)(iphone.context);
+    const page = await iphone.context.newPage();
+    const problems = watch(page);
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector(ME_READY);
+    await sheet(page).waitFor();
+    assert.equal((await look(page)).primary, NAVY, "the page stays the club's");
+    assert.equal(await sheet(page).evaluate((d) => getComputedStyle(d).getPropertyValue("--primary").trim().toLowerCase()), COURT_GREEN);
+    const get = sheet(page).getByRole("link", { name: "Get it on the App Store" });
+    assert.equal(await get.getAttribute("href"), STORE.ios);
+    await page.addScriptTag({ content: axeSource });
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+    const axe = await page.evaluate(() => window.axe.run(document.querySelector("dialog.get-app"), { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] }));
+    assert.deepEqual(axe.violations.map((v) => v.id), []);
+    if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/app-get-the-app.png` });
+    await sheet(page).getByRole("button", { name: "Not now" }).click();
+    await sheet(page).waitFor({ state: "detached" });
+    // The sixth open: nothing.
+    await page.reload();
+    await page.waitForSelector(ME_READY);
+    await page.waitForTimeout(1800);
+    assert.equal(await sheet(page).count(), 0);
+    assert.equal(await page.evaluate(() => localStorage.getItem("lp.opens")), "6");
+    assert.deepEqual(problems, []);
+    await iphone.context.close();
+
+    // An Android phone: Google Play.
+    const pixel = await signedIn(PEOPLE.member.email, { ...devices["Pixel 7"] });
+    await opensAt(9)(pixel.context);
+    const p2 = await pixel.context.newPage();
+    await p2.goto(`${APP}/home`);
+    await sheet(p2).getByRole("link", { name: "Get it on Google Play" }).waitFor();
+    assert.equal(await sheet(p2).getByRole("link", { name: "Get it on Google Play" }).getAttribute("href"), STORE.android);
+    await pixel.context.close();
+
+    // A computer, its fifth open: never.
+    const desk = await signedIn(PEOPLE.member.email, { viewport: { width: 1280, height: 900 } });
+    await opensAt(4)(desk.context);
+    const p3 = await desk.context.newPage();
+    await p3.goto(`${APP}/home`);
+    await p3.waitForSelector(ME_READY);
+    await p3.waitForTimeout(1800);
+    assert.equal(await sheet(p3).count(), 0);
+    await desk.context.close();
+  });
+
+  test("APP50 · in no club yet: Home says so and points to the club finder, no club tabs, a club's space goes Home; My profile still opens; Skip to content first", async () => {
+    const { context } = await signedIn(PEOPLE.member.email, { bypassCSP: true });
+    await context.route(`${api}/clubs`, (route) => (route.request().method() === "OPTIONS" ? route.fallback() : route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ clubs: [] }) })));
+    const page = await context.newPage();
+    const problems = watch(page);
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector('[data-screen="nav_home"][data-state="empty"]');
+    await page.getByRole("heading", { name: "You're not in a club yet" }).waitFor();
+    assert.equal(await page.getByRole("link", { name: /Find a club near you/ }).getAttribute("href"), "https://luvallplay.com/en/find-a-club");
+    assert.equal(await page.locator(".shell-nav").count(), 0, "no club tabs");
+    assert.equal(await page.locator(".skeleton").count(), 0, "no endless loading");
+    await page.goto(`${APP}/player`);
+    await page.waitForURL(`${APP}/home`);
+    // The keyboard's first stop: Skip to content, which lands on the screen.
+    await page.keyboard.press("Tab");
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Skip to content");
+    await page.addScriptTag({ content: axeSource });
+    const axe = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] }));
+    assert.deepEqual(axe.violations.map((v) => v.id), []);
+    await page.locator(".top-actions .head-avatar").click();
+    await page.waitForSelector("text=Signed in as mia.member@e2e.test");
+    assert.deepEqual(problems, []);
+    await context.close();
+  });
+
+  test("APP51 · a payment that didn't go through shows on Home, with the way to fix it; a healthy membership shows nothing there", async () => {
+    const { context } = await signedIn(PEOPLE.member.email, { bypassCSP: true });
+    const page = await context.newPage();
+    await page.goto(`${APP}/home`);
+    await page.waitForSelector(ME_READY);
+    assert.equal(await page.locator(".alert").count(), 0, "an active membership that renews: nothing to do");
+    await context.route(`${api}/clubs/three-wolves/me`, async (route) => {
+      if (route.request().method() === "OPTIONS") return route.fallback();
+      const response = await route.fetch();
+      const json = await response.json();
+      return route.fulfill({ response, json: { ...json, membership: { ...json.membership, status: "past_due" } } });
+    });
+    await page.reload();
+    await page.waitForSelector(ME_READY);
+    const alert = page.getByRole("alert").filter({ hasText: "Your last payment didn't go through" });
+    await alert.waitFor();
+    assert.equal(await alert.getByRole("link", { name: "Fix payment" }).getAttribute("href"), "/membership");
+    await page.addScriptTag({ content: axeSource });
+    const axe = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] }));
+    assert.deepEqual(axe.violations.map((v) => `${v.id} ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`), []);
+    await context.close();
+  });
+
   test("APP14 · the built page carries a strict Content-Security-Policy that names only the API host, Stripe's, the tracker's models and the photo store", async () => {
     const html = await (await fetch(`${APP}/signin`)).text();
     const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1] ?? "";
@@ -2234,7 +2375,7 @@ describe("APP · accessibility and the page's rules", () => {
     await context.close();
   });
 
-  test("APP15 · screens are separate chunks: the Settings screen's code arrives only when Settings is opened", async () => {
+  test("APP15 · screens are separate chunks: My profile's code arrives only when My profile is opened", async () => {
     const { context } = await signedIn(PEOPLE.member.email);
     const page = await context.newPage();
     const scripts = [];
@@ -2243,11 +2384,11 @@ describe("APP · accessibility and the page's rules", () => {
     });
     await page.goto(`${APP}/me`);
     await page.waitForSelector(ME_READY);
-    assert.ok(scripts.some((s) => s.startsWith("Me-")), `Me's chunk loaded (${scripts.join(", ")})`);
-    assert.ok(!scripts.some((s) => s.startsWith("Settings-")), "Settings isn't loaded on Me");
-    await page.getByRole("link", { name: "Settings" }).click();
+    assert.ok(scripts.some((s) => s.startsWith("Home-")), `Home's chunk loaded (${scripts.join(", ")})`);
+    assert.ok(!scripts.some((s) => s.startsWith("Profile-")), "My profile isn't loaded on Home");
+    await page.getByRole("link", { name: "My profile" }).click();
     await page.waitForSelector("text=Signed in as");
-    assert.ok(scripts.some((s) => s.startsWith("Settings-")));
+    assert.ok(scripts.some((s) => s.startsWith("Profile-")));
     await context.close();
   });
 });

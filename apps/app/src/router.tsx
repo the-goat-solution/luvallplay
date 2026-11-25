@@ -12,7 +12,7 @@ const index = createRoute({
   getParentRoute: () => root,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: store.get().token ? "/me" : "/signin", replace: true });
+    throw redirect({ to: store.get().token ? "/home" : "/signin", replace: true });
   },
 });
 
@@ -20,7 +20,7 @@ const signIn = createRoute({
   getParentRoute: () => root,
   path: "/signin",
   beforeLoad: () => {
-    if (store.get().token) throw redirect({ to: "/me", replace: true });
+    if (store.get().token) throw redirect({ to: "/home", replace: true });
   },
   component: SignInScreen,
 });
@@ -36,7 +36,10 @@ const shell = createRoute({
   component: Shell,
 });
 
-const me = createRoute({ getParentRoute: () => shell, path: "/me", component: lazyRouteComponent(() => import("./screens/Me.tsx")) });
+const home = createRoute({ getParentRoute: () => shell, path: "/home", component: lazyRouteComponent(() => import("./screens/Home.tsx")) });
+// Me was the first tab before Home; Settings now lives in My profile. Old links still land.
+const me = createRoute({ getParentRoute: () => shell, path: "/me", beforeLoad: () => { throw redirect({ to: "/home", replace: true }); } });
+const profile = createRoute({ getParentRoute: () => shell, path: "/profile", component: lazyRouteComponent(() => import("./screens/Profile.tsx")) });
 const arena = createRoute({ getParentRoute: () => shell, path: "/arena", component: lazyRouteComponent(() => import("./screens/Arena.tsx")) });
 const leaderboard = createRoute({ getParentRoute: () => shell, path: "/leaderboard", component: lazyRouteComponent(() => import("./screens/Leaderboard.tsx")) });
 const vision = createRoute({ getParentRoute: () => shell, path: "/vision", component: lazyRouteComponent(() => import("./screens/Vision.tsx")) });
@@ -53,9 +56,9 @@ const welcome = createRoute({ getParentRoute: () => shell, path: "/welcome", com
 const membership = createRoute({ getParentRoute: () => shell, path: "/membership", component: lazyRouteComponent(() => import("./screens/Membership.tsx")) });
 const visionTrack = createRoute({ getParentRoute: () => shell, path: "/vision/track", component: lazyRouteComponent(() => import("./screens/VisionTrack.tsx")) });
 const visionLabel = createRoute({ getParentRoute: () => shell, path: "/vision/label", component: lazyRouteComponent(() => import("./screens/VisionLabel.tsx")) });
-const settings = createRoute({ getParentRoute: () => shell, path: "/settings", component: lazyRouteComponent(() => import("./screens/Settings.tsx")) });
+const settings = createRoute({ getParentRoute: () => shell, path: "/settings", beforeLoad: () => { throw redirect({ to: "/profile", hash: "settings", replace: true }); } });
 
-const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([me, player, arena, leaderboard, vision, visionLabel, visionTrack, settings, welcome, membership, inbox, inboxNew, inboxThread])]);
+const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([home, me, profile, player, arena, leaderboard, vision, visionLabel, visionTrack, settings, welcome, membership, inbox, inboxNew, inboxThread])]);
 
 export const router = createRouter({
   routeTree,

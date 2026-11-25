@@ -2,7 +2,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { isHomePath, moduleForPath, spaceClub, visibleTabsAcross } from "../src/lib/nav.ts";
-import { initials, latestThreads, mergeCalendars, nextAcross } from "../src/lib/home.ts";
+import { initials, latestThreads, mergeCalendars, nextAcross, partOfDay } from "../src/lib/home.ts";
 
 // Start times are instants (UTC here); "19:00" is short for that time on the day.
 const day = (date: string, extra: Partial<{ startTime: string | null; paused: boolean; booked: boolean; included: boolean }> = {}) => {
@@ -13,7 +13,7 @@ const hhmm = (iso: string | null) => iso?.slice(11, 16) ?? null;
 
 describe("several clubs: where Home ends and a club's space begins", () => {
   test("Home is Me, the inbox, Settings and the welcome; the tabs of a club's modules are its spaces", () => {
-    for (const p of ["/", "/me", "/welcome", "/inbox", "/inbox/new", "/inbox/12", "/settings"]) assert.equal(isHomePath(p), true, p);
+    for (const p of ["/", "/home", "/me", "/welcome", "/inbox", "/inbox/new", "/inbox/12", "/settings", "/profile"]) assert.equal(isHomePath(p), true, p);
     for (const p of ["/player", "/arena", "/leaderboard", "/vision", "/vision/track", "/membership", "/inboxes"]) assert.equal(isHomePath(p), false, p);
     assert.equal(moduleForPath("/arena"), "arena");
     assert.equal(moduleForPath("/leaderboard"), "arena");
@@ -24,9 +24,9 @@ describe("several clubs: where Home ends and a club's space begins", () => {
 
   test("the tabs across clubs: a tab shows when one club has its module; unknown clubs add nothing", () => {
     const ids = (m: (string[] | null)[]) => visibleTabsAcross(m).map((t) => t.id);
-    assert.deepEqual(ids([["vision"], ["arena"]]), ["me", "player", "arena", "leaderboard", "vision"]);
-    assert.deepEqual(ids([["vision"], null]), ["me", "player", "vision"]);
-    assert.deepEqual(ids([null, null]), ["me", "player"]);
+    assert.deepEqual(ids([["vision"], ["arena"]]), ["home", "player", "arena", "leaderboard", "vision"]);
+    assert.deepEqual(ids([["vision"], null]), ["home", "player", "vision"]);
+    assert.deepEqual(ids([null, null]), ["home", "player"]);
   });
 
   test("a space shows the chosen club when it has the module, else the first that does", () => {
@@ -35,7 +35,8 @@ describe("several clubs: where Home ends and a club's space begins", () => {
     assert.equal(pick("a", "vision"), "a");
     assert.equal(pick("a", "arena"), "b", "the chosen club has the Arena off");
     assert.equal(pick("c", null), "c", "every club has Player");
-    assert.equal(pick("c", "arena"), "b", "a club still loading isn't picked for a module");
+    assert.equal(pick("c", "arena"), null, "the chosen club is still loading: wait, don't open another club");
+    assert.equal(spaceClub([{ slug: "x", m: null }, ...clubs], (c) => c.m, null, "vision"), null, "the first club is still loading: wait");
     assert.equal(pick("gone", null), "a", "a club the person left: the first");
     assert.equal(pick(null, "gallery"), null);
   });
@@ -72,5 +73,11 @@ describe("several clubs: Home brings their Me together", () => {
     assert.equal(initials("The Club of Shuttles"), "S");
     assert.equal(initials("Câu lạc bộ Sài Gòn"), "CL");
     assert.equal(initials("  "), "?");
+  });
+});
+
+describe("Home's greeting", () => {
+  test("morning from 5 until noon, afternoon until 6pm, evening the rest", () => {
+    assert.deepEqual([0, 4, 5, 11, 12, 17, 18, 23].map(partOfDay), ["evening", "evening", "morning", "morning", "afternoon", "afternoon", "evening", "evening"]);
   });
 });

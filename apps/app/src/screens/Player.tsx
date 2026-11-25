@@ -9,6 +9,7 @@ import { Heatmap, RrChart } from "./player/Charts.tsx";
 import { usePlayerStats } from "./player/data.ts";
 import { RankCard, RankLadder } from "./player/RankCard.tsx";
 import { LoadError } from "../components/LoadError.tsx";
+import { Icon } from "../components/Icon.tsx";
 
 const PERIODS = [["month", "pl_this_month"], ["quarter", "pl_this_quarter"], ["year", "pl_this_year"], ["lifetime", "pl_lifetime"]] as const;
 
@@ -52,7 +53,7 @@ export default function PlayerScreen() {
             {PERIODS.map(([k, label]) => (
               <div key={k} className="stat"><dt>{t("pl_play_days")} · {t(label)}</dt><dd className="stat-value">{s.attended[k]}</dd></div>
             ))}
-            <div className="stat stat-feature"><dt>{t("pl_streak")} · {t("pl_best_streak", { n: s.streak.best })}</dt><dd className="stat-value">🔥 {s.streak.current}</dd></div>
+            <div className="stat stat-feature"><dt>{t("pl_streak")} · {t("pl_best_streak", { n: s.streak.best })}</dt><dd className="stat-value stat-icon"><Icon name="flame" size={26} />{s.streak.current}</dd></div>
             <div className="stat"><dt>{t("pl_rr_points")}</dt><dd className="stat-value">{s.rr.points}</dd></div>
             <div className="stat"><dt>{t("pl_win_rate")}</dt><dd className="stat-value">{winRate}</dd></div>
             <div className="stat"><dt>{t("pl_best_finish")}</dt><dd className="stat-value">{s.rr.bestPlacing ? ord(s.rr.bestPlacing) : "—"}</dd></div>
@@ -60,7 +61,7 @@ export default function PlayerScreen() {
           <section className="card stack" aria-labelledby="places-title">
             <div className="card-head">
               <h2 id="places-title">{t("pl_ranks_title")}</h2>
-              {arenaOn && <Link to="/leaderboard" className="button button-quiet button-small">{t("pl_see_leaderboard")} →</Link>}
+              {arenaOn && <Link to="/leaderboard" className="button button-quiet button-small">{t("pl_see_leaderboard")}<Icon name="arrowRight" size={18} /></Link>}
             </div>
             {s.ranks.lifetime.attendance === null && s.attended.lifetime > 0 && <p className="notice">{t("pl_hidden_note")}</p>}
             <div className="table-wrap">
@@ -107,7 +108,7 @@ export default function PlayerScreen() {
                     <li key={d} className="row">
                       <span className="row-text">
                         <time dateTime={d}>{date(d)}</time>
-                        <span className="muted small">{rr ? t("pl_history_rr", { pts: rr.points, w: rr.wins, l: rr.losses, place: t("pl_rr_place", { place: ord(rr.placing), teams: rr.teams }) }) : "🏸"}</span>
+                        <span className="muted small">{rr ? t("pl_history_rr", { pts: rr.points, w: rr.wins, l: rr.losses, place: t("pl_rr_place", { place: ord(rr.placing), teams: rr.teams }) }) : t("pl_history_day")}</span>
                       </span>
                     </li>
                   );

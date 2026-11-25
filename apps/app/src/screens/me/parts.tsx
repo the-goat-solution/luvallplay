@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { useCurrentClub, useLang, useT } from "../../hooks.tsx";
 import { localeOf } from "../../lib/format.ts";
+import { Icon } from "../../components/Icon.tsx";
 
 export function usePlace() {
   const { config } = useCurrentClub();
@@ -44,9 +45,7 @@ export function WebsiteLink({ href, className = "button", children }: { href: st
   return (
     <a className={`${className} link-out`} href={href} target="_blank" rel="noopener noreferrer">
       {children}
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-        <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
-      </svg>
+      <Icon name="external" size={16} />
       <span className="visually-hidden"> ({t("me_on_website")})</span>
     </a>
   );

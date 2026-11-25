@@ -17,6 +17,7 @@ import { latestThreads } from "../lib/home.ts";
 import { localeOf } from "../lib/format.ts";
 import { useReply, useStartThread, useThread, useThreads, type Thread, type ThreadItem } from "./inbox/data.ts";
 import { LoadError } from "../components/LoadError.tsx";
+import { Icon } from "../components/Icon.tsx";
 
 type T = ReturnType<typeof useT>;
 
@@ -204,9 +205,7 @@ function PickClub({ clubs }: { clubs: Club[] }) {
           <li key={c.slug}>
             <Link to="/inbox/new" search={{ club: c.slug }} className="pick-club-link">
               <ClubTag club={c} config={configs[i]} />
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-                <path d="m9 6 6 6-6 6" />
-              </svg>
+              <Icon name="chevronRight" size={20} />
             </Link>
           </li>
         ))}
@@ -281,7 +280,7 @@ export default function InboxScreen() {
         </div>
         <div className="inbox-detail card stack">
           <Link to="/inbox" className="back">
-            <span aria-hidden="true">← </span>
+            <Icon name="chevronLeft" size={20} />
             {t("msg_back")}
           </Link>
           {composing ? (

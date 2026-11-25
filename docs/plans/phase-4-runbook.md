@@ -299,6 +299,10 @@ Safe areas on every edge, `dvh`, 44px touch targets, rem type (text scales to 20
 |---|---|
 | `VITE_API_BASE` | The home API host, for example `https://api.luvallplay.com`. Empty means the app's own origin. |
 | `VITE_API_HOSTS` | More API hosts (other regions), space or comma separated. |
+| `VITE_APP_STORE_URL` | The iOS app's App Store page (`https://apps.apple.com/...`). **Leave unset until the app is live in the App Store.** Set, it turns on "Get the app" for iPhone and iPad browsers. |
+| `VITE_PLAY_STORE_URL` | The Android app's Google Play page (`https://play.google.com/store/apps/details?id=...`). **Leave unset until the app is live on Google Play.** Set, it turns on "Get the app" for Android browsers. |
+
+**"Get the app"** (`apps/app/src/lib/get-app.ts`, `components/GetTheApp.tsx`): a sheet in Luvallplay's look offering the store app. It shows only in a phone or tablet's browser, never in the installed web app, the store app (Capacitor) or on a computer. It appears on every fifth open on that device (`lp.opens`), a moment after the screen loads, and only for the store whose link is set. Each store turns on by itself: set its variable on `luvallplay-app` (Production) and redeploy. A link that isn't that store's https page is ignored.
 
 These, plus `https://api.luvallplay.com`, are the only hosts the built page may talk to: the build writes them into the page's Content-Security-Policy (`connect-src`), and the app only sends a session token to a host on that list. Images may come from any `https:` host (a club's logo on its own site, profile photos in Blob storage); an image can't read the page or carry the token. The API must allow the app's origin in turn (`APP_ORIGINS`, §2).
 

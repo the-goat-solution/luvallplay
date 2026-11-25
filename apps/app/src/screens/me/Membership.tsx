@@ -7,6 +7,7 @@ import { useId } from "react";
 import { useEnterClub } from "../../hooks.tsx";
 import { ScopeTag } from "../../components/ClubTag.tsx";
 import { daysName, planName, usePlace } from "./parts.tsx";
+import { Icon } from "../../components/Icon.tsx";
 
 type Membership = NonNullable<Me["membership"]>;
 
@@ -50,7 +51,7 @@ export function MembershipCard({ m }: { m: Membership }) {
           <dd className="stat-when">{when}</dd>
         </div>
       </dl>
-      {m.next && <p className="muted small">✓ {t("mem_continuation", { plan: planName(t, m.next.plan), date: dayLabel(m.next.periodStart, locale, true) })}</p>}
+      {m.next && <p className="muted small icon-line"><Icon name="check" size={16} />{t("mem_continuation", { plan: planName(t, m.next.plan), date: dayLabel(m.next.periodStart, locale, true) })}</p>}
       <div><Link to="/membership" className="button" onClick={enter}>{t("me_manage")}</Link></div>
     </section>
   );

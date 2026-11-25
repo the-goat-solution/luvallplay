@@ -6,7 +6,7 @@ import { summarizeAdminRequest } from "@/lib/admin-roles";
 import { moduleBlocking } from "@/lib/club-modules";
 import { sql } from "@/lib/database";
 import { recordShadow } from "@/lib/shadow-log";
-import { firstRefusalOf, routeHost, routingMode } from "@/lib/tenant-routing";
+import { clubPathsOn, firstRefusalOf, routeClubPath, routeHost, routingMode } from "@/lib/tenant-routing";
 
 // The proxy (Next.js 16's name for middleware) runs on the Node runtime: the
 // admin check reads the player's session and role from the database, and it
@@ -176,6 +176,17 @@ async function guardHost(request: NextRequest, api: boolean): Promise<NextRespon
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  // app.luvallplay.com/{club}: off unless CLUB_PATHS=on (lib/tenant-routing.ts).
+  if (clubPathsOn()) {
+    const v = await routeClubPath(sql, request.headers.get("host"), path, request.nextUrl.search);
+    if (v.action === "redirect") return NextResponse.redirect(v.url, 308);
+    if (v.action === "refuse") return new NextResponse(v.status === 503 ? "Service unavailable" : "Not found", { status: v.status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    if (v.action === "rewrite") {
+      const url = request.nextUrl.clone();
+      url.pathname = v.path;
+      return NextResponse.rewrite(url);
+    }
+  }
   const refused = await guardHost(request, path.startsWith("/api/"));
   if (refused) return refused;
   // First: is this path's module on for the club? (Never throws; a database

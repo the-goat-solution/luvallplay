@@ -480,6 +480,17 @@ Today the app connects as the database owner and steps down to `luvallplay_app` 
 
 **One thing to know before `enforce`:** a scoped statement is a small transaction of its own (begin, step down, name the club, the statement, commit). Inside the same region that is a few milliseconds; it was slow only from the build session's sandbox. If the switch shows slower pages, the setup can be sent as one message instead of three; not done yet because nothing has shown the need.
 
+### 11.3 Switch-day checklist (not before 1 Dec 2026)
+
+1. `node --import ./tests/register.mjs scripts/shadow-report.mjs` in `apps/web` with the production `POSTGRES_URL`: seven days of `clean` for `settings`, `routing` and `tenant-reads`, no `differ`. If not, stop.
+2. Free Neon branches (limit 10, §12) and take a restore point.
+3. Day 1: `CLUB_SETTINGS_SOURCE=database`, redeploy, watch the error log for an hour.
+4. Day 2: `TENANT_SCOPE=enforce`, redeploy, watch for an hour. (Optionally create the app login first, §11.2.)
+5. After a quiet week: `TENANT_ROUTING=enforce`, then `CLUB_PATHS=on` (below).
+6. Rollback for each: set the variable back (`shadow`, `off`) and redeploy.
+
+**`CLUB_PATHS` (built, off by default).** `apps/web/proxy.ts` and `lib/tenant-routing.ts` (`routeClubPath`): on `app.luvallplay.com`, `/{club}/…` serves that club at `/…` (a rewrite). A club with its own domain gets a 308 to it; another club, an unknown slug or another region's club is refused (404, 404, 421), and 503 if the database can't answer. It needs `app.luvallplay.com` attached to this project (DNS, phase-6 runbook §2) and `TENANT_ROUTING` on. **Known limit:** pages still write links from the root (`/arena`), so after the first click a visitor leaves the `/{club}` prefix; the club-relative links come with the second club's first real use. Three Wolves itself is unaffected: it keeps `threewolvesbadminton.org`.
+
 **Before step 9's tables are relied on for add-ons** (a note from the planning session, decision AK): the Xero accounting sync will be a paid add-on that any club can hold, including one on the free plan. Today `club_plans` allows one current row per club. Add-ons need either a `kind` on `plans` (`base` or `addon`) with the one-current-row rule applied to base plans only, or a separate table. Nothing is built for this yet, and nothing built so far blocks it.
 
 ## 12. Housekeeping that needs you

@@ -22,7 +22,7 @@
 // Until reads are tenant-aware (step 11) a deployment holds one club's
 // data, so a host that resolves to a different club in the same region is
 // refused too.
-import { classifyHost, decideHost, hostKey, normalizeHost, refusalStatus, type HostDecision, type LookupResult, type RoutingOptions } from "@luvallplay/core/host-routing";
+import { canonicalClubUrl, clubFromPath, classifyHost, decideHost, hostKey, normalizeHost, refusalStatus, type HostDecision, type LookupResult, type RoutingOptions } from "@luvallplay/core/host-routing";
 import { defaultTenantSlug } from "./tenant-members.ts";
 
 export type Db = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
@@ -178,4 +178,46 @@ export async function routingSelfCheck(db: Db, options: RoutingOptions = routing
     if (!verdict.serve) differences.push(`${host}: ${verdict.reason} (${verdict.status})`);
   }
   return { checked, differences };
+}
+
+// ── Clubs without a domain: app.luvallplay.com/{club} (build plan §6.4) ─────
+//
+// CLUB_PATHS chooses what happens (default off; anything but "on" is off):
+//   on   on the platform's app host, "/{club}/…" is that club's page. A club
+//        with its own domain is sent there (308); this deployment's club is
+//        served at the rest of the path; any other club or unknown slug is a
+//        404. Every other host and path is left to the host check above.
+//
+// Until reads are tenant-aware (step 11) this deployment can only serve its
+// own club, so a different club is refused rather than answered with the
+// wrong data. Links inside pages are still written from the root, so this is
+// only the front door; club-relative links come with step 11.
+
+export function clubPathsOn(): boolean {
+  return process.env.CLUB_PATHS?.trim().toLowerCase() === "on";
+}
+
+export type ClubPathVerdict =
+  | { action: "none" }
+  | { action: "redirect"; url: string }
+  | { action: "rewrite"; path: string }
+  | { action: "refuse"; status: number };
+
+export async function routeClubPath(db: Db, rawHost: string | null | undefined, pathname: string, search = "", options: RoutingOptions = routingOptions()): Promise<ClubPathVerdict> {
+  const host = normalizeHost(rawHost);
+  if (!host || classifyHost(host, options).kind !== "app") return { action: "none" };
+  const club = clubFromPath(pathname);
+  if (!club) return { action: "none" };
+  let row: Record<string, unknown> | undefined;
+  try {
+    row = (await db.query(`SELECT slug, region, custom_domain FROM tenants WHERE slug = $1 LIMIT 1`, [club.slug])).rows[0];
+  } catch {
+    return { action: "refuse", status: 503 };
+  }
+  if (!row) return { action: "refuse", status: 404 };
+  if (row.region !== options.region) return { action: "refuse", status: 421 };
+  const canonical = canonicalClubUrl({ customDomain: row.custom_domain as string | null }, club.rest, search);
+  if (canonical) return { action: "redirect", url: canonical };
+  if (row.slug !== options.deploymentTenant) return { action: "refuse", status: 404 };
+  return { action: "rewrite", path: club.rest };
 }

@@ -1,6 +1,6 @@
 # Build plan: from Three Wolves to Luvallplay
 
-Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need your answer before that phase starts. Each has my recommendation, so you can just say "go with the recommendation".
+Status: **in build** (updated 25 Nov 2026). Phases 0, 1, 2 and 4 are done, Phase 3 is at step 10, Phase 6 Stage A is live. **The remaining phases now run at the same time as lanes (§9)**, after an audit of everything built ([`luvallplay-audit-2026-11-25.md`](./luvallplay-audit-2026-11-25.md)). Items marked **🟡 Decision** need your answer; each has my recommendation, so you can just say "go with the recommendation".
 
 **Decided (22 Nov):**
 - **A:** one **Luvallplay** store app, with Three Wolves as a club inside it (its own theme and terms).
@@ -49,6 +49,10 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 - **AL: there is one store app, and no separate admin store app** (decided 24 Nov). The players' app stays **Luvallplay**, the rebranded profile app (decision A stands). **Club admin stays web-only** (responsive, opened from the app through the secure handoff link). A "Luvallplay Manage" store app was considered and rejected (§4.6).
 - **AM: club look inside, Luvallplay frame** (decided 24 Nov). After sign-in, the club's logo, colours, fonts and words fill the app and the web admin. The store icon, splash screen, sign-in screens and a small "on Luvallplay" footer stay Luvallplay (§6.3).
 - **AN: the club admin becomes a white-label module host** (decided 25 Nov, strategy in §6.2.4). One admin codebase, adapted to each club by configuration (modules, theme, terms, settings, country pack, roles), never by per-club code. Menus, Today cards, badges and settings panels are generated from the module registry, and a new module's admin plugs in through a defined contract.
+**Proposed (25 Nov, with the audit; 🟡 needs your answer):**
+- **🟡 AO: the website's player pages freeze after the app cutover**, new player features go in the app only, and `/profile` is retired after two quiet weeks (§9.5).
+- **🟡 AP: the remaining phases run at the same time as nine lanes**, hardening first, with the coordination rules in §9.4.
+
 - **First outside feedback:** the current order stays (outside clubs join after the setup wizard). Recruiting and interviews, which need no engineering, still start now.
 
 **Testing:** every phase passes the gates in [`luvallplay-test-plan.md`](./luvallplay-test-plan.md) before production. The data guard that proves no one lost access or data is already built (`scripts/data-guard/`).
@@ -59,22 +63,23 @@ Status: **draft for review** (22 Nov 2026). Items marked **🟡 Decision** need 
 
 ## 0. Executive summary
 
-The work runs in **8 phases (0–7) over roughly 23–29 weeks** of focused build time. Each phase ships something usable, so Three Wolves keeps running in production the whole way.
+The work runs in **8 phases (0–7)** plus tracks; the original estimate was 23–29 weeks of focused build time, re-baselined in §9 on 25 Nov. Each phase ships something usable, so Three Wolves keeps running in production the whole way.
 
-| # | Phase | What you get | Est. |
-|---|---|---|---|
-| 0 | **Safety net** | Previews on their own database branches (today they share production), CI required on `main`, restore drill, data guard in CI ([test plan](./luvallplay-test-plan.md)) | 1 wk |
-| 1 | **Tidy the Three Wolves app** | Leaderboard inside Arena; Account and Membership merged into one **Me** page; admin access by player account (Timba and Kelcee), with a button from their profile; dead code removed | 2–3 wks |
-| 2 | **New foundations** | Monorepo, Next.js 16, Neon + Drizzle with real migrations, module system skeleton, design tokens | 2–3 wks |
-| 3 | **Multi-tenant core** | `tenants`, global user accounts, club roles, `tenant_id` + row-level security on every table, club settings replacing hard-coded constants. Three Wolves becomes club #1 | 4–5 wks |
-| 4 | **Player app as an API-driven app** | The profile app rebuilt as a client-side app (same screens and code where possible) talking to a typed API with token auth. Runs on the web (PWA) and inside Capacitor | 3–4 wks |
-| 5 | **Capacitor + store readiness** | iOS and Android apps tuned for phones, foldables and tablets, with push, deep links, secure sign-in, a privacy manifest, store listings, TestFlight and Play testing | 3–4 wks |
-| 6 | **Luvallplay brand, websites and setup wizard** | Platform site (luvallplay.com), club landing pages driven by templates, custom domains, a modular setup wizard, and Admin → Modules | 3–4 wks |
-| 3b | **Junior accounts** | Guardian-managed junior profiles, safeguarding rules and forms (§6.8) | 2–3 wks |
-| 7 | **Global modules** | Find a club nearby, then per-sport leaderboards. Social and marketplace only when the gate passes (§8, §11.6). Each module is opt-in per club | 3–5 wks each |
-| A | **White-label admin host (track)** | The club admin generated from the module registry, in the club's look, words and currency; a module admin contract with a scaffold; capabilities; a starter admin for every new club (§6.2.4). Steps A1 to A3 before Phase 6 stage B | 4–6 wks |
-| B | **Business foundations (track)** | NZ company, legal pack, company-owned accounts, trademark, IP audit, cost model and metering: the hard gates in §11.3. Runs from week 0 beside Phase 2 | weeks 0–8 |
-| V | **Vietnam launch pack (track)** | Discovery now; then VietQR and local payments, Zalo, Vietnamese localisation, region (§11.4). Social and marketplace stay gated | 8–12 wks build |
+| # | Phase | What you get | Est. | Status (25 Nov) |
+|---|---|---|---|---|
+| 0 | **Safety net** | Previews on their own database branches (today they share production), CI required on `main`, restore drill, data guard in CI ([test plan](./luvallplay-test-plan.md)) | 1 wk | ✅ Done (CI not yet *required*: needs a GitHub organisation) |
+| 1 | **Tidy the Three Wolves app** | Leaderboard inside Arena; Account and Membership merged into one **Me** page; admin access by player account (Timba and Kelcee), with a button from their profile; dead code removed | 2–3 wks | ✅ Done |
+| 2 | **New foundations** | Monorepo, Next.js 16, Neon + Drizzle with real migrations, module system skeleton, design tokens | 2–3 wks | ✅ Done |
+| 3 | **Multi-tenant core** | `tenants`, global user accounts, club roles, `tenant_id` + row-level security on every table, club settings replacing hard-coded constants. Three Wolves becomes club #1 | 4–5 wks | 🔶 Steps 1–10 done; 11–12 in lane T (§9) |
+| 4 | **Player app as an API-driven app** | The profile app rebuilt as a client-side app (same screens and code where possible) talking to a typed API with token auth. Runs on the web (PWA) and inside Capacitor | 3–4 wks | ✅ Done, live at app.luvallplay.com; cutover in lane N |
+| 5 | **Capacitor + store readiness** | iOS and Android apps tuned for phones, foldables and tablets, with push, deep links, secure sign-in, a privacy manifest, store listings, TestFlight and Play testing | 3–4 wks | ⬜ Lane N |
+| 6 | **Luvallplay brand, websites and setup wizard** | Platform site (luvallplay.com), club landing pages driven by templates, custom domains, a modular setup wizard, and Admin → Modules | 3–4 wks | 🔶 Stage A live; Stage B in lane W |
+| 3b | **Junior accounts** | Guardian-managed junior profiles, safeguarding rules and forms (§6.8) | 2–3 wks | 🔶 Step 1 merged; lane J |
+| 7 | **Global modules** | Find a club nearby, then per-sport leaderboards. Social and marketplace only when the gate passes (§8, §11.6). Each module is opt-in per club | 3–5 wks each | ⬜ Lane G |
+| A | **White-label admin host (track)** | The club admin generated from the module registry, in the club's look, words and currency; a module admin contract with a scaffold; capabilities; a starter admin for every new club (§6.2.4). Steps A1 to A3 before Phase 6 stage B | 4–6 wks | ⬜ Lane A |
+| B | **Business foundations (track)** | NZ company, legal pack, company-owned accounts, trademark, IP audit, cost model and metering: the hard gates in §11.3. Runs from week 0 beside Phase 2 | weeks 0–8 | Owner track; gate 2 items now urgent (§9.2) |
+| H | **Hardening (lane)** | The audit's fixes: web journeys in CI, sign-in and payment races, club-blind queries, error reporting, rate limits (§9.2, audit) | 2 wks | ⬜ Starts first |
+| V | **Vietnam launch pack (track)** | Discovery now; then VietQR and local payments, Zalo, Vietnamese localisation, region (§11.4). Social and marketplace stay gated | 8–12 wks build | Discovery; portable pieces in lane V |
 
 **My biggest recommendations (detail in each section):**
 
@@ -704,7 +709,7 @@ Not club modules at all: **Setup check** (environment diagnostics) and **Platfor
 
 **Delivery: Track A, six small steps.** Each is a pull request that changes no club's data.
 - **A1 One menu source:** generate the menu, Today widgets and badges from the registry, delete the duplicate list, keep the permission test.
-- **A2 Remove the hard-coding:** replace every club-specific literal with club config (the 19 known spots in 9 files, listed in the runbook), then switch on the CI scan.
+- **A2 Remove the hard-coding:** replace every club-specific literal with club config, then switch on the CI scan. *Audit 25 Nov (C4): wider than the 19 spots in 9 files first counted. Admin has about 18 lines in 9 files plus `en-NZ`, "$0" and weekday values; emails, receipts, Stripe descriptions and exports have 93 lines in 37 files; and the schema fixes Three Wolves' plan ids (`pricing_plans` CHECK) and `memberships.day DEFAULT 'friday'`, which needs a rehearsed migration. The scan covers `lib/` and `app/api/` too.*
 - **A3 Theming:** the shell reads the club's theme, logo and terms; mobile card layouts.
 - **A4 Admin kit:** `PageHeader`, `DataTable`, `Badge`, `Toolbar`, `EmptyState`, form fields, `Stat`, `Tabs` and an auto-rendered settings panel. Pages migrate as they're touched.
 - **A5 Admin i18n:** namespaces per module, the ratchet, and Vietnamese for the pages a Vietnamese club needs first (Play days, People, Messages, Memberships, Payments to check).
@@ -1276,7 +1281,77 @@ Build them in this order, each one releasable on its own. **Decision Z: social a
 
 ---
 
-## 9. Sequencing and timeline
+## 9. Sequencing: the remaining phases, built at the same time
+
+*Re-baselined 25 Nov 2026, after Phase 4 finished and Phase 3 reached step 10. The evidence is in [`luvallplay-audit-2026-11-25.md`](./luvallplay-audit-2026-11-25.md). It replaces the one-after-another timeline of 22 Nov (kept in §9.6 for the record).*
+
+### 9.1 Where things stand
+
+| Done | In progress, waiting on a date or an OK | Not started |
+|---|---|---|
+| Phase 0, 1, 2; Phase 3 steps 1–10; Phase 3b step 1; **Phase 4 (players' app live at app.luvallplay.com)**; Phase 6 Stage A (luvallplay.com live) | Phase 3 settings switch and **step 11**: **the shadow evidence is failing (audit C0), so the 7-day clock restarts once it's fixed**; step 12 a week after step 11; migration `0012` production run to confirm, `0013` waiting for an OK; the Phase 4 cutover; Stage A's DNS, Sanity organisation and forms database | Phase 3b steps 2–8, Phase 5, Phase 6 Stage B, Track A, Phase 7, Track I, Track V build; the hardening work from the audit |
+
+Two things changed the picture: the players' app finished early, and the audit found that **step 11 and the first outside club need a hardening pass first**: the step 11 shadow evidence is failing and covers too little, several platform-table queries and scripts ignore the club, crons run for one club, most journeys aren't in CI, and club-specific values sit in emails, exports and the schema. That work can run beside everything else, so it becomes a lane of its own.
+
+### 9.2 The lanes
+
+Every remaining phase starts now as a **lane**: one build thread, one set of directories it owns, and a "now" scope that needs nothing from another lane. The part of each lane that does depend on another lane is listed as its **gated** scope, with the exact gate.
+
+| Lane | Phases | Owns (directories) | Now (from 26 Nov) | Gated, and by what |
+|---|---|---|---|---|
+| **H Hardening and CI** | Audit fixes | `.github/workflows`, `apps/web/tests/e2e`, `apps/web/tests/schema-drift*`, `lib/security.ts`, `instrumentation.ts`, `lib/player-auth.ts`, `lib/webhooks.ts`, `lib/match-stats-db.ts`, `lib/photos-service.ts`, `lib/wolf-vision-share.ts` | Week 1: web journeys in CI and S2 for every module (C2); the sign-in attempts race (C5); booking replay (H3); match-stats ownership (H4); Sentry on web and app (H6); a shared rate limiter. Week 2: webhook SSRF, photo host pinning, stats-email relay, fail-closed defaults, constant-time compares, the Drizzle check repaired or removed, the low items | Nothing. **First**, because every other lane's gate is a CI result |
+| **T Tenancy switch** | Phase 3 steps 11–12, club paths | `packages/db` (schema, `tenancy.ts`), `lib/database*.ts`, `lib/repos/**`, `lib/tenant-*.ts`, `lib/tenant-routing.ts`, `proxy.ts`, `app/api/cron/**`, `packages/core/src/host-routing.ts` | **Week 1, the step 11 evidence (C0, C0b):** decide `0012` and `0013` with the owner (or add `--to` to the migrator); the heartbeat skips missing tables and gets the raw pool under `enforce`; `shadow-report` needs every check clean each day; shadow `orm()` and `connect()`; then **restart the 7-day clock**. Also: the advisory lock (`pg_advisory_xact_lock`); one `set_config` per scoped statement and a load test. **Week 2, second-club blockers:** club-blind player lists (C1), merge, round-robin names, welcome list, scripts and the mirror (C6); fail closed on `TENANT_SCOPE`, `TENANT_SLUG`, `CLUB_SETTINGS_SOURCE` (H1, C7); crons loop over the region's clubs and check switches, webhook retries get their own job (H2); rebase `clever-lovelace` (club paths, off); free Neon branches; the app's own login with the owner | **Step 11** after 7 clean days *by the tightened report* and T1 run against a copy of production with two clubs (earliest about a week after the week-1 fixes merge, so early December). **Step 12** a quiet week later, with a fresh restore point. Then drop the `COALESCE(…, 1)` defaults. **No second club's rows in the shared database before `enforce` and `APP_DATABASE_URL` are live and quiet** |
+| **A White-label admin** | Track A (§6.2.4) | `apps/web/app/admin/**`, `components/admin/**`, `nav-config.ts`, `lib/email*.ts`, `lib/*-email*.ts`, `lib/admin-notify.ts`, `lib/message-notify.ts`, `app/api/admin/*/export`, `lib/admin-roles.ts` (audit summary), `lib/admin-access.ts`, `packages/auth`, the manifest *shape* in `packages/modules/src/define.ts` | A1 menu from the registry; A2 widened to emails, receipts and exports (C4, 93 lines in 37 files) and the literal scan over `lib/` and `app/api/`; A3 club theme; **per-action audit rows with outcome and an allow-list of fields (H7)**; **per-action step-up (H8)**. Then A4–A6 | The schema part of A2 (drop the `pricing_plans` CHECK and `memberships.day DEFAULT 'friday'`) goes through the migration queue (§9.4). **A1–A3 must land before W creates a club** |
+| **J Juniors** | Phase 3b steps 2–8 | `packages/modules` entries `juniors` and `forms-waivers`, `lib/juniors/**` (new), `app/api/v1/app/**/family*` (new), `apps/app/src/screens/family/**` (new), `app/admin/juniors/**` (new, built on A's contract) | Confirm `0012` on production; step 2 (modules and the switch-on guard); step 3 (the guardian's Family section, in the **app only**, see §9.5); step 5 (booking and paying for a child) | Step 4 (encrypted medical notes) after **H7 and H8**; step 6 (club roster, coach checks) after **A1**; real children only after the safeguarding review and gate 1 |
+| **N Native app** | Phase 4 close-out, Phase 5 | `apps/native` (new: Capacitor `ios/`, `android/`), `apps/app/src/lib/native/**` (new), `apps/app/src/lib/{storage,store,offline,queue,install}.ts`, `apps/app/sw/**`, `apps/web/public/.well-known/*`, the `vision` payment adapter in `packages/vision` | Phase 4 bugs from the audit (token out of query keys H9, build id and error screen H10, queue and 401 fixes, timeouts, focus on route change); a parity checklist and the **cutover** of Three Wolves members to the app; then the Capacitor shell, async secure storage, one public app URL and universal/app links, `@capacitor/browser`, service worker and Install card off in native, file export through Share, push (FCM), Sign in with Apple | **TestFlight and Play testing** need the organisation developer accounts (gate 2, D-U-N-S); **Vision passes** in the store apps need StoreKit and Play Billing through RevenueCat (decision C, and the audit found Play needs it too); store release after the device matrix |
+| **W Club sites, wizard and payments** | Phase 6 Stage B | `packages/site-templates` (new), `apps/web/app/(club-site)/**` and `app/start/**` (new), the website editor's tables and module, `lib/payments/**`, `lib/stripe.ts`, `app/api/create-*`, `lib/app-membership.ts`, `lib/membership-self-service.ts`, `apps/site` follow-ups | **W1:** every card flow behind the payments interface and one membership path (H5, ends the drift in `app-membership.ts`); Stripe Connect in test mode; the per-club website content model replacing the one Sanity dataset (decision D); site templates rendered for Three Wolves; Look & feel and brand import on `packages/ui`; Stage A's open items | **W2:** the wizard creating clubs, Admin → Modules, Look & feel and Payments pages, custom domains: after **step 11** and **A1–A3**. A real outside club after the **four hard gates** (§11.3) |
+| **G Global modules** | Phase 7 items 1–2 | `packages/core/src/rating/**` (new), `lib/directory/**` and `lib/ratings/**` (new), `apps/app/src/screens/discover/**` (new) | Glicko-2 as pure code with tests, fed by confirmed Arena games; per-sport scoring rules (the Arena is badminton-only today); the Find a club data model and API behind a module switch; the app's Discover tab hidden | Listing real clubs needs more than one club (after **W2**); PostGIS through the migration queue. **Social and marketplace stay gated by §8; nothing is built for them** |
+| **I Integrations** | Track I (§12) | `packages/integrations` (new), `lib/integrations/**` (new) | The connector framework (OAuth tokens, sync queue, error queue, reconciliation report); Xero against a sandbox organisation; the NZ direct-debit authority flow in Stripe test mode; the Windcave spike | Connectors live for clubs after **W1's payments interface** and **paid plans switched on** (gate 4, Track B) |
+| **V Vietnam** | Track V build | `packages/core/src/vietqr*` (new), the VN country pack data, the S3-compatible provider in `lib/storage.ts`, message channels in `lib/messages/**` | VietQR codes and matching; the VN country pack (VND, +84, names, accent-free search); the S3 storage provider (contract test exists); message channels (email, push, SMS, later Zalo) | MoMo and Zalo after their rules are confirmed in writing; the Hanoi stack after discovery and counsel; launch after the V gate in the test plan |
+
+**Not engineering, and still the longest wait:** Track B (the four hard gates) and Vietnam discovery. Three items decide when the engineering can be used, so start them this week: **a GitHub organisation on a paid plan** (CI can't be required today, C3), **Vercel Pro and a paid Neon plan in company accounts** (Hobby isn't for commercial use; Neon's free plan keeps 6 hours of history and is at 10 of 10 branches), and **the D-U-N-S number and organisation developer accounts** (lane N's store testing waits on them).
+
+### 9.3 Order of the gates
+
+```
+Now ──┬─ H  CI journeys, sign-in race, booking replay, Sentry ──────────┐
+      ├─ T  fix shadow evidence ─▶ clock restarts · club-blind queries, crons, fail closed ┤
+      │                                         7 clean days + T1 on a copy ┴─▶ STEP 11 ──(a week)──▶ STEP 12
+      ├─ A  A1 menu · A2 literals (incl. emails, schema) · A3 theme · H7/H8 ──▶ A1–A3 done ─┐
+      ├─ W  W1 payments interface, Connect test, content model, templates ─────────────────┼─▶ W2 wizard creates clubs ─▶ gates §11.3 ─▶ first outside club
+      │                                                               STEP 11 ─────────────┘
+      ├─ J  steps 2, 3, 5 ─────────── H7/H8 ─▶ step 4 · A1 ─▶ step 6 · step 7
+      ├─ N  Phase 4 fixes ─▶ cutover ─▶ Capacitor shell ── org accounts ─▶ TestFlight / Play ─▶ store launch
+      ├─ G  ratings, Find a club API (hidden) ─────────────────────── W2 ─▶ real listings
+      ├─ I  framework, Xero sandbox, direct debit test ── W1 + paid plans ─▶ live connectors
+      └─ V  VietQR, country pack, S3, channels ── discovery + counsel ─▶ MoMo, Zalo, Hanoi
+```
+
+Rough lengths at the pace Phase 4 ran (best case, not counting waits on people): H 2 weeks; T 2 weeks of code, then the dates; A 4–6 weeks (A1–A3 in the first 2–3); J 2–3 weeks; N 1 week to cutover, then 3–4 weeks to store-ready; W 2 weeks for W1, 2–3 for W2; G 2–3 weeks; I 5–7 weeks for framework and Xero; V 3–4 weeks for the portable pieces. **With all lanes running, the engineering for the first outside NZ club (T, A1–A3, W2, H) fits in about 4–5 weeks, so the four hard gates in §11.3 become the critical path**, not the code.
+
+### 9.4 Rules for building at the same time
+
+The lanes only work if they don't trip over each other. These rules are part of the plan:
+
+1. **Stay in your directories.** A change outside a lane's own directories is a small separate pull request, named in the title (`[lane T] …`), and the owning lane's thread is told. When two lanes need the same file, the owner makes the change.
+2. **Shared files have one owner each:**
+   - `packages/db/migrations` and `meta/_journal.json`: **the migration queue.** Any lane may write a migration, but it takes its number when it merges (rebase and renumber), it is additive, and it is rehearsed. **Production data steps run one at a time**, booked in the Phase 3 runbook's calendar, by the lane that wrote them, with the owner's OK as today. Lane T keeps the restore-point branches within the Neon budget.
+   - `packages/api/src/contract.ts`, `schemas.ts` and the generated files: **lane H splits the contract into one file per module in week 1**; after that each lane adds endpoints in its module's file, additions only, and regenerates. The compat check guards old apps.
+   - `packages/modules/src/registry.ts` and `routes.ts`: each lane adds or edits only its own modules' entries; **lane A owns the manifest's shape** (`define.ts`).
+   - `packages/i18n`: one namespace per area; new namespaces for new areas; never edit another lane's namespace.
+   - `proxy.ts` and `lib/database.ts`: lane T. `lib/stripe.ts` and `lib/payments`: lane W.
+   - `apps/site/content/availability.ts`: every pull request that ships something people can use updates its own line (rule from §7.5).
+   - This plan: each lane writes only its own delivery log; the §9.1 table is kept by the coordinating thread.
+3. **Small pull requests, rebased on `main` every day.** One merge per step, CI green, the same owner-OK rules as Phases 3 and 4 (routes, sign-in, production settings and data steps ask first).
+4. **A coordinating thread** (the planning thread) keeps the lane board, books the data-step calendar, and passes notes between lanes. Lanes don't message each other's threads to change scope.
+5. **Review bandwidth is the real limit.** Nine threads can produce more pull requests than one person can review. If that happens, run H, T, A, N and W first (they hold the critical path) and start J, G, I and V a week later. Either way, H starts first.
+
+### 9.5 Two decisions this plan proposes
+
+- **🟡 Decision AO: freeze the website's player pages once the app cutover is done.** Today the website's `/profile` and the app are two UIs for the same features, and `lib/app-membership.ts` has already drifted from the website's routes. Proposal: after the cutover (lane N), new player-facing features (the juniors' Family section, Find a club, ratings) are built **in the app only**, the website's `/profile` gets fixes only, and it's retired (redirecting to the app) after two quiet weeks. *Recommendation: yes.* Until you answer, lane J builds Family in the app only.
+- **🟡 Decision AP: run the lanes at once, as above, with H first.** *Recommendation: yes, with the bandwidth fallback in §9.4 rule 5.*
+
+### 9.6 The 22 Nov timeline (superseded, for the record)
 
 ```
 Wk  0–8   Track B  Business foundations: NZ company, legal pack, accounts, trademark, IP audit, cost model (§11.3)
@@ -1296,9 +1371,10 @@ Wk 14–26  Track I  Integrations for NZ: framework + Xero sync, NZ direct debit
 Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat and booking, Vietnamese legal pack (§11.4)
 ```
 
-**Treat the week numbers as a best case.** They don't include waiting on lawyers, the NZ company, app-store review or Vietnamese counsel. Phase 2 has already found surprises, so **re-baseline the whole schedule after Phase 2 and again after Phase 3** using real progress. Phases overlap where they don't depend on each other. Start the Apple and Google organization accounts and the D-U-N-S number **in week 1**, because approval can take 1–3 weeks.
+The week numbers didn't include waiting on lawyers, the NZ company, app-store review or Vietnamese counsel, and that still holds: the waits on people are now the longest items.
 
-**Main risks and how they're handled:**
+### 9.7 Main risks
+
 
 | Risk | Mitigation |
 |---|---|
@@ -1325,7 +1401,12 @@ Wk 20–32  Track V  Vietnam launch pack: Hanoi region, VietQR, MoMo, Zalo chat 
 | **Direct debit scheme duties** (mandates, notifications, disputes) | Mandate flow and notification emails built to the scheme rules, tested with Stripe's NZ test mode (§12.6) |
 | **Shopify's distribution choice can't be changed** | Custom apps for partner clubs first; a public app is a separate, later decision (§12.5) |
 | **The admin is still Three Wolves-specific** (menu list, 19 hard-coded spots, English only, no club theme), so the first outside club would see another club's words, days and currency | Track A (§6.2.4): A1 to A3 before Phase 6 stage B, a CI scan for club-specific literals, the club-theme and Demo-club tests |
-| **Schedule is optimistic** | Re-baseline after Phase 2 and Phase 3 |
+| **Parallel lanes collide** (migrations, the API contract, the module registry, i18n) | One owner per shared file, the migration queue, the contract split per module, daily rebases, a coordinating thread (§9.4) |
+| **Step 11 passes on weak evidence** (the shadow check is failing today and doesn't compare Drizzle reads or transactions) | Lane T fixes the evidence first and restarts the clock; T1 with two clubs on a copy of production is the real gate (audit C0, C0b) |
+| **A second club leaks through platform tables** (accounts, merges, round-robin names, scripts) | Club conditions and club-aware scripts in lane T; no second club's rows before `enforce` is live and quiet (audit C1, C6, C7) |
+| **Two player UIs drift** (website `/profile` and the app) | Cutover in lane N, then decision AO freezes and retires `/profile` (§9.5) |
+| **Review bandwidth** with nine threads | Run H, T, A, N, W first and the rest a week later if pull requests queue up (§9.4 rule 5) |
+| **Schedule is optimistic** | Re-baselined on 25 Nov (§9); the waits on people (gates, store accounts, counsel) are now the critical path |
 
 ---
 

@@ -1,0 +1,27 @@
+{
+  "name": "native",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Luvallplay store apps: a Capacitor shell around the players' app (apps/app), bundled, not a remote website.",
+  "scripts": {
+    "web": "node scripts/build-web.mjs",
+    "sync": "cap sync",
+    "sync:android": "cap sync android",
+    "android:debug": "cd android && ./gradlew assembleDebug",
+    "android:bundle": "cd android && ./gradlew bundleRelease",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.3",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/core": "^8.6.3",
+    "capacitor-secure-storage-plugin": "^0.14.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.3",
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3"
+  }
+}

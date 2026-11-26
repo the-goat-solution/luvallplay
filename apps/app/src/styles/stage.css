@@ -276,7 +276,10 @@ body:has([data-stage]) { background: color-mix(in oklab, var(--primary) 24%, bla
 .crown .sticker { font-size: var(--text-md); }
 
 /* Just happened: faces, stickers, the rank-ups lit, the hot streak. */
-.feed-row { display: flex; align-items: flex-start; gap: 0.75rem; }
+.feed-row { display: flex; align-items: flex-start; gap: 0.75rem; min-width: 0; }
+.feed-row .row-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* With large text a sticker wraps rather than pushing the row wider than the screen. */
+.sticker { max-width: 100%; overflow-wrap: anywhere; }
 .feed-rankup { border-radius: var(--radius-md); background: radial-gradient(80% 120% at 0% 50%, var(--stage-glow), transparent 70%); }
 .feed-rank-art { flex: none; color: var(--surface); }
 .feed-sticker { margin-left: 0.5rem; font-size: var(--text-xs); }

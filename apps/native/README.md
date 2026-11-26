@@ -60,4 +60,14 @@ Inside the app, a link leads only to a screen of the app (`apps/app/src/lib/nati
 - The phone is asked for permission only when the person turns notifications on in Settings, never at first launch.
 - A notification can open a screen of the app (`data.path`, a path only) and nothing else.
 
-For the owner, when the time comes: Firebase console → the Luvallplay project → Project settings → Your apps → Add app → Android → package name `com.luvallplay.app` → download `google-services.json`. It goes into the build through the repository's Actions secrets, and the server's sending key goes into the hosting environment settings; neither is ever pasted into a chat.
+Where the file comes from in a build: the `GOOGLE_SERVICES_JSON` setting (`pnpm --filter native google-services` writes the file from it, and stops if it is another app's file). CI does this on `main` only, from the repository secret of that name; pull requests and local debug builds have no file and no push. `pnpm --filter native release:check` fails when the file is missing.
+
+### For the owner: the Firebase file (a GitHub secret)
+
+1. Firebase console → the **Luvallplay** project → ⚙️ **Project settings → General → Your apps** → the Android app `com.luvallplay.app` → **google-services.json** (download).
+2. GitHub → the `luvallplay` repository → **Settings → Secrets and variables → Actions → New repository secret**:
+   - Name: `GOOGLE_SERVICES_JSON`
+   - Secret: open the downloaded file in a text editor, select everything, paste it.
+3. Save. From the next build on `main`, the Android build has push notifications. Nothing needs to be sent to anyone, and the file is never pasted into a chat or committed.
+
+The server's own keys (`PUSH_KEKS`, `FCM_SERVICE_ACCOUNT`) go into the hosting environment settings: `docs/SETUP-push.md`.

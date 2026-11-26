@@ -43,7 +43,9 @@ export function MemberCancelButton({
       // The session can lapse while this page sits open. Send them to the
       // login page rather than showing an "Unauthorized" they can't act on.
       if (res.status === 401) {
-        window.location.assign(new URL(`/login?stepup=1&next=${encodeURIComponent(window.location.pathname)}`, window.location.origin));
+        // "step_up": cancelling needs a code entered in the last five minutes (H8).
+        const kind = ((await res.json().catch(() => null)) as { scope?: string } | null)?.scope === "action" ? "action" : "1";
+        window.location.assign(new URL(`/login?stepup=${kind}&next=${encodeURIComponent(window.location.pathname)}`, window.location.origin));
         return;
       }
       const data = await res.json();

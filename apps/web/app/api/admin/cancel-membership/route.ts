@@ -51,4 +51,4 @@ export const POST = auditedRoute("membership.cancel", async function POST(reques
     const message = e instanceof Error ? e.message : "Invalid request";
     return NextResponse.json({ error: message }, { status: 400 });
   }
-});
+}, { stepUp: true });

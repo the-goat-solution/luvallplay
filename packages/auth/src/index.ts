@@ -13,6 +13,13 @@ export function isClubRole(value: unknown): value is ClubRole {
 /** Admin pages need a sign-in (a code) within this long. Player sessions last 90 days. */
 export const STEP_UP_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
+/**
+ * Sensitive actions (switching modules, changing or removing admins, refunds
+ * and cancellations, exports, platform grants) need a code entered within
+ * this long, however recent the admin sign-in is (audit H8, 25 Nov 2026).
+ */
+export const ACTION_STEP_UP_MAX_AGE_MS = 5 * 60 * 1000;
+
 export type Access = {
   role: ClubRole | null;
   platformAdmin: boolean;
@@ -67,8 +74,17 @@ export function adminApiAllowed(a: Access): boolean {
   return isClubAdmin(a);
 }
 
-export function isStepUpFresh(signedInAt: Date | string | null | undefined, now: number = Date.now()): boolean {
+function signedInWithin(maxAgeMs: number, signedInAt: Date | string | null | undefined, now: number): boolean {
   if (!signedInAt) return false;
   const t = new Date(signedInAt).getTime();
-  return Number.isFinite(t) && now - t <= STEP_UP_MAX_AGE_MS && t <= now + 60_000;
+  return Number.isFinite(t) && now - t <= maxAgeMs && t <= now + 60_000;
+}
+
+export function isStepUpFresh(signedInAt: Date | string | null | undefined, now: number = Date.now()): boolean {
+  return signedInWithin(STEP_UP_MAX_AGE_MS, signedInAt, now);
+}
+
+/** Was a code entered recently enough for a sensitive action (ACTION_STEP_UP_MAX_AGE_MS)? */
+export function isActionStepUpFresh(signedInAt: Date | string | null | undefined, now: number = Date.now()): boolean {
+  return signedInWithin(ACTION_STEP_UP_MAX_AGE_MS, signedInAt, now);
 }

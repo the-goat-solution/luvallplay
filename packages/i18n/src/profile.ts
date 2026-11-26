@@ -463,6 +463,7 @@ const en = {
   lb_how: "{pointsName}: 1 WP per play day you signed up for (counted the day after), 2 per round robin or challenge win, plus challenge bonuses. {alphaName} and {silverName} titles go to the top four on {pointsName} over the last 90 days. Your tier comes from all-time {pointsName}.",
   // Phase 1: Me page, Settings, admin by account.
   login_stepup: "Club admin needs a fresh sign-in (it's been more than 12 hours). We'll send a new code to your email.",
+  login_stepup_action: "To keep the club safe, this action needs a new code. We'll email you one, then press the button again.",
   acc_delete_last_owner: "You're the club's only owner. Make someone else an owner in Admin → People → Admins before deleting your account.",
   tab_me: "Me",
   me_title: "Me",
@@ -936,6 +937,7 @@ const vi: Messages<ProfileKey> = {
   lb_how: "{pointsName}: 1 WP mỗi buổi chơi bạn đã đăng ký (tính vào hôm sau), 2 WP mỗi trận thắng vòng tròn hoặc thách đấu, cộng thưởng thách đấu. Danh hiệu {alphaName} và {silverName} dành cho bốn người dẫn đầu {pointsName} trong 90 ngày qua. Hạng của bạn tính từ tổng {pointsName}.",
   // Phase 1: Me page, Settings, admin by account.
   login_stepup: "Khu quản trị cần đăng nhập lại (đã hơn 12 giờ). Chúng tôi sẽ gửi mã mới đến email của bạn.",
+  login_stepup_action: "Để bảo vệ câu lạc bộ, thao tác này cần một mã mới. Chúng tôi sẽ gửi mã qua email, sau đó bạn bấm lại nút.",
   acc_delete_last_owner: "Bạn là chủ duy nhất của câu lạc bộ. Hãy chỉ định người khác làm chủ trong Admin → People → Admins trước khi xoá tài khoản.",
   tab_me: "Tôi",
   me_title: "Tôi",

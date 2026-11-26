@@ -30,7 +30,10 @@ export default async function LoginPage({
   // Step-up (admin): already signed in, but admin needs a sign-in within the
   // last 12 hours. Show the form with their email filled in instead of
   // bouncing straight back.
-  const stepUp = params.stepup === "1";
+  // stepup=action: a sensitive admin action needs a code entered in the last
+  // five minutes (lib/admin-step-up.ts); same form, its own wording.
+  const stepUpAction = params.stepup === "action";
+  const stepUp = params.stepup === "1" || stepUpAction;
   const current = dbReady ? await getCurrentPlayer() : null;
   if (current && !stepUp) redirect(next);
 
@@ -53,7 +56,7 @@ export default async function LoginPage({
           recaptchaSiteKey={siteKey}
           next={next}
           defaultEmail={params.email ?? (stepUp ? current?.email : "") ?? ""}
-          notice={stepUp ? "stepup" : params.expired ? "expired" : params.signed_out ? "signed_out" : null}
+          notice={stepUpAction ? "stepup_action" : stepUp ? "stepup" : params.expired ? "expired" : params.signed_out ? "signed_out" : null}
         />
       </div>
       <div className={styles.authFoot}>

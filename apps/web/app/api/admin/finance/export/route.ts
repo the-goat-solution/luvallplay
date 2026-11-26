@@ -270,7 +270,7 @@ export const GET = auditedRoute("export.finance", async function GET(request: Re
       "Cache-Control": "no-store",
     },
   });
-});
+}, { stepUp: true });
 
 function styleHeader(row: ExcelJS.Row, columns: number) {
   row.font = { bold: true, color: { argb: "FFFFFFFF" } };

@@ -22,6 +22,12 @@ export function ExportButton({ href, children }: { href: string; children: React
     setBusy(true);
     try {
       const res = await fetch(href, { credentials: "same-origin" });
+      if (res.status === 401) {
+        // An export needs a code entered in the last five minutes: off to the code screen and back here.
+        const kind = ((await res.json().catch(() => null)) as { scope?: string } | null)?.scope === "action" ? "action" : "1";
+        window.location.assign(new URL(`/login?stepup=${kind}&next=${encodeURIComponent(window.location.pathname + window.location.search)}`, window.location.origin));
+        return;
+      }
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? `Export failed (${res.status})`);

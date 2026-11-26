@@ -21,7 +21,7 @@ import { takeSnapshot } from "../scripts/data-guard/pg.ts";
 import * as C from "../lib/constants.ts";
 import { BANK_ACCOUNT_NAME, BANK_ACCOUNT_NUMBER } from "../lib/jersey.ts";
 import { setRoleForPlayer, removeRole } from "../lib/admin-roles.ts";
-import { clubMemberDrift, defaultTenantSlug, mirrorClubMember, reconcileClubMembers } from "../lib/tenant-members.ts";
+import { clubMemberDrift, defaultTenantSlug, joinClub, mirrorClubMember, reconcileClubMembers } from "../lib/tenant-members.ts";
 
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
@@ -156,6 +156,8 @@ describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? 
   });
 
   test("every account is a club member, with its role from club_roles", async () => {
+    // This suite stops at 0003; the app's code names the roles table's club column (0004) and key (0010).
+    await c.query(readFileSync(new URL("./fixtures/roles-current-keys.sql", import.meta.url), "utf8"));
     const { rows } = await c.query(`SELECT user_id, role, status, leaderboard_visible, global_profile_visible, joined_at FROM club_members ORDER BY user_id`);
     assert.deepEqual(
       rows.map((r) => [r.user_id, r.role, r.status, r.leaderboard_visible, r.global_profile_visible]),
@@ -176,8 +178,6 @@ describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? 
   test("role changes are mirrored; the mirror keeps guests and disabled members as they are", async () => {
     const role = async (id: number) => (await one(`SELECT role FROM club_members WHERE user_id = $1`, [id]))?.role;
 
-    // This suite stops at 0003; the app's code names the roles key as it is after 0004 and 0010.
-    await c.query(readFileSync(new URL("./fixtures/roles-current-keys.sql", import.meta.url), "utf8"));
     // As the admin pages do: change the role in club_roles, then mirror it.
     await setRoleForPlayer(c, script, 4, "admin");
     assert.deepEqual((await clubMemberDrift(c)).map((d) => d.problem), ["role member should be admin"]);
@@ -192,11 +192,30 @@ describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? 
     assert.equal(await role(4), "member");
     assert.deepEqual(await clubMemberDrift(c), []);
 
-    // A new account becomes a member; the leaderboard flag follows the account.
+    // An account is global: existing doesn't make it a member of this club (audit C1),
+    // and the mirror never adds it. Joining does; the leaderboard flag follows the account.
     await c.query(`INSERT INTO players (id, email, first_name) VALUES (6, 'new@x.test', 'New')`);
-    assert.deepEqual((await clubMemberDrift(c)).map((d) => d.problem), ["missing"]);
+    assert.deepEqual(await clubMemberDrift(c), [], "not in the club is not drift");
     await mirrorClubMember(c, 6);
+    await mirrorClubMember(c, null);
+    assert.equal(await reconcileClubMembers(c), 0);
+    assert.equal(await role(6), undefined, "the mirror doesn't enrol an account");
+    await joinClub(c, 6);
     assert.equal(await role(6), "member");
+    await joinClub(c, 6);
+    assert.equal((await one(`SELECT count(*)::int AS n FROM club_members WHERE user_id = 6`)).n, 1, "joining twice is one row");
+
+    // A role given in this club brings the person in; a role in another club doesn't.
+    await c.query(`INSERT INTO players (id, email, first_name) VALUES (8, 'other-club@x.test', 'Other'), (9, 'this-club@x.test', 'This')`);
+    await c.query(`INSERT INTO tenants (slug, name, country, region, timezone, currency) SELECT 'second', 'Second', country, region, timezone, currency FROM tenants WHERE id = 1`);
+    await c.query(`INSERT INTO club_roles (tenant_id, player_id, role) SELECT id, 8, 'admin' FROM tenants WHERE slug = 'second'`);
+    await c.query(`INSERT INTO club_roles (tenant_id, player_id, role) VALUES (1, 9, 'coach')`);
+    assert.deepEqual((await clubMemberDrift(c)).map((d) => [d.userId, d.problem]), [[9, "missing"]]);
+    assert.equal(await reconcileClubMembers(c), 1);
+    assert.deepEqual([await role(8), await role(9)], [undefined, "coach"]);
+    await c.query(`DELETE FROM club_roles WHERE player_id IN (8, 9)`);
+    await mirrorClubMember(c, 9);
+    await c.query(`DELETE FROM tenants WHERE slug = 'second'`);
     await c.query(`UPDATE players SET leaderboard_visible = FALSE WHERE id = 6`);
     assert.deepEqual((await clubMemberDrift(c)).map((d) => d.problem), ["leaderboard flag differs"]);
     await mirrorClubMember(c, 6);
@@ -247,7 +266,7 @@ describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? 
     assert.deepEqual(rows.filter((r) => r.confdeltype !== "r"), [], "every new foreign key is ON DELETE RESTRICT");
     // An account whose only row elsewhere is its club membership.
     await c.query(`INSERT INTO players (id, email) VALUES (7, 'only-member@x.test')`);
-    await mirrorClubMember(c, 7);
+    await joinClub(c, 7);
     await assert.rejects(c.query(`DELETE FROM players WHERE id = 7`), /club_members_user_id_fkey/);
     // Postgres 18 words this "violates RESTRICT setting of foreign key constraint".
     await assert.rejects(c.query(`DELETE FROM tenants`), /foreign key constraint/);

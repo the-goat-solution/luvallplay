@@ -2,6 +2,7 @@ import { clubClock } from "./club";
 import { CLUB_TIME_ZONE } from "./constants";
 import crypto from "crypto";
 import { sql, db } from "./database";
+import { defaultTenantSlug } from "./tenant-members";
 import { revalidateTag } from "next/cache";
 import { getPlayerSetting, setPlayerSetting } from "./player-db";
 import { runStatsBackfill, syncRosterAttendance } from "./stats-db";
@@ -346,7 +347,11 @@ export async function loadWorld(opts: { skipSync?: boolean } = {}): Promise<Worl
     // which vacuum can change.
     sql.query(
       `SELECT p.id, p.email, p.first_name, ${DISPLAY_NAME_SQL} AS name, p.leaderboard_visible, p.avatar_url
-       FROM players p WHERE p.deleted_at IS NULL ORDER BY p.id;`,
+       FROM players p WHERE p.deleted_at IS NULL
+         -- Accounts are global; the Arena's world is the people in this club (audit C1).
+         AND EXISTS (SELECT 1 FROM club_members cm JOIN tenants t ON t.id = cm.tenant_id WHERE cm.user_id = p.id AND t.slug = $1)
+       ORDER BY p.id;`,
+      [defaultTenantSlug()],
     ),
     sql.query(
       `SELECT p.id, a.session_date::text AS d FROM attendance a JOIN players p ON p.email = a.email

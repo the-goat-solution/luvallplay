@@ -12,6 +12,7 @@
 //
 // Only allow-listed fields are kept (AUDIT_FIELD_ALLOW_LIST in admin-roles.ts):
 // ids and choices, never free text.
+import { isActionStepUpFresh } from "@luvallplay/auth";
 import { audit, adminContextFromCookies, readCookie, type AdminContext } from "./admin-access";
 import { auditFields, auditTarget } from "./admin-roles";
 
@@ -34,6 +35,24 @@ export async function recordAdminAction(ctx: AdminContext | null, r: ActionRecor
     target: r.target || null,
     meta: { ...(r.meta ?? {}), outcome: r.outcome, ...(r.reason ? { reason: r.reason.slice(0, 200) } : {}) },
   });
+}
+
+export const STEP_UP_REASON = "asked for a fresh sign-in code";
+
+/** Where the code screen is, coming back to `next` (an admin page) afterwards. */
+export function actionStepUpUrl(next: string): string {
+  return `/login?stepup=action&next=${encodeURIComponent(next)}`;
+}
+
+/** The admin page an export link was clicked on (same origin only), to return to after the code. */
+function backTo(request: Request): string {
+  try {
+    const referer = new URL(request.headers.get("referer") ?? "");
+    if (referer.origin === new URL(request.url).origin && referer.pathname.startsWith("/admin")) return referer.pathname + referer.search;
+  } catch {
+    // No or unreadable referer.
+  }
+  return "/admin";
 }
 
 function outcomeOf(status: number): AuditOutcome {
@@ -64,30 +83,49 @@ async function requestEntries(request: Request): Promise<[string, string][]> {
  * nothing.
  *
  *   export const POST = auditedRoute("membership.cancel", async (request) => { … });
+ *
+ * With `stepUp: true` the route is a sensitive action (audit H8): it also
+ * needs a sign-in code entered in the last five minutes. Without one the
+ * handler doesn't run and a "not done" row is written; a page navigation
+ * (an export link) goes to the code screen and back to the page it came
+ * from, anything else gets 401 { error: "step_up", scope: "action" } (the
+ * admin buttons already send a 401 to the code screen).
  */
 export function auditedRoute<Args extends unknown[]>(
   action: string,
   handler: (request: Request, ...args: Args) => Promise<Response>,
-  /** For tests: who is asking, and where the row goes. */
-  deps: { context: (request: Request) => Promise<AdminContext | null>; record: typeof recordAdminAction } = {
-    context: (request) => adminContextFromCookies((n) => readCookie(request, n)),
-    record: recordAdminAction,
-  },
+  options: {
+    /** A sensitive action: needs a code entered in the last five minutes. */
+    stepUp?: boolean;
+    /** For tests: who is asking, where the row goes, and the time. */
+    deps?: { context: (request: Request) => Promise<AdminContext | null>; record: typeof recordAdminAction; now?: () => number };
+  } = {},
 ): (request: Request, ...args: Args) => Promise<Response> {
+  const deps = options.deps ?? {
+    context: (request: Request) => adminContextFromCookies((n) => readCookie(request, n)),
+    record: recordAdminAction,
+  };
   return async (request, ...args) => {
     // Read before the handler consumes the body.
     const entries = await requestEntries(request);
-    const write = async (outcome: AuditOutcome, status: number | null) => {
-      const ctx = await deps.context(request).catch(() => null);
+    const ctx = await deps.context(request).catch(() => null);
+    const write = async (outcome: AuditOutcome, status: number | null, reason?: string) => {
       if (!ctx) return;
       const fields = auditFields(entries);
       await deps.record(ctx, {
         action,
         target: auditTarget(entries) || new URL(request.url).pathname,
         outcome,
+        ...(reason ? { reason } : {}),
         meta: { ...(status === null ? {} : { status }), ...(Object.keys(fields).length ? { fields } : {}) },
       });
     };
+    if (options.stepUp && ctx && !isActionStepUpFresh(ctx.signedInAt, deps.now?.() ?? Date.now())) {
+      const navigation = request.method === "GET" && (request.headers.get("accept") ?? "").includes("text/html");
+      await write("refused", navigation ? 303 : 401, STEP_UP_REASON);
+      if (navigation) return Response.redirect(new URL(actionStepUpUrl(backTo(request)), request.url), 303);
+      return Response.json({ error: "step_up", scope: "action" }, { status: 401 });
+    }
     let response: Response;
     try {
       response = await handler(request, ...args);

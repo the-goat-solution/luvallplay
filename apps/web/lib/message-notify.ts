@@ -1,4 +1,5 @@
 import { sendAdminAlertEmail, sendPlayerNoticeEmail } from "./player-email";
+import { clubShortName } from "./club-brand";
 
 // Email nudges for new messages. Best effort: a failed email never loses the
 // message itself, which is already saved.
@@ -33,7 +34,7 @@ export async function notifyPlayerOfReply(input: {
   try {
     await sendPlayerNoticeEmail({
       to: input.to,
-      subject: vi ? `Three Wolves đã trả lời: ${input.subject}` : `Three Wolves replied: ${input.subject}`,
+      subject: vi ? `${clubShortName()} đã trả lời: ${input.subject}` : `${clubShortName()} replied: ${input.subject}`,
       heading: vi ? "Bạn có tin nhắn mới" : "You have a new message",
       lines: [input.body.slice(0, 1500)],
       cta: { label: vi ? "Mở tin nhắn" : "Open the conversation", path: `/profile?thread=${input.threadId}` },

@@ -5,7 +5,8 @@ import { canManageAdmins } from "@luvallplay/auth";
 import { Badge, Notice, PageHeader, Section, kit } from "@/components/admin/kit";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
-import { currentAdmin, db, requireAdminActor } from "@/lib/admin-access";
+import { currentAdmin, db } from "@/lib/admin-access";
+import { requireFreshAdminActor } from "@/lib/admin-step-up";
 import { recordAdminAction, type AuditOutcome } from "@/lib/admin-audit";
 import { listClubModules, setClubModule, setModuleLock, type ModuleRow } from "@/lib/club-modules";
 
@@ -44,9 +45,10 @@ function back(kind: "toast" | "toastError", message: string): never {
 
 async function switchModule(formData: FormData) {
   "use server";
-  const { ctx } = await requireAdminActor(PATH);
-  if (!canManageAdmins(ctx.access)) back("toastError", "Only owners can switch modules.");
   const moduleId = String(formData.get("moduleId") ?? "");
+  // A sensitive action: needs a code entered in the last five minutes (H8).
+  const { ctx } = await requireFreshAdminActor(PATH, "module.switch", `module:${moduleId}`);
+  if (!canManageAdmins(ctx.access)) back("toastError", "Only owners can switch modules.");
   const on = formData.get("on") === "1";
   const name = MODULES.find((m) => m.id === moduleId)?.name.en ?? moduleId;
   // The switch's own audit row, with what happened (the proxy's row only says someone tried).
@@ -78,9 +80,9 @@ async function switchModule(formData: FormData) {
 // Luvallplay staff only: lock a module on or off for the club, or unlock it.
 async function lockModule(formData: FormData) {
   "use server";
-  const { ctx } = await requireAdminActor(PATH);
-  if (!ctx.access.platformAdmin) back("toastError", "Only Luvallplay staff can lock a module.");
   const moduleId = String(formData.get("moduleId") ?? "");
+  const { ctx } = await requireFreshAdminActor(PATH, "module.lock", `module:${moduleId}`);
+  if (!ctx.access.platformAdmin) back("toastError", "Only Luvallplay staff can lock a module.");
   const raw = String(formData.get("lock") ?? "");
   const lock = raw === "on" || raw === "off" ? raw : null;
   const name = MODULES.find((m) => m.id === moduleId)?.name.en ?? moduleId;

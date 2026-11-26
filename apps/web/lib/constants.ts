@@ -15,6 +15,13 @@ export const CLUB_NAME = "Three Wolves Badminton Club";
 export const CLUB_SHORT_NAME = "Three Wolves";
 export const CLUB_SLUG = "three-wolves";
 export const CLUB_LOCALE = "en-NZ";
+// Where the club is, as its emails' footers say it, and the inbox people can write to.
+export const CLUB_PLACE = "Christchurch, NZ";
+export const CLUB_CONTACT_EMAIL = "threewolvesbadminton@gmail.com";
+// The club's logo files under /uploads, as emails link to them (the admin
+// shell and letterheads take the logo from the club's theme in step A3).
+export const CLUB_EMAIL_LOGO_PATH = "/uploads/Three%20wolves%20logo.png";
+export const CLUB_EMAIL_LOGO_DARK_PATH = "/uploads/three-wolves-logo-white-mini.png";
 
 // The club's own names for points and for the match tracker: the built-in
 // values of the `terms` setting (lib/club-terms.ts).

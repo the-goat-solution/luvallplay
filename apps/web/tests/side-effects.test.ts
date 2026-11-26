@@ -110,7 +110,7 @@ test("wiring: every outbound client is created behind the gate", () => {
   const resend = scan((src) => /new Resend\(/.test(src));
   assert.deepEqual(resend.sort(), ["lib/email.ts", "lib/notify.ts"]);
   const stripe = scan((src) => /new Stripe\(/.test(src));
-  assert.deepEqual(stripe, ["lib/stripe.ts"]);
+  assert.deepEqual(stripe, ["lib/payments/stripe-client.ts"]);
   for (const file of [...resend, ...stripe, "lib/sms.ts", "lib/bank-akahu.ts"]) {
     const src = readFileSync(path.join(ROOT, file), "utf8");
     assert.match(src, /side-effects/, `${file} imports the side-effect gate`);

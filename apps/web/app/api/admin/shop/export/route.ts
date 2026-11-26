@@ -83,4 +83,4 @@ export const GET = auditedRoute("export.shop", async function GET(request: Reque
       "Cache-Control": "no-store",
     },
   });
-});
+}, { stepUp: true });

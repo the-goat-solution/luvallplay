@@ -12,6 +12,7 @@ import {
 } from "./email-layout";
 import type { Lang } from "./i18n";
 import { renderWelcomeEmail } from "./welcome-email-template";
+import { clubContactEmail, clubShortName } from "./club-brand";
 
 // Emails for player accounts. Same branded layout as every other club email
 // (lib/email-layout.ts).
@@ -28,22 +29,22 @@ export function adminAlertRecipients(): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
   if (list.length > 0) return list;
-  return [process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com"];
+  return [process.env.CLUB_ROSTER_EMAIL || `${clubContactEmail()}`];
 }
 
 const CODE_TEXT = {
   en: {
-    subject: "{code} is your Three Wolves sign-in code",
+    subject: `{code} is your ${clubShortName()} sign-in code`,
     heading: "Your sign-in code",
-    intro: "Enter this code to sign in to your Three Wolves account:",
+    intro: `Enter this code to sign in to your ${clubShortName()} account:`,
     or: "Or sign in on this device with one tap:",
     button: "Sign in",
     expiry: "The code and button work once and expire in 10 minutes. If you didn't ask to sign in, you can ignore this email.",
   },
   vi: {
-    subject: "{code} là mã đăng nhập Three Wolves của bạn",
+    subject: `{code} là mã đăng nhập ${clubShortName()} của bạn`,
     heading: "Mã đăng nhập của bạn",
-    intro: "Nhập mã này để đăng nhập tài khoản Three Wolves:",
+    intro: `Nhập mã này để đăng nhập tài khoản ${clubShortName()}:`,
     or: "Hoặc đăng nhập trên thiết bị này chỉ với một chạm:",
     button: "Đăng nhập",
     expiry: "Mã và nút chỉ dùng được một lần và hết hạn sau 10 phút. Nếu bạn không yêu cầu đăng nhập, hãy bỏ qua email này.",

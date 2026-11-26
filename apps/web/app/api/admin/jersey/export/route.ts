@@ -150,4 +150,4 @@ export const GET = auditedRoute("export.jersey", async function GET(request: Req
       "Cache-Control": "no-store",
     },
   });
-});
+}, { stepUp: true });

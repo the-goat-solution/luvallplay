@@ -5,6 +5,7 @@ import { Badge, ConfirmButton, DataTable, EmptyState, Notice, PageHeader, Sectio
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { currentAdmin, db, requireAdminActor } from "@/lib/admin-access";
+import { requireFreshAdminActor } from "@/lib/admin-step-up";
 import {
   CLUB_ROLES,
   RoleError,
@@ -28,7 +29,9 @@ import { formatNz } from "@/components/admin/ui";
 // Admin → People → Admins (build plan §2.4). Owners and platform admins add
 // admins by email, change roles and remove them. Guardrails live in
 // lib/admin-roles.ts (last owner, audit); the middleware already required a
-// sign-in within 12 hours, and every action re-checks that here.
+// sign-in within 12 hours, and every action re-checks that here. Adding,
+// changing or removing an admin also needs a code entered in the last five
+// minutes (lib/admin-step-up.ts).
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +66,8 @@ function actorName(ctx: Awaited<ReturnType<typeof requireAdminActor>>["ctx"]): s
 
 async function addAdmin(formData: FormData) {
   "use server";
-  const { ctx, actor } = await requireAdminActor(PATH);
+  // Changing who is an admin needs a code entered in the last five minutes (H8).
+  const { ctx, actor } = await requireFreshAdminActor(PATH, "admin.granted");
   const email = String(formData.get("email") ?? "");
   const role = String(formData.get("role") ?? "");
   let message: string;
@@ -94,8 +98,8 @@ async function addAdmin(formData: FormData) {
 
 async function changeRole(formData: FormData) {
   "use server";
-  const { ctx, actor } = await requireAdminActor(PATH);
   const playerId = Number(formData.get("playerId"));
+  const { ctx, actor } = await requireFreshAdminActor(PATH, "admin.role_changed", `player:${playerId}`);
   const role = String(formData.get("role") ?? "");
   let message: string;
   try {
@@ -115,8 +119,8 @@ async function changeRole(formData: FormData) {
 
 async function removeAdmin(formData: FormData) {
   "use server";
-  const { ctx, actor } = await requireAdminActor(PATH);
   const playerId = Number(formData.get("playerId"));
+  const { ctx, actor } = await requireFreshAdminActor(PATH, "admin.removed", `player:${playerId}`);
   let message: string;
   try {
     const before = (await listAdmins(db)).admins.find((a) => a.playerId === playerId);

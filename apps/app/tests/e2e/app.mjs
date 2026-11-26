@@ -290,6 +290,35 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     await context.close();
   });
 
+  test("APP2b · Send a new code: after a pause, said when sent, and the new code signs in", async () => {
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
+    // Its two code requests come from an address of their own, so they don't
+    // use up the ten per address per 15 minutes the other journeys share.
+    await context.route(`${api}/auth/email/start`, (route) =>
+      route.request().method() === "OPTIONS" ? route.fallback() : route.continue({ headers: { ...route.request().headers(), "x-forwarded-for": "203.0.113.9" } }),
+    );
+    const page = await context.newPage();
+    await page.clock.install();
+    await page.goto(`${APP}/signin`);
+    await fetch(`${env.base}/api/dev/outbox`, { method: "DELETE" });
+    await page.getByLabel("Email").fill(PEOPLE.coach.email);
+    await page.getByRole("button", { name: "Send my code" }).click();
+    await page.waitForSelector("text=Check your email");
+    const first = await outboxCode(PEOPLE.coach.email);
+    // Not straight away: the email may just be slow.
+    assert.equal(await page.getByRole("button", { name: /Send a new code \(\d+s\)/ }).isDisabled(), true);
+    await page.clock.fastForward(31_000);
+    await fetch(`${env.base}/api/dev/outbox`, { method: "DELETE" });
+    await page.getByRole("button", { name: "Send a new code", exact: true }).click();
+    await page.getByRole("status").filter({ hasText: `A new code is on its way to ${PEOPLE.coach.email}` }).waitFor();
+    const second = await outboxCode(PEOPLE.coach.email);
+    assert.notEqual(second, first);
+    await page.getByLabel("6-digit code").fill(second);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.waitForURL(`${APP}/home`);
+    await context.close();
+  });
+
   test("APP3 · a club's invite link applies the club's look before sign-in, then opens that club", async () => {
     const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
     const page = await context.newPage();
@@ -1149,7 +1178,13 @@ describe("APP · settings: the account", () => {
       assert.match(key, /^tw_/);
       const row = (await db.query(`SELECT scopes FROM api_tokens WHERE player_id = $1 AND name = 'Habit tracker' AND revoked_at IS NULL`, [peteId])).rows[0];
       assert.deepEqual(row.scopes.sort(), ["read:attendance", "read:calendar", "read:stats"]);
+      // Two taps: the question first (Cancel keeps it), then Disconnect.
       await page.getByRole("button", { name: "Disconnect: Habit tracker" }).click();
+      const asking = page.getByRole("group", { name: "Disconnect: Habit tracker" });
+      await asking.getByRole("button", { name: "Cancel" }).click();
+      await page.getByRole("button", { name: "Disconnect: Habit tracker" }).click();
+      await asking.getByRole("button", { name: "Disconnect" }).click();
+      await asking.waitFor({ state: "detached" });
       await page.getByRole("button", { name: "Disconnect: Habit tracker" }).waitFor({ state: "detached" });
       assert.equal((await db.query(`SELECT 1 FROM api_tokens WHERE player_id = $1 AND revoked_at IS NULL`, [peteId])).rowCount, 0);
 
@@ -1160,7 +1195,13 @@ describe("APP · settings: the account", () => {
       await page.getByPlaceholder("https://").fill("https://hooks.example.com/tw");
       await page.getByRole("button", { name: "Add webhook" }).click();
       await page.getByRole("status").filter({ hasText: "Signing secret" }).waitFor();
+      // Two taps: the question first (Cancel keeps it), then Disconnect.
       await page.getByRole("button", { name: "Disconnect: https://hooks.example.com/tw" }).click();
+      const askingHook = page.getByRole("group", { name: "Disconnect: https://hooks.example.com/tw" });
+      await askingHook.getByRole("button", { name: "Cancel" }).click();
+      await page.getByRole("button", { name: "Disconnect: https://hooks.example.com/tw" }).click();
+      await askingHook.getByRole("button", { name: "Disconnect" }).click();
+      await askingHook.waitFor({ state: "detached" });
       await page.getByRole("button", { name: "Disconnect: https://hooks.example.com/tw" }).waitFor({ state: "detached" });
       assert.equal((await db.query(`SELECT 1 FROM webhook_endpoints WHERE player_id = $1`, [peteId])).rowCount, 0);
     } finally {
@@ -1991,6 +2032,8 @@ describe("APP · every screen's states (build plan §7: loading, empty, error, o
       ["/vision", `${club}/vision`, '[data-screen="nav_vision"][data-state="ready"]'],
       ["/membership", `${club}/membership`, '[data-screen="membership"][data-state="ready"]'],
       ["/inbox", `${club}/messages`, ".thread-link, .inbox-empty, [data-screen='inbox']"],
+      // A conversation (here one that isn't there, once it can be asked for).
+      ["/inbox/999999", `${club}/messages/*`, "text=That conversation isn't here."],
       ["/settings", `${api}/account/profile`, "#details-title, [data-screen='nav_settings'] form"],
       // Cards on Me: the shop and My photos.
       ["/me", `${club}/shop`, ME_READY],

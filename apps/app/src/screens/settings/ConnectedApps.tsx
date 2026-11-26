@@ -6,6 +6,7 @@ import { API_SCOPES } from "@luvallplay/api/schemas";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { useCurrentClub, useLang, useT } from "../../hooks.tsx";
 import { localeOf } from "../../lib/format.ts";
+import type { T } from "../../lib/messages.ts";
 import { useConnectedApps } from "./data.ts";
 
 type Scope = (typeof API_SCOPES)[number];
@@ -30,6 +31,30 @@ function Copy({ text, t }: { text: string; t: ReturnType<typeof useT> }) {
     >
       {done ? t("ca_copied") : t("ca_copy")}
     </button>
+  );
+}
+
+/**
+ * Revoking can't be undone (an app using the key stops working at once), so
+ * it takes two taps: "Revoke", then the question with "Revoke" and "Cancel".
+ */
+function ConfirmRemove({ label, question, busy, onConfirm, t }: { label: string; question: string; busy: boolean; onConfirm: () => void; t: T }) {
+  const [asking, setAsking] = useState(false);
+  if (!asking) {
+    return (
+      <button type="button" className="button button-quiet" disabled={busy} onClick={() => setAsking(true)} aria-label={label}>
+        {t("ca_revoke")}
+      </button>
+    );
+  }
+  return (
+    <span className="confirm-remove" role="group" aria-label={label}>
+      <span className="small" role="status">{question}</span>
+      <span className="actions">
+        <button type="button" className="button button-small button-danger" disabled={busy} autoFocus onClick={onConfirm}>{t("ca_revoke")}</button>
+        <button type="button" className="button button-small" onClick={() => setAsking(false)}>{t("cancel")}</button>
+      </span>
+    </span>
   );
 }
 
@@ -94,9 +119,7 @@ export function ConnectedApps() {
                       {k.lastUsedAt ? t("ca_last_used", { date: new Date(k.lastUsedAt).toLocaleDateString(localeOf(lang, config?.club.country ?? "")) }) : t("ca_never_used")}
                     </span>
                   </span>
-                  <button type="button" className="button button-quiet" disabled={revokeToken.isPending} onClick={() => revokeToken.mutate(k.id)} aria-label={`${t("ca_revoke")}: ${k.name}`}>
-                    {t("ca_revoke")}
-                  </button>
+                  <ConfirmRemove label={`${t("ca_revoke")}: ${k.name}`} question={t("ca_revoke_confirm")} busy={revokeToken.isPending} onConfirm={() => revokeToken.mutate(k.id)} t={t} />
                 </li>
               ))}
             </ul>
@@ -142,9 +165,7 @@ export function ConnectedApps() {
                     <strong className="break">{w.url}</strong>
                     <span className="muted small">{w.lastStatus ?? "—"}</span>
                   </span>
-                  <button type="button" className="button button-quiet" disabled={deleteWebhook.isPending} onClick={() => deleteWebhook.mutate(w.id)} aria-label={`${t("ca_revoke")}: ${w.url}`}>
-                    {t("ca_revoke")}
-                  </button>
+                  <ConfirmRemove label={`${t("ca_revoke")}: ${w.url}`} question={t("ca_webhook_confirm")} busy={deleteWebhook.isPending} onConfirm={() => deleteWebhook.mutate(w.id)} t={t} />
                 </li>
               ))}
             </ul>

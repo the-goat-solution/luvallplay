@@ -14,7 +14,7 @@ import { apiForClub } from "../app.ts";
 import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, useT, type Club, type ClubConfig, useWho } from "../hooks.tsx";
 import { ClubTag, ScopeTag } from "../components/ClubTag.tsx";
 import { latestThreads } from "../lib/home.ts";
-import { localeOf } from "../lib/format.ts";
+import { deviceCountry, localeOf } from "../lib/format.ts";
 import { useReply, useStartThread, useThread, useThreads, type Thread, type ThreadItem } from "./inbox/data.ts";
 import { LoadError } from "../components/LoadError.tsx";
 import { Icon } from "../components/Icon.tsx";
@@ -30,7 +30,7 @@ function when(iso: string, locale: string): string {
 
 function useLocale(): string {
   const { config } = useCurrentClub();
-  return localeOf(useLang(), config?.club.country ?? "NZ");
+  return localeOf(useLang(), config?.club.country ?? deviceCountry());
 }
 
 function sendError(t: T, err: unknown): string {
@@ -65,7 +65,7 @@ function ThreadLink({ th, club, config, open, t, locale }: { th: ThreadItem; clu
 /** Several clubs: every club's conversations, newest first. */
 function AllThreads({ clubs, open }: { clubs: Club[]; open: Open }) {
   const t = useT(null);
-  const locale = localeOf(useLang(), "NZ");
+  const locale = localeOf(useLang(), deviceCountry());
   const who = useWho();
   const configs = useClubConfigs(clubs);
   const lists = useQueries({
@@ -162,7 +162,7 @@ function ThreadView({ id }: { id: number }) {
 
   if (!thread.data) {
     if ((thread.error as { status?: number } | null)?.status === 404) return <p role="alert">{t("msg_not_found")}</p>;
-    return thread.isError ? <p role="alert">{t("me_retry_load")}</p> : <p className="muted" role="status">{t("loading")}</p>;
+    return thread.isError ? <LoadError compact onRetry={() => void thread.refetch()} /> : <p className="muted" role="status">{t("loading")}</p>;
   }
   const submit = (e: FormEvent) => {
     e.preventDefault();

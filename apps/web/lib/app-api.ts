@@ -19,7 +19,7 @@ import { sql } from "./database";
 import { PLAYER_COOKIE, PLAYER_SESSION_DAYS, sessionForToken, sha256 } from "./player-auth";
 import type { Player } from "./player-db";
 import { slideSession } from "./repos/sessions";
-import { checkRateLimit, getClientIp } from "./security";
+import { checkRateLimit, getClientIp, rateLimit } from "./security";
 import { defaultTenantSlug } from "./tenant-members";
 import { deploymentRegion } from "./tenant-routing";
 
@@ -198,7 +198,10 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
 
       const { limit, windowMs } = endpoint.rateLimit;
       const key = options.rateKey ? options.rateKey(ip, session) : `app:${id}:${session ? `p${session.player.id}` : ip}`;
-      if (!checkRateLimit(key, limit, windowMs)) return error(request, fail(429, "rate_limited"));
+      // Sign-in (the public endpoints) is counted in the shared store, so its
+      // limits hold across server instances; the rest count per instance.
+      const within = endpoint.auth === "public" && endpoint.method !== "GET" ? await rateLimit(key, limit, windowMs) : checkRateLimit(key, limit, windowMs);
+      if (!within) return error(request, fail(429, "rate_limited"));
 
       const bad = fail(400, options.badRequestCode ?? "bad_request");
       let params: unknown;

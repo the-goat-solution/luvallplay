@@ -86,8 +86,10 @@ export const PLATFORM_TABLES = [
   "player_sessions",
   "player_settings", // platform switches (SMS on/off, alert timestamps)
   "players", // the global identity
+  "rate_limits", // shared rate-limit counters (hashed keys)
   "schema_runs", // unused since Phase 2; dropped in a later release
   "sms_sends", // sign-in texts
+  "stripe_events", // Stripe events already handled
   "tenants",
   // Unused copies from before previews had their own database (Phase 0).
   "pv_arena_after_game",

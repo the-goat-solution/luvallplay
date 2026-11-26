@@ -1362,6 +1362,17 @@ CREATE TABLE pv_wv_updates (
   CONSTRAINT pv_wv_updates_pkey PRIMARY KEY (id)
 );
 
+CREATE TABLE rate_limits (
+  key_hash text NOT NULL,
+  count integer NOT NULL,
+  reset_at timestamp with time zone NOT NULL,
+  CONSTRAINT rate_limits_count_not_null NOT NULL count,
+  CONSTRAINT rate_limits_key_hash_not_null NOT NULL key_hash,
+  CONSTRAINT rate_limits_reset_at_not_null NOT NULL reset_at,
+  CONSTRAINT rate_limits_pkey PRIMARY KEY (key_hash)
+);
+CREATE INDEX rate_limits_reset_at_idx ON public.rate_limits USING btree (reset_at);
+
 CREATE TABLE rr_results (
   draw_id integer NOT NULL,
   mg_name text NOT NULL,
@@ -1621,6 +1632,17 @@ CREATE TABLE sms_sends (
   CONSTRAINT sms_sends_pkey PRIMARY KEY (id)
 );
 CREATE INDEX sms_sends_sent_at_idx ON public.sms_sends USING btree (sent_at);
+
+CREATE TABLE stripe_events (
+  event_id text NOT NULL,
+  type text NOT NULL,
+  processed_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT stripe_events_event_id_not_null NOT NULL event_id,
+  CONSTRAINT stripe_events_processed_at_not_null NOT NULL processed_at,
+  CONSTRAINT stripe_events_type_not_null NOT NULL type,
+  CONSTRAINT stripe_events_pkey PRIMARY KEY (event_id)
+);
+CREATE INDEX stripe_events_processed_at_idx ON public.stripe_events USING btree (processed_at);
 
 CREATE TABLE stripe_payouts (
   id text NOT NULL,

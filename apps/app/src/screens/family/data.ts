@@ -4,10 +4,14 @@
 // Asked for only when the club's modules list Juniors. The server decides
 // again on every request (it fails closed), so a stale list can't show a
 // child's data: the answer is then 404 and the section says it is off.
+// A child's data is never kept on the device: "family" is not among the
+// saved screens (lib/offline.ts).
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub } from "../../app.ts";
 import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { ownerOf } from "../../lib/offline.ts";
 
 export type Family = ResponseOf<"family.list">;
 export type Child = Family["children"][number];
@@ -19,23 +23,33 @@ export function useFamilyOn(): boolean {
   return !!config && config.modules.includes("juniors");
 }
 
-function useClubApi() {
+/**
+ * Whose data a query holds: a fingerprint of the session, never the token
+ * itself (audit H9). The same value as `useWho()` in hooks.tsx once that is
+ * on main; then this is replaced by it.
+ */
+function useWho(): string | null {
   const { token } = usePrefs();
+  return useMemo(() => (token ? ownerOf(token) : null), [token]);
+}
+
+function useClubApi() {
+  const who = useWho();
   const { current, slug } = useCurrentClub();
   const on = useFamilyOn();
-  return { token, slug: slug as string, ready: !!token && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
+  return { who, slug: slug as string, ready: !!who && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
 }
 
 export function useFamily() {
-  const { token, slug, ready, api } = useClubApi();
-  return useQuery({ queryKey: ["family", slug, token], queryFn: ({ signal }) => api.family.list({ club: slug }, { signal }), enabled: ready, retry: false });
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["family", slug, who], queryFn: ({ signal }) => api.family.list({ club: slug }, { signal }), enabled: ready, retry: false });
 }
 
 function useSetChild() {
-  const { token, slug } = useClubApi();
+  const { who, slug } = useClubApi();
   const queryClient = useQueryClient();
   return (child: Child) =>
-    queryClient.setQueryData<Family>(["family", slug, token], (f) =>
+    queryClient.setQueryData<Family>(["family", slug, who], (f) =>
       f ? { ...f, children: f.children.some((c) => c.id === child.id) ? f.children.map((c) => (c.id === child.id ? child : c)) : [...f.children, child] } : f,
     );
 }

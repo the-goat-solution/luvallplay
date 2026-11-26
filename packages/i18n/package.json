@@ -12,6 +12,7 @@
     "./jersey": "./src/jersey.ts",
     "./app": "./src/app.ts",
     "./juniors": "./src/juniors.ts",
+    "./juniors-entry": "./src/juniors-entry.ts",
     "./format": "./src/format.ts"
   },
   "dependencies": {

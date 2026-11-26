@@ -4,11 +4,11 @@
 // and {var} placeholders are filled by format() in ./format.ts.
 // The Vietnamese is a first draft and needs a native review before launch.
 import type { Messages } from "./format.ts";
+import { juniorsEntry } from "./juniors-entry.ts";
 
 const en = {
   family_title: "Family",
-  family_entry: "Family",
-  family_entry_sub: "Add and manage your children at {club}",
+  ...juniorsEntry.en,
   family_intro: "Children under 16 don't have their own sign-in. You add them here, book for them, and decide what the club may show.",
   family_empty: "You haven't added a child yet.",
   family_add: "Add a child",
@@ -48,8 +48,7 @@ const en = {
 
 const vi: Messages<keyof typeof en> = {
   family_title: "Gia đình",
-  family_entry: "Gia đình",
-  family_entry_sub: "Thêm và quản lý con của bạn tại {club}",
+  ...juniorsEntry.vi,
   family_intro: "Trẻ dưới 16 tuổi không có tài khoản riêng. Bạn thêm con ở đây, đặt chỗ cho con và quyết định câu lạc bộ được hiển thị những gì.",
   family_empty: "Bạn chưa thêm trẻ nào.",
   family_add: "Thêm trẻ",

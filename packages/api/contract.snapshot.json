@@ -226,6 +226,162 @@
         }
       }
     },
+    "account.push": {
+      "method": "GET",
+      "path": "/account/push",
+      "auth": "session",
+      "response": {
+        "t": "object",
+        "fields": {
+          "available": {
+            "t": "boolean"
+          },
+          "devices": {
+            "t": "number"
+          },
+          "kinds": {
+            "t": "object",
+            "fields": {
+              "challenge": {
+                "t": "boolean"
+              },
+              "message": {
+                "t": "boolean"
+              },
+              "payment": {
+                "t": "boolean"
+              },
+              "reminder": {
+                "t": "boolean"
+              },
+              "result": {
+                "t": "boolean"
+              },
+              "roster": {
+                "t": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "account.pushDevice": {
+      "method": "POST",
+      "path": "/account/push/device",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "platform": {
+            "t": "enum",
+            "values": [
+              "android",
+              "ios"
+            ]
+          },
+          "token": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "account.pushKinds": {
+      "method": "POST",
+      "path": "/account/push/kinds",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "challenge": {
+            "t": "boolean",
+            "optional": true
+          },
+          "message": {
+            "t": "boolean",
+            "optional": true
+          },
+          "payment": {
+            "t": "boolean",
+            "optional": true
+          },
+          "reminder": {
+            "t": "boolean",
+            "optional": true
+          },
+          "result": {
+            "t": "boolean",
+            "optional": true
+          },
+          "roster": {
+            "t": "boolean",
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "kinds": {
+            "t": "object",
+            "fields": {
+              "challenge": {
+                "t": "boolean"
+              },
+              "message": {
+                "t": "boolean"
+              },
+              "payment": {
+                "t": "boolean"
+              },
+              "reminder": {
+                "t": "boolean"
+              },
+              "result": {
+                "t": "boolean"
+              },
+              "roster": {
+                "t": "boolean"
+              }
+            }
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "account.pushRemoveDevice": {
+      "method": "POST",
+      "path": "/account/push/device/remove",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "token": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
     "account.removePhoto": {
       "method": "DELETE",
       "path": "/account/photo",
@@ -2347,6 +2503,11 @@
         "fields": {
           "all": {
             "t": "boolean",
+            "nullable": true,
+            "optional": true
+          },
+          "pushToken": {
+            "t": "string",
             "nullable": true,
             "optional": true
           }

@@ -8,6 +8,7 @@ import { sendAdminAlertEmail } from "@/lib/player-email";
 import { endPlayerArena } from "@/lib/arena-db";
 import { db } from "@/lib/admin-access";
 import { isLastOwner } from "@/lib/admin-roles";
+import { forgetPushDevices } from "@/lib/app-push";
 
 const bodySchema = z.object({ confirm: z.literal("DELETE") });
 
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
   // The profile picture goes with the account.
   await deletePublicBlobs([await setPlayerAvatar(player.id, null).catch(() => null)]);
   await deletePlayerAccount(player.id);
+  await forgetPushDevices(player.id, { all: true });
   await sendAdminAlertEmail({
     subject: `Account deleted: ${player.email}`,
     heading: "A player deleted their account",

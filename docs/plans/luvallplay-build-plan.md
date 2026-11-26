@@ -363,7 +363,7 @@ Findings and changes recorded as the work goes:
 | Edge-to-edge | Enforced for API 35+. Handled by SystemBars + safe-area CSS |
 | Data safety form + account deletion | In-app deletion **plus a public web page** for deletion requests (Play requires both) |
 | Photo/video permissions | Photo Picker, no `READ_MEDIA_IMAGES` |
-| Developer account | **Organization account** to skip the 14-day / 12-tester closed-test rule for new personal accounts, and to show "Luvallplay" as the developer |
+| Developer account | **Organization account** to skip the 14-day / 12-tester closed-test rule for new personal accounts, and to show "Luvallplay" as the developer . **Registered 26 Nov 2026: Google Play developer account ID 4932366388846048390.** Apple is still to come |
 | App signing | Play App Signing, AAB builds |
 
 ### 4.4 Phones, foldables and tablets

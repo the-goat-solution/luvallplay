@@ -111,8 +111,10 @@ export default async function JuniorsAdminPage({ searchParams }: { searchParams:
   if (tenantId === null) notFound();
   const ctx = await currentAdmin();
   const isOwner = ctx?.kind === "player" && ctx.access.role === "owner";
+  // Everyone's safety-check status is for the people who run the club. A coach sees the roster, not this.
+  const seesSafetyChecks = ctx?.kind === "player" && (ctx.access.role === "owner" || ctx.access.role === "admin");
   const today = await clubToday();
-  const staff = await listStaffSafety(db, tenantId, today);
+  const staff = seesSafetyChecks ? await listStaffSafety(db, tenantId, today) : [];
   const names = new Map(
     (await db.query(`SELECT id, first_name, last_name FROM players WHERE id = ANY($1::int[])`, [staff.map((s) => s.userId)])).rows.map((r) => [Number(r.id), `${String(r.first_name ?? "")} ${String(r.last_name ?? "")}`.trim() || `#${r.id}`]),
   );
@@ -141,7 +143,7 @@ export default async function JuniorsAdminPage({ searchParams }: { searchParams:
 
       <Section title="Roster" id="roster">
         {!days?.ok ? (
-          <Notice>You need a current safety check, recorded below by an owner, to see the junior roster.</Notice>
+          <Notice>You need a current safety check, recorded by an owner of the club, to see the junior roster.</Notice>
         ) : days.value.length === 0 ? (
           <p>No child is booked on a coming play day.</p>
         ) : (
@@ -191,6 +193,8 @@ export default async function JuniorsAdminPage({ searchParams }: { searchParams:
         <Link href="/admin/juniors/forms">Forms and waivers guardians sign</Link>
       </p>
 
+      {seesSafetyChecks && (
+        <>
       <Section title="Safety checks" id="safety-checks">
         <p>
           Everyone with a role in the club who works with juniors needs a current safety check recorded here. Without one they can&apos;t open the junior roster. Luvallplay records that a check exists and
@@ -266,6 +270,8 @@ export default async function JuniorsAdminPage({ searchParams }: { searchParams:
         </Section>
       ) : (
         <Notice>Only an owner of the club can record or withdraw a safety check.</Notice>
+      )}
+        </>
       )}
     </div>
   );

@@ -2405,6 +2405,62 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
       await owner.context.close();
     }
   });
+
+  test("APP61 · a coach in Admin → Juniors: no roster without a safety check; with one, the roster and a child's medical note, but never other people's safety-check status or the form to record one", async () => {
+    await juniorsOn();
+    const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;
+    await db.query(`UPDATE tenants SET payment_mode = 'free' WHERE id = 1`);
+    const guardian = await sessionToken(PEOPLE.member.email);
+    const json = { ...auth(guardian).headers, "content-type": "application/json" };
+    const coach = await signedIn(PEOPLE.coach.email);
+    const page = await coach.context.newPage();
+    const coachId = (await db.query(`SELECT id FROM players WHERE lower(email) = lower($1)`, [PEOPLE.coach.email])).rows[0].id;
+    try {
+      assert.equal((await db.query(`SELECT role FROM club_roles WHERE player_id = $1`, [coachId])).rows[0]?.role, "coach");
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) })).status, 200);
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/care/medical-notes`, { method: "PUT", headers: json, body: JSON.stringify({ notes: "Asthma: blue inhaler." }) })).status, 200);
+      const date = (await (await fetch(`${api}/clubs/three-wolves/family/bookings`, auth(guardian))).json()).days.find((d) => d.spotsLeft > 0).date;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) })).status, 200);
+
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(/\/admin/);
+      // No safety check: the page opens, the roster doesn't.
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.locator("#roster").getByText("You need a current safety check").waitFor();
+      assert.equal(await page.getByText("Tama Testchild").count(), 0);
+      const noStaffTable = async () => {
+        assert.equal(await page.locator("#safety-checks").count(), 0, "no safety-check table for a coach");
+        assert.equal(await page.locator("#record").count(), 0, "no form to record a check");
+        assert.equal(await page.getByText(PEOPLE.owner.first, { exact: false }).count(), 0, "no other staff member's name");
+      };
+      await noStaffTable();
+
+      await db.query(`INSERT INTO junior_safety_checks (tenant_id, user_id, kind, checked_on, expires_on, recorded_by_user_id) VALUES (1, $1, 'police-vet', CURRENT_DATE - 30, CURRENT_DATE + 300, $1)`, [coachId]);
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.locator("#roster").getByText("Tama Testchild (born 2016)").waitFor();
+      await noStaffTable();
+      // The note, for a coach with a valid check, logged.
+      await page.locator("#roster").getByRole("link", { name: /^Read/ }).click();
+      await page.waitForURL(`${env.base}/admin/juniors/child/${childId}/medical`);
+      assert.equal(await page.locator("[data-medical-note]").textContent(), "Asthma: blue inhaler.");
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'juniors.medical_note.read' AND actor_player_id = $1`, [coachId])).rows[0].n, 1);
+      // Marking who came is recorded as the coach's.
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.locator("#roster").getByRole("button", { name: "Mark as here" }).click();
+      await page.getByText("Marked as here.").first().waitFor();
+      assert.deepEqual((await db.query(`SELECT source, recorded_by_user_id FROM junior_attendance WHERE junior_profile_id = $1`, [childId])).rows, [{ source: "coach", recorded_by_user_id: coachId }]);
+      // Nothing else opened up: the members page is still not a coach's.
+      await page.goto(`${env.base}/admin/members`);
+      assert.ok(!new URL(page.url()).pathname.startsWith("/admin/members") || (await page.getByRole("heading", { name: "Members" }).count()) === 0, "a coach still can't open Members");
+    } finally {
+      await db.query(`DELETE FROM junior_attendance`);
+      await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
+      await juniorsOff();
+      await coach.context.close();
+    }
+  });
 });
 
 describe("APP · Vision", () => {

@@ -6,12 +6,14 @@
 // phone number (it needs text-message codes).
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, store } from "../app.ts";
+import { api, storage, store } from "../app.ts";
+import { takePushToken } from "../lib/native/push-device.ts";
 import { useClubs, useCurrentClub, useLang, usePrefs, useSession, useT } from "../hooks.tsx";
 import { AccountCards } from "./settings/Account.tsx";
 import { ClubAdmin } from "./settings/ClubAdmin.tsx";
 import { ConnectedApps } from "./settings/ConnectedApps.tsx";
 import { InstallCard } from "./settings/Install.tsx";
+import { NotificationsCard } from "./settings/Notifications.tsx";
 import { useSaveLanguage } from "./settings/data.ts";
 import type { ThemeChoice } from "../lib/theme.ts";
 
@@ -32,7 +34,8 @@ export function SettingsSections() {
   async function signOut(all: boolean) {
     setBusy(true);
     try {
-      await api.auth.logout({ all });
+      // The store app: this phone stops receiving notifications too.
+      await api.auth.logout({ all, pushToken: takePushToken(storage) });
     } catch {
       // Offline or already ended: this device is signed out all the same.
     }
@@ -68,6 +71,7 @@ export function SettingsSections() {
             </label>
           ))}
         </fieldset>
+        <NotificationsCard t={t} />
         <InstallCard t={t} />
         {multi
           ? clubs.filter((c) => c.canOpenAdmin).map((c) => <ClubAdmin key={c.slug} clubName={c.name} email={session.data?.player.email} apiBase={c.apiBase} />)

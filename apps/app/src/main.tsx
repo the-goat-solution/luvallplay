@@ -13,7 +13,7 @@ import "@fontsource/barlow-condensed/800.css";
 import "@luvallplay/ui/tokens.css";
 import "@luvallplay/ui/system.css";
 import "./styles/app.css";
-import { storage, store } from "./app.ts";
+import { api, storage, store } from "./app.ts";
 import { watchInstall } from "./lib/install.ts";
 import { clearOffline, restoreCache, saveCache } from "./lib/offline.ts";
 import { startQueue } from "./lib/queue.ts";
@@ -69,7 +69,11 @@ await Promise.race([loadLang(pickLang(store.get().lang, null, navigator.language
 // The store app only: links that open the app land on their screen, and the
 // Android back button closes sheets before it goes back (lib/native/shell.ts).
 if (isNative()) {
-  void import("./lib/native/shell.ts").then((m) => m.startShell({ go: (path) => router.history.push(path), back: () => router.history.back() }));
+  void import("./lib/native/shell.ts").then((m) => {
+    m.startShell({ go: (path) => router.history.push(path), back: () => router.history.back() });
+    // Notifications are on for this phone and it has a new push address: the server learns it.
+    if (store.get().token) void import("./lib/native/push-device.ts").then((p) => p.refreshPush({ storage, server: { register: (v) => api.account.pushDevice(v), remove: (v) => api.account.pushRemoveDevice(v) } })).catch(() => {});
+  });
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(

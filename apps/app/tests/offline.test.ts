@@ -153,3 +153,18 @@ test("choices that wait show over what the club last said", () => {
   assert.deepEqual(withPending(calendar, "c", waiting), [{ ...day("2026-12-01", true), spots: 4 }, day("2026-12-08", true), day("2026-12-15", false, false)]);
   assert.equal(withPending(calendar, "none", waiting), calendar, "nothing waiting for this club: the same list");
 });
+
+test("a club's saved settings show at once but are checked again on every start; other saved screens keep their freshness", async () => {
+  const storage = memoryStorage();
+  const a = new QueryClient();
+  const stop = saveCache(a, storage, () => "token-a", 5);
+  a.setQueryData(["config", "three-wolves"], { modules: ["arena"] });
+  a.setQueryData(["me", "three-wolves", ownerOf("token-a")], { hello: 1 });
+  await wait(20);
+  stop();
+  const b = new QueryClient();
+  assert.equal(restoreCache(b, storage, "token-a"), true);
+  assert.deepEqual(b.getQueryData(["config", "three-wolves"]), { modules: ["arena"] }, "shown from the saved copy");
+  assert.equal(b.getQueryState(["config", "three-wolves"])?.isInvalidated, true, "and fetched again when a screen uses it");
+  assert.equal(b.getQueryState(["me", "three-wolves", ownerOf("token-a")])?.isInvalidated, false);
+});

@@ -656,6 +656,39 @@ export const player_sessions = pgTable("player_sessions", {
 	unique("player_sessions_token_hash_key").on(table.token_hash),
 ]);
 
+// Phase 5 step 6: a person's phones that asked for notifications. Platform-wide
+// (an account's, not a club's). The address is sealed by the application.
+export const push_devices = pgTable("push_devices", {
+	id: serial().primaryKey().notNull(),
+	player_id: integer().notNull(),
+	platform: text().notNull(),
+	// SHA-256 (hex) of the device's address.
+	token_hash: text().notNull(),
+	// The address, encrypted by the application. Never plain text.
+	sealed: text().notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	last_seen_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("push_devices_player_id_idx").using("btree", table.player_id.asc().nullsLast()),
+	foreignKey({ columns: [table.player_id], foreignColumns: [players.id], name: "push_devices_player_id_fkey" }).onDelete("restrict"),
+	unique("push_devices_token_hash_key").on(table.token_hash),
+	check("push_devices_platform_check", sql`platform = ANY (ARRAY['android'::text, 'ios'::text])`),
+	check("push_devices_token_hash_check", sql`token_hash ~ '^[0-9a-f]{64}$'::text`),
+	check("push_devices_sealed_check", sql`sealed ~ '^v1\\.[a-z0-9-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$'::text`),
+]);
+
+// Which kinds of notification a person asked for (no row = don't send).
+export const push_prefs = pgTable("push_prefs", {
+	player_id: integer().notNull(),
+	category: text().notNull(),
+	enabled: boolean().notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.player_id], foreignColumns: [players.id], name: "push_prefs_player_id_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.player_id, table.category], name: "push_prefs_pkey" }),
+	check("push_prefs_category_check", sql`category = ANY (ARRAY['challenge'::text, 'result'::text, 'message'::text, 'reminder'::text, 'roster'::text, 'payment'::text])`),
+]);
+
 export const player_settings = pgTable("player_settings", {
 	key: text().primaryKey().notNull(),
 	value: text().notNull(),
@@ -1536,6 +1569,55 @@ export const junior_attendance = pgTable("junior_attendance", {
 	foreignKey({ columns: [table.tenant_id, table.session_date], foreignColumns: [sessions.tenant_id, sessions.date], name: "junior_attendance_session_date_fkey" }).onDelete("restrict"),
 	primaryKey({ columns: [table.tenant_id, table.session_date, table.junior_profile_id], name: "junior_attendance_pkey"}),
 	check("junior_attendance_source_check", sql`source = ANY (ARRAY['roster'::text, 'coach'::text, 'admin'::text])`),
+]);
+
+// Phase 3b step 4: a club's forms and waivers. The text is never edited: new
+// wording is a new version (a new row), so a signature points at exact words.
+export const club_forms = pgTable("club_forms", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	// The form's stable name within the club, e.g. "junior-waiver".
+	slug: text().notNull(),
+	version: integer().notNull(),
+	kind: text().notNull(),
+	title: text().notNull(),
+	body: text().notNull(),
+	published_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	published_by_user_id: integer().notNull(),
+	// Set when the club stops asking for this form. Its signatures are kept.
+	retired_at: timestamp({ withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("club_forms_published_by_user_id_idx").using("btree", table.published_by_user_id.asc().nullsLast()),
+	unique("club_forms_tenant_id_id_key").on(table.tenant_id, table.id),
+	unique("club_forms_one_per_version").on(table.tenant_id, table.slug, table.version),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "club_forms_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.published_by_user_id], foreignColumns: [players.id], name: "club_forms_published_by_user_id_fkey" }).onDelete("restrict"),
+	check("club_forms_kind_check", sql`kind = ANY (ARRAY['waiver'::text, 'consent'::text])`),
+	check("club_forms_version_check", sql`version >= 1`),
+	check("club_forms_slug_check", sql`slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text`),
+]);
+
+// Who signed which version of a form, for which child. Never updated.
+export const form_signatures = pgTable("form_signatures", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	form_id: integer().notNull(),
+	// The child the form was signed for.
+	junior_profile_id: integer().notNull(),
+	// The guardian who signed, and the name they typed as their signature.
+	signed_by_user_id: integer().notNull(),
+	signed_name: text().notNull(),
+	signed_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("form_signatures_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
+	index("form_signatures_signed_by_user_id_idx").using("btree", table.signed_by_user_id.asc().nullsLast()),
+	index("form_signatures_form_idx").using("btree", table.tenant_id.asc().nullsLast(), table.form_id.asc().nullsLast()),
+	unique("form_signatures_once").on(table.tenant_id, table.form_id, table.junior_profile_id, table.signed_by_user_id),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "form_signatures_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.form_id], foreignColumns: [club_forms.tenant_id, club_forms.id], name: "form_signatures_form_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.junior_profile_id], foreignColumns: [junior_profiles.id], name: "form_signatures_junior_profile_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "form_signatures_junior_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.signed_by_user_id], foreignColumns: [players.id], name: "form_signatures_signed_by_user_id_fkey" }).onDelete("restrict"),
 ]);
 
 // Phase 3b step 4: who to call for a child. Club-owned; written by a guardian.

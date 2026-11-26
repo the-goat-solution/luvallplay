@@ -103,9 +103,15 @@ export function createApi(transport: Transport) {
       /** PUT /clubs/{club}/family/{id}/consent (signed in) */
       consent: (params: ParamsOf<"family.consent">, body: BodyOf<"family.consent">, options?: Options) =>
         transport.call("family.consent", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.consent">>,
+      /** GET /clubs/{club}/family/{id}/forms (signed in) */
+      forms: (params: ParamsOf<"family.forms">, options?: Options) =>
+        transport.call("family.forms", { params, signal: options?.signal }) as Promise<ResponseOf<"family.forms">>,
       /** GET /clubs/{club}/family (signed in) */
       list: (params: ParamsOf<"family.list">, options?: Options) =>
         transport.call("family.list", { params, signal: options?.signal }) as Promise<ResponseOf<"family.list">>,
+      /** POST /clubs/{club}/family/{id}/forms/{formId}/sign (signed in) */
+      signForm: (params: ParamsOf<"family.signForm">, body: BodyOf<"family.signForm">, options?: Options) =>
+        transport.call("family.signForm", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.signForm">>,
       /** PATCH /clubs/{club}/family/{id} (signed in) */
       update: (params: ParamsOf<"family.update">, body: BodyOf<"family.update">, options?: Options) =>
         transport.call("family.update", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.update">>,

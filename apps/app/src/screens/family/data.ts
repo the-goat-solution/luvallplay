@@ -117,3 +117,23 @@ export function useSaveNotes(childId: number) {
   const set = useSetCare(childId);
   return useMutation({ mutationFn: (notes: string) => api.family.careNotes({ club: slug, id: childId }, { notes }), onSuccess: set });
 }
+
+// ── The club's forms and waivers for a child ────────────────────────────────
+
+export type ChildForms = ResponseOf<"family.forms">;
+export type ChildForm = ChildForms["forms"][number];
+
+export function useChildForms(childId: number) {
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["family-forms", slug, who, childId], queryFn: ({ signal }) => api.family.forms({ club: slug, id: childId }, { signal }), enabled: ready, retry: false });
+}
+
+export function useSignForm(childId: number) {
+  const { slug, api } = useClubApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { formId: number; name: string }) => api.family.signForm({ club: slug, id: childId, formId: input.formId }, { name: input.name }),
+    // Signed, or refused because the wording changed: either way the list is asked for again.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["family-forms"] }),
+  });
+}

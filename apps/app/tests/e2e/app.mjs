@@ -1577,6 +1577,8 @@ describe("APP · the Player tab", () => {
         const p2 = await context.newPage();
         await p2.goto(`${APP}/player`);
         await p2.waitForSelector('[data-screen="nav_player"][data-state="ready"]');
+        // The saved copy of the club's settings shows first; the fresh one takes the Arena away.
+        await p2.getByRole("heading", { name: "Kit bag" }).waitFor({ state: "detached" });
         assert.equal(await p2.getByRole("heading", { name: "Kit bag" }).count(), 0);
         assert.equal(await p2.getByRole("heading", { name: "The ladder" }).count(), 0);
         assert.equal(await p2.getByRole("link", { name: /See the leaderboard/ }).count(), 0);
@@ -1822,6 +1824,8 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
   const juniorsOff = async () => {
     await db.query(`UPDATE sessions s SET booked_spots = GREATEST(0, s.booked_spots - (SELECT count(*) FROM junior_bookings b WHERE b.session_date = s.date AND b.status IN ('pending', 'confirmed')))`);
     await db.query(`DELETE FROM junior_bookings`);
+    await db.query(`DELETE FROM form_signatures`);
+    await db.query(`DELETE FROM club_forms`);
     await db.query(`DELETE FROM junior_medical_notes`);
     await db.query(`DELETE FROM junior_emergency_contacts`);
     await db.query(`DELETE FROM guardianships`);
@@ -2057,6 +2061,67 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
       assert.deepEqual([mine.contacts.length, mine.medicalNotes, mine.medicalNotesAvailable], [1, NOTE, true]);
       // The one refusal this journey asked for (the contact with no phone number) and nothing else.
       assert.deepEqual(problems, ["Failed to load resource: the server responded with a status of 400 (Bad Request)"]);
+    } finally {
+      await juniorsOff();
+      await context.close();
+    }
+  });
+
+  test("APP56 · a guardian reads the club's waiver and signs it for their child by typing their name; new wording asks again; nobody else can sign for the child", async () => {
+    await juniorsOn();
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const json = { ...auth(token).headers, "content-type": "application/json" };
+    const publish = async (version, body) =>
+      (await db.query(`INSERT INTO club_forms (tenant_id, slug, version, kind, title, body, published_by_user_id) VALUES (1, 'junior-waiver', $1, 'waiver', 'Junior waiver', $2, 1) RETURNING id`, [version, body])).rows[0].id;
+    try {
+      const added = await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) });
+      assert.equal(added.status, 200);
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+
+      // A club that asks for nothing shows no forms part.
+      await page.goto(`${APP}/family`);
+      await page.waitForSelector(FAMILY);
+      await page.locator(`[data-care="${childId}"]`).waitFor();
+      assert.equal(await page.locator(`[data-forms="${childId}"]`).count(), 0);
+
+      const v1 = await publish(1, "I accept the risks of playing badminton for my child.\n\nI will collect my child on time.");
+      await page.reload();
+      await page.waitForSelector(FAMILY);
+      const part = page.locator(`[data-forms="${childId}"]`);
+      await part.locator("[data-forms-status]").filter({ hasText: "1 to sign" }).waitFor();
+      await part.getByRole("button", { name: "Read and sign" }).click();
+      const dialog = page.getByRole("dialog", { name: "Junior waiver" });
+      await dialog.getByText("I will collect my child on time.").waitFor();
+      // No name, no signature.
+      await dialog.getByRole("button", { name: "Sign" }).click();
+      await dialog.getByRole("alert").waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM form_signatures`)).rows[0].n, 0);
+      await dialog.getByLabel("Type your full name to sign").fill("Mia Guardian");
+      await dialog.getByRole("button", { name: "Sign" }).click();
+      await part.locator("[data-forms-status]").filter({ hasText: "All signed" }).waitFor();
+      await part.getByText(/^Signed by Mia Guardian on /).waitFor();
+      const rows = (await db.query(`SELECT form_id, junior_profile_id, signed_name FROM form_signatures`)).rows;
+      assert.deepEqual(rows, [{ form_id: v1, junior_profile_id: childId, signed_name: "Mia Guardian" }]);
+
+      // Another signed-in person can't see or sign for this child; signed out, nothing.
+      const other = { ...auth(await sessionToken(PEOPLE.player.email)).headers, "content-type": "application/json" };
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms`, { headers: other })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms/${v1}/sign`, { method: "POST", headers: other, body: JSON.stringify({ name: "Someone Else" }) })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms`)).status, 401);
+
+      // The club rewords the form: asked again, and the old version can no longer be signed.
+      const v2 = await publish(2, "New wording.");
+      const old = await fetch(`${api}/clubs/three-wolves/family/${childId}/forms/${v1}/sign`, { method: "POST", headers: json, body: JSON.stringify({ name: "Mia Guardian" }) });
+      assert.deepEqual([old.status, (await old.json()).error], [409, "not_current"]);
+      await page.reload();
+      await page.waitForSelector(FAMILY);
+      await page.locator(`[data-forms="${childId}"] [data-forms-status]`).filter({ hasText: "1 to sign" }).waitFor();
+      const mine = (await (await fetch(`${api}/clubs/three-wolves/family/${childId}/forms`, auth(token))).json()).forms;
+      assert.deepEqual(mine.map((f) => [f.id, f.version, f.signedAt]), [[v2, 2, null]]);
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM form_signatures`)).rows[0].n, 1, "the first signature is kept as a record");
+      assert.deepEqual(problems, []);
     } finally {
       await juniorsOff();
       await context.close();

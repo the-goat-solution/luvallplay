@@ -57,8 +57,6 @@ describe("a child's emergency contacts and medical notes", { skip: !BASE_URL && 
   // Seed accounts: 3 Mia (a member), 4 and 5 other players, 25 a deleted account.
   const MIA = 3;
   const PETE = 4;
-  const QUINN = 5;
-  const DELETED = 25;
   const NOW = new Date("2026-11-26T02:00:00.000Z");
   const add = (guardianId: number, over: Record<string, unknown> = {}, tenantId = 1) =>
     addChild(c, tenantId, guardianId, { name: "Test Child", birthYear: 2016, guardianConfirmed: true, ...over }, { year: YEAR, now: NOW });

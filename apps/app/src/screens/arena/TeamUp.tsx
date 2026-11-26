@@ -2,6 +2,7 @@
 // it), scanning a partner's QR with the camera, or a 5-digit code read out
 // and typed in. The QR and scanner libraries load only when used.
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { publicOrigin } from "../../lib/native/public-url.ts";
 import { useArenaAction, errorCode } from "./data.ts";
 import type { ArenaT } from "./words.ts";
 
@@ -22,7 +23,8 @@ function useCountdown(expiresAt: string | null): string | null {
 }
 
 export function inviteUrl(code: string): string {
-  return `${window.location.origin}/arena?join=${code}`;
+  // In the store app: the public address, which opens the app on the partner's phone too.
+  return `${publicOrigin()}/arena?join=${code}`;
 }
 
 function CodeTiles({ code }: { code: string }) {

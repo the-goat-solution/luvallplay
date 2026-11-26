@@ -224,7 +224,7 @@ export const en = {
   acc_download_hint: "Everything the club holds under your account, as a file.",
   acc_delete: "Delete my account",
   acc_delete_confirm: "Delete your account? You'll be signed out everywhere. Payment records stay with the club as the law requires.",
-  acc_delete_type: "Type DELETE to confirm",
+  acc_delete_yes: "Yes, delete my account",
   acc_delete_last_owner: "You're the club's only owner. Make someone else an owner in Admin → People → Admins before deleting your account.",
   ca_title: "Connected apps",
   ca_sub: "Let a habit tracker or an AI assistant read your play days and round robin results. You can disconnect any time.",

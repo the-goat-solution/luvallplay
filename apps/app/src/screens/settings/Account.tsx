@@ -145,7 +145,11 @@ function YourData({ t }: { t: T }) {
   const remove = useDeleteAccount();
   const id = useId();
   const [deleting, setDeleting] = useState(false);
-  const [typed, setTyped] = useState("");
+  // The question is read out, and the keyboard doesn't land on "Yes".
+  const question = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (deleting) question.current?.focus();
+  }, [deleting]);
   const lastOwner = (remove.error as { code?: string } | null)?.code === "last_owner";
   return (
     <section className="card stack" aria-labelledby={`${id}-title`}>
@@ -170,17 +174,13 @@ function YourData({ t }: { t: T }) {
             remove.mutate();
           }}
         >
-          <p>{t("acc_delete_confirm")}</p>
-          <label className="field">
-            <span>{t("acc_delete_type")}</span>
-            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoCapitalize="characters" autoComplete="off" spellCheck={false} />
-          </label>
+          <p ref={question} tabIndex={-1}>{t("acc_delete_confirm")}</p>
           {remove.isError && <p className="notice notice-error" role="alert">{lastOwner ? t("acc_delete_last_owner") : t("error_generic")}</p>}
           <div className="actions">
-            <button type="submit" className="button button-danger" disabled={typed.trim().toUpperCase() !== "DELETE" || remove.isPending}>
-              {remove.isPending ? t("loading") : t("acc_delete")}
+            <button type="submit" className="button button-danger" disabled={remove.isPending}>
+              {remove.isPending ? t("loading") : t("acc_delete_yes")}
             </button>
-            <button type="button" className="button button-quiet" onClick={() => { setDeleting(false); setTyped(""); remove.reset(); }}>
+            <button type="button" className="button button-quiet" onClick={() => { setDeleting(false); remove.reset(); }}>
               {t("cancel")}
             </button>
           </div>

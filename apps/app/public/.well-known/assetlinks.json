@@ -4,7 +4,7 @@
     "target": {
       "namespace": "android_app",
       "package_name": "com.luvallplay.app",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT"]
+      "sha256_cert_fingerprints": ["90:3D:F4:7C:A6:14:E1:86:69:56:94:2E:2C:58:98:EC:DF:17:E6:51:7A:8A:B0:F5:02:5E:62:39:D1:FE:91:B0"]
     }
   }
 ]

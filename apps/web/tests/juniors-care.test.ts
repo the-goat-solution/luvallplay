@@ -14,7 +14,6 @@ import {
   MEDICAL_NOTES_MAX,
   juniorsVault,
   listEmergencyContacts,
-  mayReadMedicalNotes,
   medicalNotesAvailable,
   readMedicalNotesAsGuardian,
   readMedicalNotesForClub,
@@ -37,12 +36,6 @@ test("medical notes need a key: with none, or a malformed one, they are unavaila
   assert.equal(medicalNotesAvailable({}), false);
   assert.equal(medicalNotesAvailable({ JUNIORS_KEKS: "k1:too-short" }), false);
   assert.equal(medicalNotesAvailable(ENV), true);
-});
-
-test("who on the club's side may read medical notes: owners only, and never Luvallplay staff by that alone", () => {
-  assert.equal(mayReadMedicalNotes({ role: "owner", platformAdmin: false }), true);
-  for (const role of ["admin", "coach", "treasurer", null] as const) assert.equal(mayReadMedicalNotes({ role, platformAdmin: false } as never), false, String(role));
-  assert.equal(mayReadMedicalNotes({ role: null, platformAdmin: true } as never), false);
 });
 
 describe("a child's emergency contacts and medical notes", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST_URL" : false }, () => {
@@ -96,6 +89,7 @@ describe("a child's emergency contacts and medical notes", { skip: !BASE_URL && 
   let tama = 0; // Mia's child
   let ben = 0; // Pete's child
   beforeEach(async () => {
+    await c.query(`TRUNCATE junior_safety_checks`);
     await c.query(`DELETE FROM junior_medical_notes`);
     await c.query(`DELETE FROM junior_emergency_contacts`);
     await c.query(`DELETE FROM guardianships`);
@@ -103,7 +97,6 @@ describe("a child's emergency contacts and medical notes", { skip: !BASE_URL && 
     tama = value(await add(MIA, { name: "Tama Testchild" })).id;
     ben = value(await add(PETE, { name: "Ben Testchild" })).id;
   });
-  const OWNER = { role: "owner", platformAdmin: false } as never;
 
   test("emergency contacts: the guardian sets them in order, replaces them, and removes them", async () => {
     const set = value(await setEmergencyContacts(c, 1, MIA, tama, [{ name: "  Nan   Guardian ", phone: "021 555 0101", relationship: "Grandmother" }, { name: "Uncle Rewi", phone: "+64 (21) 555-0102" }]));
@@ -181,15 +174,24 @@ describe("a child's emergency contacts and medical notes", { skip: !BASE_URL && 
     assert.equal((await c.query(`SELECT count(*)::int AS n FROM junior_medical_notes`)).rows[0].n, 0);
   });
 
-  test("the club's side: an owner reads a note; an admin, a coach and Luvallplay staff don't; nor an owner of another club", async () => {
+  test("the club's side: an owner reads a note, and a coach with a valid safety check; an admin, a coach without one and Luvallplay staff don't", async () => {
+    const TODAY = "2026-11-26";
+    const as = (playerId: number, role: string | null, platformAdmin = false) => ({ playerId, access: { role, platformAdmin } as never });
     value(await setMedicalNotes(c, vault, 1, MIA, tama, NOTE, ENV));
-    assert.equal(value(await readMedicalNotesForClub(c, vault, 1, OWNER, tama, ENV)).notes, NOTE);
-    for (const access of [{ role: "admin", platformAdmin: false }, { role: "coach", platformAdmin: false }, { role: null, platformAdmin: true }, { role: null, platformAdmin: false }]) {
-      assert.equal(code(await readMedicalNotesForClub(c, vault, 1, access as never, tama, ENV)), "forbidden", JSON.stringify(access));
+    assert.equal(value(await readMedicalNotesForClub(c, vault, 1, as(1, "owner"), tama, TODAY, ENV)).notes, NOTE);
+    for (const actor of [as(2, "admin"), as(PETE, "coach"), as(9, null, true), as(9, null)]) {
+      assert.equal(code(await readMedicalNotesForClub(c, vault, 1, actor, tama, TODAY, ENV)), "forbidden", JSON.stringify(actor));
     }
-    assert.equal(code(await readMedicalNotesForClub(c, vault, club2, OWNER, tama, ENV)), "not_found", "the other club has no such child");
+    // The coach gets a safety check: now they read it, until the day it expires.
+    await c.query(`INSERT INTO junior_safety_checks (tenant_id, user_id, kind, checked_on, expires_on, recorded_by_user_id) VALUES (1, $1, 'police-vet', '2026-06-01', '2027-06-01', 1)`, [PETE]);
+    assert.equal(value(await readMedicalNotesForClub(c, vault, 1, as(PETE, "coach"), tama, TODAY, ENV)).notes, NOTE);
+    assert.equal(code(await readMedicalNotesForClub(c, vault, 1, as(PETE, "coach"), tama, "2027-06-01", ENV)), "forbidden");
+    // A check doesn't open notes to an admin.
+    await c.query(`INSERT INTO junior_safety_checks (tenant_id, user_id, kind, checked_on, expires_on, recorded_by_user_id) VALUES (1, 2, 'police-vet', '2026-06-01', '2027-06-01', 1)`);
+    assert.equal(code(await readMedicalNotesForClub(c, vault, 1, as(2, "admin"), tama, TODAY, ENV)), "forbidden");
+    assert.equal(code(await readMedicalNotesForClub(c, vault, club2, as(1, "owner"), tama, TODAY, ENV)), "not_found", "the other club has no such child");
     await c.query(`UPDATE junior_profiles SET deleted_at = now() WHERE id = $1`, [tama]);
-    assert.equal(code(await readMedicalNotesForClub(c, vault, 1, OWNER, tama, ENV)), "not_found", "a deleted profile");
+    assert.equal(code(await readMedicalNotesForClub(c, vault, 1, as(1, "owner"), tama, TODAY, ENV)), "not_found", "a deleted profile");
   });
 
   test("row-level security: the app's database role sees a child's contacts and note only inside the child's club", async () => {

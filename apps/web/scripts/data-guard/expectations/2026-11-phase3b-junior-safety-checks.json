@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3b-junior-safety-checks",
+  "description": "Phase 3b step 6 (build plan §6.8): one new, empty, club-owned table with row-level security, for the safety check a club records for a coach or volunteer. Nothing existing is altered. Additive: no row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

@@ -1587,6 +1587,37 @@ export const form_signatures = pgTable("form_signatures", {
 	foreignKey({ columns: [table.signed_by_user_id], foreignColumns: [players.id], name: "form_signatures_signed_by_user_id_fkey" }).onDelete("restrict"),
 ]);
 
+// Phase 3b step 6: the safety check a club records for a coach or volunteer.
+// That a check exists and when it expires: never its document or result.
+export const junior_safety_checks = pgTable("junior_safety_checks", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	// The coach or volunteer the check is about.
+	user_id: integer().notNull(),
+	kind: text().notNull(),
+	// The club's own reference for where the record is kept. Optional.
+	reference: text(),
+	checked_on: date().notNull(),
+	expires_on: date().notNull(),
+	recorded_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// The owner who recorded it.
+	recorded_by_user_id: integer().notNull(),
+	// Set when the club withdraws the record before it expires.
+	revoked_at: timestamp({ withTimezone: true, mode: 'string' }),
+	revoked_by_user_id: integer(),
+}, (table) => [
+	index("junior_safety_checks_user_idx").using("btree", table.tenant_id.asc().nullsLast(), table.user_id.asc().nullsLast()),
+	index("junior_safety_checks_user_id_idx").using("btree", table.user_id.asc().nullsLast()),
+	index("junior_safety_checks_recorded_by_user_id_idx").using("btree", table.recorded_by_user_id.asc().nullsLast()),
+	index("junior_safety_checks_revoked_by_user_id_idx").using("btree", table.revoked_by_user_id.asc().nullsLast()),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "junior_safety_checks_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.user_id], foreignColumns: [players.id], name: "junior_safety_checks_user_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.recorded_by_user_id], foreignColumns: [players.id], name: "junior_safety_checks_recorded_by_user_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.revoked_by_user_id], foreignColumns: [players.id], name: "junior_safety_checks_revoked_by_user_id_fkey" }).onDelete("restrict"),
+	check("junior_safety_checks_kind_check", sql`kind = ANY (ARRAY['police-vet'::text, 'working-with-children'::text, 'other'::text])`),
+	check("junior_safety_checks_dates_check", sql`expires_on > checked_on`),
+]);
+
 // Phase 3b step 4: who to call for a child. Club-owned; written by a guardian.
 export const junior_emergency_contacts = pgTable("junior_emergency_contacts", {
 	id: serial().primaryKey().notNull(),

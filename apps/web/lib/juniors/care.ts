@@ -3,9 +3,8 @@
 // Who may do what:
 // - The child's GUARDIAN writes and reads both. Nobody else writes either.
 // - MEDICAL NOTES are read by the guardian and, on the club's side, by an
-//   owner. (Coaches assigned to juniors with a valid recorded safety check
-//   join that list when safety checks exist, step 6.) Admins, coaches without
-//   a check and Luvallplay staff do not read them.
+//   owner or a coach with a valid recorded safety check (lib/juniors/safety.ts).
+//   Admins, coaches without a check and Luvallplay staff do not read them.
 // - The note is ENCRYPTED before it reaches the database (envelope
 //   encryption, bound to the club and the child: lib/integrations/token-vault.ts
 //   with Juniors' own keys, JUNIORS_KEKS). With no key set, a note can't be
@@ -16,6 +15,7 @@ import type { Access } from "@luvallplay/auth";
 import type { TokenVault } from "@luvallplay/integrations";
 import { parseKeks, tokenVault } from "../integrations/token-vault.ts";
 import { isGuardianOf, type Db } from "./family.ts";
+import { mayReadMedicalNotesToday } from "./safety.ts";
 
 export const MAX_EMERGENCY_CONTACTS = 3;
 export const CONTACT_NAME_MAX = 60;
@@ -161,17 +161,13 @@ export async function readMedicalNotesAsGuardian(db: Db, vault: TokenVault, tena
   return { ok: true, value: await openNotes(db, vault, tenantId, childId) };
 }
 
-/** May this club-side person read medical notes? Owners only, until safety-checked junior coaches exist (step 6). Never Luvallplay staff acting for the club. */
-export function mayReadMedicalNotes(access: Access): boolean {
-  return access.role === "owner";
-}
-
 /**
- * The child's medical note, for the club. The caller records the read in the
- * audit log (who, which child id; never the note).
+ * The child's medical note, for the club: an owner, or a coach with a safety
+ * check that is valid today (lib/juniors/safety.ts). The caller records the
+ * read in the audit log (who, which child id; never the note).
  */
-export async function readMedicalNotesForClub(db: Db, vault: TokenVault, tenantId: number, access: Access, childId: number, env: Env = process.env): Promise<CareResult<MedicalNotes>> {
-  if (!mayReadMedicalNotes(access)) return no("forbidden");
+export async function readMedicalNotesForClub(db: Db, vault: TokenVault, tenantId: number, actor: { playerId: number; access: Access }, childId: number, today: string, env: Env = process.env): Promise<CareResult<MedicalNotes>> {
+  if (!(await mayReadMedicalNotesToday(db, tenantId, actor, today))) return no("forbidden");
   const child = (await db.query(`SELECT 1 FROM junior_profiles WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`, [tenantId, childId])).rows[0];
   if (!child) return no("not_found");
   if (!medicalNotesAvailable(env)) return no("notes_unavailable");

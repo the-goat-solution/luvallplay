@@ -127,6 +127,13 @@
       "when": 1795635807000,
       "tag": "0017_club_forms",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795698105209,
+      "tag": "0018_junior_safety_checks",
+      "breakpoints": true
     }
   ]
 }

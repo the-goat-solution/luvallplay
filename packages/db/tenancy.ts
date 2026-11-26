@@ -45,6 +45,7 @@ export const CLUB_OWNED_TABLES = [
   "junior_bookings",
   "junior_emergency_contacts",
   "junior_medical_notes",
+  "junior_safety_checks",
   "junior_profiles",
   "membership_reminders_sent",
   "memberships",

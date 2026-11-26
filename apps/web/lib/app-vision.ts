@@ -6,7 +6,7 @@
 // (app/api/wolf-vision/*, app/api/arena/match-stats).
 import type { BodyOf, QueryOf } from "@luvallplay/api/contract";
 import { SHUTTLE_CHECKER } from "@luvallplay/vision/checker-model";
-import { allowedOrigins, fail, type AppApiError } from "./app-api";
+import { appReturnOrigin, fail, type AppApiError } from "./app-api";
 import { ArenaError, invalidateWorld } from "./arena-db";
 import { visionName } from "./club-terms";
 import { getSiteUrl } from "./email-layout";
@@ -80,9 +80,9 @@ export async function buyPass(player: Player, body: BodyOf<"vision.buy">, reques
   if (!live()) return { pass: await createPass(player.id, kind, { test: true, challengeId: body.challengeId }), testMode: true };
   const pass = await createPass(player.id, kind, { test: false, challengeId: body.challengeId });
   // Back to the tracker in the app (same challenge, if any), or to the website's.
-  const origin = request.headers.get("origin");
+  const origin = appReturnOrigin(request.headers.get("origin"));
   const rt = body.returnTo;
-  const back = origin && allowedOrigins().includes(origin) ? `${origin}${rt && rt.startsWith("/vision") ? rt : "/vision"}` : `${getSiteUrl()}/profile/wolf-vision`;
+  const back = origin ? `${origin}${rt && rt.startsWith("/vision") ? rt : "/vision"}` : `${getSiteUrl()}/profile/wolf-vision`;
   const sep = back.includes("?") ? "&" : "?";
   const cs = await createVisionCheckout({
     kind,

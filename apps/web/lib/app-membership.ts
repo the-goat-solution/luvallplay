@@ -6,7 +6,7 @@
 // lib/payments/membership.ts.
 import { revalidatePath } from "next/cache";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
-import { allowedOrigins } from "./app-api";
+import { appReturnOrigin } from "./app-api";
 import type { ClubConfig } from "./club-config";
 import { clubPrices, membershipStatus } from "./app-me";
 import { clubClock } from "./club";
@@ -117,8 +117,8 @@ export async function membershipAction(player: Player, body: BodyOf<"membership.
 
 /** Stripe's page for updating the card, returning to the app (when called from it) or the website. */
 export async function portalUrl(player: Player, request: Request): Promise<string> {
-  const origin = request.headers.get("origin");
-  const back = origin && allowedOrigins().includes(origin) ? `${origin}/membership?card=updated` : `${getSiteUrl()}/profile?card=updated`;
+  const origin = appReturnOrigin(request.headers.get("origin"));
+  const back = origin ? `${origin}/membership?card=updated` : `${getSiteUrl()}/profile?card=updated`;
   return cardUpdatePortalUrl(player, back);
 }
 

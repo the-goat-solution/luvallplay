@@ -2,6 +2,7 @@
 // Every change refreshes what shows the person elsewhere (Me's header, the
 // session's name and language).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { saveFile } from "../../lib/native/files.ts";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
 import { api, store } from "../../app.ts";
 import { useWho } from "../../hooks.tsx";
@@ -51,18 +52,12 @@ export function usePhoto() {
   return { save, remove };
 }
 
-/** Fetches the account's data and hands it to the browser as a file. */
+/** Fetches the account's data and hands it to the person as a file (a download; the share sheet in the store app). */
 export function useDownloadData() {
   return useMutation({
     mutationFn: async () => {
       const data = await api.account.export();
-      const url = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "my-club-data.json";
-      document.body.append(a);
-      a.click();
-      a.remove();
+      await saveFile("my-club-data.json", JSON.stringify(data, null, 2), "application/json");
     },
   });
 }

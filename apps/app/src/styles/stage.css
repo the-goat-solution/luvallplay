@@ -472,6 +472,9 @@ body:has([data-stage]) { background: color-mix(in oklab, var(--primary) 24%, bla
 .stage .board-top2 { background: var(--medal-2); color: var(--on-medal-2); }
 .stage .board-top3 { background: var(--medal-3); color: var(--on-medal-3); }
 .stage .board-value { font-size: var(--title-sm); font-weight: 800; color: var(--ink); }
+.stage .board-button { flex-wrap: nowrap; }
+/* Large text on a small phone: the points go under the name rather than squeezing it. */
+@container screen (max-width: 17rem) { .stage .board-button { flex-wrap: wrap; } }
 .stage .board-button .row-text .small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .stage .avatar-small { box-shadow: 0 0 0 0.125rem var(--stage-deep); }
 .stage .board-face-rank { background: transparent; box-shadow: none; }

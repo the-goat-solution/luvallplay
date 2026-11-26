@@ -145,22 +145,52 @@ export async function readScoped(pool: PoolLike, tenantId: number | null, text: 
 }
 
 /**
+ * Which of `tables` exist in the public schema, asked as the app's role with
+ * no club named (the catalog is readable by every role, so this works on the
+ * owner's connection and on the app's own login alike). A deployment can be
+ * ahead of its database for a while: a club-owned table whose migration
+ * hasn't run yet isn't there to probe.
+ */
+export async function existingTables(pool: PoolLike, tables: readonly string[]): Promise<{ present: string[]; missing: string[] }> {
+  const { rows } = await readScoped(pool, null, `SELECT t FROM unnest($1::text[]) AS t WHERE to_regclass('public.' || quote_ident(t)) IS NOT NULL`, [[...tables]]);
+  const found = new Set(rows.map((r) => r.t as string));
+  return { present: tables.filter((t) => found.has(t)), missing: tables.filter((t) => !found.has(t)) };
+}
+
+/**
  * The isolation probe (the daily shadow heartbeat, and verify.mjs): for
  * every club-owned table, the app's role must see exactly the club's rows
  * with the club named, and none with no club named. Returns what differs;
  * empty = clean. Read-only.
+ *
+ * `pool` must be the unscoped pool: the probe sets the role and the club
+ * itself, and a pool that already names a club would hide a failure of the
+ * "no club named" half.
+ *
+ * - A table that doesn't exist is reported as a difference. Callers that
+ *   expect one (the heartbeat, between a deploy and its migration) take it
+ *   out first with existingTables().
+ * - `ownerReads: false` is for the app's own login (APP_DATABASE_URL), which
+ *   can't count rows as the owner. There the probe checks what can be seen
+ *   from inside: no row of another club with the club named, and none with
+ *   no club named.
  */
-export async function probeTenantIsolation(pool: PoolLike, tenantId: number, tables: readonly string[]): Promise<string[]> {
-  const counts = tables.map((t) => `SELECT '${t}' AS t, count(*)::int AS n FROM "${t}"`).join(" UNION ALL ");
-  const own = tables.map((t) => `SELECT '${t}' AS t, count(*)::int AS n FROM "${t}" WHERE tenant_id = ${Number(tenantId)}`).join(" UNION ALL ");
-  const asMap = (rows: Record<string, unknown>[]) => new Map(rows.map((r) => [r.t as string, r.n as number]));
-  const owner = asMap((await pool.query(own)).rows);
-  const scoped = asMap((await readScoped(pool, tenantId, counts)).rows);
+export async function probeTenantIsolation(pool: PoolLike, tenantId: number, tables: readonly string[], { ownerReads = true }: { ownerReads?: boolean } = {}): Promise<string[]> {
+  const id = Number(tenantId);
+  if (!Number.isInteger(id)) throw new Error(`probeTenantIsolation: "${tenantId}" is not a club id`);
+  const { present, missing } = await existingTables(pool, tables);
+  const differences: string[] = missing.map((t) => `${t}: the table doesn't exist`);
+  if (!present.length) return differences;
+  const each = (select: (t: string) => string) => present.map(select).join(" UNION ALL ");
+  const counts = each((t) => `SELECT '${t}' AS t, count(*)::int AS n, (count(*) FILTER (WHERE tenant_id <> ${id}))::int AS other FROM "${t}"`);
+  const asMap = (rows: Record<string, unknown>[]) => new Map(rows.map((r) => [r.t as string, r as { n: number; other: number }]));
+  const owner = ownerReads ? asMap((await pool.query(each((t) => `SELECT '${t}' AS t, count(*)::int AS n FROM "${t}" WHERE tenant_id = ${id}`))).rows) : null;
+  const scoped = asMap((await readScoped(pool, id, counts)).rows);
   const closed = asMap((await readScoped(pool, null, counts)).rows);
-  const differences: string[] = [];
-  for (const t of tables) {
-    if (scoped.get(t) !== owner.get(t)) differences.push(`${t}: the app's role sees ${scoped.get(t)} rows, the club has ${owner.get(t)}`);
-    if (closed.get(t) !== 0) differences.push(`${t}: ${closed.get(t)} rows visible with no club named`);
+  for (const t of present) {
+    if (owner && scoped.get(t)?.n !== owner.get(t)?.n) differences.push(`${t}: the app's role sees ${scoped.get(t)?.n} rows, the club has ${owner.get(t)?.n}`);
+    else if (scoped.get(t)?.other !== 0) differences.push(`${t}: the app's role sees ${scoped.get(t)?.other} rows of another club`);
+    if (closed.get(t)?.n !== 0) differences.push(`${t}: ${closed.get(t)?.n} rows visible with no club named`);
   }
   return differences;
 }

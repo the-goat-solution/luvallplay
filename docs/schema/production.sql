@@ -933,6 +933,39 @@ CREATE TABLE junior_profiles (
 );
 CREATE INDEX junior_profiles_guardian_user_id_idx ON public.junior_profiles USING btree (guardian_user_id);
 
+CREATE TABLE junior_safety_checks (
+  id integer DEFAULT nextval('junior_safety_checks_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  user_id integer NOT NULL,
+  kind text NOT NULL,
+  reference text,
+  checked_on date NOT NULL,
+  expires_on date NOT NULL,
+  recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+  recorded_by_user_id integer NOT NULL,
+  revoked_at timestamp with time zone,
+  revoked_by_user_id integer,
+  CONSTRAINT junior_safety_checks_dates_check CHECK ((expires_on > checked_on)),
+  CONSTRAINT junior_safety_checks_kind_check CHECK ((kind = ANY (ARRAY['police-vet'::text, 'working-with-children'::text, 'other'::text]))),
+  CONSTRAINT junior_safety_checks_recorded_by_user_id_fkey FOREIGN KEY (recorded_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_safety_checks_revoked_by_user_id_fkey FOREIGN KEY (revoked_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_safety_checks_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_safety_checks_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_safety_checks_checked_on_not_null NOT NULL checked_on,
+  CONSTRAINT junior_safety_checks_expires_on_not_null NOT NULL expires_on,
+  CONSTRAINT junior_safety_checks_id_not_null NOT NULL id,
+  CONSTRAINT junior_safety_checks_kind_not_null NOT NULL kind,
+  CONSTRAINT junior_safety_checks_recorded_at_not_null NOT NULL recorded_at,
+  CONSTRAINT junior_safety_checks_recorded_by_user_id_not_null NOT NULL recorded_by_user_id,
+  CONSTRAINT junior_safety_checks_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_safety_checks_user_id_not_null NOT NULL user_id,
+  CONSTRAINT junior_safety_checks_pkey PRIMARY KEY (id)
+);
+CREATE INDEX junior_safety_checks_recorded_by_user_id_idx ON public.junior_safety_checks USING btree (recorded_by_user_id);
+CREATE INDEX junior_safety_checks_revoked_by_user_id_idx ON public.junior_safety_checks USING btree (revoked_by_user_id);
+CREATE INDEX junior_safety_checks_user_id_idx ON public.junior_safety_checks USING btree (user_id);
+CREATE INDEX junior_safety_checks_user_idx ON public.junior_safety_checks USING btree (tenant_id, user_id);
+
 CREATE TABLE membership_reminders_sent (
   membership_id integer NOT NULL,
   session_date date NOT NULL,
@@ -2075,6 +2108,7 @@ CREATE SEQUENCE jersey_registrations_id_seq AS integer OWNED BY jersey_registrat
 CREATE SEQUENCE junior_bookings_id_seq AS integer OWNED BY junior_bookings.id;
 CREATE SEQUENCE junior_emergency_contacts_id_seq AS integer OWNED BY junior_emergency_contacts.id;
 CREATE SEQUENCE junior_profiles_id_seq AS integer OWNED BY junior_profiles.id;
+CREATE SEQUENCE junior_safety_checks_id_seq AS integer OWNED BY junior_safety_checks.id;
 CREATE SEQUENCE memberships_id_seq AS integer OWNED BY memberships.id;
 CREATE SEQUENCE message_threads_id_seq AS integer OWNED BY message_threads.id;
 CREATE SEQUENCE messages_id_seq AS integer OWNED BY messages.id;
@@ -2212,6 +2246,7 @@ ALTER TABLE junior_bookings ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_emergency_contacts ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_medical_notes ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_profiles ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE junior_safety_checks ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE membership_reminders_sent ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE memberships ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE message_threads ENABLE AND FORCE ROW LEVEL SECURITY;
@@ -2278,6 +2313,7 @@ POLICY tenant_isolation ON junior_bookings (PERMISSIVE) FOR ALL TO {public} USIN
 POLICY tenant_isolation ON junior_emergency_contacts (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_medical_notes (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_profiles (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON junior_safety_checks (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON membership_reminders_sent (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON memberships (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON message_threads (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));

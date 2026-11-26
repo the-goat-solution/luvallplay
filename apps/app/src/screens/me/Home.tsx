@@ -16,11 +16,11 @@ import { useId } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
 import { apiForClub, store } from "../../app.ts";
-import { ClubScopeProvider, useClubConfigs, usePrefs, useSession, useT, type Club, type ClubConfig } from "../../hooks.tsx";
+import { ClubScopeProvider, useClubConfigs, usePrefs, useSession, useT, type Club, type ClubConfig, useWho } from "../../hooks.tsx";
 import { latestThreads, mergeCalendars, nextAcross } from "../../lib/home.ts";
 import { ClubTag } from "../../components/ClubTag.tsx";
 import { LoadError } from "../../components/LoadError.tsx";
-import { meKey, type Me } from "./data.ts";
+import { meKey, type Me, useQueue, withWaiting } from "./data.ts";
 import { JoinCard } from "./Membership.tsx";
 import { MembershipAlert } from "./MembershipAlert.tsx";
 import { Greeting } from "../../components/Greeting.tsx";
@@ -81,21 +81,24 @@ function Messages({ loaded, t }: { loaded: Loaded[]; t: T }) {
 }
 
 export function AllClubsHome({ clubs }: { clubs: Club[] }) {
-  const { token, homeClub } = usePrefs();
+  const who = useWho();
+  const { homeClub } = usePrefs();
+  const { waiting } = useQueue();
   const session = useSession();
   const t = useT(null);
   const configs = useClubConfigs(clubs);
   const results = useQueries({
     queries: clubs.map((c) => ({
-      queryKey: meKey(c.slug, token),
+      queryKey: meKey(c.slug, who),
       queryFn: ({ signal }: { signal: AbortSignal }) => apiForClub(c.apiBase).me.home({ club: c.slug }, { signal }),
-      enabled: !!token,
+      enabled: !!who,
       staleTime: 30_000,
     })),
   });
 
   const settled = results.every((r) => r.data || r.isError);
-  const all: Loaded[] = clubs.flatMap((club, i) => (results[i].data ? [{ club, config: configs[i], me: results[i].data as Me }] : []));
+  // Choices that still wait on this device show over what each club last said.
+  const all: Loaded[] = clubs.flatMap((club, i) => (results[i].data ? [{ club, config: configs[i], me: withWaiting(results[i].data as Me, club.slug, waiting) }] : []));
   const failed = clubs.filter((_, i) => !results[i].data && results[i].isError);
   // A filter for a club the person has left: all clubs again.
   const chosen = homeClub && clubs.some((c) => c.slug === homeClub) ? homeClub : null;

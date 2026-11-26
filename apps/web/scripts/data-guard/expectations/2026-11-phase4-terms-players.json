@@ -1,0 +1,14 @@
+{
+  "change": "2026-11-phase4-terms-players",
+  "description": "Phase 4 (handoff §1a): Three Wolves' row in tenants gets its words for a player and a pair, for the shared match tracker: terms.player_name, terms.players_name, terms.pair_name (Wolf, Wolves, Pack) and the Vietnamese ones under terms.localized.vi (Sói, Sói, Bầy). They equal the built-in settings in lib/constants.ts, so the settings shadow stops reporting a difference (audit C0). One row of one platform table changes; keys are added, nothing is removed or renamed. No account, email, phone, session, role, membership or club-owned row may change. Rehearsal on a Neon branch of production, so nothing is volatile.",
+  "allowChangedColumns": [
+    {
+      "target": "tenants.terms",
+      "reason": "The one intended change: Three Wolves' row gains its words for a player and a pair. tenants has one row."
+    },
+    {
+      "target": "tenants.updated_at",
+      "reason": "Set to now() by the same UPDATE."
+    }
+  ]
+}

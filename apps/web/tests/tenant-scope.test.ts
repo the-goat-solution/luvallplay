@@ -8,7 +8,7 @@ import fs from "node:fs";
 import pg from "pg";
 import { CLUB_OWNED_TABLES } from "@luvallplay/db/tenancy";
 import { migrate } from "../scripts/db/migrate.mjs";
-import { isReadOnlyStatement, probeTenantIsolation, readScoped, scopeClient, scopePool, scopeStatement, textOf, transactionVerb } from "../lib/tenant-scope.ts";
+import { existingTables, isReadOnlyStatement, probeTenantIsolation, readScoped, scopeClient, scopePool, textOf, transactionVerb } from "../lib/tenant-scope.ts";
 import { shadowHeartbeat } from "../lib/shadow-log.ts";
 
 test("statements that open or close a transaction are recognised", () => {
@@ -204,6 +204,80 @@ describe("the scoped connection", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_G
     const out = await shadowHeartbeat(pool, pool);
     assert.deepEqual(out.map((o) => [o.what, o.result]), [["settings", "clean"], ["routing", "clean"], ["tenant-reads", "clean"]]);
   });
+
+  test("a club-owned table whose migration hasn't run: the probe names it, the heartbeat skips it and says so (audit C0)", async () => {
+    const tables = [...CLUB_OWNED_TABLES, "not_migrated_yet"];
+    assert.deepEqual(await existingTables(pool, tables), { present: [...CLUB_OWNED_TABLES], missing: ["not_migrated_yet"] });
+    // verify.mjs, run after a migration, must not let a missing table pass.
+    assert.deepEqual(await probeTenantIsolation(pool, 1, tables), ["not_migrated_yet: the table doesn't exist"]);
+    // The heartbeat: the deployment is ahead of its database. Without the skip
+    // one query over every table fails, and the whole check was "unavailable".
+    await pool.query(`ALTER TABLE junior_attendance RENAME TO junior_attendance_later`);
+    try {
+      await pool.query(`DELETE FROM admin_audit_log WHERE action LIKE 'shadow.%'`);
+      const out = await shadowHeartbeat(pool, pool);
+      assert.deepEqual(out.map((o) => [o.what, o.result]), [["settings", "clean"], ["routing", "clean"], ["tenant-reads", "clean"]]);
+      const row = (await pool.query(`SELECT target, meta FROM admin_audit_log WHERE action = 'shadow.tenant-reads'`)).rows[0];
+      assert.deepEqual(row.meta.skipped, ["junior_attendance"]);
+      assert.equal(row.meta.tables, CLUB_OWNED_TABLES.length - 1);
+    } finally {
+      await pool.query(`ALTER TABLE junior_attendance_later RENAME TO junior_attendance`);
+    }
+  });
+
+  test("given a pool that already names the club, the probe's \"no club named\" half can't work: why the heartbeat takes the unscoped pool", async () => {
+    // What the roster cron did under `enforce` (audit, Medium): a false alarm every day.
+    const scoped = scopePool(pool, async () => 1);
+    const viaScoped = await probeTenantIsolation(scoped, 1, ["tenant_modules"]);
+    assert.equal(viaScoped.length, 1);
+    assert.match(viaScoped[0], /^tenant_modules: \d+ rows visible with no club named$/);
+    assert.deepEqual(await probeTenantIsolation(pool, 1, ["tenant_modules"]), []);
+  });
+
+  test("the probe from the app's own login: no owner to compare with, so it checks what the role can see", async () => {
+    // A login like runbook §11.2's: no rights of its own, may only step down.
+    await pool.query(`DROP ROLE IF EXISTS probe_login`);
+    await pool.query(`CREATE ROLE probe_login LOGIN PASSWORD 'probe' NOINHERIT`);
+    await pool.query(`GRANT luvallplay_app TO probe_login WITH INHERIT FALSE, SET TRUE`);
+    const u = new URL(urlFor(NAME));
+    u.username = "probe_login";
+    u.password = "probe";
+    const login = new pg.Pool({ connectionString: u.toString(), max: 3 });
+    try {
+      await assert.rejects(login.query(`SELECT count(*) FROM tenant_modules`), /permission denied/);
+      await assert.rejects(probeTenantIsolation(login, 1, CLUB_OWNED_TABLES), /permission denied/, "the owner's half can't run on this login");
+      assert.deepEqual(await probeTenantIsolation(login, 1, CLUB_OWNED_TABLES, { ownerReads: false }), []);
+      // A policy that lets everything through is still caught from the inside.
+      const club2 = (
+        await pool.query(
+          `INSERT INTO tenants (slug, name, status, country, region, timezone, currency, languages, sports, payment_mode, incorporated, stripe_status, bank_details, theme, terms)
+           SELECT 'probe-club', 'Probe Club', status, country, region, timezone, currency, languages, sports, payment_mode, incorporated, 'none', '{}'::jsonb, theme, terms FROM tenants WHERE slug = 'three-wolves' RETURNING id`,
+        )
+      ).rows[0].id;
+      await pool.query(`INSERT INTO tenant_modules (tenant_id, module_id, enabled) VALUES ($1, 'home', true)`, [club2]);
+      await pool.query(`DROP POLICY tenant_isolation ON tenant_modules`);
+      await pool.query(`CREATE POLICY tenant_isolation ON tenant_modules FOR ALL USING (true)`);
+      try {
+        const differences = await probeTenantIsolation(login, 1, CLUB_OWNED_TABLES, { ownerReads: false });
+        assert.equal(differences.length, 2);
+        assert.match(differences[0], /^tenant_modules: the app's role sees \d+ rows of another club$/);
+        assert.match(differences[1], /^tenant_modules: \d+ rows visible with no club named$/);
+        // The heartbeat writes its rows through `db` and probes through the login.
+        await pool.query(`DELETE FROM admin_audit_log WHERE action LIKE 'shadow.%'`);
+        const out = await shadowHeartbeat(pool, login, { ownerReads: false });
+        assert.deepEqual(out.map((o) => [o.what, o.result]), [["settings", "clean"], ["routing", "clean"], ["tenant-reads", "differ"]]);
+        assert.equal((await pool.query(`SELECT meta FROM admin_audit_log WHERE action = 'shadow.tenant-reads'`)).rows[0].meta.as, "app-login");
+      } finally {
+        await pool.query(`DROP POLICY tenant_isolation ON tenant_modules`);
+        await pool.query(`CREATE POLICY tenant_isolation ON tenant_modules FOR ALL USING (tenant_id = app_tenant_id()) WITH CHECK (tenant_id = app_tenant_id())`);
+        await pool.query(`DELETE FROM tenant_modules WHERE tenant_id = $1`, [club2]);
+        await pool.query(`DELETE FROM tenants WHERE id = $1`, [club2]);
+      }
+    } finally {
+      await login.end();
+      await pool.query(`DROP ROLE IF EXISTS probe_login`);
+    }
+  });
 });
 
 describe("the database client's modes (standard-Postgres driver)", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST_URL" : false }, () => {
@@ -338,5 +412,94 @@ describe("the database client's modes (standard-Postgres driver)", { skip: !BASE
     const last = (await shadowRows()).at(-1)!;
     assert.match(last.meta.statement, /\$1/);
     assert.doesNotMatch(JSON.stringify(last.meta), /"home"/);
+  });
+
+  test("shadow: Drizzle and connect() are compared too, and their statements still run once, as the owner (audit C0b)", async () => {
+    process.env.TENANT_SCOPE = "shadow";
+    const shadowRows = async () => (await admin.query(`SELECT target, meta FROM admin_audit_log WHERE action = 'shadow.tenant-reads' ORDER BY id`)).rows;
+    await admin.query(`DELETE FROM admin_audit_log WHERE action LIKE 'shadow.%'`);
+    await database.closeDatabase(); // forget what the last test already reported
+    const club2 = (await admin.query(`SELECT id FROM tenants WHERE slug = 'hanoi-smash'`)).rows[0].id;
+
+    // Drizzle: a repository read with no club condition sees both clubs as the owner.
+    const viaOrm = await database.orm().select().from(database.schema.tenant_modules);
+    assert.ok(viaOrm.some((m) => m.tenant_id === club2), "still answered by the owner");
+    let recorded = await shadowRows();
+    assert.equal(recorded.length, 1);
+    assert.equal(recorded[0].meta.detail, "rows differ");
+    assert.match(recorded[0].meta.statement, /from "tenant_modules"/);
+    // A clean Drizzle read records nothing; neither does a write, which runs once.
+    await database.orm().select().from(database.schema.tenants);
+    const before = (await admin.query(`SELECT count(*)::int AS n FROM usage_counters`)).rows[0].n;
+    await database.orm().insert(database.schema.usage_counters).values({ tenant_id: 1, metric: "shadow.test", period: "2026-11-01", quantity: 1 });
+    assert.equal((await admin.query(`SELECT count(*)::int AS n FROM usage_counters`)).rows[0].n, before + 1);
+    assert.equal((await shadowRows()).length, 1);
+
+    // Drizzle's transactions borrow a connection: its reads are compared as well.
+    await database.orm().transaction(async (tx) => {
+      const r = await tx.execute(`SELECT tenant_id, module_id FROM tenant_modules WHERE enabled ORDER BY 1, 2`);
+      assert.ok(r.rows.length > 1);
+      // (Not a read by the sampler's rule, so it isn't compared: the two roles would answer differently by design.)
+      assert.notEqual((await tx.execute(`SELECT current_user AS role, pg_advisory_xact_lock(424242)`)).rows[0].role, "luvallplay_app");
+    });
+    recorded = await shadowRows();
+    assert.equal(recorded.length, 2);
+    assert.match(recorded[1].meta.statement, /WHERE enabled/);
+
+    // sql.connect(): the transaction is the caller's, untouched; its reads are sampled.
+    const client = await database.db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`UPDATE usage_counters SET quantity = 7 WHERE metric = 'shadow.test'`);
+      // Reads its own uncommitted write, as before.
+      assert.equal((await client.query(`SELECT quantity::int AS q FROM usage_counters WHERE metric = $1`, ["shadow.test"])).rows[0].q, 7);
+      const leaky = await client.query(`SELECT tenant_id FROM tenant_modules WHERE module_id = $1 ORDER BY 1`, ["home"]);
+      assert.equal(leaky.rows.length, 2);
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+    assert.equal((await admin.query(`SELECT quantity::int AS q FROM usage_counters WHERE metric = 'shadow.test'`)).rows[0].q, 1, "the rollback is the caller's");
+    recorded = await shadowRows();
+    assert.equal(recorded.length, 3);
+    assert.match(recorded[2].meta.statement, /WHERE module_id = \$1/);
+    assert.doesNotMatch(JSON.stringify(recorded[2].meta), /"home"/);
+    await admin.query(`DELETE FROM usage_counters WHERE metric = 'shadow.test'`);
+  });
+
+  test("shadow: a transaction never waits on the pool for its comparison (no deadlock when every connection is held)", async () => {
+    process.env.TENANT_SCOPE = "shadow";
+    process.env.PG_POOL_MAX = "2";
+    await database.closeDatabase();
+    await admin.query(`DELETE FROM admin_audit_log WHERE action LIKE 'shadow.%'`);
+    const leaky = `SELECT tenant_id FROM tenant_modules WHERE module_id = 'home' ORDER BY 1`;
+    try {
+      const a = await database.db.connect();
+      const b = await database.db.connect();
+      try {
+        // Both connections are held. Each read would need a third for its
+        // comparison; waiting for one here would hang for ever.
+        const done = await Promise.race([
+          Promise.all([a.query(leaky), b.query(leaky)]).then(() => "answered"),
+          new Promise((resolve) => setTimeout(() => resolve("hung"), 3000)),
+        ]);
+        assert.equal(done, "answered");
+      } finally {
+        a.release();
+        b.release();
+      }
+      assert.equal((await admin.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'shadow.tenant-reads'`)).rows[0].n, 0, "skipped, not compared");
+      // With a connection to spare, the same read is compared.
+      const c = await database.db.connect();
+      try {
+        await c.query(leaky);
+      } finally {
+        c.release();
+      }
+      assert.equal((await admin.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'shadow.tenant-reads'`)).rows[0].n, 1);
+    } finally {
+      delete process.env.PG_POOL_MAX;
+      await database.closeDatabase();
+    }
   });
 });

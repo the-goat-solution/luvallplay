@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
 import { apiForClub } from "../app.ts";
-import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, usePrefs, useT, type Club, type ClubConfig } from "../hooks.tsx";
+import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, useT, type Club, type ClubConfig, useWho } from "../hooks.tsx";
 import { ClubTag, ScopeTag } from "../components/ClubTag.tsx";
 import { latestThreads } from "../lib/home.ts";
 import { localeOf } from "../lib/format.ts";
@@ -66,13 +66,13 @@ function ThreadLink({ th, club, config, open, t, locale }: { th: ThreadItem; clu
 function AllThreads({ clubs, open }: { clubs: Club[]; open: Open }) {
   const t = useT(null);
   const locale = localeOf(useLang(), "NZ");
-  const { token } = usePrefs();
+  const who = useWho();
   const configs = useClubConfigs(clubs);
   const lists = useQueries({
     queries: clubs.map((c) => ({
-      queryKey: ["messages", c.slug, token],
+      queryKey: ["messages", c.slug, who],
       queryFn: ({ signal }: { signal: AbortSignal }) => apiForClub(c.apiBase).messages.list({ club: c.slug }, { signal }),
-      enabled: !!token,
+      enabled: !!who,
       staleTime: 15_000,
     })),
   });

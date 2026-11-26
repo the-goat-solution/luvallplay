@@ -483,7 +483,13 @@ export const ExpectationsSchema = z.object({
   allowDroppedTables: allow.default([]),
   allowDroppedColumns: allow.default([]),
   allowChangedColumns: allow.default([]),
-  allowRowDecrease: allow.default([]),
+  /**
+   * Tables allowed to have fewer rows. With `people`, only those people (an
+   * account id, or "junior:<id>") may have fewer rows there: anyone else
+   * losing a row in the same table is still DATA_LOST. Without it, the
+   * allowance covers everyone in the table (a whole-table clean-up).
+   */
+  allowRowDecrease: z.array(z.object({ target: z.string().min(1), reason: z.string().min(10), people: z.array(z.string().min(1)).min(1).optional() })).default([]),
   allowDataLoss: allow.default([]),
   /** Account ids allowed to be removed or have their email changed (e.g. a reviewed duplicate merge). */
   allowAccountChanges: allow.default([]),
@@ -578,6 +584,9 @@ export function diffSnapshots(before: Snapshot, after: Snapshot, x: Expectations
   const signedOut: string[] = [];
   const lostData = new Map<string, string[]>();
   const accountAllowed = (id: string) => matches(x.allowAccountChanges, id);
+  // An allowance that names people excuses only them; one that doesn't excuses the whole table.
+  const rowDecreaseAllowedFor = (table: string, personId: string) =>
+    matches(x.allowRowDecrease.filter((a) => !a.people || a.people.includes(personId)), table);
 
   for (const b of before.people) {
     if (b.deleted) continue;
@@ -602,7 +611,7 @@ export function diffSnapshots(before: Snapshot, after: Snapshot, x: Expectations
       const newKey = renameLink(key, x);
       const table = newKey.split(".")[0];
       if (isVolatile(key.split(".")[0]) || isVolatile(key.split("[")[0])) continue;
-      if ((a.links[newKey] ?? 0) < n && !matches(x.allowDataLoss, key) && !matches(x.allowDataLoss, newKey) && !matches(x.allowRowDecrease, table)) {
+      if ((a.links[newKey] ?? 0) < n && !matches(x.allowDataLoss, key) && !matches(x.allowDataLoss, newKey) && !rowDecreaseAllowedFor(table, b.id)) {
         lostData.set(key, [...(lostData.get(key) ?? []), b.id]);
       }
     }

@@ -456,6 +456,14 @@ Built on branch `claude/luvallplay-phase-4`; the runbook is `docs/plans/phase-4-
 | 8. Final pass (25 Nov 2026) | Every screen and card says when its data can't load, with Try again (APP46); speed on a mid-range phone within limits (APP47); screenshots of every screen at five widths as a CI artifact (APP22); old apps keep working: the contract compared with main's in CI (`pnpm --filter @luvallplay/api compat`); the "Your match is on" pill on every tab; Free now on Record stats; the tracker no longer scrolls sideways on phones (APP10 now covers it) | Screenshots are for people, not pixel-compared: fonts differ between machines, and layout regressions are caught by APP10 and APP11. |
 | Vision: the tracker's words (25 Nov 2026) | The tracker's text names no club and no money: the host fills in the words for a player and a pair and the prices. The website keeps Three Wolves' words and NZ$; the app uses plain words and the prices from the API in the club's money. Test `vision-words.test.ts`; APP41 checks the app's prices | Needs the owner's OK: the website's tracker text comes through the new path (unchanged, except that every price line now says "NZ$5", where two said "$5") |
 | Extras: fonts and a club's words for a player (25 Nov 2026) | Luvallplay's fonts bundled; a club's fonts from its website (theme `fonts`, `font-src` for the API hosts, `Access-Control-Allow-Origin` on the website's font files); optional club terms `player_name`, `players_name`, `pair_name` for the tracker, with Three Wolves' in migration 0013. Journey APP48 | Migration 0013 adds keys to Three Wolves' `tenants.terms` only (no schema change); it runs in production with the owner's OK, after which the app's tracker says "Wolf 1" there too |
+### 4.8 Phase 4 close-out and Phase 5 delivery log (lane N)
+
+Lane N's own log (§9.2): the audit's Phase 4 fixes, the cutover of Three Wolves members to the app, then the store apps. The cutover and every step after it are asked of the owner first.
+
+| Step | What landed | Plan change |
+|---|---|---|
+| Parity checklist and cutover plan (25 Nov 2026) | [`phase-4-cutover.md`](./phase-4-cutover.md): 48 things a member can do on the website's `/profile`, compared with the app (32 the same, 5 only in the app, 3 partly, 8 missing; nothing paid or booked is missing); what blocks the cutover (B1 to B7); the one-time session handover (a 60-second single-use token from the website to the app, the admin handoff mirrored); the steps from rehearsal to retiring `/profile` (decision AO), each with its undo; every link and email that points at `/profile`. Nothing was changed in the product. | **Three blockers the Phase 4 gate didn't have:** the app's sign-in sends no bot-check token (refused in production if Turnstile is on); a link opened signed out forgets its target; player emails, the app's own sign-in email included, link to the website. **The website session stays** after `/profile` is retired (admin and the public join and booking forms use it). |
+
 ---
 
 ## 5. Request 4: clean-up of all pages
@@ -1054,6 +1062,35 @@ Findings and changes recorded as the work goes:
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.
   - Local development has Postgres 16. The schema drift check needs 18 and runs in CI and against the Neon rehearsal branch.
 
+#### Lane T delivery log (tenancy switch: steps 11 and 12)
+
+Lane T (§9.2) owns the rest of Phase 3 from 25 Nov 2026. One pull request per step, branches `claude/lane-t-<step>`. The dated record of production steps and the shadow clock is in [`phase-3-runbook.md`](./phase-3-runbook.md) §13.
+
+| Item (audit) | What | State |
+|---|---|---|
+| `--to` for the migrator (C0) | `pnpm db:migrate --to 0012` stops after the named migration, so production steps run one at a time | PR #152, CI green on its own job; not merged while `main`'s players'-app job is red |
+| Shadow report (C0) | A day is clean only when `settings`, `routing` and `tenant-reads` are all clean and none is `differ` or `unavailable`; a day with nothing recorded isn't clean; `--since`, `--need` | PR #159, waits for the owner's OK (it changes the database client) |
+| Heartbeat (C0, Medium) | Skips a club-owned table whose migration hasn't run and names it; probes through the unscoped pool, so `enforce` doesn't raise a false alarm; works from the app's own login | PR #159 |
+| Shadow coverage (C0b) | Shadow mode compares Drizzle's reads (`orm()`) and reads on `sql.connect()` connections; never waits on the pool while holding a connection | PR #159 |
+| Advisory lock (Medium) | Membership sign-up holds `pg_advisory_xact_lock` in one transaction, a savepoint per candidate day | PR #164, waits for the owner's OK (payments path) |
+| `enforce` latency (Medium) | Three round trips per scoped statement instead of five; `scripts/tenants/load-enforce.mjs` | PR #169. **Load test on the rehearsal copy of production (25 Nov, pooled host): a burst of nine reads under `enforce` takes 2.98× the owner's with this change and 4.96× without it**, exactly the round-trip counts. The multi-statement `BEGIN` message works through Neon's pooler. The absolute times are from the build session (about 230 ms a round trip through its proxy), so the in-region figure is still to measure from a Sydney preview |
+| Migrations `0012`, `0013` (C0) | Approved 25 Nov. One at a time under the data-change protocol | **Both rehearsed 25 Nov, each alone with `--to`, on a fresh copy of production: 19 accounts, 0 problems, views identical, no drift.** **Both run on production 26 Nov 2026 (00:44 and 00:47 UTC), one at a time, each with its own restore point: 19 accounts, 0 problems, no drift, verify consistent** (runbook §13.2). Neon has 7 branches of 10 |
+| 7-day clock | Restarts when #159 is live (`0012` and `0013` ran on 26 Nov) | **Not restarted**: #159 waits for the owner's OK and green CI |
+| C1, C6, C7, H1, H2 | Second-club blockers (week 2) | Not started |
+| Club paths (`clever-lovelace`) | Rebase, check its claims, merge behind `CLUB_PATHS` (off) | Not started |
+| Step 11, step 12 | `enforce` and `APP_DATABASE_URL`; then the email joins and the `COALESCE(…, 1)` defaults | Gated: 7 clean days by the tightened report and T1 on a copy of production with two clubs; the owner is asked before each switch |
+
+Findings as the work goes:
+
+- **The old report could not have failed on production's actual state.** On 25 Nov the record had `settings: differ` and `tenant-reads: unavailable` beside `routing: clean` every day; the report's rule (any clean row, no differ row for that check) would have called a day with only the last two clean. The new rule is tested against exactly that day.
+- **A comparison started from inside a transaction can deadlock the pool.** It needs a connection while the caller holds one. The first version of the shadow coverage hung in its own test (every connection held, the club-id lookup waiting for one). Comparisons from a held connection now run only when a connection is spare at that instant, and are skipped otherwise.
+- **Under `enforce` the heartbeat's probe was given the scoped pool**, so "no club named" still named the club: a daily false alarm, reproduced in a test. With the app's own login there is no owner to compare row counts with, so the probe checks from the inside (no other club's rows with the club named; none with no club named).
+- **`set_config('role', …, true)` is `SET LOCAL ROLE`**, so the role and the club are one statement, and it shares a message with `BEGIN`. The club id is written into that text, after a whole-number check.
+- **Migration `0013` had no data-guard expectations file and no rehearsal report** (`0012` has both). The expectations are written (`2026-11-phase4-terms-players*.json`: `tenants.terms` and `tenants.updated_at` on the one row, nothing else). A dry run on synthetic data passes with the file and fails without it on exactly those two columns. Rehearsed on a fresh copy of production on 25 Nov (`docs/rehearsals/2026-11-phase4-terms-players.md`): passed.
+- **`main`'s CI is red since #150** in the players' app journeys (1 of 60), not in lane T's files. Told to the coordinating thread; nothing of lane T's merges while a check is red.
+- **The lane's session reaches the database since 25 Nov, 20:10 UTC.** A new thread runs in the `three-wolves-badminton` environment, which allows the Neon hosts and holds the organisation's API key. Raw Postgres connections don't pass its proxy, so every script runs with `DB_DRIVER=neon-ws` (and `NODE_USE_ENV_PROXY=1` for the app's own client), as the Phase 3 runs did.
+- **Lane N's question (cutover B5): 0 live accounts have a phone but no usable email** (read-only count on production, 25 Nov: 19 live accounts, 16 with a phone, 6 verified). An account's email is required, and only a deleted account gets a placeholder, so it can't happen today.
+
 ---
 
 ## 7. Phase 6: brand, websites and the setup wizard
@@ -1283,6 +1320,32 @@ Build them in this order, each one releasable on its own. **Decision Z: social a
      - They carry a verified badge and **can take payment through the platform** (the country's payment provider, §6.5, with a platform fee that sits at 0% while everything is free).
    - **Player-to-player listings are unverified:** no payment through the platform, and a clear "trade at your own risk" notice. The platform takes no responsibility, as on Facebook Marketplace.
    - Listings can be reported. Banned-item rules, sold or expired listings auto-hide, and listing photos go through the same image moderation.
+
+### 8.1 Phase 7 delivery log (lane G)
+
+*Lane G builds items 1 and 2 only. Nothing is built for social or the marketplace (decision Z).*
+
+| Step | What | State |
+|---|---|---|
+| G1 | **Glicko-2 as pure code** (`packages/core/src/rating`): the rating maths, which matches count, weekly rating periods, doubles, and the leaderboard views. **Per-sport scoring rules** (`packages/core/src/scoring`). Nothing reads either yet, so no club sees a change | Built, 40 tests |
+| G2 | The Arena checks scores through the scoring rules (a small change to shared Arena code) | Not started. **Owner's OK before merging** |
+| G3 | Find a club: data model, PostGIS plan and rehearsal, API behind an off module switch | Not started. PostGIS goes through the migration queue; production only with the owner's OK |
+| G4 | Ratings: tables, the weekly job, the per-profile opt-in and the API, behind an off module switch | Not started |
+| G5 | The app's Discover tab (map, club cards, rating boards), hidden until the modules are on | Not started |
+| G6 | Real club listings | Waits for lane W's wizard (W2) |
+
+**How the rating works (G1), in plain words**
+- Every player starts at 1500 with a wide "not sure yet" range. Beating a stronger player moves the number up a lot, beating a weaker one a little. The more verified games someone plays, the narrower the range.
+- Ratings are **per sport** and change **once a week** (Monday to Sunday), from all of that week's games together, so the order of games inside a week doesn't matter and re-running the same matches always gives the same numbers.
+- **Only verified games count.** An Arena challenge counts when a player on one side entered the score and a player on the *other* side confirmed it. A round robin game counts when an admin locked the score and every player in it has an account. Left out: anything ever disputed (also when an admin settled it), voided or unfinished games, and results the timer confirmed because the other side never answered.
+- **Doubles:** each player is rated against the other pair's average, adjusted for the gap to their own partner, so two partners with the same rating move by the same amount.
+- **Boards:** city, country and "world" (the region, §6.9), optionally by age band (18–34, 35–44, 45–54, 55–64, 65+) or gender category. A player appears only after opting in, with at least 5 verified games and a settled rating, and drops off after 180 days without a verified game. Juniors never appear.
+- **Two guards beyond the textbook:** a rating moves by at most 700 in one week and volatility is capped, because a run of "impossible" results is far more likely to be a wrong account or made-up scores than real play.
+
+**Open choices for the owner (defaults are in the code, easy to change before anything is switched on)**
+1. Results the timer confirmed (the other side never answered) **don't count** towards the global rating. They still count for club points as today.
+2. Juniors are **never** on a global board.
+3. Age bands are adult ten-year bands; gender categories are women and men, taken from the profile, and a player who gives neither still appears on the open boards.
 
 ---
 
@@ -1671,3 +1734,77 @@ GST rules for the add-on's own invoices (the NZ company); taxable-supply informa
 
 Rough best-case build effort, to be re-baselined after Phase 3: framework and Xero 5 to 7 weeks, direct debit 2 to 3, Windcave 3 to 4, Shopify 3 to 4, MYOB 3 to 4. They share the framework, so later connectors are faster. Track I (§9) can run beside Phase 4 and 5.
 
+
+### 12.11 Windcave spike: findings (26 Nov 2026, lane I)
+
+*How this was read: Windcave's own site (`windcave.com`) and its API reference (`px5.docs.apiary.io`) are **blocked from the build environment**, so every point below comes from search-engine extracts of the named Windcave pages, or from third parties where marked. Nothing here was read from a full page. **Re-check the points marked ⚠ against the live documentation (and a test account) before any build.***
+
+**Recommendation: don't build yet.** Windcave fits the Payments interface (§6.5) for one-off card payments, but three of the interface's operations have no Windcave equivalent that we could find, a test account needs a sales conversation, and no club has asked for it. Ask Windcave for a test account and a price sheet now (it's a form and a wait, not engineering), and build when the first club with a Windcave merchant account wants it.
+
+| Payments interface (§6.5) | Windcave | Fit |
+|---|---|---|
+| Create payment, hosted | REST "sessions": `POST https://sec.windcave.com/api/v1/sessions`, HTTP Basic with a REST username and API key **per merchant**. Three hosted ways to take the card: Hosted Payment Page (redirect), Drop-In, Hosted Fields. Windcave says Drop-In and Hosted Fields keep the merchant at PCI SAQ A | Good |
+| Idempotency | An `X-ID` request header (up to 64 bytes): a repeat returns the first answer with `X-Duplicate`; the same id with a different body is a 409. This is what the framework's per-job key is for | Good |
+| Get payment | `GET /api/v1/sessions/{id}`. A transaction still processing after about 10 seconds answers **HTTP 202**: we must poll | Good, with polling |
+| Refund (full and partial) | A new transaction that refers to the original `transactionId`. Partial refunds up to the original amount. A time limit wasn't found ⚠ | Good |
+| Verify webhook | Windcave calls our `notificationUrl` (GET or POST), retries until it gets 200 or 404, and may send it more than once. **No signature was found** ⚠: the notification should be treated as a hint, and the truth read back with an authenticated `GET /sessions/{id}` | Works, but differently from Stripe: `verifyWebhook` becomes "fetch and confirm" |
+| Recurring | Stored-card charging: the first session stores the card (`storeCard`, a credential-on-file indicator) and returns a `cardId`; later charges are ours to start. A **Subscriptions API** (`/api/v1/subscriptions`) also appears in the docs, but its fields, retries and availability couldn't be read ⚠ | Possible. Unless the Subscriptions API is real and good, Luvallplay must run the renewal schedule and the retries itself, which Stripe does for us today |
+| List succeeded payments (reconciliation) | **No list or search API found** ⚠. Windcave's reporting is the Payline web portal | Gap: served from our own records plus per-session queries |
+| Payout status | **None.** Windcave is a gateway; the club's bank (the acquirer) settles | Gap: capability `payoutStatus: false`; bank matching (Akahu) covers it |
+| Apple Pay, Google Pay | Documented for Drop-In. Apple Pay needs a domain verification file per domain; Google Pay needs a Google merchant id | Extra setup per club domain |
+| Currencies | NZD and AUD weren't found stated ⚠ (believed to depend on the merchant's bank facility) | Check |
+
+**Onboarding and connection**
+- **Each club needs its own Windcave account and, reportedly, a merchant facility with its bank** (third parties; Windcave also offers its own acquiring). The club gives Luvallplay a REST username and API key: there is no OAuth or "connect" flow and no published partner programme. So Windcave is an **API-key connector** in the framework (§12.1): the key is sealed in the same vault as OAuth tokens, and rotation uses Windcave's second key.
+- **A test account isn't self-serve.** It's requested through sales and an integration-requirements form; the older product's guide says 1 to 3 business days. Test cards exist, but Windcave configures the account first. A community project exists because the test environment "is busted quite frequently" (third party). The REST test hostname wasn't confirmed ⚠.
+- **Account2Account** (pay by bank through Windcave's hosted page; ANZ, ASB, BNZ, Kiwibank, Co-operative Bank, TSB and Westpac listed for NZ) exists; whether it runs through the same REST sessions is claimed by a third party only ⚠. Its fees and refunds weren't found.
+
+**Fees.** **Windcave publishes no prices** (custom quote). Third-party figures are old and disagree (one 2019 table: $99 setup, $30 a month, about 2.8% + 30c on a bundled plan; one reseller: from $15 a month plus $50 setup), gateway fees are reportedly charged per attempt including declines, and the bank's merchant fees are separate. None of this is reliable enough to quote to a club.
+
+**What a build would be (not started):** a `windcave` provider in `lib/payments` (lane W's directory, behind the shared contract suite), capabilities `clientConfirmation: true, recurring: false` at first, `webhooks: true` with fetch-and-confirm, `payoutStatus: false`; an API-key connection in the framework; and Luvallplay-run renewals only if a club needs memberships on Windcave. The 3 to 4 weeks in §12.10 still looks right for one-off payments; recurring adds to it.
+
+**To do before a build:** request a test account and a price sheet from Windcave (owner); re-read the six ⚠ points in the live documentation; decide whether memberships on Windcave are needed at all, given direct debit and cards on Stripe.
+
+### 12.12 Provider facts checked for the build (26 Nov 2026, lane I)
+
+*Same caveat as §12.11: `developer.xero.com`, `docs.stripe.com` and `stripe.com` are blocked from the build environment. "Read" means read directly in Xero's public API definition on GitHub; "extract" means a search-engine extract of the official page; the rest is marked. This replaces the matching "unverified" notes in §12.1, §12.3 and §12.6 where it says "read" or "extract", and nothing else.*
+
+**Xero**
+- **Tokens (extract):** access tokens last 30 minutes, refresh tokens 60 days. Every refresh returns a **new refresh token**; the old one still works for a 30-minute grace period. A refresh token is only issued with the `offline_access` scope. Revoking (`POST https://identity.xero.com/connect/revocation`) removes all of that user's connections; one organisation is removed with `DELETE https://api.xero.com/connections/{id}` (read).
+- **Scopes (extract):** apps created on or after 2 March 2026 use **granular scopes** only: `accounting.transactions` is replaced by `accounting.invoices`, `accounting.payments`, `accounting.banktransactions` and `accounting.manualjournals`; `accounting.settings`, `accounting.contacts` and `accounting.attachments` are unchanged. Which scope covers credit notes wasn't found.
+- **Rate limits (extract):** per organisation 5 calls at once, 60 a minute and 5,000 a day; 10,000 a minute across the app. Over any of them is HTTP 429 with `Retry-After`; `X-Rate-Limit-Problem` says which.
+- **Idempotency (read):** an `Idempotency-Key` header, up to 128 characters, on writes. How long Xero remembers a key wasn't found.
+- **Lock dates (read):** `GET /Organisation` gives `PeriodLockDate` and `EndOfYearLockDate`. The refusal reads "The document date cannot be before the period lock date" (third parties).
+- **No deletes (read):** invoices have a `VOIDED` status; credit notes (`ACCRECCREDIT`) are allocated to invoices; spend-money bank transactions are type `SPEND`; attachments hang off invoices, credit notes and bank transactions. An invoice with payments or credit notes on it can't be voided (third party), which is one more reason refunds are credit notes.
+- **Demo company (extract):** connected like any organisation; **it resets 28 days after it's created**, and changing its country (to NZ) resets it too. The sandbox tests must expect to reconnect and re-seed.
+- **NZ GST codes (extract, and present in the API definition):** `OUTPUT2` 15% on income, `INPUT2` 15% on expenses, `ZERORATED`, `NONE`.
+- **Price tiers from 2 March 2026 (extract; prices from third parties):** Starter 5 connections, Core 50, Plus 1,000, Advanced 10,000. Reported prices: Starter free, Core A$35 a month, Plus A$245, Advanced A$1,445, with data egress allowances. The §12.3 figures in euros came from a different summary; **read Xero's pricing page before setting the add-on's price**. The developer terms forbid training AI models on API data (extract).
+
+**Stripe NZ direct debit** (`nz_bank_account`)
+- **What it is (extract):** NZD, New Zealand bank accounts, works with the Payment Element, SetupIntents, Subscriptions, Invoicing and Connect. **The business needs extra verification** before it can be switched on. Whether it's available on Connect *direct charges* without a per-account step wasn't found.
+- **The authority (extract):** Stripe calls the mandate a Direct Debit Authority. It must show the customer's bank details, the business's contact details and a link to the NZ Direct Debit Service Terms. **The Payment Element shows the terms and collects agreement itself**; a custom form must show Stripe's wording ("By providing your bank account details and confirming this payment, you authorise Stripe New Zealand Limited (authorisation code 3143978) to debit your account…"; the extract was cut short, so copy the full text from Stripe's page).
+- **Notices (extract):** a confirmation of the authority within 5 days, and a notice of the date and amount **no later than the day of each debit, the first included**. **Stripe sends both by default; sending our own means asking Stripe support.** This changes §12.6: Luvallplay's own English and Vietnamese emails can go out *as well as* Stripe's from day one, and can only *replace* them once Stripe agrees.
+- **Timing (extract; two pages disagree):** the result arrives within 2 or 3 business days. The payment is `processing` until then.
+- **Failures (extract):** `insufficient_funds`, `refer_to_customer`, `no_account` (the authority becomes inactive), `debit_not_authorized`.
+- **Disputes (extract):** up to **9 months** after the first debit when the customer says it wasn't authorised, 120 days when proper notice wasn't given, for the full amount.
+- **Fees (extract):** 1% + NZ$0.40, capped at NZ$4.00; NZ$6.00 for a failed payment; NZ$6.00 for a dispute; plus GST. So a failed debit costs the club more than the fee on a successful one, which the retry rules must respect.
+- **Test mode (extract):** bank 11, branch 0000, then account and suffix `0000000-010` succeeds, `2222222-027` insufficient funds, `8888888-000` refer to customer, `1111111-016` no account, `5555555-059` not authorised.
+
+### 12.13 Track I delivery log (lane I)
+
+Rules for this lane: nothing here is live for a club until lane W's payments interface is in and paid plans are switched on (§9.2). Everything merges behind off-switches.
+
+| Step | What | Status |
+|---|---|---|
+| I1 | **The connector framework, as pure code** (`packages/integrations`): the connector statement (what it reads, writes and never does, in English and Vietnamese, checked); token rules (refresh once under a lock even with rotating refresh tokens, a refused refresh marks the connection revoked, disconnect deletes our tokens even when the provider is down); the sync queue's rules (queued once, run under a lease, the same provider idempotency key on every attempt, backoff from 1 minute to a day, 8 failures to the error queue, Replay); what each kind of error does (retry, wait out a rate limit without counting it, straight to the error queue for a lock date or archived account, wait for a reconnect); mappings and the "changed at the provider: flag, never overwrite" decision; the reconciliation report to the cent. Plus the **token vault** (`apps/web/lib/integrations/token-vault.ts`): envelope encryption, AES-256-GCM, bound to the club, connector and connection, with key rotation, failing closed when no key is set. 22 tests (`tests/integrations-framework.test.ts`) | This pull request. Nothing reads it at runtime yet |
+| I1 | The Windcave spike (§12.11) and the provider facts (§12.12) | This pull request |
+| I2 | The tables (`integration_connections`, `integration_jobs`, `integration_mappings`, `integration_sync_log`, `integration_reconciliations`), row-level security and the isolation tests, through the migration queue; the Postgres stores behind the same interfaces | Next |
+| I3 | Xero: OAuth connect, reconnect and disconnect; read accounts, tax rates, tracking categories and bank accounts; push contacts, invoices, payments, fees, refunds and expenses; recorded-response tests, then the demo company | Waits on the Xero developer app's credentials (owner) |
+| I4 | The connections pages in Admin (on lane A's module contract), the `integrations` text namespace, the `xero`, `direct-debit` and `windcave` module entries | After A1; the paid add-on needs lane A's manifest to allow a plan other than "free" |
+| I5 | NZ direct debit in Stripe test mode: the authority screen, the stored authority, the notices in English and Vietnamese, failed and disputed debits, "pending" until the money arrives | After lane W's W1 (it builds on the payments interface) |
+
+**Plan changes from building I1**
+- **Usage is counted in the existing `usage_counters` table** (metrics `integrations.<connector>.calls`), not a separate `integration_usage` table as §12.1 lists: one meter for the cost model, not two.
+- **The queue is its own table, `integration_jobs`**, beside `integration_sync_log` (one row per attempt). §12.1 named only the log.
+- **The keys that encrypt tokens live in the deployment's encrypted settings (`INTEGRATIONS_KEKS`) for now**, behind an interface a key-management service can replace. §12.1 says "a secret manager"; choosing one is part of the §11.5 security programme.
+- **Jobs run one at a time per run**, on purpose: a club's jobs depend on each other (a payment needs its invoice) and Xero allows only 5 calls at once per organisation.

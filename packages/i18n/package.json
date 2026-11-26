@@ -13,6 +13,8 @@
     "./app": "./src/app.ts",
     "./juniors": "./src/juniors.ts",
     "./juniors-entry": "./src/juniors-entry.ts",
+    "./app-en": "./src/app-en.ts",
+    "./app-vi": "./src/app-vi.ts",
     "./format": "./src/format.ts"
   },
   "dependencies": {

@@ -10,7 +10,7 @@
 import { useEffect, useId } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { apiForClub } from "../app.ts";
-import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, usePrefs, useSession, useT, type Club } from "../hooks.tsx";
+import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useSession, useT, type Club, useWho } from "../hooks.tsx";
 import { meKey, type Me } from "./me/data.ts";
 import { JoinCard, MembershipCard } from "./me/Membership.tsx";
 import { PhotosCard } from "./me/Photos.tsx";
@@ -62,12 +62,12 @@ function Head({ pill }: { pill: { text: string; active: boolean } | null }) {
 }
 
 function useMeAll(clubs: Club[]): MeQuery[] {
-  const { token } = usePrefs();
+  const who = useWho();
   return useQueries({
     queries: clubs.map((c) => ({
-      queryKey: meKey(c.slug, token),
+      queryKey: meKey(c.slug, who),
       queryFn: ({ signal }: { signal: AbortSignal }) => apiForClub(c.apiBase).me.home({ club: c.slug }, { signal }),
-      enabled: !!token,
+      enabled: !!who,
       staleTime: 30_000,
     })),
   });

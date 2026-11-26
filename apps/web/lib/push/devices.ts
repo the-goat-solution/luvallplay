@@ -77,6 +77,17 @@ export async function removeAllDevices(db: Db, playerId: number): Promise<number
   return (await db.query(`DELETE FROM push_devices WHERE player_id = $1 RETURNING id`, [playerId])).rows.length;
 }
 
+/**
+ * For the sender only: addresses the push service says are gone (the app was
+ * removed from that phone, or the address was replaced). Their rows go,
+ * whoever they belonged to: nothing can be delivered to them any more.
+ */
+export async function removeGoneAddresses(db: Db, tokens: readonly string[]): Promise<number> {
+  const hashes = tokens.filter(isAddress).map(hashOf);
+  if (!hashes.length) return 0;
+  return (await db.query(`DELETE FROM push_devices WHERE token_hash = ANY($1::text[]) RETURNING id`, [hashes])).rows.length;
+}
+
 /** How many devices the person has registered (the addresses themselves are never shown). */
 export async function countDevices(db: Db, playerId: number): Promise<number> {
   return Number((await db.query(`SELECT count(*)::int AS n FROM push_devices WHERE player_id = $1`, [playerId])).rows[0].n);

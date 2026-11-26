@@ -3,11 +3,15 @@ import { createTransport } from "@luvallplay/api/client";
 import { createApi, type Api } from "@luvallplay/api/client.gen";
 import { API_PREFIX } from "@luvallplay/api/routes";
 import { trustedHost } from "./lib/api-host.ts";
+import { nativeSecrets } from "./lib/native/secure-storage.ts";
 import { browserStorage } from "./lib/storage.ts";
 import { createStore } from "./lib/store.ts";
 
 export const storage = browserStorage();
-export const store = createStore(storage);
+// In the store app the session token is kept in the phone's Keychain or
+// Keystore (asynchronous: main.tsx waits for store.ready()); in a browser, in
+// this page's storage as before.
+export const store = createStore(storage, nativeSecrets());
 
 /** The home API host: "" means this page's own origin. */
 export const HOME_HOST = (import.meta.env.VITE_API_BASE ?? "").replace(/\/+$/, "");

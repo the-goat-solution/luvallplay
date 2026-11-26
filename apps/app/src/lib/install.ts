@@ -1,6 +1,8 @@
 // Installing the app on the home screen: the browser's own prompt where it
 // offers one (kept from the moment it fires, before Settings is opened), the
 // steps on iPhone and iPad, nothing once it's installed.
+import { isNative } from "./native/platform.ts";
+
 type PromptEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
 let deferred: PromptEvent | null = null;
@@ -29,6 +31,8 @@ function standalone(): boolean {
 
 export const install = {
   get(): InstallState {
+    // The store app: nothing to install.
+    if (isNative()) return "none";
     if (installed || standalone()) return "installed";
     if (deferred) return "prompt";
     return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "ios" : "none";

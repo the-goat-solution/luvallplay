@@ -8,6 +8,17 @@ export type KeyValue = {
   remove(key: string): void;
 };
 
+/**
+ * Where a secret (the session token) is kept when the device has a proper
+ * place for one: the phone's Keychain or Keystore in the store app
+ * (lib/native/secure-storage.ts). Asynchronous, unlike localStorage.
+ */
+export type SecretStore = {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<void>;
+};
+
 /** In memory: tests, and the fallback when the browser refuses storage (private mode). */
 export function memoryStorage(): KeyValue {
   const map = new Map<string, string>();

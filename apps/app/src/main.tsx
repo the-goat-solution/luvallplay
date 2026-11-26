@@ -17,6 +17,7 @@ import { storage, store } from "./app.ts";
 import { watchInstall } from "./lib/install.ts";
 import { clearOffline, restoreCache, saveCache } from "./lib/offline.ts";
 import { startQueue } from "./lib/queue.ts";
+import { isNative } from "./lib/native/platform.ts";
 import { loadLang, pickLang } from "./lib/messages.ts";
 import { resolveMode } from "./lib/theme.ts";
 import { router } from "./router.tsx";
@@ -36,6 +37,10 @@ const queryClient = new QueryClient({
   },
 });
 
+// In the store app the token comes from the phone's secret store: wait for
+// it, so the first screen is the right one (Home, not sign-in). At once in a browser.
+await store.ready();
+
 // What was on screen last time opens at once, also offline (lib/offline.ts).
 restoreCache(queryClient, storage, store.get().token);
 saveCache(queryClient, storage, () => store.get().token);
@@ -46,10 +51,13 @@ store.subscribe(() => {
   }
 });
 startQueue(queryClient);
-watchInstall();
+// The store app is installed already and carries its own files: no "Install
+// the app" and no service worker there (it would only keep a second copy,
+// and stores reject apps that offer to install themselves).
+if (!isNative()) watchInstall();
 
 // The app shell from this device when there's no connection (public/sw.js). Built pages only.
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
+if (import.meta.env.PROD && "serviceWorker" in navigator && !isNative()) {
   window.addEventListener("load", () => void navigator.serviceWorker.register("/sw.js").catch(() => {}));
 }
 

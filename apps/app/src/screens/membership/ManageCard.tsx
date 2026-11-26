@@ -3,6 +3,7 @@
 // upgrade, change day, renew or turn on auto-renew (Stripe), downgrade or
 // turn off (the leave flow), resume, and receipts.
 import { useState } from "react";
+import { openOutside } from "../../lib/native/open.ts";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { CardPayment } from "../../components/CardPayment.tsx";
 import { Dialog } from "../../components/Dialog.tsx";
@@ -71,7 +72,7 @@ export function ManageCard({ m, state, cardUpdated }: { m: Member; state: Member
   };
   const openPortal = () =>
     portal.mutate(undefined, {
-      onSuccess: (r) => window.location.assign(r.url),
+      onSuccess: (r) => openOutside(r.url),
       onError: () => setMessage({ ok: false, text: t("mem_err_generic") }),
     });
   const close = () => {

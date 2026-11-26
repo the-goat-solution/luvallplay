@@ -4,6 +4,7 @@
 // confirms with an emailed code first, right here, and the new session
 // replaces the old one on this device.
 import { useId, useState, type FormEvent } from "react";
+import { openOutside } from "../../lib/native/open.ts";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@luvallplay/api/client";
 import type { AppKey } from "@luvallplay/i18n/app";
@@ -29,7 +30,7 @@ export function ClubAdmin({ clubName, email, apiBase }: { clubName: string; emai
     setStep("opening");
     try {
       const { url } = await (apiBase ? apiForClub(apiBase) : api).account.adminHandoff({});
-      window.location.assign(url);
+      openOutside(url);
     } catch (err) {
       const code = err instanceof ApiError ? err.code : undefined;
       if (code === "step_up") return setStep("confirm");

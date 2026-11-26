@@ -1,0 +1,25 @@
+// CI only (the "Android shell" job passes this with --init-script).
+//
+// Maven Central answers GitHub's shared build machines with "429 Too Many
+// Requests" when it is busy, which fails the Android build before it has
+// compiled anything. Google keeps a public copy of Maven Central; putting it
+// first means the build asks that copy, and Maven Central only for anything
+// the copy doesn't have. The project's own build files are unchanged.
+def centralCopy = "https://maven-central.storage-download.googleapis.com/maven2/"
+
+settingsEvaluated { settings ->
+    settings.pluginManagement.repositories {
+        maven { url centralCopy }
+    }
+}
+
+allprojects {
+    buildscript {
+        repositories {
+            maven { url centralCopy }
+        }
+    }
+    repositories {
+        maven { url centralCopy }
+    }
+}

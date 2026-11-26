@@ -5,6 +5,8 @@
 #   real Postgres 18 (production's version), with DATA_GUARD_REQUIRE_DB=1 so
 #   they can't be skipped silently.
 # - Production build.
+# - The web journeys and the players' app journeys, each in a real browser
+#   against a production build on a fresh Postgres 18.
 #
 # Monorepo (pnpm workspaces): the app is apps/web, the schema and
 # migrations packages/db.
@@ -49,6 +51,13 @@ jobs:
       DATA_GUARD_TEST_URL: postgres://postgres:postgres@localhost:5432/dg_test
       DATA_GUARD_REQUIRE_DB: "1"
       ROLES_TEST_URL: postgres://postgres:postgres@localhost:5432/dg_test
+      # The S3-compatible storage provider's contract runs against the S3
+      # server started below, and can't be skipped silently
+      # (tests/storage-s3.test.ts). Throwaway credentials, nothing secret.
+      S3_TEST_ENDPOINT: http://127.0.0.1:9000
+      S3_TEST_ACCESS_KEY_ID: testaccess
+      S3_TEST_SECRET_ACCESS_KEY: testsecret
+      STORAGE_REQUIRE_S3: "1"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +67,21 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Versity S3 Gateway: a small open-source S3 server that checks request
+      # signatures, serving a temporary folder. (MinIO no longer publishes images.)
+      - name: S3-compatible server for the storage contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/s3-data"
+          docker run -d --name s3 -p 9000:9000 -v "$RUNNER_TEMP/s3-data:/data" \
+            versity/versitygw:v1.11.0 \
+            --access "$S3_TEST_ACCESS_KEY_ID" --secret "$S3_TEST_SECRET_ACCESS_KEY" --port :9000 posix /data
+          # Any HTTP answer means it is up (an unsigned request gets a 403).
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null http://127.0.0.1:9000/ && exit 0
+            sleep 1
+          done
+          docker logs s3
+          exit 1
       - name: Vercel ignored-build-step rules (preview policy)
         run: bash scripts/vercel-ignore.test.sh
       - name: Types
@@ -127,6 +151,62 @@ jobs:
           echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
       - name: Gate R, end to end
         run: pnpm --filter site e2e
+
+  # The web journeys (test plan §3.8; audit C2): A1–A7 accounts and admin,
+  # M1–M5 membership, G1–G2 the Arena, T1 two clubs at the routes, API1–23
+  # the players' app API, and S2 for every optional module, in a real browser
+  # against a production build of apps/web on a fresh database built from
+  # the migrations. Synthetic people only; email is captured, never sent.
+  journeys:
+    name: Web journeys (accounts, membership, Arena, two clubs, API, modules)
+    # Pinned: Playwright's --with-deps can't install its fonts on ubuntu-26.04 yet.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_PG_URL: postgres://postgres:postgres@localhost:5432
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build (apps/web, end-to-end build)
+        run: E2E_BUILD=1 pnpm --filter web build
+      - name: Browser for the end-to-end checks
+        run: |
+          npm install -g playwright@1
+          playwright install --with-deps chromium
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+      - name: Journeys
+        working-directory: apps/web
+        run: node --test --test-concurrency=1 --test-timeout=240000 tests/e2e/journeys.mjs
+        env:
+          # Every screen at the five widths, for people to look at.
+          E2E_SHOTS: ${{ github.workspace }}/web-screens
+      - name: Screenshots of every screen (the "web-screens" artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-screens
+          path: web-screens
+          if-no-files-found: ignore
+          retention-days: 14
 
   # The players' app (apps/app): a client-side app on the typed API.
   # Phase 4 gate (test plan §9): the app's own rules, the performance budget,

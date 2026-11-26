@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AdminShell } from "@/components/admin/shell/AdminShell";
-import { NAV_GROUPS, type BadgeKey, type NavGroup } from "@/components/admin/nav-config";
+import type { BadgeKey } from "@/components/admin/nav-config";
+import { navGroups } from "@/components/admin/nav-registry";
 import { canOpenAdminPage, currentAdmin } from "@/lib/admin-access";
 import { attentionCount } from "@/lib/admin-attention";
 import { enabledModules } from "@/lib/club-modules";
@@ -16,9 +17,8 @@ export default async function AdminConsoleLayout({ children }: { children: React
   // …and only pages whose module is switched on for the club.
   const modulesOn = await enabledModules(sql);
   const allowed = (href: string) => canOpenAdminPage(ctx, href) && !blockedByModule(href, modulesOn);
-  const groups: NavGroup[] = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => allowed(i.href)) })).filter(
-    (g) => g.items.length > 0,
-  );
+  // The menu comes from the module registry (components/admin/nav-config.ts).
+  const groups = navGroups((item) => allowed(item.href));
 
   // Only count what this person can open; a failing count just hides its badge.
   const shown = new Set(groups.flatMap((g) => g.items.map((i) => i.badge)).filter(Boolean) as BadgeKey[]);

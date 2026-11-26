@@ -28,7 +28,7 @@ function clubTransport(host: string, club: string): VisionTransport {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     // The session was refused: signed out, as every other call does.
-    if (res.status === 401 && token) store.signOut();
+    if (res.status === 401 && token && token === store.get().token) store.signOut();
     return res;
   };
 }

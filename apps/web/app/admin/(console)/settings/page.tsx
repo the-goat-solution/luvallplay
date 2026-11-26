@@ -14,6 +14,7 @@ import {
 } from "@/lib/business-config";
 import { PRICES, SESSION_CAPACITY, type PlanId } from "@/lib/constants";
 import type { CmsPricingPlan } from "@/lib/pricing-plans";
+import { clubCurrencyCode, weekdayName } from "@/lib/club-brand";
 
 // Admin → Settings: the club's business config, moved out of Sanity into the
 // database (Phase 2 PR 6). Pricing plans (names, descriptions, prices,
@@ -23,13 +24,11 @@ import type { CmsPricingPlan } from "@/lib/pricing-plans";
 export const dynamic = "force-dynamic";
 const PATH = "/admin/settings";
 
-const PLAN_LABEL: Record<PlanId, string> = {
-  casual: "Casual",
-  fridayMonthly: "Monthly (Friday)",
-  fridayQuarterly: "Quarterly (Friday)",
-  wednesdayMonthly: "Monthly (Wednesday)",
-  wednesdayQuarterly: "Quarterly (Wednesday)",
-};
+/** "Monthly (Friday)" from a plan id like "fridayMonthly": the weekday comes from the id, not from a list typed here. */
+function planLabel(id: PlanId): string {
+  const m = /^([a-z]+)(Monthly|Quarterly)$/.exec(id);
+  return m ? `${m[2]} (${weekdayName(m[1])})` : weekdayName(id);
+}
 
 function back(param: "toast" | "toastError", message: string): never {
   redirect(`${PATH}?${param}=${encodeURIComponent(message)}`);
@@ -80,7 +79,7 @@ async function savePlan(formData: FormData) {
   await audit(ctx, { action: "settings.pricing_plan_saved", target: p.planId, meta: { price: p.price, stripePriceId: p.stripePriceId || null } });
   revalidatePath("/");
   revalidatePath(PATH);
-  back("toast", `${PLAN_LABEL[p.planId]} saved.`);
+  back("toast", `${planLabel(p.planId)} saved.`);
 }
 
 const settingsSchema = z.object({
@@ -110,7 +109,7 @@ function PlanForm({ plan }: { plan: CmsPricingPlan & { sort: number } }) {
   return (
     <form action={savePlan} style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
       <input type="hidden" name="planId" value={plan.planId} />
-      <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>{PLAN_LABEL[plan.planId]}</h3>
+      <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>{planLabel(plan.planId)}</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
         <label className={kit.field}>Name (English)<input name="nameEn" defaultValue={loc(plan.name, "en")} className={kit.input} /></label>
         <label className={kit.field}>Name (Vietnamese)<input name="nameVi" defaultValue={loc(plan.name, "vi")} className={kit.input} /></label>
@@ -118,7 +117,7 @@ function PlanForm({ plan }: { plan: CmsPricingPlan & { sort: number } }) {
         <label className={kit.field}>Description (Vietnamese)<input name="descVi" defaultValue={loc(plan.description, "vi")} className={kit.input} /></label>
         <label className={kit.field}>Period label (English)<input name="periodEn" defaultValue={loc(plan.periodLabel, "en")} className={kit.input} /></label>
         <label className={kit.field}>Period label (Vietnamese)<input name="periodVi" defaultValue={loc(plan.periodLabel, "vi")} className={kit.input} /></label>
-        <label className={kit.field}>Price (NZD)<input name="price" inputMode="decimal" defaultValue={plan.priceNzd ?? ""} placeholder={String(PRICES[plan.planId])} className={kit.input} /></label>
+        <label className={kit.field}>Price ({clubCurrencyCode()})<input name="price" inputMode="decimal" defaultValue={plan.priceNzd ?? ""} placeholder={String(PRICES[plan.planId])} className={kit.input} /></label>
         <label className={kit.field}>Stripe price id<input name="stripePriceId" defaultValue={plan.stripePriceId ?? ""} placeholder="price_…" className={kit.input} /></label>
         <label className={kit.field}>Order<input name="sort" inputMode="numeric" defaultValue={plan.sort} className={kit.input} /></label>
         <label style={{ alignSelf: "end" }}><input type="checkbox" name="featured" defaultChecked={Boolean(plan.featured)} /> Featured</label>
@@ -126,7 +125,7 @@ function PlanForm({ plan }: { plan: CmsPricingPlan & { sort: number } }) {
         <label className={kit.field}>Features, one per line (Vietnamese)<textarea name="featuresVi" rows={5} defaultValue={(plan.features ?? []).map((f) => f.vi ?? "").join("\n")} className={kit.input} /></label>
       </div>
       <p style={{ color: "#666", fontSize: 12, margin: "6px 0" }}>Empty fields use the site&apos;s built-in text. The Stripe price id is used only when the matching STRIPE_PRICE_* setting isn&apos;t set in Vercel.</p>
-      <SubmitButton className={kit.btn}>Save {PLAN_LABEL[plan.planId]}</SubmitButton>
+      <SubmitButton className={kit.btn}>Save {planLabel(plan.planId)}</SubmitButton>
     </form>
   );
 }

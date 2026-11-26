@@ -47,6 +47,9 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   ["/admin/jersey", "shop"],
   ["/admin/members", "memberships"],
   ["/admin/photos", "gallery"],
+  ["/admin/juniors", "juniors"],
+  // Where an owner switches Juniors on, so it has to be served while Juniors is off.
+  ["/admin/juniors/setup", "core"],
   // ── API: account and core ───────────────────────────────────────────────
   ["/api/auth", "account"],
   ["/api/profile", "account"],

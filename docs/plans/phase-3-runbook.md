@@ -192,7 +192,9 @@ Step 4 changes no data: the settings were stored by step 1. It ships in parts.
 
 **Shadow reads are on (23 Nov 2026, 09:50 UTC).** `CLUB_SETTINGS_SOURCE=shadow` is set for Production (by the build session, under the owner's blanket approval), and #104's deploy picked it up. The earliest day to switch to `database` is **30 Nov**, if the logs and Admin → Setup check → Club settings show no difference. Rollback at any time is deleting the variable and redeploying.
 
-**The record of shadow reads.** The hosting plan keeps server logs for one hour, so logs can't show seven clean days. Each result is a row in `admin_audit_log` (`action = shadow.settings`, `target` = `clean`, `differ` or `unavailable`): a difference is written when a request sees it, and the roster cron writes one result a day whether or not there is a play day (`lib/shadow-log.ts`). To read it: `node --import ./tests/register.mjs scripts/shadow-report.mjs` in `apps/web` with `POSTGRES_URL` set (read-only; exits 1 if any day has a difference). The gate for step 11 is seven days with a `clean` row and no `differ` row.
+**The record of shadow reads.** The hosting plan keeps server logs for one hour, so logs can't show seven clean days. Each result is a row in `admin_audit_log` (`action = shadow.settings`, `target` = `clean`, `differ` or `unavailable`): a difference is written when a request sees it, and the roster cron writes one result a day whether or not there is a play day (`lib/shadow-log.ts`). To read it: `node --import ./tests/register.mjs scripts/shadow-report.mjs --since <the day the clock started>` in `apps/web` with `POSTGRES_URL` set (read-only; exits 0 only when the gate is met).
+
+**The gate for step 11, tightened on 25 Nov (audit C0):** seven days in a row on which **every** check (`settings`, `routing`, `tenant-reads`) has a `clean` row and none has a `differ` or an `unavailable` row. A day with nothing recorded isn't clean. The report before this counted a day as clean when any one check was clean and ignored `unavailable`, so it couldn't see a check that never ran.
 
 **Parts so far:**
 
@@ -417,7 +419,7 @@ node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: te
 
 ## 11. Step 11: the switch (after 7 clean days)
 
-1. `node --import ./tests/register.mjs scripts/shadow-report.mjs` on production: seven days with `clean` rows for `settings`, `routing` and `tenant-reads`, and no `differ` row.
+1. `node --import ./tests/register.mjs scripts/shadow-report.mjs --since <clock start>` on production says `The gate needs 7: MET`: seven days in a row with `settings`, `routing` and `tenant-reads` all clean, and no `differ` or `unavailable` row (§4). **And** journey T1 (every route, two clubs, `enforce`) passes against a copy of production: with one club in the database, comparing the owner with the app's role can't show a query that forgot its club condition (audit C0b).
 2. Set `CLUB_SETTINGS_SOURCE=database` and `TENANT_SCOPE=enforce` for Production, one at a time, a day apart, redeploying each time. Watch the error log for an hour after each.
 3. Rollback for either: set it back to `shadow` and redeploy.
 

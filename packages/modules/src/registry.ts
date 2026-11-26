@@ -370,6 +370,7 @@ export const juniors = defineModule({
   plan: "free",
   availability: "hidden",
   name: { en: "Juniors", vi: "Thiếu niên" },
+  admin: { nav: [{ group: "People", href: "/admin/juniors", label: "Juniors", order: 40 }] },
   liveActivity: "children's profiles and their upcoming bookings",
 });
 

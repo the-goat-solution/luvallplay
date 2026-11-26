@@ -82,8 +82,19 @@ const MENU_BEFORE_A1 = [
 ];
 
 test("A1: the generated admin menu is exactly the hand-written one it replaced", () => {
-  const generated = NAV_GROUPS.map((g) => ({ label: g.label, items: g.items.map((i) => ({ ...i, module: undefined })) }));
+  // The menu every club has today. Modules added since, and still hidden platform-wide (Juniors), are checked below.
+  const hidden = new Set(MODULES.filter((m) => m.availability === "hidden").map((m) => m.id as string));
+  const generated = NAV_GROUPS.map((g) => ({ label: g.label, items: g.items.filter((i) => !hidden.has(i.module)).map((i) => ({ ...i, module: undefined })) }));
   assert.deepEqual(JSON.parse(JSON.stringify(generated)), MENU_BEFORE_A1);
+});
+
+test("a hidden module's menu page: Juniors has one under People, after the pages that were there, and only for a club with Juniors on", () => {
+  const people = NAV_GROUPS.find((g) => g.label === "People")!;
+  const juniors = people.items.filter((i) => i.module === "juniors");
+  assert.deepEqual(juniors.map((i) => [i.href, i.label]), [["/admin/juniors", "Juniors"]]);
+  assert.equal(people.items.at(-1)?.module, "juniors", "it comes last in its group");
+  assert.equal(routeOwner("/admin/juniors"), "juniors");
+  assert.equal(routeOwner("/admin/juniors/setup"), "core", "the page that switches Juniors on is served while it is off");
 });
 
 test("A1: the generated Today list is exactly the hand-written one it replaced, and every line has a counter", () => {

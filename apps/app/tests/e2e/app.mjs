@@ -1140,15 +1140,14 @@ describe("APP · settings: the account", () => {
     }
   });
 
-  test("APP30 · deleting the account: typed DELETE, back to sign-in; the club's only owner is told to hand over first", async () => {
+  test("APP30 · deleting the account: two taps (ask, then yes), back to sign-in; the club's only owner is told to hand over first", async () => {
     const owner = await signedIn(PEOPLE.owner.email);
     const op = await owner.context.newPage();
     await op.goto(`${APP}/settings`);
     await op.getByRole("button", { name: "Delete my account" }).click();
-    const confirm = op.getByRole("button", { name: "Delete my account" });
-    assert.equal(await confirm.isDisabled(), true, "nothing typed yet");
-    await op.getByLabel("Type DELETE to confirm").fill("delete");
-    await confirm.click();
+    await op.getByText("Delete your account? You'll be signed out everywhere.").waitFor();
+    assert.equal(await op.getByRole("button", { name: "Delete my account", exact: true }).count(), 0, "the first button gives way to the question");
+    await op.getByRole("button", { name: "Yes, delete my account" }).click();
     await op.getByRole("alert").filter({ hasText: "only owner" }).waitFor();
     await owner.context.close();
 
@@ -1159,10 +1158,10 @@ describe("APP · settings: the account", () => {
     await page.goto(`${APP}/settings`);
     await page.getByRole("button", { name: "Delete my account" }).click();
     await page.getByRole("button", { name: "Cancel" }).last().click();
-    assert.equal(await page.getByLabel("Type DELETE to confirm").count(), 0, "Cancel closes it");
-    await page.getByRole("button", { name: "Delete my account" }).click();
-    await page.getByLabel("Type DELETE to confirm").fill("DELETE");
-    await page.getByRole("button", { name: "Delete my account" }).click();
+    assert.equal(await page.getByRole("button", { name: "Yes, delete my account" }).count(), 0, "Cancel closes it");
+    assert.equal((await db.query(`SELECT deleted_at FROM players WHERE id = $1`, [id])).rows[0].deleted_at, null, "one tap deletes nothing");
+    await page.getByRole("button", { name: "Delete my account", exact: true }).click();
+    await page.getByRole("button", { name: "Yes, delete my account" }).click();
     await page.waitForURL(`${APP}/signin`);
     assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${token}` } })).status, 401);
     assert.ok((await db.query(`SELECT deleted_at FROM players WHERE id = $1`, [id])).rows[0].deleted_at);
@@ -1825,6 +1824,7 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
   const juniorsOff = async () => {
     await db.query(`UPDATE sessions s SET booked_spots = GREATEST(0, s.booked_spots - (SELECT count(*) FROM junior_bookings b WHERE b.session_date = s.date AND b.status IN ('pending', 'confirmed')))`);
     await db.query(`DELETE FROM junior_bookings`);
+    await db.query(`TRUNCATE junior_safety_checks`);
     await db.query(`DELETE FROM form_signatures`);
     await db.query(`DELETE FROM club_forms`);
     await db.query(`DELETE FROM junior_medical_notes`);
@@ -2232,6 +2232,142 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
       await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
       await juniorsOff();
       await context.close();
+    }
+  });
+
+  test("APP58 · the club's side: Admin → Juniors isn't there while Juniors is off; on, an owner records a safety check, sees it as valid, and withdraws it", async () => {
+    await juniorsOff();
+    const owner = await signedIn(PEOPLE.owner.email);
+    const page = await owner.context.newPage();
+    const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      // Off: no menu entry, and the page isn't served.
+      assert.equal(await page.getByRole("link", { name: "Juniors", exact: true }).count(), 0);
+      assert.equal((await page.goto(`${env.base}/admin/juniors`)).status(), 404);
+
+      await juniorsOn();
+      await page.goto(`${env.base}/admin`);
+      // On: the menu has it (the menu can sit behind its drawer at this window size, so the page is opened by its address).
+      assert.equal(await page.getByRole("link", { name: "Juniors", exact: true }).first().getAttribute("href"), "/admin/juniors");
+      assert.equal((await page.goto(`${env.base}/admin/juniors`)).status(), 200);
+      await page.getByRole("heading", { name: "Safety checks" }).waitFor();
+      await page.getByText(/no current safety check\./).waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks`)).rows[0].n, 0);
+
+      // Dates the wrong way round are refused and nothing is written.
+      const ownerId = (await db.query(`SELECT id FROM players WHERE lower(email) = lower($1)`, [PEOPLE.owner.email])).rows[0].id;
+      const form = page.locator("#record form");
+      const fill = async (doneOn, expiresOn) => {
+        await form.getByLabel("Person").selectOption(String(ownerId));
+        await form.getByLabel("Kind of check").selectOption("police-vet");
+        await form.getByLabel("Done on").evaluate((el, v) => { el.removeAttribute("max"); el.value = v; }, doneOn);
+        await form.getByLabel("Expires on").evaluate((el, v) => { el.removeAttribute("min"); el.value = v; }, expiresOn);
+        await form.getByLabel(/Your reference/).fill("Folder B");
+        await form.getByRole("button", { name: "Record the check" }).click();
+      };
+      await fill(day(-1), day(365 * 4));
+      await page.getByText("Check the dates").first().waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks`)).rows[0].n, 0);
+
+      await fill(day(-1), day(365));
+      await page.getByText("Safety check recorded.").first().waitFor();
+      const row = (await db.query(`SELECT user_id, kind, reference, recorded_by_user_id, revoked_at FROM junior_safety_checks`)).rows;
+      assert.deepEqual(row, [{ user_id: ownerId, kind: "police-vet", reference: "Folder B", recorded_by_user_id: ownerId, revoked_at: null }]);
+      const mine = page.locator("#safety-checks tr, #safety-checks [role=row]").filter({ hasText: "Police vet" });
+      await mine.getByText("valid", { exact: true }).waitFor();
+      // The audit log says who and what kind, never the club's reference.
+      const logged = (await db.query(`SELECT action, meta::text AS meta FROM admin_audit_log WHERE action LIKE 'juniors.safety_check.%' ORDER BY id`)).rows;
+      assert.ok(logged.some((l) => l.action === "juniors.safety_check.record"), JSON.stringify(logged));
+      assert.ok(!logged.some((l) => l.meta.includes("Folder B")), "the reference isn't logged");
+
+      page.once("dialog", (d) => d.accept());
+      await mine.getByRole("button", { name: "Withdraw" }).click();
+      await page.getByText("Safety check withdrawn.").first().waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks WHERE revoked_at IS NOT NULL`)).rows[0].n, 1);
+      await page.locator("#safety-checks").getByText("withdrawn", { exact: true }).waitFor();
+    } finally {
+      await juniorsOff();
+      await owner.context.close();
+    }
+  });
+
+  test("APP59 · the junior roster: closed without a safety check; with one, the day's children, their guardian and who to call, marking who came; the medical note opens for an owner and is logged, never for an admin", async () => {
+    await juniorsOn();
+    const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;
+    await db.query(`UPDATE tenants SET payment_mode = 'free' WHERE id = 1`);
+    const guardian = await sessionToken(PEOPLE.member.email);
+    const json = { ...auth(guardian).headers, "content-type": "application/json" };
+    const owner = await signedIn(PEOPLE.owner.email);
+    const admin = await signedIn(PEOPLE.admin.email);
+    const page = await owner.context.newPage();
+    const idOf = async (email) => (await db.query(`SELECT id FROM players WHERE lower(email) = lower($1)`, [email])).rows[0].id;
+    const check = async (email) => db.query(`INSERT INTO junior_safety_checks (tenant_id, user_id, kind, checked_on, expires_on, recorded_by_user_id) VALUES (1, $1, 'police-vet', CURRENT_DATE - 30, CURRENT_DATE + 300, $1)`, [await idOf(email)]);
+    const NOTE = "Asthma: blue inhaler in the bag.";
+    try {
+      // A guardian's made-up child with a contact, a note and a place on a play day.
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) })).status, 200);
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/care/contacts`, { method: "PUT", headers: json, body: JSON.stringify({ contacts: [{ name: "Nan Guardian", phone: "021 555 0101", relationship: "Grandmother" }] }) })).status, 200);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/care/medical-notes`, { method: "PUT", headers: json, body: JSON.stringify({ notes: NOTE }) })).status, 200);
+      const date = (await (await fetch(`${api}/clubs/three-wolves/family/bookings`, auth(guardian))).json()).days.find((d) => d.spotsLeft > 0).date;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) })).status, 200);
+
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      // No safety check: the roster is closed even to an owner, and so is the note.
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.locator("#roster").getByText("You need a current safety check").waitFor();
+      assert.equal(await page.getByText("Tama Testchild").count(), 0);
+
+      await check(PEOPLE.owner.email);
+      await page.goto(`${env.base}/admin/juniors`);
+      const row = page.locator("#roster tr, #roster [role=row]").filter({ hasText: "Tama Testchild" });
+      await row.getByText("Tama Testchild (born 2016)").waitFor();
+      await row.getByText(new RegExp(PEOPLE.member.email)).waitFor();
+      await row.getByText("Nan Guardian (Grandmother): 021 555 0101").waitFor();
+      assert.equal(await page.getByText("Asthma").count(), 0, "the roster doesn't show the note");
+
+      await row.getByRole("button", { name: "Mark as here" }).click();
+      await page.getByText("Marked as here.").first().waitFor();
+      assert.deepEqual((await db.query(`SELECT source, removed FROM junior_attendance WHERE junior_profile_id = $1`, [childId])).rows, [{ source: "admin", removed: false }]);
+      await page.locator("#roster").getByRole("button", { name: "Here ✓ (undo)" }).waitFor();
+
+      // The medical note: one child at a time, and every view is logged without its words.
+      await page.locator("#roster").getByRole("link", { name: /^Read/ }).click();
+      await page.waitForURL(`${env.base}/admin/juniors/child/${childId}/medical`);
+      assert.equal(await page.locator("[data-medical-note]").textContent(), NOTE);
+      const logged = (await db.query(`SELECT action, target, meta::text AS meta FROM admin_audit_log WHERE action LIKE 'juniors.%' ORDER BY id`)).rows;
+      assert.ok(logged.some((l) => l.action === "juniors.medical_note.read" && l.target === String(childId)), JSON.stringify(logged));
+      assert.ok(logged.some((l) => l.action === "juniors.attendance"));
+      assert.ok(!logged.some((l) => l.meta.includes("Asthma") || l.meta.includes("Tama")), "no note and no name in the log");
+
+      // An admin with a check sees the roster and is told a note exists, but can't open it.
+      await check(PEOPLE.admin.email);
+      const adminPage = await admin.context.newPage();
+      await adminPage.goto(`${APP}/settings`);
+      await adminPage.getByRole("button", { name: "Club admin" }).click();
+      await adminPage.waitForURL(`${env.base}/admin`);
+      await adminPage.goto(`${env.base}/admin/juniors`);
+      await adminPage.locator("#roster").getByText("Tama Testchild (born 2016)").waitFor();
+      assert.equal(await adminPage.locator("#roster").getByRole("link", { name: /^Read/ }).count(), 0);
+      // Asking for the note's address directly: the "not found" screen (the page streams, so the status alone doesn't say), no note, and a logged refusal.
+      await adminPage.goto(`${env.base}/admin/juniors/child/${childId}/medical`);
+      await adminPage.waitForLoadState("networkidle");
+      assert.equal(await adminPage.locator("[data-medical-note]").count(), 0);
+      assert.equal(await adminPage.getByText("Asthma").count(), 0);
+      assert.equal(await adminPage.getByText("Medical note: Tama Testchild").count(), 0, "not even the child's name");
+      const refused = (await db.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'juniors.medical_note.read.refused'`)).rows[0].n;
+      assert.equal(refused, 1, "the refused attempt is logged too");
+    } finally {
+      await db.query(`DELETE FROM junior_attendance`);
+      await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
+      await juniorsOff();
+      await owner.context.close();
+      await admin.context.close();
     }
   });
 });

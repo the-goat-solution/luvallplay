@@ -35,6 +35,18 @@ export function createApi(transport: Transport) {
       /** GET /account/profile (signed in) */
       profile: (options?: Options) =>
         transport.call("account.profile", { signal: options?.signal }) as Promise<ResponseOf<"account.profile">>,
+      /** GET /account/push (signed in) */
+      push: (options?: Options) =>
+        transport.call("account.push", { signal: options?.signal }) as Promise<ResponseOf<"account.push">>,
+      /** POST /account/push/device (signed in) */
+      pushDevice: (body: BodyOf<"account.pushDevice">, options?: Options) =>
+        transport.call("account.pushDevice", { body, signal: options?.signal }) as Promise<ResponseOf<"account.pushDevice">>,
+      /** POST /account/push/kinds (signed in) */
+      pushKinds: (body: BodyOf<"account.pushKinds">, options?: Options) =>
+        transport.call("account.pushKinds", { body, signal: options?.signal }) as Promise<ResponseOf<"account.pushKinds">>,
+      /** POST /account/push/device/remove (signed in) */
+      pushRemoveDevice: (body: BodyOf<"account.pushRemoveDevice">, options?: Options) =>
+        transport.call("account.pushRemoveDevice", { body, signal: options?.signal }) as Promise<ResponseOf<"account.pushRemoveDevice">>,
       /** DELETE /account/photo (signed in) */
       removePhoto: (options?: Options) =>
         transport.call("account.removePhoto", { signal: options?.signal }) as Promise<ResponseOf<"account.removePhoto">>,

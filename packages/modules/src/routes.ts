@@ -36,6 +36,9 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   // ── Admin ───────────────────────────────────────────────────────────────
   ["/admin", "core"],
   ["/admin/setup", "platform"],
+  // Juniors' own pages stop while the module is off. Its set-up page is where an owner switches it on, so it is served while off (and 404s while hidden).
+  ["/admin/juniors", "juniors"],
+  ["/admin/juniors/setup", "core"],
   ["/admin/platform", "platform"],
   ["/admin/challenges", "arena"],
   ["/admin/day-requests", "day-requests"],

@@ -11,7 +11,7 @@
 // the safeguarding review and with counsel before any real child's profile
 // exists (Phase 3b runbook §4).
 
-export const SAFEGUARDING_POLICY_VERSION = "2026-11";
+export const SAFEGUARDING_POLICY_VERSION = "2026-11b";
 
 export type SafeguardingPoint = { id: string; en: string; vi: string };
 
@@ -43,7 +43,7 @@ export const SAFEGUARDING_POLICY: readonly SafeguardingPoint[] = [
   },
   {
     id: "concerns-and-data",
-    en: "We tell guardians how to raise a concern, and we act on a guardian's request to see, export or delete their child's information.",
-    vi: "Chúng tôi cho phụ huynh biết cách nêu quan ngại, và thực hiện yêu cầu xem, xuất hoặc xoá thông tin của con em họ.",
+    en: "We tell guardians how to raise a concern, and we act on a guardian's request to see or export their child's information. When a guardian asks us to delete it, an owner or admin of our club confirms the request without delay, and then everything we hold about the child is deleted for good.",
+    vi: "Chúng tôi cho phụ huynh biết cách nêu quan ngại, và thực hiện yêu cầu xem hoặc xuất thông tin của con em họ. Khi phụ huynh yêu cầu xoá, chủ hoặc quản trị viên câu lạc bộ sẽ xác nhận yêu cầu ngay, và sau đó mọi thông tin chúng tôi lưu về trẻ sẽ bị xoá vĩnh viễn.",
   },
 ];

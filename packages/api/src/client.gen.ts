@@ -103,6 +103,9 @@ export function createApi(transport: Transport) {
       /** POST /clubs/{club}/family/bookings/{id}/cancel (signed in) */
       cancelBooking: (params: ParamsOf<"family.cancelBooking">, body: BodyOf<"family.cancelBooking">, options?: Options) =>
         transport.call("family.cancelBooking", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.cancelBooking">>,
+      /** POST /clubs/{club}/family/{id}/delete-request/cancel (signed in) */
+      cancelDelete: (params: ParamsOf<"family.cancelDelete">, body: BodyOf<"family.cancelDelete">, options?: Options) =>
+        transport.call("family.cancelDelete", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.cancelDelete">>,
       /** GET /clubs/{club}/family/{id}/care (signed in) */
       care: (params: ParamsOf<"family.care">, options?: Options) =>
         transport.call("family.care", { params, signal: options?.signal }) as Promise<ResponseOf<"family.care">>,
@@ -130,6 +133,9 @@ export function createApi(transport: Transport) {
       /** POST /clubs/{club}/family/{id}/delete (signed in) */
       remove: (params: ParamsOf<"family.remove">, body: BodyOf<"family.remove">, options?: Options) =>
         transport.call("family.remove", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.remove">>,
+      /** POST /clubs/{club}/family/{id}/delete-request (signed in) */
+      requestDelete: (params: ParamsOf<"family.requestDelete">, body: BodyOf<"family.requestDelete">, options?: Options) =>
+        transport.call("family.requestDelete", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.requestDelete">>,
       /** POST /clubs/{club}/family/{id}/forms/{formId}/sign (signed in) */
       signForm: (params: ParamsOf<"family.signForm">, body: BodyOf<"family.signForm">, options?: Options) =>
         transport.call("family.signForm", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.signForm">>,

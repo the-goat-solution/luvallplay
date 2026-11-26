@@ -24,6 +24,8 @@ export const familyChild = z.object({
   addedAt: z.string(),
   /** How many guardians manage this child. */
   guardians: z.number().int(),
+  /** Set while a request to delete this child's information waits for the club. */
+  deletionRequestedAt: z.string().nullable().optional(),
 });
 export const familyResponse = z.object({
   children: z.array(familyChild),
@@ -131,6 +133,9 @@ export const familyDeleteResponse = z.object({
   removed: z.object({ medicalNotes: z.number().int(), emergencyContacts: z.number().int(), signatures: z.number().int() }),
   kept: z.object({ bookings: z.number().int(), attendance: z.number().int() }),
 });
+/** Whether a request to delete the child's information is waiting for the club. */
+export const familyDeleteRequestResponse = z.object({ requested: z.boolean(), requestedAt: z.string().nullable() });
+export type FamilyDeleteRequestResponse = z.infer<typeof familyDeleteRequestResponse>;
 export type FamilyExportResponse = z.infer<typeof familyExportResponse>;
 export type FamilyDeleteResponse = z.infer<typeof familyDeleteResponse>;
 export type FamilyBookingsResponse = z.infer<typeof familyBookingsResponse>;

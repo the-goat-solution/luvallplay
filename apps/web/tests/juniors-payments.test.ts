@@ -191,6 +191,21 @@ describe("paying for a child's place", { skip: !BASE_URL && !REQUIRE_DB ? "set D
     assert.deepEqual(await state(date), { booked: 0, live: 0, all: 0 });
   });
 
+  test("a payment event that arrives again after the child's information was deleted: recognised, not booked and not refunded", async () => {
+    const date = await open();
+    const pi = await paid(MIA, tama, date);
+    assert.deepEqual(await pay.settleJuniorPayment(database.sql, pi, ON), { outcome: "booked" });
+    // The club confirms a deletion: the booking goes, and the payment is remembered without the child.
+    const rights = await import("../lib/juniors/data-rights.ts");
+    const asked = await rights.requestChildDeletion(c, 1, MIA, tama, { confirm: true, today: "2040-01-01" });
+    assert.ok(asked.ok, JSON.stringify(asked));
+    const done = await rights.confirmChildDeletion(database.sql, 1, { playerId: MIA, access: { role: "owner", platformAdmin: false } as never }, asked.value.id, "2040-01-01");
+    assert.ok(done.ok, JSON.stringify(done));
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM junior_bookings WHERE payment_intent_id = $1`, [pi.id])).rows[0].n, 0);
+    assert.deepEqual(await pay.settleJuniorPayment(database.sql, pi, ON), { outcome: "already" });
+    assert.equal(refundedOf(pi.id), 0, "a used, paid place is not refunded because its child was deleted");
+  });
+
   test("the refund itself fails: said plainly so a person is told, and still nothing is booked", async () => {
     const date = await open();
     const pi = await paid(QUINN, tama, date);

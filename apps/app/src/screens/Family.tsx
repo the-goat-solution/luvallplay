@@ -89,7 +89,7 @@ function AddChild({ family, clubName, ft, onDone }: { family: Family; clubName: 
   );
 }
 
-function ChildCard({ child, family, bookings, ft, onDeleted }: { child: Child; family: Family; bookings: FamilyBookings | undefined; ft: FamilyT; onDeleted: (name: string) => void }) {
+function ChildCard({ child, family, bookings, ft }: { child: Child; family: Family; bookings: FamilyBookings | undefined; ft: FamilyT }) {
   const id = useId();
   const update = useUpdateChild(child.id);
   const consent = useSetConsent(child.id);
@@ -147,7 +147,7 @@ function ChildCard({ child, family, bookings, ft, onDeleted }: { child: Child; f
       {bookings && <ChildBookings childId={child.id} data={bookings} ft={ft} />}
       <ChildFormsPart childId={child.id} childName={child.name} ft={ft} />
       <ChildCare childId={child.id} ft={ft} />
-      <ChildRights childId={child.id} childName={child.name} ft={ft} onDeleted={onDeleted} />
+      <ChildRights childId={child.id} childName={child.name} requestedAt={child.deletionRequestedAt ?? null} ft={ft} />
       <fieldset className="stack">
         <legend className="label-title">{ft("family_optional_title")}</legend>
         <p className="muted small">{ft("family_optional_hint")}</p>
@@ -168,7 +168,6 @@ export default function FamilyScreen() {
   const bookings = useFamilyBookings().data;
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
-  const [deleted, setDeleted] = useState<string | null>(null);
   const clubName = current?.name ?? "";
   // Off for this club (or switched off since the list was read): say so, show nothing else.
   const off = (!!config && !on) || codeOf(state.error) === "module_off";
@@ -185,10 +184,9 @@ export default function FamilyScreen() {
         <>
           <p className="muted">{ft("family_intro")}</p>
           {added && <p className="notice" role="status">{ft("family_added", { name: added })}</p>}
-          {deleted && <p className="notice" role="status">{ft("rights_deleted", { child: deleted })}</p>}
           {family.children.length === 0 && !adding && <p className="muted">{ft("family_empty")}</p>}
           {family.children.map((child) => (
-            <ChildCard key={child.id} child={child} family={family} bookings={bookings} ft={ft} onDeleted={(name) => (setAdded(null), setDeleted(name))} />
+            <ChildCard key={child.id} child={child} family={family} bookings={bookings} ft={ft} />
           ))}
           {adding ? (
             <>

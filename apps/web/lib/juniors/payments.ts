@@ -65,6 +65,9 @@ export async function settleJuniorPayment(db: BookingDb, pi: PaidJuniorPayment, 
   const sessionDate = /^\d{4}-\d{2}-\d{2}$/.test(m.sessionDate ?? "") ? m.sessionDate : "";
   const guardianEmail = m.email ?? "";
 
+  // Settled before, for a child whose information has since been deleted: nothing to book, and nothing to refund.
+  if (tenantId && (await db.query(`SELECT 1 FROM junior_payment_records WHERE tenant_id = $1 AND payment_intent_id = $2`, [tenantId, pi.id])).rows[0]) return { outcome: "already" };
+
   let why: "full" | "not_found" | "module_off" | "bad_payment" | "duplicate" | null = null;
   if (!tenantId || !guardianId || !childId || !sessionDate) why = "bad_payment";
   else {

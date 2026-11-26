@@ -53,7 +53,8 @@ test("where Juniors is offered: the manifest decides in production; an override 
 });
 
 test("the safeguarding policy: a version, and every point in English and Vietnamese", () => {
-  assert.match(SAFEGUARDING_POLICY_VERSION, /^\d{4}-\d{2}$/);
+  // The month the wording was written, with a letter when it changes again within the month.
+  assert.match(SAFEGUARDING_POLICY_VERSION, /^\d{4}-\d{2}[a-z]?$/);
   assert.ok(SAFEGUARDING_POLICY.length >= 5);
   assert.equal(new Set(SAFEGUARDING_POLICY.map((p) => p.id)).size, SAFEGUARDING_POLICY.length);
   for (const p of SAFEGUARDING_POLICY) assert.ok(p.en.trim().length > 20 && p.vi.trim().length > 20, p.id);

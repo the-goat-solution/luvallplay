@@ -77,3 +77,18 @@ export function byMonth<T extends { date: string }>(days: readonly T[]): [string
 export function nextUp<T extends { paused: boolean; booked: boolean; included: boolean }>(days: readonly T[]): T | null {
   return days.find((d) => !d.paused && (d.booked || d.included)) ?? null;
 }
+
+const HOUR_MS = 3600_000;
+
+/**
+ * How long a challenge stays open, for its card: whole days once there is a
+ * day or more, hours under a day, "today" under an hour. A challenge closes
+ * at the end of the club's day, so one put up for 7 days has between 7 and 8
+ * days left: whole days are counted (never rounded up), so it never reads as
+ * more days than were chosen.
+ */
+export function openFor(leftMs: number): { unit: "today" } | { unit: "hours" | "days"; n: number } {
+  if (leftMs < HOUR_MS) return { unit: "today" };
+  if (leftMs < 24 * HOUR_MS) return { unit: "hours", n: Math.round(leftMs / HOUR_MS) };
+  return { unit: "days", n: Math.floor(leftMs / (24 * HOUR_MS)) };
+}

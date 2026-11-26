@@ -1538,6 +1538,52 @@ export const junior_attendance = pgTable("junior_attendance", {
 	check("junior_attendance_source_check", sql`source = ANY (ARRAY['roster'::text, 'coach'::text, 'admin'::text])`),
 ]);
 
+// Phase 3b step 4: who to call for a child. Club-owned; written by a guardian.
+export const junior_emergency_contacts = pgTable("junior_emergency_contacts", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	junior_profile_id: integer().notNull(),
+	// 1 is who to call first.
+	position: smallint().default(1).notNull(),
+	name: text().notNull(),
+	phone: text().notNull(),
+	relationship: text(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// The guardian who wrote it.
+	updated_by_user_id: integer().notNull(),
+}, (table) => [
+	index("junior_emergency_contacts_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
+	index("junior_emergency_contacts_updated_by_user_id_idx").using("btree", table.updated_by_user_id.asc().nullsLast()),
+	unique("junior_emergency_contacts_one_per_position").on(table.tenant_id, table.junior_profile_id, table.position),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "junior_emergency_contacts_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.junior_profile_id], foreignColumns: [junior_profiles.id], name: "junior_emergency_contacts_junior_profile_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "junior_emergency_contacts_junior_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.updated_by_user_id], foreignColumns: [players.id], name: "junior_emergency_contacts_updated_by_user_id_fkey" }).onDelete("restrict"),
+	check("junior_emergency_contacts_position_check", sql`("position" >= 1) AND ("position" <= 3)`),
+]);
+
+// A child's medical note, as sealed text only: encrypted by the application
+// (bound to the club and the child) before it reaches the database.
+export const junior_medical_notes = pgTable("junior_medical_notes", {
+	tenant_id: integer().notNull(),
+	junior_profile_id: integer().notNull(),
+	// Encrypted by the application. Never plain text.
+	sealed: text().notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// The guardian who wrote it.
+	updated_by_user_id: integer().notNull(),
+}, (table) => [
+	index("junior_medical_notes_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
+	index("junior_medical_notes_updated_by_user_id_idx").using("btree", table.updated_by_user_id.asc().nullsLast()),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "junior_medical_notes_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.junior_profile_id], foreignColumns: [junior_profiles.id], name: "junior_medical_notes_junior_profile_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "junior_medical_notes_junior_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.updated_by_user_id], foreignColumns: [players.id], name: "junior_medical_notes_updated_by_user_id_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.junior_profile_id], name: "junior_medical_notes_pkey"}),
+	check("junior_medical_notes_sealed_check", sql`sealed ~ '^v1\\.[a-z0-9-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$'::text`),
+]);
+
 // One child can have two guardians, one guardian several children. The one
 // source of truth for who may act for a child. Club-owned: the child's club.
 export const guardianships = pgTable("guardianships", {

@@ -113,6 +113,13 @@
       "when": 1795463007000,
       "tag": "0015_junior_details",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795549407000,
+      "tag": "0016_junior_care",
+      "breakpoints": true
     }
   ]
 }

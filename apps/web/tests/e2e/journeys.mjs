@@ -1762,11 +1762,45 @@ describe("S · modules", () => {
     };
     const configModules = async () => (await appApi("GET", "/clubs/three-wolves/config")).json.modules;
 
-    const covered = { routes: 0, endpoints: 0, menu: 0 };
+    const covered = { routes: 0, endpoints: 0, menu: 0, hidden: 0 };
+    /** Everything the module owns is gone: each route stopped by the switch, each endpoint "module_off", no menu entry, no config line. */
+    const gone = async (id, nav, when) => {
+      const stopped = await routes(id);
+      for (const [prefix, status, body] of stopped) {
+        assert.equal(status, 404, `${id} ${when}: ${prefix} is still served`);
+        assert.ok(prefix.startsWith("/api/") ? body === '{"error":"not_found"}' : body.includes("This page isn't available."), `${id} ${when}: ${prefix} isn't stopped by the switch (${body.slice(0, 80)})`);
+      }
+      const refused = await endpoints(id);
+      for (const [eid, status, code] of refused) assert.deepEqual([status, code], [404, "module_off"], `${id} ${when}: ${eid}`);
+      const menu = await adminMenu();
+      for (const href of nav) assert.ok(!menu.includes(`href="${href}"`), `${id} ${when}: the admin menu still offers ${href}`);
+      assert.ok(!(await configModules()).includes(id), `${id} ${when}: the club's config still lists it`);
+      return { routes: stopped.length, endpoints: refused.length };
+    };
+    /** The switches of the module and everything around it, as they were before the test touched them. */
+    const restore = async (id) => {
+      for (const dep of new Set([...needs(id), ...neededBy(id), id])) {
+        const was = original.find((r) => r.module_id === dep);
+        if (was) await set(dep, was.enabled);
+        else await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [dep]);
+      }
+    };
     try {
       for (const m of optional) {
         const id = m.id;
         const nav = (m.admin?.nav ?? []).map((n) => n.href);
+        // A module the platform keeps hidden can't be had by a club at all:
+        // even with its switch stored as on, everything it owns stays gone.
+        if (m.availability === "hidden") {
+          for (const dep of [...needs(id), id]) await set(dep, true);
+          const counts = await gone(id, nav, "hidden, switched on");
+          covered.routes += counts.routes;
+          covered.endpoints += counts.endpoints;
+          covered.menu += nav.length;
+          covered.hidden += 1;
+          await restore(id);
+          continue;
+        }
         // On (with what it needs).
         for (const dep of [...needs(id), id]) await set(dep, true);
         const routesOn = await routes(id);
@@ -1782,14 +1816,7 @@ describe("S · modules", () => {
 
         // Off (and what needs it).
         for (const dep of [...neededBy(id), id]) await set(dep, false);
-        for (const [prefix, status, body] of await routes(id)) {
-          assert.equal(status, 404, `${id} off: ${prefix} is still served`);
-          assert.ok(prefix.startsWith("/api/") ? body === '{"error":"not_found"}' : body.includes("This page isn't available."), `${id} off: ${prefix} isn't stopped by the switch (${body.slice(0, 80)})`);
-        }
-        for (const [eid, status, code] of await endpoints(id)) assert.deepEqual([status, code], [404, "module_off"], `${id} off: ${eid}`);
-        const menuOff = await adminMenu();
-        for (const href of nav) assert.ok(!menuOff.includes(`href="${href}"`), `${id} off: the admin menu still offers ${href}`);
-        assert.ok(!(await configModules()).includes(id), `${id} off: the club's config still lists it`);
+        await gone(id, nav, "off");
         // The rest of the club carries on.
         assert.equal((await fetch(`${base()}/`)).status, 200, `${id} off: the home page`);
         assert.equal((await appApi("GET", "/clubs/three-wolves/me", { token: owner.token })).status, 200, `${id} off: Me`);
@@ -1803,11 +1830,7 @@ describe("S · modules", () => {
         covered.endpoints += endpointsOn.length;
         covered.menu += nav.length;
         // As it was, before the next module.
-        for (const dep of new Set([...needs(id), ...neededBy(id), id])) {
-          const was = original.find((r) => r.module_id === dep);
-          if (was) await set(dep, was.enabled);
-          else await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [dep]);
-        }
+        await restore(id);
       }
       // Nothing was left out: every guarded route and every endpoint with a module belongs to a module that was switched.
       const ids = new Set(optional.map((m) => m.id));
@@ -1816,6 +1839,7 @@ describe("S · modules", () => {
       for (const [eid, e] of Object.entries(ENDPOINTS)) assert.ok(!e.module || ids.has(e.module), `${eid} names the module "${e.module}", which isn't one`);
       assert.equal(covered.routes, ROUTE_OWNERS.filter(([, who]) => !always.has(who)).length);
       assert.equal(covered.endpoints, Object.values(ENDPOINTS).filter((e) => e.module).length);
+      assert.equal(covered.hidden, optional.filter((m) => m.availability === "hidden").length);
     } finally {
       // Whatever happened above, leave the switches as they were for the journeys that follow.
       await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND NOT (module_id = ANY($1))`, [original.map((r) => r.module_id)]);

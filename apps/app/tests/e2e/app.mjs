@@ -1578,6 +1578,8 @@ describe("APP · the Player tab", () => {
         const p2 = await context.newPage();
         await p2.goto(`${APP}/player`);
         await p2.waitForSelector('[data-screen="nav_player"][data-state="ready"]');
+        // The saved copy of the club's settings shows first; the fresh one takes the Arena away.
+        await p2.getByRole("heading", { name: "Kit bag" }).waitFor({ state: "detached" });
         assert.equal(await p2.getByRole("heading", { name: "Kit bag" }).count(), 0);
         assert.equal(await p2.getByRole("heading", { name: "The ladder" }).count(), 0);
         assert.equal(await p2.getByRole("link", { name: /See the leaderboard/ }).count(), 0);

@@ -15,7 +15,7 @@ import { forgetDropped } from "../../lib/offline.ts";
 import { byMonth, dayLabel, dayTile, money, monthLabel, timeRange } from "../../lib/format.ts";
 import { usePlace } from "./parts.tsx";
 import { CardPayment } from "../../components/CardPayment.tsx";
-import { Dialog } from "../arena/Dialogs.tsx";
+import { Dialog } from "../../components/Dialog.tsx";
 import { useBook, useRefreshSoon } from "../membership/data.ts";
 import { Icon } from "../../components/Icon.tsx";
 

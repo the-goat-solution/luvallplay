@@ -3,11 +3,13 @@
 // whole screen, and its server. The server calls are named, not URLs: each
 // app maps them to its own routes, which answer with the same JSON and
 // status codes, so the tracker reads every answer the same way.
+import type { OverlayTheme } from "./ui/overlay.ts";
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 
 import type { ClubWords, Lang } from "./words.ts";
 
 export type { ClubWords, Lang } from "./words.ts";
+export type { OverlayTheme } from "./ui/overlay.ts";
 export { PLAIN_WORDS, fillWords } from "./words.ts";
 
 /** The tracker's server calls. */
@@ -61,6 +63,14 @@ export type VisionHost = {
   };
   /** Asked to hide the app's own bars while a session is set up or running. */
   onFocus?: (on: boolean) => void;
+  /**
+   * The line drawn under the overlay's HUD (into recordings too) and a small
+   * logo beside it. Same-origin logos only: another site's image would stop
+   * the canvas from being recorded. Default: the tracker's name alone.
+   */
+  brand?: { line: string; logoUrl?: string | null };
+  /** The overlay's colours and fonts (the club's); default: the night court's own. */
+  overlay?: Partial<OverlayTheme>;
 };
 
 const Ctx = createContext<VisionHost | null>(null);

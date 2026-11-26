@@ -3,7 +3,7 @@
 // rule, and the messages in both languages.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { app } from "@luvallplay/i18n/app";
 import { hostOfApiBase, trustedHost } from "../src/lib/api-host.ts";
 import { langs, loadLang, pickLang, translator } from "../src/lib/messages.ts";
@@ -90,6 +90,10 @@ describe("window classes (build plan §4.4)", () => {
     }
   });
 
+  test("a compact window keeps the bottom bar on every screen, iPhone Duo's outer display (466) and Split View (382) included", () => {
+    for (const width of [382, 466]) assert.equal(navKind(windowClass(width)), "bar", String(width));
+  });
+
   test("the stylesheet uses the same breakpoints", () => {
     const css = read("../src/styles/app.css");
     const used = [...css.matchAll(/@media \(min-width: (\d+)px\)/g)].map((m) => Number(m[1]));
@@ -100,8 +104,53 @@ describe("window classes (build plan §4.4)", () => {
   });
 });
 
+// The semantic tokens (packages/ui semantic.ts), and the custom properties a component sets on its own element.
+const SEMANTIC = ["primary", "on-primary", "accent", "on-accent", "surface", "surface-raised", "ink", "ink-muted", "line", "control-border", "focus", "danger", "font-display", "font-text"];
+// nav-size and head-size: the shell's. club and on-club: components/ClubTag.tsx. The rest: per-element values set
+// inline by components/Stage.tsx and the stage screens (a confetti piece's place and colour, a meter's value, a stagger index),
+// and the fold's width on a foldable opened like a book (styles/stage.css).
+const LOCAL = ["nav-size", "head-size", "club", "on-club", "x", "delay", "turn", "drift", "c", "v", "i", "h", "fold"];
+
+/** Each `animation:` (other than none) that isn't inside an @media (prefers-reduced-motion: no-preference) block. */
+function unguardedAnimations(css: string): string[] {
+  const out: string[] = [];
+  const stack: boolean[] = [];
+  let guarded = 0;
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i];
+    if (ch === "{") {
+      const head = css.slice(css.lastIndexOf("}", i - 1) + 1, i);
+      const isGuard = /@media[^{]*prefers-reduced-motion:\s*no-preference/.test(head);
+      stack.push(isGuard);
+      if (isGuard) guarded++;
+    } else if (ch === "}") {
+      if (stack.pop()) guarded--;
+    } else if (css.startsWith("animation:", i) && !/[-\w]/.test(css[i - 1] ?? "")) {
+      const decl = css.slice(i, css.indexOf(";", i));
+      if (!/animation:\s*none/.test(decl) && guarded === 0 && !css.slice(css.lastIndexOf("{", i), i).includes("@keyframes")) out.push(decl);
+    }
+  }
+  return out;
+}
+
 describe("the stylesheet's rules", () => {
   const css = read("../src/styles/app.css");
+  // Every stylesheet the app ships: app.css, and the stage's (styles/stage.css, loaded with the Arena, Leaderboard and Vision).
+  const sheets = readdirSync(new URL("../src/styles/", import.meta.url)).filter((f) => f.endsWith(".css")).map((f) => [f, read(`../src/styles/${f}`)] as const);
+  test("every stylesheet: only semantic and design-system tokens, no brand names, no colour literals, no px type", () => {
+    assert.ok(sheets.length >= 2);
+    for (const [name, sheet] of sheets) {
+      assert.doesNotMatch(sheet, /navy|bronze|cream|court-green|smash-lime|wolf/i, name);
+      assert.deepEqual(sheet.match(/#[0-9a-f]{3,8}\b/gi) ?? [], [], name);
+      assert.deepEqual(sheet.match(/font-size:\s*[\d.]+px/g) ?? [], [], name);
+      assert.doesNotMatch(sheet, /100vh/, name);
+      const tokens = new Set([...sheet.matchAll(/var\(--([a-z0-9-]+)/g)].map((m) => m[1]));
+      const system = [...read("../../../packages/ui/src/system.css").matchAll(/^\s*--([a-z0-9-]+):/gm)].map((m) => m[1]);
+      for (const t of tokens) assert.ok(SEMANTIC.includes(t) || system.includes(t) || LOCAL.includes(t), `${name}: --${t} is not a semantic or system token`);
+      // Animations only ever run when motion is welcome.
+      for (const at of unguardedAnimations(sheet)) assert.fail(`${name}: an animation outside @media (prefers-reduced-motion: no-preference): ${at}`);
+    }
+  });
   test("only semantic and design-system tokens: no brand names, no colour literals", () => {
     assert.doesNotMatch(css, /navy|bronze|cream|court-green|smash-lime|wolf/i);
     const hex = css.match(/#[0-9a-f]{3,8}\b/gi) ?? [];
@@ -135,7 +184,7 @@ describe("the stylesheet's rules", () => {
     assert.ok(minHeight(/\.field input, \.field select \{[^}]*min-height: ([\d.]+)rem/) >= 2.75);
   });
   test("no screen names a brand colour in code either", () => {
-    for (const f of ["Shell", "SignIn", "Invite", "Settings", "Home", "Profile", "Placeholder"]) {
+    for (const f of ["Shell", "SignIn", "Invite", "Settings", "Home", "Profile", "Placeholder", "Arena", "Leaderboard", "Vision", "arena/Board", "arena/Dialogs", "arena/Versus", "arena/Stats", "leaderboard/PlayerCard", "../components/Stage"]) {
       const src = read(`../src/screens/${f}.tsx`);
       assert.doesNotMatch(src, /#[0-9a-f]{6}\b|navy|bronze|three.?wolves/i, f);
     }

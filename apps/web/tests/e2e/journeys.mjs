@@ -13,7 +13,7 @@ import { mkdirSync, readdirSync, statSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import pg from "pg";
 import { createRequire } from "node:module";
-import { ensureAppLogin, startEnv, startSecondServer, PEOPLE } from "../../scripts/e2e/env.mjs";
+import { ensureAppLogin, startEnv, startSecondServer, JOIN_CLUB_SQL, PEOPLE } from "../../scripts/e2e/env.mjs";
 
 // Playwright is preinstalled globally (resolved through NODE_PATH, which only require() uses).
 const { chromium } = createRequire(import.meta.url)("playwright");
@@ -85,6 +85,7 @@ async function signedIn(email, viewport = PHONE) {
   const normalized = email.trim().toLowerCase();
   let { rows } = await db.query(`SELECT id FROM players WHERE email = $1 AND deleted_at IS NULL`, [normalized]);
   if (!rows[0]) ({ rows } = await db.query(`INSERT INTO players (email, claimed_at) VALUES ($1, NOW()) RETURNING id`, [normalized]));
+  await db.query(JOIN_CLUB_SQL, [rows[0].id]);
   const token = randomBytes(32).toString("base64url");
   await db.query(
     `INSERT INTO player_sessions (player_id, token_hash, user_agent, expires_at) VALUES ($1, $2, 'e2e', NOW() + INTERVAL '90 days')`,

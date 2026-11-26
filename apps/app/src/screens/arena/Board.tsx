@@ -1,6 +1,6 @@
 // The Arena board's cards: your pair (or a request), your challenges, games
 // live now, open challenges, and the crown, feed and hot streak.
-import { useState, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useCurrentClub } from "../../hooks.tsx";
 import { localeOf, openFor } from "../../lib/format.ts";
@@ -10,6 +10,7 @@ import { MatchStats } from "./Stats.tsx";
 import { RankIcon } from "../../components/RankIcon.tsx";
 import { useVisionStatus } from "../vision/data.ts";
 import { Icon } from "../../components/Icon.tsx";
+import { Duo, Rays, Sticker } from "../../components/Stage.tsx";
 
 /** "Set up {visionName}", with "Free now" during the tracker's free trial (as on the website). */
 function RecordStats({ id, t, hint = false }: { id: number; t: ArenaT; hint?: boolean }) {
@@ -17,13 +18,17 @@ function RecordStats({ id, t, hint = false }: { id: number; t: ArenaT; hint?: bo
   return (
     <span className="stack-tight">
       <Link to="/vision" search={{ challenge: id } as never} className="button">
-        {t("rec_stats")}
+        <Icon name="vision" size={18} />
+        {noEmoji(t("rec_stats"))}
         {trial && <em className="tag free-tag">{t("rec_stats_free")}</em>}
       </Link>
       {hint && <span className="muted small">{t(trial ? "rec_stats_hint_trial" : "rec_stats_hint")}</span>}
     </span>
   );
 }
+
+/** The shared dictionary's few emoji stand-ins, dropped: the app draws its own icons. */
+const noEmoji = (s: string) => s.replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, "");
 
 type Props = { t: ArenaT; rank: (i: number) => string; onError: (code: string) => void };
 type MeView = NonNullable<ArenaState["me"]>;
@@ -44,12 +49,27 @@ function Person({ p, rank }: { p: Chip; rank: (i: number) => string }) {
   );
 }
 
-function PairBlock({ pair, rank }: { pair: Pair; rank: (i: number) => string }) {
+/**
+ * A pair. Compact (the board's match cards): both faces with their rank
+ * badges, the pair's name and the two ranks in short. Full (your own pair):
+ * each player on a line with the whole rank name.
+ */
+function PairBlock({ pair, rank, full = false }: { pair: Pair; rank: (i: number) => string; full?: boolean }) {
+  if (full) {
+    return (
+      <div className="pair-block">
+        {pair.name && <strong className="pair-name">{pair.name}</strong>}
+        <Person p={pair.players[0]} rank={rank} />
+        <Person p={pair.players[1]} rank={rank} />
+      </div>
+    );
+  }
+  const short = (i: number) => rank(i).split(" + ")[0];
   return (
-    <div className="pair-block">
-      {pair.name && <strong className="pair-name">{pair.name}</strong>}
-      <Person p={pair.players[0]} rank={rank} />
-      <Person p={pair.players[1]} rank={rank} />
+    <div className="pair-block pair-compact">
+      <Duo players={pair.players} size="sm" rankLabel />
+      <strong className="pair-name">{pair.name || pairTitle(pair)}</strong>
+      <span className="muted small">{pair.name ? `${pair.players[0].name} & ${pair.players[1].name}` : `${short(pair.players[0].rank)} · ${short(pair.players[1].rank)}`}</span>
     </div>
   );
 }
@@ -102,16 +122,17 @@ export function PairPanel({ me, state, t, rank, onError, lang }: { me: MeView; s
   const until = (iso: string) => new Date(iso).toLocaleString(localeOf(lang, ""), { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
   return (
     <section className="card stack arena-me" aria-labelledby="pair-title" id="arena-me">
-      <div className="card-head">
-        <div>
+      <div className="pair-head">
+        <Duo players={pair.players} size="lg" />
+        <div className="pair-head-text">
           <h2 className="title" id="pair-title">{pair.name || t("you_and", { name: partner.name })}</h2>
-          <p className="muted small">
+          <p className="muted small icon-line">
             {t("pair_record", { w: pair.record.won, l: pair.record.lost })}
-            {pair.record.streak >= 2 && <> · {t("in_a_row", { n: pair.record.streak })}</>}
+            {pair.record.streak >= 2 && <> · <Icon name="flame" size={14} className="streak-flame" /> {t("in_a_row", { n: pair.record.streak })}</>}
           </p>
         </div>
       </div>
-      <PairBlock pair={pair} rank={rank} />
+      <PairBlock pair={pair} rank={rank} full />
       {up ? (
         <div className="stack up-now">
           <strong>{t("up_now")}</strong>
@@ -142,9 +163,11 @@ export function PairPanel({ me, state, t, rank, onError, lang }: { me: MeView; s
         </form>
       ) : (
         <div className="stack">
-          <p className="muted small">{t("throw_hint")}</p>
+          <button type="button" className="slab" disabled={action.isPending} onClick={() => run({ action: "post", days: 3, note: "" })}>
+            <span className="slab-inner"><Icon name="bolt" size={22} />{t("throw_down")}</span>
+          </button>
+          <p className="muted small slab-hint">{t("throw_hint")}</p>
           <div className="actions">
-            <button type="button" className="button button-primary" disabled={action.isPending} onClick={() => run({ action: "post", days: 3, note: "" })}>{t("throw_down")}</button>
             <button type="button" className="button button-quiet" onClick={() => setComposing(true)}>{t("post_options")}</button>
           </div>
         </div>
@@ -187,10 +210,10 @@ function MyChallenge({ c, t, rank, onError, onScore }: { c: Challenge; onScore: 
   const them = c.mySide === "posting" ? c.accepting : c.posting;
   const names = them ? pairTitle(them) : "";
   return (
-    <article className="card stack challenge" id={`challenge-${c.id}`} aria-label={c.accepting ? `${pairTitle(c.posting)} ${t("vs")} ${pairTitle(c.accepting)}` : pairTitle(c.posting)}>
+    <article className="card stack challenge matchup" data-you={c.mySide === "accepting" ? "right" : "left"} id={`challenge-${c.id}`} aria-label={c.accepting ? `${pairTitle(c.posting)} ${t("vs")} ${pairTitle(c.accepting)}` : pairTitle(c.posting)}>
       <div className="versus">
         <PairBlock pair={c.posting} rank={rank} />
-        <span className="vs" aria-hidden="true">{t("vs")}</span>
+        <span className="vs vs-disc" aria-hidden="true">{t("vs")}</span>
         {c.accepting && <PairBlock pair={c.accepting} rank={rank} />}
       </div>
       {c.status === "accepted" && (
@@ -204,7 +227,7 @@ function MyChallenge({ c, t, rank, onError, onScore }: { c: Challenge; onScore: 
       )}
       {c.status === "live" && (
         <>
-          <p><span className="live-dot" aria-hidden="true" /> {t("st_live")}</p>
+          <p className="icon-line"><span className="live-badge"><span className="live-dot" aria-hidden="true" />{t("live")}</span> {t("st_live")}</p>
           <div className="actions">
             <button type="button" className="button button-primary" onClick={() => onScore(c)}>{t("score_title")}</button>
             {visionOn && <RecordStats id={c.id} t={t} />}
@@ -247,32 +270,42 @@ export function Mine({ state, ...props }: { state: ArenaState; onScore: (c: Chal
   if (!list.length) return null;
   return (
     <section className="stack" aria-labelledby="mine-title">
-      <h2 id="mine-title">{props.t("mine")}</h2>
+      <h2 id="mine-title" className="stage-title">{props.t("mine")}</h2>
       {list.map((c) => <MyChallenge key={c.id} c={c} {...props} />)}
     </section>
   );
 }
 
 export function Live({ state, t, rank }: { state: ArenaState } & Omit<Props, "onError">) {
-  const visionOn = !!useCurrentClub().config?.modules.includes("vision");
+  const config = useCurrentClub().config;
+  const visionOn = !!config?.modules.includes("vision");
+  // "<the club's tracker> · LIVE" (the shared dictionary's line names one club's tracker).
+  const trackingLive = [config?.terms.visionName, t("live")].filter(Boolean).join(" · ");
   if (!state.live.length) return null;
   const now = Date.parse(state.now);
   return (
     <section className="stack" aria-labelledby="live-title">
-      <h2 id="live-title">{t("live_now")}</h2>
-      {state.live.map((c) => (
-        <article key={c.id} className="card stack challenge" aria-label={`${pairTitle(c.posting)} ${t("vs")} ${c.accepting ? pairTitle(c.accepting) : ""}`}>
-          <p className="live-label">
-            <span className="live-dot" aria-hidden="true" /> {t("live")}
-            {c.checkedInAt && <span className="muted small"> · {t("minutes", { n: Math.max(0, Math.round((now - Date.parse(c.checkedInAt)) / 60_000)) })}</span>}
-          </p>
+      <h2 id="live-title" className="stage-title">
+        {t("live_now")}
+        <span className="title-meta">{state.live.length}</span>
+      </h2>
+      {state.live.map((c, i) => (
+        <article key={c.id} className="card stack challenge live-card enter" style={{ "--i": i } as CSSProperties} aria-label={`${pairTitle(c.posting)} ${t("vs")} ${c.accepting ? pairTitle(c.accepting) : ""}`}>
+          {/* The rally: a ball flies once along the arc between the two pairs. */}
+          <svg className="live-arc" viewBox="0 0 360 80" aria-hidden="true" focusable="false">
+            <path className="live-arc-path" d="M30 66 Q 180 -14 330 66" />
+            <circle className="live-ball" r="5" />
+          </svg>
           <div className="versus">
             <PairBlock pair={c.posting} rank={rank} />
-            <span className="vs" aria-hidden="true">{t("vs")}</span>
+            <span className="live-centre">
+              <span className="live-badge"><span className="live-dot" aria-hidden="true" />{t("live")}</span>
+              {c.checkedInAt && <span className="muted small">{t("minutes", { n: Math.max(0, Math.round((now - Date.parse(c.checkedInAt)) / 60_000)) })}</span>}
+            </span>
             {c.accepting && <PairBlock pair={c.accepting} rank={rank} />}
           </div>
           {c.tracking ? (
-            <p className="muted small"><span className="live-dot" aria-hidden="true" /> {t("wv_live")} · {t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</p>
+            <p className="muted small icon-line"><span className="live-dot" aria-hidden="true" /> {trackingLive} · {t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</p>
           ) : (
             visionOn && <RecordStats id={c.id} t={t} hint />
           )}
@@ -289,30 +322,38 @@ function FightCard({ c, i, count, me, now, t, rank, onError }: { c: Challenge; i
   const leftMs = Date.parse(c.availableUntil) - now;
   const open = openFor(leftMs);
   const left = open.unit === "today" ? t("open_today") : open.unit === "hours" ? t("open_hours", { n: open.n }) : t("open_days", { n: open.n });
-  const chips = [c.offer?.crown && t("chip_crown"), c.offer?.giantKiller && t("chip_gk"), c.offer?.newRival && t("chip_nr")].filter(Boolean) as string[];
+  const chips = [
+    c.offer?.crown && ([t("chip_crown"), "crown"] as const),
+    c.offer?.giantKiller && ([t("chip_gk"), "bolt"] as const),
+    c.offer?.newRival && ([t("chip_nr"), "sparkles"] as const),
+  ].filter(Boolean) as (readonly [string, "crown" | "bolt" | "sparkles"])[];
   const ribbon = c.crownMatch ? t("crown_ribbon") : i === 0 && count > 2 ? t("hot_ribbon") : null;
   return (
-    <article className="card stack challenge fight" id={`challenge-${c.id}`} aria-label={pairTitle(c.posting)}>
+    <article className={`card stack challenge fight enter${c.crownMatch ? " fight-crown" : ""}`} style={{ "--i": i } as CSSProperties} id={`challenge-${c.id}`} aria-label={pairTitle(c.posting)}>
       {ribbon && <span className="ribbon">{ribbon}</span>}
       <div className="versus">
         <PairBlock pair={c.posting} rank={rank} />
-        <span className="vs" aria-hidden="true">{t("vs")}</span>
+        <span className="vs vs-disc" aria-hidden="true">{t("vs")}</span>
         <div className="pair-block slot">
           <span className="slot-mark" aria-hidden="true">?</span>
-          <span className="muted small">{partner ? t("slot_you", { name: partner.name }) : t("slot_anyone")}</span>
+          <span className="slot-who">{partner ? t("slot_you", { name: partner.name }) : t("slot_anyone")}</span>
+          {c.h2h && <span className="muted small">{c.h2h.won + c.h2h.lost === 0 ? t("h2h_never") : t("h2h", { w: c.h2h.won, l: c.h2h.lost })}</span>}
         </div>
       </div>
-      {c.h2h && <p className="muted small">{c.h2h.won + c.h2h.lost === 0 ? t("h2h_never") : t("h2h", { w: c.h2h.won, l: c.h2h.lost })}</p>}
       {c.note && <p className="note">“{c.note}”</p>}
       <p className="chips">
-        {(chips.length ? chips : [t("chip_even")]).map((x) => <span key={x} className="tag">{x}</span>)}
-        <span className="tag tag-quiet">{left}</span>
+        {chips.length ? (
+          chips.map(([x, icon]) => <span key={x} className="tag tag-bonus"><Icon name={icon} size={14} />{x}</span>)
+        ) : (
+          <span className="tag tag-bonus">{t("chip_even")}</span>
+        )}
+        <span className="tag tag-quiet icon-line"><Icon name="calendar" size={14} />{left}</span>
       </p>
       {c.blocker ? (
         <p className="muted small">{t(`block_${c.blocker}` as Parameters<ArenaT>[0])}</p>
       ) : (
-        <div>
-          <button type="button" className="button button-primary" disabled={action.isPending} onClick={() => action.mutate({ action: "accept", id: c.id }, { onError: (e) => onError(errorCode(e)) })}>
+        <div className="fight-foot">
+          <button type="button" className="button button-accent" disabled={action.isPending} onClick={() => action.mutate({ action: "accept", id: c.id }, { onError: (e) => onError(errorCode(e)) })}>
             {t("accept_btn")}
           </button>
         </div>
@@ -325,14 +366,14 @@ export function Open({ state, ...props }: { state: ArenaState } & Props) {
   const now = Date.parse(state.now);
   return (
     <section className="stack" aria-labelledby="open-title">
-      <div>
-        <h2 id="open-title">{props.t("open_title")}</h2>
+      <div className="section-head">
+        <h2 id="open-title" className="stage-title">{props.t("open_title")}</h2>
         <p className="muted small">{props.t("open_sub")}</p>
       </div>
       {state.open.length ? (
         state.open.map((c, i) => <FightCard key={c.id} c={c} i={i} count={state.open.length} me={state.me} now={now} {...props} />)
       ) : (
-        <p className="muted">{props.t("open_empty")}</p>
+        <p className="card muted empty-court">{props.t("open_empty")}</p>
       )}
     </section>
   );
@@ -345,13 +386,16 @@ export function Side({ state, t, rank, lang }: { state: ArenaState; lang: string
   return (
     <div className="stack">
       {statsFor !== null && <MatchStats id={statsFor} t={t} onClose={() => setStatsFor(null)} />}
-      <section className="card stack crown" aria-labelledby="crown-title">
-        <h2 id="crown-title" className="icon-title"><Icon name="crown" size={18} />{t("crown")}</h2>
+      <section className={`card stack crown${state.crown ? " crown-held" : ""}`} aria-labelledby="crown-title">
+        <Rays />
+        <h2 id="crown-title" className="icon-title crown-title"><Icon name="crown" size={18} />{t("crown")}</h2>
         {state.crown ? (
           <>
+            <Duo players={state.crown.pair.players} side="crown" size="lg" />
+            <p className="crown-names">{pairTitle(state.crown.pair)}</p>
             <PairBlock pair={state.crown.pair} rank={rank} />
             <p className="muted small">{t("crown_held", { d: Math.max(0, Math.floor((now - Date.parse(state.crown.since)) / (24 * HOUR))), n: state.crown.defences })}</p>
-            <p className="small">{t("crown_bounty")}</p>
+            <p><Sticker>{t("crown_bounty")}</Sticker></p>
           </>
         ) : (
           <>
@@ -368,12 +412,13 @@ export function Side({ state, t, rank, lang }: { state: ArenaState; lang: string
           </p>
         )}
       </section>
-      <section className="card stack" aria-labelledby="feed-title">
+      <section className="card stack feed-card" aria-labelledby="feed-title">
         <h2 id="feed-title">{t("feed")}</h2>
         {state.feed.length ? (
           <ul className="rows feed">
             {state.feed.map((f, i) => (
-              <li key={f.kind === "result" ? `r${f.id}` : `u${i}`} className="row">
+              <li key={f.kind === "result" ? `r${f.id}` : `u${i}`} className={`row feed-row${f.kind === "rankup" ? " feed-rankup" : ""}`}>
+                {f.kind === "result" ? <Duo players={f.winners.players} size="sm" /> : <RankIcon index={f.rank} px={46} className="feed-rank-art" />}
                 <span className="row-text">
                   {f.kind === "result" ? (
                     <span>
@@ -385,11 +430,11 @@ export function Side({ state, t, rank, lang }: { state: ArenaState; lang: string
                   )}
                   <span className="muted small">
                     {when(f.at)}
-                    {f.kind === "result" && f.stickers.map((s) => <span key={s} className="tag">{t(`st_${s}` as Parameters<ArenaT>[0])}</span>)}
+                    {f.kind === "result" && f.stickers.map((s, k) => <Sticker key={s} tone={k % 2 ? "them" : "flood"} className="feed-sticker">{t(`st_${s}` as Parameters<ArenaT>[0])}</Sticker>)}
                   </span>
                   {f.kind === "result" && f.hasStats && (
                     <span>
-                      <button type="button" className="button button-small" aria-haspopup="dialog" onClick={() => setStatsFor(f.id)}>{t("stats_btn")}</button>
+                      <button type="button" className="button button-small" aria-haspopup="dialog" onClick={() => setStatsFor(f.id)}><Icon name="podium" size={16} />{noEmoji(t("stats_btn"))}</button>
                     </span>
                   )}
                 </span>
@@ -399,7 +444,7 @@ export function Side({ state, t, rank, lang }: { state: ArenaState; lang: string
         ) : (
           <p className="muted">{t("feed_empty")}</p>
         )}
-        {state.hot && <p className="small icon-line"><Icon name="flame" size={16} />{t("on_fire", { name: state.hot.player.name, n: state.hot.streak })}</p>}
+        {state.hot && <p className="on-fire icon-line"><Icon name="flame" size={20} />{t("on_fire", { name: state.hot.player.name, n: state.hot.streak })}</p>}
       </section>
     </div>
   );

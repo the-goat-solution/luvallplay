@@ -14,7 +14,12 @@ export function windowClass(width: number): WindowClass {
   return "compact";
 }
 
-/** Compact: bottom tab bar. Medium and expanded: navigation rail. Large: sidebar. */
+/**
+ * Compact: bottom tab bar. Medium and expanded: navigation rail. Large:
+ * sidebar. A compact window keeps the bar on every screen, iPhone Duo's
+ * outer display and Split View included: a rail there takes width a phone's
+ * page can't spare.
+ */
 export function navKind(cls: WindowClass): NavKind {
   return cls === "compact" ? "bar" : cls === "large" ? "sidebar" : "rail";
 }

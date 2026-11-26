@@ -26,7 +26,10 @@ export function defaultTenantSlug(): string {
   return process.env.TENANT_SLUG?.trim() || "three-wolves";
 }
 
-// One row per account. A club role (owner, admin, coach) comes from
+// One row per person IN THE CLUB. Accounts are global, so an account is not
+// a member of a club just by existing (audit C1): a row is written for
+// someone who is joining ($3), who already has a row, or who holds a role in
+// this club. A club role (owner, admin, coach) comes from this club's
 // club_roles; without one, the person is a member, and an existing
 // member/guest row keeps its role. `status` (the club's own enable/disable
 // decision) is never touched here.
@@ -35,8 +38,10 @@ INSERT INTO club_members (tenant_id, user_id, role, status, joined_at, leaderboa
 SELECT t.id, p.id, COALESCE(r.role, 'member'), 'active', p.created_at, p.leaderboard_visible
 FROM players p
 CROSS JOIN tenants t
-LEFT JOIN club_roles r ON r.player_id = p.id
+LEFT JOIN club_roles r ON r.player_id = p.id AND r.tenant_id = t.id
 WHERE t.slug = $1 AND ($2::int IS NULL OR p.id = $2)
+  AND ($3::boolean OR r.player_id IS NOT NULL
+       OR EXISTS (SELECT 1 FROM club_members m WHERE m.tenant_id = t.id AND m.user_id = p.id))
 ON CONFLICT (tenant_id, user_id) DO UPDATE SET
   role = CASE
     WHEN EXCLUDED.role <> 'member' THEN EXCLUDED.role
@@ -55,21 +60,37 @@ function isMissingTable(err: unknown): boolean {
   return (err as { code?: string })?.code === "42P01";
 }
 
-/** Brings the whole club's rows in line. Returns how many rows it wrote. */
+/** Brings the rows of the club's own people in line. Returns how many rows it wrote. */
 export async function reconcileClubMembers(db: Db, slug = defaultTenantSlug()): Promise<number> {
-  const { rows } = await db.query(UPSERT, [slug, null]);
+  const { rows } = await db.query(UPSERT, [slug, null, false]);
   return rows.length;
 }
 
 /**
- * Mirrors one account's role and leaderboard flag (null: every account).
+ * Makes the person a member of the club (a new account made on the club's
+ * site, an accepted invite). Someone already in the club keeps their row.
+ * Never throws, like mirrorClubMember.
+ */
+export async function joinClub(db: Db, playerId: number, slug = defaultTenantSlug()): Promise<void> {
+  try {
+    await db.query(UPSERT, [slug, playerId, true]);
+  } catch (err) {
+    if (isMissingTable(err)) return;
+    console.error(`[tenants] could not add ${playerId} to the club:`, err);
+  }
+}
+
+/**
+ * Mirrors the role and leaderboard flag of one person in the club (null:
+ * everyone in it). It never adds someone who isn't in the club and holds no
+ * role in it: that is joinClub.
  * Never throws: the source tables (club_roles, players) already hold the
  * change, and reconcileClubMembers repairs a missed mirror. Don't call it
  * inside an open transaction: a failed statement would abort the transaction.
  */
 export async function mirrorClubMember(db: Db, playerId: number | null, slug = defaultTenantSlug()): Promise<void> {
   try {
-    await db.query(UPSERT, [slug, playerId]);
+    await db.query(UPSERT, [slug, playerId, false]);
   } catch (err) {
     // Migration 0003 not applied yet (expand: the app may deploy first).
     if (isMissingTable(err)) return;
@@ -89,9 +110,10 @@ export async function clubMemberDrift(db: Db, slug = defaultTenantSlug()): Promi
             END AS problem
      FROM players p
      JOIN tenants t ON t.slug = $1
-     LEFT JOIN club_roles r ON r.player_id = p.id
+     LEFT JOIN club_roles r ON r.player_id = p.id AND r.tenant_id = t.id
      LEFT JOIN club_members m ON m.tenant_id = t.id AND m.user_id = p.id
-     WHERE m.user_id IS NULL
+     -- Someone with no row and no role here is simply not in this club.
+     WHERE (m.user_id IS NULL AND r.role IS NOT NULL)
         OR (r.role IS NOT NULL AND m.role <> r.role)
         OR (r.role IS NULL AND m.role IN ('owner', 'admin', 'coach'))
         OR m.leaderboard_visible <> p.leaderboard_visible

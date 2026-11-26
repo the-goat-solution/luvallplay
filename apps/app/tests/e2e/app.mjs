@@ -33,13 +33,15 @@ const pg = createRequire(path.join(WEB_DIR, "package.json"))("pg");
 const COURT_GREEN = "#0e6b4f";
 const NAVY = "#184467";
 const NAVY_DARK_MODE = "#1e5a8a";
-const WIDTHS = [320, 375, 600, 840, 1200];
-const NAV_AT = { 320: "bar", 375: "bar", 600: "rail", 840: "rail", 1200: "sidebar" };
+// 382: half of iPhone Duo's inner display in Split View; 466: its outer display's width (on a phone-height window here).
+const WIDTHS = [320, 375, 382, 466, 600, 840, 1200];
+const NAV_AT = { 320: "bar", 375: "bar", 382: "bar", 466: "bar", 600: "rail", 840: "rail", 1200: "sidebar" };
 const PHONE = { width: 375, height: 812 };
 const STORE = { ios: "https://apps.apple.com/app/luvallplay/id0000000000", android: "https://play.google.com/store/apps/details?id=com.luvallplay.app" };
 
 let env;
 let PEOPLE;
+let JOIN_CLUB_SQL;
 let preview;
 let browser;
 let db;
@@ -54,6 +56,7 @@ before(async () => {
   process.chdir(WEB_DIR); // the environment script runs the web app's own scripts
   const e2e = await import(path.join(WEB_DIR, "scripts/e2e/env.mjs"));
   PEOPLE = e2e.PEOPLE;
+  JOIN_CLUB_SQL = e2e.JOIN_CLUB_SQL;
   env = await e2e.startEnv({ log: () => {} });
   api = `${env.base}/api/v1/app`;
 
@@ -101,6 +104,8 @@ async function outboxCode(email) {
 /** A session made the way the server stores one (only the token's SHA-256), so sign-in rate limits stay on. */
 async function sessionToken(email) {
   const { rows } = await db.query(`SELECT id FROM players WHERE email = $1 AND deleted_at IS NULL`, [email]);
+  // An account made straight in the database is in no club yet.
+  await db.query(JOIN_CLUB_SQL, [rows[0].id]);
   const token = randomBytes(32).toString("base64url");
   await db.query(`INSERT INTO player_sessions (player_id, token_hash, user_agent, expires_at) VALUES ($1, $2, 'e2e-app', NOW() + INTERVAL '90 days')`, [rows[0].id, createHash("sha256").update(token).digest("hex")]);
   return token;
@@ -2420,6 +2425,19 @@ describe("APP · layout (build plan §4.4)", () => {
     const moving = await page.evaluate(() => [...document.querySelectorAll("*")].filter((el) => getComputedStyle(el).animationName !== "none").length);
     assert.equal(moving, 0);
     await context.close();
+    // The stage's screens too: no entrances, no podium rising, no confetti drawn, nothing counting up.
+    const { context: signedInCtx } = await signedIn(PEOPLE.member.email, { reducedMotion: "reduce" });
+    const stage = await signedInCtx.newPage();
+    for (const [route, ready] of [["/arena", '[data-screen="nav_arena"][data-state="ready"]'], ["/leaderboard", '[data-screen="nav_leaderboard"][data-state="ready"]'], ["/vision", '[data-screen="nav_vision"][data-state="ready"]']]) {
+      await stage.goto(`${APP}${route}`);
+      await stage.waitForSelector(ready);
+      const still = await stage.evaluate(() => ({
+        moving: [...document.querySelectorAll("*")].filter((el) => getComputedStyle(el).animationName !== "none").map((el) => el.className).slice(0, 3),
+        confetti: document.querySelectorAll(".confetti").length,
+      }));
+      assert.deepEqual(still, { moving: [], confetti: 0 }, route);
+    }
+    await signedInCtx.close();
   });
 });
 
@@ -2430,10 +2448,12 @@ describe("APP · accessibility and the page's rules", () => {
       // axe is injected by the test, which the page's own CSP would (rightly) refuse.
       const { context } = await signedIn(PEOPLE.admin.email, { colorScheme, bypassCSP: true });
       const anon = await browser.newContext({ viewport: PHONE, serviceWorkers: "block", colorScheme, bypassCSP: true });
-      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/vision", '[data-screen="nav_vision"][data-state="ready"]'], [context, "/vision/label", '[data-testid="label-file"]'], [context, "/membership", '[data-screen="membership"][data-state="ready"]'], [context, "/arena", '[data-screen="nav_arena"]']]) {
+      for (const [ctx, route, ready] of [[anon, "/signin", "form"], [anon, "/c/three-wolves", "form"], [context, "/me", ME_READY], [context, "/inbox", ".inbox-list .button"], [context, "/inbox/new", "form textarea"], [context, "/settings", "text=Signed in as"], [context, "/welcome", "#welcome-title"], [context, "/vision", '[data-screen="nav_vision"][data-state="ready"]'], [context, "/vision/label", '[data-testid="label-file"]'], [context, "/membership", '[data-screen="membership"][data-state="ready"]'], [context, "/arena", '[data-screen="nav_arena"][data-state="ready"]'], [context, "/leaderboard", '[data-screen="nav_leaderboard"][data-state="ready"]']]) {
         const page = await ctx.newPage();
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);
+        // The stage's entrances (cards rising in, the podium) settle before axe reads the colours.
+        await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
         await page.addScriptTag({ content: axeSource });
         const result = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] }));
         for (const v of result.violations) problems.push(`${route} (${colorScheme}): ${v.id} [${v.impact}] ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(" | ")}`);
@@ -2462,7 +2482,7 @@ describe("APP · accessibility and the page's rules", () => {
         await page.waitForSelector(ready);
         if (act) await act(page);
         // Measure the settled page: a colour mid-transition (a chip turning to its pressed colour) isn't what anyone reads.
-        await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+        await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
         await page.addScriptTag({ content: axeSource });
         const result = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] }));
         for (const v of result.violations) problems.push(`${route}${act ? "+" : ""} (${colorScheme}): ${v.id} [${v.impact}] ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(" | ")}`);
@@ -2490,7 +2510,7 @@ describe("APP · accessibility and the page's rules", () => {
     const get = sheet(page).getByRole("link", { name: "Get it on the App Store" });
     assert.equal(await get.getAttribute("href"), STORE.ios);
     await page.addScriptTag({ content: axeSource });
-    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+    await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
     const axe = await page.evaluate(() => window.axe.run(document.querySelector("dialog.get-app"), { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] }));
     assert.deepEqual(axe.violations.map((v) => v.id), []);
     if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/app-get-the-app.png` });
@@ -2618,5 +2638,104 @@ describe("APP · accessibility and the page's rules", () => {
     await page.waitForSelector("text=Signed in as");
     assert.ok(scripts.some((s) => s.startsWith("Profile-")));
     await context.close();
+  });
+});
+
+// iPhone Duo (Apple's foldable): Apple's guidelines ask for one layout that
+// resizes, the same controls in every pose, bars at the side on the short
+// outer display, and nothing on the fold. Safari 27.1 offers the fold to web
+// pages only behind feature flags (Device Posture and Viewport Segments), so
+// the fold is emulated here in Chromium (DevTools' display features); the
+// sizes are the displays' in points (outer about 466 × 678, inner 951 × 669
+// opened like a book). A compact window keeps the bottom bar (a rail there
+// squeezes the page); the inner display has the rail, as any window 600px+. A last check on a real device is still worth doing.
+describe("APP · iPhone Duo", () => {
+  const FOLD = 24;
+  const POSES = [
+    // The outer display and Split View are compact windows: the bottom bar, so the page keeps its width.
+    { name: "outer display", viewport: { width: 466, height: 678 }, nav: "bar" },
+    { name: "outer display, sideways", viewport: { width: 678, height: 466 }, nav: "rail" },
+    { name: "inner display", viewport: { width: 951, height: 669 }, nav: "rail" },
+    { name: "inner display, upright", viewport: { width: 669, height: 951 }, nav: "rail" },
+    { name: "Split View, half the inner display", viewport: { width: 382, height: 669 }, screen: { width: 951, height: 669 }, nav: "bar" },
+    { name: "folded like a book", viewport: { width: 951, height: 669 }, nav: "rail", fold: { orientation: "vertical", offset: 463, maskLength: FOLD } },
+    { name: "set down like a laptop", viewport: { width: 669, height: 951 }, nav: "rail", fold: { orientation: "horizontal", offset: 463, maskLength: FOLD } },
+  ];
+  const ROUTES = [
+    ["/arena", '[data-screen="nav_arena"][data-state="ready"]'],
+    ["/leaderboard", '[data-screen="nav_leaderboard"][data-state="ready"]'],
+    ["/vision", '[data-screen="nav_vision"][data-state="ready"]'],
+    ["/vision/track?demo=1", '[data-screen="vision_track"] canvas'],
+  ];
+
+  /** Emulates the pose's fold (or none). Playwright's own screenshots would drop it, so this journey takes none. */
+  async function pose(context, page, p) {
+    if (!p.fold) return;
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setDeviceMetricsOverride", { ...p.viewport, deviceScaleFactor: 1, mobile: true, displayFeature: p.fold });
+    await cdp.send("Emulation.setDisplayFeaturesOverride", { features: [p.fold] });
+    await cdp.send("Emulation.setDevicePostureOverride", { posture: { type: "folded" } }).catch(() => {});
+  }
+
+  test("APP-DUO · each pose: no sideways scroll, the tabs where Apple puts bars, 44px targets, nothing on the fold, a dialog on one half, and axe", async () => {
+    const problems = [];
+    for (const p of POSES) {
+      const { context } = await signedIn(PEOPLE.member.email, { viewport: p.viewport, screen: p.screen ?? p.viewport, bypassCSP: true });
+      const page = await context.newPage();
+      await pose(context, page, p);
+      for (const [route, ready] of ROUTES) {
+        await page.goto(`${APP}${route}`);
+        await page.waitForSelector(ready);
+        await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
+        const where = `${route} (${p.name})`;
+        const seen = await page.evaluate(() => ({
+          book: matchMedia("(horizontal-viewport-segments: 2)").matches,
+          laptop: matchMedia("(vertical-viewport-segments: 2)").matches,
+          nav: document.querySelector(".shell")?.getAttribute("data-nav"),
+          sideways: document.documentElement.scrollWidth - window.innerWidth,
+        }));
+        if (p.fold) assert.ok(p.fold.orientation === "vertical" ? seen.book : seen.laptop, `${where}: the emulated fold is seen`);
+        if (seen.sideways > 1) problems.push(`${where}: scrolls sideways by ${seen.sideways}px`);
+        if (!route.startsWith("/vision/track") && seen.nav !== p.nav) problems.push(`${where}: tabs as a ${seen.nav}, not a ${p.nav}`);
+        const small = await page.evaluate(() =>
+          [...document.querySelectorAll(".tab, .head-icon, .icon-button, .button, .choice, .field input, .slab")]
+            .map((el) => ({ what: el.textContent?.trim().slice(0, 30), h: el.getBoundingClientRect().height }))
+            .filter((x) => x.h > 0 && x.h < 44),
+        );
+        if (small.length) problems.push(`${where}: small targets ${JSON.stringify(small.slice(0, 3))}`);
+        if (p.fold?.orientation === "vertical") {
+          // Opened like a book: no control and no card sits across the fold.
+          const across = await page.evaluate(({ from, to }) =>
+            [...document.querySelectorAll(".shell-main a, .shell-main button, .shell-main input, .shell-main .card, .shell-main .board-row")]
+              .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left < to && r.right > from; })
+              .map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].join(".")} "${el.textContent?.trim().slice(0, 24)}"`)
+              .slice(0, 5), { from: p.fold.offset, to: p.fold.offset + FOLD });
+          if (across.length) problems.push(`${where}: across the fold: ${across.join(", ")}`);
+        }
+        if (p.fold?.orientation === "horizontal" && route.startsWith("/vision/track")) {
+          // Set down like a laptop: the picture stays on the upper half.
+          const pic = await page.locator('[data-screen="vision_track"] canvas').first().boundingBox();
+          if (pic && pic.y + pic.height > p.fold.offset + 1) problems.push(`${where}: the picture reaches below the fold (${Math.round(pic.y + pic.height)}px)`);
+        }
+        if (!route.startsWith("/vision/track")) {
+          await page.addScriptTag({ content: axeSource });
+          const result = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] }));
+          for (const v of result.violations) problems.push(`${where}: axe ${v.id} ${v.nodes.map((n) => n.target.join(" ")).slice(0, 2).join(" | ")}`);
+        }
+      }
+      if (p.fold?.orientation === "vertical") {
+        // A player's card opens on one half, beside the list.
+        await page.goto(`${APP}/leaderboard`);
+        await page.waitForSelector('[data-screen="nav_leaderboard"][data-state="ready"]');
+        const row = page.locator(".board-row .board-button").first();
+        if (await row.count()) {
+          await row.click();
+          const card = await page.locator("dialog[open]").boundingBox();
+          if (card && card.x < p.fold.offset + FOLD && card.x + card.width > p.fold.offset) problems.push(`player card (${p.name}): across the fold ${JSON.stringify(card)}`);
+        }
+      }
+      await context.close();
+    }
+    assert.deepEqual(problems, []);
   });
 });

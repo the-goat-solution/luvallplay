@@ -29,7 +29,7 @@ import {
 import { WolfAvatar, WolfPicker } from "./WolfPicker";
 import { isPhone, listCameras, openCamera, pickCamera, type CameraChoice } from "./camera";
 import { loadPersonDetector } from "./detector";
-import { PLAYER_COLORS, drawOverlay, type OverlayPlayer } from "./overlay";
+import { PLAYER_COLORS, drawOverlay, setOverlayTheme, type OverlayPlayer } from "./overlay";
 import { MicListener, Pipeline, onsetsFromFile, type FrameSource } from "./pipeline";
 import { COPY } from "./copy";
 import s from "./analyzer.module.css";
@@ -265,10 +265,24 @@ export function MatchAnalyzer({
     pausedRef.current = paused;
   }, [paused]);
 
+  // The overlay wears the host's look (the club's colours, fonts and name), and holds still for less motion.
+  const brandLine = host.brand?.line ?? host.visionName.toUpperCase();
+  const logoUrl = host.brand?.logoUrl ?? null;
+  const overlayLook = host.overlay;
+  useLayoutEffect(() => {
+    const still = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    setOverlayTheme({ ...overlayLook, still });
+    return () => setOverlayTheme();
+  }, [overlayLook]);
   useEffect(() => {
+    logoRef.current = null;
+    if (!logoUrl) return;
     const img = new Image();
-    img.src = "/uploads/three-wolves-logo-white-mini.png";
+    img.src = logoUrl;
     img.onload = () => (logoRef.current = img);
+  }, [logoUrl]);
+
+  useEffect(() => {
     const saved = loadAutosave();
     // Only offer a match that belongs here (same challenge, or a free session).
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the autosave in localStorage after mount; reading it during render would break SSR hydration
@@ -850,6 +864,7 @@ export function MatchAnalyzer({
         estimate: view.estimate,
         waiting: view.waiting,
         logo: logoRef.current,
+        brand: brandLine,
         show: { hud: true, cards: true, players: true, map: true, system: true },
       });
       if (now - lastUi > 250) {

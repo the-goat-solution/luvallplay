@@ -7,10 +7,16 @@
 // that every statement runs that way:
 //
 //   BEGIN
-//   SET LOCAL ROLE luvallplay_app
-//   SELECT set_config('app.tenant_id', '<club id>', true)   -- true: this transaction only
+//   SELECT set_config('role', 'luvallplay_app', true),      -- = SET LOCAL ROLE
+//          set_config('app.tenant_id', '<club id>', true)   -- true: this transaction only
 //   …the statement(s)…
 //   COMMIT
+//
+// The role and the club are set by ONE statement, and for a statement
+// outside a transaction that statement travels with the BEGIN: three round
+// trips to the database (setup, the statement, COMMIT), where there were
+// five. On a pool of ten with a page firing nine queries at once, the two
+// saved round trips per query are what `enforce` costs (audit, Medium).
 //
 // Both settings are transaction-local on purpose. The pooled endpoint hands
 // a server connection to someone else after every transaction, so anything
@@ -21,8 +27,20 @@
 // works on the Neon driver and on node-postgres alike.
 
 export const APP_ROLE = "luvallplay_app";
-const SET_ROLE = `SET LOCAL ROLE ${APP_ROLE}`;
-const SET_TENANT = `SELECT set_config('app.tenant_id', $1, true)`;
+
+/**
+ * The one statement that makes the current transaction the app's role's,
+ * for one club (or, with null, for no club: nothing club-owned is visible).
+ * The id is written into the text so the statement can share a message with
+ * BEGIN (a message with parameters can hold only one statement); it is
+ * checked to be a whole number first, and nothing else is ever put there.
+ */
+export function scopeStatement(tenantId: number | null): string {
+  const role = `set_config('role', '${APP_ROLE}', true)`;
+  if (tenantId === null) return `SELECT ${role}`;
+  if (!Number.isInteger(tenantId) || tenantId < 0) throw new Error(`"${String(tenantId)}" is not a club id`);
+  return `SELECT ${role}, set_config('app.tenant_id', '${tenantId}', true)`;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -68,16 +86,16 @@ export function isReadOnlyStatement(text: string): boolean {
 export function scopeClient<T extends Queryable>(client: T, tenantId: number): T {
   let inTransaction = false;
   const raw = (...args: unknown[]) => client.query(...args);
-  const enter = async () => {
-    await raw(SET_ROLE);
-    await raw(SET_TENANT, [String(tenantId)]);
-  };
+  // Built (and the id checked) before anything is sent.
+  const scope = scopeStatement(tenantId);
   const query = async (...args: unknown[]) => {
     const verb = transactionVerb(textOf(args));
     if (verb === "begin") {
+      // The caller's BEGIN goes as it was written (it may carry an isolation
+      // level); the role and the club follow in one statement.
       const result = await raw(...args);
       inTransaction = true;
-      await enter();
+      await raw(scope);
       return result;
     }
     if (verb === "end") {
@@ -85,9 +103,9 @@ export function scopeClient<T extends Queryable>(client: T, tenantId: number): T
       return raw(...args);
     }
     if (inTransaction) return raw(...args);
-    await raw("BEGIN");
     try {
-      await enter();
+      // One message: open the transaction and step down for the club.
+      await raw(`BEGIN; ${scope}`);
       const result = await raw(...args);
       await raw("COMMIT");
       return result;
@@ -132,11 +150,10 @@ export function scopePool<T extends PoolLike>(pool: T, tenantId: () => Promise<n
  * that is rolled back. For shadow reads: nothing it does can stay.
  */
 export async function readScoped(pool: PoolLike, tenantId: number | null, text: string, params?: unknown[]): Promise<{ rows: Record<string, unknown>[] }> {
+  const scope = scopeStatement(tenantId);
   const client = await pool.connect();
   try {
-    await client.query("BEGIN READ ONLY");
-    await client.query(SET_ROLE);
-    if (tenantId !== null) await client.query(SET_TENANT, [String(tenantId)]);
+    await client.query(`BEGIN READ ONLY; ${scope}`);
     return await client.query(text, params);
   } finally {
     await client.query("ROLLBACK").catch(() => {});

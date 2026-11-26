@@ -8,7 +8,7 @@ import fs from "node:fs";
 import pg from "pg";
 import { CLUB_OWNED_TABLES } from "@luvallplay/db/tenancy";
 import { migrate } from "../scripts/db/migrate.mjs";
-import { existingTables, isReadOnlyStatement, probeTenantIsolation, readScoped, scopeClient, scopePool, textOf, transactionVerb } from "../lib/tenant-scope.ts";
+import { scopeStatement, existingTables, isReadOnlyStatement, probeTenantIsolation, readScoped, scopeClient, scopePool, textOf, transactionVerb } from "../lib/tenant-scope.ts";
 import { shadowHeartbeat } from "../lib/shadow-log.ts";
 
 test("statements that open or close a transaction are recognised", () => {

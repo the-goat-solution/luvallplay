@@ -37,7 +37,7 @@ import type pg from "pg";
 import * as schema from "@luvallplay/db/schema";
 import { createPgDatabase, type PgDatabase } from "./database-pg.ts";
 import { defaultTenantSlug } from "./tenant-members.ts";
-import { APP_ROLE, isReadOnlyStatement, readScoped, scopePool, textOf, type PoolLike, type Queryable } from "./tenant-scope.ts";
+import { isReadOnlyStatement, readScoped, scopePool, scopeStatement, textOf, type PoolLike, type Queryable } from "./tenant-scope.ts";
 
 // Postgres DATE columns stay the 'YYYY-MM-DD' string Postgres sends. The
 // driver's default turns them into a Date at local midnight, which shifts the

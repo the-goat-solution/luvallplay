@@ -160,7 +160,8 @@ describe("admin roles on Postgres", { skip: DB_URL ? false : "set DATA_GUARD_TES
     assert.equal(await isLastOwner(db, 1), false);
   });
 
-  test("REHEARSAL · migration + grant of two owners: data guard reports 0 problems", { skip: hasPsql ? false : "psql not installed" }, () => {
+  test("REHEARSAL · migration + grant of two owners: data guard reports 0 problems", { skip: hasPsql || REQUIRE_DB ? false : "psql not installed" }, () => {
+    assert.ok(hasPsql, "psql must be installed: this rehearsal can't be skipped (DATA_GUARD_REQUIRE_DB=1)");
     const dir = mkdtempSync(join(tmpdir(), "roles-"));
     const run = `node scripts/run-migration.mjs ${MIGRATION} && node scripts/run-migration.mjs ${CURRENT_KEYS} && node scripts/grant-role.mjs --role owner --platform --email player1@example.test --email ' Player2@Example.TEST '`;
     const r = spawnSync(process.execPath, ["scripts/data-guard/cli.ts", "rehearse", "--expect", EXPECT, "--out-dir", dir, "--run", run], {

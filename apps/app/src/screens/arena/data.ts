@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub } from "../../app.ts";
-import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { useCurrentClub, useWho } from "../../hooks.tsx";
 
 export type ArenaState = ResponseOf<"arena.state">;
 export type Challenge = ArenaState["live"][number];
@@ -16,11 +16,11 @@ export type ArenaAction = BodyOf<"arena.action">;
 const POLL_MS = 5_000;
 
 function useArenaApi() {
-  const { token } = usePrefs();
+  const who = useWho();
   const { current, slug, config } = useCurrentClub();
   // Only for a club with the Arena on (switching to one without it leaves this screen).
   const on = !!config && config.modules.includes("arena");
-  return { key: ["arena", slug, token] as const, slug: slug as string, ready: !!token && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
+  return { key: ["arena", slug, who] as const, slug: slug as string, ready: !!who && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
 }
 
 export function useArena() {

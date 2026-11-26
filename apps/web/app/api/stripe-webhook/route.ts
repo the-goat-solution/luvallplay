@@ -11,7 +11,7 @@ import type Stripe from "stripe";
 import { insertOneTimeDonation, setDonationStatusBySubscription } from "@/lib/repos/donations";
 import { setMembershipStatusBySubscription } from "@/lib/repos/memberships";
 import { getStripe } from "@/lib/stripe";
-import { activateMembershipByPaymentIntentId, activateMembershipBySubscriptionId, applyMembershipRenewal, listMemberMiniGameDates, listSessionsInRange, reserveBookingSlot } from "@/lib/db";
+import { activateMembershipByPaymentIntentId, activateMembershipBySubscriptionId, applyMembershipRenewal, listMemberMiniGameDates, listSessionsInRange, reserveBookingSlotOnce } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import {
   sendAdminBookingRaceAlertEmail,
@@ -59,14 +59,16 @@ export async function POST(request: Request) {
     if (pi.metadata?.type === "casual" && pi.metadata.sessionDate) {
       if (process.env.POSTGRES_URL) {
         const sessionDate = pi.metadata.sessionDate;
-        const ok = await reserveBookingSlot(sessionDate, {
+        // "already": this payment has its booking (Stripe delivers events at
+        // least once). Nothing to count, confirm or refund a second time.
+        const slot = await reserveBookingSlotOnce(sessionDate, {
           firstName: pi.metadata.firstName ?? "",
           lastName: pi.metadata.lastName ?? "",
           email: pi.metadata.email ?? pi.receipt_email ?? "",
           phone: pi.metadata.phone,
           paymentIntentId: pi.id,
         });
-        if (ok) {
+        if (slot === "reserved") {
           const customerEmail = pi.metadata.email || pi.receipt_email || "";
           if (customerEmail) {
             const [session] = await listSessionsInRange(sessionDate, sessionDate);
@@ -82,7 +84,7 @@ export async function POST(request: Request) {
               console.error("Failed to send casual booking confirmation email", err),
             );
           }
-        } else {
+        } else if (slot === "full") {
           // Race: the session filled between PaymentIntent creation (which
           // only reads capacity) and this webhook's atomic reservation. The
           // customer was already charged for a spot that no longer exists —
@@ -319,14 +321,14 @@ export async function POST(request: Request) {
         offlineMethodFromSource(invoice.metadata.source) ?? "cash",
         invoice.id!,
       );
-      const ok = await reserveBookingSlot(sessionDate, {
+      const slot = await reserveBookingSlotOnce(sessionDate, {
         firstName: invoice.metadata.firstName ?? "",
         lastName: invoice.metadata.lastName ?? "",
         email: invoice.metadata.email ?? "",
         phone: invoice.metadata.phone || undefined,
         paymentIntentId: offlineRef,
       });
-      if (!ok) {
+      if (slot === "full") {
         // Same race as the card-payment path above, but this was paid
         // out-of-band (cash) so there's no Stripe charge to auto-refund —
         // alert the admin to reconcile with the customer directly.

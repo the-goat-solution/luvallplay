@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { app } from "@luvallplay/i18n/app";
 import { hostOfApiBase, trustedHost } from "../src/lib/api-host.ts";
-import { pickLang, translator } from "../src/lib/messages.ts";
+import { langs, loadLang, pickLang, translator } from "../src/lib/messages.ts";
 import { TABS, tabForPath, visibleTabs } from "../src/lib/nav.ts";
 import { browserStorage, memoryStorage } from "../src/lib/storage.ts";
 import { createStore } from "../src/lib/store.ts";
@@ -263,7 +263,12 @@ describe("messages", () => {
       for (const [key, text] of Object.entries(app[lang])) assert.doesNotMatch(text, /badminton|shuttle|racket|wolf|wolves|cầu lông/i, `${lang} ${key}`);
     }
   });
-  test("the club's own words fill the text, per language; without a club, the neutral ones", () => {
+  test("the club's own words fill the text, per language; without a club, the neutral ones", async () => {
+    // Vietnamese is its own file, fetched when it is shown: English until then.
+    assert.equal(langs.ready("vi"), false);
+    assert.equal(translator("vi", null)("signin_title"), "Sign in");
+    await loadLang("vi");
+    assert.equal(langs.ready("vi"), true);
     const terms = { pointsName: "Wolf Points", visionName: "Wolf Vision", localized: { vi: { visionName: "Mắt Sói" } } };
     assert.equal(translator("en", terms)("nav_vision"), "Wolf Vision");
     assert.equal(translator("vi", terms)("nav_vision"), "Mắt Sói");

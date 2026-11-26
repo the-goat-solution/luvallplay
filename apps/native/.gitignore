@@ -1,0 +1,3 @@
+# The players' app built for the shell (pnpm --filter native web).
+www/
+node_modules/

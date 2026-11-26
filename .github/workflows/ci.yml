@@ -270,3 +270,42 @@ jobs:
           path: app-screens
           if-no-files-found: ignore
           retention-days: 14
+
+  # The store app's Android shell (apps/native): the players' app bundled
+  # into the Capacitor project, compiled to a debug APK. Proves the project
+  # builds on every pull request; signing and the release bundle (AAB) come
+  # with the release pipeline (build plan §4.5.1), and need Play's keys.
+  android:
+    name: Android shell (types, tests, debug build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - name: Types and the shell's identity and settings
+        run: pnpm --filter native typecheck && pnpm --filter native test
+      - name: The players' app, built for the shell
+        run: pnpm --filter native web
+        env:
+          # A stand-in host: this build is only compiled, never published.
+          NATIVE_API_BASE: https://api.luvallplay.com
+      - name: Copy it into the Android project
+        run: pnpm --filter native sync:android
+      - name: Debug build (APK)
+        run: pnpm --filter native android:debug
+      - name: The debug APK (the "android-debug-apk" artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

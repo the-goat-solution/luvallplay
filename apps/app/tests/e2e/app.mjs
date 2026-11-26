@@ -2449,7 +2449,7 @@ describe("APP · accessibility and the page's rules", () => {
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);
         // The stage's entrances (cards rising in, the podium) settle before axe reads the colours.
-        await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+        await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
         await page.addScriptTag({ content: axeSource });
         const result = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] }));
         for (const v of result.violations) problems.push(`${route} (${colorScheme}): ${v.id} [${v.impact}] ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(" | ")}`);
@@ -2478,7 +2478,7 @@ describe("APP · accessibility and the page's rules", () => {
         await page.waitForSelector(ready);
         if (act) await act(page);
         // Measure the settled page: a colour mid-transition (a chip turning to its pressed colour) isn't what anyone reads.
-        await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+        await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
         await page.addScriptTag({ content: axeSource });
         const result = await page.evaluate(() => window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] }));
         for (const v of result.violations) problems.push(`${route}${act ? "+" : ""} (${colorScheme}): ${v.id} [${v.impact}] ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(" | ")}`);
@@ -2506,7 +2506,7 @@ describe("APP · accessibility and the page's rules", () => {
     const get = sheet(page).getByRole("link", { name: "Get it on the App Store" });
     assert.equal(await get.getAttribute("href"), STORE.ios);
     await page.addScriptTag({ content: axeSource });
-    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+    await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
     const axe = await page.evaluate(() => window.axe.run(document.querySelector("dialog.get-app"), { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] }));
     assert.deepEqual(axe.violations.map((v) => v.id), []);
     if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/app-get-the-app.png` });
@@ -2680,7 +2680,7 @@ describe("APP · iPhone Duo", () => {
       for (const [route, ready] of ROUTES) {
         await page.goto(`${APP}${route}`);
         await page.waitForSelector(ready);
-        await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+        await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
         const where = `${route} (${p.name})`;
         const seen = await page.evaluate(() => ({
           book: matchMedia("(horizontal-viewport-segments: 2)").matches,

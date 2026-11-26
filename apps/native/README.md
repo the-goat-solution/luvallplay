@@ -21,9 +21,10 @@ CI builds the debug APK on every pull request (job "Android shell") and keeps it
 |---|---|
 | `capacitor-secure-storage-plugin` | The session token in the Android Keystore (later the iOS Keychain); the app waits for it at start (`apps/app/src/lib/native/`) |
 | `@capacitor/browser` | Pages outside the app (Stripe's billing page, the club's admin, receipts, the club's website) open over the app in the phone's in-app browser; a link back to `app.luvallplay.com` closes it |
+| `@capacitor/filesystem`, `@capacitor/share` | "Download my data": the file is written to the app's cache and offered through the phone's share sheet (a web view can't download) |
 | `@capacitor/app` | The Android back button (a sheet closes first, then one screen back) and opening the app from a link |
 
-Not yet here, in the order they come: saving and sharing files, push notifications (Firebase), Play Billing for Vision passes.
+Not yet here, in the order they come: push notifications (Firebase), Play Billing for Vision passes.
 
 ## Settings that are deliberate
 

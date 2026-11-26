@@ -8,7 +8,7 @@ Build plan §6.8, decision V. Test plan §3.17, journey J1, gate "3b Junior acco
 
 | # | Step | State |
 |---|---|---|
-| 1 | Data guard counts junior profiles as people; tables for a junior's bookings and attendance (migration `0012`) | Built and rehearsed (18 accounts, 0 problems). **#119 merged 25 Nov 00:46 UTC; confirm whether `0012` has run on production.** Merged code expects the tables (drift, `verify.mjs`, the row-level security heartbeat), and running `0013` would also run `0012` (audit C0) |
+| 1 | Data guard counts junior profiles as people; tables for a junior's bookings and attendance (migration `0012`) | **Done.** #119 merged 25 Nov; `0012` ran on production 26 Nov 2026, 00:44 UTC (19 accounts, 0 problems) |
 | 2 | `juniors` and `forms-waivers` modules; switching Juniors on needs an owner, a fresh sign-in check and the safeguarding policy acknowledged | Not started |
 | 3 | Guardian side: a "Family" section, adding a child, consent | Not started |
 | 4 | Waivers, emergency contacts, encrypted medical notes | Not started |
@@ -46,7 +46,7 @@ No row changes. Nothing in the app reads or writes these tables yet.
 
 **Rehearsal (24 Nov), on `rehearsal-phase-3`, reset to a fresh copy of production:** data guard 18 accounts, 0 problems; 3.3 s; adults' views identical; no drift; verify consistent. Report: `docs/rehearsals/2026-11-phase3b-junior-activity.md`.
 
-**Production run: not done. It waits for your go-ahead** (Phase 3b asks before each production data step). Migrate first, then merge.
+**Production run, done 26 Nov 2026, 00:44 UTC** (by lane T's session, approved by the owner; `--to 0012`, so `0013` ran separately afterwards): restore point `pre-phase-3b-junior-activity`; 3.3 s; data guard 19 accounts, 0 problems; no drift; verify consistent, row-level security on 61 tables. Rehearsed again the day before on a fresh copy of production. The record is in the Phase 3 runbook §13.2. What follows is how it was prepared.
 
 ```bash
 # 1. Restore point: a Neon branch from main, now. Name: pre-phase-3b-junior-activity

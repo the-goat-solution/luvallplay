@@ -60,6 +60,19 @@ export const familyEndpoints = defineEndpoints("family", {
     params: S.familyFormParams, body: S.familySignRequest, response: S.familyFormResponse,
     rateLimit: { limit: 20, windowMs: 10 * MIN },
   },
+  // A guardian's rights over their child's information: one export of all of
+  // it, and deleting it for good. Refusals for delete: 400 confirm_required;
+  // 404 not_found; 409 has_bookings (cancel the child's coming places first).
+  "family.export": {
+    method: "GET", path: "/clubs/{club}/family/{id}/export", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, response: S.familyExportResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
+  "family.remove": {
+    method: "POST", path: "/clubs/{club}/family/{id}/delete", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyDeleteRequest, response: S.familyDeleteResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
   // Booking a place for a child. The place is shared with adults' casual
   // bookings. Refusals: 409 not_bookable (outside the booking window),
   // day_paused, locked, full, payment_needed (the club charges and paying

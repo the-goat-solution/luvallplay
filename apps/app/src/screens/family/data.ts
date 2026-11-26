@@ -137,3 +137,28 @@ export function useSignForm(childId: number) {
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ["family-forms"] }),
   });
 }
+
+// ── Export and delete a child's information ─────────────────────────────────
+
+/** Everything the club holds about the child, fetched when asked for and never kept. */
+export function useExportChild(childId: number) {
+  const { slug, api } = useClubApi();
+  return useMutation({ mutationFn: () => api.family.export({ club: slug, id: childId }) });
+}
+
+export function useDeleteChild(childId: number) {
+  const { who, slug, api } = useClubApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.family.remove({ club: slug, id: childId }, { confirm: true }),
+    onSuccess: () => {
+      // The child leaves the list at once, so their card closes before anything about them could be asked for again.
+      queryClient.setQueryData<Family>(["family", slug, who], (f) => (f ? { ...f, children: f.children.filter((c) => c.id !== childId) } : f));
+      void queryClient.invalidateQueries({ queryKey: ["family-bookings"] });
+      // Then nothing about them stays in memory.
+      window.setTimeout(() => {
+        for (const key of ["family-care", "family-forms"]) queryClient.removeQueries({ queryKey: [key, slug, who, childId] });
+      }, 1000);
+    },
+  });
+}

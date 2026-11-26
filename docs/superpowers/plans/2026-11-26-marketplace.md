@@ -12,7 +12,14 @@
 
 ## Global Constraints
 
-- Hidden until gate Z passes (including Vietnam's E-commerce Law checks for VN). `404 module_off` without access. Nothing in the app shows the Marketplace without it.
+- Hidden until gate Z passes (including Vietnam's E-commerce Law checks for VN). `404 module_off` without access. Nothing in the app shows the Marketplace without it. "Hidden" works as in the Social plan: on only for clubs in `MARKET_PILOT_TENANTS` (the review demo club first), checked through `marketRoute` before parsing and rate limiting, with a contract test over every `market.*` endpoint.
+- **People are shown by a marketplace display name** (`market_members.display_name`, the social one when the person has one) and a public id. Never by real name, `players.id` or email, until the contact step.
+- **No contact details in listing text.** Titles, descriptions, questions **and answers** run through `screenText` and a contact pattern check: email addresses, phone numbers (7+ digits in a run, allowing spaces and dashes), URLs, `@handles`, and the words whatsapp, zalo, messenger, telegram, viber, signal. A hit is `not_allowed` ("Keep contact details out of the listing; the contact button appears once a sale is agreed").
+- **Terms can't change under a buyer.** Every change to price, title, description, condition or photos bumps `terms_version`. A buyer commits to a version, and a seller can only confirm a buyer whose version is current.
+- **Moderation wins over the seller.** A listing a moderator hid or removed can't be renewed, edited, marked sold, confirmed or contacted by its seller. `removed_by_moderation` is final.
+- **Suspensions** use the Social plan's `player_suspensions` (scope `market` or `all`), so a marketplace-only person can be suspended too, and re-registering doesn't clear it.
+- **The contact step shares a login email.** The buyer agrees to it on the commit screen ("If the seller accepts, they'll get your email address, and you'll get theirs"), and the time is stored. A buyer can commit to a listing once, ever, and hold at most 10 open commitments.
+- Writes use `failClosed` shared rate limits and `withPlayerLock` for caps (encryption plan, Task 8). Cross-club reads use the Social plan's `SECURITY DEFINER` function pattern (`market_clubs_of(player_id)`), and database tests also run under `TENANT_SCOPE=enforce` with two clubs.
 - **Adults only:** an 18+ confirmation and the marketplace rules (version `"2026-12"`) are accepted once, before the first listing, question or commitment.
 - **No messaging on the platform.** Questions and answers are public on the listing. The contact button appears only for the seller and the buyer the seller confirmed. It returns a `mailto:` link, and every reveal is logged.
 - **Player listings are unverified:** no payment through the platform, and every player listing shows the notice "Luvallplay doesn't check sellers or items. Meet in a public place and check the item before you pay." in both languages. Club listings (created in Admin by an owner or admin) show a "Club" badge.
@@ -31,6 +38,8 @@
 3. **The contact endpoint called by anyone else** (a third player, a declined buyer, a blocked person, the seller after deleting their account) returns `404 not_found` and logs nothing. Task 3 test.
 4. **A price typed as "1.234,50" or "$1,234.50"** in the app gives the same minor units (parsed with the club's country pack, `@luvallplay/core/money`) or a clear `price_invalid`. Task 1 test.
 5. **A listing whose photo is still `needs_review`** isn't shown in browse until the photo is approved; its seller sees "Waiting for a photo check". Task 2 test.
+6. **The seller changes the price after a buyer taps "I want to buy" but before confirming.** The pending buyer is withdrawn and told why, and confirming a stale commitment gives `409 terms_changed`. Task 3 test.
+7. **A listing title containing `&cc=`, `%0d%0a` or `?body=`** can't inject anything into the contact step, because the API returns `{ email, subject }` as JSON and the app builds the `mailto:` with `encodeURIComponent`. Task 3 test.
 
 ---
 
@@ -81,6 +90,16 @@
   - `expireListings(db, now: Date): Promise<number>` (for the cron)
   - `type ListingCard = { id; title; priceMinor; currency; city; sport; category; condition; photoUrl; club: { name: string } | null /* club listing badge */; createdAt }`
 
+**Also (security review):**
+- Columns: `market_listings` also gets `terms_version INT NOT NULL DEFAULT 1`, `hidden_at timestamptz`, `removed_by_moderation BOOLEAN NOT NULL DEFAULT false`; `market_members` gets `display_name` and `public_id`; `market_commitments` gets `terms_version`, `email_share_consented_at NOT NULL`, and a `UNIQUE (listing_id, buyer_id)` (one commitment per buyer per listing, ever) in place of the partial one.
+- `city` is a cleaned string of 2–40 letters, spaces, hyphens and apostrophes: no digits, so no street addresses.
+- `browse` text search escapes `%`, `_` and `\` before `ILIKE`, and the migration adds `CREATE EXTENSION IF NOT EXISTS pg_trgm` with a trigram index on `search_text` (rehearse on the Neon branch: Neon supports `pg_trgm`).
+- `createListing` on the player endpoint **never** sets `seller_tenant_id`; the body schema has no field for it. Only the Admin path (Task 6) sets it, from the session's club after an owner or admin check. The `PATCH` body schema is `.strict()` with only `title`, `description`, `priceMinor`, `category`, `condition`, `sport`, `city`, `photoIds`.
+- Photos: the same ownership and approval check as Social (`player_photos.player_id = seller`, `approved`, not deleted), re-checked on every browse and detail read, with `purpose = 'market'` so they never reach the Gallery.
+- `updateListing` bumps `terms_version` on any term change and sets every `requested` commitment to `withdrawn`, with an in-app notice to each buyer. `renewListing`, `updateListing`, `markSold` and `removeListing` refuse with `not_found` while `hidden_at` is set or `removed_by_moderation` is true.
+- `browse` and `getListing` also exclude hidden listings, sellers with `players.deleted_at`, and suspended sellers.
+- Tests add: a player `POST` with a club id stores `seller_tenant_id IS NULL`; a `PATCH` with `status` or `sellerTenantId` gives `400`; renewing a moderator-removed listing is refused; a hidden listing stays hidden after the seller edits it; a title with an email, a phone number or "zalo me" gives `not_allowed`; 25 parallel `createListing` calls leave at most 20 active; a search for `%` matches only a literal `%`.
+
 - [ ] **Step 1: Failing tests:** Review Focus 2 and 5; the 21st active listing → `too_many_active`; a renewal after three → `renewals_used`; `expireListings` moves past-date listings to `expired` and is idempotent; browse never shows a blocked person's listing; a club listing needs the creator to be that club's owner or admin (via `packages/auth`).
 - [ ] **Step 2: Run** (fail). **Step 3: Implement.** **Step 4: Run** `pnpm --filter web test` and `db:drift` (pass).
 - [ ] **Step 5: Rehearse** the migration on a Neon branch; write the note.
@@ -100,6 +119,14 @@
   - `releaseBuyer(db, sellerId, listingId)` (back to `active`), `declineBuyer(...)`
   - `contactFor(db, viewerId, listingId): Promise<Result<{ mailto: string; name: string }, "not_found">>`: only the seller or the confirmed buyer; builds `mailto:<other person's email>?subject=<"About your listing: " + title, URL-encoded>`; inserts a `market_contact_reveals` row on success only
 - Notifications: an in-app inbox item for "someone wants to buy", "the seller confirmed you" and "your question was answered" (through the existing inbox, `lib/message-notify.ts`). Push waits for a new push kind and isn't in this plan.
+
+**Also (security review):**
+- One gate, `loadVisibleListing(db, viewerId, id)`, used first by `ask`, `listQuestions`, `commit` and `contactFor`. Answers are screened like questions.
+- `commit` takes `{ termsVersion, consentToShareEmail: true }`. It refuses `terms_changed` if the version isn't current, `already` for a second commitment to the same listing ever, and `too_many_open` above 10.
+- `confirmBuyer`, under the listing's `FOR UPDATE` lock, re-checks `status = 'active'`, `expires_at > now()`, not hidden, not removed by moderation, the commitment's `terms_version` equal to the listing's, and the buyer neither suspended nor deleted. Otherwise `taken`, `terms_changed` or `not_found`.
+- `contactFor` is **POST** `…/{id}/contact`. It needs the commitment `confirmed`, the listing not hidden or removed by moderation, and the other person neither suspended nor deleted. It returns `{ email: string; subject: string; name: string }`; the app builds the `mailto:` link. The reveal row records the viewer, the other person and the listing.
+- Notifications: a new in-app-only notification type (`lib/marketplace/notices.ts`, its own table `market_notices (id, player_id, kind, listing_id, created_at, read_at)`), with ids and listing titles only and no email. It is **not** `lib/message-notify.ts`, which emails message bodies and the sender's email to club admins. No notice is made for a `held` question.
+- Tests add: Review Focus 6 and 7; for each of `confirmBuyer`, `declineBuyer`, `withdraw`, `answer` and `releaseBuyer`, the wrong person gets `not_found`; a confirm that races `markSold` or the expiry job loses; contact for a listing a moderator then hid gives `not_found`; no call to `sendAdminAlertEmail` or `sendPlayerNoticeEmail` is made for any marketplace event.
 
 - [ ] **Step 1: Failing tests:** Review Focus 1 (two `confirmBuyer` calls on separate connections, `Promise.all`; exactly one `ok`) and 3; asking on your own listing → `own_listing`; a commitment to a `committed` listing → `not_active`; releasing puts the listing back in browse; a reveal row is written per successful call and none on refusal.
 - [ ] **Step 2–4:** Run, implement, run.
@@ -124,7 +151,7 @@ export const marketplace = defineModule({
 
 - Test: API journeys API31–API36
 
-**Endpoints** (`auth: "session"`, `scope: "account"`, access through `marketAccess`):
+**Endpoints** (`auth: "session"`, `scope: "account"`; built with `marketRoute`, so access is checked before parsing and rate limiting; every write sets `rateLimit.failClosed`):
 
 | Id | Method and path | Rate limit |
 |---|---|---|
@@ -134,7 +161,7 @@ export const marketplace = defineModule({
 | `market.mine` | GET `/market/mine` (listings and their commitments) | 60/min |
 | `market.questions` / `market.ask` / `market.answer` | GET / POST `/market/listings/{id}/questions`, PUT `/market/questions/{id}/answer` | 60/min, 20/day ask |
 | `market.commit` / `market.withdraw` / `market.confirm` / `market.decline` / `market.release` | POST `…/{id}/commitments`, DELETE `/market/commitments/{id}`, POST `/market/commitments/{id}/confirm`, POST `…/decline`, POST `/market/listings/{id}/release` | 20/10 min |
-| `market.contact` | GET `/market/listings/{id}/contact` | 20/hour |
+| `market.contact` | POST `/market/listings/{id}/contact` (JSON `{ email, subject, name }`, `Cache-Control: no-store`) | 20/hour |
 
 Reports and blocks use the Social plan's `moderation.*` endpoints (target types `listing`, `question`).
 
@@ -150,7 +177,7 @@ Reports and blocks use the Social plan's `moderation.*` endpoints (target types 
 - Test: `apps/web/tests/market-rights.test.ts`
 
 **Interfaces:**
-- Produces: `forgetMarket(db, playerId)` (one transaction: player listings → `removed`, their photos queued for blob deletion; their questions deleted; their commitments `withdrawn`; their membership row deleted; reveal rows keep ids only), `exportMarket(db, playerId)`
+- Produces: `forgetMarket(db, playerId)` (one transaction, called **before** `deletePlayerAccount` and allowed to throw, like `forgetSocial`): player listings and their photos, questions, commitments, notices and the membership row are **deleted**, not just marked, and photo blobs are deleted; questions **others** asked on their listings go with the listings; reveal rows keep ids only; `player_suspensions` stays. `exportMarket(db, playerId)`
 - Club listings created by a person who then deletes their account stay: they're the club's. `seller_player_id` moves to the club's first owner.
 
 - [ ] **Step 1: Failing tests:** after `forgetMarket` nothing in browse or questions names them; a buyer who'd been confirmed on their listing sees the listing as removed; a club listing stays and moves to an owner; the export has their listings and questions.
@@ -161,11 +188,12 @@ Reports and blocks use the Social plan's `moderation.*` endpoints (target types 
 
 **Files:**
 - Create: `apps/web/app/admin/marketplace/page.tsx` (a club's owners and admins create, edit, renew and remove the club's listings; see commitments; reveal contact like a seller)
-- Modify: `apps/web/lib/moderation/queue.ts` (Social Task 7): `listing` and `question` targets show a preview and link; actions hide or remove a listing. `prohibited_item` and `scam` reports on a listing hide it at once (`state` stays, `status = 'removed'` only after a moderator confirms)
+- Modify: `apps/web/lib/moderation/queue.ts` (Social Task 7): `listing` and `question` targets show a preview and link; actions hide or remove a listing. ``prohibited_item` and `scam` reports on a listing go first in the queue (see the rule below); a moderator's hide sets `hidden_at`, and remove sets `removed_by_moderation`
 - Modify: `packages/auth` (the `/admin/marketplace` page for owners and admins)
 - Test: `apps/web/tests/market-admin.test.ts`; journey APP68 (a club admin lists an item; a player sees the Club badge, commits; the admin confirms and gets the contact button)
 
-- [ ] **Step 1: Failing tests:** another club's admin can't edit this club's listing; a `prohibited_item` report hides the listing from browse immediately and puts it in the queue; restoring brings it back; the audit log names the listing id, never its words.
+- **Changed after review:** a report never hides a listing by itself (that would let a rival hide anyone's listing with one report). A `prohibited_item` or `scam` report on a listing moves to the top of the queue with a 12-hour deadline. The listing is hidden automatically only when **three different** people with marketplace access report it within 24 hours, and a moderator then confirms or restores it.
+- [ ] **Step 1: Failing tests:** another club's admin can't edit this club's listing; one `prohibited_item` report doesn't hide the listing but puts it first in the queue, and three from different people hide it; restoring brings it back; the audit log names the listing id, never its words.
 - [ ] **Step 2–4:** Run, implement, run.
 - [ ] **Step 5: Commit** `feat(market): club listings in Admin and listings in the review queue`
 
@@ -184,6 +212,7 @@ Before starting: reuse the `ui-consistency:finding-patterns` checklist from Soci
 - **ListingDetail:** photos, price, condition, the Club badge or the trade-at-your-own-risk notice, then questions and answers, then one primary action that changes with state ("I want to buy" → "Waiting for the seller" → "Contact seller").
 - **ListingForm:** photos first, then title, price (with the currency shown), category, condition and description. It saves a draft locally if the app closes.
 
+- **Also (security review):** the commit screen shows the email-sharing sentence above the button, and the button sends `consentToShareEmail: true`. The listing form says "No phone numbers, emails or links. Buyers ask questions here".
 - [ ] **Step 1: Failing journeys:** APP69 join and list with two photos; APP70 browse, filter, ask; APP71 commit, the seller confirms, and "Contact seller" opens a `mailto:` link; APP72 module off: no Marketplace entry and deep links show not-found.
 - [ ] **Step 2–4:** Run, implement, run.
 - [ ] **Step 5: Verify the look** as in Social Task 8 Step 5 (`ui-consistency:verifying`, screenshots on phone and tablet, light and dark, English and Vietnamese, `ui-design-review:review`, `vectorlab-ux-skills:anti-slop`). Fix every finding marked important.

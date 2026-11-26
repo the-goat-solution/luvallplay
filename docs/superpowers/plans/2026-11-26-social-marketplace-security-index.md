@@ -24,6 +24,8 @@ App reviewers don't reject an app for "looking AI-built". What they do reject, a
 | Apple 1.2 / Play User Generated Content policy | Terms users accept before they post, with no tolerance for objectionable content; a filter; report on every item; block a user; act on reports within 24 hours; contact details published in the app | Social tasks 2, 3, 5, 7; Marketplace tasks 3, 6 |
 | Apple 4.2 / 4.3 (minimum functionality, spam and templates) | Real features with real content. No "coming soon" screens, placeholder text or empty tabs in the reviewed build | Hidden modules stay hidden in the review build unless seeded and complete; the review pack (Social task 8) |
 | Apple 2.1 (completeness) | A demo account that works, seeded data, review notes | Social task 8, Marketplace task 7 |
+| Apple 2.3.1 (no hidden or dormant features) | A feature that's in the reviewed binary must be reachable by the reviewer and disclosed | Social and Marketplace are on only for clubs in `SOCIAL_PILOT_TENANTS` / `MARKET_PILOT_TENANTS`. The review demo club is always listed, and the review notes say so |
+| Google Play Child Safety Standards | A published CSAE standards page and a child-safety contact | Social task 9 |
 | Apple 3.1.1 / 3.1.3(e) | Physical goods and real-world services may use Stripe and not in-app purchase | Marketplace has no platform payments in this plan (payment for verified sellers waits on Stripe Connect, audit H5) |
 | Apple 5.1.1(v) / Play account deletion | Deleting an account also deletes posts, comments, follows and listings | Social task 6, Marketplace task 5 |
 | App Privacy labels / Play Data safety | Declare "user content" (posts, photos, listings) and contact info used for marketplace contact | Social task 8, Marketplace task 7 |
@@ -45,5 +47,6 @@ Reviewers and users notice the same things: identical rounded cards in a column,
 
 1. ~~Confirm the reading of decision Z~~: agreed 27 Nov (AQ).
 2. `CONTACT_KEKS`, `CONTACT_INDEX_KEYS` and `MODERATION_KEKS` as production settings (Vercel encrypted environment variables), like `PUSH_KEKS`.
-3. When to switch players' email and phone reads to the sealed columns (encryption task 4), and, at least 14 quiet days later, whether to drop the plain columns (not in these plans).
-4. Who moderates: a named person and a published response time (gate Z).
+3. Production settings for the security fixes: `RATE_LIMIT_STORE=database` (needed when encryption Task 6/8 deploy), `PLATFORM_MODERATOR_EMAILS`, and the pilot lists `SOCIAL_PILOT_TENANTS` / `MARKET_PILOT_TENANTS` (only the review demo club until the gate passes).
+4. When to switch players' phone reads to the sealed columns (encryption task 4), and, at least 14 quiet days later, whether to drop the plain columns (not in these plans).
+5. Who moderates: a named person and a published response time (gate Z).

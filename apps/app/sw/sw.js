@@ -6,6 +6,18 @@
 /* global self, caches, ASSETS, VERSION */
 const CACHE = `app-${VERSION}`;
 const SHELL = "/index.html";
+// How long the network gets before this device's copy is used instead: a
+// connection that is there but answers nothing (a lift, a crowded hall)
+// would otherwise leave a blank page for minutes.
+const PAGE_TIMEOUT_MS = 4000;
+const FILE_TIMEOUT_MS = 20000;
+
+/** fetch() that gives up after `ms`. */
+function fetchWithin(request, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -34,15 +46,18 @@ self.addEventListener("fetch", (event) => {
   // Pages: the network first (a new version shows at once), this device's copy without one.
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
+      fetchWithin(request, PAGE_TIMEOUT_MS)
         .then((response) => {
-          if (response.ok) {
+          // Only the app's own page is kept: not an error page, and not a
+          // Wi-Fi sign-in page answering in its place.
+          if (response.ok && !response.redirected && (response.headers.get("content-type") ?? "").includes("text/html")) {
             const copy = response.clone();
             void caches.open(CACHE).then((cache) => cache.put(SHELL, copy));
           }
           return response;
         })
-        .catch(() => caches.match(SHELL).then((hit) => hit ?? Response.error())),
+        // No answer (or none in time): this device's copy; without one, the network for as long as it takes.
+        .catch(() => caches.match(SHELL).then((hit) => hit ?? fetch(request))),
     );
     return;
   }
@@ -53,7 +68,7 @@ self.addEventListener("fetch", (event) => {
       caches.match(request).then(
         (hit) =>
           hit ??
-          fetch(request).then((response) => {
+          fetchWithin(request, FILE_TIMEOUT_MS).then((response) => {
             if (response.ok) {
               const copy = response.clone();
               void caches.open(CACHE).then((cache) => cache.put(request, copy));

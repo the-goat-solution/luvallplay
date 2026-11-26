@@ -154,6 +154,8 @@ export async function startEnv({ log = console.log } = {}) {
     EMAIL_FROM: "Three Wolves <club@e2e.test>",
     E2E_OUTBOX: "1",
     PLAYER_SESSION_SECRET: "e2e-player-session-secret",
+    // A made-up key for the journeys only: push device addresses are sealed with it (lib/push/seal.ts).
+    PUSH_KEKS: `e2e:${Buffer.from("e2e-push-key-not-a-real-secret!!").toString("base64")}`,
     // The proxy and the pages keep separate copies of the module switches; no cache, so a switch shows at once.
     MODULES_CACHE_MS: "0",
     ADMIN_PASSWORD: "e2e-break-glass",

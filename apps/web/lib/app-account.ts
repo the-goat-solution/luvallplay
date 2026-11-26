@@ -5,6 +5,7 @@ import { audit, db as adminDb } from "./admin-access";
 import { createHandoff, getAccess, hasAdminAccess, isLastOwner, isStepUpFresh } from "./admin-roles";
 import { endPlayerArena } from "./arena-db";
 import type { AppSession } from "./app-api";
+import { forgetPushDevices } from "./app-push";
 import { deletePlayerAccount, setPlayerAvatar } from "./player-db";
 import { sendAdminAlertEmail } from "./player-email";
 import { EVENTS, createApiToken, createWebhookEndpoint, isAllowedWebhookUrl, listApiTokens, listWebhookEndpoints, type Scope, type WebhookEvent } from "./webhooks";
@@ -80,6 +81,7 @@ export async function deleteAccount(player: AppSession["player"]): Promise<{ ok:
   await endPlayerArena(player.id).catch((err) => console.error("[app-api] arena cleanup failed:", err));
   await deletePublicBlobs([await setPlayerAvatar(player.id, null).catch(() => null)]);
   await deletePlayerAccount(player.id);
+  await forgetPushDevices(player.id, { all: true });
   refreshLeaderboard();
   await sendAdminAlertEmail({
     subject: `Account deleted: ${player.email}`,

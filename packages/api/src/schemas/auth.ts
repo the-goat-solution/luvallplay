@@ -62,6 +62,8 @@ export const smsVerifyResponse = z.object({
 export const logoutRequest = z.object({
   /** Sign out every device, not only this one. */
   all: z.boolean().nullish(),
+  /** The store app: this device's push address, so it stops receiving notifications too. */
+  pushToken: z.string().max(4096).nullish(),
 });
 
 export const playerSchema = z.object({

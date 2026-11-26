@@ -7,11 +7,13 @@
 //   It is never logged, and neither is a device's address.
 // - With the setting missing or malformed there is no sender: the push
 //   channel is "unavailable" and nothing is sent anywhere.
+// - Outside production nothing is sent (lib/side-effects.ts), whatever is set.
 // - A notification carries the club's name, a short line, and a path inside
 //   the app (data.path, opened by apps/app/src/lib/native/push.ts).
 // - An address Firebase says is gone (the app was removed, the address was
 //   replaced) is reported to `onGone`, so the device row can be deleted.
 import { JWT } from "google-auth-library";
+import { sideEffectAllowed } from "../side-effects";
 
 // The shapes lib/messages/channels/push.ts asks of a sender, written out here
 // so nothing outside lib/messages imports from it (its own rule).
@@ -87,6 +89,8 @@ function googleTransport(account: ServiceAccount): FcmTransport {
 export type FcmOptions = {
   /** Replaces the network (tests). */
   transport?: FcmTransport;
+  /** The side-effect gate (lib/side-effects.ts): outside production nothing is sent. Replaced in tests. */
+  allowed?: () => boolean;
   /** Told which addresses Firebase says are gone, so their rows can be deleted. Its failure never fails the send. */
   onGone?: (tokens: string[]) => Promise<void> | void;
 };
@@ -100,7 +104,10 @@ export function fcmPushSender(env: Env = process.env, options: FcmOptions = {}):
   const account = parseServiceAccount(env.FCM_SERVICE_ACCOUNT);
   if (!account) return null;
   let transport = options.transport ?? null;
+  const allowed = options.allowed ?? (() => sideEffectAllowed("push"));
   return async (notification) => {
+    // The push channel already keeps previews and tests from sending; this is the same gate at the last step.
+    if (!allowed()) return { ok: false, reason: "not_allowed_here" };
     transport ??= googleTransport(account);
     const send = transport;
     const outcomes = await Promise.all(

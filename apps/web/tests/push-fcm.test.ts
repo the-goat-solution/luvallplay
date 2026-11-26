@@ -57,7 +57,7 @@ test("one notification goes to each device; it is sent when at least one took it
     calls.push({ projectId, token: message.token });
     return message.token === "b" ? { status: 503 } : { status: 200 };
   };
-  const send = fcmPushSender(ENV, { transport })!;
+  const send = fcmPushSender(ENV, { allowed: () => true, transport })!;
   assert.deepEqual(await send(note(["a", "b", "c"], "/play")), { ok: true, providerId: "fcm:2/3" });
   assert.deepEqual(calls, [{ projectId: "luvallplay-test", token: "a" }, { projectId: "luvallplay-test", token: "b" }, { projectId: "luvallplay-test", token: "c" }]);
   assert.deepEqual(await send(note([])), { ok: false, reason: "no_device" });
@@ -67,22 +67,31 @@ test("an address Firebase says is gone is reported for deletion; other failures 
   const gone: string[][] = [];
   const transport: FcmTransport = async (_p, message) =>
     message.token === "old" ? { status: 404, errorCode: "UNREGISTERED" } : message.token === "other-project" ? { status: 403, errorCode: "SENDER_ID_MISMATCH" } : message.token === "busy" ? { status: 429, errorCode: "QUOTA_EXCEEDED" } : { status: 200 };
-  const send = fcmPushSender(ENV, { transport, onGone: (tokens) => void gone.push(tokens) })!;
+  const send = fcmPushSender(ENV, { allowed: () => true, transport, onGone: (tokens) => void gone.push(tokens) })!;
   assert.deepEqual(await send(note(["ok", "old", "busy", "other-project"])), { ok: true, providerId: "fcm:1/4" });
   assert.deepEqual(gone, [["old", "other-project"]]);
   assert.deepEqual(await send(note(["old"])), { ok: false, reason: "device_gone" });
   assert.deepEqual(await send(note(["busy"])), { ok: false, reason: "fcm_failed" });
 });
 
+test("outside production nothing is sent, whatever is set", async () => {
+  let called = 0;
+  const transport: FcmTransport = async () => (called++, { status: 200 });
+  // The default gate: this test run isn't production.
+  assert.deepEqual(await fcmPushSender(ENV, { transport })!(note(["a"])), { ok: false, reason: "not_allowed_here" });
+  assert.deepEqual(await fcmPushSender(ENV, { transport, allowed: () => false })!(note(["a"])), { ok: false, reason: "not_allowed_here" });
+  assert.equal(called, 0);
+});
+
 test("a failure never throws, and never carries the key or an address", async () => {
   const boom: FcmTransport = async () => {
     throw new Error(`could not sign with ${privateKey} for device-address-123`);
   };
-  const failing = fcmPushSender(ENV, { transport: boom, onGone: () => Promise.reject(new Error("db down")) })!;
+  const failing = fcmPushSender(ENV, { allowed: () => true, transport: boom, onGone: () => Promise.reject(new Error("db down")) })!;
   const result = await failing(note(["device-address-123"]));
   assert.deepEqual(result, { ok: false, reason: "fcm_failed" });
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE KEY|device-address/);
   // Cleaning up may fail too; the send's own answer stands.
-  const cleanupFails = fcmPushSender(ENV, { transport: async () => ({ status: 404 }), onGone: () => Promise.reject(new Error("db down")) })!;
+  const cleanupFails = fcmPushSender(ENV, { allowed: () => true, transport: async () => ({ status: 404 }), onGone: () => Promise.reject(new Error("db down")) })!;
   assert.deepEqual(await cleanupFails(note(["x"])), { ok: false, reason: "device_gone" });
 });

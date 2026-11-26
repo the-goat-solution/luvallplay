@@ -69,7 +69,7 @@ test("Hanoi: exactly the pinned services block a build, and each says what it ne
   assert.deepEqual(findings.filter((f) => !f.ok).map((f) => f.service).sort(), HANOI_BLOCKERS);
   for (const f of findings.filter((f) => !f.ok)) assert.match(f.detail, /Needs: /, f.service);
   // What a Hanoi deployment keeps off by its settings.
-  assert.deepEqual(findings.filter((f) => f.status === "switched-off").map((f) => [f.service, f.ok]), [["neon", true], ["google-vision", true], ["akahu", true]]);
+  assert.deepEqual(findings.filter((f) => f.status === "switched-off").map((f) => [f.service, f.ok]), [["neon", true], ["google-vision", true], ["firebase-messaging", true], ["akahu", true]]);
 });
 
 test("Hanoi: a switched-off service blocks the build when its setting is in the wrong position", () => {

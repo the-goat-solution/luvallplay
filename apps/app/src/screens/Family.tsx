@@ -6,7 +6,8 @@ import { Link } from "@tanstack/react-router";
 import { Icon } from "../components/Icon.tsx";
 import { LoadError } from "../components/LoadError.tsx";
 import { useCurrentClub, useT } from "../hooks.tsx";
-import { CONSENT_ITEMS, useAddChild, useFamily, useFamilyOn, useSetConsent, useUpdateChild, type Child, type Consent, type Family } from "./family/data.ts";
+import { ChildBookings } from "./family/Bookings.tsx";
+import { CONSENT_ITEMS, useAddChild, useFamily, useFamilyBookings, useFamilyOn, useSetConsent, useUpdateChild, type Child, type Consent, type Family, type FamilyBookings } from "./family/data.ts";
 import { errorKey, useFamilyT, type FamilyT } from "./family/words.ts";
 
 const codeOf = (e: unknown) => (e as { code?: string } | null)?.code;
@@ -85,7 +86,7 @@ function AddChild({ family, clubName, ft, onDone }: { family: Family; clubName: 
   );
 }
 
-function ChildCard({ child, family, ft }: { child: Child; family: Family; ft: FamilyT }) {
+function ChildCard({ child, family, bookings, ft }: { child: Child; family: Family; bookings: FamilyBookings | undefined; ft: FamilyT }) {
   const id = useId();
   const update = useUpdateChild(child.id);
   const consent = useSetConsent(child.id);
@@ -140,6 +141,7 @@ function ChildCard({ child, family, ft }: { child: Child; family: Family; ft: Fa
           </div>
         </form>
       )}
+      {bookings && <ChildBookings childId={child.id} data={bookings} ft={ft} />}
       <fieldset className="stack">
         <legend className="label-title">{ft("family_optional_title")}</legend>
         <p className="muted small">{ft("family_optional_hint")}</p>
@@ -157,6 +159,7 @@ export default function FamilyScreen() {
   const on = useFamilyOn();
   const state = useFamily();
   const family = state.data;
+  const bookings = useFamilyBookings().data;
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   const clubName = current?.name ?? "";
@@ -177,7 +180,7 @@ export default function FamilyScreen() {
           {added && <p className="notice" role="status">{ft("family_added", { name: added })}</p>}
           {family.children.length === 0 && !adding && <p className="muted">{ft("family_empty")}</p>}
           {family.children.map((child) => (
-            <ChildCard key={child.id} child={child} family={family} ft={ft} />
+            <ChildCard key={child.id} child={child} family={family} bookings={bookings} ft={ft} />
           ))}
           {adding ? (
             <>

@@ -28,4 +28,23 @@ export const familyEndpoints = defineEndpoints("family", {
     params: S.familyChildParams, body: S.familyConsentRequest, response: S.familyChildResponse,
     rateLimit: { limit: 30, windowMs: 10 * MIN },
   },
+  // Booking a place for a child. The place is shared with adults' casual
+  // bookings. Refusals: 409 not_bookable (outside the booking window),
+  // day_paused, locked, full, payment_needed (the club charges and paying
+  // isn't offered here yet); 404 not_found.
+  "family.bookings": {
+    method: "GET", path: "/clubs/{club}/family/bookings", auth: "session", scope: "club", module: "juniors",
+    params: S.clubParams, response: S.familyBookingsResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "family.book": {
+    method: "POST", path: "/clubs/{club}/family/{id}/bookings", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyBookRequest, response: S.familyBookingResponse,
+    rateLimit: { limit: 20, windowMs: 10 * MIN },
+  },
+  "family.cancelBooking": {
+    method: "POST", path: "/clubs/{club}/family/bookings/{id}/cancel", auth: "session", scope: "club", module: "juniors",
+    params: S.familyBookingParams, body: S.emptyRequest, response: S.familyBookingResponse,
+    rateLimit: { limit: 20, windowMs: 10 * MIN },
+  },
 });

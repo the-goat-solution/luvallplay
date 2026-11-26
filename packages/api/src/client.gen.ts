@@ -82,6 +82,15 @@ export function createApi(transport: Transport) {
       /** POST /clubs/{club}/family (signed in) */
       add: (params: ParamsOf<"family.add">, body: BodyOf<"family.add">, options?: Options) =>
         transport.call("family.add", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.add">>,
+      /** POST /clubs/{club}/family/{id}/bookings (signed in) */
+      book: (params: ParamsOf<"family.book">, body: BodyOf<"family.book">, options?: Options) =>
+        transport.call("family.book", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.book">>,
+      /** GET /clubs/{club}/family/bookings (signed in) */
+      bookings: (params: ParamsOf<"family.bookings">, options?: Options) =>
+        transport.call("family.bookings", { params, signal: options?.signal }) as Promise<ResponseOf<"family.bookings">>,
+      /** POST /clubs/{club}/family/bookings/{id}/cancel (signed in) */
+      cancelBooking: (params: ParamsOf<"family.cancelBooking">, body: BodyOf<"family.cancelBooking">, options?: Options) =>
+        transport.call("family.cancelBooking", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.cancelBooking">>,
       /** PUT /clubs/{club}/family/{id}/consent (signed in) */
       consent: (params: ParamsOf<"family.consent">, body: BodyOf<"family.consent">, options?: Options) =>
         transport.call("family.consent", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.consent">>,

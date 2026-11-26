@@ -13,7 +13,7 @@ Build plan §6.8, decision V. Test plan §3.17, journey J1, gate "3b Junior acco
 | 3 | Guardian side: a "Family" section, adding a child, consent | **Built** (26 Nov): the library, four app endpoints, the Family screen in the players' app, and two end-to-end journeys (§2b). Not built: inviting a second guardian |
 | — | The audit's "Migration 0012 details" (migration `0015_junior_details`) | **Done** (26 Nov): rehearsed on a copy of production and run in production by lane T (19 accounts, 0 problems, as reported through the coordinating thread), then merged (#178) (§2c) |
 | 4 | Waivers, emergency contacts, encrypted medical notes | Not started |
-| 5 | Booking and paying for a child | **Part built** (26 Nov): the shared place-count helpers (#202, needs your OK: it touches the booking path) and the child-booking library with its tests (§2d). Not built: the app's endpoints and screen for booking, and paying (waits for lane W's payments interface) |
+| 5 | Booking and paying for a child | **Booking built** (26 Nov): the shared place-count helpers (#202) and the child-booking library (#203) are merged; the app's three booking endpoints and the "Play days" part of the Family screen are in review (journey APP54). At a club that charges, the screen says paying in the app isn't available yet and nothing can be booked unpaid. Not built: paying, which is the next PR and needs your OK before it merges |
 | 6 | Club side: junior roster, coach safety checks, who may see what | Not started |
 | 7 | A guardian exports and deletes a child's data | Not started |
 | 8 | Growing up at 16 | Only if 1 to 7 are solid |

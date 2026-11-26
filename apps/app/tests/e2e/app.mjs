@@ -1819,6 +1819,8 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
        ON CONFLICT (tenant_id, module_id) DO UPDATE SET enabled = TRUE, settings = EXCLUDED.settings`,
     );
   const juniorsOff = async () => {
+    await db.query(`UPDATE sessions s SET booked_spots = GREATEST(0, s.booked_spots - (SELECT count(*) FROM junior_bookings b WHERE b.session_date = s.date AND b.status IN ('pending', 'confirmed')))`);
+    await db.query(`DELETE FROM junior_bookings`);
     await db.query(`DELETE FROM guardianships`);
     await db.query(`DELETE FROM junior_profiles`);
     await db.query(`DELETE FROM tenant_modules WHERE module_id IN ('juniors', 'forms-waivers')`);
@@ -1925,6 +1927,71 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
       // The one refusal this journey asked for (the email address as a name) and nothing else: no CORS or CSP trouble.
       assert.deepEqual(problems, ["Failed to load resource: the server responded with a status of 400 (Bad Request)"]);
     } finally {
+      await juniorsOff();
+      await context.close();
+    }
+  });
+
+  test("APP54 · a guardian books a play day for their child and cancels it; the place is counted and given back; a club that charges offers no booking yet", async () => {
+    await juniorsOn();
+    const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;
+    await db.query(`UPDATE tenants SET payment_mode = 'free' WHERE id = 1`);
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const json = { ...auth(token).headers, "content-type": "application/json" };
+    try {
+      const added = await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) });
+      assert.equal(added.status, 200, await added.clone().text());
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+
+      await page.goto(`${APP}/family`);
+      await page.waitForSelector(FAMILY);
+      const days = page.locator(`[data-bookings="${childId}"] [data-day]`);
+      await days.first().waitFor();
+      const open = page.locator(`[data-bookings="${childId}"] [data-day]`).filter({ has: page.getByRole("button", { name: "Book a place" }) }).first();
+      const date = await open.getAttribute("data-day");
+      const row = page.locator(`[data-bookings="${childId}"] [data-day="${date}"]`);
+      const spots = async () => (await db.query(`SELECT booked_spots FROM sessions WHERE date = $1`, [date])).rows[0].booked_spots;
+      const before = await spots();
+
+      const answered = page.waitForResponse((r) => r.url().endsWith(`/family/${childId}/bookings`) && r.request().method() === "POST");
+      await row.getByRole("button", { name: "Book a place" }).click();
+      const answer = await answered;
+      assert.equal(answer.status(), 200, await answer.text());
+      await row.getByRole("button", { name: "Cancel booking" }).waitFor();
+      assert.equal(await row.getAttribute("data-booked"), "yes");
+      assert.equal(await spots(), before + 1, "the child's place is counted");
+      const booked = (await db.query(`SELECT status FROM junior_bookings WHERE junior_profile_id = $1 AND session_date = $2`, [childId, date])).rows;
+      assert.equal(booked.length, 1);
+      assert.equal(booked[0].status, "confirmed");
+
+      // Booking the same day again changes nothing; another person can't book or cancel for this child.
+      const again = await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) });
+      assert.equal(again.status, 200);
+      assert.equal(await spots(), before + 1);
+      const other = { ...auth(await sessionToken(PEOPLE.player.email)).headers, "content-type": "application/json" };
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: other, body: JSON.stringify({ date }) })).status, 404);
+      const bookingId = (await (await fetch(`${api}/clubs/three-wolves/family/bookings`, auth(token))).json()).bookings[0].id;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/bookings/${bookingId}/cancel`, { method: "POST", headers: other, body: "{}" })).status, 404);
+      assert.deepEqual((await (await fetch(`${api}/clubs/three-wolves/family/bookings`, { headers: other })).json()).bookings, []);
+
+      await row.getByRole("button", { name: "Cancel booking" }).click();
+      await row.getByRole("button", { name: "Book a place" }).waitFor();
+      assert.equal(await spots(), before, "the place is given back");
+
+      // A club that charges: no button, a plain explanation, and the endpoint refuses rather than booking unpaid.
+      await db.query(`UPDATE tenants SET payment_mode = 'online' WHERE id = 1`);
+      await page.reload();
+      await page.waitForSelector(FAMILY);
+      await page.getByText("Paying in the app isn't available yet").waitFor();
+      assert.equal(await page.getByRole("button", { name: "Book a place" }).count(), 0);
+      const unpaid = await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) });
+      assert.deepEqual([unpaid.status, (await unpaid.json()).error], [409, "payment_needed"]);
+      assert.equal(await spots(), before);
+      assert.deepEqual(problems, []);
+    } finally {
+      await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
       await juniorsOff();
       await context.close();
     }

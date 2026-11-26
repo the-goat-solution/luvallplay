@@ -290,13 +290,18 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-          # Gradle's downloads are kept between runs: without this every run
-          # fetches several hundred files from Maven Central, which answers
-          # shared CI machines with "429 Too Many Requests" when it is busy.
-          cache: gradle
-          cache-dependency-path: |
-            apps/native/android/**/*.gradle
-            apps/native/android/gradle/wrapper/gradle-wrapper.properties
+      # Gradle's downloads are kept between runs. Maven Central answers shared
+      # CI machines with "429 Too Many Requests" when it is busy, so the less
+      # the build has to fetch, the better; `restore-keys` reuses the last
+      # run's downloads even when the build files changed (a new plugin).
+      - name: Gradle's downloads, kept between runs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-android-${{ hashFiles('apps/native/android/**/*.gradle', 'apps/native/android/gradle/wrapper/gradle-wrapper.properties', 'pnpm-lock.yaml') }}
+          restore-keys: gradle-android-
       - run: pnpm install --frozen-lockfile
       - name: Types and the shell's identity and settings
         run: pnpm --filter native typecheck && pnpm --filter native test
@@ -308,10 +313,11 @@ jobs:
       - name: Copy it into the Android project
         run: pnpm --filter native sync:android
       - name: Debug build (APK)
-        # One more go after a minute if the first fails: a rate-limited
-        # download (see the cache note above) is over by then, and a real
-        # compile error fails both times.
-        run: pnpm --filter native android:debug || (sleep 60 && pnpm --filter native android:debug)
+        # What isn't cached yet comes from Google's copy of Maven Central
+        # first (.github/gradle/maven-mirror.init.gradle), not from Maven
+        # Central itself, which rate-limits these machines.
+        working-directory: apps/native/android
+        run: ./gradlew --init-script "$GITHUB_WORKSPACE/.github/gradle/maven-mirror.init.gradle" assembleDebug
       - name: The debug APK (the "android-debug-apk" artifact)
         uses: actions/upload-artifact@v4
         with:

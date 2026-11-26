@@ -7,10 +7,16 @@
 // that every statement runs that way:
 //
 //   BEGIN
-//   SET LOCAL ROLE luvallplay_app
-//   SELECT set_config('app.tenant_id', '<club id>', true)   -- true: this transaction only
+//   SELECT set_config('role', 'luvallplay_app', true),      -- = SET LOCAL ROLE
+//          set_config('app.tenant_id', '<club id>', true)   -- true: this transaction only
 //   …the statement(s)…
 //   COMMIT
+//
+// The role and the club are set by ONE statement, and for a statement
+// outside a transaction that statement travels with the BEGIN: three round
+// trips to the database (setup, the statement, COMMIT), where there were
+// five. On a pool of ten with a page firing nine queries at once, the two
+// saved round trips per query are what `enforce` costs (audit, Medium).
 //
 // Both settings are transaction-local on purpose. The pooled endpoint hands
 // a server connection to someone else after every transaction, so anything
@@ -21,8 +27,20 @@
 // works on the Neon driver and on node-postgres alike.
 
 export const APP_ROLE = "luvallplay_app";
-const SET_ROLE = `SET LOCAL ROLE ${APP_ROLE}`;
-const SET_TENANT = `SELECT set_config('app.tenant_id', $1, true)`;
+
+/**
+ * The one statement that makes the current transaction the app's role's,
+ * for one club (or, with null, for no club: nothing club-owned is visible).
+ * The id is written into the text so the statement can share a message with
+ * BEGIN (a message with parameters can hold only one statement); it is
+ * checked to be a whole number first, and nothing else is ever put there.
+ */
+export function scopeStatement(tenantId: number | null): string {
+  const role = `set_config('role', '${APP_ROLE}', true)`;
+  if (tenantId === null) return `SELECT ${role}`;
+  if (!Number.isInteger(tenantId) || tenantId < 0) throw new Error(`"${String(tenantId)}" is not a club id`);
+  return `SELECT ${role}, set_config('app.tenant_id', '${tenantId}', true)`;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -68,16 +86,16 @@ export function isReadOnlyStatement(text: string): boolean {
 export function scopeClient<T extends Queryable>(client: T, tenantId: number): T {
   let inTransaction = false;
   const raw = (...args: unknown[]) => client.query(...args);
-  const enter = async () => {
-    await raw(SET_ROLE);
-    await raw(SET_TENANT, [String(tenantId)]);
-  };
+  // Built (and the id checked) before anything is sent.
+  const scope = scopeStatement(tenantId);
   const query = async (...args: unknown[]) => {
     const verb = transactionVerb(textOf(args));
     if (verb === "begin") {
+      // The caller's BEGIN goes as it was written (it may carry an isolation
+      // level); the role and the club follow in one statement.
       const result = await raw(...args);
       inTransaction = true;
-      await enter();
+      await raw(scope);
       return result;
     }
     if (verb === "end") {
@@ -85,9 +103,9 @@ export function scopeClient<T extends Queryable>(client: T, tenantId: number): T
       return raw(...args);
     }
     if (inTransaction) return raw(...args);
-    await raw("BEGIN");
     try {
-      await enter();
+      // One message: open the transaction and step down for the club.
+      await raw(`BEGIN; ${scope}`);
       const result = await raw(...args);
       await raw("COMMIT");
       return result;
@@ -132,11 +150,10 @@ export function scopePool<T extends PoolLike>(pool: T, tenantId: () => Promise<n
  * that is rolled back. For shadow reads: nothing it does can stay.
  */
 export async function readScoped(pool: PoolLike, tenantId: number | null, text: string, params?: unknown[]): Promise<{ rows: Record<string, unknown>[] }> {
+  const scope = scopeStatement(tenantId);
   const client = await pool.connect();
   try {
-    await client.query("BEGIN READ ONLY");
-    await client.query(SET_ROLE);
-    if (tenantId !== null) await client.query(SET_TENANT, [String(tenantId)]);
+    await client.query(`BEGIN READ ONLY; ${scope}`);
     return await client.query(text, params);
   } finally {
     await client.query("ROLLBACK").catch(() => {});
@@ -145,22 +162,52 @@ export async function readScoped(pool: PoolLike, tenantId: number | null, text: 
 }
 
 /**
+ * Which of `tables` exist in the public schema, asked as the app's role with
+ * no club named (the catalog is readable by every role, so this works on the
+ * owner's connection and on the app's own login alike). A deployment can be
+ * ahead of its database for a while: a club-owned table whose migration
+ * hasn't run yet isn't there to probe.
+ */
+export async function existingTables(pool: PoolLike, tables: readonly string[]): Promise<{ present: string[]; missing: string[] }> {
+  const { rows } = await readScoped(pool, null, `SELECT t FROM unnest($1::text[]) AS t WHERE to_regclass('public.' || quote_ident(t)) IS NOT NULL`, [[...tables]]);
+  const found = new Set(rows.map((r) => r.t as string));
+  return { present: tables.filter((t) => found.has(t)), missing: tables.filter((t) => !found.has(t)) };
+}
+
+/**
  * The isolation probe (the daily shadow heartbeat, and verify.mjs): for
  * every club-owned table, the app's role must see exactly the club's rows
  * with the club named, and none with no club named. Returns what differs;
  * empty = clean. Read-only.
+ *
+ * `pool` must be the unscoped pool: the probe sets the role and the club
+ * itself, and a pool that already names a club would hide a failure of the
+ * "no club named" half.
+ *
+ * - A table that doesn't exist is reported as a difference. Callers that
+ *   expect one (the heartbeat, between a deploy and its migration) take it
+ *   out first with existingTables().
+ * - `ownerReads: false` is for the app's own login (APP_DATABASE_URL), which
+ *   can't count rows as the owner. There the probe checks what can be seen
+ *   from inside: no row of another club with the club named, and none with
+ *   no club named.
  */
-export async function probeTenantIsolation(pool: PoolLike, tenantId: number, tables: readonly string[]): Promise<string[]> {
-  const counts = tables.map((t) => `SELECT '${t}' AS t, count(*)::int AS n FROM "${t}"`).join(" UNION ALL ");
-  const own = tables.map((t) => `SELECT '${t}' AS t, count(*)::int AS n FROM "${t}" WHERE tenant_id = ${Number(tenantId)}`).join(" UNION ALL ");
-  const asMap = (rows: Record<string, unknown>[]) => new Map(rows.map((r) => [r.t as string, r.n as number]));
-  const owner = asMap((await pool.query(own)).rows);
-  const scoped = asMap((await readScoped(pool, tenantId, counts)).rows);
+export async function probeTenantIsolation(pool: PoolLike, tenantId: number, tables: readonly string[], { ownerReads = true }: { ownerReads?: boolean } = {}): Promise<string[]> {
+  const id = Number(tenantId);
+  if (!Number.isInteger(id)) throw new Error(`probeTenantIsolation: "${tenantId}" is not a club id`);
+  const { present, missing } = await existingTables(pool, tables);
+  const differences: string[] = missing.map((t) => `${t}: the table doesn't exist`);
+  if (!present.length) return differences;
+  const each = (select: (t: string) => string) => present.map(select).join(" UNION ALL ");
+  const counts = each((t) => `SELECT '${t}' AS t, count(*)::int AS n, (count(*) FILTER (WHERE tenant_id <> ${id}))::int AS other FROM "${t}"`);
+  const asMap = (rows: Record<string, unknown>[]) => new Map(rows.map((r) => [r.t as string, r as { n: number; other: number }]));
+  const owner = ownerReads ? asMap((await pool.query(each((t) => `SELECT '${t}' AS t, count(*)::int AS n FROM "${t}" WHERE tenant_id = ${id}`))).rows) : null;
+  const scoped = asMap((await readScoped(pool, id, counts)).rows);
   const closed = asMap((await readScoped(pool, null, counts)).rows);
-  const differences: string[] = [];
-  for (const t of tables) {
-    if (scoped.get(t) !== owner.get(t)) differences.push(`${t}: the app's role sees ${scoped.get(t)} rows, the club has ${owner.get(t)}`);
-    if (closed.get(t) !== 0) differences.push(`${t}: ${closed.get(t)} rows visible with no club named`);
+  for (const t of present) {
+    if (owner && scoped.get(t)?.n !== owner.get(t)?.n) differences.push(`${t}: the app's role sees ${scoped.get(t)?.n} rows, the club has ${owner.get(t)?.n}`);
+    else if (scoped.get(t)?.other !== 0) differences.push(`${t}: the app's role sees ${scoped.get(t)?.other} rows of another club`);
+    if (closed.get(t)?.n !== 0) differences.push(`${t}: ${closed.get(t)?.n} rows visible with no club named`);
   }
   return differences;
 }

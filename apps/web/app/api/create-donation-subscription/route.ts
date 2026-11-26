@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { insertMonthlyDonation } from "@/lib/repos/donations";
 import { clubConfig } from "@/lib/club";
-import { getStripe, getDonationProductId, getInvoicePaymentIntent } from "@/lib/stripe";
+import { customersOf, payments, subscriptionsOf } from "@/lib/payments";
+import { getDonationProductId } from "@/lib/stripe";
 import { checkRateLimit, getClientIp } from "@/lib/security";
 import { formatMoney, roundToMinor } from "@/lib/money";
 
@@ -35,74 +36,50 @@ export async function POST(request: Request) {
       );
     }
 
-    const stripe = getStripe();
+    // Through the Payments interface (lib/payments): a monthly donation
+    // needs a provider that can charge again by itself.
+    const provider = payments();
+    const subscriptions = subscriptionsOf(provider);
+    const customers = customersOf(provider);
+    provider.assertReady();
     const productId = getDonationProductId();
 
-    const customers = await stripe.customers.list({
-      email: body.email,
-      limit: 1,
-    });
-    const customer =
-      customers.data[0] ??
-      (await stripe.customers.create({
+    const customerId =
+      (await customers.find(body.email)) ??
+      (await customers.create({
         email: body.email,
         name: `${body.firstName} ${body.lastName}`,
         phone: body.phone,
         metadata: { type: "donation" },
       }));
 
-    const subscription = await stripe.subscriptions.create({
-      customer: customer.id,
-      items: [
-        {
-          price_data: {
-            currency: club.currency.toLowerCase(),
-            product: productId,
-            unit_amount: amountCents,
-            recurring: { interval: "month" },
-          },
-        },
-      ],
-      payment_behavior: "default_incomplete",
-      payment_settings: {
-        save_default_payment_method: "on_subscription",
-      },
+    const subscription = await subscriptions.start({
+      customerId,
+      price: { amount: amountCents, currency: club.currency, productId, every: "month" },
       metadata: {
         type: "donation",
         firstName: body.firstName,
         lastName: body.lastName,
         email: body.email,
       },
+      receiptEmail: body.email,
     });
 
-    const invoiceId =
-      typeof subscription.latest_invoice === "string"
-        ? subscription.latest_invoice
-        : subscription.latest_invoice?.id;
-
-    const invoicePaymentIntent = invoiceId
-      ? await getInvoicePaymentIntent(stripe, invoiceId)
-      : null;
-
-    if (!invoicePaymentIntent) {
+    if (!subscription.clientSecret) {
       return NextResponse.json(
         { error: "Failed to initialize donation payment" },
         { status: 500 },
       );
     }
-    const clientSecret = invoicePaymentIntent.clientSecret;
-
-    await stripe.paymentIntents.update(invoicePaymentIntent.id, {
-      receipt_email: body.email,
-    });
+    const clientSecret = subscription.clientSecret;
 
     if (process.env.POSTGRES_URL) {
-      await insertMonthlyDonation({ email: body.email, firstName: body.firstName, lastName: body.lastName, amountCents, stripeSubscriptionId: subscription.id });
+      await insertMonthlyDonation({ email: body.email, firstName: body.firstName, lastName: body.lastName, amountCents, stripeSubscriptionId: subscription.subscriptionId });
     }
 
     return NextResponse.json({
       clientSecret,
-      subscriptionId: subscription.id,
+      subscriptionId: subscription.subscriptionId,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";

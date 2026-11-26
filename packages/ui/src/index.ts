@@ -12,6 +12,7 @@ import { DEFAULT_SCHEME, schemeTheme, themeCss } from "./semantic.ts";
 
 export { luvallplay, type BrandColor, type BrandTheme } from "./luvallplay.ts";
 export { threeWolves, threeWolvesCssVars, threeWolvesTheme } from "./three-wolves.ts";
+export { FILL_CONTRAST, TEXT_CONTRAST, adjustForContrast, brandFromHtml, brandPasses, contrastRatio, importBrand, parseColor, readableOn, type BrandAdjustment, type BrandColors, type ImportedBrand, type WebsiteBrand } from "./brand.ts";
 export { resolveClubTheme, type ClubFont, type ResolvedClubTheme } from "./club-theme.ts";
 export {
   COLOR_SCHEMES,

@@ -1,88 +1,16 @@
-import Stripe from "stripe";
-import { clubCurrencyLower } from "./money";
-import { getPricingPlans } from "@/lib/business-config";
-import { combinePlanId } from "@/lib/pricing-plans";
-import {
-  MONTHLY_PRICE_CENTS,
-  QUARTERLY_PRICE_CENTS,
-  type MembershipDay,
-  type MembershipTier,
-} from "@/lib/constants";
-import { assertStripeKeyAllowed } from "@/lib/side-effects.ts";
+// Stripe's client, Three Wolves' price ids, and the club's card flows that
+// aren't a plain one-off payment. Every call to Stripe from here goes through
+// the payments interface (lib/payments → payments()). The SDK client the
+// Stripe provider is built on is made in lib/payments/stripe-client.ts.
+import { CLUB_CURRENCY } from "./constants";
+import { checkoutOf, payments, subscriptionsOf } from "./payments";
 
-let stripe: Stripe | null = null;
+export { getStripe, setStripeForTests } from "./payments/stripe-client";
 
-export function getStripe(): Stripe {
-  const secret = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secret) {
-    throw new Error("STRIPE_SECRET_KEY is not configured");
-  }
-  // A live key is refused outside production; test keys work anywhere.
-  assertStripeKeyAllowed(secret);
-  if (!stripe) {
-    stripe = new Stripe(secret);
-  }
-  return stripe;
-}
-
-/** Client secret for Payment Element — supports Basil (confirmation_secret) and legacy invoices. */
-export function getSubscriptionPaymentClientSecret(
-  subscription: Stripe.Subscription,
-): string | null {
-  const invoice = subscription.latest_invoice;
-  if (!invoice || typeof invoice === "string") return null;
-
-  const confirmation = invoice.confirmation_secret;
-  if (confirmation && typeof confirmation === "object") {
-    const secret = confirmation.client_secret;
-    if (typeof secret === "string" && secret) return secret;
-  }
-
-  // Legacy API versions (pre-Basil) exposed payment_intent on invoices.
-  const paymentIntent = (
-    invoice as Stripe.Invoice & {
-      payment_intent?: Stripe.PaymentIntent | string | null;
-    }
-  ).payment_intent;
-  if (paymentIntent && typeof paymentIntent === "object") {
-    const secret = paymentIntent.client_secret;
-    if (typeof secret === "string" && secret) return secret;
-  }
-
-  return null;
-}
-
-// Env var name for each (day, tier) pair. Friday keeps the original env var
-// names so the already-deployed Friday configuration needs no changes —
-// only Wednesday needs new Vercel env vars added.
-const PRICE_ENV_KEYS: Record<MembershipDay, Record<MembershipTier, string>> = {
-  friday: {
-    monthly: "STRIPE_PRICE_MONTHLY",
-    quarterly: "STRIPE_PRICE_QUARTERLY",
-  },
-  wednesday: {
-    monthly: "STRIPE_PRICE_WEDNESDAY_MONTHLY",
-    quarterly: "STRIPE_PRICE_WEDNESDAY_QUARTERLY",
-  },
-};
-
-export async function resolvePriceId(
-  plan: MembershipTier,
-  day: MembershipDay,
-): Promise<string> {
-  const envKey = PRICE_ENV_KEYS[day][plan];
-  const fromEnv = process.env[envKey]?.trim();
-  if (fromEnv) return fromEnv;
-
-  const planId = combinePlanId(day, plan);
-  const plans = await getPricingPlans();
-  const fromCms = plans
-    ?.find((p) => p.planId === planId)
-    ?.stripePriceId?.trim();
-  if (fromCms) return fromCms;
-
-  throw new Error(`${envKey} is not configured`);
-}
+// Prices, joining and renewing (one membership path for the website and the
+// app) live in lib/payments/membership.ts; they keep their names here for the
+// callers outside this lane.
+export { createMembershipSubscription, createOneTimeMembershipPaymentIntent, oneTimeMembershipPriceCents, resolvePriceId } from "./payments/membership";
 
 export function getDonationProductId(): string {
   const id = process.env.STRIPE_PRODUCT_DONATION;
@@ -92,228 +20,28 @@ export function getDonationProductId(): string {
 
 // Cancels at the end of the current billing period rather than
 // immediately, so a member keeps the access they already paid for.
-export async function cancelSubscriptionAtPeriodEnd(
-  subscriptionId: string,
-): Promise<Stripe.Subscription> {
-  return getStripe().subscriptions.update(subscriptionId, {
-    cancel_at_period_end: true,
-  });
+export async function cancelSubscriptionAtPeriodEnd(subscriptionId: string): Promise<{ id: string }> {
+  await subscriptionsOf(payments()).setCancelAtPeriodEnd(subscriptionId, true);
+  return { id: subscriptionId };
 }
 
-// The invoice's payment (and its PaymentIntent) attach a moment after the
-// invoice itself is created, so an immediate retrieve can race and find
-// `payments.data` still empty — poll briefly until it shows up.
-export async function getInvoicePaymentIntent(
-  stripeClient: Stripe,
-  invoiceId: string,
-): Promise<{ id: string; clientSecret: string } | null> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const invoice = await stripeClient.invoices.retrieve(invoiceId, {
-      expand: ["payments.data.payment.payment_intent"],
-    });
-    const paymentIntent = invoice.payments?.data[0]?.payment?.payment_intent;
-    if (typeof paymentIntent === "object" && paymentIntent?.client_secret) {
-      return { id: paymentIntent.id, clientSecret: paymentIntent.client_secret };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 400));
-  }
-  return null;
-}
-
-// One shared 100%-off, single-use coupon for every "free month" an admin
-// grants (competition prizes, goodwill). A fixed id means it's created once
-// and found again on every later grant, rather than littering the Stripe
-// dashboard with a fresh coupon per member.
-export const FREE_PERIOD_COUPON_ID = "three-wolves-free-period";
-
-async function ensureFreePeriodCoupon(stripeClient: Stripe): Promise<void> {
-  try {
-    await stripeClient.coupons.retrieve(FREE_PERIOD_COUPON_ID);
-  } catch (e) {
-    if (!(e instanceof Stripe.errors.StripeError) || e.statusCode !== 404) {
-      throw e;
-    }
-    await stripeClient.coupons.create({
-      id: FREE_PERIOD_COUPON_ID,
-      name: "Free month (admin granted)",
-      percent_off: 100,
-      duration: "once",
-    });
-  }
-}
+export { FREE_PERIOD_COUPON_ID } from "./payments";
 
 // Makes the subscription's next renewal invoice $0 without cancelling or
-// pausing it. Stripe still issues that invoice and marks it paid, so the
-// webhook's renewal path (invoice.payment_succeeded → applyMembershipRenewal)
-// extends the member's access exactly as a paid renewal would, and the
-// subscription stays 'active' throughout — unlike pausing collection (voids
-// the invoice, so access never advances) or a trial (flips status to
-// 'trialing', dropping the member off the active roster).
-export async function giveFreeNextPeriod(
-  subscriptionId: string,
-): Promise<{ alreadyQueued: boolean }> {
-  const stripeClient = getStripe();
-  const subscription = await stripeClient.subscriptions.retrieve(
-    subscriptionId,
-    { expand: ["discounts"] },
-  );
-  const existing = (subscription.discounts ?? []).filter(
-    (d): d is Stripe.Discount => typeof d === "object" && d !== null,
-  );
-  // A "once" coupon is consumed by the next invoice, so one still attached
-  // means a free month is already queued — a second would be swallowed by
-  // that same invoice rather than give them another month.
-  if (existing.some((d) => d.coupon?.id === FREE_PERIOD_COUPON_ID)) {
-    return { alreadyQueued: true };
-  }
-
-  await ensureFreePeriodCoupon(stripeClient);
-  await stripeClient.subscriptions.update(subscriptionId, {
-    // Setting `discounts` replaces the whole list — carry any existing
-    // discounts over so granting a free month doesn't strip another one.
-    discounts: [
-      ...existing.map((d) => ({ discount: d.id })),
-      { coupon: FREE_PERIOD_COUPON_ID },
-    ],
-  });
-  return { alreadyQueued: false };
+// pausing it (why that way: lib/payments/stripe-provider.ts → skipNextCharge).
+export async function giveFreeNextPeriod(subscriptionId: string): Promise<{ alreadyQueued: boolean }> {
+  return subscriptionsOf(payments()).skipNextCharge(subscriptionId);
 }
 
 // Adds `days` free at the end of a subscription's current period without
 // changing what it costs afterwards — used for quarterly members, where a
-// 100%-off "once" coupon (see giveFreeNextPeriod) would make a whole quarter
-// free. Moving trial_end pushes the next charge out by `days`; Stripe shows
-// the subscription as 'trialing' until then (the webhook still treats it as
-// an active membership), and normal billing resumes on the new date. Repeat
+// free renewal (giveFreeNextPeriod) would make a whole quarter free. Repeat
 // grants stack. Returns the date billing resumes (unix seconds).
-export async function addFreeDaysBeforeNextCharge(
-  subscriptionId: string,
-  days: number,
-): Promise<number> {
-  const stripeClient = getStripe();
-  const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
-  if (subscription.status !== "active" && subscription.status !== "trialing") {
-    throw new Error(`This subscription is ${subscription.status}, so it can't be extended.`);
-  }
-  const nextCharge =
-    subscription.status === "trialing" && subscription.trial_end
-      ? subscription.trial_end
-      : subscription.items.data[0]?.current_period_end;
-  if (!nextCharge) throw new Error("Couldn't find this subscription's next billing date.");
-
-  const resumesAt = nextCharge + days * 86400;
-  await stripeClient.subscriptions.update(subscriptionId, {
-    trial_end: resumesAt,
-    proration_behavior: "none",
-  });
-  return resumesAt;
+export async function addFreeDaysBeforeNextCharge(subscriptionId: string, days: number): Promise<number> {
+  return (await subscriptionsOf(payments()).postponeNextCharge(subscriptionId, days)) / 1000;
 }
 
-const ONE_TIME_TIER_LABEL: Record<MembershipTier, string> = {
-  monthly: "Monthly",
-  quarterly: "Quarterly",
-};
-const ONE_TIME_DAY_LABEL: Record<MembershipDay, string> = {
-  friday: "Friday",
-  wednesday: "Wednesday",
-};
-
-export function oneTimeMembershipPriceCents(plan: MembershipTier): number {
-  return plan === "monthly" ? MONTHLY_PRICE_CENTS : QUARTERLY_PRICE_CENTS;
-}
-
-// A single (non-recurring) membership payment — used for new one-time
-// signups and for renewing one. The webhook activates the matching
-// membership row by this PaymentIntent's id once it succeeds.
-export async function createOneTimeMembershipPaymentIntent(input: {
-  plan: MembershipTier;
-  day: MembershipDay;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string | null;
-  renewalOf?: number;
-}): Promise<Stripe.PaymentIntent> {
-  const stripe = getStripe();
-  const customers = await stripe.customers.list({ email: input.email, limit: 1 });
-  const customer =
-    customers.data[0] ??
-    (await stripe.customers.create({
-      email: input.email,
-      name: `${input.firstName} ${input.lastName}`,
-      phone: input.phone ?? undefined,
-      metadata: { plan: input.plan, day: input.day },
-    }));
-
-  const label = `${ONE_TIME_TIER_LABEL[input.plan]} Membership (${ONE_TIME_DAY_LABEL[input.day]})`;
-  return stripe.paymentIntents.create(
-    {
-      amount: oneTimeMembershipPriceCents(input.plan),
-      currency: clubCurrencyLower(),
-      customer: customer.id,
-      automatic_payment_methods: { enabled: true },
-      receipt_email: input.email,
-      description: `Three Wolves — ${label} — ${input.renewalOf ? "renewal" : "one-time"}`,
-      metadata: {
-        type: "membership",
-        plan: input.plan,
-        day: input.day,
-        recurring: "false",
-        firstName: input.firstName,
-        lastName: input.lastName,
-        email: input.email,
-        phone: input.phone ?? "",
-        ...(input.renewalOf
-          ? { renewal: "true", renewalOf: String(input.renewalOf) }
-          : {}),
-      },
-    },
-    {
-      idempotencyKey: `membership-onetime-${input.plan}-${input.email}-${Date.now()}`,
-    },
-  );
-}
-
-const TIER_LABEL = { monthly: "Monthly", quarterly: "Quarterly" } as const;
-const DAY_LABEL = { friday: "Friday", wednesday: "Wednesday" } as const;
-
-/**
- * A new auto-renewing membership's subscription, as app/api/create-subscription
- * makes it (keep the two in step): find or create the customer, subscribe
- * with the first invoice left to pay in the browser, and send its receipt.
- * Returns that invoice's payment to confirm, or null.
- */
-export async function createMembershipSubscription(input: {
-  plan: "monthly" | "quarterly";
-  day: "friday" | "wednesday";
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-}): Promise<{ subscriptionId: string; clientSecret: string } | null> {
-  const stripe = getStripe();
-  const priceId = await resolvePriceId(input.plan, input.day);
-  const customers = await stripe.customers.list({ email: input.email, limit: 1 });
-  const customer =
-    customers.data[0] ??
-    (await stripe.customers.create({ email: input.email, name: `${input.firstName} ${input.lastName}`, phone: input.phone, metadata: { plan: input.plan, day: input.day } }));
-  const subscription = await stripe.subscriptions.create({
-    customer: customer.id,
-    items: [{ price: priceId }],
-    payment_behavior: "default_incomplete",
-    payment_settings: { save_default_payment_method: "on_subscription" },
-    description: `Three Wolves — ${TIER_LABEL[input.plan]} Membership (${DAY_LABEL[input.day]})`,
-    metadata: { plan: input.plan, day: input.day, firstName: input.firstName, lastName: input.lastName, email: input.email },
-  });
-  const invoiceId = typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice?.id;
-  const pi = invoiceId ? await getInvoicePaymentIntent(stripe, invoiceId) : null;
-  if (!pi) return null;
-  // A receipt is always sent once this invoice is paid.
-  await stripe.paymentIntents.update(pi.id, { receipt_email: input.email });
-  return { subscriptionId: subscription.id, clientSecret: pi.clientSecret };
-}
-
-/** A Checkout page for one tracker pass (the players' app; the website's pass route has its own). */
+/** A tracker pass's payment page (the players' app; the website's pass route has its own). */
 export async function createVisionCheckout(input: {
   kind: "live" | "upload";
   amountCents: number;
@@ -325,19 +53,20 @@ export async function createVisionCheckout(input: {
   successUrl: string;
   cancelUrl: string;
 }): Promise<{ id: string; url: string | null }> {
-  const cs = await getStripe().checkout.sessions.create({
-    mode: "payment",
-    line_items: [{ quantity: 1, price_data: { currency: clubCurrencyLower(), unit_amount: input.amountCents, product_data: { name: input.name, description: input.description } } }],
-    customer_email: input.email,
+  return checkoutOf(payments()).create({
+    amount: input.amountCents,
+    currency: CLUB_CURRENCY,
+    name: input.name,
+    description: input.description,
+    email: input.email,
     metadata: { type: "wolf_vision", kind: input.kind, passId: String(input.passId), playerId: String(input.playerId) },
-    success_url: input.successUrl,
-    cancel_url: input.cancelUrl,
+    successUrl: input.successUrl,
+    cancelUrl: input.cancelUrl,
   });
-  return { id: cs.id, url: cs.url };
 }
 
-/** Whether a tracker pass's Checkout was paid. */
+/** Whether a tracker pass's payment page was paid. */
 export async function visionCheckoutPaid(sessionId: string): Promise<boolean> {
-  const cs = await getStripe().checkout.sessions.retrieve(sessionId);
-  return cs.payment_status === "paid" && cs.metadata?.type === "wolf_vision";
+  const cs = await checkoutOf(payments()).get(sessionId);
+  return cs.paid && cs.metadata.type === "wolf_vision";
 }

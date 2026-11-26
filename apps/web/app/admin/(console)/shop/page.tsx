@@ -25,6 +25,9 @@ import {
 import { getStripe } from "@/lib/stripe";
 import { publicBlobConfigured, uploadPublicImage } from "@/lib/public-blob";
 import { clubMajor, clubMinor, clubMoney, clubCurrencyLower } from "@/lib/money";
+import { recordAdminAction, type AuditOutcome } from "@/lib/admin-audit";
+import { requireFreshAdminActor } from "@/lib/admin-step-up";
+import { shopDescription } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +45,7 @@ async function recordCashInStripe(order: Order): Promise<string | null> {
   const customers = await stripe.customers.list({ email: order.email, limit: 1 });
   const customer = customers.data[0] ?? (await stripe.customers.create({ email: order.email, name: order.name || undefined }));
   const items = order.items.map((i) => i.label).join(", ");
-  await stripe.invoiceItems.create({ customer: customer.id, amount: order.totalCents, currency: clubCurrencyLower(), description: `Three Wolves shop — ${items} — cash` });
+  await stripe.invoiceItems.create({ customer: customer.id, amount: order.totalCents, currency: clubCurrencyLower(), description: shopDescription(items, "cash") });
   const invoice = await stripe.invoices.create({
     customer: customer.id,
     collection_method: "send_invoice",
@@ -88,14 +91,22 @@ async function cancel(orderId: number) {
 
 async function refund(orderId: number) {
   "use server";
+  // A refund needs a code entered in the last five minutes (H8), and leaves its own audit row (H7).
+  const { ctx } = await requireFreshAdminActor("/admin/shop", "shop.refund", `order:${orderId}`);
+  const record = (outcome: AuditOutcome, reason?: string) => recordAdminAction(ctx, { action: "shop.refund", target: `order:${orderId}`, outcome, reason });
   const order = await getOrder(orderId);
-  if (!order || !order.stripePaymentIntentId) back("toastError", "Only card orders can be refunded here. Refund cash in person.");
+  if (!order || !order.stripePaymentIntentId) {
+    await record("refused", "not a card order");
+    back("toastError", "Only card orders can be refunded here. Refund cash in person.");
+  }
   try {
     await getStripe().refunds.create({ payment_intent: order.stripePaymentIntentId });
   } catch (err) {
+    await record("failed", "the payment provider refused the refund");
     back("toastError", `Stripe refund failed: ${(err as Error).message}`);
   }
   await markRefunded(orderId);
+  await record("ok");
   revalidatePath("/admin/shop");
   back("toast", `Order #${orderId} refunded.`);
 }

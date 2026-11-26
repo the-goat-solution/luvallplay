@@ -429,6 +429,7 @@ function cases(): Case[] {
     { mod: "db", fn: "saveSessionFillIn", args: () => [fx.nextWed, { membershipId: 2 }, { firstName: "Sub", lastName: "Player", email: "sub@golden.test", phone: null }] },
     { mod: "db", fn: "removeSessionFillIn", args: () => [fx.nextWed, { membershipId: 2 }] },
     { mod: "db", fn: "reserveBookingSlot", args: () => [fx.nextWed, { firstName: "Casual", lastName: "Guest", email: "casual@golden.test", phone: null, paymentIntentId: "pi_golden_new" }] },
+    { mod: "db", fn: "reserveBookingSlotOnce", args: () => [fx.nextWed, { firstName: "Casual", lastName: "Guest", email: "casual@golden.test", phone: null, paymentIntentId: "pi_golden_new" }], label: "the same payment again" },
     { mod: "db", fn: "removeBooking", args: () => [1, fx.lastWed] },
     { mod: "db", fn: "claimBookingReminder", args: [2] },
     { mod: "db", fn: "claimMembershipReminder", args: () => [1, fx.nextFri] },
@@ -585,6 +586,8 @@ const NOT_COVERED: Partial<Record<ModName, Record<string, string>>> = {
     membershipCoversDateSql: "builds SQL text only",
     projectedPeriodEndSql: "builds SQL text only",
     addDays: "date arithmetic only",
+    claimSessionSpot: "takes a transaction's connection; run through reserveBookingSlotOnce (covered) and on its own in tests/session-spot.test.ts",
+    releaseSessionSpot: "takes a connection; run through removeBooking (covered) and on its own in tests/session-spot.test.ts",
   },
   "player-db": { defaultDisplayName: "string helper", mapPlayer: "row mapper", normalizeAccountEmail: "string helper", toE164: "re-exported phone helper" },
   "player-auth": {

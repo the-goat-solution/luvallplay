@@ -273,8 +273,23 @@ describe("tenant isolation at the database", { skip: !BASE_URL && !REQUIRE_DB ? 
     await c.query("BEGIN");
     try {
       const guardian = (await c.query(`SELECT id FROM players WHERE deleted_at IS NULL ORDER BY id LIMIT 1`)).rows[0].id as number;
-      const child = (await c.query(`INSERT INTO junior_profiles (tenant_id, guardian_user_id, name, birth_year) VALUES (1, $1, 'Isolation Child', 2015) RETURNING id`, [guardian])).rows[0].id as number;
+      const child = (await c.query(`INSERT INTO junior_profiles (tenant_id, name, birth_year) VALUES (1, 'Isolation Child', 2015) RETURNING id`)).rows[0].id as number;
       await c.query(`INSERT INTO sessions (tenant_id, date, max_spots, booked_spots) VALUES (1, '2031-02-07', 10, 0), ($1, '2031-02-07', 10, 0)`, [club2]);
+      await c.query("SAVEPOINT s");
+      // Only a guardian of the child can be the one who booked.
+      await assert.rejects(c.query(`INSERT INTO junior_bookings (tenant_id, junior_profile_id, session_date, booked_by_user_id) VALUES (1, $1, '2031-02-07', $2)`, [child, guardian]), /junior_bookings_booked_by_guardian_fkey/);
+      await c.query("ROLLBACK TO SAVEPOINT s");
+      // A guardianship lives in the child's own club, nowhere else.
+      await assert.rejects(c.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at) VALUES ($1, $2, $3, now())`, [club2, guardian, child]), /guardianships_junior_in_club_fkey/);
+      await c.query("ROLLBACK TO SAVEPOINT s");
+      await c.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at) VALUES (1, $1, $2, now())`, [guardian, child]);
+      // A child is marked only at a play day that exists, in one of the known ways.
+      await c.query("SAVEPOINT s");
+      await assert.rejects(c.query(`INSERT INTO junior_attendance (tenant_id, session_date, junior_profile_id, source) VALUES (1, '2031-02-08', $1, 'coach')`, [child]), /junior_attendance_session_date_fkey/);
+      await c.query("ROLLBACK TO SAVEPOINT s");
+      await assert.rejects(c.query(`INSERT INTO junior_attendance (tenant_id, session_date, junior_profile_id, source) VALUES (1, '2031-02-07', $1, 'guess')`, [child]), /junior_attendance_source_check/);
+      await c.query("ROLLBACK TO SAVEPOINT s");
+      await c.query("RELEASE SAVEPOINT s");
       // In the child's own club: fine.
       await c.query(`INSERT INTO junior_bookings (tenant_id, junior_profile_id, session_date, booked_by_user_id, status) VALUES (1, $1, '2031-02-07', $2, 'confirmed')`, [child, guardian]);
       // The same child, written under the other club: refused, even by the owner.
@@ -291,6 +306,7 @@ describe("tenant isolation at the database", { skip: !BASE_URL && !REQUIRE_DB ? 
       await c.query("SELECT set_config('app.tenant_id', $1, true)", [String(club2)]);
       assert.equal(await count("junior_profiles"), 0);
       assert.equal(await count("junior_bookings"), 0);
+      assert.equal(await count("guardianships"), 0);
     } finally {
       await c.query("ROLLBACK");
     }

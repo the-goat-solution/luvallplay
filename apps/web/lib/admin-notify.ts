@@ -1,5 +1,6 @@
 import { sendPlayerNoticeEmail } from "./player-email";
 import type { ClubRole } from "./admin-roles";
+import { clubShortName } from "./club-brand";
 
 // "An admin was added" emails (build plan §2.4): to the person, and to every
 // owner, so a change nobody expected is noticed straight away. Admin emails
@@ -16,16 +17,16 @@ export async function notifyRoleChange(input: {
   ownerEmails: string[];
 }): Promise<void> {
   const who = input.name || input.email;
-  const what = input.role ? `${ROLE_LABEL[input.role]} of Three Wolves` : "no longer an admin of Three Wolves";
+  const what = input.role ? `${ROLE_LABEL[input.role]} of ${clubShortName()}` : `no longer an admin of ${clubShortName()}`;
   const sends: Promise<void>[] = [];
   if (input.role) {
     sends.push(
       sendPlayerNoticeEmail({
         to: input.email,
-        subject: `You're now ${ROLE_LABEL[input.role]} at Three Wolves`,
+        subject: `You're now ${ROLE_LABEL[input.role]} at ${clubShortName()}`,
         heading: `You're now ${what}`,
         lines: [
-          `${input.by} gave you ${ROLE_LABEL[input.role]} access to the Three Wolves admin area.`,
+          `${input.by} gave you ${ROLE_LABEL[input.role]} access to the ${clubShortName()} admin area.`,
           input.invited
             ? "Sign in with this email address and you'll find a Club admin button on your profile."
             : "You'll find a Club admin button on your profile. Admin asks for a fresh sign-in code if you last signed in more than 12 hours ago.",

@@ -237,63 +237,117 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   return { spots, signedUp, locked, miniGame };
 }
 
-export async function reserveBookingSlot(
-  date: string,
-  booking: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone?: string;
-    paymentIntentId: string;
-  },
-): Promise<boolean> {
-  const cfg = await getClubConfig(sql);
-  await ensureSession(date);
-  // Casual capacity is that play day's court-derived max minus current
-  // active members whose period covers this date AND whose day matches this
-  // date's membership day, so the atomic guard must account for both to
-  // avoid overselling the court. The courts → players table is the club's
-  // setting, passed in as JSON ($4), so the query and sessionCapacityFor
-  // can't disagree (it used to be a second copy typed into the SQL). See
-  // getAvailableSpots for why
-  // this reads sessions.courts rather than the stale sessions.max_spots
-  // column. The day CASE mirrors MEMBERSHIP_DAY_TO_DOW; a NULL result (a
-  // casual-only day) never matches memberships.day, so the subquery counts
-  // zero on those days without needing a separate ELSE 0 branch.
-  const { rowCount } = await sql.query(
+export type BookingSlotResult =
+  /** The spot is theirs: the booking was written and the play day's count went up by one. */
+  | "reserved"
+  /** This payment already has a booking (a replayed or repeated event): nothing was changed. */
+  | "already"
+  /** No spot left: nothing was changed. */
+  | "full";
+
+type BookingSlotInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  paymentIntentId: string;
+};
+
+/** A connection inside a transaction (or the pool itself, for a single statement). */
+type SpotDb = { query: (text: string, params?: unknown[]) => Promise<{ rowCount?: number | null }> };
+
+/**
+ * Takes one place on a play day if there is one, in one statement. True when
+ * the place was taken. Call it inside the transaction that writes whatever
+ * holds the place (an adult's casual booking; a junior's booking, Phase 3b),
+ * after that row is written, so a full day rolls the row back with it.
+ *
+ * Casual capacity is that play day's court-derived max minus current
+ * active members whose period covers this date AND whose day matches this
+ * date's membership day, so the atomic guard must account for both to
+ * avoid overselling the court. The courts → players table is the club's
+ * setting, passed in as JSON ($4), so the query and sessionCapacityFor
+ * can't disagree (it used to be a second copy typed into the SQL). See
+ * getAvailableSpots for why
+ * this reads sessions.courts rather than the stale sessions.max_spots
+ * column. The day CASE mirrors MEMBERSHIP_DAY_TO_DOW; a NULL result (a
+ * casual-only day) never matches memberships.day, so the subquery counts
+ * zero on those days without needing a separate ELSE 0 branch.
+ */
+export async function claimSessionSpot(client: SpotDb, date: string, cfg?: Awaited<ReturnType<typeof getClubConfig>>): Promise<boolean> {
+  const c = cfg ?? (await getClubConfig(sql));
+  const slot = await client.query(
     `UPDATE sessions
      SET booked_spots = booked_spots + 1
      WHERE date = $1
-       AND booked_spots < (
-         CASE
-           WHEN mini_game THEN $3
-           ELSE COALESCE(($4::jsonb ->> courts::text)::int, $2)
-         END
-       ) - (
-         SELECT COUNT(*)::int FROM memberships
-         WHERE status = 'active'
-           AND day = CASE EXTRACT(DOW FROM sessions.date) WHEN 5 THEN 'friday' WHEN 3 THEN 'wednesday' END
-           AND ${membershipCoversDateSql("$1")}
-           AND ${memberNotAbsentSql("$1::date")}
-       );`,
-    [date, cfg.playDays.sessionCapacity, cfg.roundRobin.miniGameMaxPlayers, JSON.stringify(cfg.playDays.courtsToMaxPlayers)],
+     AND booked_spots < (
+       CASE
+         WHEN mini_game THEN $3
+         ELSE COALESCE(($4::jsonb ->> courts::text)::int, $2)
+       END
+     ) - (
+       SELECT COUNT(*)::int FROM memberships
+       WHERE status = 'active'
+         AND day = CASE EXTRACT(DOW FROM sessions.date) WHEN 5 THEN 'friday' WHEN 3 THEN 'wednesday' END
+         AND ${membershipCoversDateSql("$1")}
+         AND ${memberNotAbsentSql("$1::date")}
+     );`,
+    [date, c.playDays.sessionCapacity, c.roundRobin.miniGameMaxPlayers, JSON.stringify(c.playDays.courtsToMaxPlayers)],
   );
-  if (!rowCount) return false;
+  return Boolean(slot.rowCount);
+}
 
-  await sql`
-    INSERT INTO bookings (session_date, first_name, last_name, email, phone, payment_intent_id, status)
-    VALUES (
-      ${date},
-      ${booking.firstName},
-      ${booking.lastName},
-      ${booking.email},
-      ${booking.phone ?? null},
-      ${booking.paymentIntentId},
-      'confirmed'
-    )
-    ON CONFLICT (payment_intent_id) DO NOTHING;
-  `;
-  return true;
+/** Gives one place on a play day back (never below zero). The other half of claimSessionSpot. */
+export async function releaseSessionSpot(client: SpotDb, date: string): Promise<void> {
+  await client.query(`UPDATE sessions SET booked_spots = GREATEST(booked_spots - 1, 0) WHERE date = $1;`, [date]);
+}
+
+/**
+ * Books a casual spot for a payment, once (audit H3).
+ *
+ * The booking row goes in FIRST and the play day's count only goes up when
+ * that row was new, both in one transaction. A payment that already has a
+ * booking changes nothing, so a replayed Stripe event (Stripe delivers at
+ * least once) can't count the same person twice, and can't find the day
+ * "full" and refund someone who has their spot. Two deliveries at the same
+ * moment take turns on the unique payment_intent_id.
+ */
+export async function reserveBookingSlotOnce(date: string, booking: BookingSlotInput): Promise<BookingSlotResult> {
+  const cfg = await getClubConfig(sql);
+  await ensureSession(date);
+  const client = await sql.connect();
+  try {
+    await client.query("BEGIN");
+    const inserted = await client.query(
+      `INSERT INTO bookings (session_date, first_name, last_name, email, phone, payment_intent_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'confirmed')
+       ON CONFLICT (payment_intent_id) DO NOTHING
+       RETURNING id;`,
+      [date, booking.firstName, booking.lastName, booking.email, booking.phone ?? null, booking.paymentIntentId],
+    );
+    if (!inserted.rowCount) {
+      await client.query("ROLLBACK");
+      return "already";
+    }
+    const claimed = await claimSessionSpot(client, date, cfg);
+    if (!claimed) {
+      // Full: the booking row written above goes with the rollback.
+      await client.query("ROLLBACK");
+      return "full";
+    }
+    await client.query("COMMIT");
+    return "reserved";
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/** True when the person has their spot: booked now, or already booked by this same payment. */
+export async function reserveBookingSlot(date: string, booking: BookingSlotInput): Promise<boolean> {
+  return (await reserveBookingSlotOnce(date, booking)) !== "full";
 }
 
 export async function removeBooking(
@@ -303,11 +357,7 @@ export async function removeBooking(
   const { rowCount } = await sql`
     DELETE FROM bookings WHERE id = ${bookingId} AND session_date = ${date};
   `;
-  if (rowCount) {
-    await sql`
-      UPDATE sessions SET booked_spots = GREATEST(booked_spots - 1, 0) WHERE date = ${date};
-    `;
-  }
+  if (rowCount) await releaseSessionSpot(sql, date);
 }
 
 export type MembershipAssignment =
@@ -370,14 +420,27 @@ export async function assignAndReserveMembershipAccessStart(
   const lockKey = `${member.email.toLowerCase()}:${day}`;
 
   const client = await db.connect();
+  // One transaction for the whole function, with a transaction-level
+  // advisory lock, so the duplicate-membership check and the capacity search
+  // + insert that follows it are serialized against any other concurrent
+  // signup for the same email+day. Without the lock, two requests racing
+  // each other could both pass the check below before either has committed
+  // a row.
+  //
+  // It was a session-level lock (pg_advisory_lock … pg_advisory_unlock)
+  // around one small transaction per candidate. Through a transaction pooler
+  // (Neon's pooled host, PgBouncer) each statement outside a transaction can
+  // land on a different server connection, so the unlock could miss the
+  // connection holding the lock: the lock leaked, and later sign-ups for the
+  // same email and day hung. A transaction-level lock is released by the
+  // server at COMMIT or ROLLBACK, whatever happens to this process. Each
+  // candidate day is tried inside a savepoint, so a full day's row lock is
+  // let go before the next day is tried, as before.
+  let open = false;
   try {
-    // Session-level advisory lock (not transaction-scoped, so it spans every
-    // per-candidate transaction below) held for this whole function, so the
-    // duplicate-membership check and the capacity search + insert that
-    // follows it are serialized against any other concurrent signup for the
-    // same email+day. Without this, two requests racing each other could
-    // both pass the check below before either has committed a row.
-    await client.query(`SELECT pg_advisory_lock(hashtext($1));`, [lockKey]);
+    await client.query("BEGIN");
+    open = true;
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1));`, [lockKey]);
 
     // A lapsed one-time membership is only marked 'expired' by the daily
     // status upkeep (lib/membership-status.ts), so between its end date and
@@ -434,8 +497,8 @@ export async function assignAndReserveMembershipAccessStart(
     for (const row of candidates) {
       const date = (row as { date: string }).date;
 
-      await client.query("BEGIN");
-      try {
+      await client.query("SAVEPOINT candidate");
+      {
         const { rows: sessionRows } = await client.query(
           `SELECT booked_spots, courts, mini_game FROM sessions WHERE date = $1 FOR UPDATE;`,
           [date],
@@ -490,6 +553,7 @@ export async function assignAndReserveMembershipAccessStart(
             ],
           );
           await client.query("COMMIT");
+          open = false;
           return {
             blocked: false,
             membershipId: (inserted[0] as { id: number }).id,
@@ -497,19 +561,20 @@ export async function assignAndReserveMembershipAccessStart(
             periodEnd,
           };
         }
-        await client.query("ROLLBACK");
-      } catch (e) {
-        await client.query("ROLLBACK");
-        throw e;
+        // No room: let go of this day's row lock before trying the next.
+        await client.query("ROLLBACK TO SAVEPOINT candidate");
       }
     }
 
     return { blocked: true, reason: "sessions_full" };
   } finally {
-    await client
-      .query(`SELECT pg_advisory_unlock(hashtext($1));`, [lockKey])
-      .catch(() => {});
-    client.release();
+    // Nothing was written unless the COMMIT above ran. Ending the
+    // transaction releases the advisory lock; if the ROLLBACK can't be sent,
+    // the connection is destroyed, not reused with a transaction open (the
+    // server then rolls back and releases the lock by itself).
+    let broken: Error | undefined;
+    if (open) await client.query("ROLLBACK").catch((e) => { broken = e instanceof Error ? e : new Error(String(e)); });
+    client.release(broken);
   }
 }
 

@@ -7,6 +7,7 @@ import {
 } from "@/lib/db";
 import { cancelSubscriptionAtPeriodEnd } from "@/lib/stripe";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
+import { auditedRoute } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ const bodySchema = z.object({
   membershipId: z.number().int().positive(),
 });
 
-export async function POST(request: Request) {
+export const POST = auditedRoute("membership.cancel", async function POST(request: Request) {
   if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -50,4 +51,4 @@ export async function POST(request: Request) {
     const message = e instanceof Error ? e.message : "Invalid request";
     return NextResponse.json({ error: message }, { status: 400 });
   }
-}
+}, { stepUp: true });

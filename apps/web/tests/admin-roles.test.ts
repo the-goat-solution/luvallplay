@@ -32,6 +32,9 @@ import {
   setRoleByEmail,
   setRoleForPlayer,
   summarizeAdminRequest,
+  AUDIT_FIELD_ALLOW_LIST,
+  auditFields,
+  auditTarget,
   STEP_UP_MAX_AGE_MS,
   type Access,
   type Actor,
@@ -88,7 +91,7 @@ test("step-up: a sign-in older than 12 hours needs a fresh code", () => {
   assert.equal(isStepUpFresh(new Date(now + 3_600_000), now), false, "a session from the future is not trusted");
 });
 
-test("audit summary: keeps the target, drops secrets and Next internals", () => {
+test("audit summary: keeps the target and allow-listed ids and choices; drops everything else (H7)", () => {
   const s = summarizeAdminRequest({
     method: "POST",
     path: "/admin/members",
@@ -98,18 +101,34 @@ test("audit summary: keeps the target, drops secrets and Next internals", () => 
       ["_1_$ACTION_ID_def", ""],
       ["0", '["$K1"]'],
       ["_1_memberId", "42"],
+      ["plan", "x".repeat(500)],
       ["password", "hunter2"],
-      ["note", "x".repeat(500)],
+      // Personal details and free text never reach the log, whatever the field is called.
+      ["firstName", "Mia"],
+      ["phone", "021 000 000"],
+      ["reason", "moved away"],
+      ["body", "a private message"],
+      ["medicalNotes", "asthma; carries an inhaler"],
+      ["somethingNew", "a field nobody allow-listed"],
     ],
   });
   assert.equal(s.action, "POST /admin/members");
   assert.equal(s.target, "42");
   const fields = s.meta.fields as Record<string, string>;
-  assert.equal(fields.password, undefined);
-  assert.equal(fields["1_$ACTION_ID_abc"], undefined);
-  assert.deepEqual(Object.keys(fields).sort(), ["memberId", "note"], "Next.js internals dropped, prefixes stripped");
-  assert.equal(fields.note.length, 120);
+  assert.deepEqual(Object.keys(fields).sort(), ["memberId", "plan"], "only allow-listed fields; Next.js internals dropped, prefixes stripped");
+  assert.equal(fields.plan.length, 120);
   assert.equal(s.meta.serverAction, "abc123");
+  assert.doesNotMatch(JSON.stringify(s), /asthma|hunter2|Mia|021|moved away|private message|nobody/);
+});
+
+test("audit allow-list: ids and choices only, never free text or personal details (H7)", () => {
+  for (const banned of ["email", "phone", "firstName", "lastName", "name", "notes", "note", "reason", "body", "subject", "statement", "medicalNotes", "medical", "dob", "address", "q"]) {
+    assert.equal(AUDIT_FIELD_ALLOW_LIST.has(banned), false, banned);
+  }
+  // The member's email may be the TARGET where a form has no id (memberships are keyed by email), never a copied field.
+  assert.equal(auditTarget([["email", "mia@e2e.test"], ["reason", "x"]]), "mia@e2e.test");
+  assert.deepEqual(auditFields([["email", "mia@e2e.test"], ["reason", "x"], ["role", "coach"]]), { role: "coach" });
+  assert.equal(auditTarget([["reason", "x"]]), "");
 });
 
 // ---------------------------------------------------------------------------
@@ -160,7 +179,8 @@ describe("admin roles on Postgres", { skip: DB_URL ? false : "set DATA_GUARD_TES
     assert.equal(await isLastOwner(db, 1), false);
   });
 
-  test("REHEARSAL · migration + grant of two owners: data guard reports 0 problems", { skip: hasPsql ? false : "psql not installed" }, () => {
+  test("REHEARSAL · migration + grant of two owners: data guard reports 0 problems", { skip: hasPsql || REQUIRE_DB ? false : "psql not installed" }, () => {
+    assert.ok(hasPsql, "psql must be installed: this rehearsal can't be skipped (DATA_GUARD_REQUIRE_DB=1)");
     const dir = mkdtempSync(join(tmpdir(), "roles-"));
     const run = `node scripts/run-migration.mjs ${MIGRATION} && node scripts/run-migration.mjs ${CURRENT_KEYS} && node scripts/grant-role.mjs --role owner --platform --email player1@example.test --email ' Player2@Example.TEST '`;
     const r = spawnSync(process.execPath, ["scripts/data-guard/cli.ts", "rehearse", "--expect", EXPECT, "--out-dir", dir, "--run", run], {

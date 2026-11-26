@@ -31,6 +31,18 @@ const base = () => env.base;
 before(async () => {
   env = await startEnv({ log: () => {} });
   browser = await chromium.launch();
+  // The journeys talk to the app under test and to nothing else. Pages load
+  // Stripe's script from the root layout; left alone it calls Stripe's
+  // servers (js.stripe.com, m.stripe.network, m.stripe.com) from wherever
+  // the journeys run, which is traffic a test shouldn't send and which kept
+  // the Arena page from ever settling in CI. Every context refuses any host
+  // but this machine. No journey needs one: payments are stood in for.
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (options) => {
+    const context = await newContext(options);
+    await context.route((url) => !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname), (route) => route.abort());
+    return context;
+  };
   db = new pg.Client({ connectionString: env.dbUrl });
   await db.connect();
   mkdirSync(SHOTS, { recursive: true });
@@ -80,6 +92,7 @@ async function signedIn(email, viewport = PHONE) {
   );
   const context = await browser.newContext({ viewport, baseURL: base() });
   await context.addCookies([{ name: "tw_player", value: token, url: base() }]);
+  context.on("page", watchRequests);
   return { context, token };
 }
 
@@ -93,9 +106,34 @@ async function api(token, body) {
   return { status: r.status, json };
 }
 
+/** What a page has asked for lately, so a page that never settles can say what kept it busy. */
+const traffic = new WeakMap();
+function watchRequests(page) {
+  if (traffic.has(page)) return;
+  const seen = { pending: new Set(), recent: [] };
+  traffic.set(page, seen);
+  page.on("request", (r) => {
+    seen.pending.add(r);
+    seen.recent.push([Date.now(), `${r.method()} ${r.url()}`]);
+    if (seen.recent.length > 400) seen.recent.shift();
+  });
+  for (const done of ["requestfinished", "requestfailed"]) page.on(done, (r) => seen.pending.delete(r));
+}
+
 async function shot(page, name) {
   // Fully loaded (no loading skeleton) and no sheet still animating in.
-  await page.waitForLoadState("networkidle");
+  watchRequests(page);
+  const asked = Date.now();
+  await page.waitForLoadState("networkidle").catch((err) => {
+    const seen = traffic.get(page);
+    const waiting = [...seen.pending].map((r) => `${r.method()} ${r.url()}`);
+    const during = seen.recent.filter(([at]) => at >= asked).map(([at, what]) => `+${at - asked}ms ${what}`);
+    throw new Error(
+      `${name}: the page never went quiet (${err.message.split("\n")[0]}) at ${page.url()}.\n` +
+        `Unanswered: ${waiting.join(", ") || "none"}.\n` +
+        `${during.length} requests while waiting${during.length > 40 ? " (the last 40)" : ""}:\n${during.slice(-40).join("\n")}`,
+    );
+  });
   await page.waitForTimeout(400);
   for (const w of WIDTHS) {
     await page.setViewportSize({ width: w, height: w < 600 ? 812 : 900 });
@@ -670,6 +708,10 @@ const SESSION_ENDPOINTS = [
   ["POST", "/clubs/{club}/vision/model"],
   ["POST", "/clubs/{club}/vision/share"],
   ["GET", "/clubs/{club}/arena/challenges/{id}/stats"],
+  ["GET", "/clubs/{club}/family"],
+  ["POST", "/clubs/{club}/family"],
+  ["PATCH", "/clubs/{club}/family/{id}"],
+  ["PUT", "/clubs/{club}/family/{id}/consent"],
   ["GET", "/clubs/{club}/me/photos"],
   ["POST", "/clubs/{club}/me/photos"],
   ["POST", "/clubs/{club}/me/photos/upload"],
@@ -800,7 +842,9 @@ describe("API · the players' app API", () => {
     assert.match(c.theme.light["font-display"], /Copperplate/);
     assert.equal(c.theme.artSet, "three-wolves");
     assert.deepEqual(Object.keys(c.theme.light).sort(), Object.keys(c.theme.dark).sort());
-    assert.equal(Object.keys(c.theme.light).length, 14);
+    // Every token the contract names, the four optional ones included (Three Wolves sets its own).
+    const { themeTokensSchema } = await import("../../../../packages/api/src/schemas.ts");
+    assert.deepEqual(Object.keys(c.theme.light).sort(), Object.keys(themeTokensSchema.shape).sort());
     assert.equal(c.terms.pointsName, "Wolf Points");
     for (const m of ["arena", "vision", "memberships"]) assert.ok(c.modules.includes(m), m);
     // A club this deployment doesn't serve doesn't exist, whoever asks.
@@ -1668,6 +1712,142 @@ describe("S · modules", () => {
     } finally {
       // Whatever happened above, leave the module on for the journeys that follow.
       await db.query(`UPDATE tenant_modules SET enabled = TRUE WHERE module_id = 'gallery'`);
+      await owner.context.close();
+    }
+  });
+
+  // The same promise for EVERY optional module, generated from the registry
+  // (packages/modules), the route table (ROUTE_OWNERS) and the API contract,
+  // so a new module, page or endpoint is covered the day it is added. The
+  // switch itself (the owner's button, the rules) is the test above; here
+  // the switches are set in the table, as the club's choice is stored.
+  test("S2 · every optional module, generated: switched off, each page, API route, app endpoint, menu entry and config line it owns is gone; back on, each returns", async () => {
+    const { MODULES, ROUTE_OWNERS } = await import("../../../../packages/modules/src/index.ts");
+    const { ENDPOINTS } = await import("../../../../packages/api/src/contract.ts");
+    // A module the platform keeps hidden (Juniors, Forms & waivers) can't be switched by a row in the
+    // table: it isn't skipped, it is checked the other way round below (the row says on, and it stays off).
+    const optional = MODULES.filter((m) => !m.core && m.availability !== "hidden");
+    const hidden = MODULES.filter((m) => !m.core && m.availability === "hidden");
+    assert.ok(optional.length >= 16, `the registry has ${optional.length} optional modules`);
+    const owner = await signedIn(PEOPLE.owner.email, DESKTOP);
+    const cookie = `tw_player=${owner.token}`;
+    const NO_ID = "2147483000"; // a valid id that names nothing
+
+    const original = (await db.query(`SELECT module_id, enabled FROM tenant_modules WHERE tenant_id = 1`)).rows;
+    const set = (id, on) => db.query(`INSERT INTO tenant_modules (tenant_id, module_id, enabled) VALUES (1, $1, $2) ON CONFLICT (tenant_id, module_id) DO UPDATE SET enabled = $2`, [id, on]);
+    /** Everything `id` needs, and everything that needs `id` (a module can't be off under one that needs it). */
+    const needs = (id) => (MODULES.find((m) => m.id === id).requires ?? []).flatMap((r) => [...needs(r), r]);
+    const neededBy = (id) => MODULES.filter((m) => m.requires?.includes(id)).flatMap((m) => [m.id, ...neededBy(m.id)]);
+
+    /** The paths the proxy guards for the module: [path, status, body]. */
+    const routes = async (id) => {
+      const out = [];
+      for (const [prefix, who] of ROUTE_OWNERS) {
+        if (who !== id) continue;
+        const r = await fetch(`${base()}${prefix}`, { redirect: "manual", headers: { Cookie: cookie } });
+        out.push([prefix, r.status, await r.text()]);
+      }
+      return out;
+    };
+    /** The module's endpoints in the players' app API: [id, status, error code]. A body that can't be valid, so nothing is changed when the module is on. */
+    const endpoints = async (id) => {
+      const out = [];
+      for (const [eid, e] of Object.entries(ENDPOINTS)) {
+        if (e.module !== id) continue;
+        const path = e.path.replace("{club}", "three-wolves").replace(/\{\w+\}/g, NO_ID);
+        const r = await appApi(e.method, path, { token: owner.token, ...(e.method === "GET" || !e.body ? {} : { raw: '"not a body"' }) });
+        out.push([eid, r.status, r.json?.error ?? null]);
+      }
+      return out;
+    };
+    /** The admin's side menu, as served (the Today page's own quick links are lane A's: audit, "Today is filtered by role, not module"). */
+    const adminMenu = async () => {
+      const html = await (await fetch(`${base()}/admin`, { headers: { Cookie: cookie } })).text();
+      const menu = html.match(/<aside id="admin-sidebar"[\s\S]*?<\/aside>/)?.[0];
+      assert.ok(menu, "the admin page has its side menu");
+      return menu;
+    };
+    const configModules = async () => (await appApi("GET", "/clubs/three-wolves/config")).json.modules;
+
+    const covered = { routes: 0, endpoints: 0, menu: 0 };
+    try {
+      for (const m of optional) {
+        const id = m.id;
+        const nav = (m.admin?.nav ?? []).map((n) => n.href);
+        // On (with what it needs).
+        for (const dep of [...needs(id), id]) await set(dep, true);
+        const routesOn = await routes(id);
+        const endpointsOn = await endpoints(id);
+        for (const [eid, status, code] of endpointsOn) {
+          assert.notEqual(code, "module_off", `${id} on: ${eid}`);
+          assert.ok(status < 500, `${id} on: ${eid} answers ${status}`);
+        }
+        if (routesOn.length) assert.ok(routesOn.some(([, status]) => status !== 404), `${id} on: at least one of its routes is there (${routesOn.map(([p, st]) => `${p} ${st}`).join(", ")})`);
+        const menuOn = await adminMenu();
+        for (const href of nav) assert.ok(menuOn.includes(`href="${href}"`), `${id} on: the admin menu offers ${href}`);
+        assert.ok((await configModules()).includes(id), `${id} on: the club's config lists it`);
+
+        // Off (and what needs it).
+        for (const dep of [...neededBy(id), id]) await set(dep, false);
+        for (const [prefix, status, body] of await routes(id)) {
+          assert.equal(status, 404, `${id} off: ${prefix} is still served`);
+          assert.ok(prefix.startsWith("/api/") ? body === '{"error":"not_found"}' : body.includes("This page isn't available."), `${id} off: ${prefix} isn't stopped by the switch (${body.slice(0, 80)})`);
+        }
+        for (const [eid, status, code] of await endpoints(id)) assert.deepEqual([status, code], [404, "module_off"], `${id} off: ${eid}`);
+        const menuOff = await adminMenu();
+        for (const href of nav) assert.ok(!menuOff.includes(`href="${href}"`), `${id} off: the admin menu still offers ${href}`);
+        assert.ok(!(await configModules()).includes(id), `${id} off: the club's config still lists it`);
+        // The rest of the club carries on.
+        assert.equal((await fetch(`${base()}/`)).status, 200, `${id} off: the home page`);
+        assert.equal((await appApi("GET", "/clubs/three-wolves/me", { token: owner.token })).status, 200, `${id} off: Me`);
+
+        // Back on: everything answers as it did.
+        for (const dep of [...needs(id), id]) await set(dep, true);
+        assert.deepEqual((await routes(id)).map(([p, st]) => [p, st]), routesOn.map(([p, st]) => [p, st]), `${id} back on: its routes`);
+        assert.deepEqual(await endpoints(id), endpointsOn, `${id} back on: its endpoints`);
+
+        covered.routes += routesOn.length;
+        covered.endpoints += endpointsOn.length;
+        covered.menu += nav.length;
+        // As it was, before the next module.
+        for (const dep of new Set([...needs(id), ...neededBy(id), id])) {
+          const was = original.find((r) => r.module_id === dep);
+          if (was) await set(dep, was.enabled);
+          else await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [dep]);
+        }
+      }
+      // Hidden modules: the row is written as "on" (with what it needs), and everything the module owns stays
+      // off. A row is not the owner's acknowledgement, and this deployment doesn't offer the module.
+      for (const m of hidden) {
+        const id = m.id;
+        for (const dep of [...needs(id), id]) await set(dep, true);
+        const routesHidden = await routes(id);
+        const endpointsHidden = await endpoints(id);
+        for (const [prefix, status] of routesHidden) assert.equal(status, 404, `${id} is hidden: ${prefix} is served because a row says on`);
+        for (const [eid, status, code] of endpointsHidden) assert.deepEqual([status, code], [404, "module_off"], `${id} is hidden: ${eid} answers because a row says on`);
+        const menu = await adminMenu();
+        for (const n of m.admin?.nav ?? []) assert.ok(!menu.includes(`href="${n.href}"`), `${id} is hidden: the admin menu offers ${n.href}`);
+        assert.ok(!(await configModules()).includes(id), `${id} is hidden: the club's config lists it because a row says on`);
+        covered.routes += routesHidden.length;
+        covered.endpoints += endpointsHidden.length;
+        covered.menu += (m.admin?.nav ?? []).length;
+        for (const dep of new Set([...needs(id), id])) {
+          const was = original.find((r) => r.module_id === dep);
+          if (was) await set(dep, was.enabled);
+          else await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [dep]);
+        }
+      }
+      // Nothing was left out: every guarded route and every endpoint with a module belongs to a module that was checked.
+      const ids = new Set([...optional, ...hidden].map((m) => m.id));
+      const always = new Set(["core", "account", "platform"]);
+      for (const [prefix, who] of ROUTE_OWNERS) assert.ok(always.has(who) || ids.has(who), `${prefix} belongs to "${who}", which isn't a module`);
+      for (const [eid, e] of Object.entries(ENDPOINTS)) assert.ok(!e.module || ids.has(e.module), `${eid} names the module "${e.module}", which isn't one`);
+      assert.equal(covered.routes, ROUTE_OWNERS.filter(([, who]) => !always.has(who)).length);
+      assert.equal(covered.endpoints, Object.values(ENDPOINTS).filter((e) => e.module).length);
+    } finally {
+      // Whatever happened above, leave the switches as they were for the journeys that follow.
+      await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND NOT (module_id = ANY($1))`, [original.map((r) => r.module_id)]);
+      for (const r of original) await set(r.module_id, r.enabled);
       await owner.context.close();
     }
   });

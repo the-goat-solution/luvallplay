@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { getEntryReceipt } from "@/lib/finance-db";
 import { fetchReceipt } from "@/lib/finance-receipts";
 import { isAdminRequest } from "@/lib/security";
+import { auditedRoute } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
 // Streams a finance entry's receipt to a logged-in admin. Receipts are
 // private blobs (see lib/finance-receipts.ts), so this route is the only way
 // to view one — the storage URL itself is never sent to the browser.
-export async function GET(
+export const GET = auditedRoute("finance.receipt_view", async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -50,7 +51,7 @@ export async function GET(
       "X-Content-Type-Options": "nosniff",
     },
   });
-}
+});
 
 function extensionFor(contentType: string): string {
   if (contentType === "application/pdf") return ".pdf";

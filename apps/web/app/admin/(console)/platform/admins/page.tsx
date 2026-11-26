@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache";
 import { ConfirmButton, DataTable, PageHeader, Section, Toolbar, kit } from "@/components/admin/kit";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
-import { currentAdmin, db, requireAdminActor } from "@/lib/admin-access";
+import { currentAdmin, db } from "@/lib/admin-access";
+import { requireFreshAdminActor } from "@/lib/admin-step-up";
 import { RoleError, listAdmins, normalizeEmail, setPlatformAdmin } from "@/lib/admin-roles";
 import { formatNz } from "@/components/admin/ui";
 
@@ -22,7 +23,8 @@ function back(kind: "toast" | "toastError", message: string): never {
 
 async function addPlatformAdmin(formData: FormData) {
   "use server";
-  const { actor } = await requireAdminActor(PATH);
+  // Platform grants need a code entered in the last five minutes (H8).
+  const { actor } = await requireFreshAdminActor(PATH, "platform.granted");
   const email = normalizeEmail(String(formData.get("email") ?? ""));
   const { rows } = await db.query(`SELECT id FROM players WHERE email = $1 AND deleted_at IS NULL;`, [email]);
   if (!rows[0]) back("toastError", "No account with that email. Ask them to sign in once, then add them.");
@@ -37,8 +39,8 @@ async function addPlatformAdmin(formData: FormData) {
 
 async function removePlatformAdmin(formData: FormData) {
   "use server";
-  const { actor } = await requireAdminActor(PATH);
   const playerId = Number(formData.get("playerId"));
+  const { actor } = await requireFreshAdminActor(PATH, "platform.removed", `player:${playerId}`);
   try {
     await setPlatformAdmin(db, actor, playerId, false);
   } catch (err) {

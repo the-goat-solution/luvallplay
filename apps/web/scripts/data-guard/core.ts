@@ -52,7 +52,21 @@ export type GuardConfig = {
    * guardian. They can't sign in, so there is no access to lose, but their
    * rows are checked person by person exactly like an account's.
    */
-  dependentTables: { table: string; id: string; deleted?: string; prefix: string; guardianLink: string; statusLinks: { table: string; person: string; status: string }[] }[];
+  dependentTables: {
+    table: string;
+    id: string;
+    deleted?: string;
+    prefix: string;
+    guardianLink: string;
+    /**
+     * In the guardian link's table: the column naming the guardian's account,
+     * and (optional) the column set when a guardian stepped away. A guardian
+     * counts only while their account is live and their link hasn't ended.
+     */
+    guardianPerson?: string;
+    guardianEnded?: string;
+    statusLinks: { table: string; person: string; status: string }[];
+  }[];
   /** Tables left out entirely (pure logs, caches, rate limits). */
   ignoreTables: string[];
   /** Column names (exact or regex source) whose sums are reported (money, points). */
@@ -95,10 +109,12 @@ export const DEFAULT_CONFIG: GuardConfig = {
       deleted: "deleted_at",
       prefix: "junior",
       guardianLink: "guardianships.junior_profile_id",
+      guardianPerson: "guardian_user_id",
+      guardianEnded: "ended_at",
       statusLinks: [{ table: "junior_bookings", person: "junior_profile_id", status: "status" }],
     },
   ],
-  ignoreTables: ["schema_runs", "sms_sends", "auth_codes", "webhook_deliveries", "pv_arena_code_attempts", "arena_code_attempts"],
+  ignoreTables: ["schema_runs", "sms_sends", "auth_codes", "rate_limits", "stripe_events", "webhook_deliveries", "pv_arena_code_attempts", "arena_code_attempts"],
   sumColumns: /(_cents|amount|price|total|points|balance)$/,
 };
 
@@ -113,6 +129,12 @@ export type PersonSnap = {
   kind?: "dependent";
   /** For a dependent: the link that names their guardians, e.g. "guardianships.junior_profile_id". */
   guardianLink?: string;
+  /**
+   * For a dependent: how many guardians can act for them right now (a live
+   * account, a link that hasn't ended). Absent in older snapshots, where
+   * every guardian link counted.
+   */
+  liveGuardians?: number;
   id: string;
   emailHash: string;
   emailEmpty: boolean;
@@ -361,6 +383,24 @@ export async function snapshot(query: Query, opts: { label?: string; config?: Gu
       await countFor(table, col);
     }
     for (const l of d.statusLinks) await countFor(l.table, l.person, l.status);
+
+    // Guardians who can actually act for the child: a deleted account or an
+    // ended link is nobody to see, manage or delete that child's data.
+    const [gTable, gCol] = d.guardianLink.split(".");
+    if (d.guardianPerson && hasCol(gTable, gCol) && hasCol(gTable, d.guardianPerson)) {
+      const liveAccount = identity.deleted ? `a.${quoteIdent(identity.deleted)} IS NULL` : "true";
+      const notEnded = d.guardianEnded && hasCol(gTable, d.guardianEnded) ? `g.${quoteIdent(d.guardianEnded)} IS NULL` : "true";
+      for (const person of byDependent.values()) person.liveGuardians = 0;
+      const live = await query(
+        `SELECT g.${quoteIdent(gCol)}::text AS k, count(*)::int AS n
+         FROM ${quoteIdent(gTable)} g JOIN ${quoteIdent(identity.table)} a ON a.${quoteIdent(identity.id)} = g.${quoteIdent(d.guardianPerson)}
+         WHERE ${liveAccount} AND ${notEnded} GROUP BY 1`,
+      );
+      for (const r of live) {
+        const person = byDependent.get(String(r.k));
+        if (person) person.liveGuardians = Number(r.n);
+      }
+    }
   }
 
   return { version: SNAPSHOT_VERSION, takenAt: new Date(String(now)).toISOString(), label: opts.label ?? "", identityTable: identity.table, tables, people, orphans };
@@ -390,7 +430,8 @@ export function checkSnapshot(s: Snapshot): Finding[] {
   if (!s.identityTable) return [finding("error", "NO_ACCOUNTS_TABLE", "No accounts table found (players/users), so nobody can sign in.")];
   const live = s.people.filter((p) => !p.deleted && p.kind !== "dependent");
   const dependents = s.people.filter((p) => !p.deleted && p.kind === "dependent");
-  const unguarded = dependents.filter((p) => !p.guardianLink || !(p.links[p.guardianLink] > 0)).map((p) => p.id);
+  const guardiansOf = (p: PersonSnap) => p.liveGuardians ?? (p.guardianLink ? (p.links[p.guardianLink] ?? 0) : 0);
+  const unguarded = dependents.filter((p) => !(guardiansOf(p) > 0)).map((p) => p.id);
   if (unguarded.length)
     out.push(finding("error", "DEPENDENT_WITHOUT_GUARDIAN", "Junior profiles with no guardian: nobody can see, manage or delete that child's data.", { people: unguarded }));
 
@@ -442,7 +483,13 @@ export const ExpectationsSchema = z.object({
   allowDroppedTables: allow.default([]),
   allowDroppedColumns: allow.default([]),
   allowChangedColumns: allow.default([]),
-  allowRowDecrease: allow.default([]),
+  /**
+   * Tables allowed to have fewer rows. With `people`, only those people (an
+   * account id, or "junior:<id>") may have fewer rows there: anyone else
+   * losing a row in the same table is still DATA_LOST. Without it, the
+   * allowance covers everyone in the table (a whole-table clean-up).
+   */
+  allowRowDecrease: z.array(z.object({ target: z.string().min(1), reason: z.string().min(10), people: z.array(z.string().min(1)).min(1).optional() })).default([]),
   allowDataLoss: allow.default([]),
   /** Account ids allowed to be removed or have their email changed (e.g. a reviewed duplicate merge). */
   allowAccountChanges: allow.default([]),
@@ -537,6 +584,9 @@ export function diffSnapshots(before: Snapshot, after: Snapshot, x: Expectations
   const signedOut: string[] = [];
   const lostData = new Map<string, string[]>();
   const accountAllowed = (id: string) => matches(x.allowAccountChanges, id);
+  // An allowance that names people excuses only them; one that doesn't excuses the whole table.
+  const rowDecreaseAllowedFor = (table: string, personId: string) =>
+    matches(x.allowRowDecrease.filter((a) => !a.people || a.people.includes(personId)), table);
 
   for (const b of before.people) {
     if (b.deleted) continue;
@@ -561,7 +611,7 @@ export function diffSnapshots(before: Snapshot, after: Snapshot, x: Expectations
       const newKey = renameLink(key, x);
       const table = newKey.split(".")[0];
       if (isVolatile(key.split(".")[0]) || isVolatile(key.split("[")[0])) continue;
-      if ((a.links[newKey] ?? 0) < n && !matches(x.allowDataLoss, key) && !matches(x.allowDataLoss, newKey) && !matches(x.allowRowDecrease, table)) {
+      if ((a.links[newKey] ?? 0) < n && !matches(x.allowDataLoss, key) && !matches(x.allowDataLoss, newKey) && !rowDecreaseAllowedFor(table, b.id)) {
         lostData.set(key, [...(lostData.get(key) ?? []), b.id]);
       }
     }

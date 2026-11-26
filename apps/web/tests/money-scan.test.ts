@@ -29,6 +29,7 @@ const NOT_MONEY: Record<string, [count: number, what: string]> = {
   "packages/vision/src/engine/hits.ts": [1, "rounding a measurement to two decimals"],
   "packages/vision/src/engine/shuttle.ts": [1, "a heat-map weight"],
   "packages/vision/src/engine/engine.ts": [1, "rounding a quality score to two decimals"],
+  "apps/web/lib/payments/stripe-provider.ts": [1, "the platform's fee: basis points to a percentage"],
   "apps/web/components/mini-game/MiniGame.tsx": [1, "progress bar width"],
   "apps/web/components/admin/finance/MonthlyChart.tsx": [1, "tooltip position, as a percentage"],
   "apps/web/components/Schedule.tsx": [1, "spots bar width"],
@@ -76,6 +77,8 @@ test("the currency code is written once, not typed into payment calls", () => {
     "apps/web/lib/bank-match.ts", // words to ignore when matching NZ bank references
     "apps/web/lib/payments/stripe-provider.ts", // the currencies this provider takes
     "apps/web/lib/payments/fake-provider.ts", // the test provider's currencies
+    "packages/core/src/vietqr.ts", // VietQR is Vietnam's bank-transfer code: it only carries dong
+    "packages/core/src/country-pack-vn.ts", // the Vietnam country pack: where Vietnam's currency is written down
   ]);
   const offenders: string[] = [];
   for (const dir of dirs) {

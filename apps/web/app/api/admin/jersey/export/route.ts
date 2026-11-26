@@ -7,6 +7,7 @@ import { FLAG_LABEL, JERSEY_SIZES } from "@/lib/jersey";
 import { listJerseyRegistrations } from "@/lib/jersey-db";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
 import { clubMajor } from "@/lib/money";
+import { auditedRoute } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ function styleHeader(row: ExcelJS.Row) {
 // Downloads the jersey registrations as a workbook: every registration,
 // the order list for the printer, and a summary with live formulas.
 // ?filter=paid|unpaid narrows the Registrations sheet.
-export async function GET(request: Request) {
+export const GET = auditedRoute("export.jersey", async function GET(request: Request) {
   if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -149,4 +150,4 @@ export async function GET(request: Request) {
       "Cache-Control": "no-store",
     },
   });
-}
+}, { stepUp: true });

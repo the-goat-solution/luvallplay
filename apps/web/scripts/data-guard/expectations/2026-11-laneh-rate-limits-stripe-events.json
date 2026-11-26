@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-laneh-rate-limits-stripe-events",
+  "description": "Lane H (audit H6 and H3): two new, empty platform tables. rate_limits holds one counter per limited thing, keyed by a SHA-256, so a rate limit is the same on every server instance; stripe_events holds the id of every Stripe event handled to the end, so one delivered again is skipped. Additive: no row, account, email, phone, session, role, membership or club-owned row may change, and nothing is allowed to. Both new tables are ignored by the data guard like auth_codes (counters and event ids, no personal data). Rehearsal on a Neon branch of production, so nothing is volatile."
+}

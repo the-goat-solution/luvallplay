@@ -1,6 +1,7 @@
 {
   "framework": "nextjs",
   "regions": ["syd1"],
+  "git": { "deploymentEnabled": { "claude/**": false } },
   "ignoreCommand": "bash ../../scripts/vercel-ignore.sh web",
   "crons": [
     { "path": "/api/cron/sync-calendar", "schedule": "0 2 * * *" },

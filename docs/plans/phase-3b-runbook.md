@@ -13,7 +13,7 @@ Build plan §6.8, decision V. Test plan §3.17, journey J1, gate "3b Junior acco
 | 3 | Guardian side: a "Family" section, adding a child, consent | **Built** (26 Nov): the library, four app endpoints, the Family screen in the players' app, and two end-to-end journeys (§2b). Not built: inviting a second guardian |
 | — | The audit's "Migration 0012 details" (migration `0015_junior_details`) | **Done** (26 Nov): rehearsed on a copy of production and run in production by lane T (19 accounts, 0 problems, as reported through the coordinating thread), then merged (#178) (§2c) |
 | 4 | Waivers, emergency contacts, encrypted medical notes | Not started |
-| 5 | Booking and paying for a child | Not started |
+| 5 | Booking and paying for a child | **Part built** (26 Nov): the shared place-count helpers (#202, needs your OK: it touches the booking path) and the child-booking library with its tests (§2d). Not built: the app's endpoints and screen for booking, and paying (waits for lane W's payments interface) |
 | 6 | Club side: junior roster, coach safety checks, who may see what | Not started |
 | 7 | A guardian exports and deletes a child's data | Not started |
 | 8 | Growing up at 16 | Only if 1 to 7 are solid |
@@ -147,6 +147,8 @@ Agreed with the coordinating thread on 25 Nov; each shared change is its own `[l
 - **`lib/juniors/bookings.ts`** (lane J): the child's booking row first, then the place, in one transaction, so a full day or a repeated payment event can never count twice.
 - **Paying:** a new payment type `junior` through the payments interface, and one thin branch in the Stripe webhook that calls into `lib/juniors`, after lane W's payments-interface work lands. Lane W reviews.
 - **Rosters and headcount emails don't name children until step 6.** A booked child takes a place on the day, and the play-day page shows a count ("+2 juniors"), but the existing roster, headcount emails and stats read adults' bookings only and stay that way. Children are named only on the junior roster (step 6), which is limited to the people who need it.
+
+**Built so far (26 Nov).** `apps/web/lib/db.ts` exports `claimSessionSpot` and `releaseSessionSpot` (#202; the adults' functions call them, same statement). `apps/web/lib/juniors/bookings.ts`: `bookChild` (the child's row first, then the place, one transaction; a repeat changes nothing; a full day writes nothing), `cancelChildBooking` (any current guardian; the place comes back in the same transaction), `listChildBookings`, and `juniorCounts` (a count per play day, never a name). Tests: `tests/session-spot.test.ts`, `tests/juniors-bookings.test.ts`. Nothing calls the library yet.
 
 ## 3. Decisions waiting for you
 

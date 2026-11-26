@@ -30,6 +30,8 @@ import { takeSnapshot } from "../scripts/data-guard/pg.ts";
 
 const DB_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
+// The rehearsals run psql, as the runbooks do. Without it they are skipped on a laptop and fail in CI.
+const hasPsql = spawnSync("psql", ["--version"]).status === 0;
 const FIXTURE = readFileSync(new URL("./fixtures/data-guard/club.sql", import.meta.url), "utf8");
 
 const expect = (x: Partial<Expectations> = {}): Expectations => ExpectationsSchema.parse({ change: "test", description: "test change", ...x });
@@ -460,7 +462,8 @@ describe("data guard on Postgres", { skip }, () => {
 
   // ---- The command line, end to end ----
 
-  test("CLI rehearse: passes a safe change, fails a bad one, refuses production", { skip: spawnSync("psql", ["--version"]).status !== 0 ? "psql not installed" : false }, async () => {
+  test("CLI rehearse: passes a safe change, fails a bad one, refuses production", { skip: hasPsql || REQUIRE_DB ? false : "psql not installed" }, async () => {
+    assert.ok(hasPsql, "psql must be installed: this rehearsal can't be skipped (DATA_GUARD_REQUIRE_DB=1)");
     const dbName = `dg_cli_${process.pid}_${Date.now()}`;
     const admin = new pg.Client({ connectionString: DB_URL });
     await admin.connect();

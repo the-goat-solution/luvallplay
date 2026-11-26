@@ -2,26 +2,26 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub } from "../../app.ts";
-import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { useCurrentClub, useWho } from "../../hooks.tsx";
 
 export type VisionStatus = ResponseOf<"vision.status">;
 export type VisionChallenge = ResponseOf<"vision.challenge">;
 
 function useClubApi() {
-  const { token } = usePrefs();
+  const who = useWho();
   const { current, slug, config } = useCurrentClub();
   const on = !!config && config.modules.includes("vision");
-  return { token, slug: slug as string, ready: !!token && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
+  return { who, slug: slug as string, ready: !!who && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
 }
 
 export function useVisionStatus() {
-  const { token, slug, ready, api } = useClubApi();
-  return useQuery({ queryKey: ["vision", "status", slug, token], queryFn: ({ signal }) => api.vision.status({ club: slug }, {}, { signal }), enabled: ready, staleTime: 60_000 });
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["vision", "status", slug, who], queryFn: ({ signal }) => api.vision.status({ club: slug }, {}, { signal }), enabled: ready, staleTime: 60_000 });
 }
 
 export function useVisionChallenge(id: number | null) {
-  const { token, slug, ready, api } = useClubApi();
-  return useQuery({ queryKey: ["vision", "challenge", slug, token, id], queryFn: ({ signal }) => api.vision.challenge({ club: slug, id: id as number }, { signal }), enabled: ready && id !== null, retry: false });
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["vision", "challenge", slug, who, id], queryFn: ({ signal }) => api.vision.challenge({ club: slug, id: id as number }, { signal }), enabled: ready && id !== null, retry: false });
 }
 
 export function useSaveLabels() {

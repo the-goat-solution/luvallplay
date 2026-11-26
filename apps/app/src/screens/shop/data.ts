@@ -3,17 +3,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub } from "../../app.ts";
-import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { useCurrentClub, useWho } from "../../hooks.tsx";
 
 export type Shop = ResponseOf<"shop.list">;
 export type Product = Shop["products"][number];
 export type Order = Shop["orders"][number];
 
 function useShopApi() {
-  const { token } = usePrefs();
+  const who = useWho();
   const { current, slug, config } = useCurrentClub();
   const on = !!config && config.modules.includes("shop");
-  return { key: ["shop", slug, token] as const, slug: slug as string, ready: !!token && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
+  return { key: ["shop", slug, who] as const, slug: slug as string, ready: !!who && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
 }
 
 export function useShop() {

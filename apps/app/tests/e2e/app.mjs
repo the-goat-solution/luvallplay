@@ -1281,7 +1281,8 @@ describe("APP · the Arena", () => {
       const card = cp.locator(".fight", { hasText: "Fridays at Pioneer" });
       await card.waitFor();
       assert.match(await card.textContent(), /Team up first/);
-      assert.match(await card.textContent(), /open [678] days/);
+      // Exactly the days chosen, at any hour: it closes at the end of the club's day, 7 to 8 days away, and whole days are counted.
+      assert.match(await card.textContent(), /open 7 days/);
       await mp.getByRole("button", { name: "Take it down" }).click();
       await mp.getByRole("button", { name: "Throw down a challenge" }).waitFor();
 

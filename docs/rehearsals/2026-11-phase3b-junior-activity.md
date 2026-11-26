@@ -16,6 +16,18 @@ Branch `rehearsal-phase-3` of production (`three-wolves-sydney`, Postgres 18), 2
 | `db:migrate --drift` | No schema drift. `docs/schema/production.sql` was regenerated from this branch |
 | `scripts/tenants/verify.mjs` | Consistent, including row-level security on the two new tables (61 club-owned tables) |
 
+## Second rehearsal, 25 Nov 2026 (before the production run)
+
+Production had moved on since the first rehearsal, so it was repeated on `rehearsal-phase-3`, reset to a fresh copy of production at 20:15 UTC, with the migrator's new `--to 0012` so that `0013` stayed pending.
+
+| Check | Result |
+|---|---|
+| Data guard, before and after | **19 accounts checked, 0 problems.** Two tables added, nothing else changed |
+| Migration `0012_junior_activity` | Applied in 3.3 s; `0013_terms_players` left pending |
+| Characterisation | 19 live accounts (12 views each) and 6 club views: **identical** |
+| `db:migrate --drift` | No schema drift |
+| `scripts/tenants/verify.mjs` | Consistent; 61 club-owned tables, 1,588 rows, row-level security 0 problems |
+
 ## Rollback
 
 ```sql

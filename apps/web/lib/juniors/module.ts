@@ -22,33 +22,20 @@
 // step-up (audit H8) is on main; then this calls that instead.
 //
 // Takes a small `Db`, like lib/club-modules.ts, so scripts and tests share it.
-import { MODULES, canTurnOn, type Availability, type PaymentMode } from "@luvallplay/modules";
+import { MODULES, canTurnOn, type PaymentMode } from "@luvallplay/modules";
 import type { Access } from "@luvallplay/auth";
 import { listClubModules, resetClubModulesCache, setClubModule, type Db } from "../club-modules.ts";
 import { defaultTenantSlug } from "../tenant-members.ts";
 import { SAFEGUARDING_POLICY_VERSION } from "./safeguarding-policy.ts";
+import { juniorsAvailability, readAcknowledgement, type Env, type SafeguardingAcknowledgement } from "./switch-rule.ts";
+
+export { juniorsAvailability, type SafeguardingAcknowledgement } from "./switch-rule.ts";
 
 export const JUNIORS = "juniors";
 export const FORMS_WAIVERS = "forms-waivers";
 
 /** How recently the owner must have entered a sign-in code to switch Juniors on. */
 export const JUNIORS_STEP_UP_MAX_AGE_MS = 5 * 60 * 1000;
-
-type Env = Record<string, string | undefined>;
-
-/**
- * Whether clubs can be offered Juniors on this deployment. The manifest's
- * word is final in production; anywhere else JUNIORS_AVAILABILITY can open
- * it ("available" or "beta") for tests and previews.
- */
-export function juniorsAvailability(env: Env = process.env): Availability {
-  const manifest = MODULES.find((m) => m.id === JUNIORS)?.availability ?? "available";
-  if (env.VERCEL_ENV === "production") return manifest;
-  const override = env.JUNIORS_AVAILABILITY?.trim().toLowerCase();
-  return override === "available" || override === "beta" || override === "hidden" ? override : manifest;
-}
-
-export type SafeguardingAcknowledgement = { version: string; byPlayerId: number; at: string };
 
 export type JuniorsState = {
   /** The switch itself (the club's row). */
@@ -60,12 +47,6 @@ export type JuniorsState = {
   /** The club acknowledged an older version of the policy and should be asked again. */
   policyOutOfDate: boolean;
 };
-
-function readAcknowledgement(settings: unknown): SafeguardingAcknowledgement | null {
-  const s = (settings as { safeguarding?: Record<string, unknown> } | null)?.safeguarding;
-  if (!s || typeof s.version !== "string" || !s.version || typeof s.at !== "string" || !Number.isInteger(s.byPlayerId)) return null;
-  return { version: s.version, byPlayerId: s.byPlayerId as number, at: s.at };
-}
 
 /** The club's Juniors switch as stored. Throws when it can't be read; `juniorsOn` is the safe question. */
 export async function juniorsState(db: Db, slug = defaultTenantSlug(), env: Env = process.env): Promise<JuniorsState> {

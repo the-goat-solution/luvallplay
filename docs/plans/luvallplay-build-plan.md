@@ -1280,6 +1280,32 @@ Build them in this order, each one releasable on its own. **Decision Z: social a
    - **Player-to-player listings are unverified:** no payment through the platform, and a clear "trade at your own risk" notice. The platform takes no responsibility, as on Facebook Marketplace.
    - Listings can be reported. Banned-item rules, sold or expired listings auto-hide, and listing photos go through the same image moderation.
 
+### 8.1 Phase 7 delivery log (lane G)
+
+*Lane G builds items 1 and 2 only. Nothing is built for social or the marketplace (decision Z).*
+
+| Step | What | State |
+|---|---|---|
+| G1 | **Glicko-2 as pure code** (`packages/core/src/rating`): the rating maths, which matches count, weekly rating periods, doubles, and the leaderboard views. **Per-sport scoring rules** (`packages/core/src/scoring`). Nothing reads either yet, so no club sees a change | Built, 40 tests |
+| G2 | The Arena checks scores through the scoring rules (a small change to shared Arena code) | Not started. **Owner's OK before merging** |
+| G3 | Find a club: data model, PostGIS plan and rehearsal, API behind an off module switch | Not started. PostGIS goes through the migration queue; production only with the owner's OK |
+| G4 | Ratings: tables, the weekly job, the per-profile opt-in and the API, behind an off module switch | Not started |
+| G5 | The app's Discover tab (map, club cards, rating boards), hidden until the modules are on | Not started |
+| G6 | Real club listings | Waits for lane W's wizard (W2) |
+
+**How the rating works (G1), in plain words**
+- Every player starts at 1500 with a wide "not sure yet" range. Beating a stronger player moves the number up a lot, beating a weaker one a little. The more verified games someone plays, the narrower the range.
+- Ratings are **per sport** and change **once a week** (Monday to Sunday), from all of that week's games together, so the order of games inside a week doesn't matter and re-running the same matches always gives the same numbers.
+- **Only verified games count.** An Arena challenge counts when a player on one side entered the score and a player on the *other* side confirmed it. A round robin game counts when an admin locked the score and every player in it has an account. Left out: anything ever disputed (also when an admin settled it), voided or unfinished games, and results the timer confirmed because the other side never answered.
+- **Doubles:** each player is rated against the other pair's average, adjusted for the gap to their own partner, so two partners with the same rating move by the same amount.
+- **Boards:** city, country and "world" (the region, §6.9), optionally by age band (18–34, 35–44, 45–54, 55–64, 65+) or gender category. A player appears only after opting in, with at least 5 verified games and a settled rating, and drops off after 180 days without a verified game. Juniors never appear.
+- **Two guards beyond the textbook:** a rating moves by at most 700 in one week and volatility is capped, because a run of "impossible" results is far more likely to be a wrong account or made-up scores than real play.
+
+**Open choices for the owner (defaults are in the code, easy to change before anything is switched on)**
+1. Results the timer confirmed (the other side never answered) **don't count** towards the global rating. They still count for club points as today.
+2. Juniors are **never** on a global board.
+3. Age bands are adult ten-year bands; gender categories are women and men, taken from the profile, and a player who gives neither still appears on the open boards.
+
 ---
 
 ## 9. Sequencing: the remaining phases, built at the same time

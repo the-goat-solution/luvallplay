@@ -105,7 +105,8 @@ export default async function ModulesPage() {
       {rows && !canSwitch && <Notice>Only owners (and platform admins) can switch modules. You can see the list.</Notice>}
 
       {GROUP_ORDER.map((group) => {
-        const modules = MODULES.filter((m) => m.group === group);
+        // A module the platform keeps hidden isn't offered to clubs yet.
+        const modules = MODULES.filter((m) => m.group === group && m.availability !== "hidden");
         if (modules.length === 0) return null;
         return (
           <Section key={group} title={GROUP_TITLE[group]}>

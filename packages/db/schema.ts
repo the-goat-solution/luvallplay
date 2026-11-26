@@ -656,6 +656,39 @@ export const player_sessions = pgTable("player_sessions", {
 	unique("player_sessions_token_hash_key").on(table.token_hash),
 ]);
 
+// Phase 5 step 6: a person's phones that asked for notifications. Platform-wide
+// (an account's, not a club's). The address is sealed by the application.
+export const push_devices = pgTable("push_devices", {
+	id: serial().primaryKey().notNull(),
+	player_id: integer().notNull(),
+	platform: text().notNull(),
+	// SHA-256 (hex) of the device's address.
+	token_hash: text().notNull(),
+	// The address, encrypted by the application. Never plain text.
+	sealed: text().notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	last_seen_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("push_devices_player_id_idx").using("btree", table.player_id.asc().nullsLast()),
+	foreignKey({ columns: [table.player_id], foreignColumns: [players.id], name: "push_devices_player_id_fkey" }).onDelete("restrict"),
+	unique("push_devices_token_hash_key").on(table.token_hash),
+	check("push_devices_platform_check", sql`platform = ANY (ARRAY['android'::text, 'ios'::text])`),
+	check("push_devices_token_hash_check", sql`token_hash ~ '^[0-9a-f]{64}$'::text`),
+	check("push_devices_sealed_check", sql`sealed ~ '^v1\\.[a-z0-9-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$'::text`),
+]);
+
+// Which kinds of notification a person asked for (no row = don't send).
+export const push_prefs = pgTable("push_prefs", {
+	player_id: integer().notNull(),
+	category: text().notNull(),
+	enabled: boolean().notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.player_id], foreignColumns: [players.id], name: "push_prefs_player_id_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.player_id, table.category], name: "push_prefs_pkey" }),
+	check("push_prefs_category_check", sql`category = ANY (ARRAY['challenge'::text, 'result'::text, 'message'::text, 'reminder'::text, 'roster'::text, 'payment'::text])`),
+]);
+
 export const player_settings = pgTable("player_settings", {
 	key: text().primaryKey().notNull(),
 	value: text().notNull(),

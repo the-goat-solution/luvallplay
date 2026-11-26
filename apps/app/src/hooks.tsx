@@ -9,7 +9,7 @@ import { langs, loadLang, pickLang, translator, type Lang, type T } from "./lib/
 import type { Prefs } from "./lib/store.ts";
 import { resolveMode, type Mode } from "./lib/theme.ts";
 import { withProductRules } from "./lib/modules.ts";
-import { navKind, windowClass, type NavKind, type WindowClass } from "./lib/window-class.ts";
+import { windowClass, type WindowClass } from "./lib/window-class.ts";
 
 export type ClubConfig = ResponseOf<"clubs.config">;
 export type Club = ResponseOf<"clubs.list">["clubs"][number];
@@ -139,24 +139,13 @@ export function useMode(): Mode {
 }
 
 export function useWindowClass(): WindowClass {
-  return useSyncExternalStore(onResize, () => windowClass(window.innerWidth));
-}
-
-/** How the tabs are laid out: by the window's class, and on a short, wide screen (iPhone Duo's outer display) at the side. */
-export function useNavKind(): NavKind {
-  return useSyncExternalStore(onResize, () =>
-    navKind(windowClass(window.innerWidth), { screenWidth: window.screen?.width ?? 0, screenHeight: window.screen?.height ?? 0, windowHeight: window.innerHeight }),
+  return useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener("resize", onChange);
+      return () => window.removeEventListener("resize", onChange);
+    },
+    () => windowClass(window.innerWidth),
   );
-}
-
-function onResize(onChange: () => void) {
-  window.addEventListener("resize", onChange);
-  // A foldable opened or closed may report its new screen without a window resize.
-  screen.orientation?.addEventListener?.("change", onChange);
-  return () => {
-    window.removeEventListener("resize", onChange);
-    screen.orientation?.removeEventListener?.("change", onChange);
-  };
 }
 
 export function useLang(): Lang {

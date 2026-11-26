@@ -14,25 +14,12 @@ export function windowClass(width: number): WindowClass {
   return "compact";
 }
 
-/** Compact: bottom tab bar. Medium and expanded: navigation rail. Large: sidebar. */
-export function navKind(cls: WindowClass, place?: Place): NavKind {
-  if (cls === "compact") return place && shortAndWide(place) ? "rail" : "bar";
-  return cls === "large" ? "sidebar" : "rail";
-}
-
-/** The screen (not the window: the on-screen keyboard can't change it) and the window's height. */
-export type Place = { screenWidth: number; screenHeight: number; windowHeight: number };
-
-/** A phone screen nearer square than tall (short side over long side). Phones today are 0.56 at most. */
-export const SHORT_SCREEN = 0.62;
-
 /**
- * A compact window on a short, wide screen, such as iPhone Duo's outer
- * display (about 466 × 678): the tabs move to a rail at the side, as Apple's
- * guidelines move bars there, to leave the height for content. Not a tablet's
- * narrow window beside another app: that one is tall.
+ * Compact: bottom tab bar. Medium and expanded: navigation rail. Large:
+ * sidebar. A compact window keeps the bar on every screen, iPhone Duo's
+ * outer display and Split View included: a rail there takes width a phone's
+ * page can't spare.
  */
-export function shortAndWide({ screenWidth, screenHeight, windowHeight }: Place): boolean {
-  const ratio = Math.min(screenWidth, screenHeight) / Math.max(screenWidth, screenHeight || 1);
-  return ratio >= SHORT_SCREEN && windowHeight <= 760;
+export function navKind(cls: WindowClass): NavKind {
+  return cls === "compact" ? "bar" : cls === "large" ? "sidebar" : "rail";
 }

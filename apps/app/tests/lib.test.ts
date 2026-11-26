@@ -90,15 +90,8 @@ describe("window classes (build plan §4.4)", () => {
     }
   });
 
-  test("a short, wide phone screen (iPhone Duo's outer display) gets the rail; phones and a tablet's narrow window keep the bar", () => {
-    const place = (screenWidth: number, screenHeight: number, windowHeight: number) => ({ screenWidth, screenHeight, windowHeight });
-    assert.equal(navKind("compact", place(466, 678, 600)), "rail", "iPhone Duo, closed");
-    assert.equal(navKind("compact", place(390, 844, 760)), "bar", "iPhone");
-    assert.equal(navKind("compact", place(375, 667, 560)), "bar", "iPhone SE");
-    assert.equal(navKind("compact", place(904, 2316, 700)), "bar", "a tall foldable's cover screen");
-    assert.equal(navKind("compact", place(1024, 1366, 1300)), "bar", "an iPad window beside another app");
-    assert.equal(navKind("compact", place(390, 844, 300)), "bar", "a phone with its keyboard up");
-    assert.equal(navKind("medium", place(669, 951, 900)), "rail");
+  test("a compact window keeps the bottom bar on every screen, iPhone Duo's outer display (466) and Split View (382) included", () => {
+    for (const width of [382, 466]) assert.equal(navKind(windowClass(width)), "bar", String(width));
   });
 
   test("the stylesheet uses the same breakpoints", () => {

@@ -371,22 +371,6 @@ fieldset.card > legend + * { clear: both; }
   .shell-main { padding: 1.5rem max(1.5rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) 1.5rem; }
 }
 
-/* A compact window on a short, wide screen (iPhone Duo's outer display, lib/window-class.ts):
-   the rail, a little narrower, so the height is left for content. */
-@media (max-width: 599px) {
-  .shell[data-nav="rail"] { --nav-size: 4.75rem; grid-template-columns: var(--nav-size) minmax(0, 1fr); grid-template-areas: "head head" "nav main"; }
-  .shell[data-nav="rail"] .shell-nav {
-    grid-area: nav; position: sticky; top: calc(var(--head-size) + env(safe-area-inset-top)); inset: auto; align-self: start;
-    height: calc(100dvh - var(--head-size) - env(safe-area-inset-top)); overflow-y: auto;
-    background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; border-top: 0; border-right: 1px solid var(--line);
-    padding: 0.5rem 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
-  }
-  .shell[data-nav="rail"] .shell-nav ul { flex-direction: column; gap: 0.125rem; }
-  .shell[data-nav="rail"] .tab { min-height: 3.75rem; }
-  .shell[data-nav="rail"] .tab[aria-current="page"]::before { top: 22%; bottom: 22%; left: 0; right: auto; width: 3px; height: auto; border-radius: 0 3px 3px 0; }
-  .shell[data-nav="rail"] .shell-main { padding: 1rem max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) 1rem; }
-}
-
 /* Large: a sidebar with labels beside the icons; the current one filled. */
 @media (min-width: 1200px) {
   .shell { --nav-size: 15rem; }

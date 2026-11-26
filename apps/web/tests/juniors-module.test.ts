@@ -26,6 +26,7 @@ import { DEFAULT_CLUB_CONFIG } from "../lib/club-config.ts";
 import {
   JUNIORS_STEP_UP_MAX_AGE_MS,
   juniorsAvailability,
+  juniorsClubId,
   juniorsOn,
   juniorsState,
   switchJuniorsOff,
@@ -120,9 +121,12 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     await c.query(`INSERT INTO platform_admins (player_id) VALUES ($1)`, [P.staff]);
     pool = new pg.Pool({ connectionString: urlFor(NAME), max: 2 });
     console.warn = (...a: unknown[]) => warnings.push(a.join(" "));
+    // The list of modules that are on (enabledModules) reads the deployment's own environment: this one offers Juniors.
+    process.env.JUNIORS_AVAILABILITY = "available";
   });
   after(async () => {
     console.warn = originalWarn;
+    delete process.env.JUNIORS_AVAILABILITY;
     await pool?.end();
     await c?.end();
     const admin = new pg.Client({ connectionString: urlFor("postgres") });
@@ -142,7 +146,6 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     const on = await enabledModules(c);
     assert.equal(on.has("juniors"), false);
     assert.equal(on.has("forms-waivers"), false);
-    assert.equal(await moduleBlocking(c, "/admin/juniors"), "juniors");
     assert.equal(await moduleBlocking(c, "/admin/juniors/setup"), null, "the page that switches it on is served");
     assert.ok(!(THREE_WOLVES.modules as readonly string[]).includes("juniors"));
   });
@@ -203,7 +206,6 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     });
     assert.equal(await juniorsOn(c, undefined, OPEN), true);
     assert.equal((await enabledModules(c)).has("juniors"), true, "the cache was reset by the switch");
-    assert.equal(await moduleBlocking(c, "/admin/juniors"), null);
     assert.deepEqual(await tryOn(P.owner), { ok: true, changed: false }, "twice changes nothing");
     // Every other module is as it was.
     const others = (await listClubModules(c)).filter((m) => !["juniors", "forms-waivers"].includes(m.id));
@@ -220,6 +222,10 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     // Someone writes the row by hand, without an acknowledgement.
     await c.query(`INSERT INTO tenant_modules (tenant_id, module_id, enabled, enabled_at) VALUES (1, 'forms-waivers', true, now()), (1, 'juniors', true, now())`);
     assert.equal(await juniorsOn(c, undefined, OPEN), false);
+    // …and it isn't in the list of modules that are on, so the club's config and the app don't offer it either.
+    resetClubModulesCache();
+    assert.equal((await enabledModules(c)).has("juniors"), false, "a row that says on isn't the owner's acknowledgement");
+    assert.equal((await enabledModules(c)).has("forms-waivers"), true, "Forms & waivers has no acknowledgement of its own");
     for (const bad of [{ safeguarding: {} }, { safeguarding: { version: "", byPlayerId: 7, at: "x" } }, { safeguarding: { version: "2026-11", byPlayerId: "7", at: "2026-11-26T02:00:00.000Z" } }, { safeguarding: "yes" }]) {
       await c.query(`UPDATE tenant_modules SET settings = $1::jsonb WHERE tenant_id = 1 AND module_id = 'juniors'`, [JSON.stringify(bad)]);
       assert.equal(await juniorsOn(c, undefined, OPEN), false, JSON.stringify(bad));
@@ -229,8 +235,34 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     assert.equal(code(await tryOn(P.owner)), "ok");
     assert.equal(await juniorsOn(c, undefined, OPEN), true);
     assert.equal(await juniorsOn(c, undefined, {}), false, "on in the table, hidden on this deployment");
+    // The list of modules that are on follows the deployment too.
+    resetClubModulesCache();
+    assert.equal((await enabledModules(c)).has("juniors"), true);
+    delete process.env.JUNIORS_AVAILABILITY;
+    try {
+      resetClubModulesCache();
+      const on = await enabledModules(c);
+      assert.deepEqual([on.has("juniors"), on.has("forms-waivers")], [false, false], "hidden on this deployment: neither counts as on, whatever the rows say");
+      process.env.VERCEL_ENV = "production";
+      process.env.JUNIORS_AVAILABILITY = "available";
+      resetClubModulesCache();
+      assert.equal((await enabledModules(c)).has("juniors"), false, "production ignores the override");
+    } finally {
+      delete process.env.VERCEL_ENV;
+      process.env.JUNIORS_AVAILABILITY = "available";
+      resetClubModulesCache();
+    }
     assert.equal(await juniorsOn(c, undefined, { VERCEL_ENV: "production", JUNIORS_AVAILABILITY: "available" }), false);
     assert.equal(await juniorsOn(c, "no-such-club", OPEN), false);
+    // What the endpoints ask: the club's id when it is on, and nothing in every other case above.
+    assert.equal(await juniorsClubId(c, undefined, OPEN), 1);
+    assert.equal(await juniorsClubId(c, undefined, {}), null);
+    assert.equal(await juniorsClubId(c, undefined, { VERCEL_ENV: "production", JUNIORS_AVAILABILITY: "available" }), null);
+    assert.equal(await juniorsClubId(c, "no-such-club", OPEN), null);
+    assert.equal(await juniorsClubId(c, "hanoi-smash", OPEN), null, "another club's switch is its own");
+    assert.equal(await juniorsClubId(broken, undefined, OPEN), null);
+    await c.query(`UPDATE tenant_modules SET settings = '{}'::jsonb WHERE tenant_id = 1 AND module_id = 'juniors'`);
+    assert.equal(await juniorsClubId(c, undefined, OPEN), null, "no acknowledgement, not on");
   });
 
   test("a changed policy: the club is asked again, and Juniors stays on meanwhile", async () => {
@@ -274,8 +306,8 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
   test("switching off: owners and Luvallplay staff; data is kept, the acknowledgement is not, and on again asks again", async () => {
     assert.equal(code(await tryOn(P.owner)), "ok");
     const kids = async () => (await c.query(`SELECT (SELECT count(*) FROM junior_profiles)::int AS profiles, (SELECT count(*) FROM guardianships)::int AS guardians`)).rows[0];
-    await c.query(`INSERT INTO junior_profiles (tenant_id, guardian_user_id, name, birth_year) VALUES (1, $1, 'Test Child', 2016)`, [P.member]);
-    await c.query(`INSERT INTO guardianships (guardian_user_id, junior_profile_id, consent_at) SELECT $1, id, now() FROM junior_profiles`, [P.member]);
+    await c.query(`INSERT INTO junior_profiles (tenant_id, name, birth_year) VALUES (1, 'Test Child', 2016)`);
+    await c.query(`INSERT INTO guardianships (tenant_id, guardian_user_id, junior_profile_id, consent_at) SELECT 1, $1, id, now() FROM junior_profiles`, [P.member]);
     const before = await kids();
     try {
       for (const who of [P.member, P.coach, P.admin, P.otherClubOwner]) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { emailStartSchema } from "@/lib/auth-schemas";
-import { checkRateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
+import { rateLimit, getClientIp, verifyTurnstile } from "@/lib/security";
 import { issueEmailCode, safeNextPath } from "@/lib/player-auth";
 import { sendLoginCodeEmail } from "@/lib/player-email";
 import { getSiteUrl } from "@/lib/email-layout";
@@ -10,7 +10,7 @@ const bodySchema = emailStartSchema;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  if (!checkRateLimit(`auth-email:${ip}`, 10, 15 * 60_000)) {
+  if (!(await rateLimit(`auth-email:${ip}`, 10, 15 * 60_000))) {
     return NextResponse.json({ error: "too_many" }, { status: 429 });
   }
   let body: z.infer<typeof bodySchema>;

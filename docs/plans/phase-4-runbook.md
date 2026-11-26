@@ -11,12 +11,15 @@ Working notes for Phase 4 of the build plan (§4). Kept up to date as the work l
 | Push to | What Vercel does |
 |---|---|
 | `main` | Production build of each project **whose files changed** (as before). |
+| a branch named `claude/...` | **Nothing: no deployment is created.** Each project's `vercel.json` sets `git.deploymentEnabled` to `false` for `claude/**`. A `[preview]` tag does nothing there; use a `preview/...` branch. |
 | a branch named `preview/...` | Preview of each project whose files changed. |
 | any other branch, **first line** of the newest commit message contains `[preview]` | Preview of each project whose files changed. |
 | any other branch, first line of the newest commit message contains `[preview web]`, `[preview site]` or `[preview app]` (names can be combined: `[preview web app]`) | Preview of the named projects only. |
 | anything else | **Skipped.** The deployment shows as "Canceled" with the reason in its build log. No build minutes are used. |
 
 "Files changed" compares with the project's last successful deployment on that branch. The lockfile, `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `.npmrc`, the ignore script itself and everything in `packages/*` count for every project. Docs and CI changes build nothing. On the first asked-for preview of a branch there is nothing to compare with, so the projects asked for all build.
+
+**Why `claude/...` branches create no deployment at all (26 Nov 2026):** a skipped build still counts as a deployment, and Vercel's free plan allows 100 a day across the team. Every push made three (one per project), so several build threads pushing to `claude/...` branches used the day's allowance and Vercel refused further deployments, production's included ("api-deployments-free-per-day"). `git.deploymentEnabled` stops them being created. Branches Vercel isn't told about deploy as before (its default is on), so `main` and `preview/...` are unchanged. The setting is read from the branch's own `vercel.json`, so a `claude/...` branch made before this change keeps creating deployments until it merges `main`.
 
 **Projects** (team "Timba Le's projects"):
 
@@ -36,7 +39,7 @@ Older branches that already carry the previous `apps/site/vercel.json` keep the 
 
 **How to get a preview when you want one:**
 
-1. Put `[preview]` (or `[preview app]` and so on) in the **first line** of the message of a commit that has real changes. Only the newest commit of a push is read, and only its first line, so a message that just mentions the tag further down doesn't start a build.
+1. On a branch that isn't `claude/...`: put `[preview]` (or `[preview app]` and so on) in the **first line** of the message of a commit that has real changes. Only the newest commit of a push is read, and only its first line, so a message that just mentions the tag further down doesn't start a build.
 2. Or work on a branch named `preview/<anything>`.
 3. Or redeploy a skipped deployment: Vercel dashboard → the project → Deployments → the canceled one → ⋯ → Redeploy. An agent can do the same with its deployment tool.
 

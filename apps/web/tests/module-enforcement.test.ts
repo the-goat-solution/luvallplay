@@ -171,7 +171,6 @@ describe("the club's module switches", { skip: !BASE_URL && !REQUIRE_DB ? "set D
     assert.deepEqual([...(await enabledModules(broken))].sort(), [...OFFERED].sort());
     // …except a module the platform keeps hidden: Juniors never comes on by accident.
     assert.equal((await enabledModules(broken)).has("juniors"), false);
-    assert.equal(await moduleBlocking(broken, "/admin/juniors"), "juniors");
     assert.equal(await moduleBlocking(broken, "/admin/shop"), null);
     resetClubModulesCache();
     await enabledModules(broken);

@@ -18,6 +18,7 @@ import {
 import { loadFinanceReport } from "@/lib/finance-report";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
 import { clubMajor } from "@/lib/money";
+import { auditedRoute } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -42,7 +43,7 @@ function excelDate(key: string): Date {
 // applied on the page — as an .xlsx workbook: a Transactions sheet (live
 // SUMIF totals, frozen header, autofilter) and a Summary sheet (period vs
 // year-to-date, plus a breakdown by source).
-export async function GET(request: Request) {
+export const GET = auditedRoute("export.finance", async function GET(request: Request) {
   if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -269,7 +270,7 @@ export async function GET(request: Request) {
       "Cache-Control": "no-store",
     },
   });
-}
+});
 
 function styleHeader(row: ExcelJS.Row, columns: number) {
   row.font = { bold: true, color: { argb: "FFFFFFFF" } };

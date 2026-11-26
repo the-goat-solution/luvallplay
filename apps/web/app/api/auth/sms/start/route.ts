@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { checkRateLimit, getClientIp } from "@/lib/security";
+import { rateLimit, getClientIp } from "@/lib/security";
 import { getPlayerFromRequest } from "@/lib/player-auth";
 import { toE164 } from "@/lib/player-db";
 import { sendSmsCode } from "@/lib/sms";
@@ -14,7 +14,7 @@ const bodySchema = z.object({
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  if (!checkRateLimit(`auth-sms:${ip}`, 5, 60 * 60_000)) {
+  if (!(await rateLimit(`auth-sms:${ip}`, 5, 60 * 60_000))) {
     return NextResponse.json({ error: "too_many_for_number" }, { status: 429 });
   }
   let body: z.infer<typeof bodySchema>;

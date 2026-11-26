@@ -22,6 +22,12 @@
 #    the shared packages (packages/*) matter to every project. When there is
 #    nothing to compare with, or anything is unclear, it builds.
 #
+# Branches named claude/... never get here: each project's vercel.json turns
+# deployments off for them (git.deploymentEnabled), so none is created at all.
+# A skipped build still counts as a deployment, and Vercel allows 100 a day.
+# For a preview of such work, use a preview/... branch; a [preview] tag on a
+# claude/ branch does nothing.
+#
 # CI in GitHub Actions is the merge gate, not the preview. Tested by
 # scripts/vercel-ignore.test.sh.
 set -u

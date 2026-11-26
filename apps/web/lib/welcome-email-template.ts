@@ -1,10 +1,11 @@
+import { clubContactEmail, clubEmailLogoPath, clubName, clubPlace, clubShortName } from "./club-brand";
 // The member welcome email (Admin → Players → Welcome emails). Same design
 // as the launch note in docs/release-notes/2026-11-player-accounts-email.html,
 // personalised: first name, a login link with their email filled in, and a
 // one-click link to hide from the leaderboard. Table layout with inline
 // styles only, so it survives Gmail, Outlook and Apple Mail.
 
-export const WELCOME_SUBJECT = "Your Three Wolves profile is here 🐺";
+export const WELCOME_SUBJECT = `Your ${clubShortName()} profile is here 🐺`;
 const PREHEADER = "Sign in with a code, manage your membership, grab the new jersey and see where you rank.";
 
 function escapeHtml(s: string): string {
@@ -23,7 +24,7 @@ export function renderWelcomeEmail(input: { to: string; firstName: string; optOu
   const greeting = first ? `Kia ora ${escapeHtml(first)},` : "Kia ora,";
   const loginUrl = escapeHtml(rawLoginUrl);
   const optOutUrl = escapeHtml(input.optOutUrl);
-  const logoUrl = escapeHtml(`${site}/uploads/Three%20wolves%20logo.png`);
+  const logoUrl = escapeHtml(`${site}${clubEmailLogoPath()}`);
   const siteLabel = escapeHtml(site.replace(/^https?:\/\//, ""));
 
   const html = `<!doctype html>
@@ -32,7 +33,7 @@ export function renderWelcomeEmail(input: { to: string; firstName: string; optOu
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>Your Three Wolves profile is here</title>
+    <title>Your ${clubShortName()} profile is here</title>
   </head>
   <body style="margin:0;padding:0;background:#f2efe3;font-family:'Montserrat','Helvetica Neue',Helvetica,Arial,sans-serif">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0">
@@ -47,12 +48,12 @@ export function renderWelcomeEmail(input: { to: string; firstName: string; optOu
             <!-- Header -->
             <tr>
               <td style="background:#184467;padding:36px 32px 32px;text-align:center">
-                <img src="${logoUrl}" alt="Three Wolves Badminton Club" width="84" style="display:inline-block;width:84px;height:auto;border:0" />
+                <img src="${logoUrl}" alt="${clubName()}" width="84" style="display:inline-block;width:84px;height:auto;border:0" />
                 <div style="margin:18px 0 6px;font-family:'Montserrat',Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#e2ae60">
                   New for the pack
                 </div>
                 <h1 style="margin:0;font-family:'Copperplate','Copperplate Gothic Light',Georgia,serif;font-size:30px;line-height:1.25;font-weight:normal;color:#fcfbf2">
-                  Your Three Wolves profile is here
+                  Your ${clubShortName()} profile is here
                 </h1>
               </td>
             </tr>
@@ -63,7 +64,7 @@ export function renderWelcomeEmail(input: { to: string; firstName: string; optOu
               <td style="padding:32px 32px 8px;font-size:15px;line-height:1.7;color:#3a526a">
                 <p style="margin:0 0 16px;color:#0d1b26;font-size:16px">${greeting}</p>
                 <p style="margin:0 0 16px">
-                  We've just launched something we've wanted for a long time: <strong style="color:#184467">your own Three Wolves profile</strong>.
+                  We've just launched something we've wanted for a long time: <strong style="color:#184467">your own ${clubShortName()} profile</strong>.
                   Your membership, bookings, results and photos are now all in one place, on your phone or computer.
                 </p>
                 <p style="margin:0 0 8px">
@@ -135,7 +136,7 @@ export function renderWelcomeEmail(input: { to: string; firstName: string; optOu
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#184467;border-radius:12px">
                   <tr>
                     <td width="45%" valign="middle" style="padding:16px 0 16px 16px;text-align:center">
-                      <img src="${site}/uploads/shop/jersey-port-hills-dawn-front.webp" alt="Three Wolves Port Hills Dawn jersey" width="200" style="display:block;width:100%;max-width:200px;height:auto;border:0;border-radius:8px;margin:0 auto" />
+                      <img src="${site}/uploads/shop/jersey-port-hills-dawn-front.webp" alt="${clubShortName()} Port Hills Dawn jersey" width="200" style="display:block;width:100%;max-width:200px;height:auto;border:0;border-radius:8px;margin:0 auto" />
                     </td>
                     <td valign="middle" style="padding:20px 20px 20px 16px;font-size:15px;line-height:1.65;color:#d6e3ec">
                       <div style="font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#e2ae60;margin-bottom:6px">Club shop</div>
@@ -229,17 +230,17 @@ export function renderWelcomeEmail(input: { to: string; firstName: string; optOu
                 <p style="margin:0 0 16px">
                   This is the first version, so tell us what you think.
                   Send us a message from your profile, or email
-                  <a href="mailto:threewolvesbadminton@gmail.com" style="color:#C4892A">threewolvesbadminton@gmail.com</a>.
+                  <a href="mailto:${clubContactEmail()}" style="color:#C4892A">${clubContactEmail()}</a>.
                 </p>
                 <p style="margin:0 0 4px">See you on court,</p>
-                <p style="margin:0;font-family:'Copperplate','Copperplate Gothic Light',Georgia,serif;font-size:18px;color:#184467">The Three Wolves team</p>
+                <p style="margin:0;font-family:'Copperplate','Copperplate Gothic Light',Georgia,serif;font-size:18px;color:#184467">The ${clubShortName()} team</p>
               </td>
             </tr>
 
             <!-- Footer -->
             <tr>
               <td style="background:#0e2c3f;padding:22px 32px;text-align:center;font-family:'Montserrat',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:#b4ccd9">
-                Three Wolves Badminton Club · Christchurch, NZ<br />
+                ${clubName()} · ${clubPlace()}<br />
                 <a href="${site}" style="color:#e2ae60;text-decoration:none">${siteLabel}</a>
               </td>
             </tr>
@@ -255,7 +256,7 @@ export function renderWelcomeEmail(input: { to: string; firstName: string; optOu
   const text = [
     first ? `Kia ora ${first},` : "Kia ora,",
     "",
-    "We've just launched your own Three Wolves profile: your membership, bookings, results and photos, all in one place.",
+    `We've just launched your own ${clubShortName()} profile: your membership, bookings, results and photos, all in one place.`,
     "Your account is ready. We've set it up with this email address, so sign in with it and you'll see your membership straight away.",
     "",
     `Open my profile: ${rawLoginUrl}`,
@@ -270,10 +271,10 @@ export function renderWelcomeEmail(input: { to: string; firstName: string; optOu
     "",
     `You're on the leaderboard by default. Hide me from the leaderboard: ${input.optOutUrl}`,
     "",
-    "Questions? Send us a message from your profile, or email threewolvesbadminton@gmail.com.",
+    `Questions? Send us a message from your profile, or email ${clubContactEmail()}.`,
     "",
     "See you on court,",
-    "The Three Wolves team",
+    `The ${clubShortName()} team`,
   ].join("\n");
 
   return { subject: WELCOME_SUBJECT, html, text };

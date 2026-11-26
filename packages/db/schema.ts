@@ -1000,6 +1000,16 @@ export const webhook_deliveries = pgTable("webhook_deliveries", {
 	check("webhook_deliveries_status_check", sql`status = ANY (ARRAY['pending'::text, 'delivered'::text, 'failed'::text])`),
 ]);
 
+// Lane H (audit H6): one counter per limited thing, shared by every server
+// instance. key_hash is a SHA-256: no address or email is stored.
+export const rate_limits = pgTable("rate_limits", {
+	key_hash: text().primaryKey().notNull(),
+	count: integer().notNull(),
+	reset_at: timestamp({ withTimezone: true, mode: 'string' }).notNull(),
+}, (table) => [
+	index("rate_limits_reset_at_idx").using("btree", table.reset_at.asc().nullsLast()),
+]);
+
 export const sms_sends = pgTable("sms_sends", {
 	id: serial().primaryKey().notNull(),
 	purpose: text().notNull(),
@@ -1008,6 +1018,16 @@ export const sms_sends = pgTable("sms_sends", {
 	sent_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("sms_sends_sent_at_idx").using("btree", table.sent_at.asc().nullsLast()),
+]);
+
+// Lane H (audit H3): Stripe events handled to the end, so one delivered
+// again is skipped.
+export const stripe_events = pgTable("stripe_events", {
+	event_id: text().primaryKey().notNull(),
+	type: text().notNull(),
+	processed_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("stripe_events_processed_at_idx").using("btree", table.processed_at.asc().nullsLast()),
 ]);
 
 export const stripe_payouts = pgTable("stripe_payouts", {
@@ -1442,13 +1462,13 @@ export const club_members = pgTable("club_members", {
 export const junior_profiles = pgTable("junior_profiles", {
 	id: serial().primaryKey().notNull(),
 	tenant_id: integer().notNull(),
-	guardian_user_id: integer().notNull(),
+	// Who created the profile. NOT who may act for the child: that is guardianships.
+	guardian_user_id: integer(),
 	name: text().notNull(),
 	birth_year: smallint(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	deleted_at: timestamp({ withTimezone: true, mode: 'string' }),
 }, (table) => [
-	index("junior_profiles_tenant_id_idx").using("btree", table.tenant_id.asc().nullsLast(), table.id.asc().nullsLast()),
 	index("junior_profiles_guardian_user_id_idx").using("btree", table.guardian_user_id.asc().nullsLast()),
 	// A junior's rows must be in the junior's own club: the target of their foreign keys.
 	unique("junior_profiles_tenant_id_id_key").on(table.tenant_id, table.id),
@@ -1491,6 +1511,8 @@ export const junior_bookings = pgTable("junior_bookings", {
 	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "junior_bookings_junior_in_club_fkey" }).onDelete("restrict"),
 	foreignKey({ columns: [table.tenant_id, table.session_date], foreignColumns: [sessions.tenant_id, sessions.date], name: "junior_bookings_session_date_fkey" }).onDelete("restrict"),
 	foreignKey({ columns: [table.booked_by_user_id], foreignColumns: [players.id], name: "junior_bookings_booked_by_user_id_fkey" }).onDelete("restrict"),
+	// Whoever booked is (or was) a guardian of this child, in this club.
+	foreignKey({ columns: [table.tenant_id, table.booked_by_user_id, table.junior_profile_id], foreignColumns: [guardianships.tenant_id, guardianships.guardian_user_id, guardianships.junior_profile_id], name: "junior_bookings_booked_by_guardian_fkey" }).onDelete("restrict"),
 	unique("junior_bookings_payment_intent_id_key").on(table.payment_intent_id),
 	check("junior_bookings_status_check", sql`status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'refunded'::text])`),
 	check("junior_bookings_amount_check", sql`((amount_minor IS NULL) AND (currency IS NULL)) OR ((amount_minor >= 0) AND (currency ~ '^[A-Z]{3}$'::text))`),
@@ -1511,17 +1533,26 @@ export const junior_attendance = pgTable("junior_attendance", {
 	foreignKey({ columns: [table.junior_profile_id], foreignColumns: [junior_profiles.id], name: "junior_attendance_junior_profile_id_fkey" }).onDelete("restrict"),
 	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "junior_attendance_junior_in_club_fkey" }).onDelete("restrict"),
 	foreignKey({ columns: [table.recorded_by_user_id], foreignColumns: [players.id], name: "junior_attendance_recorded_by_user_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.session_date], foreignColumns: [sessions.tenant_id, sessions.date], name: "junior_attendance_session_date_fkey" }).onDelete("restrict"),
 	primaryKey({ columns: [table.tenant_id, table.session_date, table.junior_profile_id], name: "junior_attendance_pkey"}),
+	check("junior_attendance_source_check", sql`source = ANY (ARRAY['roster'::text, 'coach'::text, 'admin'::text])`),
 ]);
 
-// One child can have two guardians, one guardian several children.
+// One child can have two guardians, one guardian several children. The one
+// source of truth for who may act for a child. Club-owned: the child's club.
 export const guardianships = pgTable("guardianships", {
 	guardian_user_id: integer().notNull(),
 	junior_profile_id: integer().notNull(),
 	consent_at: timestamp({ withTimezone: true, mode: 'string' }),
 	consent_scope: jsonb().default({}).notNull(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	tenant_id: integer().notNull(),
+	// A guardian who stepped away: the row stays for its history, and gives no access.
+	ended_at: timestamp({ withTimezone: true, mode: 'string' }),
 }, (table) => [
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "guardianships_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "guardianships_junior_in_club_fkey" }).onDelete("restrict"),
+	unique("guardianships_tenant_guardian_junior_key").on(table.tenant_id, table.guardian_user_id, table.junior_profile_id),
 	index("guardianships_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
 	foreignKey({
 			columns: [table.guardian_user_id],

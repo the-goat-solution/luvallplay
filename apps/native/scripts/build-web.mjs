@@ -7,6 +7,7 @@
 //
 //   NATIVE_API_BASE=https://… pnpm --filter native web && pnpm --filter native sync
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 const apiBase = (process.env.NATIVE_API_BASE ?? "").replace(/\/+$/, "");
@@ -16,9 +17,14 @@ if (!/^https:\/\/[^\s/]+$/.test(apiBase)) {
 }
 const appDir = path.resolve(import.meta.dirname, "..", "..", "app");
 const out = path.resolve(import.meta.dirname, "..", "www");
+// Push notifications are in the build only when the Firebase project's file is
+// there (android/app/google-services.json, not in the repository): without
+// it, asking Android for a device address would stop the app.
+const push = existsSync(path.resolve(import.meta.dirname, "..", "android", "app", "google-services.json"));
+console.log(push ? "Push notifications: on (google-services.json found)." : "Push notifications: off (no android/app/google-services.json).");
 const build = spawnSync("npx", ["vite", "build", "--outDir", out, "--emptyOutDir"], {
   cwd: appDir,
   stdio: "inherit",
-  env: { ...process.env, VITE_API_BASE: apiBase },
+  env: { ...process.env, VITE_API_BASE: apiBase, VITE_PUSH: push ? "1" : "" },
 });
 process.exit(build.status ?? 1);

@@ -16,6 +16,17 @@ const WS_PORT = 5480;
 export const BASE = `http://localhost:${PORT}`;
 const DB_URL = `${PG.replace(/\/$/, "")}/${DB}`;
 
+// An account made straight in the database is in no club (accounts are
+// global; the app adds a person to a club when they join). The journeys'
+// people are members of the deployment's club, as someone who signed up on
+// its site would be. $1: the account's id.
+export const JOIN_CLUB_SQL = `
+  INSERT INTO club_members (tenant_id, user_id, role, status, joined_at, leaderboard_visible)
+  SELECT t.id, p.id, 'member', 'active', p.created_at, p.leaderboard_visible
+  FROM players p JOIN tenants t ON t.slug = '${process.env.TENANT_SLUG?.trim() || "three-wolves"}'
+  WHERE p.id = $1
+  ON CONFLICT (tenant_id, user_id) DO NOTHING`;
+
 export const PEOPLE = {
   owner: { email: "olivia.owner@e2e.test", first: "Olivia", last: "Owner" },
   admin: { email: "adam.admin@e2e.test", first: "Adam", last: "Admin" },
@@ -69,6 +80,7 @@ async function seed() {
       [p.email, p.first, p.last, key !== "hidden", key === "player"],
     );
     ids[key] = rows[0].id;
+    await c.query(JOIN_CLUB_SQL, [rows[0].id]);
   }
   // Play days: the next Friday and Wednesday, plus two weeks on.
   const fri = nextWeekday(5, 1);

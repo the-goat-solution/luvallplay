@@ -40,6 +40,7 @@ const STORE = { ios: "https://apps.apple.com/app/luvallplay/id0000000000", andro
 
 let env;
 let PEOPLE;
+let JOIN_CLUB_SQL;
 let preview;
 let browser;
 let db;
@@ -51,6 +52,7 @@ before(async () => {
   process.chdir(WEB_DIR); // the environment script runs the web app's own scripts
   const e2e = await import(path.join(WEB_DIR, "scripts/e2e/env.mjs"));
   PEOPLE = e2e.PEOPLE;
+  JOIN_CLUB_SQL = e2e.JOIN_CLUB_SQL;
   env = await e2e.startEnv({ log: () => {} });
   api = `${env.base}/api/v1/app`;
 
@@ -98,6 +100,8 @@ async function outboxCode(email) {
 /** A session made the way the server stores one (only the token's SHA-256), so sign-in rate limits stay on. */
 async function sessionToken(email) {
   const { rows } = await db.query(`SELECT id FROM players WHERE email = $1 AND deleted_at IS NULL`, [email]);
+  // An account made straight in the database is in no club yet.
+  await db.query(JOIN_CLUB_SQL, [rows[0].id]);
   const token = randomBytes(32).toString("base64url");
   await db.query(`INSERT INTO player_sessions (player_id, token_hash, user_agent, expires_at) VALUES ($1, $2, 'e2e-app', NOW() + INTERVAL '90 days')`, [rows[0].id, createHash("sha256").update(token).digest("hex")]);
   return token;

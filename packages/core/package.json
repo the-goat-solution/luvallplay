@@ -21,7 +21,9 @@
     "./country-pack-vn": "./src/country-pack-vn.ts",
     "./entitlements": "./src/entitlements.ts",
     "./rank-art": "./src/rank-art.ts",
-    "./exif-gps": "./src/exif-gps.ts"
+    "./exif-gps": "./src/exif-gps.ts",
+    "./rating": "./src/rating/index.ts",
+    "./scoring": "./src/scoring/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

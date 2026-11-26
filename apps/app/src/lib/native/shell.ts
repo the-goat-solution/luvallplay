@@ -1,5 +1,6 @@
 // What only the store app does, loaded only there (main.tsx): opening the
 // screen a link asks for, and the Android back button.
+import { catchOutsideLinks, closeOutside } from "./open.ts";
 import { plugin } from "./platform.ts";
 import { pathFromLink } from "./public-url.ts";
 
@@ -36,7 +37,11 @@ export function startShell(host: ShellHost, app: AppPlugin | undefined = plugin<
   if (!app) return;
   void app.addListener("appUrlOpen", ({ url }) => {
     const path = pathFromLink(url);
-    if (path) host.go(path);
+    if (!path) return;
+    // Back from a page that was open over the app (Stripe's billing page): it goes away.
+    closeOutside();
+    host.go(path);
   });
+  catchOutsideLinks();
   void app.addListener("backButton", (data) => onBack(data, host, () => void app.exitApp()));
 }

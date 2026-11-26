@@ -1,7 +1,7 @@
 // Push notifications for the players' app API: the signed-in person's own
 // devices and kinds (lib/push/devices.ts does the work and holds the rules).
 import { db } from "./admin-access";
-import { countDevices, getPrefs, registerDevice, removeAllDevices, removeDevice, setPrefs } from "./push/devices";
+import { countDevices, getPrefs, registerDevice, removeAllDevices, removeDevice, removeGoneAddresses, setPrefs } from "./push/devices";
 import { pushSealAvailable } from "./push/seal";
 
 export async function pushOverview(playerId: number) {
@@ -25,4 +25,9 @@ export async function forgetPushDevices(playerId: number, which: { all: true } |
   } catch (err) {
     console.error("[push] device cleanup failed:", err instanceof Error ? err.message : "unknown error");
   }
+}
+
+/** For the sender: addresses Firebase says are gone; their rows are deleted. */
+export async function forgetGoneAddresses(tokens: readonly string[]): Promise<void> {
+  await removeGoneAddresses(db, tokens);
 }

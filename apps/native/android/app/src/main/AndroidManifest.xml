@@ -22,6 +22,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- App links: an https://app.luvallplay.com address opens the app
+                 (pairing invites, links in emails). Android checks
+                 https://app.luvallplay.com/.well-known/assetlinks.json
+                 (apps/app/public/.well-known) before it trusts this. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.luvallplay.com" />
+            </intent-filter>
+
         </activity>
 
         <provider

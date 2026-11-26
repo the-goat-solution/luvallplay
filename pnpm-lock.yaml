@@ -195,6 +195,9 @@ importers:
       '@luvallplay/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@luvallplay/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@luvallplay/modules':
         specifier: workspace:*
         version: link:../../packages/modules
@@ -342,6 +345,12 @@ importers:
       '@luvallplay/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/integrations:
     devDependencies:
       typescript:
         specifier: ^5

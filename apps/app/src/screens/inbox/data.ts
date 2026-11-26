@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub } from "../../app.ts";
-import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { useCurrentClub, useWho } from "../../hooks.tsx";
 
 export type ThreadItem = ResponseOf<"messages.list">["threads"][number];
 export type Thread = ResponseOf<"messages.thread">["thread"];
@@ -12,15 +12,15 @@ export type Thread = ResponseOf<"messages.thread">["thread"];
 const POLL_MS = 20_000;
 
 function useClubApi() {
-  const { token } = usePrefs();
+  const who = useWho();
   const { current, slug } = useCurrentClub();
-  return { token, slug, ready: !!token && !!slug && !!current, api: apiForClub(current?.apiBase) };
+  return { who, slug, ready: !!who && !!slug && !!current, api: apiForClub(current?.apiBase) };
 }
 
 export function useThreads() {
-  const { token, slug, ready, api } = useClubApi();
+  const { who, slug, ready, api } = useClubApi();
   return useQuery({
-    queryKey: ["messages", slug, token],
+    queryKey: ["messages", slug, who],
     queryFn: ({ signal }) => api.messages.list({ club: slug as string }, { signal }),
     enabled: ready,
     staleTime: 15_000,
@@ -28,15 +28,15 @@ export function useThreads() {
 }
 
 export function useThread(id: number | null) {
-  const { token, slug, ready, api } = useClubApi();
+  const { who, slug, ready, api } = useClubApi();
   const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ["messages", slug, token, id],
+    queryKey: ["messages", slug, who, id],
     queryFn: async ({ signal }) => {
       const answer = await api.messages.thread({ club: slug as string, id: id as number }, { signal });
       // Reading marks it read: the list and Me's bell follow.
-      void queryClient.invalidateQueries({ queryKey: ["messages", slug, token], exact: true });
-      void queryClient.invalidateQueries({ queryKey: ["me", slug, token] });
+      void queryClient.invalidateQueries({ queryKey: ["messages", slug, who], exact: true });
+      void queryClient.invalidateQueries({ queryKey: ["me", slug, who] });
       return answer.thread;
     },
     enabled: ready && id !== null,
@@ -47,25 +47,25 @@ export function useThread(id: number | null) {
 }
 
 export function useReply(id: number) {
-  const { token, slug, api } = useClubApi();
+  const { who, slug, api } = useClubApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: string) => api.messages.reply({ club: slug as string, id }, { body }),
     onSuccess: (answer) => {
-      queryClient.setQueryData<Thread>(["messages", slug, token, id], (t) => (t ? { ...t, status: "open", messages: [...t.messages, answer.message] } : t));
-      void queryClient.invalidateQueries({ queryKey: ["messages", slug, token], exact: true });
+      queryClient.setQueryData<Thread>(["messages", slug, who, id], (t) => (t ? { ...t, status: "open", messages: [...t.messages, answer.message] } : t));
+      void queryClient.invalidateQueries({ queryKey: ["messages", slug, who], exact: true });
     },
   });
 }
 
 export function useStartThread() {
-  const { token, slug, api } = useClubApi();
+  const { who, slug, api } = useClubApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (v: { subject: string; body: string }) => api.messages.start({ club: slug as string }, v),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["messages", slug, token], exact: true });
-      void queryClient.invalidateQueries({ queryKey: ["me", slug, token] });
+      void queryClient.invalidateQueries({ queryKey: ["messages", slug, who], exact: true });
+      void queryClient.invalidateQueries({ queryKey: ["me", slug, who] });
     },
   });
 }

@@ -17,7 +17,10 @@ import { enabledModules, listClubModules, moduleBlocking, resetClubModulesCache,
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
 const NAME = `module_enforcement_${process.pid}`;
-const OPTIONAL = MODULES.filter((m) => !m.core).map((m) => m.id);
+// Every module a club can have on. The hidden ones (Juniors, Forms & waivers) can't be
+// switched by the ordinary switch at all: tests/juniors-module.test.ts covers theirs.
+const OFFERED = MODULES.filter((m) => m.availability !== "hidden").map((m) => m.id);
+const OPTIONAL = MODULES.filter((m) => !m.core && m.availability !== "hidden").map((m) => m.id);
 
 test("the proxy's matcher covers every prefix a module owns", () => {
   const proxy = readFileSync(new URL("../proxy.ts", import.meta.url), "utf8");
@@ -75,7 +78,7 @@ describe("the club's module switches", { skip: !BASE_URL && !REQUIRE_DB ? "set D
 
   test("Three Wolves starts with every module on: nothing is stopped", async () => {
     const on = await enabledModules(c);
-    assert.deepEqual([...on].sort(), MODULES.map((m) => m.id).sort());
+    assert.deepEqual([...on].sort(), [...OFFERED].sort());
     for (const path of ["/admin/shop", "/api/arena", "/profile/wolf-vision", "/api/cron/sync-finance", "/gallery"]) {
       assert.equal(await moduleBlocking(c, path), null, path);
     }
@@ -99,7 +102,7 @@ describe("the club's module switches", { skip: !BASE_URL && !REQUIRE_DB ? "set D
 
       assert.deepEqual(await owner(id, true), { ok: true, changed: true });
       for (const d of dependents) assert.deepEqual(await owner(d, true), { ok: true, changed: true });
-      assert.deepEqual([...(await enabledModules(c))].sort(), MODULES.map((m) => m.id).sort(), "everything is back on");
+      assert.deepEqual([...(await enabledModules(c))].sort(), [...OFFERED].sort(), "everything is back on");
       assert.deepEqual(await counts(), before);
     });
   }
@@ -165,7 +168,10 @@ describe("the club's module switches", { skip: !BASE_URL && !REQUIRE_DB ? "set D
 
   test("a database problem never switches features off: every module counts as on, and it is logged once", async () => {
     const broken = { query: async () => Promise.reject(new Error("connection lost")) };
-    assert.equal((await enabledModules(broken)).size, MODULES.length);
+    assert.deepEqual([...(await enabledModules(broken))].sort(), [...OFFERED].sort());
+    // …except a module the platform keeps hidden: Juniors never comes on by accident.
+    assert.equal((await enabledModules(broken)).has("juniors"), false);
+    assert.equal(await moduleBlocking(broken, "/admin/juniors"), "juniors");
     assert.equal(await moduleBlocking(broken, "/admin/shop"), null);
     resetClubModulesCache();
     await enabledModules(broken);

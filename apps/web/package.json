@@ -25,6 +25,7 @@
     "@luvallplay/core": "workspace:*",
     "@luvallplay/db": "workspace:*",
     "@luvallplay/i18n": "workspace:*",
+    "@luvallplay/integrations": "workspace:*",
     "@luvallplay/modules": "workspace:*",
     "@luvallplay/site-templates": "workspace:*",
     "@luvallplay/ui": "workspace:*",

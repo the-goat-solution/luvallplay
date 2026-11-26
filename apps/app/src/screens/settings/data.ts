@@ -4,13 +4,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
 import { api, store } from "../../app.ts";
-import { usePrefs } from "../../hooks.tsx";
+import { useWho } from "../../hooks.tsx";
 
 export type Profile = ResponseOf<"account.profile">;
 
 export function useProfile() {
-  const { token } = usePrefs();
-  return useQuery({ queryKey: ["profile", token], queryFn: ({ signal }) => api.account.profile({ signal }), enabled: !!token, staleTime: 30_000 });
+  const who = useWho();
+  return useQuery({ queryKey: ["profile", who], queryFn: ({ signal }) => api.account.profile({ signal }), enabled: !!who, staleTime: 30_000 });
 }
 
 function useRefreshAccount() {
@@ -34,12 +34,12 @@ export function useSaveLanguage() {
 
 /** "Show me on the leaderboard" (the switch itself moves at once; see Privacy). */
 export function useSavePrivacy() {
-  const { token } = usePrefs();
+  const who = useWho();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (leaderboardVisible: boolean) => api.account.privacy({ leaderboardVisible }),
     onSuccess: (_r, leaderboardVisible) => {
-      queryClient.setQueryData<Profile>(["profile", token], (p) => (p ? { ...p, leaderboardVisible } : p));
+      queryClient.setQueryData<Profile>(["profile", who], (p) => (p ? { ...p, leaderboardVisible } : p));
     },
   });
 }
@@ -81,10 +81,10 @@ export function useDeleteAccount() {
 
 /** Connected apps: access keys and webhooks. */
 export function useConnectedApps() {
-  const { token } = usePrefs();
+  const who = useWho();
   const queryClient = useQueryClient();
-  const key = ["integrations", token];
-  const list = useQuery({ queryKey: key, queryFn: ({ signal }) => api.integrations.list({ signal }), enabled: !!token });
+  const key = ["integrations", who];
+  const list = useQuery({ queryKey: key, queryFn: ({ signal }) => api.integrations.list({ signal }), enabled: !!who });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: key });
   const createToken = useMutation({ mutationFn: (v: BodyOf<"integrations.createToken">) => api.integrations.createToken(v), onSuccess: refresh });
   const revokeToken = useMutation({ mutationFn: (id: number) => api.integrations.revokeToken({ id }), onSuccess: refresh });

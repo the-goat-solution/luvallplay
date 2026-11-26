@@ -6,8 +6,8 @@ import { storage, store } from "../app.ts";
 import { platformOf, storeLinks, storeToOffer } from "../lib/get-app.ts";
 import { countOpen } from "../lib/app-opens.ts";
 import { LuvallplayMark, Notice, OnLuvallplay, Splash, useLook } from "../Frame.tsx";
-import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, usePrefs, useSession, useT, useWindowClass, type Club, type ClubConfig } from "../hooks.tsx";
-import { isHomePath, moduleForPath, spaceClub, tabForPath, visibleTabs, visibleTabsAcross, type TabId } from "../lib/nav.ts";
+import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, usePrefs, useSession, useT, useWho, useWindowClass, type Club, type ClubConfig } from "../hooks.tsx";
+import { isHomePath, moduleForPath, spaceClub, tabForPath, titleKeyForPath, visibleTabs, visibleTabsAcross, type TabId } from "../lib/nav.ts";
 import { translator } from "../lib/messages.ts";
 import { ClubBadge } from "../components/ClubTag.tsx";
 import { Icon, type IconName } from "../components/Icon.tsx";
@@ -114,8 +114,8 @@ function SpacePicker({ clubs, current, configOf, module }: { clubs: Club[]; curr
 }
 
 /** On the other tabs: back to an accepted game whose "versus" splash was put off (from the board already loaded; never fetched here). */
-function MatchPill({ slug, token, t }: { slug: string | null; token: string | null; t: ReturnType<typeof useT> }) {
-  const board = useQuery<ArenaState>({ queryKey: ["arena", slug, token], queryFn: skipToken });
+function MatchPill({ slug, who, t }: { slug: string | null; who: string | null; t: ReturnType<typeof useT> }) {
+  const board = useQuery<ArenaState>({ queryKey: ["arena", slug, who], queryFn: skipToken });
   const versus = useVersus(board.data);
   if (!versus.later) return null;
   return (
@@ -154,6 +154,7 @@ function useAppOffer() {
 export function Shell() {
   const appOffer = useAppOffer();
   const prefs = usePrefs();
+  const who = useWho();
   const focused = useSyncExternalStore(focus.subscribe, focus.get);
   const connected = useSyncExternalStore(online.subscribe, online.get);
   const session = useSession();
@@ -186,8 +187,20 @@ export function Shell() {
   const space = multi && !home ? spaceClub(list, modulesOf, prefs.club, moduleForPath(pathname)) : null;
   const scopeClub = multi ? space : current;
   const config = multi ? (space ? configOf(space) : null) : currentConfig;
-  useLook(config);
   const t = useT(config);
+  // The tab's title names the screen, and a new screen takes the focus (so a
+  // screen reader starts at its content, not at the tab that was tapped).
+  const titleKey = titleKeyForPath(pathname);
+  useLook(config, titleKey ? t(titleKey) : undefined);
+  const mainRef = useRef<HTMLElement>(null);
+  const lastPath = useRef(pathname);
+  useEffect(() => {
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    // Only when something was activated to get here (a tab, a link): a
+    // redirect while the app opens leaves the keyboard's start where it is.
+    if (document.activeElement && document.activeElement !== document.body) mainRef.current?.focus({ preventScroll: true });
+  }, [pathname]);
 
   // In no club yet: Home explains, and there are no club tabs to show.
   const noClub = !!clubs && list.length === 0;
@@ -251,8 +264,8 @@ export function Shell() {
           </ul>
         </nav>
       )}
-      <main className="shell-main" id="main">
-        {arenaOn && !pathname.startsWith("/arena") && <MatchPill slug={arenaClub?.slug ?? null} token={prefs.token} t={t} />}
+      <main className="shell-main" id="main" tabIndex={-1} ref={mainRef}>
+        {arenaOn && !pathname.startsWith("/arena") && <MatchPill slug={arenaClub?.slug ?? null} who={who} t={t} />}
         {prefs.needsDetails && !onWelcome && (
           <Notice>
             {t("needs_details")} <Link to="/welcome">{t("needs_details_link")}</Link>

@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { sql } from "./database";
+import { isAllowedWebhookUrl, postToPublicHost } from "./webhook-target";
 
 // Personal access tokens and outgoing webhooks, so habit trackers (q.buzz
 // once it has an API) and AI assistants (MCP) can read a player's activity
@@ -82,19 +83,8 @@ export function bearerFrom(request: Request): string | null {
 
 export type WebhookEndpoint = { id: number; url: string; events: WebhookEvent[]; active: boolean; createdAt: string; lastStatus: string | null };
 
-/** Only public https URLs (no internal hosts) may receive player data. */
-export function isAllowedWebhookUrl(raw: string): boolean {
-  try {
-    const u = new URL(raw);
-    if (u.protocol !== "https:") return false;
-    const host = u.hostname.toLowerCase();
-    if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return false;
-    if (/^(\d+\.){3}\d+$/.test(host) || host.includes(":")) return false; // no raw IPs
-    return true;
-  } catch {
-    return false;
-  }
-}
+// The address rules, and the guarded connection used at delivery: lib/webhook-target.ts.
+export { isAllowedWebhookUrl };
 
 export async function createWebhookEndpoint(playerId: number, url: string, events: WebhookEvent[]): Promise<{ secret: string; endpoint: WebhookEndpoint }> {
   const secret = `whsec_${crypto.randomBytes(24).toString("base64url")}`;
@@ -145,27 +135,21 @@ async function deliver(deliveryId: number): Promise<boolean> {
   const d = rows[0];
   if (!d) return false;
   const body = JSON.stringify(d.payload);
-  let ok = false;
-  let error: string | null = null;
-  try {
-    const res = await fetch(d.url as string, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "ThreeWolves-Webhooks/1",
-        "X-ThreeWolves-Event": d.event as string,
-        "X-ThreeWolves-Delivery": String(d.id),
-        "X-ThreeWolves-Signature": signPayload(d.secret as string, body),
-      },
-      body,
-      signal: AbortSignal.timeout(5000),
-      redirect: "error",
-    });
-    ok = res.ok;
-    if (!ok) error = `HTTP ${res.status}`;
-  } catch (err) {
-    error = (err as Error).message.slice(0, 200);
-  }
+  // Only to a public address, checked at the moment of connecting; what is
+  // kept about a failure is a fixed word, never the network's own message.
+  const outcome = await postToPublicHost(
+    d.url as string,
+    {
+      "Content-Type": "application/json",
+      "User-Agent": "ThreeWolves-Webhooks/1",
+      "X-ThreeWolves-Event": d.event as string,
+      "X-ThreeWolves-Delivery": String(d.id),
+      "X-ThreeWolves-Signature": signPayload(d.secret as string, body),
+    },
+    body,
+  );
+  const ok = outcome.ok;
+  const error = outcome.ok ? null : outcome.error;
   const attempts = (d.attempts as number) + 1;
   if (ok) {
     await sql`UPDATE webhook_deliveries SET status = 'delivered', attempts = ${attempts}, delivered_at = NOW(), last_error = NULL WHERE id = ${deliveryId};`;

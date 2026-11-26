@@ -400,11 +400,61 @@ export async function listAudit(db: Db, limit = 100): Promise<AuditRow[]> {
 }
 
 /**
+ * The only posted fields the audit log may keep (audit H7, 25 Nov 2026):
+ * ids and choices that say WHICH record and WHAT was chosen. Everything else
+ * is dropped, so names, emails, phone numbers, messages, notes, reasons and
+ * anything a later module posts (a junior's medical notes) can never land in
+ * the log by accident. A new field is not recorded until it is added here on
+ * purpose; add only ids and fixed choices, never free text.
+ */
+export const AUDIT_FIELD_ALLOW_LIST: ReadonlySet<string> = new Set([
+  // Which record.
+  "id", "playerId", "memberId", "membershipId", "orderId", "entryId", "ruleId", "inviteId", "bankTxnId", "payoutId", "planId", "moduleId",
+  // What was chosen.
+  "role", "on", "lock", "op", "kind", "status", "plan", "day", "date", "startDate", "entryDate", "method", "payment", "choice",
+  "keep", "merge", "active", "featured", "sendEmail", "category", "size", "courts", "amount", "price", "priceMode",
+  "maxCasualSpots", "bookingLockDays",
+  // Export and report filters (GET).
+  "filter", "orders", "preset", "from", "to", "fy",
+]);
+
+/** Next.js server actions prefix bound form fields ("_1_playerId") and add their own ("1_$ACTION_ID_…", "0"). */
+function auditFieldName(rawKey: string): string | null {
+  if (rawKey.includes("$ACTION") || /^\d+$/.test(rawKey)) return null;
+  return rawKey.replace(/^_?\d+_/, "");
+}
+
+/** The allow-listed fields of a request, values trimmed to 120 characters. */
+export function auditFields(entries: Iterable<[string, string]>): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const [rawKey, v] of entries) {
+    const k = auditFieldName(rawKey);
+    if (k === null || !AUDIT_FIELD_ALLOW_LIST.has(k)) continue;
+    fields[k] = String(v).slice(0, 120);
+  }
+  return fields;
+}
+
+/** Who or what the request acted on: the first id it names (the member's email where a form has no id). */
+export function auditTarget(entries: Iterable<[string, string]>): string {
+  const named = new Map<string, string>();
+  for (const [rawKey, v] of entries) {
+    const k = auditFieldName(rawKey);
+    if (k !== null && !named.has(k)) named.set(k, String(v).slice(0, 120));
+  }
+  for (const k of ["id", "memberId", "membershipId", "playerId", "email", "orderId", "entryId", "moduleId"]) {
+    const v = named.get(k);
+    if (v) return v;
+  }
+  return "";
+}
+
+/**
  * The audit summary of an admin request: method, path, server action id and
- * the posted form fields (values trimmed; anything that looks secret is
- * dropped). Written by the middleware for every admin POST, so refunds, free
- * months, merges, cancellations and stock changes are all on record without
- * each action having to remember.
+ * the allow-listed posted fields (AUDIT_FIELD_ALLOW_LIST). Written by the
+ * middleware for every admin POST before it runs, so an attempt is on record
+ * even when its action writes no row of its own. Actions that matter write
+ * their own row with the outcome (lib/admin-audit.ts).
  */
 export function summarizeAdminRequest(input: {
   method: string;
@@ -412,20 +462,11 @@ export function summarizeAdminRequest(input: {
   actionId?: string | null;
   fields?: [string, string][];
 }): { action: string; target: string; meta: Record<string, unknown> } {
-  const fields: Record<string, string> = {};
-  for (const [rawKey, v] of input.fields ?? []) {
-    // Next.js server actions prefix bound form fields ("_1_playerId") and add
-    // their own ("1_$ACTION_ID_…", and "0" for the argument list).
-    if (rawKey.includes("$ACTION") || /^\d+$/.test(rawKey)) continue;
-    const k = rawKey.replace(/^_?\d+_/, "");
-    if (/pass|secret|token|code|card/i.test(k)) continue;
-    if (Object.keys(fields).length >= 20) break;
-    fields[k.slice(0, 60)] = v.slice(0, 120);
-  }
-  const target = fields.id ?? fields.memberId ?? fields.playerId ?? fields.email ?? fields.orderId ?? "";
+  const fields = auditFields(input.fields ?? []);
+  const target = auditTarget(input.fields ?? []);
   return {
     action: `${input.method} ${input.path}`.slice(0, 200),
-    target: target ? String(target) : input.path,
+    target: target || input.path,
     meta: { ...(input.actionId ? { serverAction: input.actionId } : {}), ...(Object.keys(fields).length ? { fields } : {}) },
   };
 }

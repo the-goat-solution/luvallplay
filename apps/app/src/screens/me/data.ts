@@ -1,82 +1,72 @@
 // The Me tab's data: one query for the whole screen (so it opens from the
-// cache at once), and its two changes, applied on screen straight away and
-// put back if the club's server refuses them.
+// cache at once), and its two changes, applied on screen straight away.
+import { useMemo, useSyncExternalStore } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub, storage } from "../../app.ts";
-import { useCurrentClub, usePrefs, type Club } from "../../hooks.tsx";
-import { enqueue } from "../../lib/offline.ts";
+import { useCurrentClub, type Club, useWho } from "../../hooks.tsx";
+import { dropped, queued, watchQueue, withPending, type DroppedAbsence, type QueuedAbsence } from "../../lib/offline.ts";
+import { changeAbsence, queueStalled } from "../../lib/queue.ts";
 
 export type Me = ResponseOf<"me.home">;
 export type PlayDay = Me["calendar"][number];
 
-export const meKey = (slug: string | null, token: string | null) => ["me", slug, token] as const;
+export const meKey = (slug: string | null, who: string | null) => ["me", slug, who] as const;
 
 export function useMe() {
-  const { token } = usePrefs();
+  const who = useWho();
   const { current, slug } = useCurrentClub();
   const query = useQuery({
-    queryKey: meKey(slug, token),
+    queryKey: meKey(slug, who),
     queryFn: ({ signal }) => apiForClub(current?.apiBase).me.home({ club: slug as string }, { signal }),
-    enabled: !!token && !!slug && !!current,
+    enabled: !!who && !!slug && !!current,
     staleTime: 30_000,
   });
-  return { ...query, apiBase: current?.apiBase, slug };
+  const { waiting } = useQueue();
+  const data = useMemo(() => (query.data && slug ? withWaiting(query.data, slug, waiting) : query.data), [query.data, slug, waiting]);
+  return { ...query, data, apiBase: current?.apiBase, slug };
+}
+
+/** The choices that wait on this device, and the ones the club's server refused. */
+export function useQueue(): { waiting: QueuedAbsence[]; dropped: DroppedAbsence[]; stalled: boolean } {
+  const waiting = useSyncExternalStore(watchQueue, () => storage.get("queue") ?? "");
+  const refused = useSyncExternalStore(watchQueue, () => storage.get("dropped") ?? "");
+  const stalled = useSyncExternalStore(watchQueue, queueStalled);
+  // The stored text is the snapshot (a stable value); the lists are read from it.
+  return useMemo(() => ({ waiting: queued(storage), dropped: dropped(storage), stalled }), [waiting, refused, stalled]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** A club's Me with the choices that still wait shown over what its server last said. */
+export function withWaiting(me: Me, club: string, waiting: readonly QueuedAbsence[]): Me {
+  const calendar = withPending(me.calendar, club, waiting);
+  return calendar === me.calendar ? me : { ...me, calendar };
 }
 
 /**
- * "Can't make it" and "I can come after all": the day flips (and its spot
- * frees up) before the server answers. Without a connection the change
- * waits on this device (`queued: true`) and is sent when it's back.
+ * "Can't make it" and "I can come after all" for the current club. Every
+ * choice goes through the queue (lib/queue.ts): the day flips (and its spot
+ * frees up) at once, the latest choice for a day wins, and it is sent as soon
+ * as there's a connection. `waits(date)` says a choice hasn't reached the
+ * club yet and can't right now.
  */
 export function useAbsence() {
-  const { token } = usePrefs();
   const { current, slug } = useCurrentClub();
   const queryClient = useQueryClient();
-  const key = meKey(slug, token);
-  return useMutation({
-    // Runs offline too: the change is queued rather than paused in memory.
-    networkMode: "always",
-    mutationFn: async (v: { date: string; absent: boolean }): Promise<{ queued: boolean }> => {
-      const later = () => {
-        enqueue(storage, { club: slug as string, apiBase: current?.apiBase, ...v });
-        return { queued: true };
-      };
-      if (!navigator.onLine) return later();
-      try {
-        await apiForClub(current?.apiBase).me.absence({ club: slug as string }, v);
-        return { queued: false };
-      } catch (err) {
-        if ((err as { status?: number }).status === 0) return later();
-        throw err;
-      }
+  const { waiting, stalled } = useQueue();
+  return {
+    change: (v: { date: string; absent: boolean }) => {
+      if (slug) void changeAbsence(queryClient, { club: slug, apiBase: current?.apiBase, ...v });
     },
-    onMutate: async (v) => {
-      await queryClient.cancelQueries({ queryKey: key });
-      const before = queryClient.getQueryData<Me>(key);
-      if (before) {
-        queryClient.setQueryData<Me>(key, {
-          ...before,
-          calendar: before.calendar.map((d) =>
-            d.date === v.date && d.absent !== v.absent ? { ...d, absent: v.absent, spots: Math.max(0, d.spots + (v.absent ? 1 : -1)) } : d,
-          ),
-        });
-      }
-      return { before };
-    },
-    onError: (_err, _v, context) => {
-      if (context?.before) queryClient.setQueryData(key, context.before);
-    },
-    onSettled: (result) => (result?.queued ? undefined : queryClient.invalidateQueries({ queryKey: key })),
-  });
+    waits: (date: string) => stalled && waiting.some((q) => q.club === slug && q.date === date),
+  };
 }
 
 /** The welcome card's Done: gone at once, kept on the account. */
 export function useDismissWelcome() {
-  const { token } = usePrefs();
+  const who = useWho();
   const { current, slug } = useCurrentClub();
   const queryClient = useQueryClient();
-  const key = meKey(slug, token);
+  const key = meKey(slug, who);
   return useMutation({
     mutationFn: () => apiForClub(current?.apiBase).account.dismissWelcome({}),
     onMutate: () => {
@@ -91,12 +81,12 @@ export function useDismissWelcome() {
  * from each club's Me (the same queries Home uses, so they share the cache).
  */
 export function useUnread(clubs: readonly Club[] | null): number {
-  const { token } = usePrefs();
+  const who = useWho();
   const results = useQueries({
     queries: (clubs ?? []).map((c) => ({
-      queryKey: meKey(c.slug, token),
+      queryKey: meKey(c.slug, who),
       queryFn: ({ signal }: { signal: AbortSignal }) => apiForClub(c.apiBase).me.home({ club: c.slug }, { signal }),
-      enabled: !!token,
+      enabled: !!who,
       staleTime: 30_000,
     })),
   });

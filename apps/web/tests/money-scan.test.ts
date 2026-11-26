@@ -76,6 +76,8 @@ test("the currency code is written once, not typed into payment calls", () => {
     "apps/web/lib/bank-match.ts", // words to ignore when matching NZ bank references
     "apps/web/lib/payments/stripe-provider.ts", // the currencies this provider takes
     "apps/web/lib/payments/fake-provider.ts", // the test provider's currencies
+    "packages/core/src/vietqr.ts", // VietQR is Vietnam's bank-transfer code: it only carries dong
+    "packages/core/src/country-pack-vn.ts", // the Vietnam country pack: where Vietnam's currency is written down
   ]);
   const offenders: string[] = [];
   for (const dir of dirs) {

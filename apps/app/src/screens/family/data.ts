@@ -6,12 +6,10 @@
 // child's data: the answer is then 404 and the section says it is off.
 // A child's data is never kept on the device: "family" is not among the
 // saved screens (lib/offline.ts).
-import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub } from "../../app.ts";
-import { useCurrentClub, usePrefs } from "../../hooks.tsx";
-import { ownerOf } from "../../lib/offline.ts";
+import { useCurrentClub, useWho } from "../../hooks.tsx";
 
 export type Family = ResponseOf<"family.list">;
 export type Child = Family["children"][number];
@@ -21,16 +19,6 @@ export const CONSENT_ITEMS = ["leaderboard", "photos", "vision"] as const;
 export function useFamilyOn(): boolean {
   const { config } = useCurrentClub();
   return !!config && config.modules.includes("juniors");
-}
-
-/**
- * Whose data a query holds: a fingerprint of the session, never the token
- * itself (audit H9). The same value as `useWho()` in hooks.tsx once that is
- * on main; then this is replaced by it.
- */
-function useWho(): string | null {
-  const { token } = usePrefs();
-  return useMemo(() => (token ? ownerOf(token) : null), [token]);
 }
 
 function useClubApi() {

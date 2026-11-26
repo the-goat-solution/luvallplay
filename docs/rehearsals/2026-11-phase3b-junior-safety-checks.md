@@ -3,9 +3,9 @@
 - **Change:** one new table, `junior_safety_checks`: that a coach or volunteer has a safety check, its kind, the club's own reference, the day it was done and the day it expires. Club-owned with row-level security from the first day. Nothing existing is altered. The app's database role can't delete a record (a check is withdrawn, never deleted).
 - **Command:** node scripts/db/migrate.mjs
 - **Expectations:** `apps/web/scripts/data-guard/expectations/2026-11-phase3b-junior-safety-checks.json` (and `.production.json` for the production run)
-- **Number:** `0019` (lane T's queue: `0018` is lane N's push tables, #223). On this branch `0018` is absent until #223 merges.
+- **Number:** `0019`, after lane N's `0018_push_devices` (#223, merged). With main merged in, the journal runs `0017`, `0018`, `0019` and the whole web suite passes (829 tests, schema drift included).
 
-## Result: passed locally. The run on a copy of production, and the production run, are lane T's and wait for the owner's go-ahead.
+## Result: passed locally. Lane T's run on a copy of production and the production run are reported done through the coordinating thread (26 Nov); I haven't seen their output myself.
 
 Local run, 26 Nov 2026, Postgres 18 (the version production and CI use):
 

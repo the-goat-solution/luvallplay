@@ -2,6 +2,8 @@
 interface ImportMetaEnv {
   /** The home API host, e.g. https://api.luvallplay.com. Empty: this page's own origin. */
   readonly VITE_API_BASE?: string;
+  /** The app's public address (default https://app.luvallplay.com): what links made inside the store app start with. */
+  readonly VITE_PUBLIC_APP_URL?: string;
   /** More API hosts the app may talk to (other regions), space or comma separated. */
   readonly VITE_API_HOSTS?: string;
   /** The app's App Store page (https://apps.apple.com/...). Set once the iOS app is live: it turns on "Get the app" on iPhones and iPads. */

@@ -20,9 +20,9 @@ CI builds the debug APK on every pull request (job "Android shell") and keeps it
 | Plugin | For |
 |---|---|
 | `capacitor-secure-storage-plugin` | The session token in the Android Keystore (later the iOS Keychain); the app waits for it at start (`apps/app/src/lib/native/`) |
-| `@capacitor/app` | The Android back button, and opening the app from a link (wired up in the next steps) |
+| `@capacitor/app` | The Android back button (a sheet closes first, then one screen back) and opening the app from a link |
 
-Not yet here, in the order they come: app links (`assetlinks.json`), opening outside pages in the in-app browser, saving and sharing files, push notifications (Firebase), Play Billing for Vision passes.
+Not yet here, in the order they come: opening outside pages in the in-app browser, saving and sharing files, push notifications (Firebase), Play Billing for Vision passes.
 
 ## Settings that are deliberate
 
@@ -32,6 +32,19 @@ Not yet here, in the order they come: app links (`assetlinks.json`), opening out
 
 `tests/shell.test.ts` holds these in place.
 
+## Links that open the app
+
+`https://app.luvallplay.com/...` addresses (pairing invites, links in emails) open the store app once Android trusts it. Two halves:
+
+- the Android project says which addresses are the app's (`AndroidManifest.xml`, an `autoVerify` intent filter);
+- the address says which app may open them: `apps/app/public/.well-known/assetlinks.json`, served at `https://app.luvallplay.com/.well-known/assetlinks.json`.
+
+That file needs the fingerprint of the key Google signs the app with. Until it is there, links simply open the browser as they do today. `pnpm --filter native release:check` fails while the placeholder is still in it.
+
+Inside the app, a link leads only to a screen of the app (`apps/app/src/lib/native/public-url.ts`), and links the app makes (a pairing invite) start with `https://app.luvallplay.com`, not the shell's own `https://localhost`.
+
 ## For the owner: Play Console
 
-Nothing is uploaded from here yet. When the release build exists, Play App Signing will hold the signing key; the upload key and the Play service-account file are given through the environment's secret settings, never pasted into a chat or committed.
+1. Create the app in Play Console with the package name **`com.luvallplay.app`** (default language English (Australia)).
+2. Once the first build has been uploaded to any track, open **Test and release → App integrity → App signing** and copy the **SHA-256 certificate fingerprint** under "App signing key certificate" (it looks like `AB:CD:…`, 32 pairs). Send it to lane N, or paste it into `assetlinks.json` in place of `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT`. A fingerprint is public information, not a secret.
+3. Nothing is uploaded from here yet. The upload key and the Play service-account file are secrets: they are given through the environment's secret settings, never pasted into a chat or committed.

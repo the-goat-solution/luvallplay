@@ -290,6 +290,13 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+          # Gradle's downloads are kept between runs: without this every run
+          # fetches several hundred files from Maven Central, which answers
+          # shared CI machines with "429 Too Many Requests" when it is busy.
+          cache: gradle
+          cache-dependency-path: |
+            apps/native/android/**/*.gradle
+            apps/native/android/gradle/wrapper/gradle-wrapper.properties
       - run: pnpm install --frozen-lockfile
       - name: Types and the shell's identity and settings
         run: pnpm --filter native typecheck && pnpm --filter native test
@@ -301,7 +308,10 @@ jobs:
       - name: Copy it into the Android project
         run: pnpm --filter native sync:android
       - name: Debug build (APK)
-        run: pnpm --filter native android:debug
+        # One more go after a minute if the first fails: a rate-limited
+        # download (see the cache note above) is over by then, and a real
+        # compile error fails both times.
+        run: pnpm --filter native android:debug || (sleep 60 && pnpm --filter native android:debug)
       - name: The debug APK (the "android-debug-apk" artifact)
         uses: actions/upload-artifact@v4
         with:

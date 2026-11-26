@@ -21,6 +21,7 @@ import { getStripe } from "@/lib/stripe";
 import { confirmAttendance, getStatsBackfillPreview, listMinigameNameMatches, listUnverifiedAttendance, removeAttendance, setMinigameName } from "@/lib/stats-db";
 import { recalculateAllPoints } from "@/lib/arena-db";
 import { MergeError, mergeMembers, type MergeResult } from "@/lib/player-merge";
+import { clubShortName } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -493,7 +494,7 @@ async function Tools({
 
       <Section title="Welcome emails">
         <p className={kit.muted} style={{ fontSize: 13, marginTop: -4 }}>
-          {welcomePending} member{welcomePending === 1 ? "" : "s"} still to welcome. The launch email (&ldquo;Your Three Wolves profile is here&rdquo;) greets
+          {welcomePending} member{welcomePending === 1 ? "" : "s"} still to welcome. The launch email (&ldquo;Your {clubShortName()} profile is here&rdquo;) greets
           each member by name with a sign-in button. Each click sends up to {WELCOME_BATCH}, to stay under the free limit of 100 emails a day.
         </p>
         <div className={kit.rowActions}>

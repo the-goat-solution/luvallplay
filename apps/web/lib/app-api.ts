@@ -210,6 +210,18 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
         if (!parsed.success) return error(request, fail(404, "not_found"));
         params = parsed.data;
       }
+      let club: ClubConfig | undefined;
+      if (endpoint.scope === "club") {
+        // One club per deployment until host routing is enforced: any other
+        // slug doesn't exist here, whoever asks.
+        const here = await deploymentClub();
+        if (!here || (params as { club?: string } | undefined)?.club !== here.slug) return error(request, fail(404, "club_not_found"));
+        club = here;
+        // Before the query and body are looked at: with its module off, an
+        // endpoint isn't there, whatever is sent to it.
+        if (endpoint.module && !(await enabledModules(sql)).has(endpoint.module)) return error(request, fail(404, "module_off"));
+      }
+
       let query: unknown;
       if (endpoint.query) {
         const parsed = endpoint.query.safeParse(Object.fromEntries(new URL(request.url).searchParams));
@@ -228,16 +240,6 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
         const parsed = endpoint.body.safeParse(raw);
         if (!parsed.success) return error(request, bad);
         body = parsed.data;
-      }
-
-      let club: ClubConfig | undefined;
-      if (endpoint.scope === "club") {
-        // One club per deployment until host routing is enforced: any other
-        // slug doesn't exist here, whoever asks.
-        const here = await deploymentClub();
-        if (!here || (params as { club?: string } | undefined)?.club !== here.slug) return error(request, fail(404, "club_not_found"));
-        club = here;
-        if (endpoint.module && !(await enabledModules(sql)).has(endpoint.module)) return error(request, fail(404, "module_off"));
       }
 
       const result = await handler({ request, ip, params, query, body, session, player: session?.player as Player, club: club as ClubConfig } as Ctx<K>);

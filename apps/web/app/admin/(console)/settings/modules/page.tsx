@@ -6,6 +6,7 @@ import { Badge, Notice, PageHeader, Section, kit } from "@/components/admin/kit"
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
 import { currentAdmin, db, requireAdminActor } from "@/lib/admin-access";
+import { recordAdminAction, type AuditOutcome } from "@/lib/admin-audit";
 import { listClubModules, setClubModule, setModuleLock, type ModuleRow } from "@/lib/club-modules";
 
 // Admin → Settings → Modules (build plan §6.2.3; Phase 3 step 5).
@@ -16,7 +17,7 @@ import { listClubModules, setClubModule, setModuleLock, type ModuleRow } from "@
 // canTurnOff): the core never switches, a needed module comes first, a
 // module others depend on stays, and a platform lock holds for owners.
 // Switching a module off hides it and keeps its data. Every change is in the
-// audit log (the proxy records each admin action).
+// audit log with its outcome ("module.switch", "module.lock").
 // Luvallplay staff (platform admins) can also lock a module on or off for the
 // club, with a reason the owners see, and unlock it.
 // The setup wizard and presets are Phase 6.
@@ -48,6 +49,9 @@ async function switchModule(formData: FormData) {
   const moduleId = String(formData.get("moduleId") ?? "");
   const on = formData.get("on") === "1";
   const name = MODULES.find((m) => m.id === moduleId)?.name.en ?? moduleId;
+  // The switch's own audit row, with what happened (the proxy's row only says someone tried).
+  const record = (outcome: AuditOutcome, extra: { reason?: string; changed?: boolean } = {}) =>
+    recordAdminAction(ctx, { action: "module.switch", target: `module:${moduleId}`, outcome, reason: extra.reason, meta: { on, ...(extra.changed === undefined ? {} : { changed: extra.changed }) } });
   let message: string;
   try {
     const result = await setClubModule(db, {
@@ -56,11 +60,16 @@ async function switchModule(formData: FormData) {
       actor: ctx.access.platformAdmin ? "platform-admin" : "owner",
       actorPlayerId: ctx.player.id,
     });
-    if (!result.ok) back("toastError", result.reason);
+    if (!result.ok) {
+      await record("refused", { reason: result.reason });
+      back("toastError", result.reason);
+    }
+    await record("ok", { changed: result.changed });
     message = result.changed ? `${name} is now ${on ? "on" : "off"}.${on ? "" : " Its data is kept."}` : "No change.";
   } catch (err) {
     if (err && typeof err === "object" && "digest" in err) throw err; // redirect()
     console.error("[admin] module switch failed:", err);
+    await record("failed");
     back("toastError", "Something went wrong. Nothing was changed.");
   }
   back("toast", message);
@@ -75,14 +84,21 @@ async function lockModule(formData: FormData) {
   const raw = String(formData.get("lock") ?? "");
   const lock = raw === "on" || raw === "off" ? raw : null;
   const name = MODULES.find((m) => m.id === moduleId)?.name.en ?? moduleId;
+  const record = (outcome: AuditOutcome, extra: { reason?: string; changed?: boolean } = {}) =>
+    recordAdminAction(ctx, { action: "module.lock", target: `module:${moduleId}`, outcome, reason: extra.reason, meta: { lock: lock ?? "unlocked", ...(extra.changed === undefined ? {} : { changed: extra.changed }) } });
   let message: string;
   try {
     const result = await setModuleLock(db, { moduleId, lock, reason: String(formData.get("reason") ?? ""), actor: "platform-admin", actorPlayerId: ctx.player.id });
-    if (!result.ok) back("toastError", result.reason);
+    if (!result.ok) {
+      await record("refused", { reason: result.reason });
+      back("toastError", result.reason);
+    }
+    await record("ok", { changed: result.changed });
     message = !result.changed ? "No change." : lock ? `${name} is locked ${lock}.` : `${name} is unlocked.`;
   } catch (err) {
     if (err && typeof err === "object" && "digest" in err) throw err; // redirect()
     console.error("[admin] module lock failed:", err);
+    await record("failed");
     back("toastError", "Something went wrong. Nothing was changed.");
   }
   back("toast", message);
@@ -105,7 +121,8 @@ export default async function ModulesPage() {
       {rows && !canSwitch && <Notice>Only owners (and platform admins) can switch modules. You can see the list.</Notice>}
 
       {GROUP_ORDER.map((group) => {
-        const modules = MODULES.filter((m) => m.group === group);
+        // A module the platform keeps hidden isn't offered to clubs yet.
+        const modules = MODULES.filter((m) => m.group === group && m.availability !== "hidden");
         if (modules.length === 0) return null;
         return (
           <Section key={group} title={GROUP_TITLE[group]}>

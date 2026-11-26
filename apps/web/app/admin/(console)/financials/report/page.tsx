@@ -21,6 +21,7 @@ import {
 } from "@/lib/finance";
 import { getCategoryBreakdown, getEarliestEntryDate, getMonthlyTotals } from "@/lib/finance-db";
 import { getFundsAt, getOpeningBalances } from "@/lib/bank-db";
+import { clubName } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -168,7 +169,7 @@ export default async function AnnualReportPage({
 
       <article className={styles.report}>
         <header className={styles.reportHead}>
-          <div className={styles.reportClub}>Three Wolves Badminton Club</div>
+          <div className={styles.reportClub}>{clubName()}</div>
           <h2 className={styles.reportTitle}>Annual financial report</h2>
           <div className={styles.cardSub}>{periodTitle}</div>
         </header>

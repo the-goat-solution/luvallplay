@@ -10,6 +10,7 @@ import {
   type FinanceKind,
 } from "@/lib/finance";
 import styles from "./financials.module.css";
+import { clubCurrencyCode } from "@/lib/club-brand";
 
 // On a validation error the action echoes back what was submitted: React
 // resets a form after its action runs, and these become the reset values so
@@ -223,7 +224,7 @@ export function EntryForm({
           </label>
 
           <label className={styles.field}>
-            <span className={styles.label}>Amount (NZD) *</span>
+            <span className={styles.label}>Amount ({clubCurrencyCode()}) *</span>
             <span className={styles.amountWrap}>
               <span className={styles.amountPrefix}>$</span>
               <input

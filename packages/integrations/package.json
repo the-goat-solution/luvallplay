@@ -1,0 +1,17 @@
+{
+  "name": "@luvallplay/integrations",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The connector framework (build plan §12.1): connector statements, token rules, the sync queue, the error queue and the reconciliation report. Pure: storage, encryption and HTTP are passed in.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./memory": "./src/memory.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

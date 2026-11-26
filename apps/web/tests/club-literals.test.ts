@@ -63,6 +63,13 @@ test("the club's clock is passed to every call of the date helpers", () => {
 // The scan grows with A2: emails, receipts, exports and payment descriptions
 // (lib/, app/api/) join ADMIN_SCAN_DIRS as they are cleaned.
 const ADMIN_SCAN_DIRS = ["app/admin", "components/admin"];
+// Part 2: the email files. (Their wording is locked by tests/email-wording.test.ts.)
+const SCANNED_FILES = ["lib/email.ts", "lib/email-layout.ts", "lib/player-email.ts", "lib/admin-notify.ts", "lib/message-notify.ts", "lib/welcome-emails.ts"];
+// Not scanned on purpose: lib/welcome-email-template.ts is Three Wolves' own
+// launch email (its jersey, its price, its photos). It takes the club's name
+// and address from club-brand, but the rest is one club's content, not code
+// for every club: it becomes a stored template per club with the website
+// editor (lane W), and no other club is ever sent it.
 
 const CLUB_LITERALS: [name: string, pattern: RegExp][] = [
   ["the club's name", /Three Wolves|three-wolves|3 ?Wolves/i],
@@ -78,10 +85,11 @@ function stripComments(src: string): string {
   return src.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
-test("A2: no club name, locale, currency code, weekday or fixed price is typed into admin code", () => {
+test("A2: no club name, locale, currency code, weekday or fixed price is typed into admin code or the email files", () => {
   const offenders: string[] = [];
-  for (const dir of ADMIN_SCAN_DIRS) {
-    for (const file of sourceFiles(join(WEB, dir))) {
+  const files = [...ADMIN_SCAN_DIRS.flatMap((dir) => sourceFiles(join(WEB, dir))), ...SCANNED_FILES.map((f) => join(WEB, f))];
+  {
+    for (const file of files) {
       const lines = stripComments(readFileSync(file, "utf8")).split("\n");
       lines.forEach((line, i) => {
         // Trailing comments on a line of code.

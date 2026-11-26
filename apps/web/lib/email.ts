@@ -18,6 +18,7 @@ import {
   withDisplayName,
 } from "./email-layout";
 import { clubMoney } from "./money";
+import { clubAmountWithCode, clubContactEmail, clubLocale, clubName, clubShortName, weekdayName } from "./club-brand";
 
 let resend: Resend | null = null;
 
@@ -44,17 +45,14 @@ const PLAN_NAME: Record<MembershipTier, string> = {
   quarterly: "Quarterly",
 };
 
-const DAY_LABEL: Record<MembershipDay, string> = {
-  friday: "Friday",
-  wednesday: "Wednesday",
-};
+const DAY_LABEL = (day: MembershipDay) => weekdayName(day);
 
 export async function sendRosterEmail(
   date: string,
   roster: RosterEntry[],
 ): Promise<void> {
   const from = process.env.EMAIL_FROM;
-  const to = process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com";
+  const to = process.env.CLUB_ROSTER_EMAIL || `${clubContactEmail()}`;
   if (!from) {
     throw new Error("EMAIL_FROM is not configured");
   }
@@ -119,7 +117,7 @@ export async function sendRosterEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `Three Wolves play day roster — ${date} (${roster.length})`,
+    subject: `${clubShortName()} play day roster — ${date} (${roster.length})`,
     html: renderEmailLayout({ title: `Play day roster — ${date}`, bodyHtml }),
     text,
   });
@@ -141,13 +139,13 @@ export async function sendWaitlistConfirmationEmail(
   const bodyHtml = `
     ${heading("You're on the waitlist")}
     ${paragraph(`Hi ${escapeHtml(name)},`)}
-    ${paragraph(`Thanks for your patience — you're on the waitlist${forDate} at Three Wolves Badminton Club. We'll email you the moment a spot opens up, no payment required until then.`)}
+    ${paragraph(`Thanks for your patience — you're on the waitlist${forDate} at ${clubName()}. We'll email you the moment a spot opens up, no payment required until then.`)}
     ${contactFooterNote()}
   `;
   const text = [
     `Hi ${name},`,
     "",
-    `Thanks for your patience — you're on the waitlist${forDateText} at Three Wolves Badminton Club. We'll email you as soon as a spot opens up, no payment required until then.`,
+    `Thanks for your patience — you're on the waitlist${forDateText} at ${clubName()}. We'll email you as soon as a spot opens up, no payment required until then.`,
     "",
     contactFooterNoteText(),
   ].join("\n");
@@ -155,7 +153,7 @@ export async function sendWaitlistConfirmationEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `You're on the waitlist — Three Wolves Badminton Club${forDateText}`,
+    subject: `You're on the waitlist — ${clubName()}${forDateText}`,
     html: renderEmailLayout({ title: "You're on the waitlist", bodyHtml }),
     text,
   });
@@ -167,7 +165,7 @@ export async function sendWaitlistAdminAlertEmail(
   sessionDate?: string,
 ): Promise<void> {
   const from = process.env.EMAIL_FROM;
-  const to = process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com";
+  const to = process.env.CLUB_ROSTER_EMAIL || `${clubContactEmail()}`;
   if (!from) {
     throw new Error("EMAIL_FROM is not configured");
   }
@@ -209,14 +207,14 @@ export async function sendWaitlistSpotOpenEmail(
   const bodyHtml = `
     ${heading("A spot just opened up!")}
     ${paragraph(`Hi ${escapeHtml(name)},`)}
-    ${paragraph(`Good news — a spot has opened up for <strong>${escapeHtml(displayDate)}</strong> at Three Wolves Badminton Club. Spots go first-come, first-served, so grab it while it's open!`)}
+    ${paragraph(`Good news — a spot has opened up for <strong>${escapeHtml(displayDate)}</strong> at ${clubName()}. Spots go first-come, first-served, so grab it while it's open!`)}
     ${ctaButton("Book your spot", bookUrl)}
     ${contactFooterNote()}
   `;
   const text = [
     `Hi ${name},`,
     "",
-    `Good news — a spot has opened up for ${displayDate} at Three Wolves Badminton Club. Spots go first-come, first-served — book now: ${bookUrl}`,
+    `Good news — a spot has opened up for ${displayDate} at ${clubName()}. Spots go first-come, first-served — book now: ${bookUrl}`,
     "",
     contactFooterNoteText(),
   ].join("\n");
@@ -224,7 +222,7 @@ export async function sendWaitlistSpotOpenEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `A spot opened up — ${displayDate} — Three Wolves Badminton Club`,
+    subject: `A spot opened up — ${displayDate} — ${clubName()}`,
     html: renderEmailLayout({ title: "A spot opened up", bodyHtml }),
     text,
   });
@@ -258,7 +256,7 @@ export async function sendMembershipConfirmationEmail(
     : "";
 
   const planName = PLAN_NAME[input.plan];
-  const dayName = DAY_LABEL[input.day];
+  const dayName = DAY_LABEL(input.day);
   const planTitle = `${planName} (${dayName})`;
   const billingNote = input.recurring
     ? `renews automatically every ${input.plan === "monthly" ? "4 weeks" : "12 weeks"}`
@@ -268,19 +266,19 @@ export async function sendMembershipConfirmationEmail(
 
   const accessParagraph = input.renewal
     ? paragraph(
-        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today. Your renewed membership picks up on <strong>${escapeHtml(displayStart)}</strong>, right after your current one — no gap, no need to book sessions.`,
+        `You were charged <strong>${clubAmountWithCode(input.priceNzd)}</strong> today. Your renewed membership picks up on <strong>${escapeHtml(displayStart)}</strong>, right after your current one — no gap, no need to book sessions.`,
       )
     : input.delayed
     ? paragraph(
-        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today. There wasn't an open spot on the very next ${dayName} session, so your membership access starts on <strong>${escapeHtml(displayStart)}</strong> — the next ${dayName} session with room. You were charged today either way; your access simply begins then.`,
+        `You were charged <strong>${clubAmountWithCode(input.priceNzd)}</strong> today. There wasn't an open spot on the very next ${dayName} session, so your membership access starts on <strong>${escapeHtml(displayStart)}</strong> — the next ${dayName} session with room. You were charged today either way; your access simply begins then.`,
       )
     : paragraph(
-        `You were charged <strong>NZD $${input.priceNzd.toFixed(2)}</strong> today, and your membership is active immediately — you're welcome at every ${dayName} session from now through <strong>${escapeHtml(displayEnd)}</strong>.`,
+        `You were charged <strong>${clubAmountWithCode(input.priceNzd)}</strong> today, and your membership is active immediately — you're welcome at every ${dayName} session from now through <strong>${escapeHtml(displayEnd)}</strong>.`,
       );
 
   const greeting = input.renewal
     ? `Thanks for renewing, ${input.firstName}!`
-    : `Welcome to Three Wolves, ${input.firstName}!`;
+    : `Welcome to ${clubShortName()}, ${input.firstName}!`;
   const intro = input.renewal
     ? `Your <strong>${planTitle}</strong> membership is renewed (${billingNote}).`
     : `We're so glad to have you — your <strong>${planTitle}</strong> membership is confirmed (${billingNote}).`;
@@ -299,10 +297,10 @@ export async function sendMembershipConfirmationEmail(
     intro.replace(/<\/?strong>/g, ""),
     "",
     input.renewal
-      ? `You were charged NZD $${input.priceNzd.toFixed(2)} today. Your renewed membership picks up on ${displayStart}, right after your current one.`
+      ? `You were charged ${clubAmountWithCode(input.priceNzd)} today. Your renewed membership picks up on ${displayStart}, right after your current one.`
       : input.delayed
-      ? `You were charged NZD $${input.priceNzd.toFixed(2)} today. There wasn't an open spot on the very next ${dayName} session, so your membership access starts on ${displayStart} — the next ${dayName} session with room.`
-      : `You were charged NZD $${input.priceNzd.toFixed(2)} today, and your membership is active immediately.`,
+      ? `You were charged ${clubAmountWithCode(input.priceNzd)} today. There wasn't an open spot on the very next ${dayName} session, so your membership access starts on ${displayStart} — the next ${dayName} session with room.`
+      : `You were charged ${clubAmountWithCode(input.priceNzd)} today, and your membership is active immediately.`,
     "",
     `Membership window: ${displayStart} to ${displayEnd}. See you on court!`,
     "",
@@ -314,8 +312,8 @@ export async function sendMembershipConfirmationEmail(
     from: withDisplayName(from),
     to,
     subject: input.renewal
-      ? `Membership renewed — ${planTitle} — Three Wolves Badminton Club`
-      : `Welcome to Three Wolves — ${planTitle} membership confirmed`,
+      ? `Membership renewed — ${planTitle} — ${clubName()}`
+      : `Welcome to ${clubShortName()} — ${planTitle} membership confirmed`,
     html: renderEmailLayout({ title: "Membership confirmed", bodyHtml }),
     text,
   });
@@ -338,7 +336,7 @@ export async function sendMembershipReminderEmail(
     throw new Error("EMAIL_FROM is not configured");
   }
 
-  const dayName = DAY_LABEL[input.day];
+  const dayName = DAY_LABEL(input.day);
   const planTitle = `${PLAN_NAME[input.plan]} (${dayName})`;
   const displayDate = formatEmailDate(input.tomorrowDate);
   const location = input.sessionLocation || "Graham Condon Recreation and Sport Centre";
@@ -417,7 +415,7 @@ export async function sendCasualBookingConfirmationEmail(
     ${heading("You're confirmed!")}
     ${paragraph(`Hi ${escapeHtml(input.firstName)}, you're booked in for play on <strong>${escapeHtml(displayDate)}</strong>, ${whenWhere}.`)}
     ${paragraph("Grab your racket and we'll see you on court!")}
-    ${paragraph("<strong>Make it yours:</strong> create a free Three Wolves account to track your play days, climb the leaderboard and share photos. One tap, no password.")}
+    ${paragraph(`<strong>Make it yours:</strong> create a free ${clubShortName()} account to track your play days, climb the leaderboard and share photos. One tap, no password.`)}
     ${ctaButton("Create my account", accountUrl)}
     ${contactFooterNote()}
   `;
@@ -426,7 +424,7 @@ export async function sendCasualBookingConfirmationEmail(
     "",
     "Grab your racket and we'll see you on court!",
     "",
-    `Create a free Three Wolves account (track your play days, climb the leaderboard, share photos): ${accountUrl}`,
+    `Create a free ${clubShortName()} account (track your play days, climb the leaderboard, share photos): ${accountUrl}`,
     "",
     contactFooterNoteText(),
   ].join("\n");
@@ -434,7 +432,7 @@ export async function sendCasualBookingConfirmationEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `You're confirmed — ${displayDate} — Three Wolves Badminton Club`,
+    subject: `You're confirmed — ${displayDate} — ${clubName()}`,
     html: renderEmailLayout({ title: "You're confirmed!", bodyHtml }),
     text,
   });
@@ -485,7 +483,7 @@ export async function sendFillInConfirmationEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `You're filling in — ${displayDate} — Three Wolves Badminton Club`,
+    subject: `You're filling in — ${displayDate} — ${clubName()}`,
     html: renderEmailLayout({ title: "You're on the list!", bodyHtml }),
     text,
   });
@@ -552,7 +550,7 @@ export async function sendCasualBookingFullRefundEmail(
     ${heading("Your session sold out — refund issued")}
     ${paragraph(`Hi ${escapeHtml(input.firstName)},`)}
     ${paragraph(`We're sorry — the play day on <strong>${escapeHtml(displayDate)}</strong> filled up in the moments between your payment and confirmation, so you have <strong>not</strong> secured a spot.`)}
-    ${paragraph(`We've refunded your <strong>NZD $${input.amountNzd.toFixed(2)}</strong> in full. It can take 5–10 business days to appear back on your card, depending on your bank.`)}
+    ${paragraph(`We've refunded your <strong>${clubAmountWithCode(input.amountNzd)}</strong> in full. It can take 5–10 business days to appear back on your card, depending on your bank.`)}
     ${paragraph("Sorry again for the mix-up — please feel free to book another play day, or join the waitlist for this one and we'll email you the moment a spot frees up.")}
     ${contactFooterNote()}
   `;
@@ -561,7 +559,7 @@ export async function sendCasualBookingFullRefundEmail(
     "",
     `We're sorry — the play day on ${displayDate} filled up in the moments between your payment and confirmation, so you have not secured a spot.`,
     "",
-    `We've refunded your NZD $${input.amountNzd.toFixed(2)} in full. It can take 5-10 business days to appear back on your card, depending on your bank.`,
+    `We've refunded your ${clubAmountWithCode(input.amountNzd)} in full. It can take 5-10 business days to appear back on your card, depending on your bank.`,
     "",
     "Sorry again for the mix-up — please feel free to book another play day, or join the waitlist for this one.",
     "",
@@ -571,7 +569,7 @@ export async function sendCasualBookingFullRefundEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `Refund issued — ${displayDate} sold out — Three Wolves Badminton Club`,
+    subject: `Refund issued — ${displayDate} sold out — ${clubName()}`,
     html: renderEmailLayout({ title: "Refund issued", bodyHtml }),
     text,
   });
@@ -590,7 +588,7 @@ export async function sendAdminBookingRaceAlertEmail(input: {
   errorDetail?: string;
 }): Promise<void> {
   const from = process.env.EMAIL_FROM;
-  const to = process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com";
+  const to = process.env.CLUB_ROSTER_EMAIL || `${clubContactEmail()}`;
   if (!from) {
     throw new Error("EMAIL_FROM is not configured");
   }
@@ -641,7 +639,7 @@ export async function sendDayRequestConfirmationEmail(
   }
 
   const message = paused
-    ? `${dayLabel} sessions at Three Wolves Badminton Club are temporarily paused. You're on the list — we'll email you as soon as ${dayLabel} sign-ups are back.`
+    ? `${dayLabel} sessions at ${clubName()} are temporarily paused. You're on the list — we'll email you as soon as ${dayLabel} sign-ups are back.`
     : `Thanks for letting us know you'd like to play on ${dayLabel}s. You're on the list — if we open up ${dayLabel} sessions, you'll be the first to hear about it.`;
 
   const bodyHtml = `
@@ -655,7 +653,7 @@ export async function sendDayRequestConfirmationEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `We'll let you know about ${dayLabel} sessions — Three Wolves Badminton Club`,
+    subject: `We'll let you know about ${dayLabel} sessions — ${clubName()}`,
     html: renderEmailLayout({ title: "You're on the list", bodyHtml }),
     text,
   });
@@ -667,7 +665,7 @@ export async function sendDayRequestAdminAlertEmail(
   dayLabel: string,
 ): Promise<void> {
   const from = process.env.EMAIL_FROM;
-  const to = process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com";
+  const to = process.env.CLUB_ROSTER_EMAIL || `${clubContactEmail()}`;
   if (!from) {
     throw new Error("EMAIL_FROM is not configured");
   }
@@ -703,14 +701,14 @@ export async function sendDayOpenEmail(
   const bodyHtml = `
     ${heading(`${dayLabel} sessions are open!`)}
     ${paragraph(`Hi ${escapeHtml(name)},`)}
-    ${paragraph(`Good news — you asked us to let you know, and <strong>${escapeHtml(dayLabel)}</strong> sessions at Three Wolves Badminton Club are now open for sign-ups. Spots go first-come, first-served.`)}
+    ${paragraph(`Good news — you asked us to let you know, and <strong>${escapeHtml(dayLabel)}</strong> sessions at ${clubName()} are now open for sign-ups. Spots go first-come, first-served.`)}
     ${ctaButton("See sessions & sign up", url)}
     ${contactFooterNote()}
   `;
   const text = [
     `Hi ${name},`,
     "",
-    `Good news — you asked us to let you know, and ${dayLabel} sessions at Three Wolves Badminton Club are now open for sign-ups. Spots go first-come, first-served: ${url}`,
+    `Good news — you asked us to let you know, and ${dayLabel} sessions at ${clubName()} are now open for sign-ups. Spots go first-come, first-served: ${url}`,
     "",
     contactFooterNoteText(),
   ].join("\n");
@@ -718,7 +716,7 @@ export async function sendDayOpenEmail(
   await getResend().emails.send({
     from: withDisplayName(from),
     to,
-    subject: `${dayLabel} sessions are open — Three Wolves Badminton Club`,
+    subject: `${dayLabel} sessions are open — ${clubName()}`,
     html: renderEmailLayout({ title: `${dayLabel} sessions are open`, bodyHtml }),
     text,
   });
@@ -742,13 +740,13 @@ export async function sendMembershipRenewalReminderEmail(
     throw new Error("EMAIL_FROM is not configured");
   }
 
-  const planTitle = `${PLAN_NAME[input.plan]} (${DAY_LABEL[input.day]})`;
+  const planTitle = `${PLAN_NAME[input.plan]} (${DAY_LABEL(input.day)})`;
   const displayEnd = formatEmailDate(input.periodEnd);
 
   const bodyHtml = `
     ${heading("Your membership is ending soon")}
     ${paragraph(`Hi ${escapeHtml(input.firstName)},`)}
-    ${paragraph(`Your <strong>${planTitle}</strong> membership at Three Wolves Badminton Club ends on <strong>${escapeHtml(displayEnd)}</strong>.`)}
+    ${paragraph(`Your <strong>${planTitle}</strong> membership at ${clubName()} ends on <strong>${escapeHtml(displayEnd)}</strong>.`)}
     ${paragraph(`Renewal is now open for you. Renew before it ends and your next membership starts straight after this one, so you keep your spot on court.`)}
     ${ctaButton("Renew my membership", input.renewUrl)}
     ${paragraph(`Not renewing? No action needed — your membership simply ends on ${escapeHtml(displayEnd)}.`)}
@@ -757,7 +755,7 @@ export async function sendMembershipRenewalReminderEmail(
   const text = [
     `Hi ${input.firstName},`,
     "",
-    `Your ${planTitle} membership at Three Wolves Badminton Club ends on ${displayEnd}.`,
+    `Your ${planTitle} membership at ${clubName()} ends on ${displayEnd}.`,
     "",
     `Renewal is now open for you. Renew before it ends and your next membership starts straight after this one: ${input.renewUrl}`,
     "",
@@ -795,7 +793,7 @@ export async function sendJerseyRegistrationEmail(input: {
   const vi = input.lang === "vi";
   const price = clubMoney(input.priceCents, { trimZeros: false });
   const deadline = input.deadline
-    ? new Intl.DateTimeFormat(vi ? "vi-VN" : "en-NZ", {
+    ? new Intl.DateTimeFormat(vi ? "vi-VN" : clubLocale(), {
         timeZone: CLUB_TIME_ZONE,
         dateStyle: "full",
         timeStyle: "short",
@@ -818,7 +816,7 @@ export async function sendJerseyRegistrationEmail(input: {
         must: `<strong>Vui lòng ghi ${code} vào ô nội dung (reference) khi chuyển khoản.</strong> Nhờ mã này chúng tôi mới đối chiếu được khoản thanh toán của bạn — nếu thiếu mã, chúng tôi có thể không tìm thấy giao dịch và bạn có thể mất suất.`,
         rules:
           "Nếu bạn chuyển dư, phần chênh lệch sẽ thuộc về quỹ CLB — xin cảm ơn! Rất tiếc chúng tôi không hoàn tiền. Áo dự kiến về khoảng đầu tháng 11 và sẽ được phát vào một buổi chơi, thời gian sẽ thông báo sau.",
-        subject: `Mã tham chiếu áo đấu của bạn: ${input.refCode} — Three Wolves Badminton Club`,
+        subject: `Mã tham chiếu áo đấu của bạn: ${input.refCode} — ${clubName()}`,
         text: [
           `Xin chào ${input.firstName}, cảm ơn bạn đã đăng ký áo đấu CLB!`,
           "",
@@ -839,7 +837,7 @@ export async function sendJerseyRegistrationEmail(input: {
         must: `<strong>Please put ${code} in the reference field of your transfer.</strong> It's how we match your payment to you — without it we may not be able to find your transfer and you could lose your spot.`,
         rules:
           "If you send more than the price, the difference goes to the club's funds — thank you! Sorry, we can't offer refunds. Jerseys arrive around early November and will be handed out at a play day, to be announced.",
-        subject: `Your jersey reference code: ${input.refCode} — Three Wolves Badminton Club`,
+        subject: `Your jersey reference code: ${input.refCode} — ${clubName()}`,
         text: [
           `Hi ${input.firstName}, thanks for registering for the club jersey!`,
           "",
@@ -894,7 +892,7 @@ export async function sendJerseyPaidEmail(input: {
         p: `Xin chào ${escapeHtml(input.firstName)}, chúng tôi đã nhận được thanh toán cho áo mã ${escapeHtml(input.refCode)}. Áo của bạn đã được xác nhận.`,
         extra: `Bạn đã chuyển dư ${extraAmt} so với giá áo. Số tiền này thuộc về quỹ CLB — cảm ơn bạn đã ủng hộ!`,
         pick: "Áo dự kiến về khoảng đầu tháng 11 và sẽ được phát vào một buổi chơi, thời gian sẽ thông báo sau. Mặc áo đến House of Barber để được giảm 10% khi cắt tóc!",
-        subject: "Đã nhận thanh toán áo đấu — Three Wolves Badminton Club",
+        subject: `Đã nhận thanh toán áo đấu — ${clubName()}`,
         title: "Đã nhận thanh toán",
         first: `Xin chào ${input.firstName}, chúng tôi đã nhận được thanh toán cho áo mã ${input.refCode}. Áo của bạn đã được xác nhận.`,
       }
@@ -903,7 +901,7 @@ export async function sendJerseyPaidEmail(input: {
         p: `Hi ${escapeHtml(input.firstName)}, we've received your payment for jersey ${escapeHtml(input.refCode)}. Your jersey is confirmed.`,
         extra: `You sent ${extraAmt} more than the price. That goes to the club's funds — thank you for the support!`,
         pick: "Jerseys arrive around early November and will be handed out at a play day, to be announced. Wear it to House of Barber for 10% off a haircut!",
-        subject: "Jersey payment received — Three Wolves Badminton Club",
+        subject: `Jersey payment received — ${clubName()}`,
         title: "Payment received",
         first: `Hi ${input.firstName}, we've received your payment for jersey ${input.refCode}. Your jersey is confirmed.`,
       };
@@ -931,7 +929,7 @@ export async function sendJerseyAdminAlertEmail(input: {
   refCode: string;
   flags: string[];
 }): Promise<void> {
-  const to = process.env.CLUB_ROSTER_EMAIL || "threewolvesbadminton@gmail.com";
+  const to = process.env.CLUB_ROSTER_EMAIL || `${clubContactEmail()}`;
   const flagText = input.flags.join(", ");
   const bodyHtml = `
     ${heading("Jersey registration needs a look")}

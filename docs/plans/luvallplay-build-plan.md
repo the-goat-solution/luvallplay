@@ -742,6 +742,23 @@ Not club modules at all: **Setup check** (environment diagnostics) and **Platfor
 - `Pacific/Auckland` → `tenants.timezone`
 - "Wolf Points" / "Wolf Vision" → `tenants.terms`
 
+##### Lane A delivery log
+
+Kept by the lane A thread (§9.2). Newest last. "Merged" means on `main`; until then the step isn't done.
+
+| Date | Step | Pull request | State | Notes |
+|---|---|---|---|---|
+| 26 Nov | **A1** one menu source | #177 | Open; its own checks pass. Waiting for `main` to be green (the players' app journey APP33 fails on `main` itself) | The menu, its badges and Today's "Needs attention" list are generated from the module registry; the hand-written list is deleted. A new `admin.nav` item needs `label` and `order`; Today lines and badges are `admin.attention` in the module's manifest, with the counter in `lib/admin-attention.ts`. Today also leaves out a switched-off module (audit: "Today is filtered by role, not module"). Proof: the generated menu equals the old one in a test, and 132 before/after captures of the admin (owner, admin, coach) show no difference |
+| 26 Nov | **H7** audit log | #182 | Open; **waiting for the owner's OK** (owners see new rows in the audit log) | An allow-list of recorded fields (ids and choices only; `medicalNotes` is named as banned in a test); per-action rows with the outcome for every `/api/admin` route, exports included, and for module switches; a test fails on a new `/api/admin` route without its row. Server actions on other pages keep the proxy's generic row until the module contract (A6) |
+| 26 Nov | **H8** per-action step-up | #186 (draft, on top of #182) | **Waiting for the owner's OK** (sign-in behaviour) | A code entered in the last 5 minutes for: module switch and lock, admin add/change/remove, platform staff, shop refund, membership cancel, the three exports. Adds `login_stepup_action` to the `profile` messages and a `stepup=action` notice on the code screen |
+| 26 Nov | **A2** part 1, admin code | #188 | Open; no visible change; waiting for `main` to be green | `lib/club-brand.ts` answers for the club's name, short name, locale, currency code, weekdays and two payment descriptions; 17 admin files use it; a scan fails on a new literal in `app/admin` or `components/admin`. Same 132-capture proof |
+
+**Tools added:** `apps/web/scripts/admin-snapshot/` (with A1): `snapshot.mjs` captures every admin page as the owner, an admin and a coach on the end-to-end environment; `compare.mjs` compares two captures. Run on `main` and on the branch on the same day.
+
+**Next:** A2 part 2 (emails and receipts) and part 3 (XLSX exports, the scan over `lib/` and `app/api/`); the Stripe description strings in lane W's files; the schema part of A2 through lane T's queue; then A3.
+
+**Found on the way, for other lanes:** APP33 (`apps/app/tests/e2e/app.mjs:1232`) fails on `main` depending on the date ("open 8 days"); web journey API3 expects 14 theme colours where the config has 18; a club's **short name** has no stored setting yet (other clubs would show their full name).
+
 ### 6.3 Whitelabel and the Three Wolves exception
 
 - Every club gets generic terms by default ("Luv Points", "Vision", generic rank art) and a **theme**.
@@ -1573,6 +1590,74 @@ The week numbers didn't include waiting on lawyers, the NZ company, app-store re
 - **Personal data law and Decree 356/2025 (from 1 Jan 2026):** consent, the data-transfer assessment filed within 60 days of processing or transfer, penalties for cross-border transfer violations (one source says up to 5% of revenue), children's data, and where the Vietnam region is hosted (§6.9).
 - **Payment intermediary rules (Decree 52/2024):** confirm that each club using its own MoMo merchant account keeps Luvallplay outside the licensing rules, and what applies to TGS collecting its own fees.
 - **E-invoices and tax** for fees TGS charges and for clubs that sell to members; **advertising and sports-event rules**; **trademark** (§11.3).
+
+#### 11.4.1 MoMo and Zalo: what their documentation says (lane V reading note, 25 Nov 2026)
+
+**How far to trust this.** developers.momo.vn, developers.zalo.me and Zalo's other documentation sites could not be opened from the build environment (its network settings don't allow them). Everything below was taken from **search-engine excerpts of the official pages**, not from reading the pages in full, so nothing here counts as confirmed. Each point names the page it came from. Before any build, someone reads those pages directly, and the rules that matter are **confirmed in writing by MoMo and Zalo** (the gate for this lane). Nothing has been built for either.
+
+**MoMo (decision AC), against the points marked unverified in §6.5:**
+
+| Point | What the excerpts say | Still open |
+|---|---|---|
+| Who can be a merchant | Sign-up is through MoMo's business portal with legal and business information; live keys need a "verified company" business account. Household businesses appear as an account type, with a business licence (developers.momo.vn/v3/docs/payment/onboarding/merchant-profile; a momo.vn notice) | **Whether an informal club or an individual can be a merchant at all.** If not, most clubs stay on VietQR, which the plan already treats as the default |
+| A platform or partner programme | The payment request has a `subPartnerCode` field: "sub-partner under a master merchant", for third-party service providers only; there is also a `storeId` (…/payment/api/wallet/onetime) | How sub-merchants are signed up and **whose account receives the money**. This decides whether "each club connects its own account" is even how MoMo works for a platform, and it is the Decree 52/2024 question for counsel |
+| Recurring payments | They exist: wallet account binding and pay-with-token (1,000 to 30,000,000 VND a charge), and a subscription type (fixed or variable amount, daily to yearly) that the customer approves at the first purchase (…/wallet/pay-with-token, …/wallet/subscription) | Whether every merchant may use it, and whether each cycle needs the customer again. **So "MoMo has no recurring billing" should not be assumed**; the capability flag stays undecided |
+| Settlement | Nothing in the developer documentation. MoMo's 2023 notices for small shops say money reaches the merchant's MoMo account at once, and moving it to a bank is a separate withdrawal with free allowances | The cycle and bank payout for gateway merchants. The plan's "1 to 7 working days" isn't supported or contradicted |
+| Refunds | An API exists, full and partial, with its own order id; minimum 1,000 VND, maximum 50,000,000; a refund-status query (…/payment-api/refund) | **How long after a payment a refund is allowed** |
+| Payment notifications (IPN) | A server-to-server POST; the signature is HMAC-SHA256 with the merchant's secret key over the fields sorted by name; the merchant must answer within 15 seconds; a status query exists as the fallback (…/result-handling/notification, …/other/signature, …/payment-api/query) | The retry schedule, duplicates and ordering (one page says answer "204", another shows a signed "200"). Our payments interface already assumes events arrive twice and out of order |
+| Methods and limits | Wallet, domestic ATM card, international cards, buy-now-pay-later; wallet payments 1,000 to 50,000,000 VND | When a payment link expires; fees per method (none published) |
+| Test environment | A sandbox at `test-payment.momo.vn` with separate keys and a MoMo test app | Whether test keys are issued without a business account |
+
+**Zalo (decision AD), against the points marked unverified in §11.4:**
+
+| Point | What the excerpts say | Still open |
+|---|---|---|
+| Who can have a verified Official Account (OA) | A business or household business with a business registration certificate; the admin needs a Vietnamese Zalo account. Without registration there is only an "advertising profile" with no messaging (oa.zalo.me guides) | Nothing: this matches the plan (TGS verifies the OA) |
+| **What an OA costs** | **Paid yearly packages from 1 June 2026**, and **using the API needs one of the two upper packages** (2,500,000 or 6,000,000 VND a year, VAT included) (zalo.solutions/oa/pricing). The plan said an OA is free | Confirm the current price list |
+| Chat messages | "Consultation" messages only after the user wrote first. Through the API the last interaction must be within **7 days**; the first 8 replies within **48 hours** are free, then about 55 VND each. Broadcasts go to followers only, at most 4 free a month per follower (oa.zalo.me policy pages) | Whether those numbers are current |
+| Notifications to a phone number (ZNS) | **Renamed "ZBS Template Message" from 1 Jan 2026.** Sends to a phone number with a Zalo account, no follow needed, but the person must have consented. Every template is reviewed (2 to 3 working days). About **300 VND a message** (400 for sign-in codes), charged when delivered. No advertising in transaction or care templates; promotional ones are rationed. Daily quotas start at 500 to 5,000 and grow with quality (zalo.solutions pricing and guidelines) | Prices; what happens when the number has no Zalo account |
+| **One OA for many clubs** | **Not what Zalo documents.** A template's logo and links must match the OA's own name, and naming another business needs proof of the relationship. The documented way to serve many organisations is the reverse: **one app, and each organisation's own OA authorises it**; or a registered partner or agency sends on their behalf (oa.zalo.me ZBS guide; zns.oa.zalo.me/policy) | **Ask Zalo in writing whether one Luvallplay OA may send under each club's name.** If not, decision AD's "one Luvallplay OA" becomes "each club's own OA connected to Luvallplay's app", which needs each club to be a registered business, or Zalo notifications come from Luvallplay itself ("Luvallplay: your session at …") |
+| Inbound messages | Webhooks by HTTP POST with a signature header (`X-ZEvent-Signature`, a SHA-256 over the app id, the body, the timestamp and the OA secret); events for a message, a follow, an unfollow, and **a person using their data rights** (delete, withdraw consent) (developers.zalo.me webhook pages; the formula is from Zalo's forum) | Retry rules; which secret signs when one app serves several OAs |
+| Access tokens | Short-lived access token (about a day), a 3-month refresh token that is **replaced on every use** (Zalo's forum, not the documentation) | The exact lifetimes. A lost refresh token means the club must reconnect, so storage must be careful |
+| Mini app | Publishing needs a verified OA or a business dossier; each version is reviewed (about 72 working hours). **A mini app that takes payments must use Zalo's Checkout SDK**, which offers ZaloPay, MoMo, VNPay, cards and bank transfer; bank transfer has no payment callback (mini.zalo.me; miniapp.zaloplatforms.com) | Whether our own VietQR code may be shown beside the SDK; fees; categories needing a licence |
+| Signing in and the phone number | The mini app can ask for the phone number with the person's consent: a single-use token our server exchanges for the number. The user id is specific to the app; an OA-specific id comes back only when the mini app is tied to the OA and the person follows it (miniapp.zaloplatforms.com docs) | Whether the phone-number request costs money. **Linking by phone number, as the plan says, looks workable** |
+| Data rules | A public data-processing agreement; Zalo may audit proof of consent for notifications (zalo.me/policy; zns.oa.zalo.me/policy) | Residency and retention terms: for counsel, with the agreement itself |
+
+**What this changes in the plan (proposals, for the owner):**
+1. **Zalo isn't free.** Budget a yearly OA package (the API needs an upper one) and about 300 VND for each notification. Chat is free only inside a short window after the member writes.
+2. **"One Luvallplay OA for every club" is the main risk** and gets asked first, in writing. The fallback designs are above.
+3. **Paying inside the mini app goes through Zalo's Checkout SDK**, so "pay by VietQR or MoMo" in the mini app means "through the SDK's bank transfer or MoMo", not our own screens.
+4. **MoMo may well support subscriptions**, and its merchant rules may exclude informal clubs. Both go to MoMo in writing before the provider's capabilities are declared.
+5. Zalo sends an event when a person uses their data rights: the Zalo channel must act on it (delete or stop), which belongs in the design from the start.
+
+#### 11.4.2 Track V delivery log
+
+Lane V builds the Vietnam pieces that don't wait for discovery or counsel. **Nothing here is live for any club:** every piece is unused pure code, behind an off-switch, or test data. No migration and no production step has been needed.
+
+| Step | Pull request | What it is | State on 25 Nov 2026 |
+|---|---|---|---|
+| 1 VietQR | #155 | `packages/core/src/vietqr.ts` builds and reads NAPAS VietQR codes (amount in whole dong, the reference as the transfer note) and declares VietQR's capabilities for the payments interface. `vietqr-match.ts` makes references with a check character and matches incoming transfers: automatic only when the reference is found, the amount is exact and the payment is open; replays never pay twice | Open, tests pass |
+| 2 Country pack | #165 | `country-pack.ts` and `country-pack-vn.ts`: VND, `Asia/Ho_Chi_Minh`, +84 phones, family-name-first names with a display name, accent-free search in the app and in Postgres (no extension), Vietnamese sport words, and the checklist a pack must pass. A synthetic Vietnamese club for test databases only | Open, tests pass |
+| 3 S3 storage | #171, #172 | `lib/storage-s3.ts`, chosen by `STORAGE_DRIVER=s3` (Vercel Blob stays the default); #172 adds an S3 server to CI so the shared storage contract runs against a real one | Open |
+| 4 Message channels | #181 | `lib/messages/**`: an announcement goes out on each member's chosen channels (email; push and SMS once a sender is registered; Zalo a named slot). Off by default and called by nothing | Open, tests pass |
+| 5 Regional services matrix | #184 | Every outside service, its personal data and its status per region, with a CI check: nothing unclassified, Sydney clean, Hanoi's blockers pinned, no Hanoi approval without a written decision | Open, tests pass |
+| 6 MoMo and Zalo reading | this section | §11.4.1 | From search excerpts only; a direct read is still owed |
+
+**Decisions made while building (each can be changed):**
+- **Payment references** look like `LVP000016JK`: a prefix, the payment's number in letters and digits that aren't confused with each other, and a check character. They survive what banks do to transfer notes (capitals, no accents, their own text around it, spaces pushed in).
+- **A transfer with the wrong amount is never matched automatically**, in either direction; neither is a transfer with no reference, even when only one open payment has that amount. A person decides, with the reason shown.
+- **Accent-free search in the database uses built-in Postgres functions**, not the `unaccent` extension, because a Vietnamese cloud's managed Postgres may not offer it. No migration was needed. If name search becomes slow on a large club, an indexed search column goes through the migration queue.
+- **The Vietnam pack can't be selected**: its tax and legal items are empty until counsel answers, and the checklist refuses a pack with open items.
+- **The S3 provider speaks the protocol directly** (no AWS library), so it adds no dependency and works with any S3-compatible store.
+- **Nothing is approved for the Hanoi region by default.** A service nobody has decided about is blocked there.
+
+**Found along the way (for other lanes, through the coordinator):**
+- **Photos would still leave a Hanoi region.** Browser photo uploads (`lib/photos-service.ts`, the app) and finance receipts (`lib/finance-receipts.ts`) call Vercel Blob directly, outside the storage interface. The matrix records it as a blocker.
+- **"Is this production?" is asked of Vercel.** `lib/side-effects.ts` treats only a Vercel production deployment as production, so on Kubernetes in Hanoi every email and text would be captured and never sent. It needs a region-neutral setting before Hanoi runs.
+- **Profiles still have first and last name fields.** §6.9 wants one full-name field plus a display name; the name helpers are ready for it, the schema change isn't made.
+- **CI on `main` was already failing** in the players' app job when this lane started, so none of the pull requests above could be merged on a green run.
+
+**Gated, not started:** a VietQR provider behind the payments interface (lane W's file); where a member's channel choice is stored (migration queue) and the Messages module sending announcements (changes what members receive: owner's OK); MoMo and Zalo (their rules in writing); the Hanoi stack (discovery and counsel); scanning generated VietQR codes with real banking apps and checking the bank list against NAPAS (V gate).
 
 ### 11.5 Support, operations and security (before commercial launch)
 

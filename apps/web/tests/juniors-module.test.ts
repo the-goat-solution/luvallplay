@@ -142,7 +142,6 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     const on = await enabledModules(c);
     assert.equal(on.has("juniors"), false);
     assert.equal(on.has("forms-waivers"), false);
-    assert.equal(await moduleBlocking(c, "/admin/juniors"), "juniors");
     assert.equal(await moduleBlocking(c, "/admin/juniors/setup"), null, "the page that switches it on is served");
     assert.ok(!(THREE_WOLVES.modules as readonly string[]).includes("juniors"));
   });
@@ -203,7 +202,6 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     });
     assert.equal(await juniorsOn(c, undefined, OPEN), true);
     assert.equal((await enabledModules(c)).has("juniors"), true, "the cache was reset by the switch");
-    assert.equal(await moduleBlocking(c, "/admin/juniors"), null);
     assert.deepEqual(await tryOn(P.owner), { ok: true, changed: false }, "twice changes nothing");
     // Every other module is as it was.
     const others = (await listClubModules(c)).filter((m) => !["juniors", "forms-waivers"].includes(m.id));

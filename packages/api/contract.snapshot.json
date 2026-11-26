@@ -3493,6 +3493,157 @@
         }
       }
     },
+    "family.export": {
+      "method": "GET",
+      "path": "/clubs/{club}/family/{id}/export",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "attendance": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "date": {
+                  "t": "string"
+                },
+                "recordedAt": {
+                  "t": "string"
+                }
+              }
+            }
+          },
+          "bookings": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "amountMinor": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "bookedAt": {
+                  "t": "string"
+                },
+                "currency": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "date": {
+                  "t": "string"
+                },
+                "status": {
+                  "t": "string"
+                }
+              }
+            }
+          },
+          "child": {
+            "t": "object",
+            "fields": {
+              "addedAt": {
+                "t": "string"
+              },
+              "birthYear": {
+                "t": "number",
+                "nullable": true
+              },
+              "name": {
+                "t": "string"
+              }
+            }
+          },
+          "consent": {
+            "t": "object",
+            "fields": {
+              "confirmedAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "leaderboard": {
+                "t": "boolean"
+              },
+              "photos": {
+                "t": "boolean"
+              },
+              "version": {
+                "t": "string",
+                "nullable": true
+              },
+              "vision": {
+                "t": "boolean"
+              }
+            }
+          },
+          "emergencyContacts": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "name": {
+                  "t": "string"
+                },
+                "phone": {
+                  "t": "string"
+                },
+                "position": {
+                  "t": "number"
+                },
+                "relationship": {
+                  "t": "string",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "exportedAt": {
+            "t": "string"
+          },
+          "forms": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "kind": {
+                  "t": "string"
+                },
+                "signedAt": {
+                  "t": "string"
+                },
+                "signedName": {
+                  "t": "string"
+                },
+                "title": {
+                  "t": "string"
+                },
+                "version": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "guardians": {
+            "t": "number"
+          },
+          "medicalNotes": {
+            "t": "unknown",
+            "nullable": true
+          }
+        }
+      }
+    },
     "family.forms": {
       "method": "GET",
       "path": "/clubs/{club}/family/{id}/forms",
@@ -3634,6 +3785,64 @@
                 "t": "number"
               },
               "nameMax": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.remove": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/delete",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "confirm": {
+            "t": "boolean"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "deleted": {
+            "t": "literal",
+            "value": true
+          },
+          "kept": {
+            "t": "object",
+            "fields": {
+              "attendance": {
+                "t": "number"
+              },
+              "bookings": {
+                "t": "number"
+              }
+            }
+          },
+          "removed": {
+            "t": "object",
+            "fields": {
+              "emergencyContacts": {
+                "t": "number"
+              },
+              "medicalNotes": {
+                "t": "number"
+              },
+              "signatures": {
                 "t": "number"
               }
             }

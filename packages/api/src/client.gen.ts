@@ -103,12 +103,18 @@ export function createApi(transport: Transport) {
       /** PUT /clubs/{club}/family/{id}/consent (signed in) */
       consent: (params: ParamsOf<"family.consent">, body: BodyOf<"family.consent">, options?: Options) =>
         transport.call("family.consent", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.consent">>,
+      /** GET /clubs/{club}/family/{id}/export (signed in) */
+      export: (params: ParamsOf<"family.export">, options?: Options) =>
+        transport.call("family.export", { params, signal: options?.signal }) as Promise<ResponseOf<"family.export">>,
       /** GET /clubs/{club}/family/{id}/forms (signed in) */
       forms: (params: ParamsOf<"family.forms">, options?: Options) =>
         transport.call("family.forms", { params, signal: options?.signal }) as Promise<ResponseOf<"family.forms">>,
       /** GET /clubs/{club}/family (signed in) */
       list: (params: ParamsOf<"family.list">, options?: Options) =>
         transport.call("family.list", { params, signal: options?.signal }) as Promise<ResponseOf<"family.list">>,
+      /** POST /clubs/{club}/family/{id}/delete (signed in) */
+      remove: (params: ParamsOf<"family.remove">, body: BodyOf<"family.remove">, options?: Options) =>
+        transport.call("family.remove", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.remove">>,
       /** POST /clubs/{club}/family/{id}/forms/{formId}/sign (signed in) */
       signForm: (params: ParamsOf<"family.signForm">, body: BodyOf<"family.signForm">, options?: Options) =>
         transport.call("family.signForm", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.signForm">>,

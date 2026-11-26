@@ -105,6 +105,28 @@ export const familySignRequest = z.object({ name: z.string().max(400) });
 export const familyFormResponse = z.object({ form: familyForm });
 export type FamilyFormsResponse = z.infer<typeof familyFormsResponse>;
 export type FamilyFormResponse = z.infer<typeof familyFormResponse>;
+// Everything the club holds about a child, for their guardian (step 7).
+export const familyExportResponse = z.object({
+  exportedAt: z.string(),
+  child: z.object({ name: z.string(), birthYear: z.number().int().nullable(), addedAt: z.string() }),
+  consent: z.object({ leaderboard: z.boolean(), photos: z.boolean(), vision: z.boolean(), confirmedAt: z.string().nullable(), version: z.string().nullable() }),
+  guardians: z.number().int(),
+  bookings: z.array(z.object({ date: z.string(), status: z.string(), amountMinor: z.number().int().nullable(), currency: z.string().nullable(), bookedAt: z.string() })),
+  attendance: z.array(z.object({ date: z.string(), recordedAt: z.string() })),
+  emergencyContacts: z.array(z.object({ position: z.number().int(), name: z.string(), phone: z.string(), relationship: z.string().nullable() })),
+  /** null: no note. `unavailable`: a note exists but can't be decrypted right now. */
+  medicalNotes: z.union([z.object({ notes: z.string() }), z.object({ unavailable: z.literal(true) })]).nullable(),
+  forms: z.array(z.object({ title: z.string(), kind: z.string(), version: z.number().int(), signedName: z.string(), signedAt: z.string() })),
+});
+/** `confirm` must be true: deleting can't be undone. */
+export const familyDeleteRequest = z.object({ confirm: z.boolean() });
+export const familyDeleteResponse = z.object({
+  deleted: z.literal(true),
+  removed: z.object({ medicalNotes: z.number().int(), emergencyContacts: z.number().int(), signatures: z.number().int() }),
+  kept: z.object({ bookings: z.number().int(), attendance: z.number().int() }),
+});
+export type FamilyExportResponse = z.infer<typeof familyExportResponse>;
+export type FamilyDeleteResponse = z.infer<typeof familyDeleteResponse>;
 export type FamilyBookingsResponse = z.infer<typeof familyBookingsResponse>;
 export type FamilyBookingResponse = z.infer<typeof familyBookingResponse>;
 export type FamilyChild = z.infer<typeof familyChild>;

@@ -9,6 +9,7 @@ import { useCurrentClub, useT } from "../hooks.tsx";
 import { ChildBookings } from "./family/Bookings.tsx";
 import { ChildCare } from "./family/Care.tsx";
 import { ChildFormsPart } from "./family/Forms.tsx";
+import { ChildRights } from "./family/Rights.tsx";
 import { CONSENT_ITEMS, useAddChild, useFamily, useFamilyBookings, useFamilyOn, useSetConsent, useUpdateChild, type Child, type Consent, type Family, type FamilyBookings } from "./family/data.ts";
 import { errorKey, useFamilyT, type FamilyT } from "./family/words.ts";
 
@@ -88,7 +89,7 @@ function AddChild({ family, clubName, ft, onDone }: { family: Family; clubName: 
   );
 }
 
-function ChildCard({ child, family, bookings, ft }: { child: Child; family: Family; bookings: FamilyBookings | undefined; ft: FamilyT }) {
+function ChildCard({ child, family, bookings, ft, onDeleted }: { child: Child; family: Family; bookings: FamilyBookings | undefined; ft: FamilyT; onDeleted: (name: string) => void }) {
   const id = useId();
   const update = useUpdateChild(child.id);
   const consent = useSetConsent(child.id);
@@ -146,6 +147,7 @@ function ChildCard({ child, family, bookings, ft }: { child: Child; family: Fami
       {bookings && <ChildBookings childId={child.id} data={bookings} ft={ft} />}
       <ChildFormsPart childId={child.id} childName={child.name} ft={ft} />
       <ChildCare childId={child.id} ft={ft} />
+      <ChildRights childId={child.id} childName={child.name} ft={ft} onDeleted={onDeleted} />
       <fieldset className="stack">
         <legend className="label-title">{ft("family_optional_title")}</legend>
         <p className="muted small">{ft("family_optional_hint")}</p>
@@ -166,6 +168,7 @@ export default function FamilyScreen() {
   const bookings = useFamilyBookings().data;
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState<string | null>(null);
   const clubName = current?.name ?? "";
   // Off for this club (or switched off since the list was read): say so, show nothing else.
   const off = (!!config && !on) || codeOf(state.error) === "module_off";
@@ -182,9 +185,10 @@ export default function FamilyScreen() {
         <>
           <p className="muted">{ft("family_intro")}</p>
           {added && <p className="notice" role="status">{ft("family_added", { name: added })}</p>}
+          {deleted && <p className="notice" role="status">{ft("rights_deleted", { child: deleted })}</p>}
           {family.children.length === 0 && !adding && <p className="muted">{ft("family_empty")}</p>}
           {family.children.map((child) => (
-            <ChildCard key={child.id} child={child} family={family} bookings={bookings} ft={ft} />
+            <ChildCard key={child.id} child={child} family={family} bookings={bookings} ft={ft} onDeleted={(name) => (setAdded(null), setDeleted(name))} />
           ))}
           {adding ? (
             <>

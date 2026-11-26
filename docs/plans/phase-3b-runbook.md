@@ -15,7 +15,7 @@ Build plan §6.8, decision V. Test plan §3.17, journey J1, gate "3b Junior acco
 | 4 | Waivers, emergency contacts, encrypted medical notes | **Part built** (26 Nov): the tables and the library for emergency contacts and encrypted medical notes, with tests (migration `0016_junior_care`, additive, rehearsed locally; lane T numbers and runs it). A note is encrypted before it reaches the database; the guardian writes it; on the club's side only an owner reads it until safety-checked coaches exist (step 6). The app's "Safety details" part of the Family screen (three endpoints, journey APP55) is merged (#219): closed until the guardian opens it, and nothing of it is kept on the device. Waivers: the tables and library are built with tests (migration `0017_club_forms`, additive, rehearsed locally): a club publishes a form, new wording is a new version that asks every guardian again, a guardian signs for a child by typing their name, a signature is never edited. Signing in the app is in review (two endpoints, a "Forms and waivers" part on the child's card, journey APP56). Not built: the admin page for publishing a form (with step 6) |
 | 5 | Booking and paying for a child | **Booking built** (26 Nov): the shared place-count helpers (#202) and the child-booking library (#203) are merged; the app's three booking endpoints and the "Play days" part of the Family screen are in review (journey APP54). At a club that charges, the screen says paying in the app isn't available yet and nothing can be booked unpaid. Not built: paying, which is the next PR and needs your OK before it merges |
 | 6 | Club side: junior roster, coach safety checks, who may see what | Not started |
-| 7 | A guardian exports and deletes a child's data | Not started |
+| 7 | A guardian exports and deletes a child's data | **Built, in review** (26 Nov): the library with database tests, two app endpoints, and "This child's information" on the child's card (journey APP57). Export: everything the club holds, as one file, the medical note in plain words. Delete (asked twice, can't be undone): the note, contacts and signatures are removed; the profile is emptied and every guardianship ended; dated bookings and attendance stay with nothing that names the child. Refused while a coming place is held. No migration. See §3, questions 11 and 12 |
 | 8 | Growing up at 16 | Only if 1 to 7 are solid |
 
 ## 1. How a junior is stored (plan change)
@@ -162,6 +162,8 @@ Agreed with the coordinating thread on 25 Nov; each shared change is its own `[l
 | 7 | What may a guardian allow for a child, and what is the default? | Three items, all off until the guardian switches one on: the club's board (first name and initial only), photos, match video. With two guardians both must agree |
 | 8 | How many children can one guardian add? | 8 |
 | 6 | Does Juniors need Forms & waivers? | Yes: switching Juniors on switches Forms & waivers on too, since a guardian signs the club's consent forms and waivers for each child (step 4) |
+| 11 | When a child's information is deleted, what does the club keep? | The dates, statuses and amounts of past bookings and attendance marks, pointing at an emptied profile (no name, no year of birth). The club needs them for its counts of places and its money records. Everything else goes. **Check with counsel** how long those may be kept |
+| 12 | With two guardians, who can delete? | Either one, alone, and it ends it for both. The other guardian isn't asked or told yet (no notice is built) |
 
 ## 4. Check with counsel (not claimed as done)
 

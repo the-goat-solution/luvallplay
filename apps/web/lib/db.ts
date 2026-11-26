@@ -403,14 +403,27 @@ export async function assignAndReserveMembershipAccessStart(
   const lockKey = `${member.email.toLowerCase()}:${day}`;
 
   const client = await db.connect();
+  // One transaction for the whole function, with a transaction-level
+  // advisory lock, so the duplicate-membership check and the capacity search
+  // + insert that follows it are serialized against any other concurrent
+  // signup for the same email+day. Without the lock, two requests racing
+  // each other could both pass the check below before either has committed
+  // a row.
+  //
+  // It was a session-level lock (pg_advisory_lock … pg_advisory_unlock)
+  // around one small transaction per candidate. Through a transaction pooler
+  // (Neon's pooled host, PgBouncer) each statement outside a transaction can
+  // land on a different server connection, so the unlock could miss the
+  // connection holding the lock: the lock leaked, and later sign-ups for the
+  // same email and day hung. A transaction-level lock is released by the
+  // server at COMMIT or ROLLBACK, whatever happens to this process. Each
+  // candidate day is tried inside a savepoint, so a full day's row lock is
+  // let go before the next day is tried, as before.
+  let open = false;
   try {
-    // Session-level advisory lock (not transaction-scoped, so it spans every
-    // per-candidate transaction below) held for this whole function, so the
-    // duplicate-membership check and the capacity search + insert that
-    // follows it are serialized against any other concurrent signup for the
-    // same email+day. Without this, two requests racing each other could
-    // both pass the check below before either has committed a row.
-    await client.query(`SELECT pg_advisory_lock(hashtext($1));`, [lockKey]);
+    await client.query("BEGIN");
+    open = true;
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1));`, [lockKey]);
 
     // A lapsed one-time membership is only marked 'expired' by the daily
     // status upkeep (lib/membership-status.ts), so between its end date and
@@ -467,8 +480,8 @@ export async function assignAndReserveMembershipAccessStart(
     for (const row of candidates) {
       const date = (row as { date: string }).date;
 
-      await client.query("BEGIN");
-      try {
+      await client.query("SAVEPOINT candidate");
+      {
         const { rows: sessionRows } = await client.query(
           `SELECT booked_spots, courts, mini_game FROM sessions WHERE date = $1 FOR UPDATE;`,
           [date],
@@ -523,6 +536,7 @@ export async function assignAndReserveMembershipAccessStart(
             ],
           );
           await client.query("COMMIT");
+          open = false;
           return {
             blocked: false,
             membershipId: (inserted[0] as { id: number }).id,
@@ -530,19 +544,20 @@ export async function assignAndReserveMembershipAccessStart(
             periodEnd,
           };
         }
-        await client.query("ROLLBACK");
-      } catch (e) {
-        await client.query("ROLLBACK");
-        throw e;
+        // No room: let go of this day's row lock before trying the next.
+        await client.query("ROLLBACK TO SAVEPOINT candidate");
       }
     }
 
     return { blocked: true, reason: "sessions_full" };
   } finally {
-    await client
-      .query(`SELECT pg_advisory_unlock(hashtext($1));`, [lockKey])
-      .catch(() => {});
-    client.release();
+    // Nothing was written unless the COMMIT above ran. Ending the
+    // transaction releases the advisory lock; if the ROLLBACK can't be sent,
+    // the connection is destroyed, not reused with a transaction open (the
+    // server then rolls back and releases the lock by itself).
+    let broken: Error | undefined;
+    if (open) await client.query("ROLLBACK").catch((e) => { broken = e instanceof Error ? e : new Error(String(e)); });
+    client.release(broken);
   }
 }
 

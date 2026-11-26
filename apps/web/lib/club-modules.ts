@@ -8,7 +8,7 @@
 // - A module without a row is OFF: the registry is the catalogue, and the
 //   table is what the club chose.
 // - If the table can't be read (database down, or the migration not applied
-//   yet), every module counts as on. Enforcement is a product switch, not a
+//   yet), every module counts as on, except one the platform keeps hidden. Enforcement is a product switch, not a
 //   security boundary, and a database hiccup must not turn a club's features
 //   off. The failure is logged.
 // - MODULE_ENFORCEMENT=off turns enforcement off altogether (every module
@@ -21,7 +21,10 @@ import { defaultTenantSlug } from "./tenant-members.ts";
 export type Db = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
 
 const CORE = MODULES.filter((m) => m.core).map((m) => m.id as string);
-const ALL = MODULES.map((m) => m.id as string);
+// A module the platform keeps hidden (its manifest says so) can't be switched
+// on by a club, so "every module" never includes it: when the switches can't
+// be read, a hidden module stays off.
+const ALL = MODULES.filter((m) => m.availability !== "hidden").map((m) => m.id as string);
 const everyModule = () => new Set(ALL);
 
 export function moduleEnforcementOn(): boolean {

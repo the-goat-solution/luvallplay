@@ -97,6 +97,9 @@ export function createApi(transport: Transport) {
       /** GET /clubs/{club}/family (signed in) */
       list: (params: ParamsOf<"family.list">, options?: Options) =>
         transport.call("family.list", { params, signal: options?.signal }) as Promise<ResponseOf<"family.list">>,
+      /** POST /clubs/{club}/family/{id}/bookings/pay (signed in) */
+      pay: (params: ParamsOf<"family.pay">, body: BodyOf<"family.pay">, options?: Options) =>
+        transport.call("family.pay", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.pay">>,
       /** PATCH /clubs/{club}/family/{id} (signed in) */
       update: (params: ParamsOf<"family.update">, body: BodyOf<"family.update">, options?: Options) =>
         transport.call("family.update", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.update">>,

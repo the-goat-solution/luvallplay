@@ -88,3 +88,18 @@ export function useCancelBooking() {
   const refresh = useRefreshBookings();
   return useMutation({ mutationFn: (bookingId: number) => api.family.cancelBooking({ club: slug, id: bookingId }, {}), onSettled: refresh });
 }
+
+/** A club that charges: a card payment to confirm. The booking appears once the payment succeeds. */
+export function usePayForChild(childId: number) {
+  const { slug, api } = useClubApi();
+  return useMutation({ mutationFn: (date: string) => api.family.pay({ club: slug, id: childId }, { date }) });
+}
+
+/** After a payment: look again now and a little later, because the booking is written when the payment provider reports back. */
+export function useRefreshBookingsSoon() {
+  const refresh = useRefreshBookings();
+  return () => {
+    refresh();
+    for (const ms of [2500, 7000]) window.setTimeout(refresh, ms);
+  };
+}

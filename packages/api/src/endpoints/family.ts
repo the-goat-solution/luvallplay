@@ -42,6 +42,15 @@ export const familyEndpoints = defineEndpoints("family", {
     params: S.familyChildParams, body: S.familyBookRequest, response: S.familyBookingResponse,
     rateLimit: { limit: 20, windowMs: 10 * MIN },
   },
+  // A club that charges: a payment to confirm. The booking appears once the
+  // payment succeeds. Refusals as family.book, plus 409 no_payment_needed
+  // (a free-play club: use family.book) and already_booked.
+  "family.pay": {
+    method: "POST", path: "/clubs/{club}/family/{id}/bookings/pay", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyBookRequest, response: S.familyPayResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
+  // 409 paid_booking: a paid place isn't cancelled in the app yet (the club refunds it).
   "family.cancelBooking": {
     method: "POST", path: "/clubs/{club}/family/bookings/{id}/cancel", auth: "session", scope: "club", module: "juniors",
     params: S.familyBookingParams, body: S.emptyRequest, response: S.familyBookingResponse,

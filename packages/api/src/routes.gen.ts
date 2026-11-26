@@ -31,6 +31,7 @@ export const ROUTES = {
   "family.cancelBooking": { method: "POST", path: "/clubs/{club}/family/bookings/{id}/cancel", auth: "session" },
   "family.consent": { method: "PUT", path: "/clubs/{club}/family/{id}/consent", auth: "session" },
   "family.list": { method: "GET", path: "/clubs/{club}/family", auth: "session" },
+  "family.pay": { method: "POST", path: "/clubs/{club}/family/{id}/bookings/pay", auth: "session" },
   "family.update": { method: "PATCH", path: "/clubs/{club}/family/{id}", auth: "session" },
   "integrations.createToken": { method: "POST", path: "/account/integrations/tokens", auth: "session" },
   "integrations.createWebhook": { method: "POST", path: "/account/integrations/webhooks", auth: "session" },

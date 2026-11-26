@@ -715,6 +715,7 @@ const SESSION_ENDPOINTS = [
   ["PUT", "/clubs/{club}/family/{id}/consent"],
   ["GET", "/clubs/{club}/family/bookings"],
   ["POST", "/clubs/{club}/family/{id}/bookings"],
+  ["POST", "/clubs/{club}/family/{id}/bookings/pay"],
   ["POST", "/clubs/{club}/family/bookings/{id}/cancel"],
   ["GET", "/clubs/{club}/me/photos"],
   ["POST", "/clubs/{club}/me/photos"],

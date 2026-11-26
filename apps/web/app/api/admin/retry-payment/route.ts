@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { getMembershipById } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
+import { auditedRoute } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,7 @@ const bodySchema = z.object({
 // schedule (typically days apart); this is the "they say they've topped up,
 // try it now" button, so the admin doesn't have to wait for that schedule or
 // open the Stripe dashboard.
-export async function POST(request: Request) {
+export const POST = auditedRoute("payment.retry", async function POST(request: Request) {
   if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -122,4 +123,4 @@ export async function POST(request: Request) {
       { status: 402 },
     );
   }
-}
+});

@@ -14,6 +14,7 @@
     "./host-routing": "./src/host-routing.ts",
     "./money": "./src/money.ts",
     "./payments": "./src/payments.ts",
+    "./regional-services": "./src/regional-services.ts",
     "./vietqr": "./src/vietqr.ts",
     "./vietqr-match": "./src/vietqr-match.ts",
     "./text-fold": "./src/text-fold.ts",

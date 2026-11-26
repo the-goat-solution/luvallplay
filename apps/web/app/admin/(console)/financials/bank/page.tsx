@@ -46,6 +46,7 @@ import {
   type BankStatus,
 } from "@/lib/bank-db";
 import { getStripeBalanceCents } from "@/lib/finance-stripe";
+import { clubRoundAmount } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,7 @@ async function saveOpening(formData: FormData) {
   const cash = parseMoneyToCents(String(formData.get("cash") ?? "0") || "0");
   if (!isDateKey(date)) back({ financeError: "Please enter the opening date." }, "setup");
   if (bank === null) back({ financeError: "Please enter the bank balance, like 1520.35." }, "setup");
-  if (cash === null || cash < 0) back({ financeError: "Cash on hand must be $0 or more." }, "setup");
+  if (cash === null || cash < 0) back({ financeError: `Cash on hand must be ${clubRoundAmount(0)} or more.` }, "setup");
   await setOpeningBalances({ date, bankCents: bank, cashCents: cash });
   revalidatePath(PAGE);
   back({ notice: "Opening balances saved." }, "setup");

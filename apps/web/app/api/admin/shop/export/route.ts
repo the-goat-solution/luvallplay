@@ -4,6 +4,7 @@ import ExcelJS from "exceljs";
 import { isAdminRequest } from "@/lib/security";
 import { listOrdersForAdmin, listProductsForAdmin } from "@/lib/shop-db";
 import { clubMajor } from "@/lib/money";
+import { auditedRoute } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -12,7 +13,7 @@ const HEADER_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: 
 
 // Shop orders (the current filter) plus a stock sheet, for handing over at
 // play days and for ordering more from the supplier.
-export async function GET(request: Request) {
+export const GET = auditedRoute("export.shop", async function GET(request: Request) {
   if (!(await isAdminRequest(request))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const url = new URL(request.url);
   const f = url.searchParams.get("orders");
@@ -82,4 +83,4 @@ export async function GET(request: Request) {
       "Cache-Control": "no-store",
     },
   });
-}
+});

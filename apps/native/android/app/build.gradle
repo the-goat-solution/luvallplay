@@ -7,7 +7,9 @@ android {
         applicationId "com.luvallplay.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // Play needs every upload to have a higher versionCode than the last.
+        // CI passes its run number (ANDROID_VERSION_CODE); a local build is 1.
+        versionCode (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInteger()
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -16,8 +18,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // The upload key signs the bundle that goes to Google Play (Play App Signing
+    // re-signs it with the app signing key). It comes from the environment, never
+    // from the repository: ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD,
+    // ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD. Without them the release build
+    // is unsigned (a debug or pull-request build never needs the key).
+    def uploadKeystore = System.getenv("ANDROID_KEYSTORE_PATH")
+    if (uploadKeystore) {
+        signingConfigs {
+            upload {
+                storeFile file(uploadKeystore)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (uploadKeystore) signingConfig signingConfigs.upload
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

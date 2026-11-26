@@ -42,3 +42,16 @@ test("the plugins the players' app expects are in the Android project", () => {
   // The name the app looks the secure store up by (apps/app/src/lib/native/secure-storage.ts on its branch).
   assert.match(read("../../../node_modules/capacitor-secure-storage-plugin/dist/esm/index.js"), /registerPlugin\(['"]SecureStoragePlugin['"]/);
 });
+
+test("release signing: the upload key comes from the environment only, and the release workflow never runs for a pull request", () => {
+  const gradle = read("../android/app/build.gradle");
+  for (const name of ["ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD", "ANDROID_VERSION_CODE"]) assert.match(gradle, new RegExp(`System\\.getenv\\("${name}"\\)`));
+  assert.doesNotMatch(gradle, /(storePassword|keyPassword)\s+["'][^"']/, "no password in the repository");
+  assert.doesNotMatch(gradle, /signingConfig signingConfigs\.debug/, "a release is never signed with the debug key");
+  const flow = read("../../../.github/workflows/android-release.yml");
+  assert.doesNotMatch(flow, /pull_request/, "secrets never reach a pull request's code");
+  // Only GitHub's own actions and pnpm's see the build; the Play key goes to our script, not a third-party action.
+  const uses = [...flow.matchAll(/uses:\s*([^\s@]+)@/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(uses)].filter((u) => !/^(actions|pnpm)\//.test(u)), []);
+  assert.match(flow, /PLAY_SERVICE_ACCOUNT_JSON: \$\{\{ secrets\.PLAY_SERVICE_ACCOUNT_JSON \}\}/);
+});

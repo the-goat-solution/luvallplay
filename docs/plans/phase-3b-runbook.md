@@ -10,7 +10,8 @@ Build plan §6.8, decision V. Test plan §3.17, journey J1, gate "3b Junior acco
 |---|---|---|
 | 1 | Data guard counts junior profiles as people; tables for a junior's bookings and attendance (migration `0012`) | Built and rehearsed (18 accounts, 0 problems). **#119 merged 25 Nov 00:46 UTC; confirm whether `0012` has run on production.** Merged code expects the tables (drift, `verify.mjs`, the row-level security heartbeat), and running `0013` would also run `0012` (audit C0) |
 | 2 | `juniors` and `forms-waivers` modules; switching Juniors on needs an owner, a fresh sign-in check and the safeguarding policy acknowledged | **Built** (25 Nov, lane J): both modules are in the registry, hidden; the switch-on guard and its page are tested. Nothing can switch it on in production (§2a) |
-| 3 | Guardian side: a "Family" section, adding a child, consent | Not started |
+| 3 | Guardian side: a "Family" section, adding a child, consent | **Part built** (25 Nov): the library and its database tests (§2b). The app's endpoints and screen wait for lane H's contract split (#153) |
+| — | The audit's "Migration 0012 details" (migration `0015_junior_details`) | **Built; rehearsed on a copy of production by lane T on 26 Nov (19 accounts, 0 problems)** (§2c). Runs in production after `0014`, with your go-ahead, then the pull request merges |
 | 4 | Waivers, emergency contacts, encrypted medical notes | Not started |
 | 5 | Booking and paying for a child | Not started |
 | 6 | Club side: junior roster, coach safety checks, who may see what | Not started |
@@ -85,6 +86,60 @@ Forms & waivers is switched on with it, in the same statement. Switching Juniors
 
 **Tests:** `apps/web/tests/juniors-module.test.ts` (who may switch, each refusal, fail closed, another club untouched, switching off keeps data), plus the registry, route and enforcement suites.
 
+## 2b. Step 3, first part: a guardian's family (no data step)
+
+`apps/web/lib/juniors/family.ts` is what every Family endpoint will call.
+
+| Rule | How it is kept |
+|---|---|
+| A child is a name and a birth year in one club | A name that looks like an email address, a phone number or a link is refused. Birth year: under 16 by the club's calendar year |
+| Only a guardian, only in the child's club | Every read and write names the guardian and the club and goes through `guardianships`; tested as another guardian, another club, and as the app's own database role |
+| A child never exists without a guardian | The profile and the guardianship are written by one statement, after "I am this child's parent or legal guardian" is confirmed |
+| Nothing about a child is shown unless a guardian says so | Three items, each off until switched on and dated when changed: the club's board (first name and initial), photos, match video. With two guardians both must agree |
+| Limits | 8 children per guardian; the same child can't be added twice |
+
+Not built yet: inviting a second guardian, the app's endpoints and screen, the J1 journey.
+
+## 2c. The audit's "Migration 0012 details": migration `0015_junior_details` (one production step, additive)
+
+| Audit finding | Fix |
+|---|---|
+| `junior_attendance` has no link to its play day and no check on `source` | A foreign key to the club's play day; `source` is `roster`, `coach` or `admin` |
+| Nothing ties `booked_by_user_id` to a guardianship | A foreign key: whoever booked is (or was) a guardian of that child, in that club |
+| `guardianships` is platform-wide, so the app's database role could write one for any club | `tenant_id` (named by the app), tied to the child's club, row-level security enabled and forced, moved to the club-owned list in `packages/db/tenancy.ts` |
+| `junior_profiles.guardian_user_id` duplicates `guardianships` | `guardianships` is the one source of truth. The column stops being required and is no longer written or read; dropping it is a later, separate step |
+| A duplicate `(tenant_id, id)` index | Dropped (the unique key covers it) |
+| The data guard counts a soft-deleted guardian as a guardian | A guardian counts only while their account is live and their guardianship hasn't ended |
+
+**New: `guardianships.ended_at`.** A guardian who steps away keeps their row, so what they booked and agreed to keeps its history; only a row that hasn't ended gives access.
+
+Every table touched is empty in production. Report: `docs/rehearsals/2026-11-phase3b-junior-details.md` (local Postgres 18 so far). **The rehearsal on a copy of production and the production run are not done:** they are booked through the coordinator, after `0012` and `0013`, and the production run waits for your go-ahead like every data step.
+
+```bash
+# After the rehearsal on a fresh copy of production has passed, and with your go-ahead:
+# 1. Restore point: a Neon branch from main, now. Name: pre-phase-3b-junior-details
+cd apps/web
+export POSTGRES_URL='<production direct connection string>'
+export PRODUCTION_DATABASE_HOSTS='ep-shiny-rain-a76n3kg6.ap-southeast-2.aws.neon.tech'
+pnpm data-guard snapshot --out .data-guard/prod-before.json
+pnpm db:migrate --production
+pnpm data-guard snapshot --out .data-guard/prod-after.json
+pnpm data-guard diff .data-guard/prod-before.json .data-guard/prod-after.json \
+  --expect scripts/data-guard/expectations/2026-11-phase3b-junior-details.production.json
+pnpm db:drift
+node --import ./tests/register.mjs scripts/tenants/verify.mjs
+# 2. Merge the pull request.
+```
+
+## 2d. Step 5, agreed shape (not built yet)
+
+Agreed with the coordinating thread on 25 Nov; each shared change is its own `[lane J]` pull request and needs your OK before merging, because it touches booking and payments.
+
+- **A child's booking takes a place through the same counter as an adult's.** `lib/db.ts` gets two small helpers taken out of today's code (`claimSessionSpot`, `releaseSessionSpot`), after lane H's replay fix (#167) is on `main`. Adults' behaviour must be provably unchanged (the golden master and booking tests pass untouched). Lane H reviews.
+- **`lib/juniors/bookings.ts`** (lane J): the child's booking row first, then the place, in one transaction, so a full day or a repeated payment event can never count twice.
+- **Paying:** a new payment type `junior` through the payments interface, and one thin branch in the Stripe webhook that calls into `lib/juniors`, after lane W's payments-interface work lands. Lane W reviews.
+- **Rosters and headcount emails don't name children until step 6.** A booked child takes a place on the day, and the play-day page shows a count ("+2 juniors"), but the existing roster, headcount emails and stats read adults' bookings only and stay that way. Children are named only on the junior roster (step 6), which is limited to the people who need it.
+
 ## 3. Decisions waiting for you
 
 | # | Question | What I'll build unless you say otherwise |
@@ -94,6 +149,8 @@ Forms & waivers is switched on with it, in the same statement. Switching Juniors
 | 3 | May Luvallplay staff switch Juniors on for a club? | No. Only an owner of that club can, because the safeguarding acknowledgement is the club's own promise. Staff can switch it off or lock it off |
 | 4 | How fresh must the owner's sign-in code be to switch Juniors on? | 5 minutes |
 | 5 | The safeguarding policy's wording (six statements, in §2a's file) | My draft, in English and Vietnamese. It needs the safeguarding review and counsel before any real child's profile exists; the Vietnamese needs a native review |
+| 7 | What may a guardian allow for a child, and what is the default? | Three items, all off until the guardian switches one on: the club's board (first name and initial only), photos, match video. With two guardians both must agree |
+| 8 | How many children can one guardian add? | 8 |
 | 6 | Does Juniors need Forms & waivers? | Yes: switching Juniors on switches Forms & waivers on too, since a guardian signs the club's consent forms and waivers for each child (step 4) |
 
 ## 4. Check with counsel (not claimed as done)

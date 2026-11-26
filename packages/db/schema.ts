@@ -1538,6 +1538,55 @@ export const junior_attendance = pgTable("junior_attendance", {
 	check("junior_attendance_source_check", sql`source = ANY (ARRAY['roster'::text, 'coach'::text, 'admin'::text])`),
 ]);
 
+// Phase 3b step 4: a club's forms and waivers. The text is never edited: new
+// wording is a new version (a new row), so a signature points at exact words.
+export const club_forms = pgTable("club_forms", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	// The form's stable name within the club, e.g. "junior-waiver".
+	slug: text().notNull(),
+	version: integer().notNull(),
+	kind: text().notNull(),
+	title: text().notNull(),
+	body: text().notNull(),
+	published_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	published_by_user_id: integer().notNull(),
+	// Set when the club stops asking for this form. Its signatures are kept.
+	retired_at: timestamp({ withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("club_forms_published_by_user_id_idx").using("btree", table.published_by_user_id.asc().nullsLast()),
+	unique("club_forms_tenant_id_id_key").on(table.tenant_id, table.id),
+	unique("club_forms_one_per_version").on(table.tenant_id, table.slug, table.version),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "club_forms_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.published_by_user_id], foreignColumns: [players.id], name: "club_forms_published_by_user_id_fkey" }).onDelete("restrict"),
+	check("club_forms_kind_check", sql`kind = ANY (ARRAY['waiver'::text, 'consent'::text])`),
+	check("club_forms_version_check", sql`version >= 1`),
+	check("club_forms_slug_check", sql`slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text`),
+]);
+
+// Who signed which version of a form, for which child. Never updated.
+export const form_signatures = pgTable("form_signatures", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	form_id: integer().notNull(),
+	// The child the form was signed for.
+	junior_profile_id: integer().notNull(),
+	// The guardian who signed, and the name they typed as their signature.
+	signed_by_user_id: integer().notNull(),
+	signed_name: text().notNull(),
+	signed_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("form_signatures_junior_profile_id_idx").using("btree", table.junior_profile_id.asc().nullsLast()),
+	index("form_signatures_signed_by_user_id_idx").using("btree", table.signed_by_user_id.asc().nullsLast()),
+	index("form_signatures_form_idx").using("btree", table.tenant_id.asc().nullsLast(), table.form_id.asc().nullsLast()),
+	unique("form_signatures_once").on(table.tenant_id, table.form_id, table.junior_profile_id, table.signed_by_user_id),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "form_signatures_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.form_id], foreignColumns: [club_forms.tenant_id, club_forms.id], name: "form_signatures_form_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.junior_profile_id], foreignColumns: [junior_profiles.id], name: "form_signatures_junior_profile_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "form_signatures_junior_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.signed_by_user_id], foreignColumns: [players.id], name: "form_signatures_signed_by_user_id_fkey" }).onDelete("restrict"),
+]);
+
 // Phase 3b step 4: who to call for a child. Club-owned; written by a guardian.
 export const junior_emergency_contacts = pgTable("junior_emergency_contacts", {
 	id: serial().primaryKey().notNull(),

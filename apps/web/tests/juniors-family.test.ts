@@ -123,7 +123,7 @@ describe("a guardian's family, from the database", { skip: !BASE_URL && !REQUIRE
     const fks = await c.query(
       `SELECT cl.relname AS t FROM pg_constraint k JOIN pg_class cl ON cl.oid = k.conrelid WHERE k.contype = 'f' AND k.confrelid = 'junior_profiles'::regclass ORDER BY 1`,
     );
-    assert.deepEqual([...new Set(fks.rows.map((r) => r.t))], ["guardianships", "junior_attendance", "junior_bookings", "junior_emergency_contacts", "junior_medical_notes"]);
+    assert.deepEqual([...new Set(fks.rows.map((r) => r.t))], ["form_signatures", "guardianships", "junior_attendance", "junior_bookings", "junior_emergency_contacts", "junior_medical_notes"]);
   });
 
   test("adding a child: stored with the guardian, everything optional off, the consent dated and versioned", async () => {

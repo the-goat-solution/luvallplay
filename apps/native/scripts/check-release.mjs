@@ -2,7 +2,8 @@
 // needs is still a placeholder. (A debug build doesn't need these.)
 //
 //   pnpm --filter native release:check
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { readGoogleServices } from "./write-google-services.mjs";
 import path from "node:path";
 
 const problems = [];
@@ -12,6 +13,13 @@ if (fingerprints.length === 0 || fingerprints.some((f) => !/^([0-9A-F]{2}:){31}[
   problems.push(
     "apps/app/public/.well-known/assetlinks.json still has the placeholder fingerprint. Copy the SHA-256 certificate fingerprint from Play Console → Luvallplay → Test and release → App integrity → App signing (\"App signing key certificate\"), and put it there. Without it, links to app.luvallplay.com open the browser, not the app.",
   );
+}
+const services = path.resolve(import.meta.dirname, "../android/app/google-services.json");
+if (!existsSync(services)) {
+  problems.push("android/app/google-services.json isn't there, so this build would have no push notifications. In CI it is written from the GOOGLE_SERVICES_JSON secret (pnpm --filter native google-services); see apps/native/README.md.");
+} else {
+  const checked = readGoogleServices(readFileSync(services, "utf8"));
+  if (!checked.ok) problems.push(`android/app/google-services.json: ${checked.problem}`);
 }
 for (const p of problems) console.error(`✗ ${p}`);
 if (problems.length) process.exit(1);

@@ -47,6 +47,9 @@ export const VIETQR_CAPABILITIES: PaymentCapabilities = {
   // The bank doesn't tell us: transfers are matched by hand or from a bank feed.
   webhooks: false,
   payoutStatus: false,
+  // No customers or saved cards at the bank, and no payment page of its own: the code is shown in the app.
+  customers: false,
+  hostedCheckout: false,
   currencies: ["VND"],
 };
 

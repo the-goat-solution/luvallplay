@@ -29,6 +29,7 @@ const NOT_MONEY: Record<string, [count: number, what: string]> = {
   "packages/vision/src/engine/hits.ts": [1, "rounding a measurement to two decimals"],
   "packages/vision/src/engine/shuttle.ts": [1, "a heat-map weight"],
   "packages/vision/src/engine/engine.ts": [1, "rounding a quality score to two decimals"],
+  "apps/web/lib/payments/stripe-provider.ts": [1, "the platform's fee: basis points to a percentage"],
   "apps/web/components/mini-game/MiniGame.tsx": [1, "progress bar width"],
   "apps/web/components/admin/finance/MonthlyChart.tsx": [1, "tooltip position, as a percentage"],
   "apps/web/components/Schedule.tsx": [1, "spots bar width"],

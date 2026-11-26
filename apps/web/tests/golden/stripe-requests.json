@@ -1,0 +1,2332 @@
+{
+  "one-time membership: new customer": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 3300,
+            "currency": "nzd",
+            "customer": "cus_new",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "membership",
+              "plan": "monthly",
+              "day": "friday",
+              "recurring": "false",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": "+64211234567"
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
+          },
+          {
+            "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "id": "pi_1",
+        "client_secret": "pi_1_secret"
+      }
+    }
+  },
+  "one-time membership: renewal, known customer, no phone": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 8500,
+            "currency": "nzd",
+            "customer": "cus_7",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "membership",
+              "plan": "quarterly",
+              "day": "wednesday",
+              "recurring": "false",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": "",
+              "renewal": "true",
+              "renewalOf": "31"
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Quarterly Membership (Wednesday) — renewal"
+          },
+          {
+            "idempotencyKey": "membership-onetime-quarterly-ana@example.test-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "id": "pi_2",
+        "client_secret": "pi_2_secret"
+      }
+    }
+  },
+  "auto-renew membership (players' app)": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567",
+            "metadata": {
+              "plan": "quarterly",
+              "day": "wednesday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_new",
+            "items": [
+              {
+                "price": "price_wed_quarterly"
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "description": "Three Wolves — Quarterly Membership (Wednesday)",
+            "metadata": {
+              "plan": "quarterly",
+              "day": "wednesday",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      },
+      {
+        "call": "invoices.retrieve",
+        "args": [
+          "in_1",
+          {
+            "expand": [
+              "payments.data.payment.payment_intent"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.update",
+        "args": [
+          "pi_inv",
+          {
+            "receipt_email": "ana@example.test"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "subscriptionId": "sub_new",
+        "clientSecret": "pi_inv_secret"
+      }
+    }
+  },
+  "auto-renew membership: known customer, invoice as an object": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_7",
+            "items": [
+              {
+                "price": "price_fri_monthly"
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "description": "Three Wolves — Monthly Membership (Friday)",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      },
+      {
+        "call": "invoices.retrieve",
+        "args": [
+          "in_2",
+          {
+            "expand": [
+              "payments.data.payment.payment_intent"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.update",
+        "args": [
+          "pi_inv",
+          {
+            "receipt_email": "ana@example.test"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "subscriptionId": "sub_new",
+        "clientSecret": "pi_inv_secret"
+      }
+    }
+  },
+  "auto-renew membership: no invoice": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_new",
+            "items": [
+              {
+                "price": "price_fri_monthly"
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "description": "Three Wolves — Monthly Membership (Friday)",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": null
+    }
+  },
+  "one-time membership: Stripe refuses": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 3300,
+            "currency": "nzd",
+            "customer": "cus_7",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "membership",
+              "plan": "monthly",
+              "day": "friday",
+              "recurring": "false",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": "+64211234567"
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
+          },
+          {
+            "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": "Amount must be at least $0.50 nzd"
+    }
+  },
+  "Vision pass checkout": {
+    "calls": [
+      {
+        "call": "checkout.sessions.create",
+        "args": [
+          {
+            "mode": "payment",
+            "line_items": [
+              {
+                "quantity": 1,
+                "price_data": {
+                  "currency": "nzd",
+                  "unit_amount": 500,
+                  "product_data": {
+                    "name": "Live match pass",
+                    "description": "One live match"
+                  }
+                }
+              }
+            ],
+            "customer_email": "ana@example.test",
+            "metadata": {
+              "type": "wolf_vision",
+              "kind": "live",
+              "passId": "12",
+              "playerId": "7"
+            },
+            "success_url": "https://app.test/vision?paid=1",
+            "cancel_url": "https://app.test/vision"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "id": "cs_1",
+        "url": "https://checkout.stripe.test/cs_1"
+      }
+    }
+  },
+  "Vision pass paid?": {
+    "calls": [
+      {
+        "call": "checkout.sessions.retrieve",
+        "args": [
+          "cs_1"
+        ]
+      }
+    ],
+    "outcome": {
+      "result": true
+    }
+  },
+  "Vision pass not paid": {
+    "calls": [
+      {
+        "call": "checkout.sessions.retrieve",
+        "args": [
+          "cs_1"
+        ]
+      }
+    ],
+    "outcome": {
+      "result": false
+    }
+  },
+  "admin: cancel at period end": {
+    "calls": [
+      {
+        "call": "subscriptions.update",
+        "args": [
+          "sub_31",
+          {
+            "cancel_at_period_end": true
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": "sub_31"
+    }
+  },
+  "admin: free month, first ever (coupon made)": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "discounts"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "coupons.retrieve",
+        "args": [
+          "three-wolves-free-period"
+        ]
+      },
+      {
+        "call": "coupons.create",
+        "args": [
+          {
+            "id": "three-wolves-free-period",
+            "name": "Free month (admin granted)",
+            "percent_off": 100,
+            "duration": "once"
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.update",
+        "args": [
+          "sub_31",
+          {
+            "discounts": [
+              {
+                "coupon": "three-wolves-free-period"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "alreadyQueued": false
+      }
+    }
+  },
+  "admin: free month, keeps another discount": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "discounts"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "coupons.retrieve",
+        "args": [
+          "three-wolves-free-period"
+        ]
+      },
+      {
+        "call": "subscriptions.update",
+        "args": [
+          "sub_31",
+          {
+            "discounts": [
+              {
+                "discount": "di_other"
+              },
+              {
+                "coupon": "three-wolves-free-period"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "alreadyQueued": false
+      }
+    }
+  },
+  "admin: free month already queued": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "discounts"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "alreadyQueued": true
+      }
+    }
+  },
+  "admin: free days (active)": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      },
+      {
+        "call": "subscriptions.update",
+        "args": [
+          "sub_31",
+          {
+            "trial_end": 1796604800,
+            "proration_behavior": "none"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": 1796604800
+    }
+  },
+  "admin: free days (already trialing)": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      },
+      {
+        "call": "subscriptions.update",
+        "args": [
+          "sub_31",
+          {
+            "trial_end": 1797709600,
+            "proration_behavior": "none"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": 1797709600
+    }
+  },
+  "admin: free days refused when past due": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      }
+    ],
+    "outcome": {
+      "result": "This subscription is past_due, so it can't be extended."
+    }
+  },
+  "billing: card on the subscription, a change pending": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": {
+          "brand": "visa",
+          "last4": "4242",
+          "expMonth": 4,
+          "expYear": 2029
+        },
+        "nextCharge": {
+          "date": "2026-11-30",
+          "amountCents": 8500
+        },
+        "pendingChange": {
+          "plan": "quarterly",
+          "day": "wednesday",
+          "from": "<date>"
+        },
+        "receipts": [
+          {
+            "date": "2026-11-19",
+            "amountCents": 6000,
+            "description": "Subscription update",
+            "url": "https://pay.stripe.test/r1",
+            "refunded": false
+          },
+          {
+            "date": "2026-10-26",
+            "amountCents": 1000,
+            "description": "Three Wolves",
+            "url": null,
+            "refunded": true
+          }
+        ]
+      }
+    }
+  },
+  "billing: no subscription, first saved card": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "paymentMethods.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "type": "card",
+            "limit": 1
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": {
+          "brand": "visa",
+          "last4": "4242",
+          "expMonth": 4,
+          "expYear": 2029
+        },
+        "nextCharge": null,
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: default card on the customer, cancelling": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": {
+          "brand": "visa",
+          "last4": "4242",
+          "expMonth": 4,
+          "expYear": 2029
+        },
+        "nextCharge": null,
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: trialing, deleted customer, no card": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentMethods.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "type": "card",
+            "limit": 1
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": null,
+        "nextCharge": {
+          "date": "2026-12-06",
+          "amountCents": 6000
+        },
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: the customer's default isn't a card": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": null,
+        "nextCharge": null,
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: the subscription's own method isn't a card": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": null,
+        "nextCharge": {
+          "date": "2026-11-30",
+          "amountCents": 6000
+        },
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: a scheduled change that isn't a plan the club knows": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": {
+          "brand": "visa",
+          "last4": "4242",
+          "expMonth": 4,
+          "expYear": 2029
+        },
+        "nextCharge": {
+          "date": "2026-11-30",
+          "amountCents": 6000
+        },
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "billing: a schedule that has finished": {
+    "calls": [
+      {
+        "call": "customers.retrieve",
+        "args": [
+          "cus_7",
+          {
+            "expand": [
+              "invoice_settings.default_payment_method"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "charges.list",
+        "args": [
+          {
+            "customer": "cus_7",
+            "limit": 12
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31",
+          {
+            "expand": [
+              "default_payment_method",
+              "schedule"
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "card": {
+          "brand": "visa",
+          "last4": "4242",
+          "expMonth": 4,
+          "expYear": 2029
+        },
+        "nextCharge": null,
+        "pendingChange": null,
+        "receipts": []
+      }
+    }
+  },
+  "card update page": {
+    "calls": [
+      {
+        "call": "billingPortal.sessions.create",
+        "args": [
+          {
+            "customer": "cus_7",
+            "return_url": "https://app.test/membership?card=updated",
+            "flow_data": {
+              "type": "payment_method_update",
+              "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                  "return_url": "https://app.test/membership?card=updated"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": "https://billing.stripe.test/p1"
+    }
+  },
+  "customer: found by email (then saved)": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "threw": "error"
+    }
+  },
+  "customer: created": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "threw": "error"
+    }
+  },
+  "customer: none, not created": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": null
+    }
+  },
+  "change plan at renewal: first change (schedule made)": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.create",
+        "args": [
+          {
+            "from_subscription": "sub_31"
+          }
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.retrieve",
+        "args": [
+          "sub_sched_1"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.update",
+        "args": [
+          "sub_sched_1",
+          {
+            "end_behavior": "release",
+            "phases": [
+              {
+                "items": [
+                  {
+                    "price": "price_fri_monthly",
+                    "quantity": 1
+                  }
+                ],
+                "start_date": 1794999999,
+                "end_date": 4000000000,
+                "metadata": {
+                  "plan": "monthly",
+                  "day": "friday",
+                  "email": "ana@example.test"
+                },
+                "trial_end": 1795100000
+              },
+              {
+                "items": [
+                  {
+                    "price": "price_fri_quarterly",
+                    "quantity": 1
+                  }
+                ],
+                "duration": {
+                  "interval": "week",
+                  "interval_count": 12
+                },
+                "proration_behavior": "none",
+                "metadata": {
+                  "plan": "quarterly",
+                  "day": "friday",
+                  "email": "ana@example.test"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": "scheduled"
+    }
+  },
+  "change plan at renewal: replaces a pending change": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.retrieve",
+        "args": [
+          "sub_sched_1"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.update",
+        "args": [
+          "sub_sched_1",
+          {
+            "end_behavior": "release",
+            "phases": [
+              {
+                "items": [
+                  {
+                    "price": "price_fri_monthly",
+                    "quantity": 2
+                  }
+                ],
+                "start_date": 1750000000,
+                "end_date": 4000000000,
+                "metadata": {
+                  "plan": "monthly",
+                  "day": "friday",
+                  "email": "ana@example.test"
+                }
+              },
+              {
+                "items": [
+                  {
+                    "price": "price_fri_monthly",
+                    "quantity": 1
+                  }
+                ],
+                "duration": {
+                  "interval": "week",
+                  "interval_count": 4
+                },
+                "proration_behavior": "none",
+                "metadata": {
+                  "plan": "monthly",
+                  "day": "friday",
+                  "email": "ana@example.test"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": "scheduled"
+    }
+  },
+  "change plan at renewal: back to the current plan (pending change dropped)": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.retrieve",
+        "args": [
+          "sub_sched_1"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.release",
+        "args": [
+          "sub_sched_1"
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "cleared": true
+      }
+    }
+  },
+  "change plan at renewal: refused while cancelling": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      }
+    ],
+    "outcome": {
+      "threw": "SelfServiceError:cancelling"
+    }
+  },
+  "change plan at renewal: refused when not active": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      }
+    ],
+    "outcome": {
+      "threw": "SelfServiceError:not_active"
+    }
+  },
+  "change plan at renewal: refused for a one-time membership": {
+    "calls": [],
+    "outcome": {
+      "threw": "SelfServiceError:not_recurring"
+    }
+  },
+  "cancel a pending change: schedule already released": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.retrieve",
+        "args": [
+          "sub_sched_1"
+        ]
+      }
+    ],
+    "outcome": {}
+  },
+  "cancel a pending change: none pending": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      }
+    ],
+    "outcome": {}
+  },
+  "turn off auto-renew": {
+    "calls": [
+      {
+        "call": "subscriptions.retrieve",
+        "args": [
+          "sub_31"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.retrieve",
+        "args": [
+          "sub_sched_1"
+        ]
+      },
+      {
+        "call": "subscriptionSchedules.release",
+        "args": [
+          "sub_sched_1"
+        ]
+      },
+      {
+        "call": "subscriptions.update",
+        "args": [
+          "sub_31",
+          {
+            "cancel_at_period_end": true
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "threw": "error"
+    }
+  },
+  "resume auto-renew": {
+    "calls": [
+      {
+        "call": "subscriptions.update",
+        "args": [
+          "sub_31",
+          {
+            "cancel_at_period_end": false
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "threw": "error"
+    }
+  },
+  "resume: no subscription": {
+    "calls": [],
+    "outcome": {
+      "threw": "SelfServiceError:not_recurring"
+    }
+  },
+  "one-time to auto-renew: save a card": {
+    "calls": [
+      {
+        "call": "setupIntents.create",
+        "args": [
+          {
+            "customer": "cus_7",
+            "usage": "off_session",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "membership_autorenew",
+              "playerId": "7"
+            }
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "clientSecret": "seti_1_secret"
+      }
+    }
+  },
+  "one-time to auto-renew: no secret": {
+    "calls": [
+      {
+        "call": "setupIntents.create",
+        "args": [
+          {
+            "customer": "cus_7",
+            "usage": "off_session",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "membership_autorenew",
+              "playerId": "7"
+            }
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "threw": "SelfServiceError:payment_failed"
+    }
+  },
+  "website: join, auto-renew": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_new",
+            "items": [
+              {
+                "price": "price_fri_monthly"
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "description": "Three Wolves — Monthly Membership (Friday)",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      },
+      {
+        "call": "invoices.retrieve",
+        "args": [
+          "in_1",
+          {
+            "expand": [
+              "payments.data.payment.payment_intent"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.update",
+        "args": [
+          "pi_inv",
+          {
+            "receipt_email": "ana@example.test"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_inv_secret",
+          "subscriptionId": "sub_new",
+          "periodStart": "<today>"
+        }
+      }
+    }
+  },
+  "website: join, auto-renew, known customer, no phone": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_7",
+            "items": [
+              {
+                "price": "price_fri_quarterly"
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "description": "Three Wolves — Quarterly Membership (Friday)",
+            "metadata": {
+              "plan": "quarterly",
+              "day": "friday",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      },
+      {
+        "call": "invoices.retrieve",
+        "args": [
+          "in_1",
+          {
+            "expand": [
+              "payments.data.payment.payment_intent"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.update",
+        "args": [
+          "pi_inv",
+          {
+            "receipt_email": "ana@example.test"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_inv_secret",
+          "subscriptionId": "sub_new",
+          "periodStart": "<today>"
+        }
+      }
+    }
+  },
+  "website: join, auto-renew, new customer, no phone": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_new",
+            "items": [
+              {
+                "price": "price_fri_monthly"
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "description": "Three Wolves — Monthly Membership (Friday)",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      },
+      {
+        "call": "invoices.retrieve",
+        "args": [
+          "in_1",
+          {
+            "expand": [
+              "payments.data.payment.payment_intent"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.update",
+        "args": [
+          "pi_inv",
+          {
+            "receipt_email": "ana@example.test"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_inv_secret",
+          "subscriptionId": "sub_new",
+          "periodStart": "<today>"
+        }
+      }
+    }
+  },
+  "website: join, one-time, new customer, no phone": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 3300,
+            "currency": "nzd",
+            "customer": "cus_new",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "membership",
+              "plan": "monthly",
+              "day": "friday",
+              "recurring": "false",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": ""
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
+          },
+          {
+            "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_1_secret",
+          "periodStart": "<today>"
+        }
+      }
+    }
+  },
+  "website: join, Stripe refuses": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_new",
+            "items": [
+              {
+                "price": "price_fri_monthly"
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "description": "Three Wolves — Monthly Membership (Friday)",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 400,
+        "body": {
+          "error": "No such price: 'price_fri_monthly'"
+        }
+      }
+    }
+  },
+  "website: join, auto-renew, invoice never ready": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_new",
+            "items": [
+              {
+                "price": "price_fri_monthly"
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "description": "Three Wolves — Monthly Membership (Friday)",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 500,
+        "body": {
+          "error": "Failed to initialize subscription payment"
+        }
+      }
+    }
+  },
+  "website: join, one-time": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567",
+            "metadata": {
+              "plan": "monthly",
+              "day": "friday"
+            }
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 3300,
+            "currency": "nzd",
+            "customer": "cus_new",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "membership",
+              "plan": "monthly",
+              "day": "friday",
+              "recurring": "false",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": "+64211234567"
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
+          },
+          {
+            "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_1_secret",
+          "periodStart": "<today>"
+        }
+      }
+    }
+  },
+  "website: join, one-time, no secret": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 3300,
+            "currency": "nzd",
+            "customer": "cus_7",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "membership",
+              "plan": "monthly",
+              "day": "friday",
+              "recurring": "false",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": "+64211234567"
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Three Wolves — Monthly Membership (Friday) — one-time"
+          },
+          {
+            "idempotencyKey": "membership-onetime-monthly-ana@example.test-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 500,
+        "body": {
+          "error": "Failed to initialize membership payment"
+        }
+      }
+    }
+  },
+  "website: join, a paused day": {
+    "calls": [],
+    "outcome": {
+      "result": {
+        "status": 409,
+        "body": {
+          "error": "day_paused",
+          "day": "wednesday"
+        }
+      }
+    }
+  },
+  "website: join, bad request": {
+    "calls": [],
+    "outcome": {
+      "result": {
+        "status": 400,
+        "body": {
+          "error": "[\n  {\n    \"received\": \"yearly\",\n    \"code\": \"invalid_enum_value\",\n    \"options\": [\n      \"monthly\",\n      \"quarterly\"\n    ],\n    \"path\": [\n      \"plan\"\n    ],\n    \"message\": \"Invalid enum value. Expected 'monthly' | 'quarterly', received 'yearly'\"\n  }\n]"
+        }
+      }
+    }
+  },
+  "website: casual session": {
+    "calls": [
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 1000,
+            "currency": "nzd",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "casual",
+              "sessionDate": "<date>",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": "+64211234567"
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Casual session — <date>"
+          },
+          {
+            "idempotencyKey": "casual-<date>-ana@example.test-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_c_secret"
+        }
+      }
+    }
+  },
+  "website: one-off donation": {
+    "calls": [
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 2500,
+            "currency": "nzd",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "donation",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": "+64211234567"
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Donation — Three Wolves Badminton Club"
+          },
+          {
+            "idempotencyKey": "donation-ana@example.test-2500-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_d_secret"
+        }
+      }
+    }
+  },
+  "website: monthly donation": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "phone": "+64211234567",
+            "metadata": {
+              "type": "donation"
+            }
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_new",
+            "items": [
+              {
+                "price_data": {
+                  "currency": "nzd",
+                  "product": "prod_donation",
+                  "unit_amount": 1250,
+                  "recurring": {
+                    "interval": "month"
+                  }
+                }
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "metadata": {
+              "type": "donation",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      },
+      {
+        "call": "invoices.retrieve",
+        "args": [
+          "in_1",
+          {
+            "expand": [
+              "payments.data.payment.payment_intent"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.update",
+        "args": [
+          "pi_inv",
+          {
+            "receipt_email": "ana@example.test"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_inv_secret",
+          "subscriptionId": "sub_new"
+        }
+      }
+    }
+  },
+  "website: monthly donation, new customer, no phone": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "customers.create",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "name": "Ana Ngata",
+            "metadata": {
+              "type": "donation"
+            }
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_new",
+            "items": [
+              {
+                "price_data": {
+                  "currency": "nzd",
+                  "product": "prod_donation",
+                  "unit_amount": 2000,
+                  "recurring": {
+                    "interval": "month"
+                  }
+                }
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "metadata": {
+              "type": "donation",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      },
+      {
+        "call": "invoices.retrieve",
+        "args": [
+          "in_1",
+          {
+            "expand": [
+              "payments.data.payment.payment_intent"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.update",
+        "args": [
+          "pi_inv",
+          {
+            "receipt_email": "ana@example.test"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_inv_secret",
+          "subscriptionId": "sub_new"
+        }
+      }
+    }
+  },
+  "website: monthly donation, too small": {
+    "calls": [],
+    "outcome": {
+      "result": {
+        "status": 400,
+        "body": {
+          "error": "Amount must be between $2 and $5000 NZD"
+        }
+      }
+    }
+  },
+  "website: one-off donation, Stripe refuses": {
+    "calls": [
+      {
+        "call": "paymentIntents.create",
+        "args": [
+          {
+            "amount": 2500,
+            "currency": "nzd",
+            "automatic_payment_methods": {
+              "enabled": true
+            },
+            "metadata": {
+              "type": "donation",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test",
+              "phone": "+64211234567"
+            },
+            "receipt_email": "ana@example.test",
+            "description": "Donation — Three Wolves Badminton Club"
+          },
+          {
+            "idempotencyKey": "donation-ana@example.test-2500-<now>"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 400,
+        "body": {
+          "error": "Your card was declined."
+        }
+      }
+    }
+  },
+  "website: monthly donation, known customer, no phone": {
+    "calls": [
+      {
+        "call": "customers.list",
+        "args": [
+          {
+            "email": "ana@example.test",
+            "limit": 1
+          }
+        ]
+      },
+      {
+        "call": "subscriptions.create",
+        "args": [
+          {
+            "customer": "cus_7",
+            "items": [
+              {
+                "price_data": {
+                  "currency": "nzd",
+                  "product": "prod_donation",
+                  "unit_amount": 2000,
+                  "recurring": {
+                    "interval": "month"
+                  }
+                }
+              }
+            ],
+            "payment_behavior": "default_incomplete",
+            "payment_settings": {
+              "save_default_payment_method": "on_subscription"
+            },
+            "metadata": {
+              "type": "donation",
+              "firstName": "Ana",
+              "lastName": "Ngata",
+              "email": "ana@example.test"
+            }
+          }
+        ]
+      },
+      {
+        "call": "invoices.retrieve",
+        "args": [
+          "in_1",
+          {
+            "expand": [
+              "payments.data.payment.payment_intent"
+            ]
+          }
+        ]
+      },
+      {
+        "call": "paymentIntents.update",
+        "args": [
+          "pi_inv",
+          {
+            "receipt_email": "ana@example.test"
+          }
+        ]
+      }
+    ],
+    "outcome": {
+      "result": {
+        "status": 200,
+        "body": {
+          "clientSecret": "pi_inv_secret",
+          "subscriptionId": "sub_new"
+        }
+      }
+    }
+  }
+}

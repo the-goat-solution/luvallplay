@@ -1296,7 +1296,13 @@ Still open for Stage A: the Sanity organisation (owner is creating one), the for
 
 **Availability as one source of truth (24 Nov, owner's request).** What the website says is live, in early access or coming soon now comes from one list (`apps/site/content/availability.ts`, mirrored as the Studio's Availability document), not from wording scattered through the pages. It drives the "coming soon" chips, the Vision and store-app notes, a status box on each help article and a public page, "What's live today". **Rule for every later phase:** a pull request that ships or changes something people can use updates that list in the same change (the pull request template asks), and `pnpm --filter site test` fails if any page still says "coming soon" about something marked live. Steps are in the Phase 6 runbook, §3a.
 
-**Stage B** (setup wizard, club websites and editor, Admin → Modules, Look & feel, Payments, Stripe Connect in test mode, the readiness-gate lock) has not started: it needs Phase 3 finished (§6.10).
+**Stage B** started on 25 Nov 2026 as lane W (§9.2). W1 needs nothing from another lane; W2 (the wizard creating clubs, Admin → Modules, Look & feel, Payments, custom domains, the readiness-gate lock) waits for step 11 and A1–A3. The day-to-day detail is in the Phase 6 runbook §10.
+
+| Date | W1 step | What landed | State |
+|---|---|---|---|
+| 25 Nov | 1. Card flows behind the payments interface; one membership path (audit H5) | The interface (`packages/core/src/payments.ts`) gained customers and saved cards, subscriptions and a hosted payment page, each present only when the provider declares it. `apps/web/lib/payments/membership.ts` is the one membership path for the website and the app. Files calling Stripe directly: 15 → 11 (the rest are other lanes' files). `tests/stripe-requests.test.ts` replays 58 scenarios against a recording made from the old code: identical requests and answers | On branch `claude/lane-w`, **waiting for the owner's OK** (live payments) |
+| 25 Nov | 2. Stripe Connect, test mode | The connected account on the Stripe client (so on every request), the fee at 0% with nothing sent, the Connect webhook secret; a live key with a connected account is refused. Off unless `STRIPE_CONNECT_ACCOUNT` is set | Same branch. Creating and onboarding accounts waits for a Stripe **test** key |
+| 25 Nov | 4. Stage A open items | Checked read-only: runbook §7a | Owner steps listed |
 
 ---
 

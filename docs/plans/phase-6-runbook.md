@@ -2,7 +2,7 @@
 
 How the public website is put together, and the steps only a person can do. Written for the owner; no coding needed.
 
-Status on 24 Nov 2026: **Stage A (the public website) is built, tested and live on https://luvallplay.com** (`SITE_ORIGIN` already points there; luvallplay.vn, .org and .nz still need their DNS records). Stage B (setup wizard, club websites, admin settings) waits for Phase 3 to finish.
+Status on 24 Nov 2026: **Stage A (the public website) is built, tested and live on https://luvallplay.com** (`SITE_ORIGIN` already points there). What is still open from Stage A, checked on 25 Nov, is in §7a. **Stage B (club websites, the setup wizard and payments) started on 25 Nov as lane W: see §10.**
 
 ## 1. What exists
 
@@ -129,6 +129,21 @@ Already set in Vercel: `EMAIL_FROM` = `Luvallplay <hello@luvallplay.com>`, `TEAM
 4. Company legal name, postal address and contact email filled in (Site settings). Privacy and Terms read by you. They are plain-language website notices, not legal advice, and not the product terms (readiness gate 1).
 5. Studio → Site settings → **Let search engines index the site** → on.
 
+## 7a. Stage A: what is still open (checked 25 Nov 2026)
+
+Checked in Vercel and Sanity, read-only. None of these blocks Stage B.
+
+| Item | State on 25 Nov | What you do |
+|---|---|---|
+| luvallplay.com | **Working** | Nothing |
+| luvallplay.nz | **Working** (redirects to luvallplay.com) | Nothing |
+| luvallplay.org | Attached, on Vercel's name servers, but **has no address record**, so it doesn't open | Vercel → Domains → luvallplay.org → add A `@` → `216.198.79.1` (and `www` CNAME as in §2). Or say the word and Claude adds the records |
+| luvallplay.vn | **Not attached to the project** (the list in Vercel has .com, .org and .nz only), and its DNS is still at the Vietnamese registrar with no records | Add the two records from §2 at the registrar; then attach `luvallplay.vn` and `www.luvallplay.vn` to luvallplay-site (Claude can do the attaching) and set `SITE_VI_ORIGIN` |
+| Sanity organisation | **Not created**: the only organisation is Three Wolves', with its one project | §3, step 1 |
+| Forms database | **Not connected**: `SITE_DATABASE_URL` isn't set, so sending a form shows "That didn't go through" | §4 (about two minutes) |
+| Email (Resend) | **Not connected**: `RESEND_API_KEY` isn't set on luvallplay-site; the DNS records couldn't be checked from the build environment | §5 |
+| Vietnamese copy review | Not recorded anywhere as done | A Vietnamese speaker reads `/vi` (§7, step 3) |
+
 ## 8. Housekeeping the site does by itself
 
 - Unconfirmed sign-ups are deleted after 30 days; rate-limit records after a day (a daily job, 15:17 UTC).
@@ -138,3 +153,59 @@ Already set in Vercel: `EMAIL_FROM` = `Luvallplay <hello@luvallplay.com>`, `TEAM
 ## 9. Checks
 
 `pnpm --filter site test` (both languages complete, content rules) and `pnpm --filter site e2e` (every link, meta tag and anchor, axe in light and dark, motion rules, the forms through double opt-in). Both run in CI on every pull request ("Website" job).
+
+## 10. Stage B (lane W): club websites, the setup wizard and payments
+
+Started 25 Nov 2026 (decision AP). W1 needs nothing from another lane; W2 (the wizard creating clubs, Admin → Modules, Look & feel, Payments, custom domains) waits for Phase 3 step 11 and Track A's A1–A3. No outside club before the four gates in build plan §11.3.
+
+### 10.1 W1 progress
+
+| Step | State | Notes |
+|---|---|---|
+| 1. Every card flow behind the payments interface; one membership path | **Built, waiting for your OK to merge** (branch `claude/lane-w`) | §10.2 |
+| 2. Stripe Connect in test mode | **Part built, off** (same branch): the connected account on every request, the 0% fee, the Connect webhook secret. Creating and onboarding accounts waits for the test key | §10.4. Needs a Stripe **test** key for the platform account (§10.3) |
+| 3. Per-club website content model, templates, Look & feel | **Part built** (on `claude/lane-w`, not used by any page yet): the per-club content model and the three templates, *Classic*, *Bold* and *Minimal* (`packages/site-templates`: pure code, pages with no script, colours only from the club's theme, English and Vietnamese, the free-play block); bring-your-own-brand colours with automatic contrast and reading a brand from a club's website (`packages/ui/src/brand.ts`). Checked by eye for Three Wolves in its own theme and in one ready-made scheme, on a phone and a desktop width, light and dark. Not started: storing the content per club (a table, through the migration queue), the route that serves a club's site, moving Three Wolves' Sanity content across, the Website editor, logo and font uploads, the safe fetch of the club's page | The 12 schemes and per-club themes already existed in `packages/ui` |
+| 4. Stage A open items | Checked | §7a |
+
+### 10.2 Step 1: what changed, and how it's proven safe for Three Wolves
+
+**What a member or admin sees: nothing.** The same screens, prices, receipts and emails.
+
+**What changed underneath:**
+- The shared payments interface (`packages/core/src/payments.ts`) now covers **customers and saved cards**, **subscriptions** (start, start later on a saved card, change at renewal, stop and carry on, a free renewal, free days) and **a payment page the provider hosts**, as well as one-off payments. Each part is there only when the provider declares it, so a provider that can't charge again by itself (VietQR) is refused cleanly and the screens fall back to one-time memberships with reminders.
+- **One membership path**: `apps/web/lib/payments/membership.ts`. The website's join route and the players' app used to build the same Stripe requests separately and had started to drift; both now call the same function. Casual-session payments are shared the same way.
+- Membership self-service (change plan, cancel, resume, update card, switch to auto-renew), monthly donations, Vision passes in the app, and the admin's "cancel" and "free month" all go through the interface.
+- The Stripe client is made in exactly one place (`lib/payments/stripe-client.ts`), which is where a club's connected account goes in step 2.
+- **Files that call Stripe directly: 15 → 11**, and the 11 left belong to other lanes (admin pages, the webhook's handlers, the ledger sync, offline invoices, the set-up check). They move in small `[lane W]` pull requests. A test lists them, and the list can only shrink.
+
+**The proof** (`apps/web/tests/stripe-requests.test.ts`): before touching anything, a test recorded every request Three Wolves' card flows send to Stripe, 58 scenarios (joining with and without auto-renew, renewing, changing plan, cancelling and resuming, card updates, billing details, donations, casual play, Vision passes, the admin's free month and free days, refusals and errors), together with what each answers to the browser. The recording was made from the old code. The new code must produce exactly the same recording, and does. A second check ran the final test against the old code again and compared the two recordings: identical.
+
+**Three small differences, none visible to members:**
+1. One-time membership payments are now counted in the club's "payments started" usage figure, like every other payment (they were missed because they bypassed the interface).
+2. In the players' app, joining when Stripe has no key now stops before a place is reserved (as the website already did), instead of after.
+3. Errors from Stripe in these flows are now the interface's own error type; the message shown is unchanged.
+
+**Not covered by the recording**, because they need a database: the one-time renewal from the profile and the switch from one-time to auto-renew. Their Stripe requests are pinned by a separate test written out from the old code, and the web journeys (M1–M5) cover them end to end.
+
+**Before merging** (this touches live payments, so it waits for your OK): CI green, then the web journeys M1–M5 on the preview with Stripe test cards.
+
+### 10.3 What lane W needs from you
+
+1. **Your OK to merge step 1** (§10.2).
+2. **Switch on Connect on the platform's Stripe account** (26 Nov). A test key is now saved, and Stripe confirms it is in test mode. It belongs to a New Zealand account that **hasn't signed up for Connect**, so Stripe refuses to create connected accounts ("You can only create new accounts if you've signed up for Connect"). In the Stripe dashboard, in Test mode: **Connect → Get started**, and choose the platform profile (clubs are the merchants and pay Stripe's fees; Luvallplay takes no fee). Two things to decide while there: the plan (§6.5) makes **the NZ company's account** the platform, so if this key is Three Wolves' own account, either create the company's account first and send that test key instead, or use this one for building only. Nothing was created or changed on the account
+
+### 10.4 Step 2: Stripe Connect, test mode
+
+How it works (build plan §6.5): the platform's Stripe key acts **on a club's own Stripe account** ("direct charges"). The money, customers, subscriptions and payouts are the club's; Luvallplay never holds them.
+
+Built so far, and **switched off unless the first setting below is set** (Three Wolves' deployment has none of them, so nothing changes for it):
+
+| Setting | What it does |
+|---|---|
+| `STRIPE_CONNECT_ACCOUNT` | The club's connected account (`acct_…`). The account is put on the Stripe client itself (`lib/payments/stripe-client.ts`), so **every** request carries it; a test fails if any file makes its own client or names an account on a single call |
+| `STRIPE_CONNECT_FEE_BPS` | The platform's fee in basis points (100 = 1%). Unset or `0` = **0%**, and then nothing about a fee is sent to Stripe |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | The signing secret of the platform's Connect webhook endpoint. Events signed with it are accepted beside the account's own, and carry the account they belong to |
+
+Safety rules, each with a test (`apps/web/tests/stripe-connect.test.ts`): a connected account **with a live key is refused**, on production too (W1 is test mode only); an account id or fee that isn't well formed stops the app instead of guessing.
+
+Still to do in step 2, once the test key is here (so each call is tried against Stripe's test mode, not assumed): creating a connected account for a new club, the onboarding link, reading whether the account can take payments and be paid out, connecting an **existing** account (Three Wolves' own is connected, not recreated), and the webhook's handlers reading the event's account (a `[lane W]` change to the webhook route). The account moves from a deployment setting to the club's own payment settings with the wizard (W2), through the migration queue.

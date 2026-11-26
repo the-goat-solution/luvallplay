@@ -1140,15 +1140,14 @@ describe("APP · settings: the account", () => {
     }
   });
 
-  test("APP30 · deleting the account: typed DELETE, back to sign-in; the club's only owner is told to hand over first", async () => {
+  test("APP30 · deleting the account: two taps (ask, then yes), back to sign-in; the club's only owner is told to hand over first", async () => {
     const owner = await signedIn(PEOPLE.owner.email);
     const op = await owner.context.newPage();
     await op.goto(`${APP}/settings`);
     await op.getByRole("button", { name: "Delete my account" }).click();
-    const confirm = op.getByRole("button", { name: "Delete my account" });
-    assert.equal(await confirm.isDisabled(), true, "nothing typed yet");
-    await op.getByLabel("Type DELETE to confirm").fill("delete");
-    await confirm.click();
+    await op.getByText("Delete your account? You'll be signed out everywhere.").waitFor();
+    assert.equal(await op.getByRole("button", { name: "Delete my account", exact: true }).count(), 0, "the first button gives way to the question");
+    await op.getByRole("button", { name: "Yes, delete my account" }).click();
     await op.getByRole("alert").filter({ hasText: "only owner" }).waitFor();
     await owner.context.close();
 
@@ -1159,10 +1158,10 @@ describe("APP · settings: the account", () => {
     await page.goto(`${APP}/settings`);
     await page.getByRole("button", { name: "Delete my account" }).click();
     await page.getByRole("button", { name: "Cancel" }).last().click();
-    assert.equal(await page.getByLabel("Type DELETE to confirm").count(), 0, "Cancel closes it");
-    await page.getByRole("button", { name: "Delete my account" }).click();
-    await page.getByLabel("Type DELETE to confirm").fill("DELETE");
-    await page.getByRole("button", { name: "Delete my account" }).click();
+    assert.equal(await page.getByRole("button", { name: "Yes, delete my account" }).count(), 0, "Cancel closes it");
+    assert.equal((await db.query(`SELECT deleted_at FROM players WHERE id = $1`, [id])).rows[0].deleted_at, null, "one tap deletes nothing");
+    await page.getByRole("button", { name: "Delete my account", exact: true }).click();
+    await page.getByRole("button", { name: "Yes, delete my account" }).click();
     await page.waitForURL(`${APP}/signin`);
     assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${token}` } })).status, 401);
     assert.ok((await db.query(`SELECT deleted_at FROM players WHERE id = $1`, [id])).rows[0].deleted_at);

@@ -7,13 +7,15 @@
 // STORAGE_DRIVER chooses the provider:
 //
 //   vercel-blob  (default) Vercel Blob. For regions on Vercel.
+//   s3           any S3-compatible store (lib/storage-s3.ts). For regions
+//                that aren't on Vercel. Passes the same contract tests
+//                (tests/storage.test.ts → storageContract) against a real
+//                S3-compatible server (tests/storage-s3.test.ts).
 //   memory       in-process, for tests. Refused in production.
 //
-// Any other value throws: a region must never guess where its files go. The
-// S3-compatible provider arrives with the Hanoi stack and must pass the same
-// contract tests (tests/storage.test.ts → storageContract).
+// Any other value throws: a region must never guess where its files go.
 //
-// Still provider-specific, on purpose, until that provider exists:
+// Still provider-specific, on purpose, until a region off Vercel needs them:
 //   - browser-direct photo uploads (lib/photos-service.ts, for the website and the app): the
 //     upload handshake is the provider's own protocol;
 //   - finance receipts (lib/finance-receipts.ts): a private store with its
@@ -21,6 +23,7 @@
 // tests/storage.test.ts keeps the list of files allowed to import the
 // provider's library, so a new direct use can't slip in.
 import { del, put } from "@vercel/blob";
+import { s3Storage } from "./storage-s3";
 
 export type StoredObject = { url: string; pathname: string };
 
@@ -111,8 +114,9 @@ export function publicStorage(): ObjectStorage {
   if (current) return current;
   const v = process.env.STORAGE_DRIVER?.trim().toLowerCase();
   if (!v || v === "vercel-blob") current = vercelBlobStorage();
+  else if (v === "s3") current = s3Storage();
   else if (v === "memory" && process.env.VERCEL_ENV !== "production") current = memoryStorage();
-  else throw new Error(`STORAGE_DRIVER is "${process.env.STORAGE_DRIVER}": expected "vercel-blob".`);
+  else throw new Error(`STORAGE_DRIVER is "${process.env.STORAGE_DRIVER}": expected "vercel-blob" or "s3".`);
   return current;
 }
 

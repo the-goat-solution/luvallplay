@@ -17,6 +17,7 @@ import { storage, store } from "./app.ts";
 import { watchInstall } from "./lib/install.ts";
 import { clearOffline, restoreCache, saveCache } from "./lib/offline.ts";
 import { startQueue } from "./lib/queue.ts";
+import { loadLang, pickLang } from "./lib/messages.ts";
 import { resolveMode } from "./lib/theme.ts";
 import { router } from "./router.tsx";
 
@@ -51,6 +52,11 @@ watchInstall();
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => void navigator.serviceWorker.register("/sw.js").catch(() => {}));
 }
+
+// The text of the language the first screen will be in, before it draws
+// (English is built in). Without a connection or in time: English for now,
+// and the screens draw again when it arrives.
+await Promise.race([loadLang(pickLang(store.get().lang, null, navigator.language)).catch(() => {}), new Promise((done) => setTimeout(done, 3000))]);
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>

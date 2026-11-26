@@ -429,6 +429,7 @@ function cases(): Case[] {
     { mod: "db", fn: "saveSessionFillIn", args: () => [fx.nextWed, { membershipId: 2 }, { firstName: "Sub", lastName: "Player", email: "sub@golden.test", phone: null }] },
     { mod: "db", fn: "removeSessionFillIn", args: () => [fx.nextWed, { membershipId: 2 }] },
     { mod: "db", fn: "reserveBookingSlot", args: () => [fx.nextWed, { firstName: "Casual", lastName: "Guest", email: "casual@golden.test", phone: null, paymentIntentId: "pi_golden_new" }] },
+    { mod: "db", fn: "reserveBookingSlotOnce", args: () => [fx.nextWed, { firstName: "Casual", lastName: "Guest", email: "casual@golden.test", phone: null, paymentIntentId: "pi_golden_new" }], label: "the same payment again" },
     { mod: "db", fn: "removeBooking", args: () => [1, fx.lastWed] },
     { mod: "db", fn: "claimBookingReminder", args: [2] },
     { mod: "db", fn: "claimMembershipReminder", args: () => [1, fx.nextFri] },

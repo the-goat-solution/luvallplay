@@ -115,6 +115,8 @@ export function MatchAnalyzer({
 }) {
   const host = useVisionHost();
   const { lang, setLang, termed, transport, links } = host;
+  /** False in the Android store app until Play Billing exists: no prices, no buying. */
+  const sells = host.purchases !== false;
   // The club's own name for the tracker is filled in as each line is read.
   const c = useMemo(() => fillTerms(termed(COPY[lang], lang), (text) => fillWords(text, lang, host)), [lang, termed, host]);
   /** English, for the stats emailed to players who aren't registered. */
@@ -343,6 +345,7 @@ export function MatchAnalyzer({
   };
 
   const buyPass = async (kind: "live" | "upload") => {
+    if (!sells) return;
     setBuying(true);
     setError(null);
     try {
@@ -1250,7 +1253,8 @@ export function MatchAnalyzer({
                   <h2>{c.trialTitle}</h2>
                   <p>{c.trialText}</p>
                   <p className={s.trialAfter}>
-                    <b>{c.trialDays(trialDaysLeft())}</b> · {c.trialAfter}
+                    <b>{c.trialDays(trialDaysLeft())}</b>
+                    {sells ? <> · {c.trialAfter}</> : null}
                   </p>
                 </div>
               </section>
@@ -1262,10 +1266,10 @@ export function MatchAnalyzer({
                 {payState === "trial" ? (
                   <span className={s.freeChipRow}>
                     <span className={s.freeChip}>{c.freeNow}</span>
-                    <span className={s.freeThen}>{c.trialThen(c.priceLive)}</span>
+                    {sells ? <span className={s.freeThen}>{c.trialThen(c.priceLive)}</span> : null}
                   </span>
                 ) : (
-                  <span className={s.price}>{passes.live ? c.passReady("live") : c.priceLive}</span>
+                  <span className={s.price}>{passes.live ? c.passReady("live") : sells ? c.priceLive : ""}</span>
                 )}
               </button>
               <button className={s.mode} type="button" onClick={() => gate("upload", () => fileRef.current?.click())} disabled={blocked} data-testid="mode-video">
@@ -1274,10 +1278,10 @@ export function MatchAnalyzer({
                 {payState === "trial" ? (
                   <span className={s.freeChipRow}>
                     <span className={s.freeChip}>{c.freeNow}</span>
-                    <span className={s.freeThen}>{c.trialThen(c.priceUpload)}</span>
+                    {sells ? <span className={s.freeThen}>{c.trialThen(c.priceUpload)}</span> : null}
                   </span>
                 ) : (
-                  <span className={s.price}>{passes.upload ? c.passReady("upload") : c.priceUpload}</span>
+                  <span className={s.price}>{passes.upload ? c.passReady("upload") : sells ? c.priceUpload : ""}</span>
                 )}
               </button>
               {sandbox ? (
@@ -1303,9 +1307,16 @@ export function MatchAnalyzer({
               <section className={`${s.card} ${s.paywall}`} data-testid="paywall">
                 <span className={s.aiBadge}>✦ {c.aiBadge}</span>
                 <h2>{c.payTitle(paywallFor)}</h2>
-                <p>{c.payText(paywallFor)}</p>
+                {sells ? <p>{c.payText(paywallFor)}</p> : null}
                 <p className={s.muted}>{c.aiLayers}</p>
-                {payState === "signed_out" ? (
+                {!sells ? (
+                  <div className={s.row}>
+                    <p className={s.notice} role="status" data-testid="pass-not-in-app">{c.payNotInApp}</p>
+                    <button className={s.btnGhost} type="button" onClick={() => setPaywallFor(null)}>
+                      {c.cancel}
+                    </button>
+                  </div>
+                ) : payState === "signed_out" ? (
                   <div className={s.notice}>
                     {c.paySignIn}{" "}
                     <a href={links.signIn(`${links.tracker}${challengeId ? `?challenge=${challengeId}` : ""}`)} style={{ color: "inherit", fontWeight: 700 }}>

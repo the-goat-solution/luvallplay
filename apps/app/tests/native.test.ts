@@ -3,7 +3,7 @@
 // a browser nothing changes.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isNative, platform, plugin } from "../src/lib/native/platform.ts";
+import { isNative, platform, plugin, sellsPasses } from "../src/lib/native/platform.ts";
 import { nativeSecrets } from "../src/lib/native/secure-storage.ts";
 import { memoryStorage, type SecretStore } from "../src/lib/storage.ts";
 import { createStore } from "../src/lib/store.ts";
@@ -114,4 +114,15 @@ test("the secret store's plugin: a missing key is null, keys carry the app's pre
   s.set({ token: "t" });
   await wait(5);
   assert.equal(s.get().token, "t", "kept for this run");
+});
+
+test("Vision passes are sold in a browser and never in a store app (until Play Billing exists)", () => {
+  const g = globalThis as { Capacitor?: unknown };
+  assert.equal(sellsPasses(), true);
+  for (const p of ["android", "ios"]) {
+    g.Capacitor = { isNativePlatform: () => true, getPlatform: () => p };
+    assert.equal(sellsPasses(), false, p);
+  }
+  delete g.Capacitor;
+  assert.equal(sellsPasses(), true);
 });

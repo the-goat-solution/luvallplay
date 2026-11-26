@@ -3654,6 +3654,73 @@
         }
       }
     },
+    "family.forms": {
+      "method": "GET",
+      "path": "/clubs/{club}/family/{id}/forms",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "forms": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "body": {
+                  "t": "string"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "kind": {
+                  "t": "enum",
+                  "values": [
+                    "waiver",
+                    "consent"
+                  ]
+                },
+                "signedAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "signedName": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "slug": {
+                  "t": "string"
+                },
+                "title": {
+                  "t": "string"
+                },
+                "version": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "limits": {
+            "t": "object",
+            "fields": {
+              "nameMax": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
+    },
     "family.list": {
       "method": "GET",
       "path": "/clubs/{club}/family",
@@ -3728,6 +3795,73 @@
                 "t": "number"
               },
               "nameMax": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.signForm": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/forms/{formId}/sign",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "formId": {
+            "t": "number"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "name": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "form": {
+            "t": "object",
+            "fields": {
+              "body": {
+                "t": "string"
+              },
+              "id": {
+                "t": "number"
+              },
+              "kind": {
+                "t": "enum",
+                "values": [
+                  "waiver",
+                  "consent"
+                ]
+              },
+              "signedAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "signedName": {
+                "t": "string",
+                "nullable": true
+              },
+              "slug": {
+                "t": "string"
+              },
+              "title": {
+                "t": "string"
+              },
+              "version": {
                 "t": "number"
               }
             }

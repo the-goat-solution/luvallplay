@@ -47,6 +47,19 @@ export const familyEndpoints = defineEndpoints("family", {
     params: S.familyChildParams, body: S.familyNotesRequest, response: S.familyCareResponse,
     rateLimit: { limit: 20, windowMs: 10 * MIN },
   },
+  // The club's forms and waivers for a child, and signing one (the guardian
+  // types their own name). Refusals: 400 name_required, name_too_long;
+  // 404 not_found; 409 not_current (the form has newer wording: show it).
+  "family.forms": {
+    method: "GET", path: "/clubs/{club}/family/{id}/forms", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, response: S.familyFormsResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "family.signForm": {
+    method: "POST", path: "/clubs/{club}/family/{id}/forms/{formId}/sign", auth: "session", scope: "club", module: "juniors",
+    params: S.familyFormParams, body: S.familySignRequest, response: S.familyFormResponse,
+    rateLimit: { limit: 20, windowMs: 10 * MIN },
+  },
   // Booking a place for a child. The place is shared with adults' casual
   // bookings. Refusals: 409 not_bookable (outside the booking window),
   // day_paused, locked, full, payment_needed (the club charges and paying

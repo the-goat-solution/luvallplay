@@ -720,6 +720,8 @@ const SESSION_ENDPOINTS = [
   ["GET", "/clubs/{club}/family/{id}/care"],
   ["PUT", "/clubs/{club}/family/{id}/care/contacts"],
   ["PUT", "/clubs/{club}/family/{id}/care/medical-notes"],
+  ["GET", "/clubs/{club}/family/{id}/forms"],
+  ["POST", "/clubs/{club}/family/{id}/forms/{formId}/sign"],
   ["GET", "/clubs/{club}/family/bookings"],
   ["POST", "/clubs/{club}/family/{id}/bookings"],
   ["POST", "/clubs/{club}/family/bookings/{id}/cancel"],

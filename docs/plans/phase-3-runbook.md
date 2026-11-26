@@ -19,7 +19,7 @@ Phase 3 (multi-tenant core, build plan §6) ships as twelve small steps. The cod
 | 8 | Payments interface | Built: the interface, Stripe as the first provider, a shared contract suite; one-off payments and the webhook signature check use it (§8) |
 | 9 | Entitlements and metering | **Done.** Production data run passed (23 Nov, 17:09 UTC); merged (#109) |
 | 10 | `NOT NULL`, foreign keys, row-level security | **Done.** Production data run passed (23 Nov, 18:17 UTC); merged (#110). **Shadow reads through row-level security started 23 Nov, 19:06 UTC** |
-| 11 | Reads switched to tenant-aware queries | After **7 clean days of shadow reads**: not before **1 Dec 2026** (§11) |
+| 11 | Reads switched to tenant-aware queries | **The shadow evidence was failing (audit C0), so the 7-day clock restarts** once the fixes are live and `0012` and `0013` have run (§13). Then 7 clean days by the tightened report **and** journey T1 on a copy of production with two clubs. Lane T, from 25 Nov |
 | 12 | Old email joins dropped | A later release, after a quiet week |
 
 **Timeline.** Step 11 can't happen sooner than 7 days after shadow reads start (they start with step 4, once steps 2 and 3 have run on production). Step 12 follows at least a week after step 11. So Phase 3 finishes about two to three weeks after step 3 reaches production, however fast the code is written.
@@ -492,3 +492,51 @@ Today the app connects as the database owner and steps down to `luvallplay_app` 
 - **Each new Neon branch has a new host**, and the build session's network only allows named hosts. Expect one approval card per rehearsal (two hosts: direct and pooled).
 - **One branch, one step at a time.** The build session pushes only to `claude/luvallplay-phase-3`, so each step's pull request opens after the previous one is merged.
 - **Previews build again.** The nine stale `preview/claude/*` branches in the old US Neon project were deleted on 23 Nov. That project fills up again after about nine more previews; option A in the Phase 2 runbook §1 stops it recurring.
+
+## 13. Lane T: the shadow clock and the data-step calendar (from 25 Nov 2026)
+
+Lane T (build plan §9.2) owns steps 11 and 12 and keeps the migration queue. This section is the dated record; the item-by-item log is in build plan §6.10.
+
+### 13.1 The shadow clock
+
+| Event | When (UTC) | Note |
+|---|---|---|
+| Shadow reads for settings started | 23 Nov 2026, 09:50 | §4 |
+| Shadow reads through row-level security started | 23 Nov 2026, 19:06 | §10 |
+| **Evidence found failing** (audit C0) | 25 Nov 2026 | `settings` differs daily (three club words only migration `0013` stores); the row-level-security heartbeat is `unavailable` while `0012`'s tables are missing; the report couldn't see it. **None of the days so far count** |
+| `0012` and `0013` run on production | 26 Nov 2026, 00:44 and 00:47 | §13.2. From the next heartbeat (03:00 UTC) the stored settings match the built-in ones and the junior tables exist |
+| **Clock restarted** | *not yet* | Needs: #159 merged and deployed (`0012` and `0013` have run), then the first heartbeat (03:00 UTC) with all three checks clean. That day is day 1 |
+
+To read the gate once it has restarted: `node --import ./tests/register.mjs scripts/shadow-report.mjs --since <day 1>` (§4).
+
+### 13.2 Data-step calendar (one production step at a time)
+
+| Step | Migration | Booked by | State |
+|---|---|---|---|
+| 1 | `0012_junior_activity` (additive: two empty tables) | Lane T (written by Phase 3b; lane J waits on it) | Approved by the owner 25 Nov. **Rehearsed again 25 Nov, alone with `--to 0012`, on a fresh copy of production: 19 accounts, 0 problems, 3.3 s, views identical, no drift, verify consistent** (`docs/rehearsals/2026-11-phase3b-junior-activity.md`). **Done on production 26 Nov 2026, 00:44 UTC** (run by lane T's session, confirmed by the owner in its thread, from #152's branch with `--to 0012`): restore point `pre-phase-3b-junior-activity` (`br-aged-night-a7t3h7hc`, 00:43 UTC); the migration took 3.3 s; data guard 19 accounts, 0 problems, only the two new tables added; no drift; verify consistent (61 club-owned tables, row-level security 0 problems); `/` and `/login` answer. `0013` stayed pending |
+| 2 | `0013_terms_players` (one row: three keys added to Three Wolves' terms) | Lane T (written by Phase 4) | Approved 25 Nov. **Rehearsed 25 Nov, alone with `--to 0013`, on the same copy after `0012`: 19 accounts, 0 problems, 1.4 s, views identical, no drift, verify consistent** (`docs/rehearsals/2026-11-phase4-terms-players.md`). **Done on production 26 Nov 2026, 00:47 UTC** (same session, `--to 0013`): restore point `pre-phase-4-terms-players` (`br-morning-dust-a76pmx2p`, 00:46 UTC); the migration took 1.4 s; data guard 19 accounts, 0 problems, only `tenants.terms` and `tenants.updated_at` changed; no drift; verify consistent; the row holds Wolf, Wolves, Pack and Sói, Sói, Bầy; `/` and `/login` answer |
+
+How each runs (test plan §4.4), with `--to` so nothing else rides along:
+
+```bash
+# 0. Rehearse on rehearsal-phase-3, reset to a fresh copy of production: the same commands, without --production.
+# 1. Restore point: a Neon branch from main, now. Names: pre-phase-3b-junior-activity, pre-phase-4-terms-players
+cd apps/web
+export POSTGRES_URL='<production direct connection string>'
+export PRODUCTION_DATABASE_HOSTS='ep-shiny-rain-a76n3kg6.ap-southeast-2.aws.neon.tech'
+pnpm db:migrate --status                                          # 0012 and 0013 pending, nothing else
+pnpm data-guard snapshot --out .data-guard/prod-before.json
+pnpm db:migrate --production --to 0012                            # stops after 0012; 0013 stays pending
+pnpm data-guard snapshot --out .data-guard/prod-after.json
+pnpm data-guard diff .data-guard/prod-before.json .data-guard/prod-after.json \
+  --expect scripts/data-guard/expectations/2026-11-phase3b-junior-activity.production.json
+node --import ./tests/register.mjs scripts/tenants/verify.mjs     # must say: tenants tables are consistent
+# 2. The same again with --to 0013 and --expect scripts/data-guard/expectations/2026-11-phase4-terms-players.production.json; then:
+pnpm db:drift                                                     # must say: No schema drift
+```
+
+`db:drift` compares with the schema after **every** migration, so between the two steps it reports `0013`'s difference only if `0013` changed the schema; it changes one row and no structure, so drift is checked after each step and must be clean after `0012` already.
+
+### 13.3 Restore-point branches (Neon free plan: 10 per project)
+
+**Checked through the Neon API on 25 Nov, 20:13 UTC: the project had 5 branches, not 10 (7 since the two restore points of 26 Nov)**: `main`, `rehearsal-phase-3`, and three restore points (`pre-phase-3-tenants`, `pre-phase-3-user-id-links`, `pre-phase-3-tenant-keys-contract`). The Phase 1 and Phase 2 restore points and two of Phase 3's are already gone, so the restore points for `0012` and `0013` fit and nothing needs deleting first. Step 12 (destructive) needs a fresh restore point of its own. **No branch is deleted without the owner naming it.** Note from the audit: the restore points for `0008`, `0009` and `0010` were the rehearsal branch, reset since, so they no longer exist as restore points.

@@ -1059,6 +1059,35 @@ Findings and changes recorded as the work goes:
   - The Neon project is at 6 of the free plan's 10 branches. Rehearsal branches from Phase 2 and Phase 3 are still there and hold real data.
   - Local development has Postgres 16. The schema drift check needs 18 and runs in CI and against the Neon rehearsal branch.
 
+#### Lane T delivery log (tenancy switch: steps 11 and 12)
+
+Lane T (§9.2) owns the rest of Phase 3 from 25 Nov 2026. One pull request per step, branches `claude/lane-t-<step>`. The dated record of production steps and the shadow clock is in [`phase-3-runbook.md`](./phase-3-runbook.md) §13.
+
+| Item (audit) | What | State |
+|---|---|---|
+| `--to` for the migrator (C0) | `pnpm db:migrate --to 0012` stops after the named migration, so production steps run one at a time | PR #152, CI green on its own job; not merged while `main`'s players'-app job is red |
+| Shadow report (C0) | A day is clean only when `settings`, `routing` and `tenant-reads` are all clean and none is `differ` or `unavailable`; a day with nothing recorded isn't clean; `--since`, `--need` | PR #159, waits for the owner's OK (it changes the database client) |
+| Heartbeat (C0, Medium) | Skips a club-owned table whose migration hasn't run and names it; probes through the unscoped pool, so `enforce` doesn't raise a false alarm; works from the app's own login | PR #159 |
+| Shadow coverage (C0b) | Shadow mode compares Drizzle's reads (`orm()`) and reads on `sql.connect()` connections; never waits on the pool while holding a connection | PR #159 |
+| Advisory lock (Medium) | Membership sign-up holds `pg_advisory_xact_lock` in one transaction, a savepoint per candidate day | PR #164, waits for the owner's OK (payments path) |
+| `enforce` latency (Medium) | Three round trips per scoped statement instead of five; `scripts/tenants/load-enforce.mjs` | PR #169. **Load test on the rehearsal copy of production (25 Nov, pooled host): a burst of nine reads under `enforce` takes 2.98× the owner's with this change and 4.96× without it**, exactly the round-trip counts. The multi-statement `BEGIN` message works through Neon's pooler. The absolute times are from the build session (about 230 ms a round trip through its proxy), so the in-region figure is still to measure from a Sydney preview |
+| Migrations `0012`, `0013` (C0) | Approved 25 Nov. One at a time under the data-change protocol | **Both rehearsed 25 Nov, each alone with `--to`, on a fresh copy of production: 19 accounts, 0 problems, views identical, no drift.** **Both run on production 26 Nov 2026 (00:44 and 00:47 UTC), one at a time, each with its own restore point: 19 accounts, 0 problems, no drift, verify consistent** (runbook §13.2). Neon has 7 branches of 10 |
+| 7-day clock | Restarts when #159 is live (`0012` and `0013` ran on 26 Nov) | **Not restarted**: #159 waits for the owner's OK and green CI |
+| C1, C6, C7, H1, H2 | Second-club blockers (week 2) | Not started |
+| Club paths (`clever-lovelace`) | Rebase, check its claims, merge behind `CLUB_PATHS` (off) | Not started |
+| Step 11, step 12 | `enforce` and `APP_DATABASE_URL`; then the email joins and the `COALESCE(…, 1)` defaults | Gated: 7 clean days by the tightened report and T1 on a copy of production with two clubs; the owner is asked before each switch |
+
+Findings as the work goes:
+
+- **The old report could not have failed on production's actual state.** On 25 Nov the record had `settings: differ` and `tenant-reads: unavailable` beside `routing: clean` every day; the report's rule (any clean row, no differ row for that check) would have called a day with only the last two clean. The new rule is tested against exactly that day.
+- **A comparison started from inside a transaction can deadlock the pool.** It needs a connection while the caller holds one. The first version of the shadow coverage hung in its own test (every connection held, the club-id lookup waiting for one). Comparisons from a held connection now run only when a connection is spare at that instant, and are skipped otherwise.
+- **Under `enforce` the heartbeat's probe was given the scoped pool**, so "no club named" still named the club: a daily false alarm, reproduced in a test. With the app's own login there is no owner to compare row counts with, so the probe checks from the inside (no other club's rows with the club named; none with no club named).
+- **`set_config('role', …, true)` is `SET LOCAL ROLE`**, so the role and the club are one statement, and it shares a message with `BEGIN`. The club id is written into that text, after a whole-number check.
+- **Migration `0013` had no data-guard expectations file and no rehearsal report** (`0012` has both). The expectations are written (`2026-11-phase4-terms-players*.json`: `tenants.terms` and `tenants.updated_at` on the one row, nothing else). A dry run on synthetic data passes with the file and fails without it on exactly those two columns. Rehearsed on a fresh copy of production on 25 Nov (`docs/rehearsals/2026-11-phase4-terms-players.md`): passed.
+- **`main`'s CI is red since #150** in the players' app journeys (1 of 60), not in lane T's files. Told to the coordinating thread; nothing of lane T's merges while a check is red.
+- **The lane's session reaches the database since 25 Nov, 20:10 UTC.** A new thread runs in the `three-wolves-badminton` environment, which allows the Neon hosts and holds the organisation's API key. Raw Postgres connections don't pass its proxy, so every script runs with `DB_DRIVER=neon-ws` (and `NODE_USE_ENV_PROXY=1` for the app's own client), as the Phase 3 runs did.
+- **Lane N's question (cutover B5): 0 live accounts have a phone but no usable email** (read-only count on production, 25 Nov: 19 live accounts, 16 with a phone, 6 verified). An account's email is required, and only a deleted account gets a placeholder, so it can't happen today.
+
 ---
 
 ## 7. Phase 6: brand, websites and the setup wizard

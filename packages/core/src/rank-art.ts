@@ -163,6 +163,85 @@ const INSET: Record<League, string> = {
   4: "translate(33 26.5) scale(.7) translate(-31.5 -30)",
 };
 
+// ── The Luvallplay set: the same ladder, sport-neutral ─────────────────
+/**
+ * Whose drawings: "three-wolves" (the club's own: shuttles and rackets, wolf
+ * crests, its navy and bronze) or "luvallplay" (any club: the same frames and
+ * steps, with chevrons, stars, a bolt, a flame and gems for the items, plain
+ * crests for the top seats, and the club's own colours, see clubColoured).
+ */
+export type ArtSet = "three-wolves" | "luvallplay";
+export const artSetOf = (name: string | null | undefined): ArtSet => (name === "three-wolves" ? "three-wolves" : "luvallplay");
+
+const emblem = (d: string, mat: string, large: boolean, id: string) =>
+  `<defs>${grad(id + "e", M[mat])}</defs><path d="${d}" fill="url(#${id}e)" stroke="${INK}" stroke-width="${large ? 2 : 3.2}" stroke-linejoin="round" stroke-linecap="round"/>`;
+const STAR = (cx: number, cy: number, r: number) => {
+  let d = "";
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rr = i % 2 ? r * 0.45 : r;
+    d += `${i ? "L" : "M"}${(cx + rr * Math.cos(a)).toFixed(2)} ${(cy + rr * Math.sin(a)).toFixed(2)}`;
+  }
+  return d + "Z";
+};
+const CHEVRON = (cy: number) => `M18 ${cy + 7}L32 ${cy - 4}L46 ${cy + 7}L46 ${cy + 13}L32 ${cy + 2}L18 ${cy + 13}Z`;
+const chevrons = (n: number) => [CHEVRON(24), CHEVRON(32), CHEVRON(16)].slice(0, n).join("");
+const stars = (n: number) => (n === 1 ? STAR(32, 31, 16) : n === 2 ? STAR(23, 33, 11) + STAR(41, 29, 11) : STAR(32, 22, 10) + STAR(20, 40, 9) + STAR(44, 40, 9));
+const BOLT = "M36 8L18 34h12l-4 22l20-28H34z";
+const GEM = "M20 22l6-8h12l6 8l-12 26z";
+const genericGem = (mat: string, n: number, large: boolean, id: string) =>
+  emblem(GEM, mat, large, id) + (large ? `<path d="M20 22h24M26 14l6 8l6-8M32 22v26" fill="none" stroke="${INK}" stroke-width=".8" opacity=".45"/>` : "") + sparkle(n, large);
+
+const GENERIC_ITEM: Record<ItemKey, (large: boolean, id: string) => string> = {
+  plastic: (l, id) => emblem(chevrons(1), "plastic", l, id),
+  feather: (l, id) => emblem(chevrons(2), "feather", l, id),
+  tube: (l, id) => emblem(chevrons(3), "tube", l, id),
+  wooden: (l, id) => emblem(stars(1), "wood", l, id),
+  steel: (l, id) => emblem(stars(2), "steel", l, id),
+  aluminium: (l, id) => emblem(stars(3), "alu", l, id),
+  carbon: (l, id) => emblem(BOLT, "carbon", l, id),
+  pro: (l, id) => `<g transform="translate(32 32) scale(.82) translate(-32 -32)">${emblem(FLAME, "pro", l, id)}</g>`,
+  silver: (l, id) => genericGem("silver", 1, l, id),
+  golden: (l, id) => genericGem("gold", 2, l, id),
+  platinum: (l, id) => genericGem("platinum", 3, l, id),
+  diamond: (l, id) => genericGem("diamond", 4, l, id) + crownShape(23, 2, 18, 9, C.bronzeLight, l),
+};
+
+/** A top seat in the plain set: the crest with a star, crowned for the first seat, with a laurel for the second. */
+function genericSeat(alpha: boolean, large: boolean, id: string): string {
+  let s = `<path d="${CREST}" fill="${alpha ? C.navyDark : C.navy}" stroke="${INK}" stroke-width="${large ? 2.2 : 3.6}" stroke-linejoin="round"/>`;
+  s += `<path d="${CREST}" fill="none" stroke="${alpha ? C.bronzeLight : C.steel}" stroke-width="${large ? 1.2 : 1.8}" transform="translate(32 32) scale(.88) translate(-32 -32)" stroke-linejoin="round"/>`;
+  s += `<defs>${grad(id + "s", alpha ? M.gold : M.silver)}</defs><path d="${STAR(32, 34, 14)}" fill="url(#${id}s)" stroke="${INK}" stroke-width="${large ? 1.6 : 2.6}" stroke-linejoin="round"/>`;
+  if (alpha) s += crownShape(24, 6, 16, 9, C.bronzeLight, large);
+  else s += `<path d="M17 46C13 41 13 34 16 28M47 46c4-5 4-12 1-18" fill="none" stroke="${C.steelLight}" stroke-width="${large ? 1.6 : 2.4}" stroke-linecap="round"/>`;
+  return s;
+}
+
+/**
+ * The plain set in the club's colours: each of the drawings' house colours
+ * gets a class (art-deep, art-light, art-cool, art-warm, for fill and
+ * stroke), which the app's stylesheet paints from the club's theme. The
+ * colour stays in the markup as the fallback.
+ */
+const ROLE: Record<string, string> = Object.fromEntries(
+  ([
+    [[C.navy, C.navyDark, C.navyMid], "deep"],
+    [[C.cream, C.creamDark, "#eef4f8", "#fbf3e4"], "light"],
+    [[C.steel, C.steelLight], "cool"],
+    [[C.bronze, C.bronzeDark, C.bronzeLight], "warm"],
+  ] as const).flatMap(([hexes, role]) => hexes.map((h) => [h.toLowerCase(), role])),
+);
+export function clubColoured(markup: string): string {
+  return markup.replace(/<(path|circle|ellipse|rect|stop|g)\b([^>]*?)(\/?)>/g, (tag, name: string, attrs: string, close: string) => {
+    const classes: string[] = [];
+    for (const m of attrs.matchAll(/\b(fill|stroke|stop-color)="(#[0-9a-fA-F]{3,6})"/g)) {
+      const role = ROLE[m[2].toLowerCase()];
+      if (role) classes.push(`art-${m[1] === "stroke" ? "s" : "f"}-${role}`);
+    }
+    return classes.length ? `<${name}${attrs} class="${classes.join(" ")}"${close}>` : tag;
+  });
+}
+
 // ── Kit add-ons: little round badges along the bottom ─────────────────
 const KIT_GLYPH: Record<KitKey, string> = {
   shoes: `<path d="M-3.6 1.2V-.8c0-.9.6-1.5 1.3-1.5c.8 0 1.2.7 1.9.7c.9 0 1.3-1.9 2.4-1.9c.8 0 1 .8 1.7 1.4c1.3 1.1 2.1 1.4 2.1 2.6v.7z" fill="${C.cream}"/><path d="M-4 1.2h8.4v1.1h-8.4z" fill="${C.bronzeLight}"/>`,
@@ -190,12 +269,13 @@ function kitBadges(kit: KitKey[], league: League, large: boolean): string {
     .join("");
 }
 
-/** Inner SVG markup for a rank on the ladder. `id` must be unique on the page. */
-export function rankArt(index: number, size: ArtSize, id: string): string {
+/** Inner SVG markup for a rank on the ladder. `id` must be unique on the page. `set`: whose drawings (see ArtSet). */
+export function rankArt(index: number, size: ArtSize, id: string, set: ArtSet = "three-wolves"): string {
   const r = LADDER[index];
   const large = size === "lg";
+  const plain = set === "luvallplay";
   let s = frame(r.league, large);
-  s += `<g transform="${INSET[r.league]}">${ITEM_ART[r.item](large, id)}</g>`;
+  s += `<g transform="${INSET[r.league]}">${(plain ? GENERIC_ITEM : ITEM_ART)[r.item](large, id)}</g>`;
   if (r.league === 4) s += ribbon(large);
   // League 1 has no kit; show the step with pips there.
   if (r.league === 1 && large) {
@@ -207,7 +287,7 @@ export function rankArt(index: number, size: ArtSize, id: string): string {
     }
   }
   s += kitBadges(r.kit, r.league, large);
-  return s;
+  return plain ? clubColoured(s) : s;
 }
 
 // ── Wolf seats ────────────────────────────────────────────────────────
@@ -229,9 +309,10 @@ export function crownShape(x: number, y: number, w: number, h: number, fill: str
 }
 
 const CREST = "M32 3L58 14L54 42L32 61L10 42L6 14Z";
-export function seatArt(seat: "alpha" | "silver", size: ArtSize, id: string): string {
+export function seatArt(seat: "alpha" | "silver", size: ArtSize, id: string, set: ArtSet = "three-wolves"): string {
   const large = size === "lg";
   const alpha = seat === "alpha";
+  if (set === "luvallplay") return clubColoured(genericSeat(alpha, large, id));
   let s = `<path d="${CREST}" fill="${alpha ? C.navyDark : C.navy}" stroke="${INK}" stroke-width="${large ? 2.2 : 3.6}" stroke-linejoin="round"/>`;
   s += `<path d="${CREST}" fill="none" stroke="${alpha ? C.bronzeLight : C.steel}" stroke-width="${large ? 1.2 : 1.8}" transform="translate(32 32) scale(.88) translate(-32 -32)" stroke-linejoin="round"/>`;
   s += `<g transform="translate(32 ${alpha ? 35 : 33}) scale(${alpha ? 0.66 : 0.72}) translate(-32 -32)" color="${C.cream}">${wolfHead(alpha, large, id)}</g>`;
@@ -258,8 +339,14 @@ function trophy(large: boolean, id: string, laurel = false): string {
 }
 
 export type CrownKind = "crown-pair" | "pack-leader" | "season-champion";
-export function crownArt(kind: CrownKind, size: ArtSize, id: string): string {
+export function crownArt(kind: CrownKind, size: ArtSize, id: string, set: ArtSet = "three-wolves"): string {
   const large = size === "lg";
+  if (set === "luvallplay") {
+    // The most games: a pennant on its pole, not a paw.
+    if (kind === "pack-leader")
+      return clubColoured(medal(`<path d="M24 50V14" stroke="${INK}" stroke-width="${large ? 2.4 : 3.4}" stroke-linecap="round"/><path d="M25 15l20 6.5l-20 6.5z" fill="${C.bronzeLight}" stroke="${INK}" stroke-width="${large ? 1.8 : 2.6}" stroke-linejoin="round"/>`, C.steel, large));
+    return clubColoured(crownArt(kind, size, id));
+  }
   if (kind === "crown-pair")
     return medal(`${crownShape(17, 19, 30, 17, C.bronzeLight, large)}<circle cx="26" cy="45" r="3.4" fill="${C.navy}"/><circle cx="38" cy="45" r="3.4" fill="${C.navy}"/>`, C.bronze, large);
   if (kind === "pack-leader")
@@ -292,7 +379,12 @@ export function bonusArt(kind: BonusKind): string {
 }
 
 const g = (d: string, sw = 3.4) => `<g fill="none" stroke="${INK}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${d}</g>`;
-export function achievementArt(key: AchievementKey, size: ArtSize, id: string): string {
+export function achievementArt(key: AchievementKey, size: ArtSize, id: string, set: ArtSet = "three-wolves"): string {
+  const s = twAchievementArt(key, size, id);
+  return set === "luvallplay" ? clubColoured(s) : s;
+}
+
+function twAchievementArt(key: AchievementKey, size: ArtSize, id: string): string {
   const large = size === "lg";
   const inner: Record<AchievementKey, () => string> = {
     "first-blood": () =>

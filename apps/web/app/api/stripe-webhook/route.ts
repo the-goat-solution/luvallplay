@@ -11,6 +11,7 @@ import type Stripe from "stripe";
 import { insertOneTimeDonation, setDonationStatusBySubscription } from "@/lib/repos/donations";
 import { setMembershipStatusBySubscription } from "@/lib/repos/memberships";
 import { getStripe } from "@/lib/stripe";
+import { markStripeEventHandled, stripeEventHandled } from "@/lib/stripe-events";
 import { activateMembershipByPaymentIntentId, activateMembershipBySubscriptionId, applyMembershipRenewal, listMemberMiniGameDates, listSessionsInRange, reserveBookingSlotOnce } from "@/lib/db";
 import { formatEventTimeRange, getClubToday } from "@/lib/dates";
 import {
@@ -52,6 +53,11 @@ export async function POST(request: Request) {
     event = (await payments().verifyWebhook({ body, headers: { "stripe-signature": signature } })).raw as Stripe.Event;
   } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  // Delivered before and handled to the end: nothing to do twice (lib/stripe-events.ts).
+  if (process.env.POSTGRES_URL && (await stripeEventHandled(event.id))) {
+    return NextResponse.json({ received: true, duplicate: true });
   }
 
   if (event.type === "payment_intent.succeeded") {
@@ -356,5 +362,6 @@ export async function POST(request: Request) {
     }
   }
 
+  if (process.env.POSTGRES_URL) await markStripeEventHandled(event.id, event.type);
   return NextResponse.json({ received: true });
 }

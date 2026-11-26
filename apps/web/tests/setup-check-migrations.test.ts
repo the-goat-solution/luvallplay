@@ -1,10 +1,10 @@
-// Admin → Setup check, "Database schema" (lib/setup-check.ts): the migration
+// Admin → Setup check, "Database schema" (lib/setup-check.ts, lib/migration-history.ts): the migration
 // history lives in the `drizzle` schema, which the app's database role has no
 // rights on. A read that is refused must not be reported as "no history".
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { newestMigrationApplied } from "../lib/setup-check.ts";
+import { newestMigrationApplied } from "../lib/migration-history.ts";
 
 const answering = (rows: Record<string, unknown>[]) => ({ query: async () => ({ rows }) });
 const failing = (code: string) => ({

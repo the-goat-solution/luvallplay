@@ -198,6 +198,9 @@ importers:
       '@luvallplay/modules':
         specifier: workspace:*
         version: link:../../packages/modules
+      '@luvallplay/site-templates':
+        specifier: workspace:*
+        version: link:../../packages/site-templates
       '@luvallplay/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -345,6 +348,16 @@ importers:
         version: 5.9.3
 
   packages/modules:
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/site-templates:
+    dependencies:
+      '@luvallplay/ui':
+        specifier: workspace:*
+        version: link:../ui
     devDependencies:
       typescript:
         specifier: ^5

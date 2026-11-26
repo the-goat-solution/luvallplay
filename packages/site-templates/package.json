@@ -1,0 +1,19 @@
+{
+  "name": "@luvallplay/site-templates",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Club websites: the per-club content model and the templates (Classic, Bold, Minimal) that render it in the club's theme.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@luvallplay/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

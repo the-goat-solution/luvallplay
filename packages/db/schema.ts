@@ -1000,6 +1000,16 @@ export const webhook_deliveries = pgTable("webhook_deliveries", {
 	check("webhook_deliveries_status_check", sql`status = ANY (ARRAY['pending'::text, 'delivered'::text, 'failed'::text])`),
 ]);
 
+// Lane H (audit H6): one counter per limited thing, shared by every server
+// instance. key_hash is a SHA-256: no address or email is stored.
+export const rate_limits = pgTable("rate_limits", {
+	key_hash: text().primaryKey().notNull(),
+	count: integer().notNull(),
+	reset_at: timestamp({ withTimezone: true, mode: 'string' }).notNull(),
+}, (table) => [
+	index("rate_limits_reset_at_idx").using("btree", table.reset_at.asc().nullsLast()),
+]);
+
 export const sms_sends = pgTable("sms_sends", {
 	id: serial().primaryKey().notNull(),
 	purpose: text().notNull(),
@@ -1008,6 +1018,16 @@ export const sms_sends = pgTable("sms_sends", {
 	sent_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("sms_sends_sent_at_idx").using("btree", table.sent_at.asc().nullsLast()),
+]);
+
+// Lane H (audit H3): Stripe events handled to the end, so one delivered
+// again is skipped.
+export const stripe_events = pgTable("stripe_events", {
+	event_id: text().primaryKey().notNull(),
+	type: text().notNull(),
+	processed_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("stripe_events_processed_at_idx").using("btree", table.processed_at.asc().nullsLast()),
 ]);
 
 export const stripe_payouts = pgTable("stripe_payouts", {

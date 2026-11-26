@@ -114,7 +114,7 @@ export const DEFAULT_CONFIG: GuardConfig = {
       statusLinks: [{ table: "junior_bookings", person: "junior_profile_id", status: "status" }],
     },
   ],
-  ignoreTables: ["schema_runs", "sms_sends", "auth_codes", "webhook_deliveries", "pv_arena_code_attempts", "arena_code_attempts"],
+  ignoreTables: ["schema_runs", "sms_sends", "auth_codes", "rate_limits", "stripe_events", "webhook_deliveries", "pv_arena_code_attempts", "arena_code_attempts"],
   sumColumns: /(_cents|amount|price|total|points|balance)$/,
 };
 

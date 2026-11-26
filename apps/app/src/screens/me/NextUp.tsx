@@ -23,16 +23,14 @@ export function NextUp({ day }: { day: PlayDay | null }) {
           <p className="muted">{[timeRange(day.startTime, day.endTime, locale, timezone), day.location].filter(Boolean).join(" · ")}</p>
           <p><span className="tag">{day.booked ? t("me_next_booked") : t("me_next_included")}</span></p>
           {day.absent && <p className="muted">{t("cal_absent")}</p>}
-          {absence.isError && <p className="notice notice-error" role="alert">{t("mem_err_generic")}</p>}
-          {absence.data?.queued && <p className="muted small" role="status">{t("cal_queued")}</p>}
+          {absence.waits(day.date) && <p className="muted small" role="status">{t("cal_queued")}</p>}
           {day.included && !day.booked && (
             <div>
               <button
                 type="button"
                 className={`button ${day.absent ? "button-primary" : ""}`}
                 aria-pressed={day.absent}
-                disabled={absence.isPending}
-                onClick={() => absence.mutate({ date: day.date, absent: !day.absent })}
+                onClick={() => absence.change({ date: day.date, absent: !day.absent })}
               >
                 {day.absent ? t("cal_undo_absence") : t("cal_cant_make_it")}
               </button>

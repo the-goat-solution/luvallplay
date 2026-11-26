@@ -192,7 +192,7 @@ Started 25 Nov 2026 (decision AP). W1 needs nothing from another lane; W2 (the w
 ### 10.3 What lane W needs from you
 
 1. **Your OK to merge step 1** (§10.2).
-2. **A Stripe test key for the platform account** (starts `sk_test_`), for Stripe Connect in test mode. Claude asks for it through a secure form; it is never pasted into chat, and production keys are never used. If the NZ company's Stripe account doesn't exist yet, a test key from any Stripe account with Connect switched on (Settings → Connect) is enough to build against.
+2. **Switch on Connect on the platform's Stripe account** (26 Nov). A test key is now saved, and Stripe confirms it is in test mode. It belongs to a New Zealand account that **hasn't signed up for Connect**, so Stripe refuses to create connected accounts ("You can only create new accounts if you've signed up for Connect"). In the Stripe dashboard, in Test mode: **Connect → Get started**, and choose the platform profile (clubs are the merchants and pay Stripe's fees; Luvallplay takes no fee). Two things to decide while there: the plan (§6.5) makes **the NZ company's account** the platform, so if this key is Three Wolves' own account, either create the company's account first and send that test key instead, or use this one for building only. Nothing was created or changed on the account
 
 ### 10.4 Step 2: Stripe Connect, test mode
 

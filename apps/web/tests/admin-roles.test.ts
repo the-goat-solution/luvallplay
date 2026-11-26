@@ -66,6 +66,12 @@ test("rules: who reaches which admin page", () => {
   assert.equal(adminPathAllowed(A("owner"), "/admin/platform/admins"), false);
   assert.equal(adminPathAllowed(A(null, true), "/admin/platform/admins"), true);
   assert.equal(adminPathAllowed(A(null, true), "/admin/people/admins"), true, "platform admins manage any club's admins");
+  // A coach opens the Juniors pages (the roster; served only while the club has Juniors on) and nothing else new.
+  assert.equal(adminPathAllowed(A("coach"), "/admin/juniors"), true);
+  assert.equal(adminPathAllowed(A("coach"), "/admin/juniors/child/7/medical"), true, "the note itself is decided by the safety check, not the path");
+  assert.equal(adminPathAllowed(A("coach"), "/admin/juniors-secret"), false);
+  assert.equal(adminPathAllowed(A("coach"), "/admin/players"), false);
+  assert.equal(adminPathAllowed(none, "/admin/juniors"), false);
   // Prefix tricks don't widen access.
   assert.equal(adminPathAllowed(A("coach"), "/admin/play-days-secret"), false);
   assert.equal(adminPathAllowed(A("admin"), "/admin/platformx"), true);

@@ -129,7 +129,7 @@ describe("tenants: Three Wolves is club #1", { skip: !BASE_URL && !REQUIRE_DB ? 
       `SELECT m.module_id, m.enabled, m.settings, m.locked, m.enabled_at FROM tenant_modules m JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1`,
       [defaultTenantSlug()],
     );
-    assert.deepEqual(rows.map((r) => r.module_id).sort(), MODULES.map((m) => m.id).sort(), "one row per module in the registry");
+    assert.deepEqual(rows.map((r) => r.module_id).sort(), MODULES.filter((m) => m.availability !== "hidden").map((m) => m.id).sort(), "one row per module in the registry that a club can have (a hidden one needs none)");
     assert.ok(rows.every((r) => r.enabled === true && r.locked === null && r.enabled_at));
     for (const id of THREE_WOLVES.modules) assert.ok(rows.some((r) => r.module_id === id), id);
 

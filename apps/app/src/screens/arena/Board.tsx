@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useCurrentClub } from "../../hooks.tsx";
-import { localeOf } from "../../lib/format.ts";
+import { localeOf, openFor } from "../../lib/format.ts";
 import { errorCode, pairTitle, useArenaAction, type ArenaState, type Challenge, type Chip, type Pair } from "./data.ts";
 import type { ArenaT } from "./words.ts";
 import { MatchStats } from "./Stats.tsx";
@@ -287,7 +287,8 @@ function FightCard({ c, i, count, me, now, t, rank, onError }: { c: Challenge; i
   const action = useArenaAction();
   const partner = me?.pair?.players.find((p) => p.id !== me.id);
   const leftMs = Date.parse(c.availableUntil) - now;
-  const left = leftMs < 24 * HOUR ? (leftMs < HOUR ? t("open_today") : t("open_hours", { n: Math.round(leftMs / HOUR) })) : t("open_days", { n: Math.round(leftMs / (24 * HOUR)) });
+  const open = openFor(leftMs);
+  const left = open.unit === "today" ? t("open_today") : open.unit === "hours" ? t("open_hours", { n: open.n }) : t("open_days", { n: open.n });
   const chips = [c.offer?.crown && t("chip_crown"), c.offer?.giantKiller && t("chip_gk"), c.offer?.newRival && t("chip_nr")].filter(Boolean) as string[];
   const ribbon = c.crownMatch ? t("crown_ribbon") : i === 0 && count > 2 ? t("hot_ribbon") : null;
   return (

@@ -237,16 +237,33 @@ export async function getSpotsAndHeadcountForDates(dates: string[]): Promise<{
   return { spots, signedUp, locked, miniGame };
 }
 
-export async function reserveBookingSlot(
-  date: string,
-  booking: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone?: string;
-    paymentIntentId: string;
-  },
-): Promise<boolean> {
+export type BookingSlotResult =
+  /** The spot is theirs: the booking was written and the play day's count went up by one. */
+  | "reserved"
+  /** This payment already has a booking (a replayed or repeated event): nothing was changed. */
+  | "already"
+  /** No spot left: nothing was changed. */
+  | "full";
+
+type BookingSlotInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  paymentIntentId: string;
+};
+
+/**
+ * Books a casual spot for a payment, once (audit H3).
+ *
+ * The booking row goes in FIRST and the play day's count only goes up when
+ * that row was new, both in one transaction. A payment that already has a
+ * booking changes nothing, so a replayed Stripe event (Stripe delivers at
+ * least once) can't count the same person twice, and can't find the day
+ * "full" and refund someone who has their spot. Two deliveries at the same
+ * moment take turns on the unique payment_intent_id.
+ */
+export async function reserveBookingSlotOnce(date: string, booking: BookingSlotInput): Promise<BookingSlotResult> {
   const cfg = await getClubConfig(sql);
   await ensureSession(date);
   // Casual capacity is that play day's court-derived max minus current
@@ -260,40 +277,56 @@ export async function reserveBookingSlot(
   // column. The day CASE mirrors MEMBERSHIP_DAY_TO_DOW; a NULL result (a
   // casual-only day) never matches memberships.day, so the subquery counts
   // zero on those days without needing a separate ELSE 0 branch.
-  const { rowCount } = await sql.query(
-    `UPDATE sessions
-     SET booked_spots = booked_spots + 1
-     WHERE date = $1
-       AND booked_spots < (
-         CASE
-           WHEN mini_game THEN $3
-           ELSE COALESCE(($4::jsonb ->> courts::text)::int, $2)
-         END
-       ) - (
-         SELECT COUNT(*)::int FROM memberships
-         WHERE status = 'active'
-           AND day = CASE EXTRACT(DOW FROM sessions.date) WHEN 5 THEN 'friday' WHEN 3 THEN 'wednesday' END
-           AND ${membershipCoversDateSql("$1")}
-           AND ${memberNotAbsentSql("$1::date")}
-       );`,
-    [date, cfg.playDays.sessionCapacity, cfg.roundRobin.miniGameMaxPlayers, JSON.stringify(cfg.playDays.courtsToMaxPlayers)],
-  );
-  if (!rowCount) return false;
+  const client = await sql.connect();
+  try {
+    await client.query("BEGIN");
+    const inserted = await client.query(
+      `INSERT INTO bookings (session_date, first_name, last_name, email, phone, payment_intent_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'confirmed')
+       ON CONFLICT (payment_intent_id) DO NOTHING
+       RETURNING id;`,
+      [date, booking.firstName, booking.lastName, booking.email, booking.phone ?? null, booking.paymentIntentId],
+    );
+    if (!inserted.rowCount) {
+      await client.query("ROLLBACK");
+      return "already";
+    }
+    const slot = await client.query(
+      `UPDATE sessions
+       SET booked_spots = booked_spots + 1
+       WHERE date = $1
+         AND booked_spots < (
+           CASE
+             WHEN mini_game THEN $3
+             ELSE COALESCE(($4::jsonb ->> courts::text)::int, $2)
+           END
+         ) - (
+           SELECT COUNT(*)::int FROM memberships
+           WHERE status = 'active'
+             AND day = CASE EXTRACT(DOW FROM sessions.date) WHEN 5 THEN 'friday' WHEN 3 THEN 'wednesday' END
+             AND ${membershipCoversDateSql("$1")}
+             AND ${memberNotAbsentSql("$1::date")}
+         );`,
+      [date, cfg.playDays.sessionCapacity, cfg.roundRobin.miniGameMaxPlayers, JSON.stringify(cfg.playDays.courtsToMaxPlayers)],
+    );
+    if (!slot.rowCount) {
+      // Full: the booking row written above goes with the rollback.
+      await client.query("ROLLBACK");
+      return "full";
+    }
+    await client.query("COMMIT");
+    return "reserved";
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
 
-  await sql`
-    INSERT INTO bookings (session_date, first_name, last_name, email, phone, payment_intent_id, status)
-    VALUES (
-      ${date},
-      ${booking.firstName},
-      ${booking.lastName},
-      ${booking.email},
-      ${booking.phone ?? null},
-      ${booking.paymentIntentId},
-      'confirmed'
-    )
-    ON CONFLICT (payment_intent_id) DO NOTHING;
-  `;
-  return true;
+/** True when the person has their spot: booked now, or already booked by this same payment. */
+export async function reserveBookingSlot(date: string, booking: BookingSlotInput): Promise<boolean> {
+  return (await reserveBookingSlotOnce(date, booking)) !== "full";
 }
 
 export async function removeBooking(

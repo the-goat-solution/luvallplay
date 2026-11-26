@@ -2,7 +2,7 @@
 // "Challenge" (accepts their pair's open challenge, or opens the Arena).
 import { useNavigate } from "@tanstack/react-router";
 import { useArenaAction, errorCode } from "../arena/data.ts";
-import { Dialog } from "../arena/Dialogs.tsx";
+import { Dialog } from "../../components/Dialog.tsx";
 import { useArenaT } from "../arena/words.ts";
 import { useCurrentClub, useT } from "../../hooks.tsx";
 import { usePlayerCard } from "./data.ts";
@@ -35,23 +35,21 @@ export function PlayerCard({ id, onClose }: { id: number; onClose: () => void })
     } else void navigate({ to: "/arena", search: { vs: c.id } as never });
   };
   return (
-    <Dialog label={c?.name ?? t("card_close")} onClose={onClose}>
+    <Dialog label={c?.name ?? t("card_close")} onClose={onClose} className="player-card">
       {card.isError ? (
         <p>{(card.error as { status?: number }).status === 404 ? t("card_hidden") : t("err_generic")}</p>
       ) : !c ? (
         <div className="skeleton skeleton-short" aria-busy="true" />
       ) : (
         <>
-          <div className="me-head">
-            <div className="avatar" aria-hidden="true">{c.avatarUrl ? <img src={c.avatarUrl} alt="" width={64} height={64} /> : c.initials}</div>
-            <div className="me-who">
-              <h2 className="title">{c.name}</h2>
-              <span className="pill seat-pill">
-                <RankIcon index={c.rankIndex} seat={c.seat} tarnished={c.tarnishing} px={28} />
-                {rank(c.rankIndex)}
-              </span>
-              {c.seat && <span className="pill pill-active">{tl(c.seat === "alpha" ? "lb_alpha" : "lb_silver")}</span>}
+          <div className="card-face">
+            <div className="card-art">
+              <RankIcon index={c.rankIndex} seat={c.seat} tarnished={c.tarnishing} px={96} />
+              <div className="avatar card-avatar" aria-hidden="true">{c.avatarUrl ? <img src={c.avatarUrl} alt="" width={64} height={64} /> : c.initials}</div>
             </div>
+            <h2 className="title card-name">{c.name}</h2>
+            <p className="card-rank">{rank(c.rankIndex)}</p>
+            {c.seat && <span className="sticker sticker-flood">{tl(c.seat === "alpha" ? "lb_alpha" : "lb_silver")}</span>}
           </div>
           <dl className="stats">
             <div className="stat"><dt>{t("card_wp_total", { n: "" }).trim()}</dt><dd className="stat-value">{c.wpTotal}</dd></div>
@@ -61,7 +59,7 @@ export function PlayerCard({ id, onClose }: { id: number; onClose: () => void })
             <strong>{t("card_form")}</strong>
             {c.form.length ? (
               <p className="chips form" aria-label={c.form.join(" ")}>
-                {c.form.map((f, i) => <span key={i} className={f === "W" ? "tag form-w" : "tag tag-quiet"} aria-hidden="true">{f}</span>)}
+                {c.form.map((f, i) => <span key={i} className={f === "W" ? "form-pip form-w" : "form-pip form-l"} aria-hidden="true">{f}</span>)}
               </p>
             ) : (
               <p className="muted small">{t("card_form_none")}</p>
@@ -75,7 +73,7 @@ export function PlayerCard({ id, onClose }: { id: number; onClose: () => void })
             <>
               {!c.openChallengeId && <p className="muted small">{t("card_post_hint", { name: c.name })}</p>}
               <div>
-                <button type="button" className="button button-primary" disabled={action.isPending} onClick={challenge}>
+                <button type="button" className="button button-accent" disabled={action.isPending} onClick={challenge}>
                   {c.openChallengeId ? t("card_accept_open") : t("card_challenge")}
                 </button>
               </div>

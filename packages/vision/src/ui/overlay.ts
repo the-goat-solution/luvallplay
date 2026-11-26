@@ -1,7 +1,8 @@
-// "Wolf Vision": the Match Analyzer's broadcast overlay, in the Arena's night-
-// court style (coral vs teal corners, floodlight yellow for the shuttle and
-// highlights, navy glass panels, Copperplate for the brand). Drawn in video
-// pixels on top of the camera frame; the caller sets the canvas transform.
+// The tracker's broadcast overlay, in the Arena's night-court style (coral vs
+// teal corners, floodlight yellow for the shuttle and highlights, navy glass
+// panels, Copperplate for the brand) unless the host dresses it in a club's
+// own colours, fonts and name (setOverlayTheme, OverlayState.brand). Drawn in
+// video pixels on top of the camera frame; the caller sets the canvas transform.
 import { COURT, courtLines, formatClock, type Box, type Pt, type RallyReadout } from "../match-analyzer";
 import { courtToImage, projectSegment, type CourtCamera } from "../engine/lens";
 import type { Hit } from "../engine/hits";
@@ -10,13 +11,61 @@ import type { ShuttlePoint } from "../engine/shuttle";
 
 /** Posting pair: coral + soft coral; accepting pair: teal + soft teal (the Arena's two corners). */
 export const PLAYER_COLORS = ["#ff6b57", "#ffb4a6", "#2fd4b5", "#a4f2e2"];
-const FLOOD = "#ffd54a";
-const BRONZE = "#c4892a";
-const NIGHT = "rgba(8, 19, 31, 0.82)";
-const NIGHT_SOFT = "rgba(13, 32, 51, 0.72)";
-const STEEL = "rgba(180, 204, 217, 0.85)";
-const SANS = "Montserrat, system-ui, -apple-system, Segoe UI, sans-serif";
-const DISPLAY = "Copperplate, 'Copperplate Gothic Light', Montserrat, serif";
+let FLOOD = "#ffd54a";
+let ON_FLOOD = "#08131f";
+let BRONZE = "#c4892a";
+let NIGHT = "rgba(8, 19, 31, 0.82)";
+let NIGHT_SOFT = "rgba(13, 32, 51, 0.72)";
+let STEEL = "rgba(180, 204, 217, 0.85)";
+let SANS = "Montserrat, system-ui, -apple-system, Segoe UI, sans-serif";
+let DISPLAY = "Copperplate, 'Copperplate Gothic Light', Montserrat, serif";
+/** Hold still: no turning rings or scanning bar (the person asked for less motion). */
+let STILL = false;
+
+/**
+ * The overlay's look, set by the host: the club's colours and fonts (the
+ * players' app reads them from the club's theme), or the night court's own
+ * when none is given. Colours are CSS colour strings the canvas understands.
+ */
+export type OverlayTheme = {
+  /** Four players' colours: the posting pair's two, then the accepting pair's two. */
+  players: [string, string, string, string];
+  /** Highlights: the shuttle, hits, the live rally. */
+  highlight: string;
+  /** Text on the highlight. */
+  onHighlight: string;
+  /** The brand's own colour (the line under the HUD, the tracker panel's edge). */
+  brand: string;
+  /** Glass panels, top and bottom of their gradient. */
+  panel: string;
+  panelSoft: string;
+  /** Quiet labels. */
+  muted: string;
+  /** Font stacks. */
+  sans: string;
+  display: string;
+  still: boolean;
+};
+
+const DEFAULTS: OverlayTheme = {
+  players: [PLAYER_COLORS[0], PLAYER_COLORS[1], PLAYER_COLORS[2], PLAYER_COLORS[3]],
+  highlight: FLOOD, onHighlight: ON_FLOOD, brand: BRONZE, panel: NIGHT, panelSoft: NIGHT_SOFT, muted: STEEL, sans: SANS, display: DISPLAY, still: false,
+};
+
+/** Dress the overlay (anything left out keeps the night court's own). PLAYER_COLORS is updated in place. */
+export function setOverlayTheme(theme: Partial<OverlayTheme> = {}): void {
+  const t = { ...DEFAULTS, ...theme };
+  PLAYER_COLORS.splice(0, 4, ...t.players);
+  FLOOD = t.highlight;
+  ON_FLOOD = t.onHighlight;
+  BRONZE = t.brand;
+  NIGHT = t.panel;
+  NIGHT_SOFT = t.panelSoft;
+  STEEL = t.muted;
+  SANS = t.sans;
+  DISPLAY = t.display;
+  STILL = t.still;
+}
 
 export type OverlayPlayer = {
   name: string;
@@ -50,6 +99,8 @@ export type OverlayState = {
   /** Untagged people (when the assistant is fixing identities). */
   untagged?: Box[];
   logo?: CanvasImageSource | null;
+  /** The line under the HUD: the club's name and its tracker's ("THREE WOLVES · WOLF VISION"). */
+  brand?: string;
   show: { hud: boolean; cards: boolean; players: boolean; map: boolean; system: boolean };
 };
 
@@ -157,7 +208,7 @@ function drawRings(ctx: CanvasRenderingContext2D, st: OverlayState, u: number) {
     // Rotating tick marks: the "locked on" look; the arc length is the ID confidence.
     ctx.globalAlpha = 0.95;
     ctx.lineWidth = 3 * u;
-    const spin = st.t * 1.6;
+    const spin = STILL ? 0 : st.t * 1.6;
     const pts: Pt[] = [];
     const span = Math.max(0.2, p.conf) * Math.PI * 2;
     for (let k = 0; k <= 28; k++) {
@@ -313,7 +364,7 @@ function drawHitBursts(ctx: CanvasRenderingContext2D, st: OverlayState, u: numbe
     ctx.fillStyle = h.status === "accepted" ? FLOOD : "rgba(8,19,31,0.85)";
     rr(ctx, lx - 12 * u, ly - 26 * u, tw + 24 * u, 36 * u, 6 * u);
     ctx.fill();
-    ctx.fillStyle = h.status === "accepted" ? "#08131f" : FLOOD;
+    ctx.fillStyle = h.status === "accepted" ? ON_FLOOD : FLOOD;
     ctx.fillText(label, lx, ly);
     spaced(ctx, 0);
     ctx.restore();
@@ -346,9 +397,11 @@ function drawAcquiring(ctx: CanvasRenderingContext2D, vw: number, vh: number, st
   ctx.fillStyle = FLOOD;
   ctx.fillText(label, x, y);
   // Scanning bar.
-  const k = (st.t * 0.8) % 1;
-  ctx.fillStyle = "rgba(255,213,74,0.25)";
+  const k = STILL ? 0.5 : (st.t * 0.8) % 1;
+  ctx.fillStyle = FLOOD;
+  ctx.globalAlpha = 0.25;
   ctx.fillRect(x - 24 * u + (tw + 48 * u) * k - 30 * u, y + 12 * u, 60 * u, 4 * u);
+  ctx.globalAlpha = 1;
   spaced(ctx, 0);
   ctx.restore();
 }
@@ -382,7 +435,7 @@ function drawHud(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, y: 
     ctx.fillText(c.value, cx + 18 * u, y + 92 * u);
     if (c.unit) {
       ctx.textAlign = "right";
-      ctx.fillStyle = c.unit === "LIVE" ? "#ff6b57" : STEEL;
+      ctx.fillStyle = c.unit === "LIVE" ? PLAYER_COLORS[0] : STEEL;
       ctx.font = f(800, 14 * u);
       spaced(ctx, 2 * u);
       ctx.fillText(c.unit, cx + w - 18 * u, y + 92 * u);
@@ -394,9 +447,9 @@ function drawHud(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, y: 
   ctx.save();
   ctx.font = f(700, 16 * u, DISPLAY);
   spaced(ctx, 4 * u);
-  ctx.fillStyle = "rgba(226, 174, 96, 0.9)";
+  ctx.fillStyle = BRONZE;
   if (st.logo) ctx.drawImage(st.logo, x, y + h + 10 * u, 26 * u, 26 * u);
-  ctx.fillText("THREE WOLVES · WOLF VISION", x + (st.logo ? 34 : 0) * u, y + h + 30 * u);
+  if (st.brand) ctx.fillText(st.brand, x + (st.logo ? 34 : 0) * u, y + h + 30 * u);
   spaced(ctx, 0);
   ctx.restore();
   return y + h + 40 * u;
@@ -474,12 +527,12 @@ function drawSystem(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, 
   glass(ctx, x, y, w, h, u, BRONZE);
   ctx.font = f(800, 15 * u);
   spaced(ctx, 3 * u);
-  ctx.fillStyle = "rgba(226,174,96,0.95)";
+  ctx.fillStyle = BRONZE;
   ctx.fillText("AI-ENHANCED TRACKER", x + 20 * u, y + 28 * u);
   spaced(ctx, 0);
   if (st.perf?.ai.length) {
     ctx.font = f(700, 10 * u);
-    ctx.fillStyle = "rgba(47,212,181,0.9)";
+    ctx.fillStyle = PLAYER_COLORS[2];
     spaced(ctx, 1 * u);
     ctx.fillText(st.perf.ai.join(" · "), x + 20 * u, y + 46 * u);
     spaced(ctx, 0);
@@ -491,7 +544,7 @@ function drawSystem(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, 
   ctx.beginPath();
   ctx.arc(gx, gy, gr, Math.PI * 0.75, Math.PI * 2.25);
   ctx.stroke();
-  const col = q.q > 0.7 ? "#2fd4b5" : q.q > 0.45 ? FLOOD : "#ff6b57";
+  const col = q.q > 0.7 ? PLAYER_COLORS[2] : q.q > 0.45 ? FLOOD : PLAYER_COLORS[0];
   ctx.strokeStyle = col;
   ctx.shadowColor = col;
   ctx.shadowBlur = 10 * u;
@@ -525,7 +578,7 @@ function drawSystem(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, 
     spaced(ctx, 0);
     ctx.fillStyle = "rgba(255,255,255,0.1)";
     ctx.fillRect(fx + 84 * u, ry - 8 * u, fw - 84 * u, 7 * u);
-    ctx.fillStyle = v > 0.7 ? "#2fd4b5" : v > 0.45 ? FLOOD : "#ff6b57";
+    ctx.fillStyle = v > 0.7 ? PLAYER_COLORS[2] : v > 0.45 ? FLOOD : PLAYER_COLORS[0];
     ctx.fillRect(fx + 84 * u, ry - 8 * u, (fw - 84 * u) * Math.max(0, Math.min(1, v)), 7 * u);
   });
   const est = st.estimate;
@@ -555,10 +608,12 @@ function drawMap(ctx: CanvasRenderingContext2D, st: OverlayState, x: number, y: 
   spaced(ctx, 0);
   const px = x + 24 * u, py = y + 40 * u, pw = w - 44 * u, ph = h - 74 * u;
   const toMap = (p: Pt): Pt => ({ x: px + (p.y / COURT.length) * pw, y: py + (p.x / COURT.width) * ph });
-  ctx.fillStyle = "rgba(47, 212, 181, 0.07)";
+  ctx.globalAlpha = 0.07;
+  ctx.fillStyle = PLAYER_COLORS[2];
   ctx.fillRect(px, py, pw / 2, ph);
-  ctx.fillStyle = "rgba(255, 107, 87, 0.07)";
+  ctx.fillStyle = PLAYER_COLORS[0];
   ctx.fillRect(px + pw / 2, py, pw / 2, ph);
+  ctx.globalAlpha = 1;
   ctx.lineWidth = 1.4 * u;
   for (const seg of courtLines()) {
     const a = toMap(seg.a), b = toMap(seg.b);
@@ -618,7 +673,7 @@ function drawTaps(ctx: CanvasRenderingContext2D, cal: NonNullable<OverlayState["
     ctx.lineWidth = 3 * u;
     ctx.strokeStyle = FLOOD;
     ctx.stroke();
-    ctx.fillStyle = k === cal.selected ? "#08131f" : "#fff";
+    ctx.fillStyle = k === cal.selected ? ON_FLOOD : "#fff";
     ctx.font = f(900, 22 * u);
     ctx.textAlign = "center";
     ctx.fillText(String(k + 1), p.x, p.y + 8 * u);

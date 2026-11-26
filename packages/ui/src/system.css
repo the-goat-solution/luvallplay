@@ -58,6 +58,11 @@
   /* ── Motion ────────────────────────────────────────────────────────── */
   --ease: 0.2s cubic-bezier(0.2, 0, 0, 1);
   --ease-spring: 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+  /* Big moments (a score landing, a rank-up): quick, with a small overshoot. */
+  --ease-pop: cubic-bezier(0.2, 1.5, 0.4, 1);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-quick: 0.18s;
+  --dur-moment: 0.45s;
 }
 
 [data-theme="dark"], [data-theme="dark"] [data-look-scope] {
@@ -74,4 +79,42 @@
   --shadow-2: 0 8px 40px rgb(0 0 0 / 0.45);
   --shadow-active: none;
   --card-border: var(--line);
+}
+
+/* ── The stage: match night ───────────────────────────────────────────────
+   The Arena, the Leaderboard and Vision play on a floodlit court. The stage
+   wears the club's own dark theme (components/Stage.tsx sets it on the
+   element, whatever the page's mode), so every colour here is the club's:
+   the ground is its dark surface lit by its primary, the floodlight is its
+   accent, and the two sides of a match are its primary and that colour's
+   opposite on the colour wheel. */
+[data-stage] {
+  color-scheme: dark;
+  --stage: color-mix(in oklab, var(--surface) 86%, var(--primary));
+  --stage-deep: color-mix(in oklab, var(--surface) 70%, black);
+  --stage-panel: color-mix(in oklab, var(--surface-raised) 84%, transparent);
+  --stage-edge: color-mix(in oklab, var(--ink) 14%, transparent);
+  --stage-line: color-mix(in oklab, var(--ink) 16%, transparent);
+  --stage-glow: color-mix(in oklab, var(--accent) 26%, transparent);
+  --stage-beam: color-mix(in oklab, var(--ink) 10%, transparent);
+  --flood: var(--accent);
+  --on-flood: var(--on-accent);
+  /* A hard "slab" shadow under the floodlit buttons and stickers. */
+  --flood-shadow: color-mix(in oklab, var(--accent) 55%, black);
+  --side-you: var(--primary);
+  --on-side-you: var(--on-primary);
+  --side-them: var(--brand-heart);
+  --on-side-them: var(--surface);
+  /* Places on the podium: the floodlight, then two quieter metals. */
+  --medal-1: var(--accent);
+  --on-medal-1: var(--on-accent);
+  --medal-2: color-mix(in oklab, white 80%, var(--primary));
+  --on-medal-2: var(--surface);
+  --medal-3: color-mix(in oklab, color-mix(in oklab, var(--brand-heart) 60%, var(--accent)) 58%, black);
+  --on-medal-3: white;
+}
+@supports (color: oklch(from red l c h)) {
+  [data-stage] {
+    --side-them: oklch(from var(--primary) 0.72 max(c, 0.13) calc(h + 150));
+  }
 }

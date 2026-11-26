@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { AppKey } from "@luvallplay/i18n/app";
-import { Dialog } from "../arena/Dialogs.tsx";
+import { Dialog } from "../../components/Dialog.tsx";
 import { dayLabel, money } from "../../lib/format.ts";
 import { planName, usePlace } from "../me/parts.tsx";
 import { useMembershipAction, type Member, type MembershipState } from "./data.ts";

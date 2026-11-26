@@ -6,7 +6,7 @@ import { ScopeTag } from "../../components/ClubTag.tsx";
 import { useCurrentClub, useLang, useT } from "../../hooks.tsx";
 import { dayLabel, localeOf, money } from "../../lib/format.ts";
 import { CardPayment } from "../../components/CardPayment.tsx";
-import { Dialog } from "../arena/Dialogs.tsx";
+import { Dialog } from "../../components/Dialog.tsx";
 import { useShop, useShopActions, type Order, type Product } from "./data.ts";
 import { LoadError } from "../../components/LoadError.tsx";
 

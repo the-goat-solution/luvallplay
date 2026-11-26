@@ -2,7 +2,7 @@
 // one list of the club's points for a period (month, quarter, year, all
 // time) from every source or one, with the tiers marked, your next tier,
 // and a card for each player with a "Challenge" button.
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { ITEMS, LADDER, nextRank } from "@luvallplay/core/ranks";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { useCurrentClub, useLang, useT } from "../hooks.tsx";
@@ -12,6 +12,8 @@ import { useBoard, type Board, type BoardQuery, type BoardRow } from "./leaderbo
 import { PlayerCard } from "./leaderboard/PlayerCard.tsx";
 import { RankIcon } from "../components/RankIcon.tsx";
 import { LoadError } from "../components/LoadError.tsx";
+import { Meter, Stage } from "../components/Stage.tsx";
+import { Icon } from "../components/Icon.tsx";
 
 type Source = NonNullable<BoardQuery["source"]>;
 type Period = NonNullable<BoardQuery["period"]>;
@@ -47,8 +49,8 @@ export default function LeaderboardScreen() {
     if (r.challenges) parts.push(r.challenges === 1 ? t("lb_ch_part1") : t("lb_ch_part", { n: r.challenges }));
     return parts.join(" · ");
   };
-  const row = (r: BoardRow, mine: boolean) => (
-    <li key={`p${r.playerId}`} className={`board-row${mine ? " board-mine" : ""}`}>
+  const row = (r: BoardRow, mine: boolean, i = 0) => (
+    <li key={`p${r.playerId}`} className={`board-row${mine ? " board-mine" : ""}${i < 12 ? " enter" : ""}`} style={{ "--i": i } as CSSProperties}>
       <button type="button" className="board-button" aria-haspopup="dialog" onClick={() => setSelected(r.playerId)}>
         <span className={`board-rank${r.rank <= 3 ? ` board-top${r.rank}` : ""}`}>{r.rank}</span>
         <span className="board-face">
@@ -66,7 +68,7 @@ export default function LeaderboardScreen() {
               </span>
             )}
           </span>
-          <span className="muted small">{[rank(r.index), breakdown(r)].filter(Boolean).join(" · ")}</span>
+          <span className="muted small">{[ITEMS[tierOf(r.index)][lang], breakdown(r)].filter(Boolean).join(" · ")}</span>
         </span>
         <span className="board-value">{t("lb_wp_val", { n: r.value })}</span>
       </button>
@@ -79,10 +81,12 @@ export default function LeaderboardScreen() {
   const tiersInOrder = shown.every((r, i) => i === 0 || r.index <= shown[i - 1].index);
   const next = b?.me.ladder ? nextRank(b.me.ladder.index) : null;
 
+  const podium = shown.length >= 3 ? shown.slice(0, 3) : null;
   return (
+    <Stage>
     <div className="screen leaderboard" data-screen="nav_leaderboard" data-state={b ? "ready" : board.isError ? "error" : "loading"}>
-      <header className="arena-hero stack-tight">
-        {config && <p className="muted small">{config.club.name}</p>}
+      <header className="stage-hero">
+        {config && <p className="stage-kicker">{config.club.name}</p>}
         <h1>{t("lb_title")}</h1>
         <p className="lead">{t("lb_sub")}</p>
         <nav className="segmented" aria-label={t("lb_period")}>
@@ -97,6 +101,28 @@ export default function LeaderboardScreen() {
       ) : (
         <div className="stack" aria-busy={board.isFetching}>
           {!b.me.visible && b.me.hiddenRank && <p className="notice">{t("lb_hidden_self", { rank: b.me.hiddenRank })}</p>}
+          <div className="period-stepper">
+            <button type="button" className="icon-button" aria-label={t("lb_prev")} disabled={!b.prevKey} onClick={() => setQ({ ...q, key: b.prevKey ?? undefined })}>‹</button>
+            <h2>{rangeTitle(b, t, locale)}</h2>
+            <button type="button" className="icon-button" aria-label={t("lb_next")} disabled={!b.nextKey} onClick={() => setQ({ ...q, key: b.nextKey ?? undefined })}>›</button>
+          </div>
+          {podium && (
+            // The top three on a podium: a picture of the list's first rows, which stay the way to read and open them.
+            <div className="top-three" aria-hidden="true" key={`${b.source}-${b.range.key}`}>
+              {[podium[1], podium[0], podium[2]].map((r) => (
+                <div key={r.playerId} className={`podium-place podium-${r.rank}`} onClick={() => setSelected(r.playerId)}>
+                  {r.rank === 1 && <Icon name="crown" size={26} className="podium-crown" />}
+                  <span className="podium-face">
+                    {r.avatarUrl ? <img className="podium-disc" src={r.avatarUrl} alt="" /> : <span className="podium-disc">{r.initials}</span>}
+                    <RankIcon index={r.index} tarnished={r.tarnishing} px={r.rank === 1 ? 30 : 24} className="podium-rank" />
+                  </span>
+                  <span className="podium-name">{r.name}</span>
+                  <span className="podium-value">{t("lb_wp_val", { n: r.value })}</span>
+                  <span className="podium-block"><span>{r.rank}</span></span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="stack-tight">
             <span className="muted small">{t("lb_points_from")}</span>
             <nav className="chips" aria-label={t("lb_points_from")}>
@@ -105,26 +131,24 @@ export default function LeaderboardScreen() {
               ))}
             </nav>
           </div>
-          <div className="period-stepper">
-            <button type="button" className="icon-button" aria-label={t("lb_prev")} disabled={!b.prevKey} onClick={() => setQ({ ...q, key: b.prevKey ?? undefined })}>‹</button>
-            <h2>{rangeTitle(b, t, locale)}</h2>
-            <button type="button" className="icon-button" aria-label={t("lb_next")} disabled={!b.nextKey} onClick={() => setQ({ ...q, key: b.nextKey ?? undefined })}>›</button>
-          </div>
           {b.me.ladder && next && (
-            <div className="card stack-tight next-tier">
-              <span className="next-tier-head">
-                <RankIcon index={next.index} px={34} />
+            <div className="card next-tier">
+              <RankIcon index={next.index} px={48} />
+              <span className="next-tier-text">
                 <strong>{t("lb_next_tier", { tier: rank(next.index) })}</strong>
+                <Meter
+                  value={(b.me.ladder.wpTotal - LADDER[b.me.ladder.index].wp) / Math.max(1, next.wp - LADDER[b.me.ladder.index].wp)}
+                  label={t("lb_next_tier", { tier: rank(next.index) })}
+                />
+                <span className="muted small">{t("lb_next_tier_to_go", { n: Math.max(1, next.wp - b.me.ladder.wpTotal), total: b.me.ladder.wpTotal })}</span>
               </span>
-              <span className="muted small">{t("lb_next_tier_to_go", { n: Math.max(1, next.wp - b.me.ladder.wpTotal), total: b.me.ladder.wpTotal })}</span>
-              <progress max={next.wp - LADDER[b.me.ladder.index].wp} value={Math.max(0, b.me.ladder.wpTotal - LADDER[b.me.ladder.index].wp)} aria-label={t("lb_next_tier", { tier: rank(next.index) })} />
             </div>
           )}
           {b.rows.length === 0 ? (
             <p className="muted">{t("lb_empty")}</p>
           ) : (
             <>
-              <ol className="board">
+              <ol className="board" key={`${b.source}-${b.range.key}`}>
                 {shown.flatMap((r, i) => {
                   const out = [];
                   if (tiersInOrder && (i === 0 || tierOf(shown[i - 1].index) !== tierOf(r.index))) {
@@ -137,7 +161,7 @@ export default function LeaderboardScreen() {
                       </li>,
                     );
                   }
-                  out.push(row(r, r.playerId === b.me.id));
+                  out.push(row(r, r.playerId === b.me.id, i));
                   return out;
                 })}
               </ol>
@@ -149,5 +173,6 @@ export default function LeaderboardScreen() {
       )}
       {selected !== null && <PlayerCard id={selected} onClose={() => setSelected(null)} />}
     </div>
+    </Stage>
   );
 }

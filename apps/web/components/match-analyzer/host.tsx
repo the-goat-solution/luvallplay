@@ -59,6 +59,8 @@ export function WebVisionHost({ children }: { children: ReactNode }) {
       words: WORDS,
       prices: PRICES,
       onFocus,
+      // The website's own overlay line and crest, as it has always drawn them.
+      brand: { line: "THREE WOLVES · WOLF VISION", logoUrl: "/uploads/three-wolves-logo-white-mini.png" },
     }),
     [lang, setLang, onFocus],
   );

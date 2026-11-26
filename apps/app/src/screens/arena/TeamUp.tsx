@@ -1,7 +1,7 @@
 // Pairing, as on the website: a QR invite (a link that pairs whoever opens
 // it), scanning a partner's QR with the camera, or a 5-digit code read out
 // and typed in. The QR and scanner libraries load only when used.
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useArenaAction, errorCode } from "./data.ts";
 import type { ArenaT } from "./words.ts";
 
@@ -29,7 +29,7 @@ function CodeTiles({ code }: { code: string }) {
   return (
     <p className="code-tiles" aria-label={code.split("").join(" ")}>
       {code.split("").map((d, i) => (
-        <span key={i} className={i === 2 ? "tile tile-gap" : "tile"} aria-hidden="true">{d}</span>
+        <span key={i} className={i === 2 ? "tile tile-gap" : "tile"} style={{ "--i": i } as CSSProperties} aria-hidden="true">{d}</span>
       ))}
     </p>
   );

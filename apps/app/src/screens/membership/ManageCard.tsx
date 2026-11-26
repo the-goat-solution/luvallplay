@@ -5,7 +5,7 @@
 import { useState } from "react";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { CardPayment } from "../../components/CardPayment.tsx";
-import { Dialog } from "../arena/Dialogs.tsx";
+import { Dialog } from "../../components/Dialog.tsx";
 import { dayLabel, money } from "../../lib/format.ts";
 import { daysName, planName, usePlace } from "../me/parts.tsx";
 import { LeaveFlow } from "./LeaveFlow.tsx";

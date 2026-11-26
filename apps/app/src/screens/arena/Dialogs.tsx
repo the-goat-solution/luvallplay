@@ -1,35 +1,31 @@
 // The Arena's dialogs: entering a final score, the after-game card (points
 // won, keep the pair, another challenge?) and a rank-up.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { isValidGameScore, nextRank, LADDER } from "@luvallplay/core/ranks";
 import { errorCode, pairTitle, useArenaAction, type ArenaState, type Challenge } from "./data.ts";
 import type { ArenaT } from "./words.ts";
 import { Icon } from "../../components/Icon.tsx";
+import { Dialog } from "../../components/Dialog.tsx";
+export { Dialog };
+import { RankIcon } from "../../components/RankIcon.tsx";
+import { Confetti, CountUp, Meter, Rays, Sticker, buzz } from "../../components/Stage.tsx";
 
-/** A modal <dialog> that opens with its content and closes with Escape. */
-export function Dialog({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const d = ref.current;
-    if (d && !d.open) d.showModal();
-    return () => d?.close();
-  }, []);
-  return (
-    <dialog ref={ref} className="dialog" aria-label={label} onCancel={(e) => { e.preventDefault(); onClose(); }}>
-      <div className="stack">{children}</div>
-    </dialog>
-  );
-}
-
-function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+/** One side's score as a flip card: − and + flip the number over, as on a court's scoreboard. */
+function Stepper({ label, name, value, onChange, side, winner }: { label: string; name: string; value: number; onChange: (n: number) => void; side: "you" | "them"; winner: string | null }) {
   const clamp = (n: number) => Math.max(0, Math.min(30, Number.isFinite(n) ? n : 0));
+  // A flap with the new number turns down over the card when a button changes it (not while typing).
+  const [flip, setFlip] = useState(0);
+  const step = (d: number) => { onChange(clamp(value + d)); setFlip((f) => f + 1); };
   return (
-    <div className="stepper">
-      <span className="stepper-label">{label}</span>
+    <div className={`stepper flip-card flip-${side}`}>
+      <span className="stepper-label">{name}{winner && <Sticker className="winner-sticker">{winner}</Sticker>}</span>
       <div className="stepper-row">
-        <button type="button" className="button" aria-label={`${label} −1`} onClick={() => onChange(clamp(value - 1))}>−</button>
-        <input aria-label={label} inputMode="numeric" value={value} onChange={(e) => onChange(clamp(Number(e.target.value.replace(/\D/g, ""))))} />
-        <button type="button" className="button" aria-label={`${label} +1`} onClick={() => onChange(clamp(value + 1))}>+</button>
+        <button type="button" className="button" aria-label={`${label} −1`} onClick={() => step(-1)}>−</button>
+        <span className="flip-face">
+          <input aria-label={label} inputMode="numeric" value={value} onChange={(e) => onChange(clamp(Number(e.target.value.replace(/\D/g, ""))))} />
+          {flip > 0 && <span key={flip} className="flip-flap" aria-hidden="true">{value}</span>}
+        </span>
+        <button type="button" className="button" aria-label={`${label} +1`} onClick={() => step(1)}>+</button>
       </div>
     </div>
   );
@@ -47,13 +43,27 @@ export function ScoreEntry({ c, t, onClose, onError }: { c: Challenge; t: ArenaT
   const send = (a: Parameters<typeof action.mutate>[0]) => action.mutate(a, { onSuccess: onClose, onError: (e) => onError(errorCode(e)) });
   const scores = mine === "posting" ? { posting: ours, accepting: theirs } : { posting: theirs, accepting: ours };
   return (
-    <Dialog label={t("score_title")} onClose={onClose}>
+    <Dialog label={t("score_title")} onClose={onClose} className="score-dialog">
       <h2>{t("score_title")}</h2>
       <div className="score-grid">
-        <Stepper label={`${us ? pairTitle(us) : ""}${ours > theirs && valid ? ` · ${t("winners")}` : ""}`} value={ours} onChange={setOurs} />
-        <Stepper label={`${them ? pairTitle(them) : ""}${theirs > ours && valid ? ` · ${t("winners")}` : ""}`} value={theirs} onChange={setTheirs} />
+        <Stepper
+          label={`${us ? pairTitle(us) : ""}${ours > theirs && valid ? ` · ${t("winners")}` : ""}`}
+          name={us ? pairTitle(us) : ""}
+          side="you"
+          winner={ours > theirs && valid ? t("winners") : null}
+          value={ours}
+          onChange={setOurs}
+        />
+        <Stepper
+          label={`${them ? pairTitle(them) : ""}${theirs > ours && valid ? ` · ${t("winners")}` : ""}`}
+          name={them ? pairTitle(them) : ""}
+          side="them"
+          winner={theirs > ours && valid ? t("winners") : null}
+          value={theirs}
+          onChange={setTheirs}
+        />
       </div>
-      <p className={valid ? "small" : "small notice-error"} role="status">{valid ? t("score_valid") : t("score_invalid")} · {t("score_rules")}</p>
+      <p className={`score-rules ${valid ? "score-ok" : "score-bad"}`} role="status">{valid ? t("score_valid") : t("score_invalid")} · {t("score_rules")}</p>
       <div className="actions">
         <button type="button" className="button button-primary" disabled={!valid || action.isPending} onClick={() => send({ action: "score", id: c.id, ...scores })}>
           {t("score_send", { names: them ? pairTitle(them) : "" })}
@@ -73,6 +83,8 @@ export function ScoreEntry({ c, t, onClose, onError }: { c: Challenge; t: ArenaT
 }
 
 type After = NonNullable<ArenaState["me"]>["after"][number];
+type IconName = Parameters<typeof Icon>[0]["name"];
+const BONUS_ICON: Record<string, IconName> = { pts_gk: "bolt", pts_nr: "sparkles", pts_hs: "flame", pts_cb: "crown" };
 
 export function AfterGame({ a, me, t, rank, onError }: { a: After; me: NonNullable<ArenaState["me"]>; t: ArenaT; rank: (i: number) => string; onError: (code: string) => void }) {
   const action = useArenaAction();
@@ -81,25 +93,40 @@ export function AfterGame({ a, me, t, rank, onError }: { a: After; me: NonNullab
   const next = nextRank(me.rank.shown);
   const ready = keep === false || (keep === true && again !== null);
   const parts: [string, number][] = [["pts_gk", a.giantKiller], ["pts_nr", a.newRival], ["pts_hs", a.hotStreak], ["pts_cb", a.crownBounty]];
+  useEffect(() => {
+    if (a.won) buzz();
+  }, [a.won]);
+  const bonuses = [["pts_win", a.base, "check"], ...parts.map(([k, n]) => [k, n, BONUS_ICON[k]])].filter(([, n]) => (n as number) > 0) as [string, number, IconName][];
   return (
-    <Dialog label={a.won ? t("victory") : t("good_game")} onClose={() => undefined}>
-      <h2 className="icon-title">{a.won && <Icon name="trophy" size={26} />}{a.won ? t("victory") : t("good_game")}</h2>
-      <p className="score-big">{a.retired ? t("retired_note") : `${a.scoreFor ?? 0}–${a.scoreAgainst ?? 0}`} · {pairTitle(a.opponents)}</p>
-      {a.won ? (
-        <>
-          <p className="score-big">+{a.total} WP</p>
-          <p className="muted small">
-            {t("pts_win", { n: a.base })}
-            {parts.filter(([, n]) => n > 0).map(([k, n]) => ` · ${t(k as Parameters<ArenaT>[0], { n })}`).join("")}
-          </p>
-        </>
-      ) : (
-        <p className="muted">{t("gg_body")}</p>
+    <Dialog label={a.won ? t("victory") : t("good_game")} onClose={() => undefined} className={`moment ${a.won ? "moment-win" : "moment-gg"}`}>
+      <div className="moment-head">
+        {a.won && <Rays />}
+        {a.won && <Confetti />}
+        <p className="moment-kicker">{a.retired ? t("retired_note") : `${a.scoreFor ?? 0}–${a.scoreAgainst ?? 0}`} · {pairTitle(a.opponents)}</p>
+        <h2 className="moment-title pop">{a.won ? t("victory") : t("good_game")}</h2>
+        {a.won ? (
+          <CountUp className="moment-points" prefix="+" value={a.total} suffix=" WP" />
+        ) : (
+          <p className="moment-sub">{t("gg_body")}</p>
+        )}
+      </div>
+      {a.won && (
+        <ul className="bonus-list" aria-label={t("victory")}>
+          {bonuses.map(([k, n, icon], i) => (
+            <li key={k} className="bonus enter" style={{ "--i": i + 4 } as CSSProperties}>
+              <Icon name={icon} size={16} />
+              {t(k as Parameters<ArenaT>[0], { n })}
+            </li>
+          ))}
+        </ul>
       )}
-      <div className="stack-tight">
-        <strong>{rank(me.rank.shown)}</strong>
-        <progress max={1} value={me.rank.progress} aria-label={rank(me.rank.shown)} />
-        <span className="muted small">{next ? t("to_next", { n: Math.max(0, next.wp - me.rank.wpTotal), rank: rank(LADDER.indexOf(next)) }) : t("top")}</span>
+      <div className="rank-progress">
+        <RankIcon index={me.rank.shown} px={48} />
+        <div className="rank-progress-text">
+          <strong>{rank(me.rank.shown)}</strong>
+          <Meter value={me.rank.progress} label={rank(me.rank.shown)} />
+          <span className="muted small">{next ? t("to_next", { n: Math.max(0, next.wp - me.rank.wpTotal), rank: rank(LADDER.indexOf(next)) }) : t("top")}</span>
+        </div>
       </div>
       <fieldset className="stack">
         <legend>{t("keep_q")}</legend>
@@ -117,10 +144,10 @@ export function AfterGame({ a, me, t, rank, onError }: { a: After; me: NonNullab
           </div>
         </fieldset>
       )}
-      <div>
+      <div className="moment-actions">
         <button
           type="button"
-          className="button button-primary"
+          className="button button-accent"
           disabled={!ready || action.isPending}
           onClick={() => action.mutate({ action: "after", id: a.challengeId, keep: !!keep, again: !!keep && !!again }, { onError: (e) => onError(errorCode(e)) })}
         >
@@ -131,9 +158,10 @@ export function AfterGame({ a, me, t, rank, onError }: { a: After; me: NonNullab
   );
 }
 
-export function RankUp({ to, t, rank, onError }: { to: number; t: ArenaT; rank: (i: number) => string; onError: (code: string) => void }) {
+export function RankUp({ from, to, t, rank, onError }: { from: number; to: number; t: ArenaT; rank: (i: number) => string; onError: (code: string) => void }) {
   const action = useArenaAction();
   const [hidden, setHidden] = useState(false);
+  useEffect(() => buzz(), []);
   if (hidden) return null;
   const share = async () => {
     try {
@@ -143,12 +171,25 @@ export function RankUp({ to, t, rank, onError }: { to: number; t: ArenaT; rank: 
     }
   };
   return (
-    <Dialog label={t("rankup")} onClose={() => undefined}>
-      <h2 className="icon-title"><Icon name="rankUp" size={26} />{t("rankup")}</h2>
-      <p>{t("rankup_body")}</p>
-      <p className="score-big">{rank(to)}</p>
-      <div className="actions">
-        <button type="button" className="button button-primary" onClick={() => { setHidden(true); action.mutate({ action: "rank_seen" }, { onError: (e) => onError(errorCode(e)) }); }}>{t("nice")}</button>
+    <Dialog label={t("rankup")} onClose={() => undefined} className="moment moment-rankup">
+      <div className="moment-head">
+        <Rays />
+        <Confetti />
+        <p className="moment-kicker icon-line"><Icon name="rankUp" size={16} />{t("rankup")}</p>
+        <span className="rankup-art pop"><RankIcon index={to} px={160} /></span>
+        <p className="moment-sub">{t("rankup_body")}</p>
+        <h2 className="moment-title">{rank(to)}</h2>
+        {from !== to && (
+          <p className="rankup-from icon-line">
+            <RankIcon index={from} px={28} />
+            <span className="muted small">{rank(from)}</span>
+            <Icon name="arrowRight" size={16} />
+            <RankIcon index={to} px={28} />
+          </p>
+        )}
+      </div>
+      <div className="actions moment-actions">
+        <button type="button" className="button button-accent" onClick={() => { setHidden(true); action.mutate({ action: "rank_seen" }, { onError: (e) => onError(errorCode(e)) }); }}>{t("nice")}</button>
         {"share" in navigator && <button type="button" className="button" onClick={() => void share()}>{t("share")}</button>}
       </div>
     </Dialog>

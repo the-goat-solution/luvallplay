@@ -2996,6 +2996,207 @@
         }
       }
     },
+    "family.book": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/bookings",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "date": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "booking": {
+            "t": "object",
+            "fields": {
+              "amountMinor": {
+                "t": "number",
+                "nullable": true
+              },
+              "childId": {
+                "t": "number"
+              },
+              "currency": {
+                "t": "string",
+                "nullable": true
+              },
+              "date": {
+                "t": "string"
+              },
+              "id": {
+                "t": "number"
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "pending",
+                  "confirmed",
+                  "cancelled",
+                  "refunded"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.bookings": {
+      "method": "GET",
+      "path": "/clubs/{club}/family/bookings",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "bookings": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "amountMinor": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "childId": {
+                  "t": "number"
+                },
+                "currency": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "date": {
+                  "t": "string"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "status": {
+                  "t": "enum",
+                  "values": [
+                    "pending",
+                    "confirmed",
+                    "cancelled",
+                    "refunded"
+                  ]
+                }
+              }
+            }
+          },
+          "days": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "date": {
+                  "t": "string"
+                },
+                "end": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "location": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "spotsLeft": {
+                  "t": "number"
+                },
+                "start": {
+                  "t": "string",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "payment": {
+            "t": "enum",
+            "values": [
+              "none",
+              "card"
+            ]
+          }
+        }
+      }
+    },
+    "family.cancelBooking": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/bookings/{id}/cancel",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {}
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "booking": {
+            "t": "object",
+            "fields": {
+              "amountMinor": {
+                "t": "number",
+                "nullable": true
+              },
+              "childId": {
+                "t": "number"
+              },
+              "currency": {
+                "t": "string",
+                "nullable": true
+              },
+              "date": {
+                "t": "string"
+              },
+              "id": {
+                "t": "number"
+              },
+              "status": {
+                "t": "enum",
+                "values": [
+                  "pending",
+                  "confirmed",
+                  "cancelled",
+                  "refunded"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "family.consent": {
       "method": "PUT",
       "path": "/clubs/{club}/family/{id}/consent",

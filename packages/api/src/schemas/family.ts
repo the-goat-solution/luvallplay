@@ -2,6 +2,7 @@
 // A child is a name and a birth year: never an email, a phone or a sign-in.
 import { z } from "zod";
 import { clubParams } from "./clubs.ts";
+import { dateKeySchema } from "./me.ts";
 
 /** What a guardian can allow for a child, each on its own; all off until switched on. */
 export const familyConsent = z.object({
@@ -45,6 +46,37 @@ export const familyUpdateRequest = z.object({
   birthYear: z.number().int().min(1900).max(2200).optional(),
 });
 export const familyConsentRequest = familyConsent.partial();
+// ── Booking a place for a child (step 5) ────────────────────────────────────
+/** A play day a child could be booked on. */
+export const familyDay = z.object({
+  date: z.string(),
+  start: z.string().nullable(),
+  end: z.string().nullable(),
+  location: z.string().nullable(),
+  /** Places left that day, shared with adults' casual bookings. */
+  spotsLeft: z.number().int(),
+});
+export const familyBooking = z.object({
+  id: z.number().int(),
+  childId: z.number().int(),
+  date: z.string(),
+  status: z.enum(["pending", "confirmed", "cancelled", "refunded"]),
+  /** Minor units of `currency`; null when nothing was charged. */
+  amountMinor: z.number().int().nullable(),
+  currency: z.string().nullable(),
+});
+export const familyBookingsResponse = z.object({
+  days: z.array(familyDay),
+  /** The guardian's own children's upcoming bookings. */
+  bookings: z.array(familyBooking),
+  /** "none": a place is booked at once. "card": the club charges for a junior's place. */
+  payment: z.enum(["none", "card"]),
+});
+export const familyBookRequest = z.object({ date: dateKeySchema });
+export const familyBookingResponse = z.object({ booking: familyBooking });
+export const familyBookingParams = clubParams.extend({ id: z.coerce.number().int().positive().max(2147483647) });
+export type FamilyBookingsResponse = z.infer<typeof familyBookingsResponse>;
+export type FamilyBookingResponse = z.infer<typeof familyBookingResponse>;
 export type FamilyChild = z.infer<typeof familyChild>;
 export type FamilyResponse = z.infer<typeof familyResponse>;
 export type FamilyChildResponse = z.infer<typeof familyChildResponse>;

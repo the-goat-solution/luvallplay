@@ -59,3 +59,32 @@ export function useSetConsent(id: number) {
   const set = useSetChild();
   return useMutation({ mutationFn: (body: BodyOf<"family.consent">) => api.family.consent({ club: slug, id }, body), onSuccess: (r) => set(r.child) });
 }
+
+// ── Booking a place for a child ─────────────────────────────────────────────
+
+export type FamilyBookings = ResponseOf<"family.bookings">;
+export type FamilyDay = FamilyBookings["days"][number];
+export type FamilyBooking = FamilyBookings["bookings"][number];
+
+/** The play days open to book and this guardian's children's bookings. Refreshed after every booking or cancellation. */
+export function useFamilyBookings() {
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["family-bookings", slug, who], queryFn: ({ signal }) => api.family.bookings({ club: slug }, { signal }), enabled: ready, retry: false });
+}
+
+function useRefreshBookings() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ["family-bookings"] });
+}
+
+export function useBookChild(childId: number) {
+  const { slug, api } = useClubApi();
+  const refresh = useRefreshBookings();
+  return useMutation({ mutationFn: (date: string) => api.family.book({ club: slug, id: childId }, { date }), onSettled: refresh });
+}
+
+export function useCancelBooking() {
+  const { slug, api } = useClubApi();
+  const refresh = useRefreshBookings();
+  return useMutation({ mutationFn: (bookingId: number) => api.family.cancelBooking({ club: slug, id: bookingId }, {}), onSettled: refresh });
+}

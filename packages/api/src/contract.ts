@@ -23,6 +23,7 @@ import { membershipEndpoints } from "./endpoints/membership.ts";
 import { playEndpoints } from "./endpoints/play.ts";
 import { visionEndpoints } from "./endpoints/vision.ts";
 import { photosEndpoints } from "./endpoints/photos.ts";
+import { familyEndpoints } from "./endpoints/family.ts";
 
 export type { Auth, Endpoint } from "./endpoint.ts";
 
@@ -46,6 +47,7 @@ export const ENDPOINTS = {
   ...playEndpoints,
   ...visionEndpoints,
   ...photosEndpoints,
+  ...familyEndpoints,
 };
 
 export type EndpointId = keyof typeof ENDPOINTS;

@@ -78,6 +78,20 @@ export function createApi(transport: Transport) {
       list: (options?: Options) =>
         transport.call("clubs.list", { signal: options?.signal }) as Promise<ResponseOf<"clubs.list">>,
     },
+    family: {
+      /** POST /clubs/{club}/family (signed in) */
+      add: (params: ParamsOf<"family.add">, body: BodyOf<"family.add">, options?: Options) =>
+        transport.call("family.add", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.add">>,
+      /** PUT /clubs/{club}/family/{id}/consent (signed in) */
+      consent: (params: ParamsOf<"family.consent">, body: BodyOf<"family.consent">, options?: Options) =>
+        transport.call("family.consent", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.consent">>,
+      /** GET /clubs/{club}/family (signed in) */
+      list: (params: ParamsOf<"family.list">, options?: Options) =>
+        transport.call("family.list", { params, signal: options?.signal }) as Promise<ResponseOf<"family.list">>,
+      /** PATCH /clubs/{club}/family/{id} (signed in) */
+      update: (params: ParamsOf<"family.update">, body: BodyOf<"family.update">, options?: Options) =>
+        transport.call("family.update", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.update">>,
+    },
     integrations: {
       /** POST /account/integrations/tokens (signed in) */
       createToken: (body: BodyOf<"integrations.createToken">, options?: Options) =>

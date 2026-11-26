@@ -1,3 +1,4 @@
+import { clubContactEmail, clubEmailLogoPath, clubName, clubPlace } from "./club-brand";
 // Shared branded HTML shell for every transactional email the app sends
 // (via lib/email.ts and lib/notify.ts). Table-based layout with inline
 // styles only — the safe subset that survives Gmail/Outlook/Apple Mail
@@ -18,8 +19,8 @@ const FONT_SANS =
 // The club's public inbox — same address shown in the site footer and used
 // as the admin alert fallback, so members always land in the one mailbox
 // that's actually read.
-export const CLUB_CONTACT_EMAIL = "threewolvesbadminton@gmail.com";
-const CLUB_DISPLAY_NAME = "Three Wolves Badminton Club";
+export const CLUB_CONTACT_EMAIL = clubContactEmail();
+const CLUB_DISPLAY_NAME = clubName();
 
 // Resend sends whatever's in EMAIL_FROM/ALERT_FROM_EMAIL verbatim as the
 // From header — a bare address (no display name) shows up in a member's
@@ -62,7 +63,7 @@ export function getSiteUrl(): string {
 }
 
 export function emailLogoUrl(): string {
-  return `${getSiteUrl()}/uploads/Three%20wolves%20logo.png`;
+  return `${getSiteUrl()}${clubEmailLogoPath()}`;
 }
 
 export function ctaButton(label: string, href: string): string {
@@ -106,7 +107,7 @@ export function renderEmailLayout(input: {
               <td style="background:${NAVY};padding:28px 32px;text-align:center">
                 <img
                   src="${emailLogoUrl()}"
-                  alt="Three Wolves Badminton Club"
+                  alt="${clubName()}"
                   width="72"
                   style="display:inline-block;width:72px;height:auto;border:0"
                 />
@@ -119,7 +120,7 @@ export function renderEmailLayout(input: {
             </tr>
             <tr>
               <td style="background:${NAVY_DARK};padding:20px 32px;text-align:center;font-family:${FONT_SANS};font-size:12px;color:${"#b4ccd9"}">
-                Three Wolves Badminton Club · Christchurch, NZ
+                ${clubName()} · ${clubPlace()}
               </td>
             </tr>
           </table>

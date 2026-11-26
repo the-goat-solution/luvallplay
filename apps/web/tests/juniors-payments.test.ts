@@ -17,7 +17,6 @@ describe("paying for a child's place", { skip: !BASE_URL && !REQUIRE_DB ? "set D
   let c: pg.Client;
   let lib: typeof import("../lib/db.ts");
   let database: typeof import("../lib/database.ts");
-  let bookings: typeof import("../lib/juniors/bookings.ts");
   let family: typeof import("../lib/juniors/family.ts");
   let pay: typeof import("../lib/juniors/payments.ts");
   let provider: typeof import("../lib/payments/index.ts");
@@ -30,11 +29,8 @@ describe("paying for a child's place", { skip: !BASE_URL && !REQUIRE_DB ? "set D
     return u.toString();
   };
   const MIA = 1;
-  const PETE = 2;
   const QUINN = 3;
   let tama = 0; // Mia's child
-  let aroha = 0; // Mia's other child
-  let ben = 0; // Pete's child
   let club2 = 0;
   // Every play day used here is the same weekday (weeks apart), so each holds the same number.
   let week = 0;
@@ -54,8 +50,6 @@ describe("paying for a child's place", { skip: !BASE_URL && !REQUIRE_DB ? "set D
     await lib.ensureSession(date);
     return date;
   };
-  const book = (guardian: number, child: number, date: string, payment: import("../lib/juniors/bookings.ts").ChildPayment | null = null, tenant = 1) =>
-    bookings.bookChild(database.sql, tenant, guardian, child, date, payment);
 
   before(async () => {
     assert.ok(BASE_URL, "DATA_GUARD_TEST_URL must be set (DATA_GUARD_REQUIRE_DB=1)");
@@ -79,7 +73,6 @@ describe("paying for a child's place", { skip: !BASE_URL && !REQUIRE_DB ? "set D
     delete process.env.VERCEL_ENV;
     database = await import("../lib/database.ts");
     lib = await import("../lib/db.ts");
-    bookings = await import("../lib/juniors/bookings.ts");
     family = await import("../lib/juniors/family.ts");
     pay = await import("../lib/juniors/payments.ts");
     provider = await import("../lib/payments/index.ts");
@@ -97,8 +90,6 @@ describe("paying for a child's place", { skip: !BASE_URL && !REQUIRE_DB ? "set D
       return r.value.id;
     };
     tama = await add(MIA, "Tama Testchild");
-    aroha = await add(MIA, "Aroha Testchild");
-    ben = await add(PETE, "Ben Testchild");
   });
   after(async () => {
     provider?.setPaymentsProvider(null);

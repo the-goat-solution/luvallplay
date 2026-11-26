@@ -49,6 +49,9 @@ try {
   console.log(`Modules: ${modules.length} rows, ${modules.filter((m) => m.enabled).length} on (registry has ${MODULES.length}).`);
   if (missing.length) problems.push(`modules without a row: ${missing.join(", ")}`);
   if (unknown.length) problems.push(`module rows not in the registry: ${unknown.join(", ")}`);
+  // A hidden module can't be switched on, so a row saying it is on should be impossible.
+  const hiddenOn = modules.filter((m) => m.enabled && MODULES.find((x) => x.id === m.module_id)?.availability === "hidden").map((m) => m.module_id);
+  if (hiddenOn.length) problems.push(`hidden modules switched on: ${hiddenOn.join(", ")}`);
 
   const counts = (
     await db.query(

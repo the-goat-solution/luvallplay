@@ -30,6 +30,8 @@ import { takeSnapshot } from "../scripts/data-guard/pg.ts";
 
 const DB_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
+// The rehearsals run psql, as the runbooks do. Without it they are skipped on a laptop and fail in CI.
+const hasPsql = spawnSync("psql", ["--version"]).status === 0;
 const FIXTURE = readFileSync(new URL("./fixtures/data-guard/club.sql", import.meta.url), "utf8");
 
 const expect = (x: Partial<Expectations> = {}): Expectations => ExpectationsSchema.parse({ change: "test", description: "test change", ...x });
@@ -445,9 +447,36 @@ describe("data guard on Postgres", { skip }, () => {
     assert.deepEqual(byCode(wrong.findings, "DATA_LOST").find((f) => f.target === "junior_attendance.junior_profile_id")?.people, ["junior:2"]);
   });
 
+  test("JUNIORS · CAUGHT · an allowance that names people excuses only them: another child's lost rows in an allowed table are still reported", async () => {
+    const why = "The guardian asked for this child's data to be deleted";
+    // Child 1 and their guardian (account 1) are named; child 2 and account 2 are not.
+    const forChild1 = (tables: string[]) => ({
+      allowAccountChanges: [{ target: "junior:1", reason: why }],
+      allowRowDecrease: tables.map((target) => ({ target, reason: why, people: ["junior:1", "1"] })),
+    });
+    const all = ["junior_profiles", "guardianships", "junior_bookings", "junior_attendance"];
+    const right = `DELETE FROM junior_attendance WHERE junior_profile_id = 1; DELETE FROM junior_bookings WHERE junior_profile_id = 1; DELETE FROM guardianships WHERE junior_profile_id = 1; DELETE FROM junior_profiles WHERE id = 1;`;
+    assert.deepEqual(errorCodes((await rehearseJuniors(right, forChild1(all))).findings), [], "the declared deletion passes");
+
+    // The same declaration, but the delete also takes the other child's attendance and booking.
+    const tooMuch = right.replace("DELETE FROM junior_attendance WHERE junior_profile_id = 1", "DELETE FROM junior_attendance").replace("DELETE FROM junior_bookings WHERE junior_profile_id = 1", "DELETE FROM junior_bookings");
+    const caught = await rehearseJuniors(tooMuch, forChild1(all));
+    assert.deepEqual(byCode(caught.findings, "DATA_LOST").find((f) => f.target === "junior_attendance.junior_profile_id")?.people, ["junior:2"]);
+    assert.deepEqual(byCode(caught.findings, "DATA_LOST").find((f) => f.target === "junior_bookings.junior_profile_id")?.people, ["junior:2"]);
+
+    // The gap this closes: without names, the same allowance excuses everyone in the table.
+    const unnamed = await rehearseJuniors(tooMuch, { allowAccountChanges: [{ target: "junior:1", reason: why }], allowRowDecrease: all.map((target) => ({ target, reason: why })) });
+    assert.equal(byCode(unnamed.findings, "DATA_LOST").length, 0);
+
+    // The other guardian's link to child 2 is theirs: removing it isn't covered by naming account 1.
+    const otherGuardian = await rehearseJuniors(`${right} DELETE FROM guardianships WHERE guardian_user_id = 2;`, forChild1(all));
+    assert.deepEqual(byCode(otherGuardian.findings, "DATA_LOST").find((f) => f.target === "guardianships.guardian_user_id")?.people, ["2"]);
+  });
+
   // ---- The command line, end to end ----
 
-  test("CLI rehearse: passes a safe change, fails a bad one, refuses production", { skip: spawnSync("psql", ["--version"]).status !== 0 ? "psql not installed" : false }, async () => {
+  test("CLI rehearse: passes a safe change, fails a bad one, refuses production", { skip: hasPsql || REQUIRE_DB ? false : "psql not installed" }, async () => {
+    assert.ok(hasPsql, "psql must be installed: this rehearsal can't be skipped (DATA_GUARD_REQUIRE_DB=1)");
     const dbName = `dg_cli_${process.pid}_${Date.now()}`;
     const admin = new pg.Client({ connectionString: DB_URL });
     await admin.connect();

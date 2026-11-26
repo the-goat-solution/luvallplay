@@ -2,6 +2,10 @@
 // changes. Never runs at request time.
 //
 //   npm run db:migrate                     apply pending migrations to POSTGRES_URL
+//   npm run db:migrate -- --to 0012        apply pending migrations up to and
+//                                          including that one, and stop (the
+//                                          number or the full tag). Production
+//                                          data steps run one at a time.
 //   npm run db:migrate -- --status         list applied / pending, change nothing
 //   npm run db:migrate -- --baseline       mark an existing database (production)
 //                                          as already at the baseline, after
@@ -113,9 +117,40 @@ async function runOne(c, m, log) {
   log(`applied ${m.tag} (${Date.now() - started} ms)`);
 }
 
-/** Applies pending migrations. Returns the tags applied. */
-export async function migrate(c, { migrations = loadMigrations(), log = console.log } = {}) {
-  const { pending } = await plan(c, migrations);
+/**
+ * The migration `to` names: its full tag ("0012_junior_activity") or its
+ * number ("0012", "12"). Throws when it names none, or more than one.
+ */
+export function resolveTarget(migrations, to) {
+  const wanted = String(to ?? "").trim();
+  if (!wanted) throw new Error("--to needs a migration: its number (0012) or its full tag (0012_junior_activity).");
+  const exact = migrations.filter((m) => m.tag === wanted);
+  const byNumber = /^\d+$/.test(wanted) ? migrations.filter((m) => Number(m.tag.split("_")[0]) === Number(wanted)) : [];
+  const found = exact.length ? exact : byNumber;
+  if (found.length !== 1) {
+    throw new Error(`--to ${wanted}: ${found.length ? "more than one migration has that number" : "no such migration"}. Known: ${migrations.map((m) => m.tag).join(", ")}`);
+  }
+  return found[0];
+}
+
+/**
+ * Applies pending migrations. Returns the tags applied. With `to`, stops
+ * after that migration: the ones after it stay pending.
+ */
+export async function migrate(c, { migrations = loadMigrations(), log = console.log, to } = {}) {
+  let { pending } = await plan(c, migrations);
+  if (to !== undefined) {
+    // Resolved before anything runs: a mistyped target must not migrate at all.
+    const target = resolveTarget(migrations, to);
+    const stop = pending.findIndex((m) => m.tag === target.tag);
+    if (stop === -1) {
+      log(`Nothing to migrate: ${target.tag} is already applied.`);
+      return [];
+    }
+    const held = pending.slice(stop + 1);
+    pending = pending.slice(0, stop + 1);
+    if (held.length) log(`Stopping after ${target.tag}; left pending: ${held.map((m) => m.tag).join(", ")}`);
+  }
   if (pending.length === 0) {
     log("Nothing to migrate: the database is up to date.");
     return [];
@@ -191,7 +226,9 @@ async function main() {
     } else if (args.includes("--baseline")) {
       await markBaseline(c);
     } else {
-      await migrate(c);
+      const at = args.indexOf("--to");
+      // "--to" with nothing after it is an error, not "everything".
+      await migrate(c, at === -1 ? {} : { to: args[at + 1] ?? "" });
     }
   } catch (err) {
     console.error(err.message);

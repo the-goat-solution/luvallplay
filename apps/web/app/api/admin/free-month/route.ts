@@ -10,6 +10,7 @@ import { getClubToday } from "@/lib/dates";
 import { clubConfig } from "@/lib/club";
 import { addFreeDaysBeforeNextCharge, giveFreeNextPeriod } from "@/lib/stripe";
 import { checkRateLimit, getClientIp, isAdminRequest } from "@/lib/security";
+import { auditedRoute } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,7 @@ const bodySchema = z.object({
 // - recurring monthly: the next renewal invoice comes out at $0;
 // - recurring quarterly: 4 free weeks after the current quarter, then
 //   quarterly billing carries on.
-export async function POST(request: Request) {
+export const POST = auditedRoute("membership.free_month", async function POST(request: Request) {
   const FREE_MONTH_DAYS = (await clubConfig()).memberships.cycleDays.monthly;
   if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -137,4 +138,4 @@ export async function POST(request: Request) {
     const message = e instanceof Error ? e.message : "Could not reach Stripe";
     return NextResponse.json({ error: message }, { status: 502 });
   }
-}
+});

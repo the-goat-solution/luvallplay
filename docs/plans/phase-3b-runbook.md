@@ -10,8 +10,8 @@ Build plan §6.8, decision V. Test plan §3.17, journey J1, gate "3b Junior acco
 |---|---|---|
 | 1 | Data guard counts junior profiles as people; tables for a junior's bookings and attendance (migration `0012`) | Built and rehearsed (18 accounts, 0 problems). **#119 merged 25 Nov 00:46 UTC; confirm whether `0012` has run on production.** Merged code expects the tables (drift, `verify.mjs`, the row-level security heartbeat), and running `0013` would also run `0012` (audit C0) |
 | 2 | `juniors` and `forms-waivers` modules; switching Juniors on needs an owner, a fresh sign-in check and the safeguarding policy acknowledged | **Built** (25 Nov, lane J): both modules are in the registry, hidden; the switch-on guard and its page are tested. Nothing can switch it on in production (§2a) |
-| 3 | Guardian side: a "Family" section, adding a child, consent | **Part built** (25 Nov): the library and its database tests (§2b). The app's endpoints and screen wait for lane H's contract split (#153) |
-| — | The audit's "Migration 0012 details" (migration `0015_junior_details`) | **Built; rehearsed on a copy of production by lane T on 26 Nov (19 accounts, 0 problems)** (§2c). Runs in production after `0014`, with your go-ahead, then the pull request merges |
+| 3 | Guardian side: a "Family" section, adding a child, consent | **Built** (26 Nov): the library, four app endpoints, the Family screen in the players' app, and two end-to-end journeys (§2b). Not built: inviting a second guardian |
+| — | The audit's "Migration 0012 details" (migration `0015_junior_details`) | **Done** (26 Nov): rehearsed on a copy of production and run in production by lane T (19 accounts, 0 problems, as reported through the coordinating thread), then merged (#178) (§2c) |
 | 4 | Waivers, emergency contacts, encrypted medical notes | Not started |
 | 5 | Booking and paying for a child | Not started |
 | 6 | Club side: junior roster, coach safety checks, who may see what | Not started |
@@ -98,7 +98,15 @@ Forms & waivers is switched on with it, in the same statement. Switching Juniors
 | Nothing about a child is shown unless a guardian says so | Three items, each off until switched on and dated when changed: the club's board (first name and initial), photos, match video. With two guardians both must agree |
 | Limits | 8 children per guardian; the same child can't be added twice |
 
-Not built yet: inviting a second guardian, the app's endpoints and screen, the J1 journey.
+**The app's endpoints** (`family.list`, `family.add`, `family.update`, `family.consent`; contract files `packages/api/src/endpoints/family.ts` and `schemas/family.ts`). Additions only: the contract check reports the released endpoints unchanged. Each handler asks the fail-closed switch again (`juniorsClubId`) before touching a child's data, so a club with Juniors off answers 404 whatever the app believes.
+
+**The Family screen** (`apps/app/src/screens/Family.tsx` and `screens/family/`, address `/family`). A row in My profile for each club that has Juniors on, and nothing for a club that hasn't: Three Wolves' members see no change. The guardian adds a child (name, year of birth, the confirmation, and the three optional items, all off), corrects the details, and switches each item on or off. Its words are a `juniors` namespace in `packages/i18n`, English and Vietnamese (the Vietnamese needs a native review).
+
+**Journeys** (`apps/app/tests/e2e/app.mjs`): APP52, Juniors off as every club is today (no row, 404s, a hand-written switch without an acknowledgement is still off); APP53, a made-up guardian adds a made-up child, is refused an email address as a name, switches photos on, corrects the name, and another person can neither see nor change the child; no account is created for the child.
+
+Outside lane J's directories, for lane N to see: one route line in `apps/app/src/router.tsx` and five lines in `screens/Profile.tsx` (the row), and one line in the journeys' set-up so the test server offers Juniors.
+
+Not built yet: inviting a second guardian; the rest of journey J1 (waiver, paying, the roster, export and delete) arrives with steps 4 to 7.
 
 ## 2c. The audit's "Migration 0012 details": migration `0015_junior_details` (one production step, additive)
 

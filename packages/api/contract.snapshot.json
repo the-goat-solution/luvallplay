@@ -2906,6 +2906,329 @@
         }
       }
     },
+    "family.add": {
+      "method": "POST",
+      "path": "/clubs/{club}/family",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "birthYear": {
+            "t": "number"
+          },
+          "consent": {
+            "t": "object",
+            "fields": {
+              "leaderboard": {
+                "t": "boolean",
+                "optional": true
+              },
+              "photos": {
+                "t": "boolean",
+                "optional": true
+              },
+              "vision": {
+                "t": "boolean",
+                "optional": true
+              }
+            },
+            "optional": true
+          },
+          "guardianConfirmed": {
+            "t": "boolean"
+          },
+          "name": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "child": {
+            "t": "object",
+            "fields": {
+              "addedAt": {
+                "t": "string"
+              },
+              "birthYear": {
+                "t": "number"
+              },
+              "consent": {
+                "t": "object",
+                "fields": {
+                  "leaderboard": {
+                    "t": "boolean"
+                  },
+                  "photos": {
+                    "t": "boolean"
+                  },
+                  "vision": {
+                    "t": "boolean"
+                  }
+                }
+              },
+              "consentAt": {
+                "t": "string"
+              },
+              "consentVersion": {
+                "t": "string"
+              },
+              "guardians": {
+                "t": "number"
+              },
+              "id": {
+                "t": "number"
+              },
+              "name": {
+                "t": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.consent": {
+      "method": "PUT",
+      "path": "/clubs/{club}/family/{id}/consent",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "leaderboard": {
+            "t": "boolean",
+            "optional": true
+          },
+          "photos": {
+            "t": "boolean",
+            "optional": true
+          },
+          "vision": {
+            "t": "boolean",
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "child": {
+            "t": "object",
+            "fields": {
+              "addedAt": {
+                "t": "string"
+              },
+              "birthYear": {
+                "t": "number"
+              },
+              "consent": {
+                "t": "object",
+                "fields": {
+                  "leaderboard": {
+                    "t": "boolean"
+                  },
+                  "photos": {
+                    "t": "boolean"
+                  },
+                  "vision": {
+                    "t": "boolean"
+                  }
+                }
+              },
+              "consentAt": {
+                "t": "string"
+              },
+              "consentVersion": {
+                "t": "string"
+              },
+              "guardians": {
+                "t": "number"
+              },
+              "id": {
+                "t": "number"
+              },
+              "name": {
+                "t": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.list": {
+      "method": "GET",
+      "path": "/clubs/{club}/family",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "children": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "addedAt": {
+                  "t": "string"
+                },
+                "birthYear": {
+                  "t": "number"
+                },
+                "consent": {
+                  "t": "object",
+                  "fields": {
+                    "leaderboard": {
+                      "t": "boolean"
+                    },
+                    "photos": {
+                      "t": "boolean"
+                    },
+                    "vision": {
+                      "t": "boolean"
+                    }
+                  }
+                },
+                "consentAt": {
+                  "t": "string"
+                },
+                "consentVersion": {
+                  "t": "string"
+                },
+                "guardians": {
+                  "t": "number"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "name": {
+                  "t": "string"
+                }
+              }
+            }
+          },
+          "consentVersion": {
+            "t": "string"
+          },
+          "limits": {
+            "t": "object",
+            "fields": {
+              "birthYearMax": {
+                "t": "number"
+              },
+              "birthYearMin": {
+                "t": "number"
+              },
+              "maxChildren": {
+                "t": "number"
+              },
+              "nameMax": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.update": {
+      "method": "PATCH",
+      "path": "/clubs/{club}/family/{id}",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "birthYear": {
+            "t": "number",
+            "optional": true
+          },
+          "name": {
+            "t": "string",
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "child": {
+            "t": "object",
+            "fields": {
+              "addedAt": {
+                "t": "string"
+              },
+              "birthYear": {
+                "t": "number"
+              },
+              "consent": {
+                "t": "object",
+                "fields": {
+                  "leaderboard": {
+                    "t": "boolean"
+                  },
+                  "photos": {
+                    "t": "boolean"
+                  },
+                  "vision": {
+                    "t": "boolean"
+                  }
+                }
+              },
+              "consentAt": {
+                "t": "string"
+              },
+              "consentVersion": {
+                "t": "string"
+              },
+              "guardians": {
+                "t": "number"
+              },
+              "id": {
+                "t": "number"
+              },
+              "name": {
+                "t": "string"
+              }
+            }
+          }
+        }
+      }
+    },
     "integrations.createToken": {
       "method": "POST",
       "path": "/account/integrations/tokens",

@@ -18,6 +18,7 @@ import { SettingsSections } from "./Settings.tsx";
 import { usePlace } from "./me/parts.tsx";
 import { dayLabel } from "../lib/format.ts";
 import { LoadError } from "../components/LoadError.tsx";
+import { FamilyEntry } from "./family/Entry.tsx";
 
 type MeQuery = { data?: Me; isError: boolean; refetch: () => unknown };
 
@@ -121,6 +122,12 @@ export default function ProfileScreen() {
     <section className="screen stack profile" data-screen="nav_profile">
       <Head pill={pill} />
       <Memberships clubs={clubs} multi={multi} results={results} />
+      {/* One row per club that has Juniors on; nothing otherwise (screens/family). */}
+      {clubs.map((club) => (
+        <ClubScopeProvider key={`family:${club.slug}`} club={club}>
+          <FamilyEntry />
+        </ClubScopeProvider>
+      ))}
       <SettingsSections />
     </section>
   );

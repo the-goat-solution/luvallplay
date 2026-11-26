@@ -11,11 +11,15 @@
 //   yet), every module counts as on, except one the platform keeps hidden. Enforcement is a product switch, not a
 //   security boundary, and a database hiccup must not turn a club's features
 //   off. The failure is logged.
+// - A module the platform keeps hidden counts as on only when its own guard
+//   agrees (Juniors: offered on this deployment, and an owner's
+//   acknowledgement stored). A row that merely says "enabled" isn't enough.
 // - MODULE_ENFORCEMENT=off turns enforcement off altogether (every module
 //   on), as an escape hatch.
 //
 // Takes a small `Db`, like lib/club-config.ts, so scripts and tests share it.
 import { MODULES, blockedByModule, routeOwner, canTurnOff, canTurnOn, type ModuleId, type PaymentMode } from "@luvallplay/modules";
+import { hiddenModuleOn } from "./juniors/switch-rule.ts";
 import { defaultTenantSlug } from "./tenant-members.ts";
 
 export type Db = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
@@ -26,17 +30,18 @@ const CORE = MODULES.filter((m) => m.core).map((m) => m.id as string);
 // be read, a hidden module stays off.
 const ALL = MODULES.filter((m) => m.availability !== "hidden").map((m) => m.id as string);
 const everyModule = () => new Set(ALL);
+const HIDDEN = new Set(MODULES.filter((m) => m.availability === "hidden").map((m) => m.id as string));
 
 export function moduleEnforcementOn(): boolean {
   return process.env.MODULE_ENFORCEMENT?.trim().toLowerCase() !== "off";
 }
 
-export type ModuleRow = { id: string; enabled: boolean; locked: "on" | "off" | null; lockReason: string | null };
+export type ModuleRow = { id: string; enabled: boolean; locked: "on" | "off" | null; lockReason: string | null; settings?: unknown };
 
 /** The club's row for every module in the registry (a missing row reads as off, unlocked). */
 export async function listClubModules(db: Db, slug = defaultTenantSlug()): Promise<ModuleRow[]> {
   const { rows } = await db.query(
-    `SELECT m.module_id, m.enabled, m.locked, m.lock_reason
+    `SELECT m.module_id, m.enabled, m.locked, m.lock_reason, m.settings
      FROM tenant_modules m JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1`,
     [slug],
   );
@@ -48,6 +53,7 @@ export async function listClubModules(db: Db, slug = defaultTenantSlug()): Promi
       enabled: m.core ? true : r?.enabled === true,
       locked: r?.locked === "on" || r?.locked === "off" ? r.locked : null,
       lockReason: typeof r?.lock_reason === "string" ? r.lock_reason : null,
+      settings: r?.settings,
     };
   });
 }
@@ -75,7 +81,8 @@ export async function enabledModules(db: Db, now = Date.now()): Promise<Set<stri
   let enabled: Set<string>;
   try {
     const rows = await listClubModules(db);
-    enabled = new Set([...CORE, ...rows.filter((r) => r.enabled).map((r) => r.id)]);
+    // A hidden module's row saying "on" isn't enough: its own guard has to agree (lib/juniors/switch-rule.ts).
+    enabled = new Set([...CORE, ...rows.filter((r) => r.enabled && (!HIDDEN.has(r.id) || hiddenModuleOn(r.id, r.settings))).map((r) => r.id)]);
   } catch (err) {
     const message = String((err as Error)?.message ?? err).slice(0, 200);
     if (message !== lastError) {

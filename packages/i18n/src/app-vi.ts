@@ -217,7 +217,7 @@ export const vi: Messages<AppKey> = {
   acc_download_hint: "Mọi thông tin câu lạc bộ lưu theo tài khoản của bạn, dưới dạng tệp.",
   acc_delete: "Xoá tài khoản",
   acc_delete_confirm: "Xoá tài khoản? Bạn sẽ bị đăng xuất khỏi mọi thiết bị. Hồ sơ thanh toán vẫn được CLB lưu theo quy định pháp luật.",
-  acc_delete_type: "Gõ DELETE để xác nhận",
+  acc_delete_yes: "Có, xoá tài khoản của tôi",
   acc_delete_last_owner: "Bạn là chủ duy nhất của câu lạc bộ. Hãy chỉ định người khác làm chủ trong Admin → People → Admins trước khi xoá tài khoản.",
   ca_title: "Ứng dụng đã kết nối",
   ca_sub: "Cho phép ứng dụng theo dõi thói quen hoặc trợ lý AI đọc số buổi chơi và kết quả vòng tròn của bạn. Có thể ngắt kết nối bất cứ lúc nào.",

@@ -708,6 +708,10 @@ const SESSION_ENDPOINTS = [
   ["POST", "/clubs/{club}/vision/model"],
   ["POST", "/clubs/{club}/vision/share"],
   ["GET", "/clubs/{club}/arena/challenges/{id}/stats"],
+  ["GET", "/clubs/{club}/family"],
+  ["POST", "/clubs/{club}/family"],
+  ["PATCH", "/clubs/{club}/family/{id}"],
+  ["PUT", "/clubs/{club}/family/{id}/consent"],
   ["GET", "/clubs/{club}/me/photos"],
   ["POST", "/clubs/{club}/me/photos"],
   ["POST", "/clubs/{club}/me/photos/upload"],
@@ -1720,7 +1724,10 @@ describe("S · modules", () => {
   test("S2 · every optional module, generated: switched off, each page, API route, app endpoint, menu entry and config line it owns is gone; back on, each returns", async () => {
     const { MODULES, ROUTE_OWNERS } = await import("../../../../packages/modules/src/index.ts");
     const { ENDPOINTS } = await import("../../../../packages/api/src/contract.ts");
-    const optional = MODULES.filter((m) => !m.core);
+    // A module the platform keeps hidden (Juniors, Forms & waivers) can't be switched by a row in the
+    // table: it isn't skipped, it is checked the other way round below (the row says on, and it stays off).
+    const optional = MODULES.filter((m) => !m.core && m.availability !== "hidden");
+    const hidden = MODULES.filter((m) => !m.core && m.availability === "hidden");
     assert.ok(optional.length >= 16, `the registry has ${optional.length} optional modules`);
     const owner = await signedIn(PEOPLE.owner.email, DESKTOP);
     const cookie = `tw_player=${owner.token}`;
@@ -1809,8 +1816,29 @@ describe("S · modules", () => {
           else await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [dep]);
         }
       }
-      // Nothing was left out: every guarded route and every endpoint with a module belongs to a module that was switched.
-      const ids = new Set(optional.map((m) => m.id));
+      // Hidden modules: the row is written as "on" (with what it needs), and everything the module owns stays
+      // off. A row is not the owner's acknowledgement, and this deployment doesn't offer the module.
+      for (const m of hidden) {
+        const id = m.id;
+        for (const dep of [...needs(id), id]) await set(dep, true);
+        const routesHidden = await routes(id);
+        const endpointsHidden = await endpoints(id);
+        for (const [prefix, status] of routesHidden) assert.equal(status, 404, `${id} is hidden: ${prefix} is served because a row says on`);
+        for (const [eid, status, code] of endpointsHidden) assert.deepEqual([status, code], [404, "module_off"], `${id} is hidden: ${eid} answers because a row says on`);
+        const menu = await adminMenu();
+        for (const n of m.admin?.nav ?? []) assert.ok(!menu.includes(`href="${n.href}"`), `${id} is hidden: the admin menu offers ${n.href}`);
+        assert.ok(!(await configModules()).includes(id), `${id} is hidden: the club's config lists it because a row says on`);
+        covered.routes += routesHidden.length;
+        covered.endpoints += endpointsHidden.length;
+        covered.menu += (m.admin?.nav ?? []).length;
+        for (const dep of new Set([...needs(id), id])) {
+          const was = original.find((r) => r.module_id === dep);
+          if (was) await set(dep, was.enabled);
+          else await db.query(`DELETE FROM tenant_modules WHERE tenant_id = 1 AND module_id = $1`, [dep]);
+        }
+      }
+      // Nothing was left out: every guarded route and every endpoint with a module belongs to a module that was checked.
+      const ids = new Set([...optional, ...hidden].map((m) => m.id));
       const always = new Set(["core", "account", "platform"]);
       for (const [prefix, who] of ROUTE_OWNERS) assert.ok(always.has(who) || ids.has(who), `${prefix} belongs to "${who}", which isn't a module`);
       for (const [eid, e] of Object.entries(ENDPOINTS)) assert.ok(!e.module || ids.has(e.module), `${eid} names the module "${e.module}", which isn't one`);

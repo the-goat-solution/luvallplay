@@ -24,3 +24,4 @@ export * from "./schemas/shop.ts";
 export * from "./schemas/membership.ts";
 export * from "./schemas/vision.ts";
 export * from "./schemas/photos.ts";
+export * from "./schemas/family.ts";

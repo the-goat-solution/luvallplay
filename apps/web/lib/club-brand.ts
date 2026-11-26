@@ -8,7 +8,20 @@
 // Synchronous on purpose: client components use it too. When a deployment
 // serves more than one club (audit C7), this file and lib/money.ts are the
 // two places that take the club from the request.
-import { CLUB_CURRENCY, CLUB_LOCALE, CLUB_NAME, CLUB_SHORT_NAME, CLUB_SLUG, CLUB_TIME_ZONE, MEMBERSHIP_ACCESS_DAYS, type MembershipDay } from "./constants.ts";
+import {
+  CLUB_CONTACT_EMAIL,
+  CLUB_CURRENCY,
+  CLUB_EMAIL_LOGO_DARK_PATH,
+  CLUB_EMAIL_LOGO_PATH,
+  CLUB_LOCALE,
+  CLUB_NAME,
+  CLUB_PLACE,
+  CLUB_SHORT_NAME,
+  CLUB_SLUG,
+  CLUB_TIME_ZONE,
+  MEMBERSHIP_ACCESS_DAYS,
+  type MembershipDay,
+} from "./constants.ts";
 
 /** The club's full name ("… Badminton Club"): letterheads, report headers, file authors. */
 export function clubName(): string {
@@ -18,6 +31,26 @@ export function clubName(): string {
 /** The club's short name: the admin's top-left corner, email subjects, payment descriptions. */
 export function clubShortName(): string {
   return CLUB_SHORT_NAME;
+}
+
+/** Where the club is, as an email footer says it ("Christchurch, NZ"). */
+export function clubPlace(): string {
+  return CLUB_PLACE;
+}
+
+/** The club's public inbox: shown to members, and where alerts go when no other address is set. */
+export function clubContactEmail(): string {
+  return CLUB_CONTACT_EMAIL;
+}
+
+/** The club's logo for emails, as a path under the site ("/uploads/…"); `dark` is the one for dark backgrounds. */
+export function clubEmailLogoPath(dark = false): string {
+  return dark ? CLUB_EMAIL_LOGO_DARK_PATH : CLUB_EMAIL_LOGO_PATH;
+}
+
+/** An amount in major units with the currency code, as receipts and emails write it: "NZD $33.00". */
+export function clubAmountWithCode(major: number): string {
+  return `${CLUB_CURRENCY} ${new Intl.NumberFormat(clubLocale(), { style: "currency", currency: CLUB_CURRENCY }).format(major)}`;
 }
 
 /** The club's slug, for file names ("<slug>-financials.xlsx"). */

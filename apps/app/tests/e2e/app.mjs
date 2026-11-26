@@ -48,6 +48,9 @@ let api;
 before(async () => {
   // The API allows this origin, exactly as APP_ORIGINS will in production.
   process.env.APP_ORIGINS = APP;
+  // Juniors is hidden platform-wide (Phase 3b ships dark). The test server offers it, as a preview would;
+  // it stays off for the club until a journey switches it on (the Family journeys).
+  process.env.JUNIORS_AVAILABILITY = "available";
   process.chdir(WEB_DIR); // the environment script runs the web app's own scripts
   const e2e = await import(path.join(WEB_DIR, "scripts/e2e/env.mjs"));
   PEOPLE = e2e.PEOPLE;
@@ -1754,6 +1757,129 @@ describe("APP · membership and casual booking", () => {
       assert.equal(joined.recurring, false);
       assert.deepEqual(problems, []);
     } finally {
+      await context.close();
+    }
+  });
+});
+
+describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardian's part)", () => {
+  const FAMILY = '[data-screen="family"][data-state="ready"]';
+  const auth = (token) => ({ headers: { authorization: `Bearer ${token}` } });
+  const juniorsOn = () =>
+    db.query(
+      `INSERT INTO tenant_modules (tenant_id, module_id, enabled, enabled_at, settings) VALUES
+         (1, 'forms-waivers', TRUE, now(), '{}'::jsonb),
+         (1, 'juniors', TRUE, now(), '{"safeguarding":{"version":"2026-11","byPlayerId":1,"at":"2026-11-26T00:00:00.000Z"}}'::jsonb)
+       ON CONFLICT (tenant_id, module_id) DO UPDATE SET enabled = TRUE, settings = EXCLUDED.settings`,
+    );
+  const juniorsOff = async () => {
+    await db.query(`DELETE FROM guardianships`);
+    await db.query(`DELETE FROM junior_profiles`);
+    await db.query(`DELETE FROM tenant_modules WHERE module_id IN ('juniors', 'forms-waivers')`);
+  };
+
+  test("APP52 · Juniors off (as every club is today): no Family row, the endpoints answer 404, and the address says it is off", async () => {
+    await juniorsOff();
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    try {
+      assert.ok(!(await realConfig()).modules.includes("juniors"));
+      const r = await fetch(`${api}/clubs/three-wolves/family`, auth(token));
+      assert.equal(r.status, 404);
+      assert.equal((await r.json()).error, "module_off");
+      const add = await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: { ...auth(token).headers, "content-type": "application/json" }, body: JSON.stringify({ name: "Test Child", birthYear: 2016, guardianConfirmed: true }) });
+      assert.equal(add.status, 404);
+      await page.goto(`${APP}/profile`);
+      await page.waitForSelector(PROFILE_READY);
+      assert.equal(await page.locator('[data-entry="family"]').count(), 0);
+      await page.goto(`${APP}/family`);
+      await page.waitForSelector('[data-screen="family"][data-state="off"]');
+      assert.equal(await page.locator('[data-action="family-add"]').count(), 0);
+      // A row written by hand without an owner's acknowledgement is still off (Juniors fails closed).
+      await db.query(`INSERT INTO tenant_modules (tenant_id, module_id, enabled, enabled_at) VALUES (1, 'forms-waivers', TRUE, now()), (1, 'juniors', TRUE, now())`);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family`, auth(token))).status, 404);
+    } finally {
+      await juniorsOff();
+      await context.close();
+    }
+  });
+
+  test("APP53 · a guardian adds a child, switches one consent on, and corrects the name; another person sees none of it; no account is made for the child", async () => {
+    await juniorsOn();
+    const accountsBefore = (await db.query(`SELECT count(*)::int AS n FROM players`)).rows[0].n;
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/profile`);
+      await page.waitForSelector(PROFILE_READY);
+      await page.locator('[data-entry="family"]').click();
+      await page.waitForURL(`${APP}/family`);
+      await page.waitForSelector(FAMILY);
+      await page.getByText("You haven't added a child yet.").waitFor();
+
+      await page.locator('[data-action="family-add"]').click();
+      const form = page.locator('[data-form="family-add"]');
+      // Refused in turn: no name, a name that is an email address, no confirmation.
+      await form.getByRole("button", { name: "Save" }).click();
+      await form.getByRole("alert").filter({ hasText: "Enter the child's name." }).waitFor();
+      await form.getByLabel("Child's name").fill("kid@example.test");
+      await form.getByLabel("Year of birth").selectOption("2016");
+      await form.getByRole("button", { name: "Save" }).click();
+      await form.getByRole("alert").filter({ hasText: "confirm you are this child's parent or guardian" }).waitFor();
+      await form.getByLabel(/I am this child's parent or legal guardian/).check();
+      await form.getByRole("button", { name: "Save" }).click();
+      await form.getByRole("alert").filter({ hasText: "no email address, phone number or link" }).waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_profiles`)).rows[0].n, 0);
+
+      await form.getByLabel("Child's name").fill("Tama Testchild");
+      await form.getByRole("button", { name: "Save" }).click();
+      await page.getByRole("status").filter({ hasText: "Tama Testchild was added." }).waitFor();
+      const card = page.locator("[data-child]");
+      await card.getByRole("heading", { name: "Tama Testchild" }).waitFor();
+      await card.getByText("Born 2016").waitFor();
+      // Everything optional starts off.
+      for (const item of ["leaderboard", "photos", "vision"]) assert.equal(await card.locator(`[data-consent="${item}"]`).isChecked(), false, item);
+
+      const saved = page.waitForResponse((r) => r.url().endsWith("/consent") && r.request().method() === "PUT");
+      await card.locator('[data-consent="photos"]').check();
+      assert.equal((await saved).status(), 200);
+      await page.reload();
+      await page.waitForSelector(FAMILY);
+      assert.equal(await page.locator('[data-child] [data-consent="photos"]').isChecked(), true);
+      assert.equal(await page.locator('[data-child] [data-consent="vision"]').isChecked(), false);
+
+      await page.locator("[data-child]").getByRole("button", { name: "Edit details" }).click();
+      const edit = page.locator('[data-form="family-edit"]');
+      await edit.getByLabel("Child's name").fill("Tama T Testchild");
+      await edit.getByRole("button", { name: "Save" }).click();
+      await page.locator("[data-child]").getByRole("heading", { name: "Tama T Testchild" }).waitFor();
+
+      // The database: one profile in this club with a name and a year, one guardianship, and no new account.
+      const rows = (await db.query(`SELECT j.name, j.birth_year, j.tenant_id, g.consent_scope FROM junior_profiles j JOIN guardianships g ON g.junior_profile_id = j.id`)).rows;
+      assert.equal(rows.length, 1);
+      assert.deepEqual([rows[0].name, rows[0].birth_year, rows[0].tenant_id], ["Tama T Testchild", 2016, 1]);
+      assert.equal(rows[0].consent_scope.items.photos.granted, true);
+      assert.equal(rows[0].consent_scope.items.leaderboard.granted, false);
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM players`)).rows[0].n, accountsBefore, "a child gets no account");
+
+      // Another signed-in person: an empty family, and this child can't be read or changed by its id.
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      const other = await sessionToken(PEOPLE.player.email);
+      assert.deepEqual((await (await fetch(`${api}/clubs/three-wolves/family`, auth(other))).json()).children, []);
+      const tamper = await fetch(`${api}/clubs/three-wolves/family/${childId}/consent`, { method: "PUT", headers: { ...auth(other).headers, "content-type": "application/json" }, body: JSON.stringify({ vision: true }) });
+      assert.equal(tamper.status, 404);
+      const rename = await fetch(`${api}/clubs/three-wolves/family/${childId}`, { method: "PATCH", headers: { ...auth(other).headers, "content-type": "application/json" }, body: JSON.stringify({ name: "Renamed" }) });
+      assert.equal(rename.status, 404);
+      // Signed out: nothing at all.
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family`)).status, 401);
+      // The guardian's own list is as they left it.
+      const mine = (await (await fetch(`${api}/clubs/three-wolves/family`, auth(token))).json()).children;
+      assert.deepEqual([mine.length, mine[0].name, mine[0].consent], [1, "Tama T Testchild", { leaderboard: false, photos: true, vision: false }]);
+      // The one refusal this journey asked for (the email address as a name) and nothing else: no CORS or CSP trouble.
+      assert.deepEqual(problems, ["Failed to load resource: the server responded with a status of 400 (Bad Request)"]);
+    } finally {
+      await juniorsOff();
       await context.close();
     }
   });

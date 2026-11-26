@@ -4,7 +4,7 @@ Three plans, one per subsystem. Each one gives working, tested software on its o
 
 | # | Plan | Why this order | Ships to users when |
 |---|---|---|---|
-| 1 | [Encryption layers](./2026-11-26-encryption-layers.md) | Social seals report details with it, and both rely on its start-up key check. Also closes gaps that exist today (players' phone numbers in plain text, three copies of the sealing code, the session token in the app's offline cache) | Steps 1–3 and 6–7 as soon as merged. Step 4's switch of reads, and step 5 in production, need the owner's OK |
+| 1 | [Encryption layers](./2026-11-26-encryption-layers.md) | Social seals report details with it, and both rely on its start-up key check. Also closes gaps that exist today (players' phone numbers in plain text, three copies of the sealing code, the session token in the app's offline cache) | Tasks 1–3, 5, 7 and 8 when merged. Task 4's production steps and Task 6's start-up check need the owner's OK first (§9.4 rule 3) |
 | 2 | [Social](./2026-11-26-social.md) | The moderation tools (reports, blocks, review queue) are shared with the Marketplace | Gate Z passes (build plan §8) |
 | 3 | [Marketplace](./2026-11-26-marketplace.md) | Reuses Social's reports, blocks and queue | Gate Z passes |
 

@@ -8,18 +8,21 @@
 
 **Tech Stack:** Node `node:crypto` only (no new dependency), TypeScript, `node:test`, Postgres via the existing migration queue.
 
-**Spec:** `docs/plans/luvallplay-build-plan.md` §12.1 (tokens sealed per club), §6.8 (medical notes sealed), §4.8 step 6b (push addresses sealed), audit `docs/plans/luvallplay-audit-2026-11-25.md` H6 and H9; the index `./2026-11-26-social-marketplace-security-index.md`.
+**Spec:** `docs/plans/luvallplay-build-plan.md` §12.1 (tokens sealed per club), §6.8 (medical notes sealed), §4.8 step 6b (push addresses sealed), audit `docs/plans/luvallplay-audit-2026-11-25.md` H9 (offline cache) and the per-instance rate limits noted under H6; the index `./2026-11-26-social-marketplace-security-index.md`.
 
 ## Global Constraints
 
 - Wire format stays `v1.<kek-id>.<wrapped-dek>.<data>`, base64url parts, 12-byte IV, 16-byte tag. Rows sealed today must open with the new code.
 - Key lists use the format `id:base64key[,id:base64key…]`: 32-byte keys, ids `^[a-z0-9-]{1,32}$`, newest first. A malformed list **throws**; an empty list means "this purpose is unavailable", never "store plain text".
 - One key list per purpose: `INTEGRATIONS_KEKS`, `PUSH_KEKS`, `JUNIORS_KEKS` (existing), `CONTACT_KEKS`, `CONTACT_INDEX_KEYS`, `MODERATION_KEKS` (new). A leak of one purpose's key opens nothing else, with one exception the plan states plainly: phone numbers are a small space (about 10^8 per country), so **anyone holding `CONTACT_INDEX_KEYS` and a copy of the database can recover every phone number offline**. The index key is as secret as the numbers themselves. And while the plain `phone`/`phone_e164` columns exist, sealing adds no confidentiality at all: it prepares their removal. Each region has its own keys (the same number hashes differently in each region).
-- Every "can't open" failure (wrong binding, changed text, wrong key) gives the same message, on purpose.
+- A wrong binding and changed text give the same "can't be opened" message, on purpose. A key id that isn't listed gives "isn't available" (today's behaviour, which existing tests expect).
 - Data keys are zeroed (`fill(0)`) after use.
 - Sealed values, plaintext, and blind indexes are never logged, never copied into the audit log, never returned by an API other than to the person they belong to.
 - Migrations are additive and numbered when they merge (build plan §9.4). Production data steps only with the owner's OK, under the data-change protocol, with a rehearsal note in `docs/rehearsals/`.
-- No new npm dependency.
+- No new npm dependency (`packages/crypto` lists `typescript` and `@types/node` as devDependencies, like the other packages).
+- **Lanes (§9.4).** This plan is lane H's, which also owns `packages/crypto/**` and `apps/web/lib/pii/**`. Edits to other lanes' files go in separate small PRs named in the title: the System check page (Task 6) is `[lane A]`; Task 7's app and native changes are `[lane N]`. `apps/web/lib/app-api.ts` has no listed owner, so tell the coordinating thread about Task 8.
+- **Every migration PR** also: updates `docs/schema/production.sql` (the drift test); adds data-guard expectations `apps/web/scripts/data-guard/expectations/<id>.json` and `<id>.production.json` (see commit `defb2e0` and `packages/db/README.md` steps 3–4); classifies any new table in `packages/db/tenancy.ts` (a `[lane T]` note); and grants new tables to `luvallplay_app` as `0018` does.
+- **Rehearsals** run against a local Postgres 18 copy, as lanes J and N did. Neon is at 10 of 10 branches, and a Neon branch is only used when booked with lane T.
 - No two purposes may share key bytes (an operator pasting one key into two variables). The start-up check refuses it.
 - New purposes start their binding with a constant naming the purpose (`"player.phone"`, `"report"`), so text sealed for one purpose can't be opened as another's even with a shared key.
 
@@ -46,12 +49,12 @@
 **Interfaces:**
 - Produces:
   - `type Kek = { id: string; key: Buffer }`
-  - `parseKeks(raw: string | undefined, name: string): Kek[]`: `name` is the env var's name, used in error messages
+  - `parseKeks(raw: string | undefined, name = "INTEGRATIONS_KEKS"): Kek[]`: `name` is the env var's name, used in error messages; optional, so today's one-argument callers (`care.ts:51,57`, `integrations-framework.test.ts`, the push re-export) keep compiling and keep their messages
   - `class SealError extends Error`
   - `type Binding = readonly (string | number)[]`: must be non-empty; numbers must be positive safe integers; strings non-empty
   - `createSeal(opts: { purpose: string; keks: () => Kek[] }): { seal(binding: Binding, plaintext: string): string; open(binding: Binding, sealed: string): string; available(): boolean }`
   - `sealedWith(sealed: string): string | null`
-- AAD per part is `JSON.stringify(["v1", part, ...prefix, ...binding])` where `part` is `"dek" | "data"`. `prefix` is what keeps today's ciphertext valid: the integrations vault used `[tenantId, connector, connectionId]` and push used `["push", playerId, deviceId]`. So the binding is passed through exactly, and `purpose` is **not** put into the AAD (it names the key list in errors only). Each caller's binding starts with its own constant (`"push"`, a connector name) as today.
+- AAD per part is exactly `JSON.stringify(["v1", part, ...binding])`, with `part` either `"dek"` or `"data"`. Today's integrations vault used the binding `[tenantId, connector, connectionId]` and push used `["push", playerId, deviceId]`, so those bindings reproduce today's AAD byte for byte (`token-vault.ts:51`, `push/seal.ts:36`). `purpose` is **not** in the AAD; it names the key list in error messages. New purposes put a constant naming the purpose first in their binding.
 
 - [ ] **Step 1: Make the compatibility vectors.** A one-off script in your scratch space seals three known plaintexts with **today's** `tokenVault` (binding `{ tenantId: 1, connector: "juniors.medical", connectionId: "child:9" }`) and **today's** `pushSeal` (binding `{ playerId: 3, deviceId: 7 }`), with fixed test keys. Save `{ keks, cases: [{ binding, plaintext, sealed }] }` to the fixture, where each `binding` is the array the new API takes (`[1, "juniors.medical", "child:9"]`, `["push", 3, 7]`).
 
@@ -73,6 +76,7 @@ test("parseKeks trims spaces and ignores empty parts", () => {
 });
 test("parseKeks throws on a short key, a bad id or a repeated id, naming the variable", () => {
   assert.throws(() => parseKeks("k1:short", "PUSH_KEKS"), /PUSH_KEKS.*32 bytes/);
+  assert.throws(() => parseKeks("k1:short"), /INTEGRATIONS_KEKS.*32 bytes/); // today's message, unchanged
 });
 test("no key: available() is false and seal throws; nothing is ever returned unsealed", () => {});
 test("an empty binding or a non-positive number is refused", () => {
@@ -125,22 +129,22 @@ Email stays in plain text in this plan: it's the join key in `attendance`, `play
 **Files:**
 - Create: `packages/db/migrations/00NN_players_contact_sealed.sql` (number at merge): `ALTER TABLE players ADD COLUMN phone_sealed text, ADD COLUMN phone_index text, ADD COLUMN phone_index_kid text;` with a `CHECK` that `phone_sealed` matches the `v1.…` format; `CREATE UNIQUE INDEX players_phone_index_verified ON players (phone_index) WHERE phone_verified_at IS NOT NULL AND deleted_at IS NULL;` (mirrors today's `players_phone_verified_idx`; the table has under 1,000 rows); and a `BEFORE UPDATE` trigger `players_phone_sealed_follows_plain`: when `NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164` and the statement didn't also change `phone_sealed`, set `phone_sealed`, `phone_index`, `phone_index_kid` to NULL. That covers every writer of the plain column, including ones this task doesn't touch. Update `packages/db/schema.ts` and `meta/_journal.json`.
 - Create: `apps/web/lib/pii/contact.ts`
-- Modify: `apps/web/lib/player-db.ts`: the writers at lines 186 (`coalesce(phone_e164, $5)`), 208 (insert), 247–248 (profile update) and 262 (`markPhoneVerified`) also write the sealed columns through `contact.ts`; the lookup at line 126 goes through `findByPhone`; `deletePlayerAccount` (298) also nulls the three new columns explicitly.
+- Modify: `apps/web/lib/player-db.ts`: the writers at lines 186 (`coalesce(phone_e164, $5)`), 208 (insert), 247–248 (profile update) and 262 (`markPhoneVerified`) also write the sealed columns through `contact.ts`; the lookup inside `getPlayerByVerifiedPhone` (lines 123–126) goes through `findVerifiedByPhone`, which keeps the "verified, not deleted" filter; `deletePlayerAccount` (298) also nulls the three new columns explicitly.
 - Modify: `apps/web/lib/player-merge.ts:307,320`: the wipe nulls the sealed columns; the copy-over re-seals for the kept player (the binding includes the player id, so the dupe's sealed text can't be copied).
 - Read only: `apps/web/lib/juniors/roster.ts:66` reads `phone_e164`, which stays until the plain column goes.
-- Create: `scripts/pii/backfill-phone.mjs` (dry run by default, `--apply` to write; batches of 200; idempotent: only rows where `phone_e164 IS NOT NULL AND phone_sealed IS NULL`)
-- Test: `apps/web/tests/pii-contact.test.ts` (database test, pattern of `push-devices.test.ts`)
-- Docs: `docs/rehearsals/2026-11-pii-phone-sealed.md`
+- Create: `apps/web/scripts/pii/backfill-phone.mjs` (uses `apps/web/scripts/db-client.mjs`) (dry run by default, `--apply` to write; batches of 200; idempotent: only rows where `phone_e164 IS NOT NULL AND phone_sealed IS NULL`)
+- Test: `apps/web/tests/pii-contact.test.ts` (database test, pattern of `push-devices.test.ts`). `lib/player-db.ts` uses the module-global `sql`, so this test covers `lib/pii/contact.ts` (which takes a `Db`), the trigger and the unique index directly in SQL. The `player-db.ts` and `player-merge.ts` wiring is covered by the web journeys (sign in by phone, delete account, merge) in `apps/web/tests/e2e/journeys.mjs` from API24, run with `pnpm --filter web e2e`
+- Docs: `docs/rehearsals/2026-11-pii-phone-sealed.md`, `docs/schema/production.sql`, data-guard expectations (Global Constraints)
 
 **Interfaces:**
 - Consumes: `createSeal`, `blindIndex` (Tasks 1, 3); `toE164` from `@luvallplay/core/phone`.
 - Produces (in `lib/pii/contact.ts`):
   - `phoneSealing(env?: Env): { available(): boolean; seal(playerId: number, e164: string): { sealed: string; index: string; indexKid: string }; open(playerId: number, sealed: string): string; indexes(e164: string): string[] }`. While a rotation is under way, `markPhoneVerified` checks "taken" against every `indexes()` value, not just the unique index, binding `["player.phone", playerId]`, keys `CONTACT_KEKS`, index keys `CONTACT_INDEX_KEYS`
-  - `PII_READS` env: `"plain"` (default) or `"sealed"`. With `"sealed"`, `findByPhone` matches on `phone_index = ANY($indexes)`; otherwise on `phone_e164`. Writes always fill both while the plain column exists.
+  - `PII_READS` env: `"plain"` (default) or `"sealed"`. With `"sealed"`, `findVerifiedByPhone` matches on `phone_index = ANY($indexes)`; otherwise on `phone_e164`. Writes always fill both while the plain column exists.
 
-- [ ] **Step 1: Failing tests:** Review Focus 6: after `deletePlayerAccount`, after a merge wipe, and after a raw `UPDATE players SET phone_e164 = NULL` (the trigger), no `phone_sealed`/`phone_index` is left; a merge re-seals for the kept player and the number is found under the kept id; two verified accounts can't share a `phone_index` (`markPhoneVerified` returns taken); writing a phone fills `phone_sealed` (no digits of the number appear in it) and `phone_index`; `findByPhone` finds the player from three spellings of the number under both `PII_READS` values; with `CONTACT_KEKS` unset, writes still store the plain column and leave the sealed ones `NULL` (today's behaviour), and `PII_READS=sealed` is refused at start (Task 6); the backfill run twice changes nothing the second time; a deleted account isn't found.
+- [ ] **Step 1: Failing tests:** Review Focus 6: after `deletePlayerAccount`, after a merge wipe, and after a raw `UPDATE players SET phone_e164 = NULL` (the trigger), no `phone_sealed`/`phone_index` is left; a merge re-seals for the kept player and the number is found under the kept id; two verified accounts can't share a `phone_index` (`markPhoneVerified` returns taken); writing a phone fills `phone_sealed` (no digits of the number appear in it) and `phone_index`; `findVerifiedByPhone` finds the player from three spellings of the number under both `PII_READS` values; with `CONTACT_KEKS` unset, writes still store the plain column and leave the sealed ones `NULL` (today's behaviour); the backfill run twice changes nothing the second time; a deleted account isn't found.
 - [ ] **Step 2: Run** and check it fails. **Step 3: Implement.** **Step 4: Run** `pnpm --filter web test` and `pnpm --filter web db:drift`. Expected: PASS, no drift.
-- [ ] **Step 5: Rehearse** on a Neon branch copy of production: migrate, backfill dry run (count), backfill `--apply`, compare `count(*) WHERE phone_e164 IS NOT NULL` with `count(*) WHERE phone_index IS NOT NULL`. Write the counts to the rehearsal note.
+- [ ] **Step 5: Rehearse** on a local copy of production (or a Neon branch booked with lane T): migrate, backfill dry run (count), backfill `--apply`, compare `count(*) WHERE phone_e164 IS NOT NULL` with `count(*) WHERE phone_index IS NOT NULL`. Write the counts to the rehearsal note.
 - [ ] **Step 6: Commit** `feat(pii): players' phone numbers sealed with a searchable index (reads stay plain until the owner switches)`
 
 Production (migrate, backfill, then `PII_READS=sealed` a week later) is booked in the Phase 3 runbook's calendar and run only with the owner's OK. Dropping `phone`/`phone_e164` isn't in this plan.
@@ -148,16 +152,16 @@ Production (migrate, backfill, then `PII_READS=sealed` a week later) is booked i
 ### Task 5: Key rotation: re-seal what an old key sealed
 
 **Files:**
-- Create: `scripts/crypto/reseal.mjs`
+- Create: `apps/web/scripts/crypto/reseal.mjs`
 - Create: `apps/web/lib/crypto-purposes.ts`
 - Test: `apps/web/tests/crypto-reseal.test.ts` (database test)
 - Docs: a "Rotating a key" section in `packages/crypto/README.md`
 
 **Interfaces:**
-- Produces: `PURPOSES: readonly { purpose: string; env: string; table: string; column: string; binding: (row: Record<string, unknown>) => Binding; module?: string }[]` with one entry per sealed column: the integrations connection tokens (no table yet: add the entry in the PR that creates it), `push_devices.sealed`, `junior_medical_notes.sealed`, `players.phone_sealed`; Social and Marketplace add theirs.
-- CLI: `node scripts/crypto/reseal.mjs --purpose <name> [--apply]` lists the count per KEK id (using `sealedWith`) and, with `--apply`, re-seals rows not on the current key, 100 per transaction, `UPDATE … WHERE id = $1 AND <column> = $old` so a concurrent write wins. For `players.phone_sealed` the same `UPDATE` also recomputes `phone_index`/`phone_index_kid` with the current index key; `--purpose contact-index` re-indexes rows whose `phone_index_kid` isn't the current index key (needed when only `CONTACT_INDEX_KEYS` rotates).
+- Produces: `PURPOSES: readonly { purpose: string; env: string; table: string; column: string; binding: (row: Record<string, unknown>) => Binding; key: (row: Record<string, unknown>) => { where: string; params: unknown[] }; tenant?: (row: Record<string, unknown>) => number; module?: string }[]`. `junior_medical_notes` has no `id`: its key is `(tenant_id, junior_profile_id)`, its binding is `[tenantId, "juniors.medical", "child:" + junior_profile_id]` (`care.ts:64`), and it has forced row-level security. So for any purpose with `tenant`, the script runs `SELECT set_config('app.tenant_id', $1, true)` inside each batch's transaction, one club at a time. with one entry per sealed column: the integrations connection tokens (no table yet: add the entry in the PR that creates it), `push_devices.sealed`, `junior_medical_notes.sealed`, `players.phone_sealed`; Social and Marketplace add theirs.
+- CLI: `node scripts/crypto/reseal.mjs --purpose <name> [--apply]` lists the count per KEK id (using `sealedWith`) and, with `--apply`, re-seals rows not on the current key, 100 per transaction, `UPDATE … WHERE <key> AND <column> = $old` so a concurrent write wins. For `players.phone_sealed` the same `UPDATE` also recomputes `phone_index`/`phone_index_kid` with the current index key; `--purpose contact-index` re-indexes rows whose `phone_index_kid` isn't the current index key (needed when only `CONTACT_INDEX_KEYS` rotates).
 
-- [ ] **Step 1: Failing test:** seal 250 rows with `k1`, set keys to `k2,k1`, run with `--apply` and stop it after the first batch (inject a failure); every row still opens; run again; every row is on `k2`; a third run reports 0 to do. Then rotate `CONTACT_INDEX_KEYS` (`i2,i1`), run `--purpose contact-index --apply`, **drop `i1`**, and `findByPhone` still finds every player (phone sign-in keeps working).
+- [ ] **Step 1: Failing test:** juniors' medical notes in two clubs re-seal (each opens with its own club's binding afterwards); seal 250 rows with `k1`, set keys to `k2,k1`, run with `--apply` and stop it after the first batch (inject a failure); every row still opens; run again; every row is on `k2`; a third run reports 0 to do. Then rotate `CONTACT_INDEX_KEYS` (`i2,i1`), run `--purpose contact-index --apply`, **drop `i1`**, and `findVerifiedByPhone` still finds every player (phone sign-in keeps working).
 - [ ] **Step 2–4:** Run (fail), implement, run (pass).
 - [ ] **Step 5: Commit** `feat(crypto): re-seal script for key rotation, safe to stop and re-run`
 
@@ -165,7 +169,9 @@ Production (migrate, backfill, then `PII_READS=sealed` a week later) is booked i
 
 **Files:**
 - Create: `apps/web/lib/crypto-health.ts`
-- Modify: `apps/web/instrumentation.ts` (call `assertCryptoReady()` in `register()` when `VERCEL_ENV === "production"`), the System check page (`/admin/setup`) gains one row per purpose
+- Modify: `apps/web/instrumentation.ts` (call `assertCryptoReady()` in `register()` when `VERCEL_ENV === "production"`; environment only, no database read)
+- Modify (`[lane A]` PR): the System check page `apps/web/app/admin/(console)/setup/page.tsx` gains one row per purpose
+- Owner's OK before this deploys to production (§9.4 rule 3: it can stop production starting)
 - Test: `apps/web/tests/crypto-health.test.ts`
 
 **Interfaces:**
@@ -174,20 +180,22 @@ Production (migrate, backfill, then `PII_READS=sealed` a week later) is booked i
 - Deploy order: Task 6's production check and the owner setting `RATE_LIMIT_STORE=database` go out together. Until Task 8 merges, the rate-limit condition is behind `CRYPTO_CHECK_RATE_LIMIT=1` so Task 6 can't break production on its own.
 - `assertCryptoReady` throws when any purpose is `malformed`, when two purposes share key bytes, when `PII_READS=sealed` lacks `CONTACT_KEKS` or `CONTACT_INDEX_KEYS`, or (production only) when `RATE_LIMIT_STORE` isn't `database` (Task 8). It does **not** read module switches. Those are scoped to one club by row-level security at start-up, so the answer would be wrong. A purpose that's `missing` shows red on the System check, and the feature answers `503 <purpose>_unavailable` when used, as push does today.
 
-- [ ] **Step 1: Failing tests:** each throw above; a missing key doesn't throw; the System check row shows the state and the key **ids**, never key material.
+- [ ] **Step 1: Failing tests:** each throw above, including `PII_READS=sealed` without `CONTACT_KEKS` (moved here from Task 4); today's production settings (`INTEGRATIONS_KEKS`, `PUSH_KEKS` and `JUNIORS_KEKS` possibly unset) **don't** throw; a missing key doesn't throw; the System check row shows the state and the key **ids**, never key material.
 - [ ] **Step 2–4:** Run, implement, run.
 - [ ] **Step 5: Commit** `feat(crypto): production refuses to start with a malformed or reused key`
 
-### Task 7: What stays on the phone
+### Task 7: What stays on the phone (regression tests, `[lane N]` PR)
+
+Most of this is already done: `apps/app/src/hooks.tsx:20-35` keys queries by `ownerOf(token)` (audit H9), and `AndroidManifest.xml:5` sets `allowBackup="false"`. There's no iOS project yet. This task pins both so they can't regress, and adds the one missing piece.
 
 **Files:**
-- Modify: `apps/app/src/lib/hooks.tsx`, `apps/app/src/screens/me/data.ts` (audit H9: query keys use the session hash from `lib/offline.ts`, never the token)
-- Modify: `apps/native/android/app/src/main/AndroidManifest.xml` only if the test below fails (`android:allowBackup="false"`, `android:dataExtractionRules` excluding the WebView's local storage)
-- Test: `apps/app` unit test `offline-keys.test.ts`; extend `apps/native/tests/shell.test.ts`
+- Test: extend `apps/app/tests/offline.test.ts` (nothing persisted in `lp.cache` contains the token string) and `apps/native/tests/shell.test.ts` (`allowBackup="false"` and a `dataExtractionRules` file excluding app data from cloud backup and device transfer)
+- Create: `apps/native/android/app/src/main/res/xml/data_extraction_rules.xml`; Modify: `AndroidManifest.xml` (`android:dataExtractionRules="@xml/data_extraction_rules"`)
+- Docs: a line in lane N's log: when the iOS project lands, set `com.apple.developer.default-data-protection` to `NSFileProtectionComplete`
 
-- [ ] **Step 1: Failing tests:** after signing in and loading Home, nothing in the persisted `lp.cache` contains the token string; the Android manifest disables backup of app data; the iOS project's entitlements set `NSFileProtectionComplete` for the app's data (add `com.apple.developer.default-data-protection` = `NSFileProtectionComplete` when the iOS project lands, and leave a failing-when-present test now).
-- [ ] **Step 2–4:** Run, implement, run.
-- [ ] **Step 5: Commit** `fix(app): the session token never lands in the offline cache; app data isn't backed up`
+- [ ] **Step 1: Write the tests**; the token test should pass now, and the extraction-rules test fails.
+- [ ] **Step 2: Add** the rules file and manifest attribute. **Step 3: Run** `pnpm --filter app test` and `pnpm --filter native test`. Expected: PASS.
+- [ ] **Step 4: Commit** `test(app): the token stays out of the offline cache; app data is excluded from backups`
 
 ### Task 8: Rate limits and daily caps that hold across instances
 

@@ -124,6 +124,9 @@ export function createApi(transport: Transport) {
       /** GET /clubs/{club}/family (signed in) */
       list: (params: ParamsOf<"family.list">, options?: Options) =>
         transport.call("family.list", { params, signal: options?.signal }) as Promise<ResponseOf<"family.list">>,
+      /** POST /clubs/{club}/family/{id}/bookings/pay (signed in) */
+      pay: (params: ParamsOf<"family.pay">, body: BodyOf<"family.pay">, options?: Options) =>
+        transport.call("family.pay", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.pay">>,
       /** POST /clubs/{club}/family/{id}/delete (signed in) */
       remove: (params: ParamsOf<"family.remove">, body: BodyOf<"family.remove">, options?: Options) =>
         transport.call("family.remove", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.remove">>,

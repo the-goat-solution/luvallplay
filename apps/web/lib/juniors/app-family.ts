@@ -4,7 +4,7 @@
 // Every handler asks `requireJuniors` first. The wrapper already answers 404
 // when the module is off, but its switch reads fail open by design; Juniors
 // fails closed (lib/juniors/module.ts), so the question is asked again here.
-import type { FamilyBookingResponse, FamilyBookingsResponse, FamilyChildResponse, FamilyResponse } from "@luvallplay/api/schemas";
+import type { FamilyBookingResponse, FamilyBookingsResponse, FamilyChildResponse, FamilyPayResponse, FamilyResponse } from "@luvallplay/api/schemas";
 import { AppApiError, fail } from "../app-api";
 import type { ClubConfig } from "../club-config";
 import { clockOf } from "../club-public";
@@ -14,6 +14,8 @@ import { isSessionDatePaused } from "../day-requests";
 import { assertSessionBookable } from "../security";
 import { notifyWaitlistIfSpotOpened } from "../waitlist-notify";
 import { bookChild, cancelChildBooking, listChildBookings, type ChildBooking } from "./bookings";
+import { JUNIOR_PRICE_MINOR, createJuniorPayment } from "./payments";
+import { CLUB_CURRENCY } from "../constants";
 import { getClubToday } from "../dates";
 import type { Player } from "../player-db";
 import {
@@ -21,6 +23,7 @@ import {
   CONSENT_VERSION,
   MAX_CHILDREN_PER_GUARDIAN,
   addChild,
+  isGuardianOf,
   juniorBirthYears,
   listChildren,
   setConsent,
@@ -106,17 +109,18 @@ export async function familyBookings(player: Player, club: ClubConfig): Promise<
   const open = await Promise.all(all.map(async (s) => held.has(s.date) || !((await isSessionDatePaused(s.date)) || (await isRegistrationLocked(s.date)))));
   const sessions = all.filter((_, i) => open[i]);
   const { spots } = await getSpotsAndHeadcountForDates(sessions.map((s) => s.date));
+  const payment = await paymentFor(ctx.tenantId);
   return {
     days: sessions.map((s) => ({ date: s.date, start: s.eventStartTime, end: s.eventEndTime, location: s.eventLocation, spotsLeft: spots[s.date] ?? 0 })),
     bookings,
-    payment: await paymentFor(ctx.tenantId),
+    payment,
+    priceMinor: payment === "card" ? JUNIOR_PRICE_MINOR : null,
+    currency: payment === "card" ? CLUB_CURRENCY : null,
   };
 }
 
-/** Book a place for a child, by the same rules an adult's casual booking follows for the day itself. */
-export async function familyBook(player: Player, club: ClubConfig, childId: number, date: string): Promise<FamilyBookingResponse | AppApiError> {
-  const ctx = await requireJuniors(club);
-  if (ctx instanceof AppApiError) return ctx;
+/** Why a place can't be booked on this day right now, by the rules an adult's casual booking follows; null when it can. */
+async function dayRefusal(date: string): Promise<AppApiError | null> {
   try {
     await assertSessionBookable(date);
   } catch {
@@ -124,7 +128,33 @@ export async function familyBook(player: Player, club: ClubConfig, childId: numb
   }
   if (await isSessionDatePaused(date)) return fail(409, "day_paused");
   if (await isRegistrationLocked(date)) return fail(409, "locked");
-  // A club that charges: nothing is booked without the payment, which isn't offered here yet.
+  return null;
+}
+
+/** A club that charges: a card payment for the guardian's app to confirm. The place is booked when the payment succeeds (lib/juniors/payments.ts). */
+export async function familyPay(player: Player, club: ClubConfig, childId: number, date: string): Promise<FamilyPayResponse | AppApiError> {
+  const ctx = await requireJuniors(club);
+  if (ctx instanceof AppApiError) return ctx;
+  const closed = await dayRefusal(date);
+  if (closed) return closed;
+  if ((await paymentFor(ctx.tenantId)) !== "card") return fail(409, "no_payment_needed");
+  // Checked before any money moves: this guardian's child, not already booked, a place left.
+  if (!(await isGuardianOf(sql, ctx.tenantId, player.id, childId))) return fail(404, "not_found");
+  const today = getClubToday(new Date(), clockOf(club)).dateKey;
+  if ((await listChildBookings(sql, ctx.tenantId, player.id, today)).some((b) => b.childId === childId && b.date === date)) return fail(409, "already_booked");
+  if ((await getAvailableSpots(date)) <= 0) return fail(409, "full");
+  const payment = await createJuniorPayment({ tenantId: ctx.tenantId, guardianId: player.id, guardianEmail: player.email, childId, date });
+  if (!payment.clientSecret) return fail(500, "failed");
+  return { clientSecret: payment.clientSecret, amountMinor: payment.amount, currency: payment.currency };
+}
+
+/** Book a place for a child, by the same rules an adult's casual booking follows for the day itself. */
+export async function familyBook(player: Player, club: ClubConfig, childId: number, date: string): Promise<FamilyBookingResponse | AppApiError> {
+  const ctx = await requireJuniors(club);
+  if (ctx instanceof AppApiError) return ctx;
+  const closed = await dayRefusal(date);
+  if (closed) return closed;
+  // A club that charges: nothing is booked without the payment (family.pay).
   if ((await paymentFor(ctx.tenantId)) !== "none") return fail(409, "payment_needed");
   if ((await getAvailableSpots(date)) <= 0) return fail(409, "full");
   const r = await bookChild(sql, ctx.tenantId, player.id, childId, date);
@@ -137,6 +167,9 @@ export async function familyBook(player: Player, club: ClubConfig, childId: numb
 export async function familyCancelBooking(player: Player, club: ClubConfig, bookingId: number): Promise<FamilyBookingResponse | AppApiError> {
   const ctx = await requireJuniors(club);
   if (ctx instanceof AppApiError) return ctx;
+  // A paid place isn't cancelled here yet: cancelling would free the place and keep the money. The club refunds it.
+  const today = getClubToday(new Date(), clockOf(club)).dateKey;
+  if ((await listChildBookings(sql, ctx.tenantId, player.id, today)).some((b) => b.id === bookingId && (b.amountMinor ?? 0) > 0)) return fail(409, "paid_booking");
   const r = await cancelChildBooking(sql, ctx.tenantId, player.id, bookingId);
   if (r.outcome === "not_found") return fail(404, "not_found");
   if (r.outcome === "cancelled") {

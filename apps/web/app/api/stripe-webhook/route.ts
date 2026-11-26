@@ -22,6 +22,8 @@ import {
 } from "@/lib/email";
 import { MONTHLY_PRICE_CENTS, QUARTERLY_PRICE_CENTS } from "@/lib/constants";
 import { clubMajor } from "@/lib/money";
+import { JUNIOR_PAYMENT, settleJuniorPayment } from "@/lib/juniors/payments";
+import { sql } from "@/lib/database";
 
 const MEMBERSHIP_PRICE_CENTS: Record<"monthly" | "quarterly", number> = {
   monthly: MONTHLY_PRICE_CENTS,
@@ -128,6 +130,20 @@ export async function POST(request: Request) {
             errorDetail,
           }).catch((err) => console.error("Failed to send admin race alert", err));
         }
+      }
+    }
+
+    // A child's place (Juniors, hidden in production): lib/juniors books it or refunds it.
+    if (pi.metadata?.type === JUNIOR_PAYMENT && process.env.POSTGRES_URL) {
+      const settled = await settleJuniorPayment(sql, pi);
+      if (settled.outcome === "refunded" || settled.outcome === "refund_failed") {
+        await sendAdminBookingRaceAlertEmail({
+          sessionDate: settled.sessionDate,
+          customerEmail: settled.guardianEmail || "(unknown)",
+          paymentIntentId: pi.id,
+          refunded: settled.outcome === "refunded",
+          errorDetail: `Junior booking not made (${settled.why}).${settled.error ? ` ${settled.error}` : ""}`,
+        }).catch((err) => console.error("Failed to send admin alert for a junior payment", err));
       }
     }
 

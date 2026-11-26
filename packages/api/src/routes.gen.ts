@@ -40,6 +40,7 @@ export const ROUTES = {
   "family.export": { method: "GET", path: "/clubs/{club}/family/{id}/export", auth: "session" },
   "family.forms": { method: "GET", path: "/clubs/{club}/family/{id}/forms", auth: "session" },
   "family.list": { method: "GET", path: "/clubs/{club}/family", auth: "session" },
+  "family.pay": { method: "POST", path: "/clubs/{club}/family/{id}/bookings/pay", auth: "session" },
   "family.remove": { method: "POST", path: "/clubs/{club}/family/{id}/delete", auth: "session" },
   "family.signForm": { method: "POST", path: "/clubs/{club}/family/{id}/forms/{formId}/sign", auth: "session" },
   "family.update": { method: "PATCH", path: "/clubs/{club}/family/{id}", auth: "session" },

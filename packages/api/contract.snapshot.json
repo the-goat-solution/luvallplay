@@ -3266,6 +3266,11 @@
               }
             }
           },
+          "currency": {
+            "t": "string",
+            "nullable": true,
+            "optional": true
+          },
           "days": {
             "t": "array",
             "of": {
@@ -3298,6 +3303,11 @@
               "none",
               "card"
             ]
+          },
+          "priceMinor": {
+            "t": "number",
+            "nullable": true,
+            "optional": true
           }
         }
       }
@@ -3949,6 +3959,44 @@
                 "t": "number"
               }
             }
+          }
+        }
+      }
+    },
+    "family.pay": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/bookings/pay",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "date": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "amountMinor": {
+            "t": "number"
+          },
+          "clientSecret": {
+            "t": "string"
+          },
+          "currency": {
+            "t": "string"
           }
         }
       }

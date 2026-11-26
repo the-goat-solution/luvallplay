@@ -71,9 +71,15 @@ export const familyBookingsResponse = z.object({
   bookings: z.array(familyBooking),
   /** "none": a place is booked at once. "card": the club charges for a junior's place. */
   payment: z.enum(["none", "card"]),
+  /** What a place costs when `payment` is "card": minor units of `currency`. */
+  priceMinor: z.number().int().nullable().optional(),
+  currency: z.string().nullable().optional(),
 });
 export const familyBookRequest = z.object({ date: dateKeySchema });
 export const familyBookingResponse = z.object({ booking: familyBooking });
+/** A card payment for the app to confirm; the place is booked when the payment succeeds. */
+export const familyPayResponse = z.object({ clientSecret: z.string(), amountMinor: z.number().int(), currency: z.string() });
+export type FamilyPayResponse = z.infer<typeof familyPayResponse>;
 export const familyBookingParams = clubParams.extend({ id: z.coerce.number().int().positive().max(2147483647) });
 // A child's "Safety details": who to call, and the medical note (stored encrypted).
 export const familyContact = z.object({ name: z.string(), phone: z.string(), relationship: z.string().nullable() });

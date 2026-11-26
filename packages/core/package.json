@@ -19,7 +19,9 @@
     "./text-fold": "./src/text-fold.ts",
     "./entitlements": "./src/entitlements.ts",
     "./rank-art": "./src/rank-art.ts",
-    "./exif-gps": "./src/exif-gps.ts"
+    "./exif-gps": "./src/exif-gps.ts",
+    "./rating": "./src/rating/index.ts",
+    "./scoring": "./src/scoring/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

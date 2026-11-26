@@ -262,6 +262,17 @@ The four hard gates and the Vietnam gate in build plan §11.3 are items on the r
 - **Windcave:** the shared payments-provider contract suite (§3.16).
 - **Entitlements and metering:** a club without the add-on can't connect or call the sync (the API refuses), a paid add-on lapsing turns the sync off without deleting mappings, and API calls, egress and connections are metered per club and reconcile with the provider's usage.
 
+### 3.20 White-label admin (Track A)
+- **Demo clubs:** synthetic clubs for each country (NZ, Australia, Vietnam when its pack exists), sport and payment mode (free, cash and bank transfer, online). Every admin page is loaded as each Demo club and must show that club's name, logo, theme, terms, currency, membership days and language, and **none of Three Wolves'**.
+- **Literal scan:** CI fails on the club name, "Wolf", "NZD", weekday literals and fixed prices in admin code (fixtures and tests exempt).
+- **Registry agreement:** the generated menu, the real routes, the route-ownership table and the permission matrix agree (a missing owner, an unreachable item or a path no role can open fails the build).
+- **Module contract:** each module's admin passes the contract checks (manifest complete, settings schema, translations, loading, empty and error states, isolation and permission tests), and the scaffold's output passes them once the placeholders are filled.
+- **On and off (S2):** for every module, switching it off removes its menu items, Today widgets, badges, search entries, settings panels and routes for that club only.
+- **Capabilities:** the permission matrix is generated from module capabilities, and a role without a capability can't open the page, call the action or see the search result.
+- **Presentation:** visual snapshots at 320, 375, 600, 840 and 1200 px for **two different club themes** (including Three Wolves, identical to today), light and dark, and printed report letterhead.
+- **Translations:** English and Vietnamese parity for the admin namespaces, and the ratchet (untranslated strings can only go down).
+- **Setup checklist:** a brand-new club shows only checklist items for its enabled modules and clears them as it completes them.
+
 ## 4. Data change protocol (the heart of this plan)
 
 ### 4.1 Classify every change
@@ -441,6 +452,8 @@ On every pull request, and required before merging to `main`:
 | 3b Junior accounts | J1, the junior permission matrix (§3.17), the data guard per account for guardian export and deletion, store-policy review, a safeguarding review with someone experienced in junior sport |
 | B Business foundations | All four hard gates ticked with evidence (§3.18). Gate checks pass |
 | V Vietnam launch | V1, R1, the Vietnam region isolation, **the Hanoi restore drill and the no-branch rehearsal**, the regional services matrix check, MoMo and Zalo contract tests, payments contract suite for the Vietnamese providers, Vietnamese quality review, **Vietnamese counsel sign-off**, Vietnam trademark filed |
+| H Hardening (lane, 25 Nov audit) | The web journeys (`tests/e2e/journeys.mjs`) run in CI on every pull request, with S2 generated for every module; CI required on `main` (needs the GitHub organisation); the shadow report needs every check clean each day; T1 with two clubs against a copy of production; concurrency tests for the sign-in attempts race and a replayed Stripe event; error reporting live on web and app |
+| A White-label admin | §3.20 complete; the literal scan green; steps A1 to A3 done before any outside club is created; Three Wolves' admin visually identical to today |
 | I Integrations (NZ) | §3.19 complete for each connector shipped, live NZ billing in place, the Xero security self-assessment started, direct-debit scheme checks reviewed, and the accountant's review of the GST and mapping fixtures |
 | 7 Global modules | Opt-in/out tests, **the §8 gate evidence** (thresholds, moderation owner, the country's legal checks), moderation and safeguarding flows (adults only), marketplace X1, abuse reports |
 

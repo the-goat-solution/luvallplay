@@ -45,6 +45,10 @@ export function restoreCache(client: QueryClient, storage: KeyValue, token: stri
       return false;
     }
     hydrate(client, saved.state);
+    // A club's settings (which modules are on) are shown from the saved copy
+    // and checked again on every start, whatever the copy's age: a module the
+    // club switched off must not linger for a minute.
+    void client.invalidateQueries({ queryKey: ["config"], refetchType: "none" });
     return true;
   } catch {
     storage.remove(CACHE_KEY);

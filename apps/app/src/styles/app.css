@@ -277,9 +277,11 @@ fieldset.card > legend + * { clear: both; }
 .shell-head > .mark { color: var(--accent); }
 .club-name {
   flex: 1; min-width: 0;
-  font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; letter-spacing: 0.04em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; letter-spacing: 0.02em; line-height: 1.1;
+  /* A long club name takes a second line rather than being cut short; only a third is clipped. */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
 }
+@media (max-width: 374px) { .club-name { font-size: var(--text-md); letter-spacing: 0; } }
 .shell-head .button-quiet { color: var(--on-primary-strong); min-height: 2.75rem; }
 .shell-head .button-quiet:hover { background: color-mix(in oklab, var(--on-primary-strong) 12%, transparent); }
 /* Settings: a ⚙ in the top bar (not a tab, as on the club website). */
@@ -322,11 +324,13 @@ fieldset.card > legend + * { clear: both; }
   padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 .shell-nav ul { list-style: none; margin: 0; padding: 0; display: flex; }
-.shell-nav li { flex: 1; min-width: 0; }
+.shell-nav li { flex: 1; min-width: 0; display: flex; }
+.shell-nav li > .tab { flex: 1; min-width: 0; }
 .tab {
   position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1875rem;
-  min-height: var(--nav-size); min-width: 2.75rem;
+  /* Five tabs share the bar whatever the text size: a tab is never narrower than a 44px target, never wider than its fifth. */
+  min-height: var(--nav-size); min-width: min(44px, 100%);
   padding: 0.25rem 0.125rem;
   color: var(--ink-muted); text-decoration: none;
   /* Scales with the phone's width so five labels ("Leaderboard" the longest) fit on one line. */
@@ -483,8 +487,9 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
 .disclosure > summary { min-height: 2.75rem; display: flex; align-items: center; font-weight: 600; cursor: pointer; }
 .disclosure[open] > summary { margin-bottom: 0.5rem; }
 .rows { list-style: none; margin: 0; padding: 0; }
-.row { display: flex; align-items: center; gap: 0.75rem; min-height: 3.25rem; padding: 0.625rem 0; border-top: 1px solid var(--line); }
-.row-text { flex: 1; min-width: 0; display: grid; gap: 0.125rem; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; min-height: 3.25rem; padding: 0.625rem 0; border-top: 1px solid var(--line); }
+/* A row's text keeps room for itself; a button beside it goes under it when the row is narrow (large text). */
+.row-text { flex: 1 1 9rem; min-width: 0; display: grid; gap: 0.125rem; }
 .break { overflow-wrap: anywhere; }
 .grow { flex: 1 1 12rem; min-width: 0; }
 .code { display: block; padding: 0.625rem 0.75rem; border-radius: var(--radius-xs); background: var(--surface-sunken); font-family: ui-monospace, Menlo, monospace; font-size: 0.8125rem; overflow-wrap: anywhere; }
@@ -543,8 +548,9 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
 .next-date { font-family: var(--font-display); font-size: var(--title-md); font-weight: 700; line-height: 1.15; letter-spacing: 0.02em; color: var(--heading); }
 .next-when { margin-top: -0.375rem; }
 
-.card-head { display: flex; align-items: flex-start; gap: 0.75rem; }
-.card-head > :first-child { flex: 1; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem 0.75rem; }
+/* The title keeps room for its words; an action beside it drops below when the card is narrow. */
+.card-head > :first-child { flex: 1 1 11rem; min-width: 0; }
 .membership { border-top: 4px solid var(--accent); }
 .membership .title, .join .title { color: var(--heading); }
 .status {
@@ -554,12 +560,14 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
 }
 .status-ending { background: var(--accent-soft); color: var(--ink); }
 .status-past_due { background: var(--danger-soft); color: var(--danger); }
-.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); gap: 0.75rem; margin: 0; }
 .stat {
   display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: 0.25rem;
   padding: 0.875rem 1rem; border-radius: var(--radius-md); background: var(--surface-sunken); min-width: 0;
 }
-.stat dt { color: var(--ink-muted); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.35; }
+.stat dt { color: var(--ink-muted); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.35; }
+/* A tile's label and value wrap between words; a word too long for the tile is hyphenated, not cut ("automatically"). */
+.stat dt, .stat dd { overflow-wrap: break-word; hyphens: auto; }
 .stat dd { margin: 0; }
 .stat-value { font-family: var(--font-display); font-size: clamp(1.75rem, 7cqi, 2.125rem); font-weight: 700; line-height: 1.1; color: var(--heading); font-variant-numeric: tabular-nums; }
 .stat-when { font-weight: 700; line-height: 1.35; color: var(--heading); }
@@ -593,14 +601,13 @@ a.button { display: inline-flex; align-items: center; justify-content: center; g
 .day-text strong { font-size: var(--text-md); }
 .day-detail { font-size: var(--text-sm); color: var(--ink-muted); }
 .day-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.day-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .day-action { flex: none; max-width: 50%; text-align: right; }
 .day-action .button:not(.button-primary) { background: transparent; border-color: transparent; padding-inline: 0.75rem; }
 .day-action .button:not(.button-primary):hover { background: var(--surface-raised); }
 /* Narrow phones: the action goes under the text rather than squeezing it. */
 @container screen (max-width: 22rem) {
   .day { flex-wrap: wrap; }
-  .day-action { flex-basis: 100%; max-width: none; text-align: left; padding-left: 4rem; }
+  .day-action { flex-basis: 100%; max-width: none; text-align: left; padding-left: min(4rem, 20%); }
 }
 
 .threads { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
@@ -718,7 +725,7 @@ progress { width: 100%; height: 0.5rem; accent-color: var(--primary); }
 .board-rank { flex: none; width: 2rem; text-align: center; font-family: var(--font-display); font-size: 1.125rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--heading); }
 .board-top1, .board-top2, .board-top3 { color: var(--accent); }
 .board-value { flex: none; margin-left: auto; font-family: var(--font-display); font-size: 1.125rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--heading); }
-.board-seat { margin-left: 0.25rem; display: inline-flex; align-items: center; gap: 0.25rem; }
+.board-seat { margin-left: 0.25rem; display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
 .board-face { position: relative; flex: none; display: inline-flex; }
 .board-face { margin-right: 0.25rem; }
 .board-face-rank { position: absolute; right: -0.75rem; bottom: -0.5rem; border-radius: 50%; background: var(--surface-raised); box-shadow: 0 0 0 2px var(--surface-raised); }
@@ -728,10 +735,8 @@ progress { width: 100%; height: 0.5rem; accent-color: var(--primary); }
 .form-w { background: var(--primary); color: var(--on-primary); }
 
 /* ── Player ────────────────────────────────────────────────────────────── */
-.stats-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@container screen (min-width: 36rem) {
-  .player .stats-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
+/* As many tiles across as fit with their labels whole: two on a phone, four on a wide screen. */
+.stats-4 { grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); }
 .stat-feature { background: var(--primary-strong); }
 .stat-feature dt, .stat-feature dd, .stat-feature .stat-value { color: var(--on-primary-strong); }
 .stat-feature dt { color: var(--on-primary-strong-muted); }
@@ -770,7 +775,7 @@ progress { width: 100%; height: 0.5rem; accent-color: var(--primary); }
 .ladder-here { background: color-mix(in srgb, var(--primary) 10%, transparent); border-radius: 0.5rem; padding-inline: 0.5rem; }
 .table-wrap { overflow-x: auto; }
 .places { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.places th, .places td { padding: 0.5rem 0.375rem; text-align: center; border-bottom: 1px solid var(--line); }
+.places th, .places td { padding: 0.5rem 0.375rem; text-align: center; border-bottom: 1px solid var(--line); overflow-wrap: normal; }
 .places th[scope="row"] { text-align: left; }
 .places thead th { font-size: 0.8125rem; color: var(--ink-muted); font-weight: 600; }
 .podium { color: var(--accent); font-weight: 700; }
@@ -897,7 +902,9 @@ progress { width: 100%; height: 0.5rem; accent-color: var(--primary); }
   background: var(--primary); color: var(--on-primary); font-weight: 700; text-decoration: none;
 }
 .match-pill-vs { display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-family: var(--font-display); font-size: 0.875rem; }
-.free-tag { margin-left: 0.375rem; font-style: normal; }
+.free-tag { margin-left: 0.375rem; font-style: normal; white-space: nowrap; }
+/* A button with a tag in it (Set up … FREE NOW): the tag goes under the words when they don't fit side by side. */
+.button:has(> .free-tag) { flex-wrap: wrap; }
 
 /* ── Several clubs (hooks.tsx): Home's tags and filter, the club picker ── */
 /* A club's mark: its crest on a light disc, or its initials on its colour
@@ -1010,7 +1017,9 @@ progress { width: 100%; height: 0.5rem; accent-color: var(--primary); }
 
 /* ── My profile ──────────────────────────────────────────────────────── */
 
-.profile-head { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+.profile-head { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; min-width: 0; }
+/* The name keeps room for itself; with very large text it goes under the picture. */
+.profile-who { flex: 1 1 10rem; }
 .avatar-large { width: 5rem; height: 5rem; font-size: 1.75rem; box-shadow: var(--shadow-2); }
 .profile-who { min-width: 0; display: grid; gap: 0.25rem; }
 .profile-who h1 { font-size: var(--title-lg); }

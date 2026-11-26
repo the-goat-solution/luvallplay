@@ -1825,6 +1825,7 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
   const juniorsOff = async () => {
     await db.query(`UPDATE sessions s SET booked_spots = GREATEST(0, s.booked_spots - (SELECT count(*) FROM junior_bookings b WHERE b.session_date = s.date AND b.status IN ('pending', 'confirmed')))`);
     await db.query(`DELETE FROM junior_bookings`);
+    await db.query(`TRUNCATE junior_safety_checks`);
     await db.query(`DELETE FROM form_signatures`);
     await db.query(`DELETE FROM club_forms`);
     await db.query(`DELETE FROM junior_medical_notes`);
@@ -2199,6 +2200,65 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
       await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
       await juniorsOff();
       await context.close();
+    }
+  });
+
+  test("APP58 · the club's side: Admin → Juniors isn't there while Juniors is off; on, an owner records a safety check, sees it as valid, and withdraws it", async () => {
+    await juniorsOff();
+    const owner = await signedIn(PEOPLE.owner.email);
+    const page = await owner.context.newPage();
+    const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      // Off: no menu entry, and the page isn't served.
+      assert.equal(await page.getByRole("link", { name: "Juniors", exact: true }).count(), 0);
+      assert.equal((await page.goto(`${env.base}/admin/juniors`)).status(), 404);
+
+      await juniorsOn();
+      await page.goto(`${env.base}/admin`);
+      // On: the menu has it (the menu can sit behind its drawer at this window size, so the page is opened by its address).
+      assert.equal(await page.getByRole("link", { name: "Juniors", exact: true }).first().getAttribute("href"), "/admin/juniors");
+      assert.equal((await page.goto(`${env.base}/admin/juniors`)).status(), 200);
+      await page.getByRole("heading", { name: "Safety checks" }).waitFor();
+      await page.getByText(/no current safety check\./).waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks`)).rows[0].n, 0);
+
+      // Dates the wrong way round are refused and nothing is written.
+      const ownerId = (await db.query(`SELECT id FROM players WHERE lower(email) = lower($1)`, [PEOPLE.owner.email])).rows[0].id;
+      const form = page.locator("#record form");
+      const fill = async (doneOn, expiresOn) => {
+        await form.getByLabel("Person").selectOption(String(ownerId));
+        await form.getByLabel("Kind of check").selectOption("police-vet");
+        await form.getByLabel("Done on").evaluate((el, v) => { el.removeAttribute("max"); el.value = v; }, doneOn);
+        await form.getByLabel("Expires on").evaluate((el, v) => { el.removeAttribute("min"); el.value = v; }, expiresOn);
+        await form.getByLabel(/Your reference/).fill("Folder B");
+        await form.getByRole("button", { name: "Record the check" }).click();
+      };
+      await fill(day(-1), day(365 * 4));
+      await page.getByText("Check the dates").first().waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks`)).rows[0].n, 0);
+
+      await fill(day(-1), day(365));
+      await page.getByText("Safety check recorded.").first().waitFor();
+      const row = (await db.query(`SELECT user_id, kind, reference, recorded_by_user_id, revoked_at FROM junior_safety_checks`)).rows;
+      assert.deepEqual(row, [{ user_id: ownerId, kind: "police-vet", reference: "Folder B", recorded_by_user_id: ownerId, revoked_at: null }]);
+      const mine = page.locator("#safety-checks tr, #safety-checks [role=row]").filter({ hasText: "Police vet" });
+      await mine.getByText("valid", { exact: true }).waitFor();
+      // The audit log says who and what kind, never the club's reference.
+      const logged = (await db.query(`SELECT action, meta::text AS meta FROM admin_audit_log WHERE action LIKE 'juniors.safety_check.%' ORDER BY id`)).rows;
+      assert.ok(logged.some((l) => l.action === "juniors.safety_check.record"), JSON.stringify(logged));
+      assert.ok(!logged.some((l) => l.meta.includes("Folder B")), "the reference isn't logged");
+
+      page.once("dialog", (d) => d.accept());
+      await mine.getByRole("button", { name: "Withdraw" }).click();
+      await page.getByText("Safety check withdrawn.").first().waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks WHERE revoked_at IS NOT NULL`)).rows[0].n, 1);
+      await page.locator("#safety-checks").getByText("withdrawn", { exact: true }).waitFor();
+    } finally {
+      await juniorsOff();
+      await owner.context.close();
     }
   });
 });

@@ -61,8 +61,14 @@ export async function familyList(player: Player, club: ClubConfig): Promise<Fami
   const ctx = await requireJuniors(club);
   if (ctx instanceof AppApiError) return ctx;
   const years = juniorBirthYears(ctx.year);
+  const children = await listChildren(sql, ctx.tenantId, player.id);
+  // Which of them have a deletion request waiting for the club.
+  const waiting = children.length
+    ? (await sql.query(`SELECT junior_profile_id, requested_at FROM junior_deletion_requests WHERE tenant_id = $1 AND status = 'pending' AND junior_profile_id = ANY($2::int[])`, [ctx.tenantId, children.map((c) => c.id)])).rows
+    : [];
+  const requestedAt = new Map(waiting.map((r) => [Number(r.junior_profile_id), new Date(r.requested_at as string).toISOString()]));
   return {
-    children: await listChildren(sql, ctx.tenantId, player.id),
+    children: children.map((c) => ({ ...c, deletionRequestedAt: requestedAt.get(c.id) ?? null })),
     limits: { maxChildren: MAX_CHILDREN_PER_GUARDIAN, birthYearMin: years.min, birthYearMax: years.max, nameMax: CHILD_NAME_MAX },
     consentVersion: CONSENT_VERSION,
   };

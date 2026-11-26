@@ -8,7 +8,10 @@ import { audit, currentAdmin, db, requireAdminActor } from "@/lib/admin-access";
 import { requireFreshAdminActor } from "@/lib/admin-step-up";
 import { clubClock } from "@/lib/club";
 import { getClubToday } from "@/lib/dates";
+import { sql } from "@/lib/database";
+import { confirmChildDeletion, listDeletionRequests, type PendingDeletion } from "@/lib/juniors/data-rights";
 import { juniorsClubId } from "@/lib/juniors/module";
+import { notifyGuardianOfDeletion } from "@/lib/juniors/notify";
 import { juniorRoster, markJuniorAttendance, rosterDays, type RosterChild } from "@/lib/juniors/roster";
 import { SAFETY_CHECK_KINDS, SAFETY_CHECK_MAX_YEARS, listStaffSafety, recordSafetyCheck, revokeSafetyCheck, type SafetyStatus } from "@/lib/juniors/safety";
 
@@ -104,6 +107,25 @@ async function mark(formData: FormData) {
   redirect(`${to}&toast=${encodeURIComponent(attended ? "Marked as here." : "Mark removed.")}`);
 }
 
+async function confirmDeletion(formData: FormData) {
+  "use server";
+  const tenantId = await juniorsClubId(db);
+  if (tenantId === null) notFound();
+  // Deleting a child's information for good: a code from the last few minutes.
+  const { ctx } = await requireFreshAdminActor(PATH, "juniors.deletion.confirm");
+  const requestId = Number(formData.get("id"));
+  const result = await confirmChildDeletion(sql, tenantId, { playerId: ctx.player.id, access: ctx.access }, requestId, await clubToday());
+  if (!result.ok) {
+    await audit(ctx, { action: "juniors.deletion.confirm.refused", target: `request:${requestId || ""}`, meta: { reason: result.code } });
+    const why = result.code === "has_bookings" ? "This child still holds a place on a coming play day. Cancel it (and refund it if it was paid) first." : result.code === "forbidden" ? "Only an owner or admin of the club can confirm a deletion." : "That request isn't waiting any more.";
+    back("toastError", why);
+  }
+  // The request's own id and nothing about the child: after this there is no child to name.
+  await audit(ctx, { action: "juniors.deletion.confirm", target: `request:${requestId}`, meta: { id: requestId } });
+  await notifyGuardianOfDeletion(result.value.requestedByUserId).catch((err) => console.error("[juniors] telling the guardian about the deletion failed:", err));
+  back("toast", "The child's information has been deleted. The guardian has been emailed.");
+}
+
 type Row = { userId: number; name: string; role: string; status: SafetyStatus; kind: string; expiresOn: string | null; checkId: number | null; live: boolean };
 
 export default async function JuniorsAdminPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
@@ -130,6 +152,9 @@ export default async function JuniorsAdminPage({ searchParams }: { searchParams:
   }));
   const missing = rows.filter((r) => !r.live).length;
 
+  // Requests from guardians to delete a child's information: for owners and admins to confirm.
+  const requests = ctx?.kind === "player" ? await listDeletionRequests(db, tenantId, ctx.access) : null;
+
   // The roster: only with a role and a safety check that is valid today.
   const actor = ctx?.kind === "player" ? { playerId: ctx.player.id, access: ctx.access } : null;
   const days = actor ? await rosterDays(db, tenantId, actor, today) : null;
@@ -140,6 +165,37 @@ export default async function JuniorsAdminPage({ searchParams }: { searchParams:
   return (
     <div className={adminStyles.page}>
       <PageHeader title="Juniors" subtitle="Children under 16 never sign in. A guardian manages each child; the club sees a child only through people with a current safety check." />
+
+      {requests?.ok && requests.value.length > 0 && (
+        <Section title="Deletion requests" id="deletion-requests">
+          <Notice>
+            A guardian has asked the club to delete everything it holds about their child. Confirming deletes it for good: the profile, medical note, emergency contacts, signed forms, bookings and attendance.
+            It can&apos;t be undone.
+          </Notice>
+          <DataTable<PendingDeletion>
+            caption="Deletion requests"
+            rows={requests.value}
+            rowKey={(r) => r.id}
+            columns={[
+              { key: "child", label: "Child", render: (r) => r.childName },
+              { key: "guardian", label: "Asked by", render: (r) => r.guardianName },
+              { key: "when", label: "Asked on", render: (r) => r.requestedAt.slice(0, 10) },
+              {
+                key: "action",
+                label: "Action",
+                render: (r) => (
+                  <form action={confirmDeletion}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <SubmitButton loadingText="Deleting…" className={kit.btn} confirmMessage={`Delete everything the club holds about ${r.childName}, for good?`}>
+                      Confirm and delete
+                    </SubmitButton>
+                  </form>
+                ),
+              },
+            ]}
+          />
+        </Section>
+      )}
 
       <Section title="Roster" id="roster">
         {!days?.ok ? (

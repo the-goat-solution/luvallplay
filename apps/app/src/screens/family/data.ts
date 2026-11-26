@@ -161,19 +161,13 @@ export function useExportChild(childId: number) {
   return useMutation({ mutationFn: () => api.family.export({ club: slug, id: childId }) });
 }
 
-export function useDeleteChild(childId: number) {
+/** Ask the club to delete the child's information (nothing is removed until the club confirms), or withdraw the request. */
+export function useRequestDelete(childId: number) {
   const { who, slug, api } = useClubApi();
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.family.remove({ club: slug, id: childId }, { confirm: true }),
-    onSuccess: () => {
-      // The child leaves the list at once, so their card closes before anything about them could be asked for again.
-      queryClient.setQueryData<Family>(["family", slug, who], (f) => (f ? { ...f, children: f.children.filter((c) => c.id !== childId) } : f));
-      void queryClient.invalidateQueries({ queryKey: ["family-bookings"] });
-      // Then nothing about them stays in memory.
-      window.setTimeout(() => {
-        for (const key of ["family-care", "family-forms"]) queryClient.removeQueries({ queryKey: [key, slug, who, childId] });
-      }, 1000);
-    },
-  });
+  const set = (requestedAt: string | null) =>
+    queryClient.setQueryData<Family>(["family", slug, who], (f) => (f ? { ...f, children: f.children.map((c) => (c.id === childId ? { ...c, deletionRequestedAt: requestedAt } : c)) } : f));
+  const ask = useMutation({ mutationFn: () => api.family.requestDelete({ club: slug, id: childId }, { confirm: true }), onSuccess: (r) => set(r.requestedAt) });
+  const withdraw = useMutation({ mutationFn: () => api.family.cancelDelete({ club: slug, id: childId }, {}), onSuccess: () => set(null) });
+  return { ask, withdraw };
 }

@@ -3,7 +3,7 @@ import { sql } from "./database";
 import { getClubToday } from "./dates";
 import type { Lang } from "./i18n";
 import { toE164 } from "./phone";
-import { defaultTenantSlug, mirrorClubMember } from "./tenant-members";
+import { defaultTenantSlug, joinClub, mirrorClubMember } from "./tenant-members";
 
 // Player accounts. Everything a player has done is already stored under
 // their email (memberships, bookings, jersey registrations, court board
@@ -212,8 +212,8 @@ export async function ensurePlayerForEmail(
     [email, firstName, lastName, phone, toE164(phone), options.details?.stripeCustomerId ?? null, options.via],
   );
   const id = rows[0]?.id as number | undefined;
-  // Phase 3: a new account is a member of the club (club_members mirror).
-  if (id) await mirrorClubMember(sql, id);
+  // A new account made on the club's site is a member of that club.
+  if (id) await joinClub(sql, id);
   const player = id ? await getPlayerById(id) : await getPlayerByEmail(email);
   if (!player) throw new Error("Could not create player account");
   return { player, created: Boolean(id) };

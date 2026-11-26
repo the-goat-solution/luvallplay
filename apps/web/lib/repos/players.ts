@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { orm, schema } from "../database.ts";
 import { DISPLAY_NAME_SQL } from "../stats-periods.ts";
+import { defaultTenantSlug } from "../tenant-members.ts";
 
 const { players } = schema;
 
@@ -38,7 +39,7 @@ export async function hideFromLeaderboardByToken(token: string): Promise<void> {
 
 export type PickerPlayer = { id: number; name: string; avatarUrl: string | null };
 
-/** Registered players with a name, for pickers (Wolf Vision set-up). No emails. */
+/** The club's registered players with a name, for pickers (Wolf Vision set-up). No emails. */
 export async function listPlayersForPicker(limit = 2000): Promise<PickerPlayer[]> {
   // The display-name rule is shared SQL (lib/stats-periods.ts) and refers to
   // the table as "p".
@@ -46,7 +47,14 @@ export async function listPlayersForPicker(limit = 2000): Promise<PickerPlayer[]
   const p = orm()
     .select({ id: sql<number>`p.id`, name, avatarUrl: sql<string | null>`p.avatar_url` })
     .from(sql`${players} p`)
-    .where(and(isNull(sql`p.deleted_at`), sql`(trim(p.first_name) <> '' OR trim(coalesce(p.display_name, '')) <> '')`))
+    .where(
+      and(
+        isNull(sql`p.deleted_at`),
+        sql`(trim(p.first_name) <> '' OR trim(coalesce(p.display_name, '')) <> '')`,
+        // Accounts are global; a club picks from its own people (audit C1).
+        sql`EXISTS (SELECT 1 FROM club_members cm JOIN tenants t ON t.id = cm.tenant_id WHERE cm.user_id = p.id AND t.slug = ${defaultTenantSlug()})`,
+      ),
+    )
     .orderBy(sql`lower(${name})`)
     .limit(limit);
   const rows = await p;

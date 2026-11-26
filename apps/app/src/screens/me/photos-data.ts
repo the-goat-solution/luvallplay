@@ -4,21 +4,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResponseOf } from "@luvallplay/api/contract";
 import { API_PREFIX } from "@luvallplay/api/routes";
 import { apiForClub, clubHost, store } from "../../app.ts";
-import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { useCurrentClub, useWho } from "../../hooks.tsx";
 
 export type MyPhotos = ResponseOf<"photos.list">;
 export type PhotoStatus = MyPhotos["photos"][number]["status"];
 
 function useClub() {
-  const { token } = usePrefs();
+  const who = useWho();
   const { current, slug, config } = useCurrentClub();
   const on = !!config && config.modules.includes("gallery");
-  return { token, slug: slug as string, current, ready: !!token && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
+  return { who, slug: slug as string, current, ready: !!who && !!slug && !!current && on, api: apiForClub(current?.apiBase) };
 }
 
 export function usePhotos() {
-  const { token, slug, ready, api } = useClub();
-  return useQuery({ queryKey: ["photos", slug, token], queryFn: ({ signal }) => api.photos.list({ club: slug }, { signal }), enabled: ready, staleTime: 30_000 });
+  const { who, slug, ready, api } = useClub();
+  return useQuery({ queryKey: ["photos", slug, who], queryFn: ({ signal }) => api.photos.list({ club: slug }, { signal }), enabled: ready, staleTime: 30_000 });
 }
 
 export function useDeletePhoto() {

@@ -29,6 +29,16 @@ export function tabForPath(pathname: string): Tab | null {
   return TABS.find((t) => pathname === t.path || pathname.startsWith(`${t.path}/`)) ?? null;
 }
 
+/** The name of the screen at a path, for the page's title (the tab's own name, else the screen's). */
+export function titleKeyForPath(pathname: string): AppKey | null {
+  const tab = tabForPath(pathname);
+  if (tab) return tab.label;
+  if (/^\/(profile|settings)(\/|$)/.test(pathname)) return "nav_profile";
+  if (/^\/inbox(\/|$)/.test(pathname)) return "msg_title";
+  if (pathname === "/membership") return "mem_title";
+  return null;
+}
+
 // ── Several clubs (hooks.tsx explains the idea) ──────────────────────────
 
 /** Home: the person's own pages, for all their clubs at once. Everything else belongs to one club. */

@@ -43,8 +43,10 @@ function csp(env: Record<string, string>): Plugin {
         `script-src 'self' 'wasm-unsafe-eval' ${STRIPE.script}`,
         "style-src 'self'",
         `img-src 'self' data: blob: https: ${hosts}`,
-        // The app's own fonts, and a club's fonts from its website (the API hosts).
-        `font-src 'self' ${hosts}`,
+        // The app's own fonts, and a club's fonts from wherever its website
+        // keeps them (its own domain, which isn't known when the app is
+        // built). Like an image, a font can't read the page or send anything.
+        `font-src 'self' https: ${hosts}`,
         // Videos chosen on the device (the tracker and the labelling tool play them from a blob: address).
         "media-src 'self' blob:",
         // The tracker's detection models (Google's MediaPipe model storage).
@@ -86,6 +88,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   return {
     plugins: [react(), csp(env), serviceWorker()],
+    // This build's id (lib/build.ts): what the app saved under another build isn't read back.
+    define: { __APP_BUILD__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 12) || `t${Date.now().toString(36)}`) },
     build: { target: "es2022", sourcemap: false },
     server: { port: 5173, strictPort: true, proxy: { "/api": "http://localhost:3000" } },
     preview: { port: 4173, strictPort: true },

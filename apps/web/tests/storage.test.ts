@@ -1,44 +1,13 @@
 // One storage interface, several providers (Phase 3 step 6; test plan §3.16
 // "Storage and cron adapters pass the same contract tests").
 
-import { test, describe } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { memoryStorage, publicStorage, setPublicStorage, vercelBlobStorage, type ObjectStorage } from "../lib/storage.ts";
+import { memoryStorage, publicStorage, setPublicStorage, vercelBlobStorage } from "../lib/storage.ts";
+import { storageContract } from "./storage-contract.ts";
 import { deletePublicBlobs, uploadPublicImage } from "../lib/public-blob.ts";
-
-/**
- * What every provider must do. A new provider (the S3-compatible one for
- * Hanoi) runs this with a real bucket in its own test.
- */
-export function storageContract(name: string, make: () => ObjectStorage, foreignUrl = "https://someone-else.example/a.jpg") {
-  describe(`storage contract: ${name}`, () => {
-    test("stores a file and returns where to read it", async () => {
-      const s = make();
-      assert.equal(s.configured(), true);
-      const a = await s.put("avatars/7/avatar.jpg", Buffer.from("one"), { contentType: "image/jpeg" });
-      assert.match(a.url, /^https:\/\//);
-      assert.ok(a.pathname.startsWith("avatars/7/avatar"));
-      assert.ok(a.pathname.endsWith(".jpg"), "the extension survives the unique suffix");
-      assert.equal(s.owns(a.url), true);
-    });
-    test("two uploads of the same name never collide", async () => {
-      const s = make();
-      const a = await s.put("shop/photo.jpg", Buffer.from("one"), { contentType: "image/jpeg" });
-      const b = await s.put("shop/photo.jpg", Buffer.from("two"), { contentType: "image/jpeg" });
-      assert.notEqual(a.url, b.url);
-    });
-    test("deletes only what it issued", async () => {
-      const s = make();
-      const a = await s.put("shop/photo.jpg", Buffer.from("one"), { contentType: "image/jpeg" });
-      assert.equal(s.owns(foreignUrl), false);
-      await s.delete([foreignUrl, a.url]);
-      await s.delete([a.url]); // deleting twice is fine
-      await s.delete([]);
-    });
-  });
-}
 
 storageContract("memory", () => memoryStorage());
 
@@ -78,7 +47,11 @@ test("the provider is chosen by STORAGE_DRIVER, and an unknown one stops", () =>
     setPublicStorage(null);
     set("VERCEL_ENV", "production");
     assert.throws(() => publicStorage(), /STORAGE_DRIVER/);
+    setPublicStorage(null);
     set("STORAGE_DRIVER", "s3");
+    assert.equal(publicStorage().name, "s3", "the S3-compatible provider, in production too");
+    setPublicStorage(null);
+    set("STORAGE_DRIVER", "gcs");
     assert.throws(() => publicStorage(), /STORAGE_DRIVER/);
   } finally {
     set("STORAGE_DRIVER", was.driver);

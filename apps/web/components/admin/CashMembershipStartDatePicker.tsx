@@ -74,8 +74,8 @@ export function CashMembershipStartDatePicker({ day }: { day: MembershipDay }) {
   const spotsLoading =
     sessionDates !== null && Object.keys(sessionDates).length > 0 && !spotsReady;
 
-  // A date picked while on "friday" is never valid once switched to
-  // "wednesday" (or vice versa) — drop it so a stale selection can't be
+  // A date picked for one weekday is never valid once switched to
+  // another — drop it so a stale selection can't be
   // silently submitted.
   const [prevDay, setPrevDay] = useState(day);
   if (day !== prevDay) {

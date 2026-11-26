@@ -41,6 +41,8 @@ export const CLUB_OWNED_TABLES = [
   "jersey_registrations",
   "junior_attendance",
   "junior_bookings",
+  "junior_emergency_contacts",
+  "junior_medical_notes",
   "junior_profiles",
   "membership_reminders_sent",
   "memberships",

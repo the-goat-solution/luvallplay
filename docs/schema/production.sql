@@ -804,6 +804,58 @@ CREATE INDEX junior_bookings_junior_profile_id_idx ON public.junior_bookings USI
 CREATE UNIQUE INDEX junior_bookings_one_live ON public.junior_bookings USING btree (tenant_id, junior_profile_id, session_date) WHERE (status = ANY (ARRAY['pending'::text, 'confirmed'::text]));
 CREATE INDEX junior_bookings_session_idx ON public.junior_bookings USING btree (tenant_id, session_date);
 
+CREATE TABLE junior_emergency_contacts (
+  id integer DEFAULT nextval('junior_emergency_contacts_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  junior_profile_id integer NOT NULL,
+  position smallint DEFAULT 1 NOT NULL,
+  name text NOT NULL,
+  phone text NOT NULL,
+  relationship text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_by_user_id integer NOT NULL,
+  CONSTRAINT junior_emergency_contacts_position_check CHECK ((("position" >= 1) AND ("position" <= 3))),
+  CONSTRAINT junior_emergency_contacts_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT junior_emergency_contacts_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_emergency_contacts_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_emergency_contacts_updated_by_user_id_fkey FOREIGN KEY (updated_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_emergency_contacts_created_at_not_null NOT NULL created_at,
+  CONSTRAINT junior_emergency_contacts_id_not_null NOT NULL id,
+  CONSTRAINT junior_emergency_contacts_junior_profile_id_not_null NOT NULL junior_profile_id,
+  CONSTRAINT junior_emergency_contacts_name_not_null NOT NULL name,
+  CONSTRAINT junior_emergency_contacts_phone_not_null NOT NULL phone,
+  CONSTRAINT junior_emergency_contacts_position_not_null NOT NULL "position",
+  CONSTRAINT junior_emergency_contacts_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_emergency_contacts_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT junior_emergency_contacts_updated_by_user_id_not_null NOT NULL updated_by_user_id,
+  CONSTRAINT junior_emergency_contacts_pkey PRIMARY KEY (id),
+  CONSTRAINT junior_emergency_contacts_one_per_position UNIQUE (tenant_id, junior_profile_id, "position")
+);
+CREATE INDEX junior_emergency_contacts_junior_profile_id_idx ON public.junior_emergency_contacts USING btree (junior_profile_id);
+CREATE INDEX junior_emergency_contacts_updated_by_user_id_idx ON public.junior_emergency_contacts USING btree (updated_by_user_id);
+
+CREATE TABLE junior_medical_notes (
+  tenant_id integer NOT NULL,
+  junior_profile_id integer NOT NULL,
+  sealed text NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_by_user_id integer NOT NULL,
+  CONSTRAINT junior_medical_notes_sealed_check CHECK ((sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'::text)),
+  CONSTRAINT junior_medical_notes_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT junior_medical_notes_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_medical_notes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_medical_notes_updated_by_user_id_fkey FOREIGN KEY (updated_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_medical_notes_junior_profile_id_not_null NOT NULL junior_profile_id,
+  CONSTRAINT junior_medical_notes_sealed_not_null NOT NULL sealed,
+  CONSTRAINT junior_medical_notes_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_medical_notes_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT junior_medical_notes_updated_by_user_id_not_null NOT NULL updated_by_user_id,
+  CONSTRAINT junior_medical_notes_pkey PRIMARY KEY (tenant_id, junior_profile_id)
+);
+CREATE INDEX junior_medical_notes_junior_profile_id_idx ON public.junior_medical_notes USING btree (junior_profile_id);
+CREATE INDEX junior_medical_notes_updated_by_user_id_idx ON public.junior_medical_notes USING btree (updated_by_user_id);
+
 CREATE TABLE junior_profiles (
   id integer DEFAULT nextval('junior_profiles_id_seq'::regclass) NOT NULL,
   tenant_id integer NOT NULL,
@@ -1923,6 +1975,7 @@ CREATE SEQUENCE donations_id_seq AS integer OWNED BY donations.id;
 CREATE SEQUENCE finance_entries_id_seq AS integer OWNED BY finance_entries.id;
 CREATE SEQUENCE jersey_registrations_id_seq AS integer OWNED BY jersey_registrations.id;
 CREATE SEQUENCE junior_bookings_id_seq AS integer OWNED BY junior_bookings.id;
+CREATE SEQUENCE junior_emergency_contacts_id_seq AS integer OWNED BY junior_emergency_contacts.id;
 CREATE SEQUENCE junior_profiles_id_seq AS integer OWNED BY junior_profiles.id;
 CREATE SEQUENCE memberships_id_seq AS integer OWNED BY memberships.id;
 CREATE SEQUENCE message_threads_id_seq AS integer OWNED BY message_threads.id;
@@ -2055,6 +2108,8 @@ ALTER TABLE guardianships ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE jersey_registrations ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_attendance ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_bookings ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE junior_emergency_contacts ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE junior_medical_notes ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_profiles ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE membership_reminders_sent ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE memberships ENABLE AND FORCE ROW LEVEL SECURITY;
@@ -2117,6 +2172,8 @@ POLICY tenant_isolation ON guardianships (PERMISSIVE) FOR ALL TO {public} USING 
 POLICY tenant_isolation ON jersey_registrations (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_attendance (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_bookings (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON junior_emergency_contacts (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON junior_medical_notes (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_profiles (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON membership_reminders_sent (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON memberships (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));

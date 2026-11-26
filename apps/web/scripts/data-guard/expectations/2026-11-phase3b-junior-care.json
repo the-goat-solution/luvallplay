@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3b-junior-care",
+  "description": "Phase 3b step 4 (build plan §6.8): two new, empty, club-owned tables with row-level security, for a child's emergency contacts and encrypted medical notes. Nothing existing is altered. Additive: no row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

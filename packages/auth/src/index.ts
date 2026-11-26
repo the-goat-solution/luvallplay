@@ -51,7 +51,8 @@ export function canManageAdmins(a: Access): boolean {
 }
 
 /** Coaches see the play-day side of admin only ("partial" in the matrix). */
-const COACH_PAGES = ["/admin/play-days", "/admin/challenges", "/admin/day-requests"];
+// "/admin/juniors": the junior roster. It is served only while the club has Juniors on, and the roster itself opens only with a valid safety check.
+const COACH_PAGES = ["/admin/play-days", "/admin/challenges", "/admin/day-requests", "/admin/juniors"];
 const OWNER_PAGES = ["/admin/people/admins"];
 const PLATFORM_PAGES = ["/admin/platform"];
 

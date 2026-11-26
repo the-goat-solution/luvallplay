@@ -1,0 +1,19 @@
+{
+  "change": "2026-11-phase5-push-devices (production run)",
+  "description": "Phase 5 step 6 (build plan §4.2): two new, empty, platform-wide tables for push notifications: a person's devices (the address stored only sealed, plus a hash) and the kinds of notification they asked for. Nothing existing is altered. Additive: no row, account, email, phone, session, role or membership may change. Live traffic keeps writing while the migration runs, so the tables below are listed as volatile.",
+  "volatile": [
+    "player_sessions",
+    "players.claimed_at",
+    "player_settings",
+    "player_events",
+    "message_threads",
+    "messages",
+    "finance_sync_state",
+    "admin_audit_log",
+    "admin_handoffs",
+    "admin_invites",
+    "auth_codes",
+    "sms_sends",
+    "usage_counters"
+  ]
+}

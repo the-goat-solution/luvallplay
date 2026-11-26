@@ -52,6 +52,7 @@ import {
   getStripeSyncState,
   syncStripeFinance,
 } from "@/lib/finance-stripe";
+import { clubRoundAmount } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,7 @@ async function saveEntry(
   if (!isFinanceCategory(category)) return fail("Please choose a source.");
   if (!isDateKey(entryDate)) return fail("Please enter a valid date.");
   if (amountCents === null) {
-    return fail("Please enter an amount greater than $0, like 45 or 45.50 (max $1,000,000).");
+    return fail(`Please enter an amount greater than ${clubRoundAmount(0)}, like 45 or 45.50 (max ${clubRoundAmount(1_000_000)}).`);
   }
   if (method && !isFinanceMethod(method)) return fail("Please choose how it was paid.");
 

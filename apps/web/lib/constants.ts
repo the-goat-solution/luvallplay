@@ -7,6 +7,15 @@ export const CLUB_TIME_ZONE = "Pacific/Auckland";
 // only place the code is written (lib/money.ts; tests/club-literals.test.ts).
 export const CLUB_CURRENCY = "NZD";
 
+// The club's names and the locale its dates and numbers are written in: the
+// built-in values of the club's `name`, short name and locale, and the only
+// place they are typed (lib/club-brand.ts reads them; tests/club-literals
+// fails on another copy in admin code).
+export const CLUB_NAME = "Three Wolves Badminton Club";
+export const CLUB_SHORT_NAME = "Three Wolves";
+export const CLUB_SLUG = "three-wolves";
+export const CLUB_LOCALE = "en-NZ";
+
 // The club's own names for points and for the match tracker: the built-in
 // values of the `terms` setting (lib/club-terms.ts).
 export const CLUB_TERMS = {

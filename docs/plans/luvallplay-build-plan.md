@@ -742,6 +742,23 @@ Not club modules at all: **Setup check** (environment diagnostics) and **Platfor
 - `Pacific/Auckland` → `tenants.timezone`
 - "Wolf Points" / "Wolf Vision" → `tenants.terms`
 
+##### Lane A delivery log
+
+Kept by the lane A thread (§9.2). Newest last. "Merged" means on `main`; until then the step isn't done.
+
+| Date | Step | Pull request | State | Notes |
+|---|---|---|---|---|
+| 26 Nov | **A1** one menu source | #177 | Open; its own checks pass. Waiting for `main` to be green (the players' app journey APP33 fails on `main` itself) | The menu, its badges and Today's "Needs attention" list are generated from the module registry; the hand-written list is deleted. A new `admin.nav` item needs `label` and `order`; Today lines and badges are `admin.attention` in the module's manifest, with the counter in `lib/admin-attention.ts`. Today also leaves out a switched-off module (audit: "Today is filtered by role, not module"). Proof: the generated menu equals the old one in a test, and 132 before/after captures of the admin (owner, admin, coach) show no difference |
+| 26 Nov | **H7** audit log | #182 | Open; **waiting for the owner's OK** (owners see new rows in the audit log) | An allow-list of recorded fields (ids and choices only; `medicalNotes` is named as banned in a test); per-action rows with the outcome for every `/api/admin` route, exports included, and for module switches; a test fails on a new `/api/admin` route without its row. Server actions on other pages keep the proxy's generic row until the module contract (A6) |
+| 26 Nov | **H8** per-action step-up | #186 (draft, on top of #182) | **Waiting for the owner's OK** (sign-in behaviour) | A code entered in the last 5 minutes for: module switch and lock, admin add/change/remove, platform staff, shop refund, membership cancel, the three exports. Adds `login_stepup_action` to the `profile` messages and a `stepup=action` notice on the code screen |
+| 26 Nov | **A2** part 1, admin code | #188 | Open; no visible change; waiting for `main` to be green | `lib/club-brand.ts` answers for the club's name, short name, locale, currency code, weekdays and two payment descriptions; 17 admin files use it; a scan fails on a new literal in `app/admin` or `components/admin`. Same 132-capture proof |
+
+**Tools added:** `apps/web/scripts/admin-snapshot/` (with A1): `snapshot.mjs` captures every admin page as the owner, an admin and a coach on the end-to-end environment; `compare.mjs` compares two captures. Run on `main` and on the branch on the same day.
+
+**Next:** A2 part 2 (emails and receipts) and part 3 (XLSX exports, the scan over `lib/` and `app/api/`); the Stripe description strings in lane W's files; the schema part of A2 through lane T's queue; then A3.
+
+**Found on the way, for other lanes:** APP33 (`apps/app/tests/e2e/app.mjs:1232`) fails on `main` depending on the date ("open 8 days"); web journey API3 expects 14 theme colours where the config has 18; a club's **short name** has no stored setting yet (other clubs would show their full name).
+
 ### 6.3 Whitelabel and the Three Wolves exception
 
 - Every club gets generic terms by default ("Luv Points", "Vision", generic rank art) and a **theme**.

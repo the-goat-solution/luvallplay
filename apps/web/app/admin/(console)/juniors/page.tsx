@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Badge, DataTable, Notice, PageHeader, Section, kit } from "@/components/admin/kit";
@@ -108,6 +109,10 @@ export default async function JuniorsAdminPage() {
   return (
     <div className={adminStyles.page}>
       <PageHeader title="Juniors" subtitle="Children under 16 never sign in. A guardian manages each child; the club sees a child only through people with a current safety check." />
+
+      <p>
+        <Link href="/admin/juniors/forms">Forms and waivers guardians sign</Link>
+      </p>
 
       <Section title="Safety checks" id="safety-checks">
         <p>

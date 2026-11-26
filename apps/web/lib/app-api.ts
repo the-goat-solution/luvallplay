@@ -36,6 +36,23 @@ export function allowedOrigins(env: Record<string, string | undefined> = process
   return [...FIXED_ORIGINS, ...(env.NODE_ENV === "production" ? [] : DEV_ORIGINS), ...extra];
 }
 
+/** The players' app's one public address: what a page outside the app (Stripe) comes back to from the store app. */
+export const PUBLIC_APP_ORIGIN = "https://app.luvallplay.com";
+// The store app's web view (apps/native): its own origin means nothing to a page outside it.
+const STORE_APP_ORIGINS = ["https://localhost", "capacitor://localhost"];
+
+/**
+ * Where a page outside the app (Stripe's billing page, Checkout) sends the
+ * person back to, for a call from this origin: the origin itself for the app
+ * in a browser; the app's public address for the store app's web view (the
+ * phone opens that address in the app); null for anything not allowed, which
+ * goes back to the website as before.
+ */
+export function appReturnOrigin(origin: string | null, env: Record<string, string | undefined> = process.env): string | null {
+  if (!origin || !allowedOrigins(env).includes(origin)) return null;
+  return STORE_APP_ORIGINS.includes(origin) ? PUBLIC_APP_ORIGIN : origin;
+}
+
 export function corsHeaders(request: Request): Record<string, string> {
   const headers: Record<string, string> = { "Cache-Control": "no-store", Vary: "Origin" };
   const origin = request.headers.get("origin");

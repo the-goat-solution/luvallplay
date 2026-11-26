@@ -34,3 +34,46 @@ export function foldedIncludes(text: string, typed: string): boolean {
   const words = foldForSearch(typed).split(" ").filter(Boolean);
   return words.length > 0 && words.every((w) => haystack.includes(w));
 }
+
+// ── The same folding inside Postgres ────────────────────────────────────────
+//
+// For searches the database runs. Built from the same rule as stripDiacritics
+// so the two can't disagree (tests/country-pack.test.ts compares them on a
+// real Postgres). It needs no extension: normalize() and translate() are
+// built in (Postgres 13+), which matters in a region whose managed Postgres
+// may not offer "unaccent".
+
+const FOLDABLE = (() => {
+  let from = "";
+  let to = "";
+  // Latin-1 Supplement, Latin Extended-A/B and Latin Extended Additional (where Vietnamese lives).
+  // Capitals are listed too, so the result doesn't depend on the database's locale knowing them.
+  const ranges: [number, number][] = [[0x00c0, 0x024f], [0x1e00, 0x1eff]];
+  for (const [lo, hi] of ranges) {
+    for (let cp = lo; cp <= hi; cp++) {
+      const ch = String.fromCodePoint(cp);
+      const plain = stripDiacritics(ch).toLowerCase();
+      // Letters that fold to two (ß → ss) are left alone in SQL: translate() swaps one for one.
+      if (plain !== ch && /^[a-z]$/.test(plain)) {
+        from += ch;
+        to += plain;
+      }
+    }
+  }
+  return { from, to };
+})();
+
+/** The accented letters the SQL folding replaces, and what each becomes (same position). */
+export const SQL_FOLD = FOLDABLE;
+
+/**
+ * A Postgres expression that folds `expression` (a column or a parameter
+ * placeholder, never user text) the way foldForSearch does for names:
+ * `sqlFold("p.display_name") LIKE '%' || sqlFold("$1") || '%'`.
+ */
+export function sqlFold(expression: string): string {
+  if (!/^[A-Za-z_$][A-Za-z0-9_.$]*$/.test(expression)) throw new Error("sqlFold takes a column name or a placeholder");
+  // Marks that didn't join a letter (a stray combining accent) are dropped, as stripDiacritics drops them.
+  const letters = `regexp_replace(translate(normalize(${expression}, NFC), '${FOLDABLE.from}', '${FOLDABLE.to}'), '[\\u0300-\\u036f]', '', 'g')`;
+  return `btrim(regexp_replace(lower(${letters}), '\\s+', ' ', 'g'))`;
+}

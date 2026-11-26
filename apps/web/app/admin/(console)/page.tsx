@@ -9,6 +9,9 @@ import { getCourtsForDate, getSpotsAndHeadcountForDates, getUpcomingSessionDates
 import { getPausedDays } from "@/lib/day-requests";
 import { formatEventTimeRange, getClubToday, isDatePaused } from "@/lib/dates";
 import { getStripeSyncState } from "@/lib/finance-stripe";
+import { enabledModules } from "@/lib/club-modules";
+import { sql } from "@/lib/database";
+import { blockedByModule } from "@luvallplay/modules";
 import s from "./today.module.css";
 import { clubLocale } from "@/lib/club-brand";
 
@@ -74,7 +77,9 @@ async function upcomingPlayDays(today: string) {
 export default async function TodayPage() {
   const ctx = await currentAdmin().catch(() => null);
   if (ctx?.kind === "player" && !canOpenAdminPage(ctx, "/admin/play-days")) redirect("/profile");
-  const can = (href: string) => canOpenAdminPage(ctx, href);
+  // What this person's role opens, among the modules switched on for the club.
+  const modulesOn = await enabledModules(sql);
+  const can = (href: string) => canOpenAdminPage(ctx, href) && !blockedByModule(href, modulesOn);
   const { dateKey: today } = getClubToday(new Date(), await clubClock());
   const hasDb = Boolean(process.env.POSTGRES_URL);
 

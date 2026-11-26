@@ -9,7 +9,9 @@ import { useState } from "react";
 import { ClubScopeProvider, type Club } from "../../hooks.tsx";
 import { ScopeTag } from "../../components/ClubTag.tsx";
 import type { PlayDay } from "./data.ts";
-import { useAbsence } from "./data.ts";
+import { useAbsence, useQueue } from "./data.ts";
+import { storage } from "../../app.ts";
+import { forgetDropped } from "../../lib/offline.ts";
 import { byMonth, dayLabel, dayTile, money, monthLabel, timeRange } from "../../lib/format.ts";
 import { usePlace } from "./parts.tsx";
 import { CardPayment } from "../../components/CardPayment.tsx";
@@ -51,9 +53,8 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
           {detail}
           {d.location ? ` · ${d.location}` : ""}
         </span>
-        {saved && d.absent && <span className="small" role="status">{t("cal_absence_saved")}</span>}
-        {absence.data?.queued && <span className="small muted" role="status">{t("cal_queued")}</span>}
-        {absence.isError && <span className="small notice-error" role="alert">{t("mem_err_generic")}</span>}
+        {saved && d.absent && !absence.waits(d.date) && <span className="small" role="status">{t("cal_absence_saved")}</span>}
+        {absence.waits(d.date) && <span className="small muted" role="status">{t("cal_queued")}</span>}
         {message && <span className={`small${message.ok ? "" : " notice-error"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
       </div>
       <div className="day-action">
@@ -62,10 +63,9 @@ function DayRow({ d, casualPrice }: { d: PlayDay; casualPrice: number }) {
             type="button"
             className={`button button-small ${d.absent ? "button-primary" : ""}`}
             aria-pressed={d.absent}
-            disabled={absence.isPending}
             onClick={() => {
               setSaved(!d.absent);
-              absence.mutate({ date: d.date, absent: !d.absent });
+              absence.change({ date: d.date, absent: !d.absent });
             }}
           >
             {d.absent ? t("cal_undo_absence") : t("cal_cant_make_it")}
@@ -109,12 +109,22 @@ export function PlayCalendar({ days, casualPrice }: { days: PlayDay[]; casualPri
 export function CalendarCard({ rows, sub }: { rows: CalendarRow[]; sub?: string }) {
   const { t, locale } = usePlace();
   const months = byMonth(rows.map((r) => ({ ...r, date: r.day.date })));
+  // A "Can't make it" (or its undo) the club's server refused: said, not silently put back.
+  const { dropped } = useQueue();
   return (
     <section className="card stack" aria-labelledby="cal-title">
       <div className="stack-tight">
         <h2 id="cal-title">{t("cal_title")}</h2>
         <p className="muted small">{sub ?? t("cal_sub")}</p>
       </div>
+      {dropped.map((d) => (
+        <div key={`${d.club}:${d.date}`} className="notice notice-error stack-tight" role="alert" data-testid="absence-dropped">
+          <p>{t("cal_dropped", { date: dayLabel(d.date, locale) })}</p>
+          <div>
+            <button type="button" className="button button-small" onClick={() => forgetDropped(storage, d)}>{t("close")}</button>
+          </div>
+        </div>
+      ))}
       {rows.length === 0 && <p className="muted">{t("cal_none")}</p>}
       {months.map(([month, list]) => (
         <div key={month} className="stack-tight">

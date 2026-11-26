@@ -4,9 +4,10 @@ import { getStripe } from "./stripe";
 import { getSmsUsage, lookupRecaptchaSiteKey } from "./sms";
 import { PUBLIC_BLOB_SETUP_HINT, publicBlobAuth } from "./public-blob";
 import { getSiteUrl } from "./email-layout";
-import { sql } from "./database";
+import { sql, unscopedPool } from "./database";
 import journal from "@luvallplay/db/migrations/meta/_journal.json";
 import { compareClubConfig } from "./club-config";
+import { newestMigrationApplied } from "./migration-history";
 
 // Live checks behind Admin → Setup check: each piece the player accounts
 // rely on, tested for real (no secrets are shown), with what to do if it
@@ -52,10 +53,10 @@ export async function runSetupChecks(): Promise<Check[]> {
       // from a page load. Compare the newest one applied with the newest in
       // this build.
       const latest = journal.entries[journal.entries.length - 1];
-      const { rows } = await sql.query(
-        `SELECT max(created_at)::text AS at FROM drizzle.__drizzle_migrations`,
-      ).catch(() => ({ rows: [{ at: null }] }));
-      const applied = rows[0]?.at ? Number(rows[0].at) : null;
+      const applied = await newestMigrationApplied(unscopedPool());
+      if (applied === "unreadable") {
+        return { area: "Basics", name: "Database schema", status: "warn", detail: "The app's database login isn't allowed to read the migration history, so this page can't tell.", fix: "Check from a terminal: npm run db:migrate -- --status (db/README.md)." };
+      }
       if (applied === null) {
         return { area: "Basics", name: "Database schema", status: "warn", detail: "No migration history yet (the database predates versioned migrations).", fix: "Mark it as at the baseline: npm run db:migrate -- --baseline (see db/README.md)." };
       }

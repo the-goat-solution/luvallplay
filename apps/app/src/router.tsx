@@ -2,6 +2,7 @@
 // is its own chunk, loaded when it is first opened.
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Navigate, Outlet, redirect } from "@tanstack/react-router";
 import { store } from "./app.ts";
+import { Crash } from "./components/Crash.tsx";
 import { InviteScreen } from "./screens/Invite.tsx";
 import { Shell } from "./screens/Shell.tsx";
 import { SignInScreen } from "./screens/SignIn.tsx";
@@ -67,6 +68,8 @@ export const router = createRouter({
   // An address the app doesn't have: to the start (Me, or sign-in). A redirect
   // thrown here isn't caught (it showed the router's bare error page).
   defaultNotFoundComponent: () => <Navigate to="/" replace />,
+  // A screen that fails says so (components/Crash.tsx), inside the shell when the shell itself is fine.
+  defaultErrorComponent: Crash,
 });
 
 declare module "@tanstack/react-router" {

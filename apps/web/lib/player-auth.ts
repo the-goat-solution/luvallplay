@@ -15,6 +15,13 @@ export const CODE_TTL_MINUTES = 10;
 export const CODE_MAX_ATTEMPTS = 5;
 /** Codes per email in any 15 minutes. */
 export const CODE_REQUESTS_PER_WINDOW = 3;
+/**
+ * Typed codes per email, right or wrong, across all of its codes: in any hour
+ * and in any day. Counted in the database (auth_codes.attempts). Someone who
+ * is locked out can still sign in with the link in the email.
+ */
+export const CODE_ATTEMPTS_PER_HOUR = 20;
+export const CODE_ATTEMPTS_PER_DAY = 50;
 
 // Keys the HMAC of sign-in codes and phone proofs (session tokens are random
 // and stored as plain SHA-256, so they don't depend on it). Required in
@@ -176,23 +183,40 @@ export type VerifyCodeResult =
   | { ok: true; email: string }
   | { ok: false; reason: "invalid" | "expired" | "too_many_attempts" };
 
-/** Checks a typed code against the newest live code for the email. */
+/**
+ * Checks a typed code against the newest live code for the email.
+ *
+ * An attempt is claimed BEFORE the code is compared, in one statement, so
+ * requests sent at the same moment can't each read "4 tries used" and all
+ * get a guess (audit C5): the row lock makes them take turns, and the sixth
+ * finds no try left. The same statement holds the per-email limit, kept in
+ * the database so it is the same on every server instance.
+ */
 export async function verifyEmailCode(rawEmail: string, rawCode: string): Promise<VerifyCodeResult> {
   const email = normalizeAccountEmail(rawEmail);
   const code = rawCode.replace(/\D/g, "");
-  const { rows } = await sql`
-    SELECT id, code_hash, attempts, expires_at FROM auth_codes
-    WHERE email = ${email} AND consumed_at IS NULL
-    ORDER BY created_at DESC LIMIT 1;
-  `;
-  const row = rows[0];
-  if (!row) return { ok: false, reason: "expired" };
-  if (new Date(row.expires_at as Date).getTime() < Date.now()) return { ok: false, reason: "expired" };
-  if ((row.attempts as number) >= CODE_MAX_ATTEMPTS) return { ok: false, reason: "too_many_attempts" };
+  const claimed = await sql.query(
+    `UPDATE auth_codes c SET attempts = c.attempts + 1
+     WHERE c.id = (SELECT id FROM auth_codes WHERE email = $1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1)
+       AND c.consumed_at IS NULL AND c.expires_at > NOW() AND c.attempts < $2
+       AND (SELECT COALESCE(SUM(attempts), 0) FROM auth_codes WHERE email = $1 AND created_at > NOW() - INTERVAL '1 hour') < $3
+       AND (SELECT COALESCE(SUM(attempts), 0) FROM auth_codes WHERE email = $1 AND created_at > NOW() - INTERVAL '1 day') < $4
+     RETURNING c.id, c.code_hash, c.attempts;`,
+    [email, CODE_MAX_ATTEMPTS, CODE_ATTEMPTS_PER_HOUR, CODE_ATTEMPTS_PER_DAY],
+  );
+  const row = claimed.rows[0];
+  if (!row) {
+    // No try was given: say why (nothing is compared on this path).
+    const { rows } = await sql`
+      SELECT expires_at > NOW() AS live FROM auth_codes
+      WHERE email = ${email} AND consumed_at IS NULL
+      ORDER BY created_at DESC LIMIT 1;
+    `;
+    return { ok: false, reason: rows[0]?.live ? "too_many_attempts" : "expired" };
+  }
 
   if (code.length !== 6 || !safeEqualHex(hmac(`${email}:${code}`), row.code_hash as string)) {
-    await sql`UPDATE auth_codes SET attempts = attempts + 1 WHERE id = ${row.id};`;
-    return { ok: false, reason: (row.attempts as number) + 1 >= CODE_MAX_ATTEMPTS ? "too_many_attempts" : "invalid" };
+    return { ok: false, reason: (row.attempts as number) >= CODE_MAX_ATTEMPTS ? "too_many_attempts" : "invalid" };
   }
   // Single use: only the request that flips consumed_at wins.
   const { rowCount } = await sql`

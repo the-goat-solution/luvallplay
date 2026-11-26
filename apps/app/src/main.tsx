@@ -66,6 +66,12 @@ if (import.meta.env.PROD && "serviceWorker" in navigator && !isNative()) {
 // and the screens draw again when it arrives.
 await Promise.race([loadLang(pickLang(store.get().lang, null, navigator.language)).catch(() => {}), new Promise((done) => setTimeout(done, 3000))]);
 
+// The store app only: links that open the app land on their screen, and the
+// Android back button closes sheets before it goes back (lib/native/shell.ts).
+if (isNative()) {
+  void import("./lib/native/shell.ts").then((m) => m.startShell({ go: (path) => router.history.push(path), back: () => router.history.back() }));
+}
+
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

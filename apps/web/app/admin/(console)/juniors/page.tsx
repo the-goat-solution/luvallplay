@@ -3,11 +3,13 @@ import { revalidatePath } from "next/cache";
 import { Badge, DataTable, Notice, PageHeader, Section, kit } from "@/components/admin/kit";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
-import { audit, currentAdmin, db } from "@/lib/admin-access";
+import Link from "next/link";
+import { audit, currentAdmin, db, requireAdminActor } from "@/lib/admin-access";
 import { requireFreshAdminActor } from "@/lib/admin-step-up";
 import { clubClock } from "@/lib/club";
 import { getClubToday } from "@/lib/dates";
 import { juniorsClubId } from "@/lib/juniors/module";
+import { juniorRoster, markJuniorAttendance, rosterDays, type RosterChild } from "@/lib/juniors/roster";
 import { SAFETY_CHECK_KINDS, SAFETY_CHECK_MAX_YEARS, listStaffSafety, recordSafetyCheck, revokeSafetyCheck, type SafetyStatus } from "@/lib/juniors/safety";
 
 // Admin → Juniors (build plan §6.8; Phase 3b step 6).
@@ -81,9 +83,30 @@ async function withdraw(formData: FormData) {
   back("toast", "Safety check withdrawn.");
 }
 
+async function mark(formData: FormData) {
+  "use server";
+  const tenantId = await juniorsClubId(db);
+  if (tenantId === null) notFound();
+  const { ctx } = await requireAdminActor(PATH);
+  const date = String(formData.get("date") ?? "");
+  const childId = Number(formData.get("id"));
+  const attended = formData.get("on") === "1";
+  const result = await markJuniorAttendance(db, tenantId, { playerId: ctx.player.id, access: ctx.access }, { date, childId, attended }, await clubToday());
+  const to = `${PATH}?date=${encodeURIComponent(date)}`;
+  if (!result.ok) {
+    await audit(ctx, { action: "juniors.attendance.refused", target: String(childId || ""), meta: { reason: result.code } });
+    revalidatePath(PATH);
+    redirect(`${to}&toastError=${encodeURIComponent(result.code === "forbidden" ? "You need a current safety check to do that." : "That child isn't booked on that day.")}`);
+  }
+  // Which child (by id), which day, came or not: never a name.
+  await audit(ctx, { action: "juniors.attendance", target: String(childId), meta: { id: childId, date, on: attended } });
+  revalidatePath(PATH);
+  redirect(`${to}&toast=${encodeURIComponent(attended ? "Marked as here." : "Mark removed.")}`);
+}
+
 type Row = { userId: number; name: string; role: string; status: SafetyStatus; kind: string; expiresOn: string | null; checkId: number | null; live: boolean };
 
-export default async function JuniorsAdminPage() {
+export default async function JuniorsAdminPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const tenantId = await juniorsClubId(db);
   if (tenantId === null) notFound();
   const ctx = await currentAdmin();
@@ -105,9 +128,64 @@ export default async function JuniorsAdminPage() {
   }));
   const missing = rows.filter((r) => !r.live).length;
 
+  // The roster: only with a role and a safety check that is valid today.
+  const actor = ctx?.kind === "player" ? { playerId: ctx.player.id, access: ctx.access } : null;
+  const days = actor ? await rosterDays(db, tenantId, actor, today) : null;
+  const wanted = (await searchParams).date;
+  const date = days?.ok ? (days.value.some((d) => d.date === wanted) ? wanted! : days.value[0]?.date) : undefined;
+  const roster = actor && date ? await juniorRoster(db, tenantId, actor, date, today) : null;
+
   return (
     <div className={adminStyles.page}>
       <PageHeader title="Juniors" subtitle="Children under 16 never sign in. A guardian manages each child; the club sees a child only through people with a current safety check." />
+
+      <Section title="Roster" id="roster">
+        {!days?.ok ? (
+          <Notice>You need a current safety check, recorded below by an owner, to see the junior roster.</Notice>
+        ) : days.value.length === 0 ? (
+          <p>No child is booked on a coming play day.</p>
+        ) : (
+          <>
+            <p>
+              {days.value.map((d) => (
+                <Link key={d.date} href={`${PATH}?date=${d.date}`} className={kit.btn} aria-current={d.date === date ? "page" : undefined} style={{ marginRight: 8 }}>
+                  {d.date} ({d.children})
+                </Link>
+              ))}
+            </p>
+            {roster?.ok && (
+              <DataTable<RosterChild>
+                caption={`Children booked on ${roster.value.date}`}
+                rows={roster.value.children}
+                rowKey={(r) => r.childId}
+                columns={[
+                  { key: "child", label: "Child", render: (r) => `${r.name}${r.birthYear ? ` (born ${r.birthYear})` : ""}` },
+                  { key: "guardians", label: "Guardians", render: (r) => r.guardians.map((g) => `${g.name}, ${g.email}${g.phone ? `, ${g.phone}` : ""}`).join("; ") || "—" },
+                  { key: "contacts", label: "Emergency contacts", render: (r) => r.emergencyContacts.map((c) => `${c.name}${c.relationship ? ` (${c.relationship})` : ""}: ${c.phone}`).join("; ") || "none recorded" },
+                  {
+                    key: "note",
+                    label: "Medical note",
+                    render: (r) =>
+                      !r.hasMedicalNote ? "none" : roster.value.canReadMedicalNotes ? <Link href={`${PATH}/child/${r.childId}/medical`}>Read (recorded in the audit log)</Link> : "yes: ask an owner or the coach",
+                  },
+                  {
+                    key: "here",
+                    label: "Here",
+                    render: (r) => (
+                      <form action={mark}>
+                        <input type="hidden" name="date" value={roster.value.date} />
+                        <input type="hidden" name="id" value={r.childId} />
+                        <input type="hidden" name="on" value={r.attended ? "0" : "1"} />
+                        <SubmitButton loadingText="Saving…" className={kit.btn}>{r.attended ? "Here ✓ (undo)" : "Mark as here"}</SubmitButton>
+                      </form>
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </>
+        )}
+      </Section>
 
       <Section title="Safety checks" id="safety-checks">
         <p>

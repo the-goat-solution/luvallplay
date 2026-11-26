@@ -8,8 +8,8 @@ import { applyClubFonts } from "./lib/club-fonts.ts";
 
 const LUVALLPLAY_THEME_COLOR = { light: "#0e6b4f", dark: "#0b1b2b" };
 
-/** Dresses the page. `club` null: Luvallplay's own look. */
-export function useLook(club: ClubConfig | null): void {
+/** Dresses the page. `club` null: Luvallplay's own look. `page` names the screen in the tab's title ("Arena · Three Wolves · Luvallplay"). */
+export function useLook(club: ClubConfig | null, page?: string): void {
   const mode = useMode();
   const lang = useLang();
   const theme = club?.theme ?? null;
@@ -24,8 +24,8 @@ export function useLook(club: ClubConfig | null): void {
     document.documentElement.lang = lang;
   }, [lang]);
   useEffect(() => {
-    document.title = club ? `${club.club.name} · Luvallplay` : "Luvallplay";
-  }, [club]);
+    document.title = [page, club?.club.name, "Luvallplay"].filter(Boolean).join(" · ");
+  }, [club, page]);
 }
 
 export function OnLuvallplay() {

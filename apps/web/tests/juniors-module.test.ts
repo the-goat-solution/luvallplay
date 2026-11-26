@@ -26,6 +26,7 @@ import { DEFAULT_CLUB_CONFIG } from "../lib/club-config.ts";
 import {
   JUNIORS_STEP_UP_MAX_AGE_MS,
   juniorsAvailability,
+  juniorsClubId,
   juniorsOn,
   juniorsState,
   switchJuniorsOff,
@@ -231,6 +232,15 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     assert.equal(await juniorsOn(c, undefined, {}), false, "on in the table, hidden on this deployment");
     assert.equal(await juniorsOn(c, undefined, { VERCEL_ENV: "production", JUNIORS_AVAILABILITY: "available" }), false);
     assert.equal(await juniorsOn(c, "no-such-club", OPEN), false);
+    // What the endpoints ask: the club's id when it is on, and nothing in every other case above.
+    assert.equal(await juniorsClubId(c, undefined, OPEN), 1);
+    assert.equal(await juniorsClubId(c, undefined, {}), null);
+    assert.equal(await juniorsClubId(c, undefined, { VERCEL_ENV: "production", JUNIORS_AVAILABILITY: "available" }), null);
+    assert.equal(await juniorsClubId(c, "no-such-club", OPEN), null);
+    assert.equal(await juniorsClubId(c, "hanoi-smash", OPEN), null, "another club's switch is its own");
+    assert.equal(await juniorsClubId(broken, undefined, OPEN), null);
+    await c.query(`UPDATE tenant_modules SET settings = '{}'::jsonb WHERE tenant_id = 1 AND module_id = 'juniors'`);
+    assert.equal(await juniorsClubId(c, undefined, OPEN), null, "no acknowledgement, not on");
   });
 
   test("a changed policy: the club is asked again, and Juniors stays on meanwhile", async () => {

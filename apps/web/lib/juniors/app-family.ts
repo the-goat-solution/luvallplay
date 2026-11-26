@@ -26,7 +26,7 @@ import {
   type FamilyError,
   type FamilyResult,
 } from "./family";
-import { juniorsOn } from "./module";
+import { juniorsClubId } from "./module";
 
 const STATUS: Record<FamilyError, number> = {
   name_required: 400,
@@ -40,9 +40,11 @@ const STATUS: Record<FamilyError, number> = {
 
 /** The club's id and its calendar year, or the 404 a switched-off module gives. */
 async function requireJuniors(club: ClubConfig): Promise<{ tenantId: number; year: number } | AppApiError> {
-  if (club.tenantId === null || !(await juniorsOn(sql, club.slug))) return fail(404, "module_off");
+  // The club's id comes from the same read as the switch (the app's own settings may not carry it).
+  const tenantId = await juniorsClubId(sql, club.slug);
+  if (tenantId === null) return fail(404, "module_off");
   const year = Number(getClubToday(new Date(), clockOf(club)).dateKey.slice(0, 4));
-  return { tenantId: club.tenantId, year };
+  return { tenantId, year };
 }
 
 const answer = (r: FamilyResult<Child>): FamilyChildResponse | AppApiError => (r.ok ? { child: r.value } : fail(STATUS[r.code], r.code));

@@ -54,11 +54,13 @@ const inboxNew = createRoute({ getParentRoute: () => shell, path: "/inbox/new", 
 const inboxThread = createRoute({ getParentRoute: () => shell, path: "/inbox/$id", component: inboxScreen, validateSearch: clubSearch });
 const welcome = createRoute({ getParentRoute: () => shell, path: "/welcome", component: lazyRouteComponent(() => import("./screens/Welcome.tsx")) });
 const membership = createRoute({ getParentRoute: () => shell, path: "/membership", component: lazyRouteComponent(() => import("./screens/Membership.tsx")) });
+// Family (module juniors): a guardian's children in the club shown. Reached from My profile.
+const family = createRoute({ getParentRoute: () => shell, path: "/family", component: lazyRouteComponent(() => import("./screens/Family.tsx")) });
 const visionTrack = createRoute({ getParentRoute: () => shell, path: "/vision/track", component: lazyRouteComponent(() => import("./screens/VisionTrack.tsx")) });
 const visionLabel = createRoute({ getParentRoute: () => shell, path: "/vision/label", component: lazyRouteComponent(() => import("./screens/VisionLabel.tsx")) });
 const settings = createRoute({ getParentRoute: () => shell, path: "/settings", beforeLoad: () => { throw redirect({ to: "/profile", hash: "settings", replace: true }); } });
 
-const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([home, me, profile, player, arena, leaderboard, vision, visionLabel, visionTrack, settings, welcome, membership, inbox, inboxNew, inboxThread])]);
+const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([home, me, profile, player, arena, leaderboard, vision, visionLabel, visionTrack, settings, welcome, membership, family, inbox, inboxNew, inboxThread])]);
 
 export const router = createRouter({
   routeTree,

@@ -93,6 +93,27 @@ export async function juniorsOn(db: Db, slug = defaultTenantSlug(), env: Env = p
   }
 }
 
+/**
+ * The club's id when Juniors is on for it, otherwise null. What a junior
+ * endpoint asks first: one read that answers "is it on?" and names the club
+ * every later statement must carry. Never throws; anything unclear is null.
+ */
+export async function juniorsClubId(db: Db, slug = defaultTenantSlug(), env: Env = process.env): Promise<number | null> {
+  try {
+    if (juniorsAvailability(env) === "hidden") return null;
+    const { rows } = await db.query(
+      `SELECT t.id, m.enabled, m.settings FROM tenant_modules m JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1 AND m.module_id = $2`,
+      [slug, JUNIORS],
+    );
+    const row = rows[0];
+    const id = Number(row?.id);
+    return row?.enabled === true && readAcknowledgement(row.settings) !== null && Number.isInteger(id) && id > 0 ? id : null;
+  } catch (err) {
+    console.warn(`[juniors] can't read the club's Juniors switch, treating it as off: ${String((err as Error)?.message ?? err).slice(0, 200)}`);
+    return null;
+  }
+}
+
 export type JuniorsSwitchRefusal =
   /** Not a club owner. */
   | "not_owner"

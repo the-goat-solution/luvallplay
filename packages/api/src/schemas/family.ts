@@ -75,6 +75,18 @@ export const familyBookingsResponse = z.object({
 export const familyBookRequest = z.object({ date: dateKeySchema });
 export const familyBookingResponse = z.object({ booking: familyBooking });
 export const familyBookingParams = clubParams.extend({ id: z.coerce.number().int().positive().max(2147483647) });
+// A child's "Safety details": who to call, and the medical note (stored encrypted).
+export const familyContact = z.object({ name: z.string(), phone: z.string(), relationship: z.string().nullable() });
+export const familyCareResponse = z.object({
+  contacts: z.array(familyContact),
+  medicalNotes: z.string(),
+  /** False when this deployment can't encrypt a note: the note can't be saved or shown. */
+  medicalNotesAvailable: z.boolean(),
+  limits: z.object({ contacts: z.number().int(), nameMax: z.number().int(), relationshipMax: z.number().int(), notesMax: z.number().int() }),
+});
+export const familyContactsRequest = z.object({ contacts: z.array(z.object({ name: z.string().max(200), phone: z.string().max(60), relationship: z.string().max(200).nullable().optional() })).max(10) });
+export const familyNotesRequest = z.object({ notes: z.string().max(10000) });
+export type FamilyCareResponse = z.infer<typeof familyCareResponse>;
 export type FamilyBookingsResponse = z.infer<typeof familyBookingsResponse>;
 export type FamilyBookingResponse = z.infer<typeof familyBookingResponse>;
 export type FamilyChild = z.infer<typeof familyChild>;

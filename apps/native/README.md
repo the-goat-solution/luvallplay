@@ -50,3 +50,14 @@ Inside the app, a link leads only to a screen of the app (`apps/app/src/lib/nati
 1. Create the app in Play Console with the package name **`com.luvallplay.app`** (default language English (Australia)).
 2. Once the first build has been uploaded to any track, open **Test and release → App integrity → App signing** and copy the **SHA-256 certificate fingerprint** under "App signing key certificate" (it looks like `AB:CD:…`, 32 pairs). Send it to lane N, or paste it into `assetlinks.json` in place of `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT`. A fingerprint is public information, not a secret.
 3. Nothing is uploaded from here yet. The upload key and the Play service-account file are secrets: they are given through the environment's secret settings, never pasted into a chat or committed.
+
+## Push notifications (off until there is a Firebase project)
+
+`@capacitor/push-notifications` is in the Android project, and the app's side is `apps/app/src/lib/native/push.ts`. It stays off until the build has the Firebase project's file:
+
+- `android/app/google-services.json` is **not in the repository** (`.gitignore`). `pnpm --filter native web` prints whether it found it and builds the app with push on or off to match; Gradle applies Google's plugin only when the file is there.
+- Without the file the app never asks Android for a device address (that call would stop the app), so a build without it is safe to install.
+- The phone is asked for permission only when the person turns notifications on in Settings, never at first launch.
+- A notification can open a screen of the app (`data.path`, a path only) and nothing else.
+
+For the owner, when the time comes: Firebase console → the Luvallplay project → Project settings → Your apps → Add app → Android → package name `com.luvallplay.app` → download `google-services.json`. It goes into the build through the repository's Actions secrets, and the server's sending key goes into the hosting environment settings; neither is ever pasted into a chat.

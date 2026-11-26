@@ -88,3 +88,32 @@ export function useCancelBooking() {
   const refresh = useRefreshBookings();
   return useMutation({ mutationFn: (bookingId: number) => api.family.cancelBooking({ club: slug, id: bookingId }, {}), onSettled: refresh });
 }
+
+// ── A child's safety details: emergency contacts and the medical note ───────
+
+export type Care = ResponseOf<"family.care">;
+export type CareContact = Care["contacts"][number];
+
+/** Asked for only when the guardian opens the section; never kept after the screen closes (gcTime 0). */
+export function useCare(childId: number, open: boolean) {
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["family-care", slug, who, childId], queryFn: ({ signal }) => api.family.care({ club: slug, id: childId }, { signal }), enabled: ready && open, retry: false, gcTime: 0, staleTime: 0 });
+}
+
+function useSetCare(childId: number) {
+  const { who, slug } = useClubApi();
+  const queryClient = useQueryClient();
+  return (care: Care) => queryClient.setQueryData<Care>(["family-care", slug, who, childId], care);
+}
+
+export function useSaveContacts(childId: number) {
+  const { slug, api } = useClubApi();
+  const set = useSetCare(childId);
+  return useMutation({ mutationFn: (contacts: BodyOf<"family.careContacts">["contacts"]) => api.family.careContacts({ club: slug, id: childId }, { contacts }), onSuccess: set });
+}
+
+export function useSaveNotes(childId: number) {
+  const { slug, api } = useClubApi();
+  const set = useSetCare(childId);
+  return useMutation({ mutationFn: (notes: string) => api.family.careNotes({ club: slug, id: childId }, { notes }), onSuccess: set });
+}

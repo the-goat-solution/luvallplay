@@ -91,6 +91,15 @@ export function createApi(transport: Transport) {
       /** POST /clubs/{club}/family/bookings/{id}/cancel (signed in) */
       cancelBooking: (params: ParamsOf<"family.cancelBooking">, body: BodyOf<"family.cancelBooking">, options?: Options) =>
         transport.call("family.cancelBooking", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.cancelBooking">>,
+      /** GET /clubs/{club}/family/{id}/care (signed in) */
+      care: (params: ParamsOf<"family.care">, options?: Options) =>
+        transport.call("family.care", { params, signal: options?.signal }) as Promise<ResponseOf<"family.care">>,
+      /** PUT /clubs/{club}/family/{id}/care/contacts (signed in) */
+      careContacts: (params: ParamsOf<"family.careContacts">, body: BodyOf<"family.careContacts">, options?: Options) =>
+        transport.call("family.careContacts", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.careContacts">>,
+      /** PUT /clubs/{club}/family/{id}/care/medical-notes (signed in) */
+      careNotes: (params: ParamsOf<"family.careNotes">, body: BodyOf<"family.careNotes">, options?: Options) =>
+        transport.call("family.careNotes", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.careNotes">>,
       /** PUT /clubs/{club}/family/{id}/consent (signed in) */
       consent: (params: ParamsOf<"family.consent">, body: BodyOf<"family.consent">, options?: Options) =>
         transport.call("family.consent", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.consent">>,

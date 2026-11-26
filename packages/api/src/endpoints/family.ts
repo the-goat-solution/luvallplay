@@ -28,6 +28,25 @@ export const familyEndpoints = defineEndpoints("family", {
     params: S.familyChildParams, body: S.familyConsentRequest, response: S.familyChildResponse,
     rateLimit: { limit: 30, windowMs: 10 * MIN },
   },
+  // A child's emergency contacts and medical note, for their guardian only.
+  // Refusals: 400 too_many_contacts, name_required, name_too_long,
+  // phone_invalid, relationship_too_long, notes_too_long; 404 not_found;
+  // 503 notes_unavailable (no encryption key on this deployment).
+  "family.care": {
+    method: "GET", path: "/clubs/{club}/family/{id}/care", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, response: S.familyCareResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "family.careContacts": {
+    method: "PUT", path: "/clubs/{club}/family/{id}/care/contacts", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyContactsRequest, response: S.familyCareResponse,
+    rateLimit: { limit: 20, windowMs: 10 * MIN },
+  },
+  "family.careNotes": {
+    method: "PUT", path: "/clubs/{club}/family/{id}/care/medical-notes", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyNotesRequest, response: S.familyCareResponse,
+    rateLimit: { limit: 20, windowMs: 10 * MIN },
+  },
   // Booking a place for a child. The place is shared with adults' casual
   // bookings. Refusals: 409 not_bookable (outside the booking window),
   // day_paused, locked, full, payment_needed (the club charges and paying

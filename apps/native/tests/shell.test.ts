@@ -38,7 +38,7 @@ test("Android: the newest target Play requires, the internet permission only, no
 
 test("the plugins the players' app expects are in the Android project", () => {
   const settings = read("../android/capacitor.settings.gradle");
-  for (const name of ["capacitor-android", "capacitor-app", "capacitor-browser", "capacitor-secure-storage-plugin"]) assert.match(settings, new RegExp(`include ':${name}'`));
+  for (const name of ["capacitor-android", "capacitor-app", "capacitor-browser", "capacitor-filesystem", "capacitor-push-notifications", "capacitor-share", "capacitor-secure-storage-plugin"]) assert.match(settings, new RegExp(`include ':${name}'`));
   // The name the app looks the secure store up by (apps/app/src/lib/native/secure-storage.ts on its branch).
   assert.match(read("../../../node_modules/capacitor-secure-storage-plugin/dist/esm/index.js"), /registerPlugin\(['"]SecureStoragePlugin['"]/);
 });

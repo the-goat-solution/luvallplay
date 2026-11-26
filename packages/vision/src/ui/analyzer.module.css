@@ -2,17 +2,20 @@
    dark, floodlight yellow for primary actions, coral vs teal for the two
    pairs, bronze for the brand. Works one-handed on a phone courtside. */
 
+/* A host may dress it in a club's colours by setting the --vision-* properties
+   on an ancestor (the players' app does, from the club's theme); otherwise it
+   wears the night court's own. */
 .page {
-  --night: #08131f;
-  --night-2: #0d2033;
-  --night-3: #14304a;
-  --coral: #ff6b57;
-  --teal: #2fd4b5;
-  --flood: #ffd54a;
-  --bronze: #c4892a;
-  --bronze-light: #e2ae60;
-  --steel: #b4ccd9;
-  --cream: #fcfbf2;
+  --night: var(--vision-night, #08131f);
+  --night-2: var(--vision-night-2, #0d2033);
+  --night-3: var(--vision-night-3, #14304a);
+  --coral: var(--vision-coral, #ff6b57);
+  --teal: var(--vision-teal, #2fd4b5);
+  --flood: var(--vision-flood, #ffd54a);
+  --bronze: var(--vision-brand, #c4892a);
+  --bronze-light: var(--vision-brand-light, #e2ae60);
+  --steel: var(--vision-steel, #b4ccd9);
+  --cream: var(--vision-ink, #fcfbf2);
   min-height: 100dvh;
   color: var(--cream);
   font-family: var(--font-sans);
@@ -789,6 +792,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .trialRibbon { animation: none; }
+  /* The recording and status dots stay lit instead of blinking. */
+  .rec i, .statusPill i { animation: none; }
 }
 @media (max-width: 560px) {
   .trial { flex-direction: column; align-items: flex-start; }

@@ -277,7 +277,10 @@ export function Mine({ state, ...props }: { state: ArenaState; onScore: (c: Chal
 }
 
 export function Live({ state, t, rank }: { state: ArenaState } & Omit<Props, "onError">) {
-  const visionOn = !!useCurrentClub().config?.modules.includes("vision");
+  const config = useCurrentClub().config;
+  const visionOn = !!config?.modules.includes("vision");
+  // "<the club's tracker> · LIVE" (the shared dictionary's line names one club's tracker).
+  const trackingLive = [config?.terms.visionName, t("live")].filter(Boolean).join(" · ");
   if (!state.live.length) return null;
   const now = Date.parse(state.now);
   return (
@@ -302,7 +305,7 @@ export function Live({ state, t, rank }: { state: ArenaState } & Omit<Props, "on
             {c.accepting && <PairBlock pair={c.accepting} rank={rank} />}
           </div>
           {c.tracking ? (
-            <p className="muted small icon-line"><span className="live-dot" aria-hidden="true" /> {t("wv_live")} · {t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</p>
+            <p className="muted small icon-line"><span className="live-dot" aria-hidden="true" /> {trackingLive} · {t("wv_live_stats", { rallies: c.tracking.rallies, hits: c.tracking.hits })}</p>
           ) : (
             visionOn && <RecordStats id={c.id} t={t} hint />
           )}

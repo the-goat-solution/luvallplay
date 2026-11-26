@@ -4,6 +4,7 @@
 import { Dialog } from "../../components/Dialog.tsx";
 import { useMatchStats } from "./data.ts";
 import type { ArenaT } from "./words.ts";
+import { MatchReport } from "../../components/MatchReport.tsx";
 
 export function MatchStats({ id, t, onClose }: { id: number; t: ArenaT; onClose: () => void }) {
   const q = useMatchStats(id);
@@ -18,33 +19,7 @@ export function MatchStats({ id, t, onClose }: { id: number; t: ArenaT; onClose:
         <p>{t("stats_failed")}</p>
       ) : (
         <div className="stack" data-testid="match-stats">
-          <dl className="stats">
-            <div className="stat"><dt>{t("stats_rallies")}</dt><dd className="stat-value">{stats.rallies}</dd></div>
-            <div className="stat"><dt>{t("stats_longest")}</dt><dd className="stat-value">{stats.longestRally}</dd></div>
-            <div className="stat"><dt>{t("stats_fastest")} (km/h)</dt><dd className="stat-value">{stats.fastestShotKmh ?? "–"}</dd></div>
-          </dl>
-          <div className="table-wrap">
-            <table className="stats-table">
-              <thead>
-                <tr>
-                  <th scope="col"><span className="visually-hidden">{t("stats_title")}</span></th>
-                  <th scope="col">{t("stats_hits")}</th>
-                  <th scope="col">{t("stats_dist")}</th>
-                  <th scope="col">{t("stats_speed")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.players.map((p, i) => (
-                  <tr key={p.playerId}>
-                    <th scope="row"><span className={`player-dot player-dot-${i}`} aria-hidden="true" /> {names[i] ?? ""}</th>
-                    <td>{p.hits}</td>
-                    <td>{p.distance.toFixed(1)} m</td>
-                    <td>{p.topSpeed.toFixed(1)} m/s</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <MatchReport stats={stats} names={names} t={t} />
           <p className="muted small">{t("stats_by", { name: stats.recordedBy.name, mode: t(stats.mode === "live" ? "stats_mode_live" : "stats_mode_upload") })}</p>
         </div>
       )}

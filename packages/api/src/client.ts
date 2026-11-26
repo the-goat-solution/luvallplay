@@ -10,7 +10,12 @@ import { fillPath } from "./path.ts";
 export class ApiError extends Error {
   /** HTTP status; 0 when the request never got an answer (offline, DNS, CORS). */
   readonly status: number;
-  /** The server's stable error code ("unauthorized", "bad_request", …) or "network". */
+  /**
+   * The server's stable error code ("unauthorized", "bad_request", …), or one
+   * of the client's own: "network" (no answer), "timeout" (no answer in time),
+   * "bad_response" (an answer that isn't the API's: a Wi-Fi sign-in page, a
+   * proxy's error page).
+   */
   readonly code: string;
   readonly endpoint: string;
   constructor(endpoint: string, status: number, code: string, message?: string) {
@@ -23,6 +28,10 @@ export class ApiError extends Error {
   get offline(): boolean {
     return this.status === 0;
   }
+  /** Worth sending again later as it is: no answer, not the API's answer, the server's own failure, or "slow down". */
+  get transient(): boolean {
+    return this.status === 0 || this.status >= 500 || this.status === 408 || this.status === 429 || this.code === "bad_response";
+  }
 }
 
 export type TransportOptions = {
@@ -33,8 +42,15 @@ export type TransportOptions = {
   /** Send the web's session cookie (same-site web use). The app uses the bearer token instead. */
   credentials?: RequestCredentials;
   fetch?: typeof fetch;
-  /** Called on a 401 for an endpoint that needs a session, so the app can show sign-in. */
-  onUnauthorized?: () => void;
+  /**
+   * Called on a 401 for an endpoint that needs a session, so the app can show
+   * sign-in. `token` is the one that call was sent with: the app compares it
+   * with the current one, so a late answer to an old session doesn't sign a
+   * new one out.
+   */
+  onUnauthorized?: (token: string | null) => void;
+  /** How long a call may take before it fails with "timeout" (default 30 seconds; 0 for no limit). */
+  timeoutMs?: number;
   /**
    * Check answers against the contract (development and tests): pass
    * `contractValidator` from "@luvallplay/api/validate". Returns a description
@@ -51,6 +67,8 @@ export type CallInput = {
 };
 
 export type Transport = { call: (id: EndpointId, input?: CallInput) => Promise<unknown>; url: (id: EndpointId, input?: CallInput) => string };
+
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export function createTransport(options: TransportOptions): Transport {
   const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -71,30 +89,50 @@ export function createTransport(options: TransportOptions): Transport {
       const method: string = e.method;
       const hasBody = method !== "GET" && method !== "DELETE";
       if (hasBody) headers["Content-Type"] = "application/json";
+      // One limit for the whole call (the answer's headers and its body), on
+      // top of the caller's own signal.
+      const limit = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      const controller = new AbortController();
+      let timedOut = false;
+      const timer = limit > 0 ? setTimeout(() => ((timedOut = true), controller.abort()), limit) : null;
+      const onAbort = () => controller.abort();
+      if (input.signal?.aborted) controller.abort();
+      else input.signal?.addEventListener("abort", onAbort, { once: true });
       let res: Response;
+      let data: unknown = null;
+      let parsed = false;
       try {
         res = await doFetch(url(id, input), {
           method: e.method,
           headers,
           body: hasBody ? JSON.stringify(input.body ?? {}) : undefined,
           credentials: options.credentials ?? "omit",
-          signal: input.signal,
+          signal: controller.signal,
         });
+        try {
+          data = await res.json();
+          parsed = true;
+        } catch (err) {
+          // Not JSON: a proxy's error page, a Wi-Fi sign-in page, or an empty body.
+          if (timedOut || controller.signal.aborted) throw err;
+        }
       } catch (err) {
-        if ((err as { name?: string })?.name === "AbortError") throw err;
+        if (timedOut) throw new ApiError(id, 0, "timeout");
+        if (input.signal?.aborted || (err as { name?: string })?.name === "AbortError") throw err;
         throw new ApiError(id, 0, "network", String((err as Error)?.message ?? err));
-      }
-      let data: unknown = null;
-      try {
-        data = await res.json();
-      } catch {
-        // Not JSON: a proxy's error page, or an empty body.
+      } finally {
+        if (timer) clearTimeout(timer);
+        input.signal?.removeEventListener("abort", onAbort);
       }
       if (!res.ok) {
         const body = (data ?? {}) as { error?: unknown; message?: unknown };
-        if (res.status === 401 && e.auth === "session") options.onUnauthorized?.();
+        // Only the API's own 401 counts: a proxy's or a sign-in page's isn't about this session.
+        if (res.status === 401 && e.auth === "session" && typeof body.error === "string") options.onUnauthorized?.(token ?? null);
         throw new ApiError(id, res.status, typeof body.error === "string" ? body.error : `http_${res.status}`, typeof body.message === "string" ? body.message : undefined);
       }
+      // "OK" with something that isn't the API's JSON (every endpoint answers
+      // with an object): never handed on as data.
+      if (!parsed || data === null || typeof data !== "object") throw new ApiError(id, res.status, "bad_response");
       const wrong = options.validate?.(id, data);
       if (wrong) throw new ApiError(id, res.status, "contract", wrong);
       return data;

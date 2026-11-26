@@ -15,9 +15,16 @@
     "./money": "./src/money.ts",
     "./payments": "./src/payments.ts",
     "./regional-services": "./src/regional-services.ts",
+    "./vietqr": "./src/vietqr.ts",
+    "./vietqr-match": "./src/vietqr-match.ts",
+    "./text-fold": "./src/text-fold.ts",
+    "./country-pack": "./src/country-pack.ts",
+    "./country-pack-vn": "./src/country-pack-vn.ts",
     "./entitlements": "./src/entitlements.ts",
     "./rank-art": "./src/rank-art.ts",
-    "./exif-gps": "./src/exif-gps.ts"
+    "./exif-gps": "./src/exif-gps.ts",
+    "./rating": "./src/rating/index.ts",
+    "./scoring": "./src/scoring/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

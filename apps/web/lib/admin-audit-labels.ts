@@ -1,4 +1,5 @@
-import { NAV_GROUPS, activeHref } from "@/components/admin/nav-config";
+import { activeHref } from "@/components/admin/nav-config";
+import { NAV_GROUPS } from "@/components/admin/nav-registry";
 
 // Readable wording for the audit log's "What" column. Unknown codes fall
 // back to the raw code, so nothing is ever hidden.
@@ -23,7 +24,7 @@ export function auditLabel(action: string): string {
   // Requests are logged as "POST /admin/shop": name the page instead.
   const m = /^(POST|PUT|PATCH|DELETE) (\/admin[^\s?]*)/.exec(action);
   if (m) {
-    const href = activeHref(m[2]);
+    const href = activeHref(m[2], NAV_GROUPS);
     const page = href ? PAGE_LABEL.get(href) : null;
     if (page) return `Made a change on ${page}`;
     if (m[2].startsWith("/api/admin/")) return `Admin action (${m[2].replace("/api/admin/", "").replace(/-/g, " ")})`;

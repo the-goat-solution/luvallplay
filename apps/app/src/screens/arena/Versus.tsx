@@ -46,6 +46,7 @@ export function Versus({ c, t, onGo, onLater }: { c: Challenge; t: ArenaT; onGo:
         <strong className="vs-who">{pairTitle(c.accepting)}</strong>
         <span className="vs-sub">{t("vs_took")}</span>
       </div>
+      <span className="vs-spark" aria-hidden="true" />
       <div className="vs-big" aria-hidden="true">{t("vs")}</div>
       <div className="vs-foot stack-tight">
         <h2 id="vs-title" className="vs-kicker">{t("vs_accepted")}</h2>

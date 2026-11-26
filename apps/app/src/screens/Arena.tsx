@@ -11,6 +11,7 @@ import { TeamUp } from "./arena/TeamUp.tsx";
 import { AfterGame, RankUp, ScoreEntry } from "./arena/Dialogs.tsx";
 import { Versus, VersusPill, useVersus } from "./arena/Versus.tsx";
 import { LoadError } from "../components/LoadError.tsx";
+import { Stage } from "../components/Stage.tsx";
 
 export default function ArenaScreen() {
   const { t, rank, lang } = useArenaT();
@@ -61,31 +62,41 @@ export default function ArenaScreen() {
 
   if (!state) {
     return (
-      <div className="screen arena" data-screen="nav_arena" data-state={arena.isError ? "error" : "loading"}>
-        <header className="arena-hero"><h1>{t("title")}</h1></header>
-        {arena.isError ? (
-          <LoadError onRetry={() => void arena.refetch()} />
-        ) : (
-          <div className="skeleton skeleton-tall" aria-busy="true" />
-        )}
-      </div>
+      <Stage>
+        <div className="screen arena" data-screen="nav_arena" data-state={arena.isError ? "error" : "loading"}>
+          <header className="stage-hero stage-hero-big"><h1>{t("title")}</h1></header>
+          {arena.isError ? (
+            <LoadError onRetry={() => void arena.refetch()} />
+          ) : (
+            <div className="skeleton skeleton-tall" aria-busy="true" />
+          )}
+        </div>
+      </Stage>
     );
   }
 
   const me = state.me;
-  const count = (n: number, one: Parameters<typeof t>[0], many: Parameters<typeof t>[0]) => `${n} ${t(n === 1 ? one : many)}`;
+  const stat = (n: number, one: Parameters<typeof t>[0], many: Parameters<typeof t>[0]) => (
+    <>
+      <strong>{n}</strong> {t(n === 1 ? one : many)}
+    </>
+  );
   const after = me?.after[0];
   return (
+    <Stage>
     <div className="screen arena" data-screen="nav_arena" data-state="ready">
-      <header className="arena-hero stack-tight">
-        <p className="muted small">{t("eyebrow")}</p>
+      <header className="stage-hero stage-hero-big">
+        <p className="stage-kicker">{t("eyebrow")}</p>
         <h1>{t("title")}</h1>
-        <p className="lead">{t("tag1")} {t("tag2")} {t("tag3")}</p>
-        <p className="chips">
-          <span className="pill">{count(state.counts.up, "stat_up_1", "stat_up")}</span>
-          <span className="pill">{state.counts.live} {t("stat_live")}</span>
-          <span className="pill">{count(state.counts.week, "stat_week_1", "stat_week")}</span>
-        </p>
+        <p className="stage-tagline">{t("tag1")} <em>{t("tag2")}</em> {t("tag3")}</p>
+        <ul className="stage-stats">
+          <li className="stage-stat stage-stat-flood">{stat(state.counts.up, "stat_up_1", "stat_up")}</li>
+          <li className={`stage-stat${state.counts.live ? " stage-stat-live" : ""}`}>
+            {state.counts.live > 0 && <span className="live-dot" aria-hidden="true" />}
+            <strong>{state.counts.live}</strong> {t("stat_live")}
+          </li>
+          <li className="stage-stat">{stat(state.counts.week, "stat_week_1", "stat_week")}</li>
+        </ul>
         {state.sandbox && <p className="notice">{t("sandbox")}</p>}
       </header>
       {versus.show && <Versus c={versus.show} t={t} onGo={() => versus.go(versus.show!.id)} onLater={() => versus.putOff(versus.show!.id)} />}
@@ -113,8 +124,9 @@ export default function ArenaScreen() {
       ) : after && me ? (
         <AfterGame key={after.challengeId} a={after} me={me} t={t} rank={rank} onError={onError} />
       ) : me?.rankUp ? (
-        <RankUp to={me.rankUp.to} t={t} rank={rank} onError={onError} />
+        <RankUp from={me.rankUp.from} to={me.rankUp.to} t={t} rank={rank} onError={onError} />
       ) : null}
     </div>
+    </Stage>
   );
 }

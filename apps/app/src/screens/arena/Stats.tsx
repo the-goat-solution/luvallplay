@@ -1,7 +1,7 @@
 // A game's tracked stats, from the feed's "Stats" chip, as the website's
 // window: rallies, the longest, the fastest shot, then each player's hits,
 // distance and top speed, and who recorded it.
-import { Dialog } from "./Dialogs.tsx";
+import { Dialog } from "../../components/Dialog.tsx";
 import { useMatchStats } from "./data.ts";
 import type { ArenaT } from "./words.ts";
 

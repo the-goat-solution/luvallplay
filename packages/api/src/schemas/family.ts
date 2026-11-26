@@ -81,6 +81,36 @@ export const familyBookingResponse = z.object({ booking: familyBooking });
 export const familyPayResponse = z.object({ clientSecret: z.string(), amountMinor: z.number().int(), currency: z.string() });
 export type FamilyPayResponse = z.infer<typeof familyPayResponse>;
 export const familyBookingParams = clubParams.extend({ id: z.coerce.number().int().positive().max(2147483647) });
+// A child's "Safety details": who to call, and the medical note (stored encrypted).
+export const familyContact = z.object({ name: z.string(), phone: z.string(), relationship: z.string().nullable() });
+export const familyCareResponse = z.object({
+  contacts: z.array(familyContact),
+  medicalNotes: z.string(),
+  /** False when this deployment can't encrypt a note: the note can't be saved or shown. */
+  medicalNotesAvailable: z.boolean(),
+  limits: z.object({ contacts: z.number().int(), nameMax: z.number().int(), relationshipMax: z.number().int(), notesMax: z.number().int() }),
+});
+export const familyContactsRequest = z.object({ contacts: z.array(z.object({ name: z.string().max(200), phone: z.string().max(60), relationship: z.string().max(200).nullable().optional() })).max(10) });
+export const familyNotesRequest = z.object({ notes: z.string().max(10000) });
+export type FamilyCareResponse = z.infer<typeof familyCareResponse>;
+// The club's forms and waivers for one child, as their guardian sees them.
+export const familyForm = z.object({
+  id: z.number().int(),
+  slug: z.string(),
+  version: z.number().int(),
+  kind: z.enum(["waiver", "consent"]),
+  title: z.string(),
+  body: z.string(),
+  /** When THIS guardian signed THIS version for the child; null when they haven't. */
+  signedAt: z.string().nullable(),
+  signedName: z.string().nullable(),
+});
+export const familyFormsResponse = z.object({ forms: z.array(familyForm), limits: z.object({ nameMax: z.number().int() }) });
+export const familyFormParams = familyChildParams.extend({ formId: z.coerce.number().int().positive().max(2147483647) });
+export const familySignRequest = z.object({ name: z.string().max(400) });
+export const familyFormResponse = z.object({ form: familyForm });
+export type FamilyFormsResponse = z.infer<typeof familyFormsResponse>;
+export type FamilyFormResponse = z.infer<typeof familyFormResponse>;
 export type FamilyBookingsResponse = z.infer<typeof familyBookingsResponse>;
 export type FamilyBookingResponse = z.infer<typeof familyBookingResponse>;
 export type FamilyChild = z.infer<typeof familyChild>;

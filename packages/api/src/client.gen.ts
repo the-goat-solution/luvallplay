@@ -91,15 +91,30 @@ export function createApi(transport: Transport) {
       /** POST /clubs/{club}/family/bookings/{id}/cancel (signed in) */
       cancelBooking: (params: ParamsOf<"family.cancelBooking">, body: BodyOf<"family.cancelBooking">, options?: Options) =>
         transport.call("family.cancelBooking", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.cancelBooking">>,
+      /** GET /clubs/{club}/family/{id}/care (signed in) */
+      care: (params: ParamsOf<"family.care">, options?: Options) =>
+        transport.call("family.care", { params, signal: options?.signal }) as Promise<ResponseOf<"family.care">>,
+      /** PUT /clubs/{club}/family/{id}/care/contacts (signed in) */
+      careContacts: (params: ParamsOf<"family.careContacts">, body: BodyOf<"family.careContacts">, options?: Options) =>
+        transport.call("family.careContacts", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.careContacts">>,
+      /** PUT /clubs/{club}/family/{id}/care/medical-notes (signed in) */
+      careNotes: (params: ParamsOf<"family.careNotes">, body: BodyOf<"family.careNotes">, options?: Options) =>
+        transport.call("family.careNotes", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.careNotes">>,
       /** PUT /clubs/{club}/family/{id}/consent (signed in) */
       consent: (params: ParamsOf<"family.consent">, body: BodyOf<"family.consent">, options?: Options) =>
         transport.call("family.consent", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.consent">>,
+      /** GET /clubs/{club}/family/{id}/forms (signed in) */
+      forms: (params: ParamsOf<"family.forms">, options?: Options) =>
+        transport.call("family.forms", { params, signal: options?.signal }) as Promise<ResponseOf<"family.forms">>,
       /** GET /clubs/{club}/family (signed in) */
       list: (params: ParamsOf<"family.list">, options?: Options) =>
         transport.call("family.list", { params, signal: options?.signal }) as Promise<ResponseOf<"family.list">>,
       /** POST /clubs/{club}/family/{id}/bookings/pay (signed in) */
       pay: (params: ParamsOf<"family.pay">, body: BodyOf<"family.pay">, options?: Options) =>
         transport.call("family.pay", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.pay">>,
+      /** POST /clubs/{club}/family/{id}/forms/{formId}/sign (signed in) */
+      signForm: (params: ParamsOf<"family.signForm">, body: BodyOf<"family.signForm">, options?: Options) =>
+        transport.call("family.signForm", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.signForm">>,
       /** PATCH /clubs/{club}/family/{id} (signed in) */
       update: (params: ParamsOf<"family.update">, body: BodyOf<"family.update">, options?: Options) =>
         transport.call("family.update", { params, body, signal: options?.signal }) as Promise<ResponseOf<"family.update">>,

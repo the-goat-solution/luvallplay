@@ -103,3 +103,52 @@ export function useRefreshBookingsSoon() {
     for (const ms of [2500, 7000]) window.setTimeout(refresh, ms);
   };
 }
+
+// ── A child's safety details: emergency contacts and the medical note ───────
+
+export type Care = ResponseOf<"family.care">;
+export type CareContact = Care["contacts"][number];
+
+/** Asked for only when the guardian opens the section; never kept after the screen closes (gcTime 0). */
+export function useCare(childId: number, open: boolean) {
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["family-care", slug, who, childId], queryFn: ({ signal }) => api.family.care({ club: slug, id: childId }, { signal }), enabled: ready && open, retry: false, gcTime: 0, staleTime: 0 });
+}
+
+function useSetCare(childId: number) {
+  const { who, slug } = useClubApi();
+  const queryClient = useQueryClient();
+  return (care: Care) => queryClient.setQueryData<Care>(["family-care", slug, who, childId], care);
+}
+
+export function useSaveContacts(childId: number) {
+  const { slug, api } = useClubApi();
+  const set = useSetCare(childId);
+  return useMutation({ mutationFn: (contacts: BodyOf<"family.careContacts">["contacts"]) => api.family.careContacts({ club: slug, id: childId }, { contacts }), onSuccess: set });
+}
+
+export function useSaveNotes(childId: number) {
+  const { slug, api } = useClubApi();
+  const set = useSetCare(childId);
+  return useMutation({ mutationFn: (notes: string) => api.family.careNotes({ club: slug, id: childId }, { notes }), onSuccess: set });
+}
+
+// ── The club's forms and waivers for a child ────────────────────────────────
+
+export type ChildForms = ResponseOf<"family.forms">;
+export type ChildForm = ChildForms["forms"][number];
+
+export function useChildForms(childId: number) {
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["family-forms", slug, who, childId], queryFn: ({ signal }) => api.family.forms({ club: slug, id: childId }, { signal }), enabled: ready, retry: false });
+}
+
+export function useSignForm(childId: number) {
+  const { slug, api } = useClubApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { formId: number; name: string }) => api.family.signForm({ club: slug, id: childId, formId: input.formId }, { name: input.name }),
+    // Signed, or refused because the wording changed: either way the list is asked for again.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["family-forms"] }),
+  });
+}

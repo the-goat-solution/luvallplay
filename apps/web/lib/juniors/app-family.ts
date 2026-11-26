@@ -47,7 +47,7 @@ const STATUS: Record<FamilyError, number> = {
 };
 
 /** The club's id and its calendar year, or the 404 a switched-off module gives. */
-async function requireJuniors(club: ClubConfig): Promise<{ tenantId: number; year: number } | AppApiError> {
+export async function requireJuniors(club: ClubConfig): Promise<{ tenantId: number; year: number } | AppApiError> {
   // The club's id comes from the same read as the switch (the app's own settings may not carry it).
   const tenantId = await juniorsClubId(sql, club.slug);
   if (tenantId === null) return fail(404, "module_off");

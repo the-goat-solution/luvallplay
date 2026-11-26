@@ -363,7 +363,7 @@ Findings and changes recorded as the work goes:
 | Edge-to-edge | Enforced for API 35+. Handled by SystemBars + safe-area CSS |
 | Data safety form + account deletion | In-app deletion **plus a public web page** for deletion requests (Play requires both) |
 | Photo/video permissions | Photo Picker, no `READ_MEDIA_IMAGES` |
-| Developer account | **Organization account** to skip the 14-day / 12-tester closed-test rule for new personal accounts, and to show "Luvallplay" as the developer . **Registered 26 Nov 2026: Google Play developer account ID 4932366388846048390.** Apple is still to come |
+| Developer account | **Organization account** to skip the 14-day / 12-tester closed-test rule for new personal accounts, and to show "Luvallplay" as the developer . **Registered 26 Nov 2026: Google Play developer account ID 4932366388846048390.** App "Luvallplay", package `com.luvallplay.app`, default language English (Australia) – en-AU; add Vietnamese as a translation. Apple is still to come |
 | App signing | Play App Signing, AAB builds |
 
 ### 4.4 Phones, foldables and tablets
@@ -406,7 +406,7 @@ Playwright visual snapshots run at each window class on every pull request. Real
 ### 4.5 Build and release pipeline
 
 - GitHub Actions: lint → unit → tenant-isolation tests → Playwright → build web → build iOS (macOS runner + fastlane match) and Android (AAB).
-- Delivery: TestFlight / Play internal testing → closed beta (Three Wolves members) → production.
+- Delivery: TestFlight / Play internal testing → closed beta (Three Wolves members) → production. **Google Play goes first** (§4.5.1); the App Store follows once the Apple account exists and the Play release is stable.
 - Crash and error reporting: Sentry (Capacitor + Next.js SDKs).
 - Analytics: privacy-friendly and first-party (no cross-app tracking).
 - Store assets:
@@ -414,6 +414,47 @@ Playwright visual snapshots run at each window class on every pull request. Real
   - Play feature graphic.
   - Privacy policy and terms on luvallplay.com.
   - A support URL.
+
+### 4.5.1 Play Store first (owner's decision, 26 Nov 2026)
+
+Luvallplay is published on Google Play before the App Store, **only if every check below passes**. The Play account is ready (organisation, The GOAT Solution); Apple's isn't. Nothing goes to production on a "nearly": a failed check stops the release until it is fixed and that check is run again.
+
+**1. Automated, on every pull request (CI must be green):**
+- unit tests, tenant-isolation tests, the web and players' app journeys;
+- Playwright visual snapshots at every window class (§4.4);
+- an Android build (AAB) of `com.luvallplay.app` that installs and opens on an emulator, with a smoke run: sign in by code, open Home, book and cancel a session, open the Arena, open My photos, sign out.
+
+**2. Real devices, before each release (Firebase Test Lab):**
+- a matrix covering Android 10 to 16 (API 29–36): a small, a mid-range and a large phone; one foldable, folded and unfolded; and one 10" tablet;
+- a Robo crawl and the scripted smoke run on each device. Zero crashes are allowed;
+- checks that the app works offline and recovers when the network returns; that it handles edge-to-edge, dark mode, large fonts and TalkBack; that it opens from a link (app links verified with `assetlinks.json`); and that push notifications arrive.
+
+**3. Internal testing track (the team, at least 3 days):**
+- every screen in the parity checklist is checked by hand, in English and Vietnamese;
+- Play's pre-launch report shows no crashes and no security or accessibility warnings left unexplained.
+
+**4. Closed testing track (Three Wolves members, at least 14 days and at least 12 testers):**
+- an organisation account doesn't need this, but we run it anyway as a real-world test;
+- real bookings, memberships, challenges and Vision;
+- crash-free users at least 99.5%; ANR rate under 0.47% and crash rate under 1.09%, which are Play's "bad behaviour" thresholds;
+- every reported bug is triaged, and nothing high or critical is left open.
+
+**5. Store and policy, before production:**
+- the store listing in English (Australia), the default, and Vietnamese;
+- screenshots for phone, 7" and 10" tablet, and the feature graphic;
+- the Data safety form matches what the app really collects;
+- account deletion works in the app **and** on a public web page;
+- the content rating questionnaire is done;
+- target audience: 18 and over until Juniors is switched on. Junior accounts bring in Google's Families policy, which needs its own review first;
+- privacy policy, terms and support URL are live on luvallplay.com;
+- **digital purchases:** Vision passes sold inside the Android app must use Play Billing (through RevenueCat, decision C). Until that is built and tested, the Android app doesn't sell passes. Memberships and session fees are real-world club services, so they keep Stripe.
+
+**6. Release:**
+- the owner gives a written go or no-go after reading the results of steps 1 to 5;
+- a staged rollout: 10%, then 50% after 48 hours with Android vitals in the green, then 100%;
+- the rollout is halted at once if crash or ANR rates pass the thresholds above. Web fixes ship over the air (§4.1); native fixes go through review.
+
+**Then the App Store:** once the Apple developer account exists, the same steps run for iOS: TestFlight in place of the Play tracks, and StoreKit for Vision passes.
 
 ---
 
@@ -1396,7 +1437,7 @@ Every remaining phase starts now as a **lane**: one build thread, one set of dir
 | **T Tenancy switch** | Phase 3 steps 11–12, club paths | `packages/db` (schema, `tenancy.ts`), `lib/database*.ts`, `lib/repos/**`, `lib/tenant-*.ts`, `lib/tenant-routing.ts`, `proxy.ts`, `app/api/cron/**`, `packages/core/src/host-routing.ts` | **Week 1, the step 11 evidence (C0, C0b):** run `0012` and `0013` on production (owner's OK given 25 Nov), and add `--to` to the migrator; the heartbeat skips missing tables and gets the raw pool under `enforce`; `shadow-report` needs every check clean each day; shadow `orm()` and `connect()`; then **restart the 7-day clock**. Also: the advisory lock (`pg_advisory_xact_lock`); one `set_config` per scoped statement and a load test. **Week 2, second-club blockers:** club-blind player lists (C1), merge, round-robin names, welcome list, scripts and the mirror (C6); fail closed on `TENANT_SCOPE`, `TENANT_SLUG`, `CLUB_SETTINGS_SOURCE` (H1, C7); crons loop over the region's clubs and check switches, webhook retries get their own job (H2); rebase `clever-lovelace` (club paths, off); free Neon branches; the app's own login with the owner | **Step 11** after 7 clean days *by the tightened report* and T1 run against a copy of production with two clubs (earliest about a week after the week-1 fixes merge, so early December). **Step 12** a quiet week later, with a fresh restore point. Then drop the `COALESCE(…, 1)` defaults. **No second club's rows in the shared database before `enforce` and `APP_DATABASE_URL` are live and quiet** |
 | **A White-label admin** | Track A (§6.2.4) | `apps/web/app/admin/**`, `components/admin/**`, `nav-config.ts`, `lib/email*.ts`, `lib/*-email*.ts`, `lib/admin-notify.ts`, `lib/message-notify.ts`, `app/api/admin/*/export`, `lib/admin-roles.ts` (audit summary), `lib/admin-access.ts`, `packages/auth`, the manifest *shape* in `packages/modules/src/define.ts` | A1 menu from the registry; A2 widened to emails, receipts and exports (C4, 93 lines in 37 files) and the literal scan over `lib/` and `app/api/`; A3 club theme; **per-action audit rows with outcome and an allow-list of fields (H7)**; **per-action step-up (H8)**. Then A4–A6 | The schema part of A2 (drop the `pricing_plans` CHECK and `memberships.day DEFAULT 'friday'`) goes through the migration queue (§9.4). **A1–A3 must land before W creates a club** |
 | **J Juniors** | Phase 3b steps 2–8 | `packages/modules` entries `juniors` and `forms-waivers`, `lib/juniors/**` (new), `app/api/v1/app/**/family*` (new), `apps/app/src/screens/family/**` (new), `app/admin/juniors/**` (new, built on A's contract) | Confirm `0012` on production; step 2 (modules and the switch-on guard); step 3 (the guardian's Family section, in the **app only**, see §9.5); step 5 (booking and paying for a child) | Step 4 (encrypted medical notes) after **H7 and H8**; step 6 (club roster, coach checks) after **A1**; real children only after the safeguarding review and gate 1 |
-| **N Native app** | Phase 4 close-out, Phase 5 | `apps/native` (new: Capacitor `ios/`, `android/`), `apps/app/src/lib/native/**` (new), `apps/app/src/lib/{storage,store,offline,queue,install}.ts`, `apps/app/sw/**`, `apps/web/public/.well-known/*`, the `vision` payment adapter in `packages/vision` | Phase 4 bugs from the audit (token out of query keys H9, build id and error screen H10, queue and 401 fixes, timeouts, focus on route change); a parity checklist and the **cutover** of Three Wolves members to the app; then the Capacitor shell, async secure storage, one public app URL and universal/app links, `@capacitor/browser`, service worker and Install card off in native, file export through Share, push (FCM), Sign in with Apple | **TestFlight and Play testing** need the organisation developer accounts (gate 2, D-U-N-S); **Vision passes** in the store apps need StoreKit and Play Billing through RevenueCat (decision C, and the audit found Play needs it too); store release after the device matrix |
+| **N Native app** | Phase 4 close-out, Phase 5 | `apps/native` (new: Capacitor `ios/`, `android/`), `apps/app/src/lib/native/**` (new), `apps/app/src/lib/{storage,store,offline,queue,install}.ts`, `apps/app/sw/**`, `apps/web/public/.well-known/*`, the `vision` payment adapter in `packages/vision` | Phase 4 bugs from the audit (token out of query keys H9, build id and error screen H10, queue and 401 fixes, timeouts, focus on route change); a parity checklist and the **cutover** of Three Wolves members to the app; then the Capacitor shell, async secure storage, one public app URL and universal/app links, `@capacitor/browser`, service worker and Install card off in native, file export through Share, push (FCM), Sign in with Apple | **TestFlight and Play testing** need the organisation developer accounts (gate 2, D-U-N-S); **Vision passes** in the store apps need StoreKit and Play Billing through RevenueCat (decision C, and the audit found Play needs it too); **Google Play first** (§4.5.1), only after its six checks pass; store release after the device matrix |
 | **W Club sites, wizard and payments** | Phase 6 Stage B | `packages/site-templates` (new), `apps/web/app/(club-site)/**` and `app/start/**` (new), the website editor's tables and module, `lib/payments/**`, `lib/stripe.ts`, `app/api/create-*`, `lib/app-membership.ts`, `lib/membership-self-service.ts`, `apps/site` follow-ups | **W1:** every card flow behind the payments interface and one membership path (H5, ends the drift in `app-membership.ts`); Stripe Connect in test mode; the per-club website content model replacing the one Sanity dataset (decision D); site templates rendered for Three Wolves; Look & feel and brand import on `packages/ui`; Stage A's open items | **W2:** the wizard creating clubs, Admin → Modules, Look & feel and Payments pages, custom domains: after **step 11** and **A1–A3**. A real outside club after the **four hard gates** (§11.3) |
 | **G Global modules** | Phase 7 items 1–2 | `packages/core/src/rating/**` (new), `lib/directory/**` and `lib/ratings/**` (new), `apps/app/src/screens/discover/**` (new) | Glicko-2 as pure code with tests, fed by confirmed Arena games; per-sport scoring rules (the Arena is badminton-only today); the Find a club data model and API behind a module switch; the app's Discover tab hidden | Listing real clubs needs more than one club (after **W2**); PostGIS through the migration queue. **Social and marketplace stay gated by §8; nothing is built for them** |
 | **I Integrations** | Track I (§12) | `packages/integrations` (new), `lib/integrations/**` (new) | The connector framework (OAuth tokens, sync queue, error queue, reconciliation report); Xero against a sandbox organisation; the NZ direct-debit authority flow in Stripe test mode; the Windcave spike | Connectors live for clubs after **W1's payments interface** and **paid plans switched on** (gate 4, Track B) |

@@ -89,6 +89,8 @@ export const PLATFORM_TABLES = [
   "platform_admins",
   "player_events", // account events (sign-in, install)
   "player_sessions",
+  "push_devices", // a person's phones that asked for notifications (the address sealed)
+  "push_prefs", // which kinds of notification a person asked for
   "player_settings", // platform switches (SMS on/off, alert timestamps)
   "players", // the global identity
   "rate_limits", // shared rate-limit counters (hashed keys)

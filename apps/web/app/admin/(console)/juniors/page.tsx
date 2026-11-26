@@ -189,6 +189,10 @@ export default async function JuniorsAdminPage({ searchParams }: { searchParams:
         )}
       </Section>
 
+      <p>
+        <Link href="/admin/juniors/forms">Forms and waivers guardians sign</Link>
+      </p>
+
       {seesSafetyChecks && (
         <>
       <Section title="Safety checks" id="safety-checks">

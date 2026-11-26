@@ -2338,6 +2338,74 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
     }
   });
 
+  test("APP60 · an owner publishes a waiver in the admin; the guardian is asked to sign it in the app; the admin sees the signature; new wording asks again; retiring stops asking", async () => {
+    await juniorsOn();
+    const guardian = await sessionToken(PEOPLE.member.email);
+    const json = { ...auth(guardian).headers, "content-type": "application/json" };
+    const owner = await signedIn(PEOPLE.owner.email);
+    const page = await owner.context.newPage();
+    const mine = async () => (await (await fetch(`${api}/clubs/three-wolves/family/${childId}/forms`, auth(guardian))).json()).forms;
+    let childId = 0;
+    try {
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) })).status, 200);
+      childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      assert.deepEqual(await mine(), []);
+
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.getByRole("link", { name: "Forms and waivers guardians sign" }).click();
+      await page.waitForURL(`${env.base}/admin/juniors/forms`);
+      await page.getByText("The club isn't asking guardians to sign anything yet.").waitFor();
+
+      const form = page.locator("#publish form");
+      const publish = async (slug, title, body) => {
+        await form.getByLabel(/^Short name/).evaluate((el, v) => { el.removeAttribute("pattern"); el.value = v; }, slug);
+        await form.getByLabel("Title").fill(title);
+        await form.getByLabel("The form's words").fill(body);
+        await form.getByRole("button", { name: "Publish" }).click();
+      };
+      // A short name with spaces is refused and nothing is written.
+      await publish("Junior Waiver", "Junior waiver", "Words.");
+      await page.getByText("The short name can only have").first().waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM club_forms`)).rows[0].n, 0);
+
+      await publish("junior-waiver", "Junior waiver", "I accept the risks of playing badminton for my child.");
+      await page.getByText("Form published.").first().waitFor();
+      const row = page.locator("#current tr, #current [role=row]").filter({ hasText: "junior-waiver" });
+      await row.getByText("0 signatures").waitFor();
+
+      // The guardian is asked, and signs.
+      const asked = await mine();
+      assert.deepEqual(asked.map((f) => [f.slug, f.version, f.signedAt]), [["junior-waiver", 1, null]]);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms/${asked[0].id}/sign`, { method: "POST", headers: json, body: JSON.stringify({ name: "Mia Member" }) })).status, 200);
+      await page.reload();
+      await row.getByText("1 signature", { exact: true }).waitFor();
+
+      // New wording: version 2, nobody has signed it yet, and the guardian is asked again.
+      await publish("junior-waiver", "Junior waiver", "New wording.");
+      await page.getByText("Version 2 published.").first().waitFor();
+      await row.getByText("0 signatures").waitFor();
+      assert.deepEqual((await mine()).map((f) => [f.version, f.signedAt]), [[2, null]]);
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM form_signatures`)).rows[0].n, 1, "the first signature is kept");
+
+      // Retired: no longer asked for.
+      page.once("dialog", (d) => d.accept());
+      await row.getByRole("button", { name: "Retire" }).click();
+      await page.getByText("Form retired.").first().waitFor();
+      await page.getByText("The club isn't asking guardians to sign anything yet.").waitFor();
+      assert.deepEqual(await mine(), []);
+      // The log names the form, not its words.
+      const logged = (await db.query(`SELECT action, target, meta::text AS meta FROM admin_audit_log WHERE action LIKE 'juniors.form.%' ORDER BY id`)).rows;
+      assert.deepEqual(logged.filter((l) => !l.action.endsWith(".refused")).map((l) => [l.action, l.target]), [["juniors.form.publish", "junior-waiver"], ["juniors.form.publish", "junior-waiver"], ["juniors.form.retire", "junior-waiver"]]);
+      assert.ok(!logged.some((l) => l.meta.includes("accept the risks")));
+    } finally {
+      await juniorsOff();
+      await owner.context.close();
+    }
+  });
+
   test("APP61 · a coach in Admin → Juniors: no roster without a safety check; with one, the roster and a child's medical note, but never other people's safety-check status or the form to record one", async () => {
     await juniorsOn();
     const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;

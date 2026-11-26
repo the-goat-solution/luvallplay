@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { auditLabel } from "@/lib/admin-audit-labels";
+import { auditLabel, auditOutcomeNote } from "@/lib/admin-audit-labels";
 import { Badge, ConfirmButton, DataTable, EmptyState, Notice, PageHeader, Section, Toolbar, kit } from "@/components/admin/kit";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
@@ -155,9 +155,17 @@ function roleBadge(a: AdminRow) {
 }
 
 function describe(row: AuditRow): string {
+  const note = auditOutcomeNote(row.meta);
+  const details = describeDetails(row);
+  return [note, details].filter(Boolean).join(" · ");
+}
+
+function describeDetails(row: AuditRow): string {
   const meta = row.meta ?? {};
   if (row.action === "admin.role_changed") return `role ${String(meta.from)} → ${String(meta.to)}`;
   if (row.action === "admin.granted" || row.action === "admin.invited") return `${row.action.replace("admin.", "")} as ${String(meta.to ?? meta.role)}`;
+  if (row.action === "module.switch") return meta.changed === false ? "no change" : `turned ${meta.on ? "on" : "off"}`;
+  if (row.action === "module.lock") return meta.changed === false ? "no change" : meta.lock === "unlocked" ? "unlocked" : `locked ${String(meta.lock)}`;
   if (meta.fields && typeof meta.fields === "object") {
     return Object.entries(meta.fields as Record<string, string>)
       .slice(0, 4)

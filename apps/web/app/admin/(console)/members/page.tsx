@@ -30,6 +30,7 @@ import { MemberFreeMonthButton } from "@/components/admin/MemberFreeMonthButton"
 import { StripeSyncButton } from "@/components/admin/StripeSyncButton";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { clubMajor, clubMoney } from "@/lib/money";
+import { clubLocale, membershipDescription, parseMembershipDay, weekdayName, weekdayPlural } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -55,8 +56,8 @@ async function addOfflineMember(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const plan = formData.get("plan") === "quarterly" ? "quarterly" : "monthly";
-  const day = formData.get("day") === "wednesday" ? "wednesday" : "friday";
-  const dayLabel = day === "wednesday" ? "Wednesday" : "Friday";
+  const day = parseMembershipDay(formData.get("day"));
+  const dayLabel = weekdayName(day);
   const startDate = String(formData.get("startDate") ?? "").trim();
   const method = parseOfflineMethod(formData.get("method"));
 
@@ -98,7 +99,7 @@ async function addOfflineMember(formData: FormData) {
       lastName,
       phone,
       amountCents: amount,
-      description: `Three Wolves — ${plan === "monthly" ? "Monthly" : "Quarterly"} Membership (${dayLabel})`,
+      description: membershipDescription(plan, day),
       metadata: {
         type: "membership",
         plan,
@@ -169,7 +170,7 @@ async function addOfflineMember(formData: FormData) {
 const OVERDUE_STATUSES = new Set(["past_due", "unpaid", "incomplete"]);
 
 const day = (key: string | null | undefined) =>
-  key ? new Date(`${key}T00:00:00Z`).toLocaleDateString("en-NZ", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }) : "—";
+  key ? new Date(`${key}T00:00:00Z`).toLocaleDateString(clubLocale(), { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }) : "—";
 
 function TransferStatus({ status }: { status: OfflineReconciliation | undefined }) {
   return status?.reconciled ? (
@@ -229,7 +230,7 @@ function MembersTable({ members, reconciliation, today }: { members: MembershipR
                 </td>
                 <td data-label="Plan">
                   <div>
-                    {m.plan === "quarterly" ? "Quarterly" : "Monthly"} · {m.day === "wednesday" ? "Wednesdays" : "Fridays"}
+                    {m.plan === "quarterly" ? "Quarterly" : "Monthly"} · {weekdayPlural(m.day)}
                     <span className={kit.sub}>{m.recurring ? "Renews automatically" : "One-time payment"}</span>
                     {m.freeDaysGranted ? (
                       <span className={kit.sub} style={{ color: "#1a7a3c" }}>
@@ -451,7 +452,7 @@ export default async function MembersAdminPage({ searchParams }: { searchParams:
                         </div>
                       </td>
                       <td data-label="Plan">
-                        {m.plan === "quarterly" ? "Quarterly" : "Monthly"} · {m.day === "wednesday" ? "Wednesdays" : "Fridays"} ·{" "}
+                        {m.plan === "quarterly" ? "Quarterly" : "Monthly"} · {weekdayPlural(m.day)} ·{" "}
                         {m.recurring ? "auto-renew" : "one-time"}
                       </td>
                       <td data-label="Period">

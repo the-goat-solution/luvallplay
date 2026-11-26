@@ -27,6 +27,7 @@ import { reconcileOfflinePayment, recordOfflinePayment } from "@/lib/offline-pay
 import { getOfflinePaymentReconciliation, type OfflineReconciliation } from "@/lib/bank-db";
 import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMethodField";
 import { clubMoney } from "@/lib/money";
+import { clubLocale, membershipDayList } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -277,7 +278,7 @@ async function removeWaitlistEntry(date: string, id: number) {
 type Tab = "roster" | "waitlist" | "attendance";
 
 function dayLabel(key: string, opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" }): string {
-  return new Date(`${key}T00:00:00Z`).toLocaleDateString("en-NZ", { timeZone: "UTC", ...opts });
+  return new Date(`${key}T00:00:00Z`).toLocaleDateString(clubLocale(), { timeZone: "UTC", ...opts });
 }
 
 function TransferStatus({ status }: { status: OfflineReconciliation | undefined }) {
@@ -445,7 +446,7 @@ export default async function PlayDaysAdminPage({
           Members whose membership covers this day take their places first; casual sign-ups get what&apos;s left.
         </p>
         <p>Auto-renewing members count for play days after their current billing period too: their membership renews before the play day.</p>
-        <p>Only Friday and Wednesday play days have members. Play days on other days start with 1 court, casual sign-ups only.</p>
+        <p>Only {membershipDayList()} play days have members. Play days on other days start with 1 court, casual sign-ups only.</p>
       </InfoDisclosure>
 
       <Tabs

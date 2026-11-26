@@ -11,7 +11,7 @@ Local run, 26 Nov 2026, Postgres 16 (this machine has no Postgres 18):
 
 | Check | Result |
 |---|---|
-| Migration `0018_push_devices` | Applied on a database built from migrations `0000` to `0016` |
+| Migration `0018_push_devices` | Applied on a database built from migrations `0000` to `0017` |
 | `tests/push-devices.test.ts` | Passes (11 of 11), including: with no key nothing is stored; the database refuses a plain address; one person can't read or remove another's devices; a row copied under another person can't be opened; a phone that signs in as someone else stops receiving the first person's notifications; nothing is sent for a kind the person didn't turn on |
 | Schema drift suite | **Not run here**: it needs Postgres 18 (CI runs it). `docs/schema/production.sql` was extended by hand-checked generation from this run (39 lines added, none changed) |
 

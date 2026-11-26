@@ -1272,6 +1272,44 @@ CREATE TABLE pricing_plans (
   CONSTRAINT pricing_plans_pkey PRIMARY KEY (tenant_id, plan_id)
 );
 
+CREATE TABLE push_devices (
+  id integer DEFAULT nextval('push_devices_id_seq'::regclass) NOT NULL,
+  player_id integer NOT NULL,
+  platform text NOT NULL,
+  token_hash text NOT NULL,
+  sealed text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT push_devices_platform_check CHECK ((platform = ANY (ARRAY['android'::text, 'ios'::text]))),
+  CONSTRAINT push_devices_sealed_check CHECK ((sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'::text)),
+  CONSTRAINT push_devices_token_hash_check CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text)),
+  CONSTRAINT push_devices_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT push_devices_created_at_not_null NOT NULL created_at,
+  CONSTRAINT push_devices_id_not_null NOT NULL id,
+  CONSTRAINT push_devices_last_seen_at_not_null NOT NULL last_seen_at,
+  CONSTRAINT push_devices_platform_not_null NOT NULL platform,
+  CONSTRAINT push_devices_player_id_not_null NOT NULL player_id,
+  CONSTRAINT push_devices_sealed_not_null NOT NULL sealed,
+  CONSTRAINT push_devices_token_hash_not_null NOT NULL token_hash,
+  CONSTRAINT push_devices_pkey PRIMARY KEY (id),
+  CONSTRAINT push_devices_token_hash_key UNIQUE (token_hash)
+);
+CREATE INDEX push_devices_player_id_idx ON public.push_devices USING btree (player_id);
+
+CREATE TABLE push_prefs (
+  player_id integer NOT NULL,
+  category text NOT NULL,
+  enabled boolean NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT push_prefs_category_check CHECK ((category = ANY (ARRAY['challenge'::text, 'result'::text, 'message'::text, 'reminder'::text, 'roster'::text, 'payment'::text]))),
+  CONSTRAINT push_prefs_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT push_prefs_category_not_null NOT NULL category,
+  CONSTRAINT push_prefs_enabled_not_null NOT NULL enabled,
+  CONSTRAINT push_prefs_player_id_not_null NOT NULL player_id,
+  CONSTRAINT push_prefs_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT push_prefs_pkey PRIMARY KEY (player_id, category)
+);
+
 CREATE TABLE pv_arena_after_game (
   challenge_id integer NOT NULL,
   player_id integer NOT NULL,
@@ -2045,6 +2083,7 @@ CREATE SEQUENCE player_events_id_seq AS integer OWNED BY player_events.id;
 CREATE SEQUENCE player_photos_id_seq AS integer OWNED BY player_photos.id;
 CREATE SEQUENCE player_sessions_id_seq AS integer OWNED BY player_sessions.id;
 CREATE SEQUENCE players_id_seq AS integer OWNED BY players.id;
+CREATE SEQUENCE push_devices_id_seq AS integer OWNED BY push_devices.id;
 CREATE SEQUENCE pv_arena_challenges_id_seq AS integer OWNED BY pv_arena_challenges.id;
 CREATE SEQUENCE pv_arena_codes_id_seq AS integer OWNED BY pv_arena_codes.id;
 CREATE SEQUENCE pv_arena_pairs_id_seq AS integer OWNED BY pv_arena_pairs.id;

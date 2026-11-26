@@ -2161,6 +2161,79 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
       await context.close();
     }
   });
+
+  test("APP57 · a guardian downloads everything the club holds about their child, then deletes it for good; a coming place blocks the delete; nobody else can do either", async () => {
+    await juniorsOn();
+    const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;
+    await db.query(`UPDATE tenants SET payment_mode = 'free' WHERE id = 1`);
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const json = { ...auth(token).headers, "content-type": "application/json" };
+    const put = (path, body) => fetch(`${api}/clubs/three-wolves/family/${path}`, { method: "PUT", headers: json, body: JSON.stringify(body) });
+    try {
+      const added = await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) });
+      assert.equal(added.status, 200);
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      assert.equal((await put(`${childId}/care/contacts`, { contacts: [{ name: "Nan Guardian", phone: "021 555 0101" }] })).status, 200);
+      assert.equal((await put(`${childId}/care/medical-notes`, { notes: "Asthma: blue inhaler." })).status, 200);
+      const formId = (await db.query(`INSERT INTO club_forms (tenant_id, slug, version, kind, title, body, published_by_user_id) VALUES (1, 'junior-waiver', 1, 'waiver', 'Junior waiver', 'Words.', 1) RETURNING id`)).rows[0].id;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms/${formId}/sign`, { method: "POST", headers: json, body: JSON.stringify({ name: "Mia Guardian" }) })).status, 200);
+      const date = (await (await fetch(`${api}/clubs/three-wolves/family/bookings`, auth(token))).json()).days.find((d) => d.spotsLeft > 0).date;
+      const booked = await (await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) })).json();
+
+      // The export, as the endpoint gives it: everything, the note in plain words.
+      const all = await (await fetch(`${api}/clubs/three-wolves/family/${childId}/export`, auth(token))).json();
+      assert.deepEqual([all.child.name, all.child.birthYear, all.emergencyContacts.length, all.medicalNotes.notes, all.forms.length, all.bookings.length], ["Tama Testchild", 2016, 1, "Asthma: blue inhaler.", 1, 1]);
+      // Nobody else: another signed-in person gets 404 for both; signed out, 401.
+      const other = { ...auth(await sessionToken(PEOPLE.player.email)).headers, "content-type": "application/json" };
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/export`, { headers: other })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/delete`, { method: "POST", headers: other, body: JSON.stringify({ confirm: true }) })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/export`)).status, 401);
+      const unconfirmed = await fetch(`${api}/clubs/three-wolves/family/${childId}/delete`, { method: "POST", headers: json, body: JSON.stringify({ confirm: false }) });
+      assert.deepEqual([unconfirmed.status, (await unconfirmed.json()).error], [400, "confirm_required"]);
+
+      await page.goto(`${APP}/family`);
+      await page.waitForSelector(FAMILY);
+      const rights = page.locator(`[data-rights="${childId}"]`);
+      // The download: a file with the child's information.
+      const download = page.waitForEvent("download");
+      await rights.getByRole("button", { name: "Download" }).click();
+      const file = await download;
+      assert.equal(file.suggestedFilename(), "child-information.json");
+      const saved = JSON.parse(await (await import("node:fs/promises")).readFile(await file.path(), "utf8"));
+      assert.deepEqual([saved.child.name, saved.medicalNotes.notes], ["Tama Testchild", "Asthma: blue inhaler."]);
+
+      // A coming place blocks the delete, and nothing is removed.
+      await rights.getByRole("button", { name: "Delete" }).click();
+      const dialog = page.getByRole("dialog", { name: "Delete Tama Testchild's information?" });
+      await dialog.getByRole("button", { name: "Delete for good" }).click();
+      await rights.getByRole("alert").filter({ hasText: "Cancel this child's coming play days first." }).waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_medical_notes`)).rows[0].n, 1);
+
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/bookings/${booked.booking.id}/cancel`, { method: "POST", headers: json, body: "{}" })).status, 200);
+      await rights.getByRole("button", { name: "Delete" }).click();
+      // Changing your mind keeps everything.
+      await dialog.getByRole("button", { name: "Keep" }).click();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_medical_notes`)).rows[0].n, 1);
+      await rights.getByRole("button", { name: "Delete" }).click();
+      await dialog.getByRole("button", { name: "Delete for good" }).click();
+      await page.getByRole("status").filter({ hasText: "Tama Testchild's information was deleted." }).waitFor();
+      await page.getByText("You haven't added a child yet.").waitFor();
+
+      const left = (await db.query(`SELECT (SELECT count(*) FROM junior_medical_notes)::int AS notes, (SELECT count(*) FROM junior_emergency_contacts)::int AS contacts, (SELECT count(*) FROM form_signatures)::int AS signatures, (SELECT count(*) FROM junior_bookings)::int AS bookings`)).rows[0];
+      assert.deepEqual(left, { notes: 0, contacts: 0, signatures: 0, bookings: 1 });
+      const profile = (await db.query(`SELECT name, birth_year, deleted_at IS NOT NULL AS deleted FROM junior_profiles WHERE id = $1`, [childId])).rows[0];
+      assert.deepEqual(profile, { name: "(deleted)", birth_year: null, deleted: true });
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/export`, auth(token))).status, 404);
+      // The one refusal this journey asked for (the delete while a place was held) and nothing else.
+      assert.deepEqual(problems, ["Failed to load resource: the server responded with a status of 409 (Conflict)"]);
+    } finally {
+      await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
+      await juniorsOff();
+      await context.close();
+    }
+  });
 });
 
 describe("APP · Vision", () => {

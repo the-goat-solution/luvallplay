@@ -416,7 +416,7 @@ body:has([data-stage]) { background: color-mix(in oklab, var(--primary) 24%, bla
 .stage .icon-button { color: var(--ink); }
 
 /* The podium: second, first, third; told apart by height and number first. */
-.podium {
+.top-three {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 0.5rem;
   max-width: 34rem; width: 100%; margin: 0.5rem auto 0; padding-top: 1.5rem;
 }
@@ -572,4 +572,63 @@ body:has([data-stage]) { background: color-mix(in oklab, var(--primary) 24%, bla
   --vision-brand-light: color-mix(in oklab, var(--accent) 70%, white);
   --vision-steel: var(--ink-muted);
   --vision-ink: var(--ink);
+}
+
+/* ── Foldables (iPhone Duo and others) ─────────────────────────────────── */
+/* Opened like a book (two side-by-side segments): the shell keeps its narrow
+   rail, and the stage screens lay their own content on both halves, with
+   nothing under the fold: the columns are the segments themselves (a grid
+   the shell, its main area and the stage share as subgrids). */
+@media (horizontal-viewport-segments: 2) {
+  .shell:has([data-fold-split]) {
+    --fold: calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw));
+    grid-template-columns: var(--nav-size) calc(env(viewport-segment-width 0 0, 50vw) - var(--nav-size)) var(--fold) minmax(0, 1fr);
+    column-gap: 0;
+    grid-template-areas: "head head head head" "nav main main main";
+  }
+  .shell:has([data-fold-split]) .shell-nav { width: var(--nav-size); padding: 0.75rem 0; }
+  .shell:has([data-fold-split]) .shell-nav ul { flex-direction: column; }
+  .shell:has([data-fold-split]) .tab { flex-direction: column; justify-content: center; gap: 0.25rem; min-height: 4rem; padding: 0.25rem 0.125rem; font-size: 0.6875rem; }
+  .shell:has([data-fold-split]) .shell-main {
+    grid-column: 2 / -1; display: grid; grid-template-columns: subgrid; align-content: start; row-gap: 1rem;
+    padding: 1rem 0 max(1rem, env(safe-area-inset-bottom));
+  }
+  .shell:has([data-fold-split]) .shell-main > * { grid-column: 1 / -1; }
+  .shell:has([data-fold-split]) .shell-main > :not(.stage) { grid-column: 1; margin-inline: 1rem; }
+  .stage[data-fold-split] { display: grid; grid-template-columns: subgrid; }
+  /* The screen is a size container, which can't be a subgrid: the same columns, spelled out. */
+  .stage[data-fold-split] > .screen {
+    grid-column: 1 / -1; display: grid; align-content: start; row-gap: 1rem;
+    grid-template-columns: calc(env(viewport-segment-width 0 0, 50vw) - var(--nav-size)) var(--fold) minmax(0, 1fr);
+  }
+  .stage[data-fold-split] > .screen > :not(dialog, .vs-screen) { grid-column: 1; margin-inline: 1rem; min-width: 0; }
+
+  /* The hero sits on one half: the phone's title sizes, whatever the whole screen's width. */
+  .stage[data-fold-split] .stage-hero h1 { font-size: 2.5rem; }
+  .stage[data-fold-split] .stage-hero-big h1 { font-size: 3.5rem; }
+
+  /* The Arena: the hero and your games on the left, the crown and the feed on the right. */
+  .stage[data-fold-split] .arena .me-grid { display: contents; }
+  .stage[data-fold-split] .arena .me-grid > :last-child { grid-column: 3; grid-row: 1 / span 6; margin-inline: 1rem; }
+  .stage[data-fold-split] .arena .me-grid > :first-child { grid-column: 1; margin-inline: 1rem; }
+  /* The Leaderboard: the podium and your next rank on the left, the list on the right. */
+  .stage[data-fold-split] .leaderboard > .stack { display: contents; }
+  .stage[data-fold-split] .leaderboard > .stack > * { grid-column: 1; margin-inline: 1rem; }
+  .stage[data-fold-split] .leaderboard > .stack > .board, .stage[data-fold-split] .leaderboard > .stack > .board-pinned { grid-column: 3; grid-row: span 8; }
+  .stage[data-fold-split] .leaderboard > .stack > .board { grid-row: 1 / span 8; }
+  /* Vision: what it is and the modes on the left, the challenge and the rest on the right. */
+  .stage[data-fold-split] .vision > section:not(.trial) { grid-column: 3; }
+  .stage[data-fold-split] .vision > :first-child { grid-row: 1 / span 2; }
+
+  /* A dialog opens on one half (the right), never across the fold. */
+  .stage .dialog, .stage[data-fold-split] .dialog {
+    margin: auto 1rem auto env(viewport-segment-left 1 0, 50vw);
+    width: min(32rem, calc(env(viewport-segment-width 1 0, 50vw) - 2rem));
+  }
+  /* The versus splash: one pair on each half. */
+  .stage .vs-screen { grid-template-columns: env(viewport-segment-width 0 0, 50vw) env(viewport-segment-width 1 0, 50vw); column-gap: var(--fold, 0px); grid-template-rows: 1fr auto; }
+  .stage .vs-half-top { grid-column: 1; grid-row: 1; clip-path: none; }
+  .stage .vs-half-bottom { grid-column: 2; grid-row: 1; clip-path: none; margin-top: 0; padding-top: max(3.5rem, env(safe-area-inset-top)); }
+  .stage .vs-foot { grid-column: 2; grid-row: 2; }
+  .stage .vs-big, .stage .vs-spark { display: none; }
 }

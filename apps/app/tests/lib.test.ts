@@ -90,6 +90,17 @@ describe("window classes (build plan §4.4)", () => {
     }
   });
 
+  test("a short, wide phone screen (iPhone Duo's outer display) gets the rail; phones and a tablet's narrow window keep the bar", () => {
+    const place = (screenWidth: number, screenHeight: number, windowHeight: number) => ({ screenWidth, screenHeight, windowHeight });
+    assert.equal(navKind("compact", place(466, 678, 600)), "rail", "iPhone Duo, closed");
+    assert.equal(navKind("compact", place(390, 844, 760)), "bar", "iPhone");
+    assert.equal(navKind("compact", place(375, 667, 560)), "bar", "iPhone SE");
+    assert.equal(navKind("compact", place(904, 2316, 700)), "bar", "a tall foldable's cover screen");
+    assert.equal(navKind("compact", place(1024, 1366, 1300)), "bar", "an iPad window beside another app");
+    assert.equal(navKind("compact", place(390, 844, 300)), "bar", "a phone with its keyboard up");
+    assert.equal(navKind("medium", place(669, 951, 900)), "rail");
+  });
+
   test("the stylesheet uses the same breakpoints", () => {
     const css = read("../src/styles/app.css");
     const used = [...css.matchAll(/@media \(min-width: (\d+)px\)/g)].map((m) => Number(m[1]));
@@ -103,8 +114,9 @@ describe("window classes (build plan §4.4)", () => {
 // The semantic tokens (packages/ui semantic.ts), and the custom properties a component sets on its own element.
 const SEMANTIC = ["primary", "on-primary", "accent", "on-accent", "surface", "surface-raised", "ink", "ink-muted", "line", "control-border", "focus", "danger", "font-display", "font-text"];
 // nav-size and head-size: the shell's. club and on-club: components/ClubTag.tsx. The rest: per-element values set
-// inline by components/Stage.tsx and the stage screens (a confetti piece's place and colour, a meter's value, a stagger index).
-const LOCAL = ["nav-size", "head-size", "club", "on-club", "x", "delay", "turn", "drift", "c", "v", "i", "h"];
+// inline by components/Stage.tsx and the stage screens (a confetti piece's place and colour, a meter's value, a stagger index),
+// and the fold's width on a foldable opened like a book (styles/stage.css).
+const LOCAL = ["nav-size", "head-size", "club", "on-club", "x", "delay", "turn", "drift", "c", "v", "i", "h", "fold"];
 
 /** Each `animation:` (other than none) that isn't inside an @media (prefers-reduced-motion: no-preference) block. */
 function unguardedAnimations(css: string): string[] {

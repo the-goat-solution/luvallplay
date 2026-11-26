@@ -1124,3 +1124,45 @@
 .posRow .posSide {
   align-self: center;
 }
+
+/* A foldable set down half-open like a laptop (two segments, one above the
+   other): the picture stays on the upper half and the controls scroll on the
+   lower half, so the phone is its own stand courtside. Nothing sits on the fold. */
+@media (vertical-viewport-segments: 2) {
+  .stage {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    margin-bottom: calc(env(viewport-segment-top 0 1, 50vh) - env(viewport-segment-bottom 0 0, 50vh));
+  }
+  .stage canvas {
+    max-height: calc(env(viewport-segment-height 0 0, 50vh) - 24px);
+  }
+}
+
+/* Opened like a book, full screen (the host marks it .tracker-fold): the
+   picture on one half, the controls on the other, nothing on the fold. */
+@media (horizontal-viewport-segments: 2) {
+  :global(.tracker-fold) .body {
+    display: grid;
+    grid-template-columns: env(viewport-segment-width 0 0, 50vw) env(viewport-segment-width 1 0, 50vw);
+    column-gap: calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw));
+    align-items: start;
+    max-width: none;
+    padding-inline: 0;
+  }
+  :global(.tracker-fold) .body > * {
+    grid-column: 2;
+    min-width: 0;
+    margin-inline: 16px;
+  }
+  :global(.tracker-fold) .stage {
+    grid-column: 1;
+    grid-row: 1 / span 40;
+    position: sticky;
+    top: 16px;
+  }
+  :global(.tracker-fold) .top {
+    padding-right: calc(env(viewport-segment-width 1 0, 50vw) + 16px);
+  }
+}

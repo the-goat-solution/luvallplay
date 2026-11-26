@@ -2,7 +2,7 @@
 // live match on this phone's camera or a match video, for an Arena
 // challenge (?challenge=ID) or any game. Its calls go to the club's API
 // (/clubs/{club}/vision/…), which answers as the website's routes do.
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { API_PREFIX } from "@luvallplay/api/routes";
 import { format, setTerms } from "@luvallplay/i18n/format";
 import { MatchAnalyzer, VisionHostProvider, fillTerms, type VisionHost, type VisionTransport } from "@luvallplay/vision/ui";
@@ -87,6 +87,8 @@ export default function VisionTrackScreen() {
   const demo = params.get("demo") === "1";
   const player = session.data?.player;
   const stageRef = useRef<HTMLDivElement>(null);
+  // Full screen (a session): on a foldable opened like a book, the picture takes one half and the controls the other.
+  const focused = useSyncExternalStore(focus.subscribe, focus.get);
   const [overlay, setOverlay] = useState<Partial<OverlayTheme> | undefined>(undefined);
   const theme = config?.theme;
   useLayoutEffect(() => {
@@ -121,7 +123,7 @@ export default function VisionTrackScreen() {
   if (!host) return <Stage foldSplit={false}><div ref={stageRef} /></Stage>;
   return (
     <Stage foldSplit={false}>
-    <div className="screen tracker" data-screen="vision_track" ref={stageRef}>
+    <div className={`screen tracker${focused ? " tracker-fold" : ""}`} data-screen="vision_track" ref={stageRef}>
       <VisionHostProvider host={host}>
         <MatchAnalyzer
           challengeId={Number.isInteger(challengeId) && challengeId > 0 ? challengeId : null}

@@ -101,14 +101,6 @@ export default function LeaderboardScreen() {
       ) : (
         <div className="stack" aria-busy={board.isFetching}>
           {!b.me.visible && b.me.hiddenRank && <p className="notice">{t("lb_hidden_self", { rank: b.me.hiddenRank })}</p>}
-          <div className="stack-tight">
-            <span className="muted small">{t("lb_points_from")}</span>
-            <nav className="chips" aria-label={t("lb_points_from")}>
-              {SOURCES.map(([s, label]) => (
-                <button key={s} type="button" className="chip-button" aria-pressed={b.source === s} onClick={() => setQ({ ...q, source: s, key: b.isCurrent ? undefined : b.range.key })}>{t(label)}</button>
-              ))}
-            </nav>
-          </div>
           <div className="period-stepper">
             <button type="button" className="icon-button" aria-label={t("lb_prev")} disabled={!b.prevKey} onClick={() => setQ({ ...q, key: b.prevKey ?? undefined })}>‹</button>
             <h2>{rangeTitle(b, t, locale)}</h2>
@@ -116,7 +108,7 @@ export default function LeaderboardScreen() {
           </div>
           {podium && (
             // The top three on a podium: a picture of the list's first rows, which stay the way to read and open them.
-            <div className="podium" aria-hidden="true" key={`${b.source}-${b.range.key}`}>
+            <div className="top-three" aria-hidden="true" key={`${b.source}-${b.range.key}`}>
               {[podium[1], podium[0], podium[2]].map((r) => (
                 <div key={r.playerId} className={`podium-place podium-${r.rank}`} onClick={() => setSelected(r.playerId)}>
                   {r.rank === 1 && <Icon name="crown" size={26} className="podium-crown" />}
@@ -131,6 +123,14 @@ export default function LeaderboardScreen() {
               ))}
             </div>
           )}
+          <div className="stack-tight">
+            <span className="muted small">{t("lb_points_from")}</span>
+            <nav className="chips" aria-label={t("lb_points_from")}>
+              {SOURCES.map(([s, label]) => (
+                <button key={s} type="button" className="chip-button" aria-pressed={b.source === s} onClick={() => setQ({ ...q, source: s, key: b.isCurrent ? undefined : b.range.key })}>{t(label)}</button>
+              ))}
+            </nav>
+          </div>
           {b.me.ladder && next && (
             <div className="card next-tier">
               <RankIcon index={next.index} px={48} />

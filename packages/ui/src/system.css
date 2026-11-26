@@ -110,7 +110,7 @@
   --on-medal-1: var(--on-accent);
   --medal-2: color-mix(in oklab, white 80%, var(--primary));
   --on-medal-2: var(--surface);
-  --medal-3: color-mix(in oklab, color-mix(in oklab, var(--brand-heart) 60%, var(--accent)) 70%, black);
+  --medal-3: color-mix(in oklab, color-mix(in oklab, var(--brand-heart) 60%, var(--accent)) 58%, black);
   --on-medal-3: white;
 }
 @supports (color: oklch(from red l c h)) {

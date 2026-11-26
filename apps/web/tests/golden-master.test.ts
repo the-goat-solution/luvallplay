@@ -586,6 +586,8 @@ const NOT_COVERED: Partial<Record<ModName, Record<string, string>>> = {
     membershipCoversDateSql: "builds SQL text only",
     projectedPeriodEndSql: "builds SQL text only",
     addDays: "date arithmetic only",
+    claimSessionSpot: "takes a transaction's connection; run through reserveBookingSlotOnce (covered) and on its own in tests/session-spot.test.ts",
+    releaseSessionSpot: "takes a connection; run through removeBooking (covered) and on its own in tests/session-spot.test.ts",
   },
   "player-db": { defaultDisplayName: "string helper", mapPlayer: "row mapper", normalizeAccountEmail: "string helper", toE164: "re-exported phone helper" },
   "player-auth": {

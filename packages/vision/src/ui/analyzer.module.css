@@ -1162,7 +1162,8 @@
     position: sticky;
     top: 16px;
   }
+  /* The header keeps to the first half: everything right of the first segment (the fold and the second half) is padding. */
   :global(.tracker-fold) .top {
-    padding-right: calc(env(viewport-segment-width 1 0, 50vw) + 16px);
+    padding-right: calc(100vw - env(viewport-segment-right 0 0, 50vw) + 16px);
   }
 }

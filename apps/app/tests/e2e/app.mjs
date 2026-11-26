@@ -2651,7 +2651,8 @@ describe("APP · iPhone Duo", () => {
     { name: "outer display, sideways", viewport: { width: 678, height: 466 }, nav: "rail" },
     { name: "inner display", viewport: { width: 951, height: 669 }, nav: "rail" },
     { name: "inner display, upright", viewport: { width: 669, height: 951 }, nav: "rail" },
-    { name: "Split View, half the inner display", viewport: { width: 382, height: 669 }, screen: { width: 951, height: 669 }, nav: "bar" },
+    // Apple puts each Split View app's bars down its outer edge, as on the outer display.
+    { name: "Split View, half the inner display", viewport: { width: 382, height: 669 }, screen: { width: 951, height: 669 }, nav: "rail" },
     { name: "folded like a book", viewport: { width: 951, height: 669 }, nav: "rail", fold: { orientation: "vertical", offset: 463, maskLength: FOLD } },
     { name: "set down like a laptop", viewport: { width: 669, height: 951 }, nav: "rail", fold: { orientation: "horizontal", offset: 463, maskLength: FOLD } },
   ];

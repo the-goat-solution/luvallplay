@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3b-junior-details",
+  "description": "Phase 3b (build plan §6.8; audit of 25 Nov, 'Migration 0012 details'): guardianships becomes club-owned (tenant_id, row-level security, ended_at); junior_attendance is tied to its play day and its source is checked; a junior booking's booker must be a guardian of that child; junior_profiles.guardian_user_id stops being required; a duplicate index is dropped. All on tables that are empty in production. Additive: no row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

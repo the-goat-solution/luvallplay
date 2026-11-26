@@ -72,6 +72,21 @@ test("with every module on, as Three Wolves has them, nothing is blocked", () =>
   assert.deepEqual(ROUTES.filter((r) => blockedByModule(r, ALL_ON) !== null), []);
 });
 
+test("Juniors: the page where an owner switches it on is served while it is off; any other Juniors admin page needs the module's claim", () => {
+  const off = new Set(ALL_ON);
+  off.delete("juniors");
+  // Today the only Juniors admin page is Set up, part of the core's /admin
+  // (it hides itself while Juniors is hidden platform-wide).
+  assert.equal(blockedByModule("/admin/juniors/setup", off), null);
+  // The module claimed "/admin/juniors" before it had a page there, which the
+  // generated on/off journey (S2) rightly failed: a claimed route must exist.
+  // The claim comes back with the first real page (Phase 3b step 6). This
+  // guard makes that impossible to forget: a Juniors admin page other than
+  // Set up must stop while Juniors is off.
+  const others = ROUTES.filter((r) => (r === "/admin/juniors" || r.startsWith("/admin/juniors/")) && r !== "/admin/juniors/setup");
+  for (const r of others) assert.equal(blockedByModule(r, off), "juniors", `${r} must stop while Juniors is off: claim "/admin/juniors" for the juniors module in packages/modules/src/routes.ts (and keep /admin/juniors/setup with the core)`);
+});
+
 test("the core, the account and the platform can't be switched off", () => {
   const nothingOn = new Set<string>();
   for (const r of ["/", "/login", "/profile", "/admin", "/admin/play-days", "/admin/settings", "/admin/people/admins", "/api/auth/email/start", "/api/sessions", "/api/spots", "/api/waitlist", "/api/cron/send-roster", "/api/stripe-webhook", "/api/health/db", "/admin/setup"]) {
@@ -95,6 +110,9 @@ test("modules that own no route of their own are listed, so the gap is deliberat
   const withRoutes = new Set(ROUTE_OWNERS.map(([, o]) => o));
   // Their screens live inside another module's pages; their parts are
   // switched inside those pages (next part of step 5), not by path.
-  assert.deepEqual(OPTIONAL.filter((id) => !withRoutes.has(id)).sort(), ["payments-to-check"]);
+  // Forms & waivers: hidden, its screens arrive with Phase 3b step 4.
+  // Juniors: hidden; its only admin page today is Set up (core). Its own
+  // routes arrive with Phase 3b step 6.
+  assert.deepEqual(OPTIONAL.filter((id) => !withRoutes.has(id)).sort(), ["forms-waivers", "juniors", "payments-to-check"]);
   assert.ok(moduleOwnedPrefixes().length > 30);
 });

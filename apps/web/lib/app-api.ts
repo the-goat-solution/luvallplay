@@ -19,7 +19,7 @@ import { sql } from "./database";
 import { PLAYER_COOKIE, PLAYER_SESSION_DAYS, sessionForToken, sha256 } from "./player-auth";
 import type { Player } from "./player-db";
 import { slideSession } from "./repos/sessions";
-import { checkRateLimit, getClientIp } from "./security";
+import { checkRateLimit, getClientIp, rateLimit } from "./security";
 import { defaultTenantSlug } from "./tenant-members";
 import { deploymentRegion } from "./tenant-routing";
 
@@ -198,7 +198,10 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
 
       const { limit, windowMs } = endpoint.rateLimit;
       const key = options.rateKey ? options.rateKey(ip, session) : `app:${id}:${session ? `p${session.player.id}` : ip}`;
-      if (!checkRateLimit(key, limit, windowMs)) return error(request, fail(429, "rate_limited"));
+      // Sign-in (the public endpoints) is counted in the shared store, so its
+      // limits hold across server instances; the rest count per instance.
+      const within = endpoint.auth === "public" && endpoint.method !== "GET" ? await rateLimit(key, limit, windowMs) : checkRateLimit(key, limit, windowMs);
+      if (!within) return error(request, fail(429, "rate_limited"));
 
       const bad = fail(400, options.badRequestCode ?? "bad_request");
       let params: unknown;
@@ -207,6 +210,18 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
         if (!parsed.success) return error(request, fail(404, "not_found"));
         params = parsed.data;
       }
+      let club: ClubConfig | undefined;
+      if (endpoint.scope === "club") {
+        // One club per deployment until host routing is enforced: any other
+        // slug doesn't exist here, whoever asks.
+        const here = await deploymentClub();
+        if (!here || (params as { club?: string } | undefined)?.club !== here.slug) return error(request, fail(404, "club_not_found"));
+        club = here;
+        // Before the query and body are looked at: with its module off, an
+        // endpoint isn't there, whatever is sent to it.
+        if (endpoint.module && !(await enabledModules(sql)).has(endpoint.module)) return error(request, fail(404, "module_off"));
+      }
+
       let query: unknown;
       if (endpoint.query) {
         const parsed = endpoint.query.safeParse(Object.fromEntries(new URL(request.url).searchParams));
@@ -225,16 +240,6 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
         const parsed = endpoint.body.safeParse(raw);
         if (!parsed.success) return error(request, bad);
         body = parsed.data;
-      }
-
-      let club: ClubConfig | undefined;
-      if (endpoint.scope === "club") {
-        // One club per deployment until host routing is enforced: any other
-        // slug doesn't exist here, whoever asks.
-        const here = await deploymentClub();
-        if (!here || (params as { club?: string } | undefined)?.club !== here.slug) return error(request, fail(404, "club_not_found"));
-        club = here;
-        if (endpoint.module && !(await enabledModules(sql)).has(endpoint.module)) return error(request, fail(404, "module_off"));
       }
 
       const result = await handler({ request, ip, params, query, body, session, player: session?.player as Player, club: club as ClubConfig } as Ctx<K>);

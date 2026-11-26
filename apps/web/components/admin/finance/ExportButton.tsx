@@ -5,6 +5,7 @@ import { LoadingIcon } from "@/components/LoadingIcon";
 import { useToast } from "@/context/ToastContext";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import styles from "./financials.module.css";
+import { clubSlug } from "@/lib/club-brand";
 
 // Downloads an Excel export with visible progress. A plain <a download>
 // gave no feedback at all while the server built the workbook (a few
@@ -34,7 +35,7 @@ export function ExportButton({ href, children }: { href: string; children: React
       const blob = await res.blob();
       const name =
         /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ??
-        "three-wolves-financials.xlsx";
+        `${clubSlug()}-financials.xlsx`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

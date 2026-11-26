@@ -674,13 +674,19 @@ CREATE TABLE guardianships (
   consent_at timestamp with time zone,
   consent_scope jsonb DEFAULT '{}'::jsonb NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
+  tenant_id integer NOT NULL,
+  ended_at timestamp with time zone,
   CONSTRAINT guardianships_guardian_user_id_fkey FOREIGN KEY (guardian_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT guardianships_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
   CONSTRAINT guardianships_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
+  CONSTRAINT guardianships_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT guardianships_consent_scope_not_null NOT NULL consent_scope,
   CONSTRAINT guardianships_created_at_not_null NOT NULL created_at,
   CONSTRAINT guardianships_guardian_user_id_not_null NOT NULL guardian_user_id,
   CONSTRAINT guardianships_junior_profile_id_not_null NOT NULL junior_profile_id,
-  CONSTRAINT guardianships_pkey PRIMARY KEY (guardian_user_id, junior_profile_id)
+  CONSTRAINT guardianships_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT guardianships_pkey PRIMARY KEY (guardian_user_id, junior_profile_id),
+  CONSTRAINT guardianships_tenant_guardian_junior_key UNIQUE (tenant_id, guardian_user_id, junior_profile_id)
 );
 CREATE INDEX guardianships_junior_profile_id_idx ON public.guardianships USING btree (junior_profile_id);
 
@@ -747,9 +753,11 @@ CREATE TABLE junior_attendance (
   removed boolean DEFAULT false NOT NULL,
   recorded_at timestamp with time zone DEFAULT now() NOT NULL,
   recorded_by_user_id integer,
+  CONSTRAINT junior_attendance_source_check CHECK ((source = ANY (ARRAY['roster'::text, 'coach'::text, 'admin'::text]))),
   CONSTRAINT junior_attendance_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
   CONSTRAINT junior_attendance_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
   CONSTRAINT junior_attendance_recorded_by_user_id_fkey FOREIGN KEY (recorded_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_attendance_session_date_fkey FOREIGN KEY (tenant_id, session_date) REFERENCES sessions(tenant_id, date) ON DELETE RESTRICT,
   CONSTRAINT junior_attendance_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT junior_attendance_junior_profile_id_not_null NOT NULL junior_profile_id,
   CONSTRAINT junior_attendance_recorded_at_not_null NOT NULL recorded_at,
@@ -775,6 +783,7 @@ CREATE TABLE junior_bookings (
   cancelled_at timestamp with time zone,
   CONSTRAINT junior_bookings_amount_check CHECK ((((amount_minor IS NULL) AND (currency IS NULL)) OR ((amount_minor >= 0) AND (currency ~ '^[A-Z]{3}$'::text)))),
   CONSTRAINT junior_bookings_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'refunded'::text]))),
+  CONSTRAINT junior_bookings_booked_by_guardian_fkey FOREIGN KEY (tenant_id, booked_by_user_id, junior_profile_id) REFERENCES guardianships(tenant_id, guardian_user_id, junior_profile_id) ON DELETE RESTRICT,
   CONSTRAINT junior_bookings_booked_by_user_id_fkey FOREIGN KEY (booked_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT junior_bookings_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
   CONSTRAINT junior_bookings_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
@@ -798,7 +807,7 @@ CREATE INDEX junior_bookings_session_idx ON public.junior_bookings USING btree (
 CREATE TABLE junior_profiles (
   id integer DEFAULT nextval('junior_profiles_id_seq'::regclass) NOT NULL,
   tenant_id integer NOT NULL,
-  guardian_user_id integer NOT NULL,
+  guardian_user_id integer,
   name text NOT NULL,
   birth_year smallint,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -806,7 +815,6 @@ CREATE TABLE junior_profiles (
   CONSTRAINT junior_profiles_guardian_user_id_fkey FOREIGN KEY (guardian_user_id) REFERENCES players(id) ON DELETE RESTRICT,
   CONSTRAINT junior_profiles_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
   CONSTRAINT junior_profiles_created_at_not_null NOT NULL created_at,
-  CONSTRAINT junior_profiles_guardian_user_id_not_null NOT NULL guardian_user_id,
   CONSTRAINT junior_profiles_id_not_null NOT NULL id,
   CONSTRAINT junior_profiles_name_not_null NOT NULL name,
   CONSTRAINT junior_profiles_tenant_id_not_null NOT NULL tenant_id,
@@ -814,7 +822,6 @@ CREATE TABLE junior_profiles (
   CONSTRAINT junior_profiles_tenant_id_id_key UNIQUE (tenant_id, id)
 );
 CREATE INDEX junior_profiles_guardian_user_id_idx ON public.junior_profiles USING btree (guardian_user_id);
-CREATE INDEX junior_profiles_tenant_id_idx ON public.junior_profiles USING btree (tenant_id, id);
 
 CREATE TABLE membership_reminders_sent (
   membership_id integer NOT NULL,
@@ -1355,6 +1362,17 @@ CREATE TABLE pv_wv_updates (
   CONSTRAINT pv_wv_updates_pkey PRIMARY KEY (id)
 );
 
+CREATE TABLE rate_limits (
+  key_hash text NOT NULL,
+  count integer NOT NULL,
+  reset_at timestamp with time zone NOT NULL,
+  CONSTRAINT rate_limits_count_not_null NOT NULL count,
+  CONSTRAINT rate_limits_key_hash_not_null NOT NULL key_hash,
+  CONSTRAINT rate_limits_reset_at_not_null NOT NULL reset_at,
+  CONSTRAINT rate_limits_pkey PRIMARY KEY (key_hash)
+);
+CREATE INDEX rate_limits_reset_at_idx ON public.rate_limits USING btree (reset_at);
+
 CREATE TABLE rr_results (
   draw_id integer NOT NULL,
   mg_name text NOT NULL,
@@ -1614,6 +1632,17 @@ CREATE TABLE sms_sends (
   CONSTRAINT sms_sends_pkey PRIMARY KEY (id)
 );
 CREATE INDEX sms_sends_sent_at_idx ON public.sms_sends USING btree (sent_at);
+
+CREATE TABLE stripe_events (
+  event_id text NOT NULL,
+  type text NOT NULL,
+  processed_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT stripe_events_event_id_not_null NOT NULL event_id,
+  CONSTRAINT stripe_events_processed_at_not_null NOT NULL processed_at,
+  CONSTRAINT stripe_events_type_not_null NOT NULL type,
+  CONSTRAINT stripe_events_pkey PRIMARY KEY (event_id)
+);
+CREATE INDEX stripe_events_processed_at_idx ON public.stripe_events USING btree (processed_at);
 
 CREATE TABLE stripe_payouts (
   id text NOT NULL,
@@ -2022,6 +2051,7 @@ ALTER TABLE donations ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE finance_entries ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE finance_settings ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE finance_sync_state ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE guardianships ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE jersey_registrations ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_attendance ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_bookings ENABLE AND FORCE ROW LEVEL SECURITY;
@@ -2083,6 +2113,7 @@ POLICY tenant_isolation ON donations (PERMISSIVE) FOR ALL TO {public} USING ((te
 POLICY tenant_isolation ON finance_entries (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON finance_settings (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON finance_sync_state (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON guardianships (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON jersey_registrations (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_attendance (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_bookings (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));

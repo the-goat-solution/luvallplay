@@ -27,6 +27,7 @@ import { publicBlobConfigured, uploadPublicImage } from "@/lib/public-blob";
 import { clubMajor, clubMinor, clubMoney, clubCurrencyLower } from "@/lib/money";
 import { recordAdminAction, type AuditOutcome } from "@/lib/admin-audit";
 import { requireFreshAdminActor } from "@/lib/admin-step-up";
+import { shopDescription } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ async function recordCashInStripe(order: Order): Promise<string | null> {
   const customers = await stripe.customers.list({ email: order.email, limit: 1 });
   const customer = customers.data[0] ?? (await stripe.customers.create({ email: order.email, name: order.name || undefined }));
   const items = order.items.map((i) => i.label).join(", ");
-  await stripe.invoiceItems.create({ customer: customer.id, amount: order.totalCents, currency: clubCurrencyLower(), description: `Three Wolves shop — ${items} — cash` });
+  await stripe.invoiceItems.create({ customer: customer.id, amount: order.totalCents, currency: clubCurrencyLower(), description: shopDescription(items, "cash") });
   const invoice = await stripe.invoices.create({
     customer: customer.id,
     collection_method: "send_invoice",

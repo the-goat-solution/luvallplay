@@ -17,6 +17,7 @@ import {
 } from "@/lib/day-requests";
 import { getUpcomingSessionDates } from "@/lib/db";
 import { sendDayOpenEmail } from "@/lib/email";
+import { clubLocale } from "@/lib/club-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,7 @@ async function removeRequest(id: number) {
 }
 
 function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-NZ", { timeZone: CLUB_TIME_ZONE, day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString(clubLocale(), { timeZone: CLUB_TIME_ZONE, day: "numeric", month: "short" });
 }
 
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;

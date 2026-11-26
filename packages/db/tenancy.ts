@@ -37,6 +37,7 @@ export const CLUB_OWNED_TABLES = [
   "finance_entries",
   "finance_settings",
   "finance_sync_state",
+  "guardianships",
   "jersey_registrations",
   "junior_attendance",
   "junior_bookings",
@@ -79,15 +80,16 @@ export const CLUB_OWNED_TABLES = [
 export const PLATFORM_TABLES = [
   "admin_handoffs", // single-use sign-in handoff for an account
   "auth_codes", // sign-in codes
-  "guardianships", // guardian ↔ junior profile; the profile carries the club
   "plans", // what Luvallplay offers, per country and sport
   "platform_admins",
   "player_events", // account events (sign-in, install)
   "player_sessions",
   "player_settings", // platform switches (SMS on/off, alert timestamps)
   "players", // the global identity
+  "rate_limits", // shared rate-limit counters (hashed keys)
   "schema_runs", // unused since Phase 2; dropped in a later release
   "sms_sends", // sign-in texts
+  "stripe_events", // Stripe events already handled
   "tenants",
   // Unused copies from before previews had their own database (Phase 0).
   "pv_arena_after_game",

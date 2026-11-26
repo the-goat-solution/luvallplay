@@ -37,7 +37,7 @@ import type pg from "pg";
 import * as schema from "@luvallplay/db/schema";
 import { createPgDatabase, type PgDatabase } from "./database-pg.ts";
 import { defaultTenantSlug } from "./tenant-members.ts";
-import { APP_ROLE, isReadOnlyStatement, readScoped, scopePool, type PoolLike } from "./tenant-scope.ts";
+import { isReadOnlyStatement, readScoped, scopePool, scopeStatement, textOf, type PoolLike, type Queryable } from "./tenant-scope.ts";
 
 // Postgres DATE columns stay the 'YYYY-MM-DD' string Postgres sends. The
 // driver's default turns them into a Date at local midnight, which shifts the
@@ -100,6 +100,8 @@ function viaPg(): PgDatabase | null {
 //   shadow   as before, and a sample of the reads is run a second time as
 //            the app's role for the club, through row-level security; a
 //            read that answers differently is put on the shadow record.
+//            Every way in is covered: sql`…`, sql.query(), the connections
+//            sql.connect() hands out, and Drizzle (orm()).
 //   enforce  every statement runs as the app's role for the club
 //            (lib/tenant-scope.ts). What row-level security hides, the app
 //            can't see.
@@ -151,16 +153,12 @@ async function viaHttp<R extends QueryResultRow>(text: string, params: unknown[]
   return (await run.query(text, params as Primitive[])) as unknown as QueryResult<R>;
 }
 
-/** One statement over HTTP as the app's role for the club: a three-statement transaction in one request. */
+/** One statement over HTTP as the app's role for the club: a two-statement transaction in one request. */
 async function viaHttpScoped<R extends QueryResultRow>(text: string, params: unknown[]): Promise<QueryResult<R>> {
   const run = neon(url(), { fullResults: true });
   const id = await scopeTenantId();
-  const results = await run.transaction([
-    run.query(`SET LOCAL ROLE ${APP_ROLE}`),
-    run.query(`SELECT set_config('app.tenant_id', $1, true)`, [String(id)]),
-    run.query(text, params as Primitive[]),
-  ]);
-  return results[2] as unknown as QueryResult<R>;
+  const results = await run.transaction([run.query(scopeStatement(id)), run.query(text, params as Primitive[])]);
+  return results[1] as unknown as QueryResult<R>;
 }
 
 /** The pool of whichever driver is in use, unscoped. */
@@ -168,10 +166,23 @@ function rawPool(): PoolLike {
   return (viaPg()?.pool() ?? getPool()) as unknown as PoolLike;
 }
 
+/**
+ * The pool with no club named, whatever TENANT_SCOPE says. ONLY for the
+ * row-level-security probe (lib/shadow-log.ts), which sets the role and the
+ * club itself and has to be able to name none: given the scoped pool, its
+ * "no club named" half would see the club's rows and report a leak that
+ * isn't there. Never use it to answer a request.
+ */
+export function unscopedPool(): PoolLike {
+  return rawPool();
+}
+
 // The club this deployment serves, looked up once: as the connection's own
 // role, or, with the app's own login (which has no rights of its own), as
 // the app's role with no club named. The clubs table is a platform table.
 let tenantIdPromise: Promise<number> | null = null;
+/** Whether that lookup has answered (so asking again needs no connection). */
+let tenantIdKnown = false;
 function scopeTenantId(): Promise<number> {
   if (!tenantIdPromise) {
     const slug = defaultTenantSlug();
@@ -180,6 +191,7 @@ function scopeTenantId(): Promise<number> {
     const lookup = found
       .then((r: { rows: { id: number }[] }) => {
         if (!r.rows[0]) throw new Error(`No club "${slug}" in tenants.`);
+        if (tenantIdPromise === lookup) tenantIdKnown = true;
         return r.rows[0].id;
       });
     // A failed lookup isn't remembered: the next query asks again.
@@ -218,33 +230,111 @@ async function reportShadowDifference(text: string, detail: string): Promise<voi
     .catch(() => {});
 }
 
-/** Runs a read again as the app's role for the club and compares. Never throws; never changes anything. */
-async function shadowRead(text: string, params: unknown[] | undefined, sample: number): Promise<void> {
+/** Whether the pool can hand out a connection now, without waiting for one to come back. */
+function hasSpareConnection(pool: PoolLike): boolean {
+  const p = pool as unknown as { idleCount?: number; totalCount?: number; options?: { max?: number } };
+  if (typeof p.idleCount !== "number" || typeof p.totalCount !== "number") return false;
+  return p.idleCount > 0 || p.totalCount < (p.options?.max ?? 10);
+}
+
+/**
+ * Runs a read again as the app's role for the club and compares. Never
+ * throws; never changes anything.
+ *
+ * `held`: the caller is holding a pooled connection (a transaction, or
+ * Drizzle's). The comparison needs connections of its own, and waiting for
+ * one while holding one is how a pool deadlocks, so each of its reads only
+ * starts when the pool has a connection to spare at that moment, and is
+ * skipped otherwise. (The check and the borrow happen in the same tick.)
+ *
+ * Both answers compared here are fresh reads on other connections, so a
+ * read inside a transaction is compared as the committed data stands, not
+ * with the transaction's own uncommitted writes; the two roles see the same
+ * committed data, which is the comparison that matters.
+ */
+async function shadowRead(text: string, params: unknown[] | undefined, sample: number, held = false): Promise<void> {
   try {
     if (!isReadOnlyStatement(text) || Math.random() >= sample) return;
     const pool = rawPool();
+    const spare = () => !held || hasSpareConnection(pool);
+    // The club's id is looked up once, and that lookup needs a connection too.
+    if (!tenantIdKnown && !spare()) return;
     const id = await scopeTenantId();
     // Compared as a set of rows: without an ORDER BY, the two roles may get
     // the same rows in a different order (their query plans differ), and
     // that isn't a difference in what a club can see.
     const canon = (rows: unknown[]) => JSON.stringify(rows.map((r) => JSON.stringify(r)).sort());
     let asApp: string;
+    if (!spare()) return;
+    const scopedRead = readScoped(pool, id, text, params);
     try {
-      asApp = canon((await readScoped(pool, id, text, params)).rows);
+      asApp = canon((await scopedRead).rows);
     } catch (err) {
       return await reportShadowDifference(text, `error as the app's role: ${String((err as Error)?.message ?? err).slice(0, 160)}`);
     }
     // The owner's answer, through the same connection type and at the same
     // moment (the first answer may be older, or parsed by the HTTP path).
+    if (!spare()) return;
     const asOwner = canon((await pool.query(text, params)).rows);
     if (asOwner === asApp) return;
     // Not the same twice in a row as the owner either: the statement isn't
     // deterministic (now(), random(), no ORDER BY), so it can't be compared.
+    if (!spare()) return;
     if (canon((await pool.query(text, params)).rows) !== asOwner) return;
     await reportShadowDifference(text, "rows differ");
   } catch {
     // A shadow read must never break the request it rides on.
   }
+}
+
+/** The values of a query() call, whichever way it was passed (text + values, or a config object). */
+function paramsOf(args: unknown[]): unknown[] | undefined {
+  if (Array.isArray(args[1])) return args[1];
+  const values = (args[0] as { values?: unknown } | null)?.values;
+  return Array.isArray(values) ? values : undefined;
+}
+
+/**
+ * Shadow mode for a connection the caller holds (sql.connect(), and the one
+ * Drizzle borrows for a transaction): every statement runs exactly as
+ * before, on that connection, and a sample of its reads is compared.
+ */
+function shadowClient<T extends Queryable>(client: T): T {
+  const query = async (...args: unknown[]) => {
+    const result = await client.query(...args);
+    // Callback-style calls return nothing to await and aren't compared.
+    if (typeof args[args.length - 1] !== "function") await shadowRead(textOf(args), paramsOf(args), shadowSample(), true);
+    return result;
+  };
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop === "query") return query;
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+/**
+ * Shadow mode for the pool Drizzle runs on: every repository query is run
+ * as before and a sample of the reads is compared, like sql`…` and
+ * sql.query() (audit C0b: these were the reads shadow mode didn't see).
+ */
+function shadowPool<T extends PoolLike>(pool: T): T {
+  const query = async (...args: unknown[]) => {
+    const result = await pool.query(...args);
+    if (typeof args[args.length - 1] !== "function") await shadowRead(textOf(args), paramsOf(args), shadowSample());
+    return result;
+  };
+  const connect = async () => shadowClient(await pool.connect());
+  return new Proxy(pool, {
+    get(target, prop, receiver) {
+      if (prop === "query") return query;
+      if (prop === "connect") return connect;
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
 }
 
 async function runQuery<R extends QueryResultRow>(text: string, params: unknown[] | undefined, overHttp: boolean): Promise<QueryResult<R>> {
@@ -282,8 +372,9 @@ export const sql: SqlTag = Object.assign(
       if (tenantScopeMode() === "enforce") return (await scoped().connect()) as unknown as PoolClient;
       const tcp = viaPg();
       // The two drivers' pooled clients have the same shape (query, release).
-      if (tcp) return (await tcp.sql.connect()) as unknown as PoolClient;
-      return getPool().connect();
+      const client = tcp ? ((await tcp.sql.connect()) as unknown as PoolClient) : await getPool().connect();
+      // Shadow mode: the transaction runs as before; a sample of its reads is compared.
+      return tenantScopeMode() === "shadow" ? shadowClient(client) : client;
     },
   },
 );
@@ -295,6 +386,7 @@ export { types };
 
 let ormInstance: NeonDatabase<typeof schema> | null = null;
 let scopedOrm: { of: PoolLike; orm: NeonDatabase<typeof schema> } | null = null;
+let shadowOrm: { of: PoolLike; orm: NeonDatabase<typeof schema> } | null = null;
 /** Drizzle on the shared pool (typed by db/schema.ts). The same query builder on either driver. */
 export function orm(): NeonDatabase<typeof schema> {
   if (tenantScopeMode() === "enforce") {
@@ -304,6 +396,15 @@ export function orm(): NeonDatabase<typeof schema> {
       scopedOrm = { of: pool, orm: viaPg() ? (drizzlePg({ client: pool as unknown as pg.Pool, schema }) as unknown as NeonDatabase<typeof schema>) : drizzle({ client: pool as unknown as Pool, schema }) };
     }
     return scopedOrm.orm;
+  }
+  if (tenantScopeMode() === "shadow") {
+    // Drizzle on a pool that compares a sample of its reads.
+    const pool = rawPool();
+    if (shadowOrm?.of !== pool) {
+      const watched = shadowPool(pool);
+      shadowOrm = { of: pool, orm: viaPg() ? (drizzlePg({ client: watched as unknown as pg.Pool, schema }) as unknown as NeonDatabase<typeof schema>) : drizzle({ client: watched as unknown as Pool, schema }) };
+    }
+    return shadowOrm.orm;
   }
   const tcp = viaPg();
   if (tcp) return tcp.orm() as unknown as NeonDatabase<typeof schema>;
@@ -320,8 +421,10 @@ export async function closeDatabase(): Promise<void> {
   boundUrl = null;
   ormInstance = null;
   scopedOrm = null;
+  shadowOrm = null;
   scopedPool = null;
   tenantIdPromise = null;
+  tenantIdKnown = false;
   shadowReported.clear();
   const tcp = pgDatabase;
   pgDatabase = null;

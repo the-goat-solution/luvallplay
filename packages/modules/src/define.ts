@@ -2,9 +2,9 @@
 // either part of the always-on core or an optional module; the setup wizard,
 // admin menu, app navigation, API, crons and emails will all read the same
 // registry, so turning a module off hides everything it owns (its data is
-// kept). Phase 2 only DESCRIBES what the club runs today: nothing reads the
-// registry at runtime yet, and tests keep it in step with the real admin
-// menu, crons and webhook events.
+// kept). The admin menu, its badges and the Today page's "Needs attention"
+// list are generated from it (adminMenu, adminAttention: Track A step A1);
+// tests keep it in step with the real routes, crons and webhook events.
 
 export type ModuleScope = "club" | "global";
 export type ModuleGroup = "core" | "run" | "money" | "engage" | "global";
@@ -23,6 +23,38 @@ export type Payments = "none" | "optional" | "required";
 
 /** Platform-wide availability, set by platform admins (§6.2.3). */
 export type Availability = "available" | "beta" | "hidden";
+
+/** Admin menu groups, in menu order. "" is the ungrouped top of the menu (Home / Today). */
+export const ADMIN_NAV_GROUPS = ["", "Play", "People", "Money", "Club"] as const;
+export type AdminNavGroup = (typeof ADMIN_NAV_GROUPS)[number];
+
+/** One page in the admin menu, declared by the module that owns it. */
+export type AdminNavItem = {
+  group: AdminNavGroup;
+  href: string;
+  /** Menu wording (English until the admin i18n step, A5, turns it into a label key). */
+  label: string;
+  /** Position inside its group, lowest first. Leave gaps (10, 20, …) so another module can slot in. */
+  order: number;
+  /** The attention key whose count shows beside the item (declared under `attention`). */
+  badge?: string;
+  /** Extra paths that count as this page (sub-pages, old URLs). */
+  match?: string[];
+  /** Only this exact path counts (the admin home, which every page is under). */
+  exact?: boolean;
+};
+
+/** Something that needs an admin: a line under "Needs attention" on Today, and a menu badge. */
+export type AdminAttention = {
+  key: string;
+  /** The page where it gets done (also decides who sees it). */
+  href: string;
+  /** Most urgent first, lowest number first. */
+  urgency: number;
+  /** Plain sentence for the Today page, e.g. "3 unread messages". */
+  sentence: (n: number) => string;
+  action: string;
+};
 
 /** Anything with a zod-style parse(); manifests declare their settings shape with zod later. */
 export type SettingsSchema<T = unknown> = { parse(input: unknown): T };
@@ -52,8 +84,8 @@ export type ModuleManifest<Id extends string = string> = {
   settingsStoredIn?: string[];
   // Everything below is what the module OWNS: switched off, all of it is hidden or stopped.
   app?: { tabs?: string[]; meCards?: string[]; routes?: string[] };
-  /** Admin menu pages; group "" is the ungrouped top of the menu (Home / Today). */
-  admin?: { nav?: { group: string; href: string }[]; pages?: string[] };
+  /** Admin menu pages, other admin pages the module owns, and what it puts on Today. */
+  admin?: { nav?: AdminNavItem[]; pages?: string[]; attention?: AdminAttention[] };
   site?: { sections?: string[]; routes?: string[] };
   /** Public and app API routes. */
   api?: string[];
@@ -112,7 +144,19 @@ export function validateRegistry(modules: readonly ModuleManifest[]): string[] {
       const missing = allowedPaymentModes(m).filter((pm) => !allowedPaymentModes(dep).includes(pm));
       if (missing.length) problems.push(`${m.id} can be on in ${missing.join(", ")} but requires ${d}, which can't`);
     }
-    for (const n of m.admin?.nav ?? []) claim(`admin page ${n.href}`, m.id);
+    for (const n of m.admin?.nav ?? []) {
+      claim(`admin page ${n.href}`, m.id);
+      claim(`admin menu position ${n.group || "(top)"} #${n.order}`, m.id);
+      if (!ADMIN_NAV_GROUPS.includes(n.group)) problems.push(`${m.id}: unknown admin menu group "${n.group}"`);
+      if (!n.label.trim()) problems.push(`${m.id}: ${n.href} has no menu label`);
+      if (n.badge && !modules.some((x) => x.admin?.attention?.some((a) => a.key === n.badge))) {
+        problems.push(`${m.id}: ${n.href} shows the badge "${n.badge}", which no module declares`);
+      }
+    }
+    for (const a of m.admin?.attention ?? []) {
+      claim(`attention ${a.key}`, m.id);
+      claim(`attention urgency #${a.urgency}`, m.id);
+    }
     for (const p of m.admin?.pages ?? []) claim(`admin page ${p}`, m.id);
     for (const c of m.crons ?? []) claim(`cron ${c.path}`, m.id);
     for (const w of m.webhooks ?? []) claim(`event ${w}`, m.id);
@@ -132,6 +176,46 @@ export function validateRegistry(modules: readonly ModuleManifest[]): string[] {
   };
   for (const m of modules) visit(m.id, []);
   return problems;
+}
+
+// ── The admin menu and Today, generated (§6.2.4 layer 1, Track A step A1) ───
+
+export type AdminMenuItem = Omit<AdminNavItem, "group" | "order"> & {
+  /** The module that declared the page; "platform" for the Luvallplay console pages. */
+  module: string;
+};
+/** A group with an empty label shows its items without a heading. */
+export type AdminMenuGroup = { label: AdminNavGroup; items: AdminMenuItem[] };
+
+/**
+ * The admin menu: every module's pages plus the platform console's, in group
+ * and `order` order. Groups with nothing in them are left out. `allowed`
+ * narrows it to what one person may open at one club (role, module switches).
+ */
+export function adminMenu(
+  modules: readonly ModuleManifest[],
+  platformPages: readonly AdminNavItem[] = [],
+  allowed: (item: AdminMenuItem) => boolean = () => true,
+): AdminMenuGroup[] {
+  const all = [
+    ...modules.flatMap((m) => (m.admin?.nav ?? []).map((n) => ({ nav: n, module: m.id as string }))),
+    ...platformPages.map((n) => ({ nav: n, module: "platform" })),
+  ];
+  return ADMIN_NAV_GROUPS.map((label) => ({
+    label,
+    items: all
+      .filter((x) => x.nav.group === label)
+      .sort((a, b) => a.nav.order - b.nav.order)
+      .map(({ nav: { group: _group, order: _order, ...item }, module }) => ({ ...item, module }))
+      .filter(allowed),
+  })).filter((g) => g.items.length > 0);
+}
+
+/** Everything that can need an admin's attention, most urgent first, with the module that declared it. */
+export function adminAttention(modules: readonly ModuleManifest[]): (AdminAttention & { module: string })[] {
+  return modules
+    .flatMap((m) => (m.admin?.attention ?? []).map((a) => ({ ...a, module: m.id as string })))
+    .sort((a, b) => a.urgency - b.urgency);
 }
 
 /** A module and everything it requires, transitively (what the wizard turns on). */

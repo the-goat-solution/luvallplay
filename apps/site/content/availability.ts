@@ -39,12 +39,12 @@ const rows: Row[] = [
   // The platform
   ["badminton", "platform", "live", l("Badminton", "Cầu lông"), l("The first sport on Luvallplay.", "Môn đầu tiên trên Luvallplay.")],
   ["otherSports", "platform", "soon", l("Pickleball, tennis, futsal, netball, volleyball, squash, table tennis", "Pickleball, quần vợt, futsal, bóng lưới, bóng chuyền, bóng quần, bóng bàn"), l("Coming soon.", "Sắp có.")],
-  ["languages", "platform", "live", l("English and Vietnamese", "Tiếng Việt và tiếng Anh"), l("Every screen, in both languages.", "Mọi màn hình, bằng cả hai ngôn ngữ.")],
+  ["languages", "platform", "live", l("English and Vietnamese", "Tiếng Việt và tiếng Anh"), l("The players' app and website, in both languages. The club admin is in English for now.", "Ứng dụng cho người chơi và trang web, bằng cả hai ngôn ngữ. Trang quản trị câu lạc bộ hiện chỉ có tiếng Anh.")],
 ];
 
 export const availability: Availability = {
   _id: "availability",
   _type: "availability",
-  updated: "2026-11-24",
+  updated: "2026-11-26",
   items: rows.map(([key, group, status, name, note]) => ({ _key: key, key, group, status, name, note })),
 };

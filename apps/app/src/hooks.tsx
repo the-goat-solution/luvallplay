@@ -4,7 +4,8 @@ import { createContext, createElement, useContext, useEffect, useMemo, useSyncEx
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type { ResponseOf } from "@luvallplay/api/contract";
 import { api, apiForClub, storage, store } from "./app.ts";
-import { pickLang, translator, type Lang, type T } from "./lib/messages.ts";
+import { ownerOf } from "./lib/offline.ts";
+import { langs, loadLang, pickLang, translator, type Lang, type T } from "./lib/messages.ts";
 import type { Prefs } from "./lib/store.ts";
 import { resolveMode, type Mode } from "./lib/theme.ts";
 import { withProductRules } from "./lib/modules.ts";
@@ -17,14 +18,25 @@ export function usePrefs(): Prefs {
   return useSyncExternalStore(store.subscribe, store.get);
 }
 
-export function useSession() {
+/**
+ * Whose data a query holds: a fingerprint of the session, or null when signed
+ * out. Query keys carry this, never the session token itself, because keys
+ * are written to the saved screens (lib/offline.ts) and show up in errors
+ * and dev tools.
+ */
+export function useWho(): string | null {
   const { token } = usePrefs();
-  return useQuery({ queryKey: ["session", token], queryFn: ({ signal }) => api.auth.session({ signal }), enabled: !!token, staleTime: 5 * 60_000 });
+  return useMemo(() => (token ? ownerOf(token) : null), [token]);
+}
+
+export function useSession() {
+  const who = useWho();
+  return useQuery({ queryKey: ["session", who], queryFn: ({ signal }) => api.auth.session({ signal }), enabled: !!who, staleTime: 5 * 60_000 });
 }
 
 export function useClubs() {
-  const { token } = usePrefs();
-  return useQuery({ queryKey: ["clubs", token], queryFn: ({ signal }) => api.clubs.list({ signal }), enabled: !!token, staleTime: 60_000 });
+  const who = useWho();
+  return useQuery({ queryKey: ["clubs", who], queryFn: ({ signal }) => api.clubs.list({ signal }), enabled: !!who, staleTime: 60_000 });
 }
 
 /** The last config seen for a club, so its look is there at once on the next start. */
@@ -146,7 +158,12 @@ export function useLang(): Lang {
 export function useT(config?: ClubConfig | null): T {
   const lang = useLang();
   const terms = config?.terms ?? null;
-  return useMemo(() => translator(lang, terms), [lang, terms]);
+  // The language's text may still be on its way (lib/messages.ts): asked for here, drawn again when it lands.
+  const ready = useSyncExternalStore(langs.subscribe, () => langs.ready(lang));
+  useEffect(() => {
+    if (!ready) void loadLang(lang).catch(() => {});
+  }, [lang, ready]);
+  return useMemo(() => translator(lang, terms), [lang, terms, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Going from Home into a club's own page: that club becomes the one shown there. */

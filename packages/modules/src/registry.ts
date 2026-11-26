@@ -341,6 +341,38 @@ export const integrations = defineModule({
   api: ["/api/v1/me", "/api/v1/sessions/upcoming", "/api/v1/leaderboard", "/api/mcp"],
 });
 
+// ── Juniors (Phase 3b, build plan §6.8) ──────────────────────────────────────
+// Both are HIDDEN platform-wide while Phase 3b ships dark: no club is offered
+// them, the ordinary switch refuses them, and they are never counted as on
+// when the switches can't be read. Juniors is switched on only through its
+// own guard (apps/web/lib/juniors/module.ts): an owner, a fresh sign-in code
+// and the safeguarding policy acknowledged.
+
+export const formsWaivers = defineModule({
+  id: "forms-waivers",
+  scope: "club",
+  group: "run",
+  payments: "none",
+  plan: "free",
+  availability: "hidden",
+  name: { en: "Forms & waivers", vi: "Biểu mẫu & giấy cam kết" },
+  liveActivity: "signed forms and waivers",
+});
+
+export const juniors = defineModule({
+  id: "juniors",
+  scope: "club",
+  group: "run",
+  // A guardian signs the club's consent forms and waivers for each child.
+  requires: ["forms-waivers"],
+  // Free on Free play; a paid club charges the guardian for a child's session.
+  payments: "optional",
+  plan: "free",
+  availability: "hidden",
+  name: { en: "Juniors", vi: "Thiếu niên" },
+  liveActivity: "children's profiles and their upcoming bookings",
+});
+
 /** The core first, then every optional module in catalogue order. Global modules (§8) arrive in a later phase. */
 export const MODULES = [
   home,
@@ -365,6 +397,8 @@ export const MODULES = [
   vision,
   gallery,
   integrations,
+  formsWaivers,
+  juniors,
 ] as const;
 
 export type ModuleId = (typeof MODULES)[number]["id"];
@@ -378,8 +412,8 @@ export const PLATFORM_CONSOLE_PAGES: readonly AdminNavItem[] = [
   { group: "Club", href: "/admin/setup", label: "System check", order: 40, match: ["/admin/device-check"] },
 ];
 
-/** Three Wolves: online payments, and every module it uses today switched on. */
+/** Three Wolves: online payments, and every module it uses today switched on (not the hidden ones: Juniors stays off). */
 export const THREE_WOLVES = {
   paymentMode: "online",
-  modules: MODULES.filter((m) => !m.core).map((m) => m.id),
+  modules: MODULES.filter((m) => !m.core && m.availability !== "hidden").map((m) => m.id),
 } as const;

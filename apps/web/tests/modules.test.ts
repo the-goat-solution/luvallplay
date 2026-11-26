@@ -150,9 +150,10 @@ test("every module has an English and a Vietnamese name, is on the Free plan and
   }
 });
 
-test("Three Wolves: online payments, every optional module on, and every one of them allowed", () => {
+test("Three Wolves: online payments, every optional module on (not the hidden ones), and every one of them allowed", () => {
   assert.equal(THREE_WOLVES.paymentMode, "online");
-  assert.deepEqual([...THREE_WOLVES.modules].sort(), MODULES.filter((m) => !m.core).map((m) => m.id).sort());
+  assert.deepEqual([...THREE_WOLVES.modules].sort(), MODULES.filter((m) => !m.core && m.availability !== "hidden").map((m) => m.id).sort());
+  assert.ok(!(THREE_WOLVES.modules as readonly string[]).includes("juniors"), "Juniors ships dark");
   for (const id of THREE_WOLVES.modules) {
     const ctx: SwitchContext = { paymentMode: "online", enabled: THREE_WOLVES.modules.filter((x) => x !== id), actor: "owner" };
     assert.deepEqual(canTurnOn(MODULES, id, ctx), { ok: true }, id);
@@ -161,7 +162,7 @@ test("Three Wolves: online payments, every optional module on, and every one of 
 
 test("Free play: a core-only club works, and nothing that needs payments can be turned on (§6.2.1)", () => {
   const free: SwitchContext = { paymentMode: "free", enabled: [], actor: "owner" };
-  for (const m of MODULES.filter((x) => !x.core)) {
+  for (const m of MODULES.filter((x) => !x.core && x.availability !== "hidden")) {
     const r = canTurnOn(MODULES, m.id, free);
     if (m.payments === "required") {
       assert.equal(r.ok, false, m.id);
@@ -190,6 +191,21 @@ test("switching rules: core never switches, requirements first, dependents block
   assert.equal(canTurnOn(MODULES, "vision", { ...ctx, availability: { vision: "hidden" } }).ok, false);
   assert.equal(canTurnOn(MODULES, "vision", { ...ctx, availability: { vision: "beta" } }).ok, false);
   assert.equal(canTurnOn(MODULES, "vision", { ...ctx, availability: { vision: "beta" }, inBeta: ["vision"] }).ok, true);
+});
+
+test("Juniors and Forms & waivers are hidden platform-wide: the ordinary switch refuses them (Phase 3b ships dark)", () => {
+  const ctx: SwitchContext = { paymentMode: "online", enabled: [...THREE_WOLVES.modules], actor: "owner" };
+  for (const id of ["juniors", "forms-waivers"]) {
+    assert.equal(MODULES.find((m) => m.id === id)?.availability, "hidden", id);
+    assert.match((canTurnOn(MODULES, id, ctx) as { reason: string }).reason, /isn't available right now/);
+    assert.equal(canTurnOn(MODULES, id, { ...ctx, actor: "platform-admin" }).ok, false, "not for Luvallplay staff either");
+  }
+  // Once the platform opens them: Juniors needs Forms & waivers first, and works on Free play.
+  const open = { ...ctx, availability: { juniors: "available", "forms-waivers": "available" } } as SwitchContext;
+  assert.match((canTurnOn(MODULES, "juniors", open) as { reason: string }).reason, /needs Forms & waivers turned on first/);
+  assert.deepEqual(canTurnOn(MODULES, "juniors", { ...open, enabled: ["forms-waivers"] }), { ok: true });
+  assert.deepEqual(canTurnOn(MODULES, "juniors", { ...open, paymentMode: "free", enabled: ["forms-waivers"] }), { ok: true });
+  assert.deepEqual(withRequirements(MODULES, "juniors"), ["juniors", "forms-waivers"]);
 });
 
 test("withRequirements follows requires transitively", () => {

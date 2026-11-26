@@ -15,11 +15,16 @@ const TRUSTED_HOSTS = [HOME_HOST, ...(import.meta.env.VITE_API_HOSTS ?? "").spli
 
 const clients = new Map<string, Api>();
 
-/** The API on `host`. Every client sends the session token and signs the app out on a 401. */
+/**
+ * The API on `host`. Every client sends the session token and signs the app
+ * out on a 401, but only when that answer was about the session the app
+ * still has: a slow call from before signing in again must not sign the new
+ * session out.
+ */
 export function apiOn(host: string): Api {
   let api = clients.get(host);
   if (!api) {
-    api = createApi(createTransport({ baseUrl: host, getToken: () => store.get().token, onUnauthorized: () => store.signOut() }));
+    api = createApi(createTransport({ baseUrl: host, getToken: () => store.get().token, onUnauthorized: (used) => void (used === store.get().token && store.signOut()) }));
     clients.set(host, api);
   }
   return api;

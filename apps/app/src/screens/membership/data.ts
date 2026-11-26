@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BodyOf, ResponseOf } from "@luvallplay/api/contract";
 import { apiForClub } from "../../app.ts";
-import { useCurrentClub, usePrefs } from "../../hooks.tsx";
+import { useCurrentClub, useWho } from "../../hooks.tsx";
 
 export type MembershipState = ResponseOf<"membership.state">;
 export type Member = NonNullable<MembershipState["membership"]>;
@@ -13,10 +13,10 @@ export type Day = MembershipState["days"][number];
 export type Plan = Member["plan"];
 
 function useClubApi() {
-  const { token } = usePrefs();
+  const who = useWho();
   const { current, slug, config } = useCurrentClub();
   const on = !!config && config.modules.includes("memberships");
-  return { token, slug: slug as string, ready: !!token && !!slug && !!current, on, api: apiForClub(current?.apiBase) };
+  return { who, slug: slug as string, ready: !!who && !!slug && !!current, on, api: apiForClub(current?.apiBase) };
 }
 
 function useRefresh() {
@@ -28,13 +28,13 @@ function useRefresh() {
 }
 
 export function useMembership() {
-  const { token, slug, ready, on, api } = useClubApi();
-  return useQuery({ queryKey: ["membership", "state", slug, token], queryFn: ({ signal }) => api.membership.state({ club: slug }, { signal }), enabled: ready && on });
+  const { who, slug, ready, on, api } = useClubApi();
+  return useQuery({ queryKey: ["membership", "state", slug, who], queryFn: ({ signal }) => api.membership.state({ club: slug }, { signal }), enabled: ready && on });
 }
 
 export function useBilling(enabled: boolean) {
-  const { token, slug, ready, on, api } = useClubApi();
-  return useQuery({ queryKey: ["membership", "billing", slug, token], queryFn: ({ signal }) => api.membership.billing({ club: slug }, { signal }), enabled: ready && on && enabled, retry: false });
+  const { who, slug, ready, on, api } = useClubApi();
+  return useQuery({ queryKey: ["membership", "billing", slug, who], queryFn: ({ signal }) => api.membership.billing({ club: slug }, { signal }), enabled: ready && on && enabled, retry: false });
 }
 
 export function useMembershipAction() {

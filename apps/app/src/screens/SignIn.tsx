@@ -87,8 +87,8 @@ export function SignInForm({ club }: { club?: string }) {
 
 /** A full-page frame for signed-out screens. With `club`, it wears that club's look and name. */
 export function SignedOutPage({ club, children }: { club: ClubConfig | null; children: React.ReactNode }) {
-  useLook(club);
   const t = useT(club);
+  useLook(club, t("signin_title"));
   return (
     <div className="signed-out">
       <header className="signed-out-head">

@@ -120,7 +120,7 @@ For each screen: add endpoints to the contract, add route files with `appRoute`,
 
 - Branches: `claude/luvallplay-phase-4-<step>`, one small PR per step, each deployable and revertable alone.
 - The agent may merge PRs that only add new, unused API routes, `apps/app` and docs, once CI is green. **Ask the owner before** merging anything that changes existing `apps/web` routes or pages, anything touching sign-in, any production setting or data step, and the cutover.
-- **Cutover** (making `app.luvallplay.com` the path Three Wolves members use, with the one-time session handover so nobody is signed out) is a separate step the owner schedules. Not started.
+- **Cutover** (making `app.luvallplay.com` the path Three Wolves members use, with the one-time session handover so nobody is signed out) is a separate step the owner schedules. Not started. The plan, the parity checklist and what blocks it are in `docs/plans/phase-4-cutover.md` (lane N, 25 Nov); lane N's log is build plan §4.8.
 - If a migration becomes unavoidable, follow the data protocol in the test plan (expectations file, rehearsal on a Neon branch, restore point, ask before each production step).
 - No "label a PR for a preview" flow (the owner declined it).
 - No secrets or personal emails in commits. No model names in commits or PRs. Don't push empty commits to start builds.

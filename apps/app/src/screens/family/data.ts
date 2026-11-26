@@ -89,6 +89,21 @@ export function useCancelBooking() {
   return useMutation({ mutationFn: (bookingId: number) => api.family.cancelBooking({ club: slug, id: bookingId }, {}), onSettled: refresh });
 }
 
+/** A club that charges: a card payment to confirm. The booking appears once the payment succeeds. */
+export function usePayForChild(childId: number) {
+  const { slug, api } = useClubApi();
+  return useMutation({ mutationFn: (date: string) => api.family.pay({ club: slug, id: childId }, { date }) });
+}
+
+/** After a payment: look again now and a little later, because the booking is written when the payment provider reports back. */
+export function useRefreshBookingsSoon() {
+  const refresh = useRefreshBookings();
+  return () => {
+    refresh();
+    for (const ms of [2500, 7000]) window.setTimeout(refresh, ms);
+  };
+}
+
 // ── A child's safety details: emergency contacts and the medical note ───────
 
 export type Care = ResponseOf<"family.care">;
@@ -116,4 +131,43 @@ export function useSaveNotes(childId: number) {
   const { slug, api } = useClubApi();
   const set = useSetCare(childId);
   return useMutation({ mutationFn: (notes: string) => api.family.careNotes({ club: slug, id: childId }, { notes }), onSuccess: set });
+}
+
+// ── The club's forms and waivers for a child ────────────────────────────────
+
+export type ChildForms = ResponseOf<"family.forms">;
+export type ChildForm = ChildForms["forms"][number];
+
+export function useChildForms(childId: number) {
+  const { who, slug, ready, api } = useClubApi();
+  return useQuery({ queryKey: ["family-forms", slug, who, childId], queryFn: ({ signal }) => api.family.forms({ club: slug, id: childId }, { signal }), enabled: ready, retry: false });
+}
+
+export function useSignForm(childId: number) {
+  const { slug, api } = useClubApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { formId: number; name: string }) => api.family.signForm({ club: slug, id: childId, formId: input.formId }, { name: input.name }),
+    // Signed, or refused because the wording changed: either way the list is asked for again.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["family-forms"] }),
+  });
+}
+
+// ── Export and delete a child's information ─────────────────────────────────
+
+/** Everything the club holds about the child, fetched when asked for and never kept. */
+export function useExportChild(childId: number) {
+  const { slug, api } = useClubApi();
+  return useMutation({ mutationFn: () => api.family.export({ club: slug, id: childId }) });
+}
+
+/** Ask the club to delete the child's information (nothing is removed until the club confirms), or withdraw the request. */
+export function useRequestDelete(childId: number) {
+  const { who, slug, api } = useClubApi();
+  const queryClient = useQueryClient();
+  const set = (requestedAt: string | null) =>
+    queryClient.setQueryData<Family>(["family", slug, who], (f) => (f ? { ...f, children: f.children.map((c) => (c.id === childId ? { ...c, deletionRequestedAt: requestedAt } : c)) } : f));
+  const ask = useMutation({ mutationFn: () => api.family.requestDelete({ club: slug, id: childId }, { confirm: true }), onSuccess: (r) => set(r.requestedAt) });
+  const withdraw = useMutation({ mutationFn: () => api.family.cancelDelete({ club: slug, id: childId }, {}), onSuccess: () => set(null) });
+  return { ask, withdraw };
 }

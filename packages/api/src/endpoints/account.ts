@@ -58,4 +58,26 @@ export const accountEndpoints = defineEndpoints("account", {
     body: S.emptyRequest, response: S.okResponse,
     rateLimit: { limit: 30, windowMs: MIN },
   },
+  // Push notifications (the store app). 503 unavailable: this server can't
+  // keep a device's address (no key set), so nothing was stored.
+  "account.push": {
+    method: "GET", path: "/account/push", auth: "session", scope: "account",
+    response: S.pushResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "account.pushDevice": {
+    method: "POST", path: "/account/push/device", auth: "session", scope: "account",
+    body: S.pushDeviceRequest, response: S.okResponse,
+    rateLimit: { limit: 20, windowMs: MIN },
+  },
+  "account.pushRemoveDevice": {
+    method: "POST", path: "/account/push/device/remove", auth: "session", scope: "account",
+    body: S.pushRemoveDeviceRequest, response: S.okResponse,
+    rateLimit: { limit: 20, windowMs: MIN },
+  },
+  "account.pushKinds": {
+    method: "POST", path: "/account/push/kinds", auth: "session", scope: "account",
+    body: S.pushKindsRequest, response: S.pushKindsResponse,
+    rateLimit: { limit: 30, windowMs: MIN },
+  },
 });

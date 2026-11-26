@@ -460,6 +460,37 @@ CREATE TABLE casual_play_sessions (
   CONSTRAINT casual_play_sessions_pkey PRIMARY KEY (tenant_id, date)
 );
 
+CREATE TABLE club_forms (
+  id integer DEFAULT nextval('club_forms_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  slug text NOT NULL,
+  version integer NOT NULL,
+  kind text NOT NULL,
+  title text NOT NULL,
+  body text NOT NULL,
+  published_at timestamp with time zone DEFAULT now() NOT NULL,
+  published_by_user_id integer NOT NULL,
+  retired_at timestamp with time zone,
+  CONSTRAINT club_forms_kind_check CHECK ((kind = ANY (ARRAY['waiver'::text, 'consent'::text]))),
+  CONSTRAINT club_forms_slug_check CHECK ((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text)),
+  CONSTRAINT club_forms_version_check CHECK ((version >= 1)),
+  CONSTRAINT club_forms_published_by_user_id_fkey FOREIGN KEY (published_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT club_forms_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT club_forms_body_not_null NOT NULL body,
+  CONSTRAINT club_forms_id_not_null NOT NULL id,
+  CONSTRAINT club_forms_kind_not_null NOT NULL kind,
+  CONSTRAINT club_forms_published_at_not_null NOT NULL published_at,
+  CONSTRAINT club_forms_published_by_user_id_not_null NOT NULL published_by_user_id,
+  CONSTRAINT club_forms_slug_not_null NOT NULL slug,
+  CONSTRAINT club_forms_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT club_forms_title_not_null NOT NULL title,
+  CONSTRAINT club_forms_version_not_null NOT NULL version,
+  CONSTRAINT club_forms_pkey PRIMARY KEY (id),
+  CONSTRAINT club_forms_one_per_version UNIQUE (tenant_id, slug, version),
+  CONSTRAINT club_forms_tenant_id_id_key UNIQUE (tenant_id, id)
+);
+CREATE INDEX club_forms_published_by_user_id_idx ON public.club_forms USING btree (published_by_user_id);
+
 CREATE TABLE club_members (
   tenant_id integer NOT NULL,
   user_id integer NOT NULL,
@@ -668,6 +699,33 @@ CREATE TABLE finance_sync_state (
   CONSTRAINT finance_sync_state_pkey PRIMARY KEY (tenant_id, key)
 );
 
+CREATE TABLE form_signatures (
+  id integer DEFAULT nextval('form_signatures_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  form_id integer NOT NULL,
+  junior_profile_id integer NOT NULL,
+  signed_by_user_id integer NOT NULL,
+  signed_name text NOT NULL,
+  signed_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT form_signatures_form_in_club_fkey FOREIGN KEY (tenant_id, form_id) REFERENCES club_forms(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT form_signatures_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT form_signatures_junior_profile_id_fkey FOREIGN KEY (junior_profile_id) REFERENCES junior_profiles(id) ON DELETE RESTRICT,
+  CONSTRAINT form_signatures_signed_by_user_id_fkey FOREIGN KEY (signed_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT form_signatures_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT form_signatures_form_id_not_null NOT NULL form_id,
+  CONSTRAINT form_signatures_id_not_null NOT NULL id,
+  CONSTRAINT form_signatures_junior_profile_id_not_null NOT NULL junior_profile_id,
+  CONSTRAINT form_signatures_signed_at_not_null NOT NULL signed_at,
+  CONSTRAINT form_signatures_signed_by_user_id_not_null NOT NULL signed_by_user_id,
+  CONSTRAINT form_signatures_signed_name_not_null NOT NULL signed_name,
+  CONSTRAINT form_signatures_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT form_signatures_pkey PRIMARY KEY (id),
+  CONSTRAINT form_signatures_once UNIQUE (tenant_id, form_id, junior_profile_id, signed_by_user_id)
+);
+CREATE INDEX form_signatures_form_idx ON public.form_signatures USING btree (tenant_id, form_id);
+CREATE INDEX form_signatures_junior_profile_id_idx ON public.form_signatures USING btree (junior_profile_id);
+CREATE INDEX form_signatures_signed_by_user_id_idx ON public.form_signatures USING btree (signed_by_user_id);
+
 CREATE TABLE guardianships (
   guardian_user_id integer NOT NULL,
   junior_profile_id integer NOT NULL,
@@ -804,6 +862,33 @@ CREATE INDEX junior_bookings_junior_profile_id_idx ON public.junior_bookings USI
 CREATE UNIQUE INDEX junior_bookings_one_live ON public.junior_bookings USING btree (tenant_id, junior_profile_id, session_date) WHERE (status = ANY (ARRAY['pending'::text, 'confirmed'::text]));
 CREATE INDEX junior_bookings_session_idx ON public.junior_bookings USING btree (tenant_id, session_date);
 
+CREATE TABLE junior_deletion_requests (
+  id integer DEFAULT nextval('junior_deletion_requests_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  junior_profile_id integer,
+  requested_by_user_id integer NOT NULL,
+  requested_at timestamp with time zone DEFAULT now() NOT NULL,
+  status text DEFAULT 'pending'::text NOT NULL,
+  decided_by_user_id integer,
+  decided_at timestamp with time zone,
+  CONSTRAINT junior_deletion_requests_child_check CHECK ((((status <> 'pending'::text) OR (junior_profile_id IS NOT NULL)) AND ((status <> 'confirmed'::text) OR (junior_profile_id IS NULL)))),
+  CONSTRAINT junior_deletion_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text]))),
+  CONSTRAINT junior_deletion_requests_decided_by_user_id_fkey FOREIGN KEY (decided_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_deletion_requests_junior_in_club_fkey FOREIGN KEY (tenant_id, junior_profile_id) REFERENCES junior_profiles(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT junior_deletion_requests_requested_by_user_id_fkey FOREIGN KEY (requested_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_deletion_requests_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_deletion_requests_id_not_null NOT NULL id,
+  CONSTRAINT junior_deletion_requests_requested_at_not_null NOT NULL requested_at,
+  CONSTRAINT junior_deletion_requests_requested_by_user_id_not_null NOT NULL requested_by_user_id,
+  CONSTRAINT junior_deletion_requests_status_not_null NOT NULL status,
+  CONSTRAINT junior_deletion_requests_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_deletion_requests_pkey PRIMARY KEY (id)
+);
+CREATE INDEX junior_deletion_requests_decided_by_user_id_idx ON public.junior_deletion_requests USING btree (decided_by_user_id);
+CREATE INDEX junior_deletion_requests_junior_profile_id_idx ON public.junior_deletion_requests USING btree (tenant_id, junior_profile_id);
+CREATE UNIQUE INDEX junior_deletion_requests_one_pending ON public.junior_deletion_requests USING btree (tenant_id, junior_profile_id) WHERE (status = 'pending'::text);
+CREATE INDEX junior_deletion_requests_requested_by_user_id_idx ON public.junior_deletion_requests USING btree (requested_by_user_id);
+
 CREATE TABLE junior_emergency_contacts (
   id integer DEFAULT nextval('junior_emergency_contacts_id_seq'::regclass) NOT NULL,
   tenant_id integer NOT NULL,
@@ -856,6 +941,21 @@ CREATE TABLE junior_medical_notes (
 CREATE INDEX junior_medical_notes_junior_profile_id_idx ON public.junior_medical_notes USING btree (junior_profile_id);
 CREATE INDEX junior_medical_notes_updated_by_user_id_idx ON public.junior_medical_notes USING btree (updated_by_user_id);
 
+CREATE TABLE junior_payment_records (
+  tenant_id integer NOT NULL,
+  payment_intent_id text NOT NULL,
+  amount_minor integer NOT NULL,
+  currency text NOT NULL,
+  recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT junior_payment_records_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_payment_records_amount_minor_not_null NOT NULL amount_minor,
+  CONSTRAINT junior_payment_records_currency_not_null NOT NULL currency,
+  CONSTRAINT junior_payment_records_payment_intent_id_not_null NOT NULL payment_intent_id,
+  CONSTRAINT junior_payment_records_recorded_at_not_null NOT NULL recorded_at,
+  CONSTRAINT junior_payment_records_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_payment_records_pkey PRIMARY KEY (tenant_id, payment_intent_id)
+);
+
 CREATE TABLE junior_profiles (
   id integer DEFAULT nextval('junior_profiles_id_seq'::regclass) NOT NULL,
   tenant_id integer NOT NULL,
@@ -874,6 +974,39 @@ CREATE TABLE junior_profiles (
   CONSTRAINT junior_profiles_tenant_id_id_key UNIQUE (tenant_id, id)
 );
 CREATE INDEX junior_profiles_guardian_user_id_idx ON public.junior_profiles USING btree (guardian_user_id);
+
+CREATE TABLE junior_safety_checks (
+  id integer DEFAULT nextval('junior_safety_checks_id_seq'::regclass) NOT NULL,
+  tenant_id integer NOT NULL,
+  user_id integer NOT NULL,
+  kind text NOT NULL,
+  reference text,
+  checked_on date NOT NULL,
+  expires_on date NOT NULL,
+  recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+  recorded_by_user_id integer NOT NULL,
+  revoked_at timestamp with time zone,
+  revoked_by_user_id integer,
+  CONSTRAINT junior_safety_checks_dates_check CHECK ((expires_on > checked_on)),
+  CONSTRAINT junior_safety_checks_kind_check CHECK ((kind = ANY (ARRAY['police-vet'::text, 'working-with-children'::text, 'other'::text]))),
+  CONSTRAINT junior_safety_checks_recorded_by_user_id_fkey FOREIGN KEY (recorded_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_safety_checks_revoked_by_user_id_fkey FOREIGN KEY (revoked_by_user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_safety_checks_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_safety_checks_user_id_fkey FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT junior_safety_checks_checked_on_not_null NOT NULL checked_on,
+  CONSTRAINT junior_safety_checks_expires_on_not_null NOT NULL expires_on,
+  CONSTRAINT junior_safety_checks_id_not_null NOT NULL id,
+  CONSTRAINT junior_safety_checks_kind_not_null NOT NULL kind,
+  CONSTRAINT junior_safety_checks_recorded_at_not_null NOT NULL recorded_at,
+  CONSTRAINT junior_safety_checks_recorded_by_user_id_not_null NOT NULL recorded_by_user_id,
+  CONSTRAINT junior_safety_checks_tenant_id_not_null NOT NULL tenant_id,
+  CONSTRAINT junior_safety_checks_user_id_not_null NOT NULL user_id,
+  CONSTRAINT junior_safety_checks_pkey PRIMARY KEY (id)
+);
+CREATE INDEX junior_safety_checks_recorded_by_user_id_idx ON public.junior_safety_checks USING btree (recorded_by_user_id);
+CREATE INDEX junior_safety_checks_revoked_by_user_id_idx ON public.junior_safety_checks USING btree (revoked_by_user_id);
+CREATE INDEX junior_safety_checks_user_id_idx ON public.junior_safety_checks USING btree (user_id);
+CREATE INDEX junior_safety_checks_user_idx ON public.junior_safety_checks USING btree (tenant_id, user_id);
 
 CREATE TABLE membership_reminders_sent (
   membership_id integer NOT NULL,
@@ -1212,6 +1345,44 @@ CREATE TABLE pricing_plans (
   CONSTRAINT pricing_plans_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT pricing_plans_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT pricing_plans_pkey PRIMARY KEY (tenant_id, plan_id)
+);
+
+CREATE TABLE push_devices (
+  id integer DEFAULT nextval('push_devices_id_seq'::regclass) NOT NULL,
+  player_id integer NOT NULL,
+  platform text NOT NULL,
+  token_hash text NOT NULL,
+  sealed text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT push_devices_platform_check CHECK ((platform = ANY (ARRAY['android'::text, 'ios'::text]))),
+  CONSTRAINT push_devices_sealed_check CHECK ((sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'::text)),
+  CONSTRAINT push_devices_token_hash_check CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text)),
+  CONSTRAINT push_devices_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT push_devices_created_at_not_null NOT NULL created_at,
+  CONSTRAINT push_devices_id_not_null NOT NULL id,
+  CONSTRAINT push_devices_last_seen_at_not_null NOT NULL last_seen_at,
+  CONSTRAINT push_devices_platform_not_null NOT NULL platform,
+  CONSTRAINT push_devices_player_id_not_null NOT NULL player_id,
+  CONSTRAINT push_devices_sealed_not_null NOT NULL sealed,
+  CONSTRAINT push_devices_token_hash_not_null NOT NULL token_hash,
+  CONSTRAINT push_devices_pkey PRIMARY KEY (id),
+  CONSTRAINT push_devices_token_hash_key UNIQUE (token_hash)
+);
+CREATE INDEX push_devices_player_id_idx ON public.push_devices USING btree (player_id);
+
+CREATE TABLE push_prefs (
+  player_id integer NOT NULL,
+  category text NOT NULL,
+  enabled boolean NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT push_prefs_category_check CHECK ((category = ANY (ARRAY['challenge'::text, 'result'::text, 'message'::text, 'reminder'::text, 'roster'::text, 'payment'::text]))),
+  CONSTRAINT push_prefs_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT push_prefs_category_not_null NOT NULL category,
+  CONSTRAINT push_prefs_enabled_not_null NOT NULL enabled,
+  CONSTRAINT push_prefs_player_id_not_null NOT NULL player_id,
+  CONSTRAINT push_prefs_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT push_prefs_pkey PRIMARY KEY (player_id, category)
 );
 
 CREATE TABLE pv_arena_after_game (
@@ -1969,14 +2140,18 @@ CREATE SEQUENCE bank_rules_id_seq AS integer OWNED BY bank_rules.id;
 CREATE SEQUENCE bank_transactions_id_seq AS integer OWNED BY bank_transactions.id;
 CREATE SEQUENCE bookings_id_seq AS integer OWNED BY bookings.id;
 CREATE SEQUENCE cancellation_feedback_id_seq AS integer OWNED BY cancellation_feedback.id;
+CREATE SEQUENCE club_forms_id_seq AS integer OWNED BY club_forms.id;
 CREATE SEQUENCE club_plans_id_seq AS integer OWNED BY club_plans.id;
 CREATE SEQUENCE day_requests_id_seq AS integer OWNED BY day_requests.id;
 CREATE SEQUENCE donations_id_seq AS integer OWNED BY donations.id;
 CREATE SEQUENCE finance_entries_id_seq AS integer OWNED BY finance_entries.id;
+CREATE SEQUENCE form_signatures_id_seq AS integer OWNED BY form_signatures.id;
 CREATE SEQUENCE jersey_registrations_id_seq AS integer OWNED BY jersey_registrations.id;
 CREATE SEQUENCE junior_bookings_id_seq AS integer OWNED BY junior_bookings.id;
+CREATE SEQUENCE junior_deletion_requests_id_seq AS integer OWNED BY junior_deletion_requests.id;
 CREATE SEQUENCE junior_emergency_contacts_id_seq AS integer OWNED BY junior_emergency_contacts.id;
 CREATE SEQUENCE junior_profiles_id_seq AS integer OWNED BY junior_profiles.id;
+CREATE SEQUENCE junior_safety_checks_id_seq AS integer OWNED BY junior_safety_checks.id;
 CREATE SEQUENCE memberships_id_seq AS integer OWNED BY memberships.id;
 CREATE SEQUENCE message_threads_id_seq AS integer OWNED BY message_threads.id;
 CREATE SEQUENCE messages_id_seq AS integer OWNED BY messages.id;
@@ -1985,6 +2160,7 @@ CREATE SEQUENCE player_events_id_seq AS integer OWNED BY player_events.id;
 CREATE SEQUENCE player_photos_id_seq AS integer OWNED BY player_photos.id;
 CREATE SEQUENCE player_sessions_id_seq AS integer OWNED BY player_sessions.id;
 CREATE SEQUENCE players_id_seq AS integer OWNED BY players.id;
+CREATE SEQUENCE push_devices_id_seq AS integer OWNED BY push_devices.id;
 CREATE SEQUENCE pv_arena_challenges_id_seq AS integer OWNED BY pv_arena_challenges.id;
 CREATE SEQUENCE pv_arena_codes_id_seq AS integer OWNED BY pv_arena_codes.id;
 CREATE SEQUENCE pv_arena_pairs_id_seq AS integer OWNED BY pv_arena_pairs.id;
@@ -2094,6 +2270,7 @@ ALTER TABLE bookings ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE cancellation_feedback ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE casual_play_profiles ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE casual_play_sessions ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE club_forms ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE club_members ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE club_plans ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE club_roles ENABLE AND FORCE ROW LEVEL SECURITY;
@@ -2104,13 +2281,17 @@ ALTER TABLE donations ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE finance_entries ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE finance_settings ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE finance_sync_state ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE form_signatures ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE guardianships ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE jersey_registrations ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_attendance ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_bookings ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE junior_deletion_requests ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_emergency_contacts ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_medical_notes ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE junior_payment_records ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE junior_profiles ENABLE AND FORCE ROW LEVEL SECURITY;
+ALTER TABLE junior_safety_checks ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE membership_reminders_sent ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE memberships ENABLE AND FORCE ROW LEVEL SECURITY;
 ALTER TABLE message_threads ENABLE AND FORCE ROW LEVEL SECURITY;
@@ -2158,6 +2339,7 @@ POLICY tenant_isolation ON bookings (PERMISSIVE) FOR ALL TO {public} USING ((ten
 POLICY tenant_isolation ON cancellation_feedback (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON casual_play_profiles (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON casual_play_sessions (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON club_forms (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON club_members (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON club_plans (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON club_roles (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
@@ -2168,13 +2350,17 @@ POLICY tenant_isolation ON donations (PERMISSIVE) FOR ALL TO {public} USING ((te
 POLICY tenant_isolation ON finance_entries (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON finance_settings (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON finance_sync_state (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON form_signatures (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON guardianships (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON jersey_registrations (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_attendance (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_bookings (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON junior_deletion_requests (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_emergency_contacts (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_medical_notes (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON junior_payment_records (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON junior_profiles (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
+POLICY tenant_isolation ON junior_safety_checks (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON membership_reminders_sent (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON memberships (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));
 POLICY tenant_isolation ON message_threads (PERMISSIVE) FOR ALL TO {public} USING ((tenant_id = app_tenant_id())) WITH CHECK ((tenant_id = app_tenant_id()));

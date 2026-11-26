@@ -113,6 +113,6 @@ test("modules that own no route of their own are listed, so the gap is deliberat
   // Forms & waivers: hidden, its screens arrive with Phase 3b step 4.
   // Juniors: hidden; its only admin page today is Set up (core). Its own
   // routes arrive with Phase 3b step 6.
-  assert.deepEqual(OPTIONAL.filter((id) => !withRoutes.has(id)).sort(), ["forms-waivers", "juniors", "payments-to-check"]);
+  assert.deepEqual(OPTIONAL.filter((id) => !withRoutes.has(id)).sort(), ["forms-waivers", "payments-to-check"]);
   assert.ok(moduleOwnedPrefixes().length > 30);
 });

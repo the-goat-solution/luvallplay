@@ -1,0 +1,4 @@
+{
+  "change": "2026-11-phase3b-junior-deletion",
+  "description": "Phase 3b step 7 (build plan §6.8): two new, empty, club-owned tables with row-level security: a guardian's request to delete a child's information waiting for the club, and anonymous payment records kept after a child is deleted. Nothing existing is altered. Additive: no row, account, email, phone, session, role or membership may change. Rehearsal on a Neon branch of production, so nothing is volatile."
+}

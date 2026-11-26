@@ -27,6 +27,7 @@ export const CLUB_OWNED_TABLES = [
   "cancellation_feedback",
   "casual_play_profiles",
   "casual_play_sessions",
+  "club_forms",
   "club_members",
   "club_plans",
   "club_roles",
@@ -37,12 +38,16 @@ export const CLUB_OWNED_TABLES = [
   "finance_entries",
   "finance_settings",
   "finance_sync_state",
+  "form_signatures",
   "guardianships",
   "jersey_registrations",
   "junior_attendance",
   "junior_bookings",
+  "junior_deletion_requests",
   "junior_emergency_contacts",
   "junior_medical_notes",
+  "junior_payment_records",
+  "junior_safety_checks",
   "junior_profiles",
   "membership_reminders_sent",
   "memberships",
@@ -86,6 +91,8 @@ export const PLATFORM_TABLES = [
   "platform_admins",
   "player_events", // account events (sign-in, install)
   "player_sessions",
+  "push_devices", // a person's phones that asked for notifications (the address sealed)
+  "push_prefs", // which kinds of notification a person asked for
   "player_settings", // platform switches (SMS on/off, alert timestamps)
   "players", // the global identity
   "rate_limits", // shared rate-limit counters (hashed keys)

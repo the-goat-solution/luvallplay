@@ -49,3 +49,30 @@ export const adminHandoffResponse = z.object({
 
 /** Deleting the account: the person types DELETE, as on the website. */
 export const deleteAccountRequest = z.object({ confirm: z.literal("DELETE") });
+
+// Push notifications (the store app). It is opt-in: every kind starts off.
+/** The kinds a person chooses between: a challenge, a result to confirm, a message from the club, a play-day reminder, the roster, a payment problem. */
+export const pushKindSchema = z.enum(["challenge", "result", "message", "reminder", "roster", "payment"]);
+const pushKinds = z.object({
+  challenge: z.boolean(),
+  result: z.boolean(),
+  message: z.boolean(),
+  reminder: z.boolean(),
+  roster: z.boolean(),
+  payment: z.boolean(),
+});
+/** A device's push address as the phone gives it. It is stored sealed and never sent back. */
+const pushAddress = z.string().regex(/^[A-Za-z0-9_:.\-]{32,4096}$/);
+
+export const pushResponse = z.object({
+  /** False where notifications can't be sent from (no key set): the app hides the switches. */
+  available: z.boolean(),
+  /** How many of the person's devices receive notifications. */
+  devices: z.number().int().nonnegative(),
+  kinds: pushKinds,
+});
+export const pushDeviceRequest = z.object({ token: pushAddress, platform: z.enum(["android", "ios"]) });
+export const pushRemoveDeviceRequest = z.object({ token: pushAddress });
+/** Only the kinds named change. */
+export const pushKindsRequest = pushKinds.partial().strict().refine((v) => Object.keys(v).length > 0);
+export const pushKindsResponse = z.object({ ok: z.literal(true), kinds: pushKinds });

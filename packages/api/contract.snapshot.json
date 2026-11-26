@@ -226,6 +226,162 @@
         }
       }
     },
+    "account.push": {
+      "method": "GET",
+      "path": "/account/push",
+      "auth": "session",
+      "response": {
+        "t": "object",
+        "fields": {
+          "available": {
+            "t": "boolean"
+          },
+          "devices": {
+            "t": "number"
+          },
+          "kinds": {
+            "t": "object",
+            "fields": {
+              "challenge": {
+                "t": "boolean"
+              },
+              "message": {
+                "t": "boolean"
+              },
+              "payment": {
+                "t": "boolean"
+              },
+              "reminder": {
+                "t": "boolean"
+              },
+              "result": {
+                "t": "boolean"
+              },
+              "roster": {
+                "t": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "account.pushDevice": {
+      "method": "POST",
+      "path": "/account/push/device",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "platform": {
+            "t": "enum",
+            "values": [
+              "android",
+              "ios"
+            ]
+          },
+          "token": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "account.pushKinds": {
+      "method": "POST",
+      "path": "/account/push/kinds",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "challenge": {
+            "t": "boolean",
+            "optional": true
+          },
+          "message": {
+            "t": "boolean",
+            "optional": true
+          },
+          "payment": {
+            "t": "boolean",
+            "optional": true
+          },
+          "reminder": {
+            "t": "boolean",
+            "optional": true
+          },
+          "result": {
+            "t": "boolean",
+            "optional": true
+          },
+          "roster": {
+            "t": "boolean",
+            "optional": true
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "kinds": {
+            "t": "object",
+            "fields": {
+              "challenge": {
+                "t": "boolean"
+              },
+              "message": {
+                "t": "boolean"
+              },
+              "payment": {
+                "t": "boolean"
+              },
+              "reminder": {
+                "t": "boolean"
+              },
+              "result": {
+                "t": "boolean"
+              },
+              "roster": {
+                "t": "boolean"
+              }
+            }
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
+    "account.pushRemoveDevice": {
+      "method": "POST",
+      "path": "/account/push/device/remove",
+      "auth": "session",
+      "body": {
+        "t": "object",
+        "fields": {
+          "token": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "ok": {
+            "t": "literal",
+            "value": true
+          }
+        }
+      }
+    },
     "account.removePhoto": {
       "method": "DELETE",
       "path": "/account/photo",
@@ -2349,6 +2505,11 @@
             "t": "boolean",
             "nullable": true,
             "optional": true
+          },
+          "pushToken": {
+            "t": "string",
+            "nullable": true,
+            "optional": true
           }
         }
       },
@@ -2982,6 +3143,11 @@
               "consentVersion": {
                 "t": "string"
               },
+              "deletionRequestedAt": {
+                "t": "string",
+                "nullable": true,
+                "optional": true
+              },
               "guardians": {
                 "t": "number"
               },
@@ -3105,6 +3271,11 @@
               }
             }
           },
+          "currency": {
+            "t": "string",
+            "nullable": true,
+            "optional": true
+          },
           "days": {
             "t": "array",
             "of": {
@@ -3137,6 +3308,11 @@
               "none",
               "card"
             ]
+          },
+          "priceMinor": {
+            "t": "number",
+            "nullable": true,
+            "optional": true
           }
         }
       }
@@ -3193,6 +3369,38 @@
                 ]
               }
             }
+          }
+        }
+      }
+    },
+    "family.cancelDelete": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/delete-request/cancel",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {}
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "requested": {
+            "t": "boolean"
+          },
+          "requestedAt": {
+            "t": "string",
+            "nullable": true
           }
         }
       }
@@ -3479,6 +3687,11 @@
               "consentVersion": {
                 "t": "string"
               },
+              "deletionRequestedAt": {
+                "t": "string",
+                "nullable": true,
+                "optional": true
+              },
               "guardians": {
                 "t": "number"
               },
@@ -3487,6 +3700,224 @@
               },
               "name": {
                 "t": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.export": {
+      "method": "GET",
+      "path": "/clubs/{club}/family/{id}/export",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "attendance": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "date": {
+                  "t": "string"
+                },
+                "recordedAt": {
+                  "t": "string"
+                }
+              }
+            }
+          },
+          "bookings": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "amountMinor": {
+                  "t": "number",
+                  "nullable": true
+                },
+                "bookedAt": {
+                  "t": "string"
+                },
+                "currency": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "date": {
+                  "t": "string"
+                },
+                "status": {
+                  "t": "string"
+                }
+              }
+            }
+          },
+          "child": {
+            "t": "object",
+            "fields": {
+              "addedAt": {
+                "t": "string"
+              },
+              "birthYear": {
+                "t": "number",
+                "nullable": true
+              },
+              "name": {
+                "t": "string"
+              }
+            }
+          },
+          "consent": {
+            "t": "object",
+            "fields": {
+              "confirmedAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "leaderboard": {
+                "t": "boolean"
+              },
+              "photos": {
+                "t": "boolean"
+              },
+              "version": {
+                "t": "string",
+                "nullable": true
+              },
+              "vision": {
+                "t": "boolean"
+              }
+            }
+          },
+          "emergencyContacts": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "name": {
+                  "t": "string"
+                },
+                "phone": {
+                  "t": "string"
+                },
+                "position": {
+                  "t": "number"
+                },
+                "relationship": {
+                  "t": "string",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "exportedAt": {
+            "t": "string"
+          },
+          "forms": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "kind": {
+                  "t": "string"
+                },
+                "signedAt": {
+                  "t": "string"
+                },
+                "signedName": {
+                  "t": "string"
+                },
+                "title": {
+                  "t": "string"
+                },
+                "version": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "guardians": {
+            "t": "number"
+          },
+          "medicalNotes": {
+            "t": "unknown",
+            "nullable": true
+          }
+        }
+      }
+    },
+    "family.forms": {
+      "method": "GET",
+      "path": "/clubs/{club}/family/{id}/forms",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "forms": {
+            "t": "array",
+            "of": {
+              "t": "object",
+              "fields": {
+                "body": {
+                  "t": "string"
+                },
+                "id": {
+                  "t": "number"
+                },
+                "kind": {
+                  "t": "enum",
+                  "values": [
+                    "waiver",
+                    "consent"
+                  ]
+                },
+                "signedAt": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "signedName": {
+                  "t": "string",
+                  "nullable": true
+                },
+                "slug": {
+                  "t": "string"
+                },
+                "title": {
+                  "t": "string"
+                },
+                "version": {
+                  "t": "number"
+                }
+              }
+            }
+          },
+          "limits": {
+            "t": "object",
+            "fields": {
+              "nameMax": {
+                "t": "number"
               }
             }
           }
@@ -3539,6 +3970,11 @@
                 "consentVersion": {
                   "t": "string"
                 },
+                "deletionRequestedAt": {
+                  "t": "string",
+                  "nullable": true,
+                  "optional": true
+                },
                 "guardians": {
                   "t": "number"
                 },
@@ -3567,6 +4003,205 @@
                 "t": "number"
               },
               "nameMax": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.pay": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/bookings/pay",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "date": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "amountMinor": {
+            "t": "number"
+          },
+          "clientSecret": {
+            "t": "string"
+          },
+          "currency": {
+            "t": "string"
+          }
+        }
+      }
+    },
+    "family.remove": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/delete",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "confirm": {
+            "t": "boolean"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "deleted": {
+            "t": "literal",
+            "value": true
+          },
+          "kept": {
+            "t": "object",
+            "fields": {
+              "attendance": {
+                "t": "number"
+              },
+              "bookings": {
+                "t": "number"
+              }
+            }
+          },
+          "removed": {
+            "t": "object",
+            "fields": {
+              "emergencyContacts": {
+                "t": "number"
+              },
+              "medicalNotes": {
+                "t": "number"
+              },
+              "signatures": {
+                "t": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "family.requestDelete": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/delete-request",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "confirm": {
+            "t": "boolean"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "requested": {
+            "t": "boolean"
+          },
+          "requestedAt": {
+            "t": "string",
+            "nullable": true
+          }
+        }
+      }
+    },
+    "family.signForm": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/forms/{formId}/sign",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "formId": {
+            "t": "number"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "name": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "form": {
+            "t": "object",
+            "fields": {
+              "body": {
+                "t": "string"
+              },
+              "id": {
+                "t": "number"
+              },
+              "kind": {
+                "t": "enum",
+                "values": [
+                  "waiver",
+                  "consent"
+                ]
+              },
+              "signedAt": {
+                "t": "string",
+                "nullable": true
+              },
+              "signedName": {
+                "t": "string",
+                "nullable": true
+              },
+              "slug": {
+                "t": "string"
+              },
+              "title": {
+                "t": "string"
+              },
+              "version": {
                 "t": "number"
               }
             }
@@ -3633,6 +4268,11 @@
               },
               "consentVersion": {
                 "t": "string"
+              },
+              "deletionRequestedAt": {
+                "t": "string",
+                "nullable": true,
+                "optional": true
               },
               "guardians": {
                 "t": "number"

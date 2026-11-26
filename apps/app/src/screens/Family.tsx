@@ -8,6 +8,8 @@ import { LoadError } from "../components/LoadError.tsx";
 import { useCurrentClub, useT } from "../hooks.tsx";
 import { ChildBookings } from "./family/Bookings.tsx";
 import { ChildCare } from "./family/Care.tsx";
+import { ChildFormsPart } from "./family/Forms.tsx";
+import { ChildRights } from "./family/Rights.tsx";
 import { CONSENT_ITEMS, useAddChild, useFamily, useFamilyBookings, useFamilyOn, useSetConsent, useUpdateChild, type Child, type Consent, type Family, type FamilyBookings } from "./family/data.ts";
 import { errorKey, useFamilyT, type FamilyT } from "./family/words.ts";
 
@@ -143,7 +145,9 @@ function ChildCard({ child, family, bookings, ft }: { child: Child; family: Fami
         </form>
       )}
       {bookings && <ChildBookings childId={child.id} data={bookings} ft={ft} />}
+      <ChildFormsPart childId={child.id} childName={child.name} ft={ft} />
       <ChildCare childId={child.id} ft={ft} />
+      <ChildRights childId={child.id} childName={child.name} requestedAt={child.deletionRequestedAt ?? null} ft={ft} />
       <fieldset className="stack">
         <legend className="label-title">{ft("family_optional_title")}</legend>
         <p className="muted small">{ft("family_optional_hint")}</p>

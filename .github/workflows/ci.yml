@@ -11,7 +11,9 @@
 # Monorepo (pnpm workspaces): the app is apps/web, the schema and
 # migrations packages/db.
 #
-# Nothing here talks to production: no secrets are used, side effects are off
+# Nothing here talks to production: no secrets are used (one exception, on
+# main only: the Android build's Firebase file, GOOGLE_SERVICES_JSON, which
+# is configuration for the app and talks to nothing), side effects are off
 # outside production (lib/side-effects.ts), and the database is the service
 # container below.
 name: CI
@@ -305,6 +307,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Types and the shell's identity and settings
         run: pnpm --filter native typecheck && pnpm --filter native test
+      # Only on main, never on a pull request: the Firebase project's file
+      # comes from the GOOGLE_SERVICES_JSON secret. Without the secret the
+      # step writes nothing and the build has no push notifications.
+      - name: The Firebase file, from its secret (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: pnpm --filter native google-services
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: The players' app, built for the shell
         run: pnpm --filter native web
         env:

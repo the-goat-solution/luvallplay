@@ -1140,15 +1140,14 @@ describe("APP · settings: the account", () => {
     }
   });
 
-  test("APP30 · deleting the account: typed DELETE, back to sign-in; the club's only owner is told to hand over first", async () => {
+  test("APP30 · deleting the account: two taps (ask, then yes), back to sign-in; the club's only owner is told to hand over first", async () => {
     const owner = await signedIn(PEOPLE.owner.email);
     const op = await owner.context.newPage();
     await op.goto(`${APP}/settings`);
     await op.getByRole("button", { name: "Delete my account" }).click();
-    const confirm = op.getByRole("button", { name: "Delete my account" });
-    assert.equal(await confirm.isDisabled(), true, "nothing typed yet");
-    await op.getByLabel("Type DELETE to confirm").fill("delete");
-    await confirm.click();
+    await op.getByText("Delete your account? You'll be signed out everywhere.").waitFor();
+    assert.equal(await op.getByRole("button", { name: "Delete my account", exact: true }).count(), 0, "the first button gives way to the question");
+    await op.getByRole("button", { name: "Yes, delete my account" }).click();
     await op.getByRole("alert").filter({ hasText: "only owner" }).waitFor();
     await owner.context.close();
 
@@ -1159,10 +1158,10 @@ describe("APP · settings: the account", () => {
     await page.goto(`${APP}/settings`);
     await page.getByRole("button", { name: "Delete my account" }).click();
     await page.getByRole("button", { name: "Cancel" }).last().click();
-    assert.equal(await page.getByLabel("Type DELETE to confirm").count(), 0, "Cancel closes it");
-    await page.getByRole("button", { name: "Delete my account" }).click();
-    await page.getByLabel("Type DELETE to confirm").fill("DELETE");
-    await page.getByRole("button", { name: "Delete my account" }).click();
+    assert.equal(await page.getByRole("button", { name: "Yes, delete my account" }).count(), 0, "Cancel closes it");
+    assert.equal((await db.query(`SELECT deleted_at FROM players WHERE id = $1`, [id])).rows[0].deleted_at, null, "one tap deletes nothing");
+    await page.getByRole("button", { name: "Delete my account", exact: true }).click();
+    await page.getByRole("button", { name: "Yes, delete my account" }).click();
     await page.waitForURL(`${APP}/signin`);
     assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${token}` } })).status, 401);
     assert.ok((await db.query(`SELECT deleted_at FROM players WHERE id = $1`, [id])).rows[0].deleted_at);
@@ -1825,6 +1824,10 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
   const juniorsOff = async () => {
     await db.query(`UPDATE sessions s SET booked_spots = GREATEST(0, s.booked_spots - (SELECT count(*) FROM junior_bookings b WHERE b.session_date = s.date AND b.status IN ('pending', 'confirmed')))`);
     await db.query(`DELETE FROM junior_bookings`);
+    await db.query(`TRUNCATE junior_safety_checks`);
+    await db.query(`TRUNCATE junior_deletion_requests, junior_payment_records`);
+    await db.query(`DELETE FROM form_signatures`);
+    await db.query(`DELETE FROM club_forms`);
     await db.query(`DELETE FROM junior_medical_notes`);
     await db.query(`DELETE FROM junior_emergency_contacts`);
     await db.query(`DELETE FROM guardianships`);
@@ -1938,7 +1941,7 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
     }
   });
 
-  test("APP54 · a guardian books a play day for their child and cancels it; the place is counted and given back; a club that charges offers no booking yet", async () => {
+  test("APP54 · a guardian books a play day for their child and cancels it; the place is counted and given back; at a club that charges they pay by card and nothing is booked unpaid", async () => {
     await juniorsOn();
     const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;
     await db.query(`UPDATE tenants SET payment_mode = 'free' WHERE id = 1`);
@@ -1946,6 +1949,7 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
     const page = await context.newPage();
     const problems = watch(page);
     const json = { ...auth(token).headers, "content-type": "application/json" };
+    const extra = [];
     try {
       const added = await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) });
       assert.equal(added.status, 200, await added.clone().text());
@@ -1986,17 +1990,49 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
       await row.getByRole("button", { name: "Book a place" }).waitFor();
       assert.equal(await spots(), before, "the place is given back");
 
-      // A club that charges: no button, a plain explanation, and the endpoint refuses rather than booking unpaid.
+      // A club that charges: nothing is booked unpaid. The guardian pays by card; the place appears once the payment succeeds.
       await db.query(`UPDATE tenants SET payment_mode = 'online' WHERE id = 1`);
-      await page.reload();
-      await page.waitForSelector(FAMILY);
-      await page.getByText("Paying in the app isn't available yet").waitFor();
-      assert.equal(await page.getByRole("button", { name: "Book a place" }).count(), 0);
       const unpaid = await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) });
       assert.deepEqual([unpaid.status, (await unpaid.json()).error], [409, "payment_needed"]);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings/pay`, { method: "POST", headers: other, body: JSON.stringify({ date }) })).status, 404, "only the child's guardian can start a payment");
       assert.equal(await spots(), before);
+      const paying = await signedIn(PEOPLE.member.email);
+      extra.push(paying.context);
+      await withStripe(paying.context);
+      let asked;
+      await paying.context.route(`${api}/clubs/three-wolves/family/${childId}/bookings/pay`, (route) => {
+        if (route.request().method() !== "POST") return route.fallback();
+        asked = route.request().postDataJSON();
+        return route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/json" }, body: JSON.stringify({ clientSecret: "pi_junior_secret_e2e", amountMinor: 1000, currency: "NZD" }) });
+      });
+      const payPage = await paying.context.newPage();
+      const payProblems = watch(payPage);
+      await payPage.goto(`${APP}/family`);
+      await payPage.waitForSelector(FAMILY);
+      const payRow = payPage.locator(`[data-bookings="${childId}"] [data-day="${date}"]`);
+      await payRow.getByRole("button", { name: /^Book and pay / }).click();
+      const dialog = payPage.getByRole("dialog", { name: "Book a place" });
+      await dialog.locator(".fake-card-fields").waitFor();
+      await dialog.getByRole("button", { name: /^Pay / }).click();
+      await payPage.getByRole("status").filter({ hasText: "Payment received." }).waitFor();
+      assert.deepEqual(asked, { date });
+      assert.deepEqual(payProblems, []);
+      assert.equal(await spots(), before, "the app books nothing itself: the payment provider's report does");
+
+      // The paid booking as the payment's report writes it (tests/juniors-payments.test.ts): shown as paid, with no cancel in the app.
+      await db.query(`INSERT INTO junior_bookings (tenant_id, junior_profile_id, session_date, booked_by_user_id, payment_intent_id, amount_minor, currency, status) SELECT 1, $1, $2, g.guardian_user_id, 'pi_junior_e2e', 1000, 'NZD', 'confirmed' FROM guardianships g WHERE g.junior_profile_id = $1`, [childId, date]);
+      await db.query(`UPDATE sessions SET booked_spots = booked_spots + 1 WHERE date = $1`, [date]);
+      await page.reload();
+      await page.waitForSelector(FAMILY);
+      await row.getByText("Booked and paid. To cancel, contact the club.").waitFor();
+      assert.equal(await row.getByRole("button").count(), 0);
+      const paidId = (await db.query(`SELECT id FROM junior_bookings WHERE payment_intent_id = 'pi_junior_e2e'`)).rows[0].id;
+      const refused = await fetch(`${api}/clubs/three-wolves/family/bookings/${paidId}/cancel`, { method: "POST", headers: json, body: "{}" });
+      assert.deepEqual([refused.status, (await refused.json()).error], [409, "paid_booking"]);
+      assert.equal(await spots(), before + 1);
       assert.deepEqual(problems, []);
     } finally {
+      for (const c of extra) await c.close();
       await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
       await juniorsOff();
       await context.close();
@@ -2063,6 +2099,448 @@ describe("APP · Family (Phase 3b: a guardian's children; journey J1, the guardi
     } finally {
       await juniorsOff();
       await context.close();
+    }
+  });
+
+  test("APP56 · a guardian reads the club's waiver and signs it for their child by typing their name; new wording asks again; nobody else can sign for the child", async () => {
+    await juniorsOn();
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const json = { ...auth(token).headers, "content-type": "application/json" };
+    const publish = async (version, body) =>
+      (await db.query(`INSERT INTO club_forms (tenant_id, slug, version, kind, title, body, published_by_user_id) VALUES (1, 'junior-waiver', $1, 'waiver', 'Junior waiver', $2, 1) RETURNING id`, [version, body])).rows[0].id;
+    try {
+      const added = await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) });
+      assert.equal(added.status, 200);
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+
+      // A club that asks for nothing shows no forms part.
+      await page.goto(`${APP}/family`);
+      await page.waitForSelector(FAMILY);
+      await page.locator(`[data-care="${childId}"]`).waitFor();
+      assert.equal(await page.locator(`[data-forms="${childId}"]`).count(), 0);
+
+      const v1 = await publish(1, "I accept the risks of playing badminton for my child.\n\nI will collect my child on time.");
+      await page.reload();
+      await page.waitForSelector(FAMILY);
+      const part = page.locator(`[data-forms="${childId}"]`);
+      await part.locator("[data-forms-status]").filter({ hasText: "1 to sign" }).waitFor();
+      await part.getByRole("button", { name: "Read and sign" }).click();
+      const dialog = page.getByRole("dialog", { name: "Junior waiver" });
+      await dialog.getByText("I will collect my child on time.").waitFor();
+      // No name, no signature.
+      await dialog.getByRole("button", { name: "Sign" }).click();
+      await dialog.getByRole("alert").waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM form_signatures`)).rows[0].n, 0);
+      await dialog.getByLabel("Type your full name to sign").fill("Mia Guardian");
+      await dialog.getByRole("button", { name: "Sign" }).click();
+      await part.locator("[data-forms-status]").filter({ hasText: "All signed" }).waitFor();
+      await part.getByText(/^Signed by Mia Guardian on /).waitFor();
+      const rows = (await db.query(`SELECT form_id, junior_profile_id, signed_name FROM form_signatures`)).rows;
+      assert.deepEqual(rows, [{ form_id: v1, junior_profile_id: childId, signed_name: "Mia Guardian" }]);
+
+      // Another signed-in person can't see or sign for this child; signed out, nothing.
+      const other = { ...auth(await sessionToken(PEOPLE.player.email)).headers, "content-type": "application/json" };
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms`, { headers: other })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms/${v1}/sign`, { method: "POST", headers: other, body: JSON.stringify({ name: "Someone Else" }) })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms`)).status, 401);
+
+      // The club rewords the form: asked again, and the old version can no longer be signed.
+      const v2 = await publish(2, "New wording.");
+      const old = await fetch(`${api}/clubs/three-wolves/family/${childId}/forms/${v1}/sign`, { method: "POST", headers: json, body: JSON.stringify({ name: "Mia Guardian" }) });
+      assert.deepEqual([old.status, (await old.json()).error], [409, "not_current"]);
+      await page.reload();
+      await page.waitForSelector(FAMILY);
+      await page.locator(`[data-forms="${childId}"] [data-forms-status]`).filter({ hasText: "1 to sign" }).waitFor();
+      const mine = (await (await fetch(`${api}/clubs/three-wolves/family/${childId}/forms`, auth(token))).json()).forms;
+      assert.deepEqual(mine.map((f) => [f.id, f.version, f.signedAt]), [[v2, 2, null]]);
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM form_signatures`)).rows[0].n, 1, "the first signature is kept as a record");
+      assert.deepEqual(problems, []);
+    } finally {
+      await juniorsOff();
+      await context.close();
+    }
+  });
+
+  test("APP57 · a guardian downloads everything the club holds about their child, then asks the club to delete it; nothing goes until an owner confirms, then everything does; nobody else can do either", async () => {
+    await juniorsOn();
+    const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;
+    await db.query(`UPDATE tenants SET payment_mode = 'free' WHERE id = 1`);
+    const { context, token } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const json = { ...auth(token).headers, "content-type": "application/json" };
+    const extra = [];
+    const put = (path, body) => fetch(`${api}/clubs/three-wolves/family/${path}`, { method: "PUT", headers: json, body: JSON.stringify(body) });
+    try {
+      const added = await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) });
+      assert.equal(added.status, 200);
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      assert.equal((await put(`${childId}/care/contacts`, { contacts: [{ name: "Nan Guardian", phone: "021 555 0101" }] })).status, 200);
+      assert.equal((await put(`${childId}/care/medical-notes`, { notes: "Asthma: blue inhaler." })).status, 200);
+      const formId = (await db.query(`INSERT INTO club_forms (tenant_id, slug, version, kind, title, body, published_by_user_id) VALUES (1, 'junior-waiver', 1, 'waiver', 'Junior waiver', 'Words.', 1) RETURNING id`)).rows[0].id;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms/${formId}/sign`, { method: "POST", headers: json, body: JSON.stringify({ name: "Mia Guardian" }) })).status, 200);
+      const date = (await (await fetch(`${api}/clubs/three-wolves/family/bookings`, auth(token))).json()).days.find((d) => d.spotsLeft > 0).date;
+      const booked = await (await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) })).json();
+
+      // The export, as the endpoint gives it: everything, the note in plain words.
+      const all = await (await fetch(`${api}/clubs/three-wolves/family/${childId}/export`, auth(token))).json();
+      assert.deepEqual([all.child.name, all.child.birthYear, all.emergencyContacts.length, all.medicalNotes.notes, all.forms.length, all.bookings.length], ["Tama Testchild", 2016, 1, "Asthma: blue inhaler.", 1, 1]);
+      // Nobody else: another signed-in person gets 404 for both; signed out, 401.
+      const other = { ...auth(await sessionToken(PEOPLE.player.email)).headers, "content-type": "application/json" };
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/export`, { headers: other })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/delete-request`, { method: "POST", headers: other, body: JSON.stringify({ confirm: true }) })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/delete-request/cancel`, { method: "POST", headers: other, body: "{}" })).status, 404);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/export`)).status, 401);
+      const unconfirmed = await fetch(`${api}/clubs/three-wolves/family/${childId}/delete-request`, { method: "POST", headers: json, body: JSON.stringify({ confirm: false }) });
+      assert.deepEqual([unconfirmed.status, (await unconfirmed.json()).error], [400, "confirm_required"]);
+
+      await page.goto(`${APP}/family`);
+      await page.waitForSelector(FAMILY);
+      const rights = page.locator(`[data-rights="${childId}"]`);
+      // The download: a file with the child's information.
+      const download = page.waitForEvent("download");
+      await rights.getByRole("button", { name: "Download" }).click();
+      const file = await download;
+      assert.equal(file.suggestedFilename(), "child-information.json");
+      const saved = JSON.parse(await (await import("node:fs/promises")).readFile(await file.path(), "utf8"));
+      assert.deepEqual([saved.child.name, saved.medicalNotes.notes], ["Tama Testchild", "Asthma: blue inhaler."]);
+
+      // Asking while a coming place is held is refused, and nothing is removed.
+      await rights.getByRole("button", { name: "Ask to delete" }).click();
+      const dialog = page.getByRole("dialog", { name: "Delete Tama Testchild's information?" });
+      await dialog.getByRole("button", { name: "Ask the club to delete" }).click();
+      await rights.getByRole("alert").filter({ hasText: "Cancel this child's coming play days first." }).waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_deletion_requests`)).rows[0].n, 0);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/bookings/${booked.booking.id}/cancel`, { method: "POST", headers: json, body: "{}" })).status, 200);
+
+      // Changing your mind in the dialog asks for nothing.
+      await rights.getByRole("button", { name: "Ask to delete" }).click();
+      await dialog.getByRole("button", { name: "Keep" }).click();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_deletion_requests`)).rows[0].n, 0);
+
+      // Asking: the club is emailed, the card says it is waiting, and NOTHING is removed yet.
+      await fetch(`${env.base}/api/dev/outbox`, { method: "DELETE" });
+      await rights.getByRole("button", { name: "Ask to delete" }).click();
+      await dialog.getByRole("button", { name: "Ask the club to delete" }).click();
+      await page.getByRole("status").filter({ hasText: "The club has been asked to delete Tama Testchild's information." }).waitFor();
+      await rights.getByText(/It is waiting for the club to confirm\./).waitFor();
+      const left = async () => (await db.query(`SELECT (SELECT count(*) FROM junior_profiles)::int AS profiles, (SELECT count(*) FROM junior_medical_notes)::int AS notes, (SELECT count(*) FROM junior_emergency_contacts)::int AS contacts, (SELECT count(*) FROM form_signatures)::int AS signatures, (SELECT count(*) FROM junior_bookings)::int AS bookings, (SELECT count(*) FROM guardianships)::int AS guardianships`)).rows[0];
+      assert.deepEqual(await left(), { profiles: 1, notes: 1, contacts: 1, signatures: 1, bookings: 1, guardianships: 1 });
+      const mailTo = async (email) => (await (await fetch(`${env.base}/api/dev/outbox?to=${encodeURIComponent(email.toLowerCase())}`)).json()).mail;
+      const toOwner = await mailTo(PEOPLE.owner.email);
+      assert.ok(toOwner.some((m) => /asked to delete a child's information/.test(m.subject)), JSON.stringify(toOwner.map((m) => m.subject)));
+      assert.ok(!toOwner.some((m) => `${m.subject} ${m.text}`.includes("Tama")), "no child's name in the email");
+      // The older "delete now" endpoint deletes nothing.
+      const old = await fetch(`${api}/clubs/three-wolves/family/${childId}/delete`, { method: "POST", headers: json, body: JSON.stringify({ confirm: true }) });
+      assert.deepEqual([old.status, (await old.json()).error], [409, "ask_the_club"]);
+
+      // Withdrawn, then asked again.
+      await rights.getByRole("button", { name: "Withdraw the request" }).click();
+      await rights.getByRole("button", { name: "Ask to delete" }).waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_deletion_requests WHERE status = 'pending'`)).rows[0].n, 0);
+      await rights.getByRole("button", { name: "Ask to delete" }).click();
+      await dialog.getByRole("button", { name: "Ask the club to delete" }).click();
+      await rights.getByText(/It is waiting for the club to confirm\./).waitFor();
+
+      // The club: an owner confirms in the admin, and then everything is gone.
+      const owner = await signedIn(PEOPLE.owner.email);
+      extra.push(owner.context);
+      const admin = await owner.context.newPage();
+      await admin.goto(`${APP}/settings`);
+      await admin.getByRole("button", { name: "Club admin" }).click();
+      await admin.waitForURL(`${env.base}/admin`);
+      await admin.goto(`${env.base}/admin/juniors`);
+      const request = admin.locator("#deletion-requests tr, #deletion-requests [role=row]").filter({ hasText: "Tama Testchild" });
+      await request.getByText(`${PEOPLE.member.first} ${PEOPLE.member.last}`).waitFor();
+      admin.once("dialog", (d) => d.accept());
+      await request.getByRole("button", { name: "Confirm and delete" }).click();
+      await admin.getByText("The child's information has been deleted.").first().waitFor();
+      assert.equal(await admin.locator("#deletion-requests").count(), 0);
+
+      assert.deepEqual(await left(), { profiles: 0, notes: 0, contacts: 0, signatures: 0, bookings: 0, guardianships: 0 });
+      const kept = (await db.query(`SELECT status, junior_profile_id FROM junior_deletion_requests ORDER BY id`)).rows;
+      assert.deepEqual(kept, [{ status: "cancelled", junior_profile_id: null }, { status: "confirmed", junior_profile_id: null }], "the requests survive, pointing at no child");
+      // The audit row holds the request's id and nothing about the child.
+      const logged = (await db.query(`SELECT target, meta::text AS meta FROM admin_audit_log WHERE action = 'juniors.deletion.confirm'`)).rows;
+      assert.equal(logged.length, 1);
+      assert.ok(/^request:\d+$/.test(logged[0].target) && !logged[0].meta.includes("Tama") && !logged[0].meta.includes(String(childId).padStart(9, "x")), JSON.stringify(logged));
+      // The guardian is told by email, without the child's name, and their app shows no child.
+      const toGuardian = await mailTo(PEOPLE.member.email);
+      assert.ok(toGuardian.some((m) => /your child's information has been deleted/.test(m.subject)), JSON.stringify(toGuardian.map((m) => m.subject)));
+      assert.ok(!toGuardian.some((m) => `${m.subject} ${m.text}`.includes("Tama")));
+      await page.reload();
+      await page.waitForSelector(FAMILY);
+      await page.getByText("You haven't added a child yet.").waitFor();
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/export`, auth(token))).status, 404);
+      // The one refusal this journey asked for (asking while a place was held) and nothing else.
+      assert.deepEqual(problems, ["Failed to load resource: the server responded with a status of 409 (Conflict)"]);
+    } finally {
+      await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
+      for (const c of extra) await c.close();
+      await juniorsOff();
+      await context.close();
+    }
+  });
+
+  test("APP58 · the club's side: Admin → Juniors isn't there while Juniors is off; on, an owner records a safety check, sees it as valid, and withdraws it", async () => {
+    await juniorsOff();
+    const owner = await signedIn(PEOPLE.owner.email);
+    const page = await owner.context.newPage();
+    const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    try {
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      // Off: no menu entry, and the page isn't served.
+      assert.equal(await page.getByRole("link", { name: "Juniors", exact: true }).count(), 0);
+      assert.equal((await page.goto(`${env.base}/admin/juniors`)).status(), 404);
+
+      await juniorsOn();
+      await page.goto(`${env.base}/admin`);
+      // On: the menu has it (the menu can sit behind its drawer at this window size, so the page is opened by its address).
+      assert.equal(await page.getByRole("link", { name: "Juniors", exact: true }).first().getAttribute("href"), "/admin/juniors");
+      assert.equal((await page.goto(`${env.base}/admin/juniors`)).status(), 200);
+      await page.getByRole("heading", { name: "Safety checks" }).waitFor();
+      await page.getByText(/no current safety check\./).waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks`)).rows[0].n, 0);
+
+      // Dates the wrong way round are refused and nothing is written.
+      const ownerId = (await db.query(`SELECT id FROM players WHERE lower(email) = lower($1)`, [PEOPLE.owner.email])).rows[0].id;
+      const form = page.locator("#record form");
+      const fill = async (doneOn, expiresOn) => {
+        await form.getByLabel("Person").selectOption(String(ownerId));
+        await form.getByLabel("Kind of check").selectOption("police-vet");
+        await form.getByLabel("Done on").evaluate((el, v) => { el.removeAttribute("max"); el.value = v; }, doneOn);
+        await form.getByLabel("Expires on").evaluate((el, v) => { el.removeAttribute("min"); el.value = v; }, expiresOn);
+        await form.getByLabel(/Your reference/).fill("Folder B");
+        await form.getByRole("button", { name: "Record the check" }).click();
+      };
+      await fill(day(-1), day(365 * 4));
+      await page.getByText("Check the dates").first().waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks`)).rows[0].n, 0);
+
+      await fill(day(-1), day(365));
+      await page.getByText("Safety check recorded.").first().waitFor();
+      const row = (await db.query(`SELECT user_id, kind, reference, recorded_by_user_id, revoked_at FROM junior_safety_checks`)).rows;
+      assert.deepEqual(row, [{ user_id: ownerId, kind: "police-vet", reference: "Folder B", recorded_by_user_id: ownerId, revoked_at: null }]);
+      const mine = page.locator("#safety-checks tr, #safety-checks [role=row]").filter({ hasText: "Police vet" });
+      await mine.getByText("valid", { exact: true }).waitFor();
+      // The audit log says who and what kind, never the club's reference.
+      const logged = (await db.query(`SELECT action, meta::text AS meta FROM admin_audit_log WHERE action LIKE 'juniors.safety_check.%' ORDER BY id`)).rows;
+      assert.ok(logged.some((l) => l.action === "juniors.safety_check.record"), JSON.stringify(logged));
+      assert.ok(!logged.some((l) => l.meta.includes("Folder B")), "the reference isn't logged");
+
+      page.once("dialog", (d) => d.accept());
+      await mine.getByRole("button", { name: "Withdraw" }).click();
+      await page.getByText("Safety check withdrawn.").first().waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM junior_safety_checks WHERE revoked_at IS NOT NULL`)).rows[0].n, 1);
+      await page.locator("#safety-checks").getByText("withdrawn", { exact: true }).waitFor();
+    } finally {
+      await juniorsOff();
+      await owner.context.close();
+    }
+  });
+
+  test("APP59 · the junior roster: closed without a safety check; with one, the day's children, their guardian and who to call, marking who came; the medical note opens for an owner and is logged, never for an admin", async () => {
+    await juniorsOn();
+    const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;
+    await db.query(`UPDATE tenants SET payment_mode = 'free' WHERE id = 1`);
+    const guardian = await sessionToken(PEOPLE.member.email);
+    const json = { ...auth(guardian).headers, "content-type": "application/json" };
+    const owner = await signedIn(PEOPLE.owner.email);
+    const admin = await signedIn(PEOPLE.admin.email);
+    const page = await owner.context.newPage();
+    const idOf = async (email) => (await db.query(`SELECT id FROM players WHERE lower(email) = lower($1)`, [email])).rows[0].id;
+    const check = async (email) => db.query(`INSERT INTO junior_safety_checks (tenant_id, user_id, kind, checked_on, expires_on, recorded_by_user_id) VALUES (1, $1, 'police-vet', CURRENT_DATE - 30, CURRENT_DATE + 300, $1)`, [await idOf(email)]);
+    const NOTE = "Asthma: blue inhaler in the bag.";
+    try {
+      // A guardian's made-up child with a contact, a note and a place on a play day.
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) })).status, 200);
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/care/contacts`, { method: "PUT", headers: json, body: JSON.stringify({ contacts: [{ name: "Nan Guardian", phone: "021 555 0101", relationship: "Grandmother" }] }) })).status, 200);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/care/medical-notes`, { method: "PUT", headers: json, body: JSON.stringify({ notes: NOTE }) })).status, 200);
+      const date = (await (await fetch(`${api}/clubs/three-wolves/family/bookings`, auth(guardian))).json()).days.find((d) => d.spotsLeft > 0).date;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) })).status, 200);
+
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      // No safety check: the roster is closed even to an owner, and so is the note.
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.locator("#roster").getByText("You need a current safety check").waitFor();
+      assert.equal(await page.getByText("Tama Testchild").count(), 0);
+
+      await check(PEOPLE.owner.email);
+      await page.goto(`${env.base}/admin/juniors`);
+      const row = page.locator("#roster tr, #roster [role=row]").filter({ hasText: "Tama Testchild" });
+      await row.getByText("Tama Testchild (born 2016)").waitFor();
+      await row.getByText(new RegExp(PEOPLE.member.email)).waitFor();
+      await row.getByText("Nan Guardian (Grandmother): 021 555 0101").waitFor();
+      assert.equal(await page.getByText("Asthma").count(), 0, "the roster doesn't show the note");
+
+      await row.getByRole("button", { name: "Mark as here" }).click();
+      await page.getByText("Marked as here.").first().waitFor();
+      assert.deepEqual((await db.query(`SELECT source, removed FROM junior_attendance WHERE junior_profile_id = $1`, [childId])).rows, [{ source: "admin", removed: false }]);
+      await page.locator("#roster").getByRole("button", { name: "Here ✓ (undo)" }).waitFor();
+
+      // The medical note: one child at a time, and every view is logged without its words.
+      await page.locator("#roster").getByRole("link", { name: /^Read/ }).click();
+      await page.waitForURL(`${env.base}/admin/juniors/child/${childId}/medical`);
+      assert.equal(await page.locator("[data-medical-note]").textContent(), NOTE);
+      const logged = (await db.query(`SELECT action, target, meta::text AS meta FROM admin_audit_log WHERE action LIKE 'juniors.%' ORDER BY id`)).rows;
+      assert.ok(logged.some((l) => l.action === "juniors.medical_note.read" && l.target === String(childId)), JSON.stringify(logged));
+      assert.ok(logged.some((l) => l.action === "juniors.attendance"));
+      assert.ok(!logged.some((l) => l.meta.includes("Asthma") || l.meta.includes("Tama")), "no note and no name in the log");
+
+      // An admin with a check sees the roster and is told a note exists, but can't open it.
+      await check(PEOPLE.admin.email);
+      const adminPage = await admin.context.newPage();
+      await adminPage.goto(`${APP}/settings`);
+      await adminPage.getByRole("button", { name: "Club admin" }).click();
+      await adminPage.waitForURL(`${env.base}/admin`);
+      await adminPage.goto(`${env.base}/admin/juniors`);
+      await adminPage.locator("#roster").getByText("Tama Testchild (born 2016)").waitFor();
+      assert.equal(await adminPage.locator("#roster").getByRole("link", { name: /^Read/ }).count(), 0);
+      // Asking for the note's address directly: the "not found" screen (the page streams, so the status alone doesn't say), no note, and a logged refusal.
+      await adminPage.goto(`${env.base}/admin/juniors/child/${childId}/medical`);
+      await adminPage.waitForLoadState("networkidle");
+      assert.equal(await adminPage.locator("[data-medical-note]").count(), 0);
+      assert.equal(await adminPage.getByText("Asthma").count(), 0);
+      assert.equal(await adminPage.getByText("Medical note: Tama Testchild").count(), 0, "not even the child's name");
+      const refused = (await db.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'juniors.medical_note.read.refused'`)).rows[0].n;
+      assert.equal(refused, 1, "the refused attempt is logged too");
+    } finally {
+      await db.query(`DELETE FROM junior_attendance`);
+      await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
+      await juniorsOff();
+      await owner.context.close();
+      await admin.context.close();
+    }
+  });
+
+  test("APP60 · an owner publishes a waiver in the admin; the guardian is asked to sign it in the app; the admin sees the signature; new wording asks again; retiring stops asking", async () => {
+    await juniorsOn();
+    const guardian = await sessionToken(PEOPLE.member.email);
+    const json = { ...auth(guardian).headers, "content-type": "application/json" };
+    const owner = await signedIn(PEOPLE.owner.email);
+    const page = await owner.context.newPage();
+    const mine = async () => (await (await fetch(`${api}/clubs/three-wolves/family/${childId}/forms`, auth(guardian))).json()).forms;
+    let childId = 0;
+    try {
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) })).status, 200);
+      childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      assert.deepEqual(await mine(), []);
+
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(`${env.base}/admin`);
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.getByRole("link", { name: "Forms and waivers guardians sign" }).click();
+      await page.waitForURL(`${env.base}/admin/juniors/forms`);
+      await page.getByText("The club isn't asking guardians to sign anything yet.").waitFor();
+
+      const form = page.locator("#publish form");
+      const publish = async (slug, title, body) => {
+        await form.getByLabel(/^Short name/).evaluate((el, v) => { el.removeAttribute("pattern"); el.value = v; }, slug);
+        await form.getByLabel("Title").fill(title);
+        await form.getByLabel("The form's words").fill(body);
+        await form.getByRole("button", { name: "Publish" }).click();
+      };
+      // A short name with spaces is refused and nothing is written.
+      await publish("Junior Waiver", "Junior waiver", "Words.");
+      await page.getByText("The short name can only have").first().waitFor();
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM club_forms`)).rows[0].n, 0);
+
+      await publish("junior-waiver", "Junior waiver", "I accept the risks of playing badminton for my child.");
+      await page.getByText("Form published.").first().waitFor();
+      const row = page.locator("#current tr, #current [role=row]").filter({ hasText: "junior-waiver" });
+      await row.getByText("0 signatures").waitFor();
+
+      // The guardian is asked, and signs.
+      const asked = await mine();
+      assert.deepEqual(asked.map((f) => [f.slug, f.version, f.signedAt]), [["junior-waiver", 1, null]]);
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/forms/${asked[0].id}/sign`, { method: "POST", headers: json, body: JSON.stringify({ name: "Mia Member" }) })).status, 200);
+      await page.reload();
+      await row.getByText("1 signature", { exact: true }).waitFor();
+
+      // New wording: version 2, nobody has signed it yet, and the guardian is asked again.
+      await publish("junior-waiver", "Junior waiver", "New wording.");
+      await page.getByText("Version 2 published.").first().waitFor();
+      await row.getByText("0 signatures").waitFor();
+      assert.deepEqual((await mine()).map((f) => [f.version, f.signedAt]), [[2, null]]);
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM form_signatures`)).rows[0].n, 1, "the first signature is kept");
+
+      // Retired: no longer asked for.
+      page.once("dialog", (d) => d.accept());
+      await row.getByRole("button", { name: "Retire" }).click();
+      await page.getByText("Form retired.").first().waitFor();
+      await page.getByText("The club isn't asking guardians to sign anything yet.").waitFor();
+      assert.deepEqual(await mine(), []);
+      // The log names the form, not its words.
+      const logged = (await db.query(`SELECT action, target, meta::text AS meta FROM admin_audit_log WHERE action LIKE 'juniors.form.%' ORDER BY id`)).rows;
+      assert.deepEqual(logged.filter((l) => !l.action.endsWith(".refused")).map((l) => [l.action, l.target]), [["juniors.form.publish", "junior-waiver"], ["juniors.form.publish", "junior-waiver"], ["juniors.form.retire", "junior-waiver"]]);
+      assert.ok(!logged.some((l) => l.meta.includes("accept the risks")));
+    } finally {
+      await juniorsOff();
+      await owner.context.close();
+    }
+  });
+
+  test("APP61 · a coach in Admin → Juniors: no roster without a safety check; with one, the roster and a child's medical note, but never other people's safety-check status or the form to record one", async () => {
+    await juniorsOn();
+    const mode = (await db.query(`SELECT payment_mode FROM tenants WHERE id = 1`)).rows[0].payment_mode;
+    await db.query(`UPDATE tenants SET payment_mode = 'free' WHERE id = 1`);
+    const guardian = await sessionToken(PEOPLE.member.email);
+    const json = { ...auth(guardian).headers, "content-type": "application/json" };
+    const coach = await signedIn(PEOPLE.coach.email);
+    const page = await coach.context.newPage();
+    const coachId = (await db.query(`SELECT id FROM players WHERE lower(email) = lower($1)`, [PEOPLE.coach.email])).rows[0].id;
+    try {
+      assert.equal((await db.query(`SELECT role FROM club_roles WHERE player_id = $1`, [coachId])).rows[0]?.role, "coach");
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family`, { method: "POST", headers: json, body: JSON.stringify({ name: "Tama Testchild", birthYear: 2016, guardianConfirmed: true }) })).status, 200);
+      const childId = (await db.query(`SELECT id FROM junior_profiles`)).rows[0].id;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/care/medical-notes`, { method: "PUT", headers: json, body: JSON.stringify({ notes: "Asthma: blue inhaler." }) })).status, 200);
+      const date = (await (await fetch(`${api}/clubs/three-wolves/family/bookings`, auth(guardian))).json()).days.find((d) => d.spotsLeft > 0).date;
+      assert.equal((await fetch(`${api}/clubs/three-wolves/family/${childId}/bookings`, { method: "POST", headers: json, body: JSON.stringify({ date }) })).status, 200);
+
+      await page.goto(`${APP}/settings`);
+      await page.getByRole("button", { name: "Club admin" }).click();
+      await page.waitForURL(/\/admin/);
+      // No safety check: the page opens, the roster doesn't.
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.locator("#roster").getByText("You need a current safety check").waitFor();
+      assert.equal(await page.getByText("Tama Testchild").count(), 0);
+      const noStaffTable = async () => {
+        assert.equal(await page.locator("#safety-checks").count(), 0, "no safety-check table for a coach");
+        assert.equal(await page.locator("#record").count(), 0, "no form to record a check");
+        assert.equal(await page.getByText(PEOPLE.owner.first, { exact: false }).count(), 0, "no other staff member's name");
+      };
+      await noStaffTable();
+
+      await db.query(`INSERT INTO junior_safety_checks (tenant_id, user_id, kind, checked_on, expires_on, recorded_by_user_id) VALUES (1, $1, 'police-vet', CURRENT_DATE - 30, CURRENT_DATE + 300, $1)`, [coachId]);
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.locator("#roster").getByText("Tama Testchild (born 2016)").waitFor();
+      await noStaffTable();
+      // The note, for a coach with a valid check, logged.
+      await page.locator("#roster").getByRole("link", { name: /^Read/ }).click();
+      await page.waitForURL(`${env.base}/admin/juniors/child/${childId}/medical`);
+      assert.equal(await page.locator("[data-medical-note]").textContent(), "Asthma: blue inhaler.");
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'juniors.medical_note.read' AND actor_player_id = $1`, [coachId])).rows[0].n, 1);
+      // Marking who came is recorded as the coach's.
+      await page.goto(`${env.base}/admin/juniors`);
+      await page.locator("#roster").getByRole("button", { name: "Mark as here" }).click();
+      await page.getByText("Marked as here.").first().waitFor();
+      assert.deepEqual((await db.query(`SELECT source, recorded_by_user_id FROM junior_attendance WHERE junior_profile_id = $1`, [childId])).rows, [{ source: "coach", recorded_by_user_id: coachId }]);
+      // Nothing else opened up: the members page is still not a coach's.
+      await page.goto(`${env.base}/admin/members`);
+      assert.ok(!new URL(page.url()).pathname.startsWith("/admin/members") || (await page.getByRole("heading", { name: "Members" }).count()) === 0, "a coach still can't open Members");
+    } finally {
+      await db.query(`DELETE FROM junior_attendance`);
+      await db.query(`UPDATE tenants SET payment_mode = $1 WHERE id = 1`, [mode]);
+      await juniorsOff();
+      await coach.context.close();
     }
   });
 });

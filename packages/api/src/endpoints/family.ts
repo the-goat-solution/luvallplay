@@ -47,6 +47,46 @@ export const familyEndpoints = defineEndpoints("family", {
     params: S.familyChildParams, body: S.familyNotesRequest, response: S.familyCareResponse,
     rateLimit: { limit: 20, windowMs: 10 * MIN },
   },
+  // The club's forms and waivers for a child, and signing one (the guardian
+  // types their own name). Refusals: 400 name_required, name_too_long;
+  // 404 not_found; 409 not_current (the form has newer wording: show it).
+  "family.forms": {
+    method: "GET", path: "/clubs/{club}/family/{id}/forms", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, response: S.familyFormsResponse,
+    rateLimit: { limit: 60, windowMs: MIN },
+  },
+  "family.signForm": {
+    method: "POST", path: "/clubs/{club}/family/{id}/forms/{formId}/sign", auth: "session", scope: "club", module: "juniors",
+    params: S.familyFormParams, body: S.familySignRequest, response: S.familyFormResponse,
+    rateLimit: { limit: 20, windowMs: 10 * MIN },
+  },
+  // A guardian's rights over their child's information: one export of all of
+  // it, and deleting it for good. Refusals for delete: 400 confirm_required;
+  // 404 not_found; 409 has_bookings (cancel the child's coming places first).
+  "family.export": {
+    method: "GET", path: "/clubs/{club}/family/{id}/export", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, response: S.familyExportResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
+  // Deleting is two steps: the guardian asks here; an owner or admin of the
+  // club confirms in the admin; then everything about the child is deleted.
+  // Refusals: 400 confirm_required; 404 not_found; 409 has_bookings.
+  "family.requestDelete": {
+    method: "POST", path: "/clubs/{club}/family/{id}/delete-request", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyDeleteRequest, response: S.familyDeleteRequestResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
+  "family.cancelDelete": {
+    method: "POST", path: "/clubs/{club}/family/{id}/delete-request/cancel", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.emptyRequest, response: S.familyDeleteRequestResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
+  // Kept for apps that still call it: it deletes nothing and answers 409 ask_the_club.
+  "family.remove": {
+    method: "POST", path: "/clubs/{club}/family/{id}/delete", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyDeleteRequest, response: S.familyDeleteResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
   // Booking a place for a child. The place is shared with adults' casual
   // bookings. Refusals: 409 not_bookable (outside the booking window),
   // day_paused, locked, full, payment_needed (the club charges and paying
@@ -61,6 +101,15 @@ export const familyEndpoints = defineEndpoints("family", {
     params: S.familyChildParams, body: S.familyBookRequest, response: S.familyBookingResponse,
     rateLimit: { limit: 20, windowMs: 10 * MIN },
   },
+  // A club that charges: a payment to confirm. The booking appears once the
+  // payment succeeds. Refusals as family.book, plus 409 no_payment_needed
+  // (a free-play club: use family.book) and already_booked.
+  "family.pay": {
+    method: "POST", path: "/clubs/{club}/family/{id}/bookings/pay", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyBookRequest, response: S.familyPayResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
+  // 409 paid_booking: a paid place isn't cancelled in the app yet (the club refunds it).
   "family.cancelBooking": {
     method: "POST", path: "/clubs/{club}/family/bookings/{id}/cancel", auth: "session", scope: "club", module: "juniors",
     params: S.familyBookingParams, body: S.emptyRequest, response: S.familyBookingResponse,

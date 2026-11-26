@@ -2,7 +2,7 @@
 // themselves are exercised end to end (tests/e2e/journeys.mjs, "API").
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { allowedOrigins, corsHeaders, sessionTokenFrom } from "../lib/app-api.ts";
+import { PUBLIC_APP_ORIGIN, allowedOrigins, appReturnOrigin, corsHeaders, sessionTokenFrom } from "../lib/app-api.ts";
 
 const req = (headers: Record<string, string>) => new Request("https://club.example/api/v1/app/auth/session", { headers });
 
@@ -56,4 +56,20 @@ test("session token: a personal access key (tw_…) is not a session", () => {
 
 test("session token: a broken cookie value is ignored, not an error", () => {
   assert.equal(sessionTokenFrom(req({ cookie: "tw_player=%E0%A4%A" })), null);
+});
+
+test("where Stripe sends people back: the store app's web view gets the app's public address; a browser's origin is unchanged; anything else goes to the website", () => {
+  const prod = { NODE_ENV: "production" };
+  assert.equal(PUBLIC_APP_ORIGIN, "https://app.luvallplay.com");
+  // The store app's web view, and only its two origins.
+  assert.equal(appReturnOrigin("https://localhost", prod), "https://app.luvallplay.com");
+  assert.equal(appReturnOrigin("capacitor://localhost", prod), "https://app.luvallplay.com");
+  // Browser callers: exactly as before.
+  assert.equal(appReturnOrigin("https://app.luvallplay.com", prod), "https://app.luvallplay.com");
+  assert.equal(appReturnOrigin("https://luvallplay-app.vercel.app", { ...prod, APP_ORIGINS: "https://luvallplay-app.vercel.app" }), "https://luvallplay-app.vercel.app");
+  assert.equal(appReturnOrigin("http://localhost:5173", { NODE_ENV: "development" }), "http://localhost:5173");
+  // Not allowed: null (the caller falls back to the website), never the origin and never the app's address.
+  for (const origin of [null, "", "https://evil.example", "http://localhost", "https://localhost:8443", "https://localhost.evil.example", "capacitor://evil", "http://localhost:5173", "null"]) {
+    assert.equal(appReturnOrigin(origin, prod), null, String(origin));
+  }
 });

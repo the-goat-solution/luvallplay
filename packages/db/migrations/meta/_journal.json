@@ -120,6 +120,34 @@
       "when": 1795549407000,
       "tag": "0016_junior_care",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795635807000,
+      "tag": "0017_club_forms",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795639407000,
+      "tag": "0018_push_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795698105209,
+      "tag": "0019_junior_safety_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795719684958,
+      "tag": "0020_junior_deletion",
+      "breakpoints": true
     }
   ]
 }

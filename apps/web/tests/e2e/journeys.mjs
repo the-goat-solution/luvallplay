@@ -674,6 +674,10 @@ const SESSION_ENDPOINTS = [
   ["POST", "/account/photo"],
   ["DELETE", "/account/photo"],
   ["GET", "/account/export"],
+  ["GET", "/account/push"],
+  ["POST", "/account/push/device"],
+  ["POST", "/account/push/device/remove"],
+  ["POST", "/account/push/kinds"],
   ["POST", "/account/admin-handoff"],
   ["POST", "/account/delete"],
   ["GET", "/account/integrations"],
@@ -716,8 +720,15 @@ const SESSION_ENDPOINTS = [
   ["GET", "/clubs/{club}/family/{id}/care"],
   ["PUT", "/clubs/{club}/family/{id}/care/contacts"],
   ["PUT", "/clubs/{club}/family/{id}/care/medical-notes"],
+  ["GET", "/clubs/{club}/family/{id}/forms"],
+  ["POST", "/clubs/{club}/family/{id}/forms/{formId}/sign"],
+  ["GET", "/clubs/{club}/family/{id}/export"],
+  ["POST", "/clubs/{club}/family/{id}/delete"],
+  ["POST", "/clubs/{club}/family/{id}/delete-request"],
+  ["POST", "/clubs/{club}/family/{id}/delete-request/cancel"],
   ["GET", "/clubs/{club}/family/bookings"],
   ["POST", "/clubs/{club}/family/{id}/bookings"],
+  ["POST", "/clubs/{club}/family/{id}/bookings/pay"],
   ["POST", "/clubs/{club}/family/bookings/{id}/cancel"],
   ["GET", "/clubs/{club}/me/photos"],
   ["POST", "/clubs/{club}/me/photos"],
@@ -1170,6 +1181,78 @@ describe("API · the players' app API", () => {
         [before.id, before.first_name, before.last_name, before.display_name, before.lang, before.leaderboard_visible, before.phone, before.phone_e164, before.phone_verified_at],
       );
       await db.query(`UPDATE club_members SET leaderboard_visible = $2 WHERE user_id = $1`, [before.id, before.leaderboard_visible]);
+      await pete.context.close();
+    }
+  });
+
+  test("API12b · push: a device is stored sealed; kinds are opt-in; nobody removes another's device; signing out and deleting the account forget it", async () => {
+    const address = (n) => `fcm-e2e-device-${n}:APA91b${"x".repeat(60)}`;
+    const pete = await signedIn(PEOPLE.player.email);
+    const mia = await signedIn(PEOPLE.member.email);
+    const call = (who, method, path, body) => appApi(method, path, { token: who.token, body });
+    const devices = async (email) => (await db.query(`SELECT d.* FROM push_devices d JOIN players p ON p.id = d.player_id WHERE p.email = $1 ORDER BY d.id`, [email])).rows;
+    try {
+      const off = { challenge: false, result: false, message: false, reminder: false, roster: false, payment: false };
+      assert.deepEqual((await call(pete, "GET", "/account/push")).json, { available: true, devices: 0, kinds: off });
+
+      // Registering: sealed in the database, never sent back; twice is once.
+      assert.deepEqual((await call(pete, "POST", "/account/push/device", { token: address(1), platform: "android" })).json, { ok: true });
+      assert.deepEqual((await call(pete, "POST", "/account/push/device", { token: address(1), platform: "android" })).json, { ok: true });
+      const [row, ...more] = await devices(PEOPLE.player.email);
+      assert.equal(more.length, 0);
+      assert.match(row.sealed, /^v1\./);
+      assert.doesNotMatch(JSON.stringify(row), /fcm-e2e-device/, "the address is nowhere in the row");
+      const seen = await call(pete, "GET", "/account/push");
+      assert.equal(seen.json.devices, 1);
+      assert.doesNotMatch(JSON.stringify(seen.json), /fcm-e2e-device/);
+      for (const bad of [{ token: "short", platform: "android" }, { token: address(1), platform: "windows" }, { token: `${address(1)} x`, platform: "ios" }, {}]) {
+        assert.equal((await call(pete, "POST", "/account/push/device", bad)).status, 400, JSON.stringify(bad));
+      }
+
+      // Kinds: only what the person turned on; unknown kinds are refused.
+      assert.deepEqual((await call(pete, "POST", "/account/push/kinds", { reminder: true, message: true })).json, { ok: true, kinds: { ...off, reminder: true, message: true } });
+      assert.deepEqual((await call(pete, "POST", "/account/push/kinds", { message: false })).json.kinds, { ...off, reminder: true });
+      for (const bad of [{}, { marketing: true }, { reminder: "yes" }]) assert.equal((await call(pete, "POST", "/account/push/kinds", bad)).status, 400, JSON.stringify(bad));
+      assert.deepEqual((await call(mia, "GET", "/account/push")).json, { available: true, devices: 0, kinds: off }, "another person's are their own");
+
+      // Nobody removes another person's device, even knowing its address.
+      assert.deepEqual((await call(mia, "POST", "/account/push/device/remove", { token: address(1) })).json, { ok: true });
+      assert.equal((await devices(PEOPLE.player.email)).length, 1);
+      // The same phone under another account moves to it.
+      await call(mia, "POST", "/account/push/device", { token: address(1), platform: "android" });
+      assert.deepEqual([(await devices(PEOPLE.player.email)).length, (await devices(PEOPLE.member.email)).length], [0, 1]);
+      await call(mia, "POST", "/account/push/device/remove", { token: address(1) });
+      assert.equal((await devices(PEOPLE.member.email)).length, 0);
+
+      // Signing out on one phone forgets that phone; signing out everywhere forgets them all.
+      await call(pete, "POST", "/account/push/device", { token: address(1), platform: "android" });
+      await call(pete, "POST", "/account/push/device", { token: address(2), platform: "ios" });
+      const second = await signedIn(PEOPLE.player.email);
+      assert.deepEqual((await call(second, "POST", "/auth/logout", { pushToken: address(2) })).json, { ok: true });
+      assert.equal((await devices(PEOPLE.player.email)).length, 1);
+      await call(pete, "POST", "/account/push/device", { token: address(3), platform: "android" });
+      assert.deepEqual((await call(pete, "POST", "/auth/logout", { all: true })).json, { ok: true });
+      assert.equal((await devices(PEOPLE.player.email)).length, 0);
+      await second.context.close();
+
+      // Without sign-in: nothing.
+      for (const [method, path] of [["GET", "/account/push"], ["POST", "/account/push/device"], ["POST", "/account/push/device/remove"], ["POST", "/account/push/kinds"]]) {
+        assert.equal((await appApi(method, path, { body: method === "POST" ? {} : undefined })).status, 401, path);
+      }
+
+      // Deleting the account forgets its devices.
+      const email = `push.delete.${Date.now()}@e2e.test`;
+      await db.query(`INSERT INTO players (email, first_name, last_name, claimed_at) VALUES ($1, 'Pat', 'Pushed', NOW())`, [email]);
+      const pat = await signedIn(email);
+      await call(pat, "POST", "/account/push/device", { token: address(9), platform: "android" });
+      assert.equal((await devices(email)).length, 1);
+      assert.deepEqual((await call(pat, "POST", "/account/delete", { confirm: "DELETE" })).json, { ok: true });
+      assert.equal((await devices(email)).length, 0);
+      await pat.context.close();
+    } finally {
+      await db.query(`DELETE FROM push_devices`);
+      await db.query(`DELETE FROM push_prefs`);
+      await mia.context.close();
       await pete.context.close();
     }
   });

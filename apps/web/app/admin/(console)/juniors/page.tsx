@@ -187,6 +187,10 @@ export default async function JuniorsAdminPage({ searchParams }: { searchParams:
         )}
       </Section>
 
+      <p>
+        <Link href="/admin/juniors/forms">Forms and waivers guardians sign</Link>
+      </p>
+
       <Section title="Safety checks" id="safety-checks">
         <p>
           Everyone with a role in the club who works with juniors needs a current safety check recorded here. Without one they can&apos;t open the junior roster. Luvallplay records that a check exists and

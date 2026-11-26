@@ -6,12 +6,13 @@ import { storage, store } from "../app.ts";
 import { platformOf, storeLinks, storeToOffer } from "../lib/get-app.ts";
 import { countOpen } from "../lib/app-opens.ts";
 import { LuvallplayMark, Notice, OnLuvallplay, Splash, useLook } from "../Frame.tsx";
-import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, usePrefs, useSession, useT, useWho, useWindowClass, useNavKind, type Club, type ClubConfig } from "../hooks.tsx";
+import { ClubScopeProvider, useClubConfigs, useClubs, useCurrentClub, useLang, usePrefs, useSession, useT, useWho, useWindowClass, type Club, type ClubConfig } from "../hooks.tsx";
 import { isHomePath, moduleForPath, spaceClub, tabForPath, titleKeyForPath, visibleTabs, visibleTabsAcross, type TabId } from "../lib/nav.ts";
 import { translator } from "../lib/messages.ts";
 import { ClubBadge } from "../components/ClubTag.tsx";
 import { Icon, type IconName } from "../components/Icon.tsx";
 import { useUnread } from "./me/data.ts";
+import { navKind } from "../lib/window-class.ts";
 import { focus } from "../lib/focus.ts";
 import { online } from "../lib/offline.ts";
 import { skipToken, useQuery } from "@tanstack/react-query";
@@ -162,7 +163,6 @@ export function Shell() {
   const clubsQuery = useClubs();
   const lang = useLang();
   const cls = useWindowClass();
-  const nav = useNavKind();
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
@@ -232,7 +232,7 @@ export function Shell() {
   const screen = waiting ? <Splash /> : <Suspense fallback={<Splash />}>{gone ? null : <Outlet />}</Suspense>;
 
   return (
-    <div className="shell" data-tabs={noClub ? "none" : undefined} data-window-class={cls} data-nav={nav} data-focus={focused ? "on" : undefined}>
+    <div className="shell" data-tabs={noClub ? "none" : undefined} data-window-class={cls} data-nav={navKind(cls)} data-focus={focused ? "on" : undefined}>
       <a className="skip-link" href="#main">{t("skip_to_content")}</a>
       <header className="shell-head" data-space={multi ? (home ? "home" : "club") : undefined}>
         {multi && home ? (

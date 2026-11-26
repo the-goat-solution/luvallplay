@@ -2647,16 +2647,17 @@ describe("APP · accessibility and the page's rules", () => {
 // pages only behind feature flags (Device Posture and Viewport Segments), so
 // the fold is emulated here in Chromium (DevTools' display features); the
 // sizes are the displays' in points (outer about 466 × 678, inner 951 × 669
-// opened like a book). A last check on a real device is still worth doing.
+// opened like a book). A compact window keeps the bottom bar (a rail there
+// squeezes the page); the inner display has the rail, as any window 600px+. A last check on a real device is still worth doing.
 describe("APP · iPhone Duo", () => {
   const FOLD = 24;
   const POSES = [
-    { name: "outer display", viewport: { width: 466, height: 678 }, nav: "rail" },
+    // The outer display and Split View are compact windows: the bottom bar, so the page keeps its width.
+    { name: "outer display", viewport: { width: 466, height: 678 }, nav: "bar" },
     { name: "outer display, sideways", viewport: { width: 678, height: 466 }, nav: "rail" },
     { name: "inner display", viewport: { width: 951, height: 669 }, nav: "rail" },
     { name: "inner display, upright", viewport: { width: 669, height: 951 }, nav: "rail" },
-    // Apple puts each Split View app's bars down its outer edge, as on the outer display.
-    { name: "Split View, half the inner display", viewport: { width: 382, height: 669 }, screen: { width: 951, height: 669 }, nav: "rail" },
+    { name: "Split View, half the inner display", viewport: { width: 382, height: 669 }, screen: { width: 951, height: 669 }, nav: "bar" },
     { name: "folded like a book", viewport: { width: 951, height: 669 }, nav: "rail", fold: { orientation: "vertical", offset: 463, maskLength: FOLD } },
     { name: "set down like a laptop", viewport: { width: 669, height: 951 }, nav: "rail", fold: { orientation: "horizontal", offset: 463, maskLength: FOLD } },
   ];

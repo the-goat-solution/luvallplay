@@ -69,6 +69,7 @@ test("no screen falls back to New Zealand or its dollar", () => {
   for (const f of (readdirSync(dir, { recursive: true }) as string[]).filter((x) => /\.tsx?$/.test(x))) {
     assert.doesNotMatch(readFileSync(new URL(f, dir), "utf8"), /\?\? "NZD?"|localeOf\([^)]*"NZ"\)/, f);
   }
+});
 
 test("a challenge's time left: whole days, never more than were chosen, whatever the hour it was put up", () => {
   const H = 3600_000;

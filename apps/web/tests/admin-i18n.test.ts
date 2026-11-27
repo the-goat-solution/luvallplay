@@ -48,7 +48,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 
 // Ratchet: admin screens (.tsx) that don't read the admin namespace yet.
 // Lower this number when you translate a screen; it must never go up.
-const UNTRANSLATED_MAX = 29;
+const UNTRANSLATED_MAX = 28;
 
 test("ratchet: admin screens still written in inline English only go down", () => {
   const left = [join(WEB, "app/admin"), join(WEB, "components/admin")]
@@ -89,4 +89,15 @@ test("every Today attention item a module declares has an English and a Vietname
     }
   }
   assert.deepEqual(missing, [], "add att_… keys to packages/i18n/src/admin.ts");
+});
+
+test("every audit code the admin can log has a Vietnamese description", async () => {
+  const { auditLabelIn, auditDetailsIn, auditOutcomeNoteIn, roleName } = await import("../lib/admin-audit-text.ts");
+  const codes = ["admin.granted", "admin.role_changed", "admin.removed", "admin.invited", "admin.invite_accepted", "admin.invite_revoked", "admin.break_glass_login", "admin.handoff_created", "admin.handoff_used", "platform.granted", "platform.removed", "module.switch", "module.lock", "membership.cancel", "membership.free_month", "payment.retry", "stripe.sync", "export.finance", "export.shop", "export.jersey", "finance.receipt_view", "shop.refund"];
+  for (const code of codes) assert.notEqual(auditLabelIn("vi", code), auditLabelIn("en", code), `${code} has no Vietnamese description`);
+  assert.equal(auditLabelIn("vi", "POST /admin/shop"), "Đã thay đổi ở Cửa hàng");
+  assert.equal(auditLabelIn("en", "POST /admin/shop"), "Made a change on Shop");
+  assert.equal(auditDetailsIn("vi", { action: "admin.role_changed", meta: { from: "admin", to: "owner" } }), "vai trò quản trị viên → chủ sở hữu");
+  assert.equal(auditOutcomeNoteIn("vi", { outcome: "refused", reason: "x" }), "chưa thực hiện: x");
+  assert.equal(roleName("vi", "coach"), "huấn luyện viên");
 });

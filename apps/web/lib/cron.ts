@@ -32,6 +32,7 @@ export const CRON_JOBS: readonly CronJob[] = [
   { id: "roster-attendance", path: "/api/cron/roster-attendance", schedule: "5 19 * * *", purpose: "Play days counted from past rosters" },
   { id: "shop-upkeep", path: "/api/cron/shop-upkeep", schedule: "10 19 * * *", purpose: "Shop reservation reminders and lapsed holds" },
   { id: "webhook-retries", path: "/api/cron/webhook-retries", schedule: "15 19 * * *", purpose: "Failed outgoing webhooks, retried" },
+  { id: "moderation-deadlines", path: "/api/cron/moderation-deadlines", schedule: "*/30 * * * *", purpose: "Reports close to or past their deadline (only where Moderation is on)" },
 ];
 
 /**

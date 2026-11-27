@@ -377,7 +377,44 @@ export const juniors = defineModule({
   liveActivity: "children's profiles and their upcoming bookings",
 });
 
-/** The core first, then every optional module in catalogue order. Global modules (§8) arrive in a later phase. */
+// ── Social and its moderation (decision AQ; Social plan) ─────────────────────
+// Global modules: a person's profile, follows and posts are theirs across
+// clubs. Both are HIDDEN platform-wide until gate Z passes (build plan §8):
+// the ordinary switch refuses them, and a club's row saying "on" counts only
+// for a club in the pilot list (apps/web/lib/juniors/switch-rule.ts:
+// SOCIAL_PILOT_TENANTS / MARKET_PILOT_TENANTS; empty by default).
+
+/** The report queue and its deadlines job, shared by Social and the Marketplace. No player screens of its own. */
+export const moderation = defineModule({
+  id: "moderation",
+  scope: "global",
+  group: "global",
+  payments: "none",
+  plan: "free",
+  availability: "hidden",
+  name: { en: "Moderation", vi: "Kiểm duyệt" },
+  // Its admin pages (a club's queue at /admin/moderation, the platform's at
+  // /admin/platform/moderation), the menu item and the Today line
+  // ("moderationOpen", urgency 25) are declared when the pages exist: a
+  // manifest names only what the app really serves.
+  crons: [{ id: "moderation-deadlines", schedule: "*/30 * * * *", path: "/api/cron/moderation-deadlines" }],
+  liveActivity: "open reports",
+});
+
+export const social = defineModule({
+  id: "social",
+  scope: "global",
+  group: "global",
+  // Reports about profiles, posts and comments need the queue.
+  requires: ["moderation"],
+  payments: "none",
+  plan: "free",
+  availability: "hidden",
+  name: { en: "Social", vi: "Cộng đồng" },
+  liveActivity: "posts and follows",
+});
+
+/** The core first, then every optional module in catalogue order, then the global modules (§8). */
 export const MODULES = [
   home,
   playDays,
@@ -403,6 +440,8 @@ export const MODULES = [
   integrations,
   formsWaivers,
   juniors,
+  moderation,
+  social,
 ] as const;
 
 export type ModuleId = (typeof MODULES)[number]["id"];

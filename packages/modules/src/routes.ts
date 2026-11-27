@@ -102,6 +102,7 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   ["/api/v1", "integrations"],
   ["/api/mcp", "integrations"],
   ["/api/cron/webhook-retries", "integrations"],
+  ["/api/cron/moderation-deadlines", "moderation"],
 ];
 
 const matches = (prefix: string, path: string) => prefix === "/" ? path === "/" : path === prefix || path.startsWith(`${prefix}/`);

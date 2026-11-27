@@ -46,6 +46,10 @@ export const MODULE_LINES: Readonly<Record<string, ModuleLines>> = {
   integrations: { lines: ["integrations"] },
   "forms-waivers": { lines: ["forms"] },
   juniors: { lines: ["juniors"] },
+  // Global modules, built hidden (decision AQ): both lines stay "soon".
+  // Moderation is the report queue Social and the Marketplace share.
+  moderation: { lines: ["social", "marketplace"] },
+  social: { lines: ["social"] },
 };
 
 /**
@@ -53,6 +57,6 @@ export const MODULE_LINES: Readonly<Record<string, ModuleLines>> = {
  * club finder, set-up, sports, languages). They are checked by hand.
  */
 export const NOT_A_MODULE: readonly string[] = [
-  "finder", "playersApp", "storeApps", "social", "marketplace",
+  "finder", "playersApp", "storeApps",
   "newClubs", "setupWizard", "badminton", "otherSports", "languages",
 ];

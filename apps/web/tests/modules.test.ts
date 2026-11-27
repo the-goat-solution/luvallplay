@@ -111,8 +111,20 @@ test("A1: the generated Today list is exactly the hand-written one it replaced, 
   ];
   const flat = (rows: { key: string; href: string; sentence: (n: number) => string; action: string }[]) =>
     rows.map((a) => [a.key, a.href, a.sentence(1), a.sentence(3), a.action]);
-  assert.deepEqual(flat(ATTENTION), flat(before.map(([key, href, sentence, action]) => ({ key, href, sentence, action }))));
+  // What every club has today. A line added by a module still hidden platform-wide isn't part of it.
+  const hidden = new Set(MODULES.filter((m) => m.availability === "hidden").map((m) => m.id as string));
+  assert.deepEqual(flat(ATTENTION.filter((a) => !hidden.has(a.module))), flat(before.map(([key, href, sentence, action]) => ({ key, href, sentence, action }))));
   assert.deepEqual(Object.keys(COUNTERS).sort(), ATTENTION.map((a) => a.key).sort());
+});
+
+test("Moderation declares its deadlines job and, until its pages exist, no menu page and no Today line", () => {
+  const m = MODULES.find((x) => x.id === "moderation")!;
+  assert.deepEqual(m.crons, [{ id: "moderation-deadlines", schedule: "*/30 * * * *", path: "/api/cron/moderation-deadlines" }]);
+  assert.equal(routeOwner("/api/cron/moderation-deadlines"), "moderation");
+  const without = new Set(MODULES.map((x) => x.id as string).filter((id) => id !== "moderation"));
+  assert.equal(blockedByModule("/api/cron/moderation-deadlines", without), "moderation", "the job stops where Moderation is off");
+  assert.deepEqual([m.admin?.nav ?? [], m.admin?.attention ?? [], m.admin?.pages ?? []], [[], [], []]);
+  assert.deepEqual(MODULES.find((x) => x.id === "social")?.admin, undefined);
 });
 
 test("registry agreement: each menu page, badge and Today line is served by the module that declares it", () => {
@@ -153,12 +165,27 @@ test("routes, admin pages and API paths named by modules exist in the app", () =
   }
 });
 
-test("every module has an English and a Vietnamese name, is on the Free plan and is a club module", () => {
+test("every module has an English and a Vietnamese name and is on the Free plan; the only global modules are the hidden Social and Moderation", () => {
   for (const m of MODULES) {
     assert.ok(m.name.en && m.name.vi, m.id);
     assert.equal(m.plan, "free");
-    assert.equal(m.scope, "club", "global modules come in a later phase");
+    assert.equal(m.scope === "global", m.group === "global", `${m.id}: a global module is in the global group, and nothing else is`);
+    if (m.scope === "global") assert.equal(m.availability, "hidden", `${m.id}: global modules are built hidden (decision AQ)`);
   }
+  assert.deepEqual(MODULES.filter((m) => m.scope === "global").map((m) => m.id), ["moderation", "social"]);
+});
+
+test("Social and Moderation are hidden platform-wide: the ordinary switch refuses them, for owners and for Luvallplay staff", () => {
+  const ctx: SwitchContext = { paymentMode: "online", enabled: [...THREE_WOLVES.modules], actor: "owner" };
+  for (const id of ["social", "moderation"]) {
+    assert.match((canTurnOn(MODULES, id, ctx) as { reason: string }).reason, /isn't available right now/);
+    assert.equal(canTurnOn(MODULES, id, { ...ctx, actor: "platform-admin" }).ok, false, id);
+    assert.ok(!(THREE_WOLVES.modules as readonly string[]).includes(id), `${id} ships dark`);
+  }
+  // Social needs the report queue, and nothing with a player's screen is declared for either yet.
+  assert.deepEqual(withRequirements(MODULES, "social"), ["social", "moderation"]);
+  assert.deepEqual(MODULES.find((m) => m.id === "social")?.requires, ["moderation"]);
+  assert.match((canTurnOff(MODULES, "moderation", { ...ctx, enabled: ["social", "moderation"] }) as { reason: string }).reason, /Social needs Moderation/);
 });
 
 test("Three Wolves: online payments, every optional module on (not the hidden ones), and every one of them allowed", () => {

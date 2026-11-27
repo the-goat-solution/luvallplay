@@ -1,0 +1,145 @@
+# The signed Android release bundle (AAB) for Google Play (build plan §4.5.1),
+# and, only when the owner asks for it, its upload to a Play testing track.
+#
+# - On every push to main: build the AAB, signed with the upload key, and keep
+#   it for 30 days as the "android-release-aab" artifact (download it, upload
+#   it by hand in Play Console for the first build).
+# - "Run workflow" (Actions tab), with "Upload to Play" ticked: also sends it to
+#   the internal testing track as a draft release the owner rolls out in Play
+#   Console. Never automatic, never on a pull request.
+# - Without the signing secrets the job says so and finishes green: nothing is
+#   built, nothing is uploaded. Pull requests never run this file (the debug
+#   build in ci.yml covers them), so no secret reaches code from a fork.
+#
+# Secrets (GitHub → Settings → Secrets and variables → Actions), set by the
+# owner; steps in apps/native/README.md:
+#   ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+#   ANDROID_KEY_PASSWORD  - the upload key
+#   GOOGLE_SERVICES_JSON  - the Firebase file (the same secret ci.yml uses)
+#   PLAY_SERVICE_ACCOUNT_JSON - only for the upload
+# Variable: NATIVE_API_BASE - the public API host the app talks to.
+name: Android release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload to Play (the internal testing track, as a draft release)
+        type: boolean
+        default: false
+      track:
+        description: Play track
+        type: choice
+        options: [internal]
+        default: internal
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Signed release bundle (AAB)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      HAVE_KEY: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+    steps:
+      - name: Is the upload key set up?
+        run: |
+          if [ "$HAVE_KEY" != "true" ]; then
+            echo "::notice title=Android release::The upload key secrets aren't set yet, so no bundle was built. Steps for the owner: apps/native/README.md → 'For the owner: the first Play build'."
+          fi
+      - uses: actions/checkout@v4
+        if: env.HAVE_KEY == 'true'
+      - uses: pnpm/action-setup@v4
+        if: env.HAVE_KEY == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAVE_KEY == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        if: env.HAVE_KEY == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Gradle's downloads, kept between runs
+        if: env.HAVE_KEY == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-android-${{ hashFiles('apps/native/android/**/*.gradle', 'apps/native/android/gradle/wrapper/gradle-wrapper.properties', 'pnpm-lock.yaml') }}
+          restore-keys: gradle-android-
+      - run: pnpm install --frozen-lockfile
+        if: env.HAVE_KEY == 'true'
+      - name: Types and the shell's identity and settings
+        if: env.HAVE_KEY == 'true'
+        run: pnpm --filter native typecheck && pnpm --filter native test
+      - name: The Firebase file, from its secret
+        if: env.HAVE_KEY == 'true'
+        run: pnpm --filter native google-services
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Release checks
+        if: env.HAVE_KEY == 'true'
+        # Internal testing may go out before Play has an app-signing fingerprint
+        # for assetlinks.json (that needs a first upload); a later track may not.
+        run: pnpm --filter native release:check --allow-placeholder-links
+      - name: The players' app, built for the shell
+        if: env.HAVE_KEY == 'true'
+        run: |
+          if [ -z "$NATIVE_API_BASE" ]; then
+            echo "::error title=NATIVE_API_BASE::Set the repository variable NATIVE_API_BASE (Settings → Secrets and variables → Actions → Variables) to the public API host the app talks to."
+            exit 1
+          fi
+          pnpm --filter native web
+        env:
+          NATIVE_API_BASE: ${{ vars.NATIVE_API_BASE }}
+      - run: pnpm --filter native sync:android
+        if: env.HAVE_KEY == 'true'
+      - name: Release bundle, signed with the upload key
+        if: env.HAVE_KEY == 'true'
+        working-directory: apps/native/android
+        run: |
+          KEYSTORE="$RUNNER_TEMP/upload.jks"
+          umask 077
+          printf '%s' "$ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          export ANDROID_KEYSTORE_PATH="$KEYSTORE"
+          ./gradlew --init-script "$GITHUB_WORKSPACE/.github/gradle/maven-mirror.init.gradle" bundleRelease
+          rm -f "$KEYSTORE"
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # Play needs each upload's version code to be higher than the last.
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+      - name: Is the bundle signed, and with which key? (a certificate fingerprint is public)
+        if: env.HAVE_KEY == 'true'
+        run: |
+          AAB=apps/native/android/app/build/outputs/bundle/release/app-release.aab
+          keytool -printcert -jarfile "$AAB" | tee "$RUNNER_TEMP/cert.txt"
+          grep -q 'SHA256:' "$RUNNER_TEMP/cert.txt" || { echo "::error::The bundle isn't signed."; exit 1; }
+          { echo '### Upload key of this bundle'; echo; echo "Play Console → App integrity → App signing → 'Upload key certificate' must show this SHA-256:"; echo; echo '```'; grep 'SHA256:' "$RUNNER_TEMP/cert.txt"; echo '```'; echo; echo "Version code: ${{ github.run_number }}"; } >> "$GITHUB_STEP_SUMMARY"
+      - name: The bundle (the "android-release-aab" artifact)
+        if: env.HAVE_KEY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-aab
+          path: apps/native/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload to Play (only when asked for in "Run workflow")
+        if: env.HAVE_KEY == 'true' && github.event_name == 'workflow_dispatch' && inputs.upload
+        run: pnpm --filter native play:upload --track "$TRACK" --status draft
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          TRACK: ${{ inputs.track }}

@@ -92,7 +92,7 @@ If the script can't reach the database it says so in one line and exits 2, havin
 
 Say the list is `k1:…` and the new key is `k2`.
 
-`MODERATION_KEKS` seals two columns: do steps 3 to 5 once for `content_reports.details_sealed` and once for `moderation_evidence.sealed`, and remove the old key only when both report nothing left on it. (The app's database role can't update `moderation_evidence`; the script connects as the database's owner, as it always does.)
+`MODERATION_KEKS` seals two columns: do steps 3 to 5 once for `content_reports.details_sealed` and once for `moderation_evidence.sealed`, and remove the old key only when both report nothing left on it. (The app's database role can't update `moderation_evidence`; the script connects as the database's owner, as it always does.) The key in your shell is proven per column, against rows of the column being re-sealed. Evidence rows are rare, so after a rotation there is usually none on the new key yet and the evidence run stops and asks for `--first-use-of-key`. Run `content_reports.details_sealed` first: when it has proven the key and re-sealed, run `moderation_evidence.sealed` with `--first-use-of-key` **from the same shell**, so it is the same key.
 
 1. **Add the new key first in the list, keeping the old one:** `k2:…,k1:…`. Check it against the parser (above).
 2. **Deploy.** From now on new sealings use `k2`; everything sealed with `k1` still opens.

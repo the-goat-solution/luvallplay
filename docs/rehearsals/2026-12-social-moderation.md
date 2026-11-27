@@ -97,7 +97,8 @@ Once Social is on for anyone, `player_suspensions` is a record that must be kept
 - **Change:** three new, empty tables. Nothing existing is altered.
   - `content_reports`: a person reports a profile, a post or a comment (later a listing or a question). The row names the target by type and id and holds no content. What the reporter wrote is kept only sealed (`details_sealed`, `MODERATION_KEKS`, bound to the report's id); the column's check takes nothing but the sealed format. `queue` is `club` or `platform`; a serious report can't be in a club's queue, and a club's queue needs a club. One open report per reporter per target (a partial unique index). `reporter_id` is a foreign key to `players` (`RESTRICT`, as every key to `players` is) and is set to `NULL` when the reporter deletes their account. `alerted_at` remembers that the moderators were told a deadline was near.
   - `moderation_actions`: what a moderator did, one row each: ids, the action and a short reason. Insert only.
-  - `moderation_evidence`: for a `child_safety` report, a sealed copy of the content and the author's account id. Insert only. One row per report.
+  - `moderation_evidence`: for a `child_safety` report, a sealed copy of the content and the author's account id. Insert only. One row per report. A trigger (`moderation_evidence_for_child_safety`, checked after the statement) refuses a row for any report that isn't a `child_safety` one.
+  - The app's role may update a report only in `reason`, `severity`, `queue`, `due_at`, `details_sealed`, `reporter_id`, `status`, `handled_by`, `handled_at` and `alerted_at`: never its id, what it is about (`target_type`, `target_id`), its club, or when it was filed.
   - `moderation_actions` and `moderation_evidence` name accounts by id **without a foreign key**, as `player_suspensions` does, so they stand when an account is deleted. A report can't be deleted while an action or evidence points at it (`RESTRICT`).
   - All three are platform-wide: no `tenant_id`, no row-level security. The club column is `club_id`.
 - **Command:** `node scripts/db/migrate.mjs`
@@ -119,15 +120,15 @@ Once Social is on for anyone, `player_suspensions` is a record that must be kept
 | The three new tables | 0 rows each |
 | Data guard, before against after, with the expectations | Passed: 24 live accounts checked, 0 problems. It reports the three new tables and nothing else; without the expectations file the result is the same |
 | Migrating a second time | **A no-op:** "Nothing to migrate: the database is up to date."; the history has 24 rows |
-| The app's role | `content_reports`: `SELECT`, `INSERT`, `UPDATE`, `DELETE`. `moderation_actions` and `moderation_evidence`: `SELECT` yes; `INSERT` on every column but `moderation_actions.id` and the two `created_at` (after the review fixes below); `UPDATE` and `DELETE` no (tried as the role: "permission denied for table moderation_actions"). `TRUNCATE` on none of the three |
-| Rollback (below), then a schema dump | The schema equals the one before `0023` (103 tables); the migrator applies `0023` again afterwards (10 ms) |
-| `tests/moderation-reports.test.ts` | Passes (35 of 35) on Postgres 16, each database test once as the owner and once under `TENANT_SCOPE=enforce` with two clubs |
+| The app's role | `content_reports`: `SELECT`, `INSERT`, `DELETE`, and `UPDATE` of the ten columns listed above only (after the second review's fixes: tried as the role, `UPDATE … SET target_id` and `SET created_at` give "permission denied for table content_reports", closing a report works, and evidence for a `spam` report is refused by the trigger). `moderation_actions` and `moderation_evidence`: `SELECT` yes; `INSERT` on every column but `moderation_actions.id` and the two `created_at` (after the review fixes below); `UPDATE` and `DELETE` no (tried as the role: "permission denied for table moderation_actions"). `TRUNCATE` on none of the three |
+| Rollback (below), then a schema dump | The schema equals the one before `0023` (103 tables); the migrator applies `0023` again afterwards (13 ms). **Run again after the review fixes** (the migration was edited in place twice, its journal date unchanged), with the function's `DROP` added |
+| `tests/moderation-reports.test.ts` | Passes (39 of 39, after the review fixes) on Postgres 16, each database test once as the owner and once under `TENANT_SCOPE=enforce` with two clubs |
 | `packages/db/schema.ts` against the migration (the three tables, their indexes and sequences, on Postgres 16) | No difference |
-| Schema drift suite, and `db:drift` | **Not run here**: they need Postgres 18 (CI runs them). `docs/schema/production.sql` was extended from this run's dump (81 lines added, none changed): on Postgres 16 the dump after `0023` equals the new `production.sql` once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside. Those 17 lines for the three new tables were written to the pattern of the existing tables and have not been checked against a real Postgres 18 |
+| Schema drift suite, and `db:drift` | **Not run here**: they need Postgres 18 (CI runs them). `docs/schema/production.sql` was extended from this run's dump (81 lines added, none changed; 11 more for the trigger and its function after the review fixes, taken from a Postgres 16 dump in the same way): on Postgres 16 the dump after `0023` equals the new `production.sql` once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside. Those 17 lines for the three new tables were written to the pattern of the existing tables and have not been checked against a real Postgres 18 |
 
 ### Settings
 
-`MODERATION_KEKS` (the encryption build's key list for reports; it already has its row in the System check). With no key a report is still taken: what the reporter wrote is not stored, and a `child_safety` report keeps **no copy of the content** (it is never stored plain). So the key has to be set before Social is switched on for anyone. Both sealed columns are in `lib/crypto-purposes.ts`: after a key rotation, `scripts/crypto/reseal.mjs` is run once for `content_reports.details_sealed` and once for `moderation_evidence.sealed`, as the database's owner (the app's role can't update the evidence), before the old key is removed.
+`MODERATION_KEKS` (the encryption build's key list for reports; it already has its row in the System check). With no key a report is still taken: what the reporter wrote is not stored, and a `child_safety` report keeps **no copy of the content** (it is never stored plain). So the key has to be set before Social is switched on for anyone. Both sealed columns are in `lib/crypto-purposes.ts`: after a key rotation, `scripts/crypto/reseal.mjs` is run once for `content_reports.details_sealed` and once for `moderation_evidence.sealed`, as the database's owner (the app's role can't update the evidence), before the old key is removed. The script proves the shell's key against rows of the column it is re-sealing, and after a rotation there is usually no evidence row on the new key yet: run the details first (that run proves the key), then the evidence with `--first-use-of-key`, in the same shell.
 
 ### Rollback
 
@@ -135,6 +136,7 @@ All three tables are new and nothing writes to them until Social is switched on 
 
 ```sql
 DROP TABLE moderation_evidence;
+DROP FUNCTION moderation_evidence_for_child_safety();
 DROP TABLE moderation_actions;
 DROP TABLE content_reports;
 DELETE FROM drizzle.__drizzle_migrations WHERE hash = (SELECT hash FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1); -- only if 0023 is the last one applied

@@ -422,7 +422,18 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
         const text = await everything();
         for (const word of ["messaging", "Look at", "Smashes"]) assert.ok(!text.includes(word), word);
 
-        await assert.rejects(fileReport(db, moderationSeal({ MODERATION_KEKS: "m1:too-short" }), { reporterId: RUA, targetType: "profile", targetId: pid(PETE), reason: "spam", details: "x" }), /MODERATION_KEKS/);
+        // The same error whatever the target is: a broken key must not say which ids exist or can be seen.
+        const broken = moderationSeal({ MODERATION_KEKS: "m1:too-short" });
+        await admin.query(`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [SIONE, RUA]);
+        const messages: string[] = [];
+        for (const [what, targetId, targetType, details] of [["a visible profile", pid(PETE), "profile", "x"], ["without details", pid(PETE), "profile", undefined], ["an id nobody has", newPublicId(), "profile", "x"], ["a blocked person", pid(SIONE), "profile", "x"], ["a malformed id", "nope", "profile", "x"], ["a kind with no loader", 1, "listing", "x"], ["an open report already", pid(PETE), "profile", "x", MIA]] as const) {
+          await assert.rejects(
+            fileReport(db, broken, { reporterId: what === "an open report already" ? MIA : RUA, targetType, targetId, reason: "spam", details }),
+            (e: Error) => (messages.push(e.message), /MODERATION_KEKS/.test(e.message)),
+            what,
+          );
+        }
+        assert.equal(new Set(messages).size, 1, "one error, word for word");
         assert.equal(await count("content_reports"), 2, "and nothing was written for it");
       });
 
@@ -456,10 +467,10 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
         assert.equal(await count("moderation_evidence"), 1);
       });
 
-      test("a repeat open report is `duplicate` and changes nothing; once the first is closed a new one is taken", async () => {
+      test("a repeat open report that is no more serious is `duplicate` and changes nothing; once the first is closed a new one is taken", async () => {
         const first = value(await fileReport(db, seal, { reporterId: MIA, targetType: "profile", targetId: pid(PETE), reason: "spam", details: "First words" }));
         const before = await report(first.id);
-        for (const reason of ["spam", "child_safety", "harassment"] as const) {
+        for (const reason of ["spam", "harassment", "scam", "other"] as const) {
           assert.deepEqual(await fileReport(db, seal, { reporterId: MIA, targetType: "profile", targetId: pid(PETE), reason, details: "Second words" }), { ok: false, code: "duplicate" }, reason);
         }
         assert.deepEqual(await report(first.id), before);
@@ -471,6 +482,89 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
         await admin.query(`UPDATE content_reports SET status = 'dismissed', handled_at = now(), handled_by = $2 WHERE id = $1`, [first.id, ADMIN]);
         const again = value(await fileReport(db, seal, { reporterId: MIA, targetType: "profile", targetId: pid(PETE), reason: "spam" }));
         assert.notEqual(again.id, first.id);
+      });
+
+      test("a serious repeat is not swallowed: the open report becomes serious, the platform's, due sooner, with the new words and (child_safety) the evidence", async () => {
+        const DUP = { ok: false, code: "duplicate" } as const;
+        const first = value(await fileReport(db, seal, { reporterId: MIA, targetType: "profile", targetId: pid(PETE), reason: "spam", details: "First words" }));
+        const spam = await report(first.id);
+        assert.deepEqual([spam.reason, spam.severity, spam.queue], ["spam", "normal", "club"]);
+
+        // Spam, then child_safety with details: the same report, raised.
+        const at = Date.now();
+        assert.deepEqual(await fileReport(db, seal, { reporterId: MIA, targetType: "profile", targetId: pid(PETE), reason: "child_safety", details: "The bio worries me" }), DUP);
+        assert.equal(await count("content_reports"), 1, "still one report");
+        const raised = await report(first.id);
+        assert.deepEqual([raised.reason, raised.severity, raised.queue, raised.status, raised.club_id, raised.reporter_id, Number(raised.target_id)], ["child_safety", "serious", "platform", "open", 1, MIA, PETE]);
+        assert.deepEqual(raised.created_at, spam.created_at, "filed when it was first filed");
+        assert.ok(raised.due_at.getTime() < spam.due_at.getTime(), "due sooner");
+        assert.ok(Math.abs(raised.due_at.getTime() - (at + 12 * HOUR)) < 5000, "12 hours from the serious report");
+        assert.equal(seal.open(first.id, raised.details_sealed), "The bio worries me", "the new words, bound to the same report");
+        const kept = await rows(`SELECT * FROM moderation_evidence`);
+        assert.deepEqual(kept.map((e) => [Number(e.report_id), e.author_player_id]), [[first.id, PETE]]);
+        assert.deepEqual(JSON.parse(seal.openEvidence(first.id, kept[0].sealed)), { targetType: "profile", targetId: PETE, content: { displayName: "Pete the Smash", bio: "Smashes first, asks later" } });
+        const text = await everything();
+        for (const word of ["First words", "worries", "Smashes"]) assert.ok(!text.includes(word), word);
+
+        // Anything after that is no more serious: nothing changes, not the words, not the deadline, not the evidence.
+        for (const [reason, details] of [["child_safety", "Third words"], ["sexual", "x"], ["hate", undefined], ["spam", "y"]] as const) {
+          assert.deepEqual(await fileReport(db, seal, { reporterId: MIA, targetType: "profile", targetId: pid(PETE), reason, details }), DUP, reason);
+        }
+        assert.deepEqual(await report(first.id), raised);
+        assert.deepEqual(await rows(`SELECT * FROM moderation_evidence`), kept);
+
+        // Normal to serious without new words keeps the old ones; a deadline already nearer is not pushed back.
+        const second = value(await fileReport(db, seal, { reporterId: QUINN, targetType: "profile", targetId: pid(PETE), reason: "harassment", details: "Kept words" }));
+        await admin.query(`UPDATE content_reports SET due_at = now() + interval '1 hour' WHERE id = $1`, [second.id]);
+        const near = (await report(second.id)).due_at;
+        assert.deepEqual(await fileReport(db, seal, { reporterId: QUINN, targetType: "profile", targetId: pid(PETE), reason: "hate" }), DUP);
+        const hate = await report(second.id);
+        assert.deepEqual([hate.reason, hate.severity, hate.queue, hate.due_at], ["hate", "serious", "platform", near]);
+        assert.equal(seal.open(second.id, hate.details_sealed), "Kept words");
+        assert.equal(await count("moderation_evidence"), 1, "evidence is for child_safety only");
+        // Serious, then child_safety: the reason changes and the evidence is kept; the deadline stays the nearer one.
+        assert.deepEqual(await fileReport(db, seal, { reporterId: QUINN, targetType: "profile", targetId: pid(PETE), reason: "child_safety" }), DUP);
+        const child = await report(second.id);
+        assert.deepEqual([child.reason, child.severity, child.queue, child.due_at], ["child_safety", "serious", "platform", near]);
+        assert.equal(seal.open(second.id, child.details_sealed), "Kept words");
+        assert.deepEqual((await rows(`SELECT report_id FROM moderation_evidence ORDER BY 1`)).map((e) => Number(e.report_id)), [first.id, second.id]);
+
+        // With no key: raised all the same; the new words and the copy can't be kept. When the key is there, a repeat keeps the copy.
+        const third = value(await fileReport(db, noKey, { reporterId: SIONE, targetType: "profile", targetId: pid(PETE), reason: "spam" }));
+        assert.deepEqual(await fileReport(db, noKey, { reporterId: SIONE, targetType: "profile", targetId: pid(PETE), reason: "child_safety", details: "No key for these" }), DUP);
+        const bare = await report(third.id);
+        assert.deepEqual([bare.reason, bare.severity, bare.queue, bare.details_sealed], ["child_safety", "serious", "platform", null]);
+        assert.equal(await count("moderation_evidence"), 2);
+        assert.deepEqual(await fileReport(db, seal, { reporterId: SIONE, targetType: "profile", targetId: pid(PETE), reason: "child_safety", details: "Late words" }), DUP);
+        assert.deepEqual(await report(third.id), bare, "the report itself is as it was");
+        const late = await rows(`SELECT sealed FROM moderation_evidence WHERE report_id = $1`, [third.id]);
+        assert.equal(JSON.parse(seal.openEvidence(third.id, late[0].sealed)).content.displayName, "Pete the Smash");
+
+        // A closed report is not raised: the serious one is a new report.
+        await admin.query(`UPDATE content_reports SET status = 'dismissed', handled_at = now(), handled_by = $2 WHERE id = $1`, [first.id, ADMIN]);
+        const closed = await report(first.id);
+        const fresh = value(await fileReport(db, seal, { reporterId: MIA, targetType: "profile", targetId: pid(PETE), reason: "child_safety" }));
+        assert.notEqual(fresh.id, first.id);
+        assert.deepEqual(await report(first.id), closed);
+      });
+
+      test("an ordinary and a child_safety report of the same thing at the same moment: one report, and it is the child_safety one with its evidence", async () => {
+        for (let round = 0; round < 4; round++) {
+          await admin.query(`TRUNCATE moderation_evidence, moderation_actions, content_reports`);
+          const reasons = ["spam", "child_safety", "harassment", "child_safety", "hate", "spam"] as const;
+          const answers = await Promise.all(reasons.map((reason) => fileReport(db, seal, { reporterId: MIA, targetType: "profile", targetId: pid(PETE), reason, details: `Words for ${reason}` })));
+          assert.equal(answers.filter((a) => a.ok).length, 1, JSON.stringify(answers));
+          assert.deepEqual(answers.filter((a) => !a.ok), Array.from({ length: 5 }, () => ({ ok: false, code: "duplicate" })));
+          const all = await rows(`SELECT * FROM content_reports`);
+          assert.equal(all.length, 1);
+          const id = Number(all[0].id);
+          assert.deepEqual([all[0].reason, all[0].severity, all[0].queue], ["child_safety", "serious", "platform"]);
+          assert.ok(all[0].due_at.getTime() - Date.now() <= 12 * HOUR + 1000);
+          assert.equal(seal.open(id, all[0].details_sealed), "Words for child_safety", "words that open for this report");
+          const kept = await rows(`SELECT report_id, sealed FROM moderation_evidence`);
+          assert.deepEqual(kept.map((e) => Number(e.report_id)), [id]);
+          assert.equal(JSON.parse(seal.openEvidence(id, kept[0].sealed)).targetId, PETE);
+        }
       });
 
       test("the same report sent twice at once makes one row: one is taken, the others are `duplicate`, none is an error", async () => {

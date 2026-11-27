@@ -20,6 +20,7 @@ One list per purpose, each in its own environment variable. A leak of one purpos
 | `JUNIORS_KEKS` | `junior_medical_notes.sealed` |
 | `CONTACT_KEKS` | `players.phone_sealed` |
 | `CONTACT_INDEX_KEYS` | `players.phone_index` (an index key, not a sealing key) |
+| `MODERATION_KEKS` | reports to moderators (Social and Marketplace; not built yet) |
 
 **The format is strict:**
 
@@ -45,6 +46,19 @@ node --input-type=module -e 'import { parseKeks } from "@luvallplay/crypto"; for
 ```
 
 It prints the key ids in order (the first is the one new sealings will use) and nothing of the keys, or says which list is malformed.
+
+### What production checks as it starts
+
+`apps/web/lib/crypto-health.ts`, called from `instrumentation.ts` when `VERCEL_ENV` is `production`. It reads the environment only. A server **does not start** (and says which variable, and which key ids, never a key) when:
+
+- a key list is malformed;
+- two lists hold the same key (every key of every list is compared, older keys and index keys too);
+- `PII_READS` is `sealed` without `CONTACT_KEKS` or `CONTACT_INDEX_KEYS`, or is anything but `plain` or `sealed`;
+- `CRYPTO_CHECK_RATE_LIMIT=1` and `RATE_LIMIT_STORE` isn't `database`. (The switch lets this check be deployed before the owner sets `RATE_LIMIT_STORE`; set both together.)
+
+A list that is **not set** doesn't stop it: that purpose is unavailable, its feature refuses when used, and Admin → System check shows it red. The System check lists every key list with its state and key ids, and says whether production would start with the current settings. A preview isn't stopped at start, so check there first.
+
+So a change to any key list, or to `PII_READS`, can stop production starting: check the value against the parser (above) and on a preview's System check before it goes to production.
 
 ### `CONTACT_INDEX_KEYS` is as secret as the phone numbers
 

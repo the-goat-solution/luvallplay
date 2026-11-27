@@ -47,7 +47,7 @@ node --input-type=module -e 'import { parseKeks } from "@luvallplay/crypto"; for
 
 It prints the key ids in order (the first is the one new sealings will use) and nothing of the keys, or says which list is malformed.
 
-### What production checks as it starts
+### What production checks as it builds and as it starts
 
 `apps/web/lib/crypto-health.ts`, when `VERCEL_ENV` is `production`. It reads the environment only, and runs twice:
 

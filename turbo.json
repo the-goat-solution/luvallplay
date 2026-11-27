@@ -13,6 +13,15 @@
       "env": [
         "NEXT_PUBLIC_*",
         "VERCEL_ENV",
+        "INTEGRATIONS_KEKS",
+        "PUSH_KEKS",
+        "JUNIORS_KEKS",
+        "CONTACT_KEKS",
+        "CONTACT_INDEX_KEYS",
+        "MODERATION_KEKS",
+        "PII_READS",
+        "RATE_LIMIT_STORE",
+        "CRYPTO_CHECK_RATE_LIMIT",
         "DATABASE_URL_VAR",
         "E2E_BUILD"
       ]

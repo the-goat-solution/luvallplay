@@ -17,13 +17,15 @@
 // lib/admin-roles.ts, so the app, scripts and tests share it. No
 // extensionless relative imports: scripts load this file directly with Node.
 
+import { tenantSlugSetting } from "./tenant-settings.ts";
+
 export type Db = {
   query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; rowCount?: number | null }>;
 };
 
-/** The club this deployment serves until host routing arrives (step 6). */
+/** The club this deployment serves (TENANT_SLUG; production must set it, lib/tenant-settings.ts). */
 export function defaultTenantSlug(): string {
-  return process.env.TENANT_SLUG?.trim() || "three-wolves";
+  return tenantSlugSetting();
 }
 
 // One row per person IN THE CLUB. Accounts are global, so an account is not

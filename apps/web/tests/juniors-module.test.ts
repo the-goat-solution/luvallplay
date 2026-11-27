@@ -245,11 +245,14 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
       const on = await enabledModules(c);
       assert.deepEqual([on.has("juniors"), on.has("forms-waivers")], [false, false], "hidden on this deployment: neither counts as on, whatever the rows say");
       process.env.VERCEL_ENV = "production";
+      // Production names its club (lib/tenant-settings.ts).
+      process.env.TENANT_SLUG = "three-wolves";
       process.env.JUNIORS_AVAILABILITY = "available";
       resetClubModulesCache();
       assert.equal((await enabledModules(c)).has("juniors"), false, "production ignores the override");
     } finally {
       delete process.env.VERCEL_ENV;
+      delete process.env.TENANT_SLUG;
       process.env.JUNIORS_AVAILABILITY = "available";
       resetClubModulesCache();
     }

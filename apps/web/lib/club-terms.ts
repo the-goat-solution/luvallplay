@@ -9,8 +9,21 @@
 // one set of names per server process is correct today.
 import { currentTerms, format, setTerms, type Terms } from "@luvallplay/i18n";
 import { CLUB_TERMS } from "./constants.ts";
+import { BUILT_IN_CLUB, DeploymentSettingsError, tenantSlugSetting } from "./tenant-settings.ts";
 
-setTerms(CLUB_TERMS);
+// Three Wolves' names only on Three Wolves' deployment (audit C7). Any other
+// club starts from the neutral names ("Points", "Vision") until its settings
+// are applied, never from Three Wolves'. With TENANT_SLUG missing on
+// production the names stay neutral; the server refuses to start anyway.
+function builtInClub(): boolean {
+  try {
+    return tenantSlugSetting() === BUILT_IN_CLUB;
+  } catch (err) {
+    if (err instanceof DeploymentSettingsError) return false;
+    throw err;
+  }
+}
+if (builtInClub()) setTerms(CLUB_TERMS);
 
 /** Use the club's names from its settings. */
 export function applyClubTerms(terms: Terms): void {

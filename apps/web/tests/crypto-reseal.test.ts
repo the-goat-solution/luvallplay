@@ -14,6 +14,8 @@ import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { createSeal, parseKeks, SealError, sealedWith } from "@luvallplay/crypto";
 import { migrate } from "../scripts/db/migrate.mjs";
@@ -170,6 +172,7 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
     assert.deepEqual(dry, { purpose: "push_devices.sealed", current: "p2", byKey: { p1: 250 }, todo: 250, done: 0, skipped: 0, problems: 0 });
     assert.deepEqual((await c.query(`SELECT id, sealed FROM push_devices ORDER BY id`)).rows, before, "a dry run writes nothing");
     assert.ok(lines.some((l) => /p1/.test(l) && /250/.test(l)), "the count per key is listed");
+    assert.equal(lines[0], "current key: p2", "the key every row is brought to is said first, to compare with the deployed list");
 
     // Stopped after the first batch of 100 (an injected failure: a lost connection, a closed laptop).
     await assert.rejects(
@@ -427,4 +430,24 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
       }
     });
   });
+});
+
+// The command line itself, with a database that can't be reached. No Postgres needed.
+test("reseal.mjs: a database it can't connect to is one line and exit 2 (never 1: that means rows were left with a problem), without the connection string", () => {
+  const web = fileURLToPath(new URL("..", import.meta.url));
+  // Port 1 on this machine: refused at once. The login is made up.
+  const url = "postgres://reseal_user:reseal-made-up-password@127.0.0.1:1/reseal_db";
+  const kek = randomBytes(32).toString("base64");
+  const run = spawnSync(process.execPath, ["scripts/crypto/reseal.mjs", "--purpose", "push_devices.sealed"], {
+    cwd: web,
+    // NODE_NO_WARNINGS: Node's own note about loading a .ts file isn't the script's output.
+    env: { PATH: process.env.PATH, NODE_NO_WARNINGS: "1", POSTGRES_URL: url, PUSH_KEKS: `p1:${kek}` },
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  assert.equal(run.status, 2, run.stderr);
+  const said = run.stderr.trim();
+  assert.equal(said.split("\n").length, 1, `one line, no stack: ${said}`);
+  assert.match(said, /Could not connect to the database/);
+  for (const secret of ["reseal_user", "reseal-made-up-password", "reseal_db", "127.0.0.1", kek]) assert.ok(!(run.stdout + run.stderr).includes(secret), `"${secret}" is not printed`);
 });

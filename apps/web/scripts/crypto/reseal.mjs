@@ -24,6 +24,10 @@
 //   as scripts/db/migrate.mjs does: only with the owner's OK.
 // - It prints counts, key ids and row keys. Never plain text, a sealed text,
 //   an index or a key.
+// - Its first line is "current key: <id>": the key every row is brought to
+//   (the first key of the list in THIS shell). Compare it with the first key
+//   of the list the servers run with before adding --apply: a list in the
+//   wrong order here would re-seal everything back onto the old key.
 // - Connect as the database's owner, as for migrations. A club-owned table
 //   is worked through one club at a time, each transaction naming its club.
 // - DB_DRIVER=neon-ws works as in the other operator scripts (db-client.mjs).
@@ -73,10 +77,25 @@ if (apply && isProductionHost(url) && !args.includes("--production")) {
   process.exit(2);
 }
 
+/** The database could not be reached. Holds the error's code only (ECONNREFUSED, 28P01, …), never its message. */
+class CannotConnect extends Error {
+  constructor(code) {
+    super("Could not connect to the database.");
+    this.code = code;
+  }
+}
+
 const c = await dbClient(url, "crypto-reseal");
-await c.connect();
 let code = 0;
 try {
+  // Inside the try: a database that can't be reached is "stopped" (exit 2),
+  // said in one line. Its error can name the host and the login, so only its
+  // code is said.
+  try {
+    await c.connect();
+  } catch (err) {
+    throw new CannotConnect(typeof err?.code === "string" && /^[0-9A-Za-z_]{1,40}$/.test(err.code) ? err.code : null);
+  }
   const result = await reseal(c, { purpose, apply, batch: 100, log: (line) => console.log(line) });
   if (!apply && result.current) console.log("Dry run: nothing was written. Add --apply to do it.");
   if (result.problems) code = 1;
@@ -84,9 +103,10 @@ try {
   // A key or seal error's message never holds a key or a value (packages/crypto).
   // A database error's message can quote a row, so only its code is said.
   const dbCode = /^[0-9A-Z]{5}$/.test(String(err?.code ?? "")) ? String(err.code) : null;
-  console.error(dbCode ? `The run stopped: database error ${dbCode}. What was committed stays; run it again to continue.` : err instanceof Error ? err.message : "The run stopped.");
+  if (err instanceof CannotConnect) console.error(`Could not connect to the database (POSTGRES_URL)${err.code ? `: ${err.code}` : ""}. Nothing was read or written.`);
+  else console.error(dbCode ? `The run stopped: database error ${dbCode}. What was committed stays; run it again to continue.` : err instanceof Error ? err.message : "The run stopped.");
   code = 2;
 } finally {
-  await c.end();
+  await c.end().catch(() => {});
 }
 process.exit(code);

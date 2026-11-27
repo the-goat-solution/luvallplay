@@ -56,6 +56,10 @@ Phone numbers are few (about 10^8 per country). Anyone who holds `CONTACT_INDEX_
 
 The script is `apps/web/scripts/crypto/reseal.mjs` (run from `apps/web`, connected as the database's owner, as for migrations). It reads the key lists from the environment. It prints counts, key ids and row keys only.
 
+**Its first line is `current key: <id>`**, on a dry run and with `--apply`: the key every row will be brought to, which is the first key of the list in *your shell*. Before adding `--apply`, compare it with the first key of the list the servers run with (the parser check above, on the deployed value, prints it). If the list in your shell is in the wrong order (`k1:…,k2:…`), the script would re-seal everything back onto the old key. Stop if the two differ.
+
+If the script can't reach the database it says so in one line and exits 2, having read and written nothing.
+
 ### A sealing key (`PUSH_KEKS`, `JUNIORS_KEKS`, `CONTACT_KEKS`)
 
 Say the list is `k1:…` and the new key is `k2`.
@@ -69,7 +73,7 @@ Say the list is `k1:…` and the new key is `k2`.
    POSTGRES_URL=… node scripts/crypto/reseal.mjs --purpose push_devices.sealed
    ```
 
-   It lists how many rows are on each key id and writes nothing.
+   It says `current key: k2` first, then how many rows are on each key id, and writes nothing. If it names any key but the new one, the list in your shell isn't the deployed one: stop.
 4. **Re-seal:**
 
    ```sh
@@ -89,17 +93,18 @@ The same number has a different index under each key, so the order matters more 
 
 1. **Add the new key first, keeping the old one:** `i2:…,i1:…`. Check it against the parser. Deploy.
    New and changed numbers are indexed with `i2`. Lookups (sign-in by phone) match the index under **every** listed key, and "this number is already someone's" is checked under every listed key, so rows still on `i1` keep working.
-2. **Dry run**, then **re-index** (needs `CONTACT_KEKS` too: the number is read from the row's own sealed copy):
+2. **Wait until every server runs with the new list** (the deploy has finished and no instance of the previous deployment is still serving) **before running the script.** The script re-indexes to the first `CONTACT_INDEX_KEYS` key in your shell. A server that doesn't have that key yet can't compute the new index, so with `PII_READS=sealed` it can't find a re-indexed account by its phone number (sign-in by phone fails for those accounts on that server) until it runs with the new list. The same holds for `--purpose players.phone_sealed`, which re-indexes in the same write. Check that the script's first line (`current key: i2`) names the first key of the deployed list.
+3. **Dry run**, then **re-index** (needs `CONTACT_KEKS` too: the number is read from the row's own sealed copy):
 
    ```sh
    POSTGRES_URL=… node scripts/crypto/reseal.mjs --purpose contact-index
    POSTGRES_URL=… node scripts/crypto/reseal.mjs --purpose contact-index --apply
    ```
 
-3. **Verify:** the dry run again must list **0** rows on `i1` (and none without a key id).
-4. **Only then remove `i1`** and deploy. A row still indexed with `i1` after that is not found by its number: its owner can't sign in by phone until the row is re-indexed.
+4. **Verify:** the dry run again must list **0** rows on `i1` (and none without a key id).
+5. **Only then remove `i1`** and deploy. A row still indexed with `i1` after that is not found by its number: its owner can't sign in by phone until the row is re-indexed.
 
-Rotating `CONTACT_KEKS` and `CONTACT_INDEX_KEYS` together: put both new keys first, deploy, and run `--purpose players.phone_sealed --apply`; it does both. Then run the `contact-index` dry run as well before removing the old index key (a row already on the new sealing key is not visited by `players.phone_sealed`).
+Rotating `CONTACT_KEKS` and `CONTACT_INDEX_KEYS` together: put both new keys first, deploy, wait until every server runs with the new lists (step 2), and run `--purpose players.phone_sealed --apply`; it does both. Then run the `contact-index` dry run as well before removing the old index key (a row already on the new sealing key is not visited by `players.phone_sealed`).
 
 Before the plain phone columns are dropped (a later project), read the precondition recorded in `docs/rehearsals/2026-11-pii-phone-sealed.md`: with several index keys listed and no plain column, two servers with different lists could verify one number for two accounts.
 

@@ -311,6 +311,12 @@ export async function reseal(db: ResealDb, opts: ResealOptions): Promise<ResealR
   if (job.tenant && job.keyColumns[0] !== "tenant_id") throw new Error(`${job.table}: a club-owned table's key starts with tenant_id.`);
   if (apply) job.ready();
 
+  // Said first, before anything is read: the key every row is brought to is
+  // the first one listed in THIS environment. The operator compares it with
+  // the first key of the list the servers run with; a list in the wrong order
+  // here would bring everything back to the old key.
+  log(`current key: ${job.current ?? NO_KEY}`);
+
   const nameOf = (row: Row) => `${job.table} ${job.keyColumns.map((k) => `${k}=${int(row[k])}`).join(" ")}`;
   const columns = [...new Set([...job.keyColumns, ...job.read])].join(", ");
   const keyList = job.keyColumns.join(", ");

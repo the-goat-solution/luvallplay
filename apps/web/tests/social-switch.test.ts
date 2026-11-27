@@ -3,7 +3,7 @@
 // yes or no out. In production only the pilot lists count.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hiddenModuleOn, pilotClubs, pilotModuleOn } from "../lib/juniors/switch-rule.ts";
+import { availabilityWordCounts, hiddenModuleOn, pilotClubs, pilotModuleOn, pilotScope } from "../lib/juniors/switch-rule.ts";
 
 const PROD = { VERCEL_ENV: "production" };
 
@@ -78,4 +78,66 @@ test("Juniors' own rule is as it was, and an unknown hidden module is never on",
   assert.equal(hiddenModuleOn("juniors", ack, { ...PROD, JUNIORS_AVAILABILITY: "available" }), false);
   assert.equal(hiddenModuleOn("juniors", ack, { SOCIAL_AVAILABILITY: "available", SOCIAL_PILOT_TENANTS: "1" }, 1), false, "Social's settings don't open Juniors");
   assert.equal(hiddenModuleOn("something-new", ack, { SOCIAL_AVAILABILITY: "available", JUNIORS_AVAILABILITY: "available", SOCIAL_PILOT_TENANTS: "1" }, 1), false);
+});
+
+test("anything not provably non-production is production: the availability word is ignored there", () => {
+  const WORDS = { SOCIAL_AVAILABILITY: "available", MARKET_AVAILABILITY: "available" };
+  const production: Record<string, string>[] = [
+    { VERCEL_ENV: "production" },
+    // A self-hosted production deployment (Hanoi): no VERCEL_ENV at all.
+    { NODE_ENV: "production" },
+    // Mistyped, or a value this code doesn't know: never a way in.
+    { VERCEL_ENV: "Production" },
+    { VERCEL_ENV: "production " },
+    { VERCEL_ENV: " production" },
+    { VERCEL_ENV: "prod" },
+    { VERCEL_ENV: "staging" },
+    { VERCEL_ENV: "Preview" },
+    { VERCEL_ENV: "" , NODE_ENV: "production" },
+    { VERCEL_ENV: "production", NODE_ENV: "development" },
+    { VERCEL_ENV: "production", NODE_ENV: "test", E2E_OUTBOX: "1" },
+    { VERCEL_ENV: "staging", NODE_ENV: "test" },
+    { NODE_ENV: "production", E2E_OUTBOX: "true" },
+    { NODE_ENV: "production", E2E_OUTBOX: "0" },
+    { NODE_ENV: "Production" },
+    { NODE_ENV: "production " },
+  ];
+  for (const env of production) {
+    assert.equal(availabilityWordCounts(env), false, JSON.stringify(env));
+    for (const id of ["social", "marketplace", "moderation"]) assert.equal(hiddenModuleOn(id, null, { ...env, ...WORDS }, 1), false, `${id} ${JSON.stringify(env)}`);
+    assert.deepEqual(pilotScope("social", { ...env, ...WORDS }), [], JSON.stringify(env));
+    // The pilot list is read everywhere.
+    assert.equal(hiddenModuleOn("social", null, { ...env, ...WORDS, SOCIAL_PILOT_TENANTS: "1" }, 1), true, JSON.stringify(env));
+    assert.equal(hiddenModuleOn("social", null, { ...env, ...WORDS, SOCIAL_PILOT_TENANTS: "1" }, 2), false, JSON.stringify(env));
+  }
+  const notProduction: Record<string, string>[] = [
+    {},
+    { NODE_ENV: "development" },
+    { NODE_ENV: "test" },
+    { VERCEL_ENV: "preview" },
+    { VERCEL_ENV: "preview", NODE_ENV: "production" },
+    { VERCEL_ENV: "development", NODE_ENV: "production" },
+    // The end-to-end harness: the built app (NODE_ENV=production), no VERCEL_ENV, captured email.
+    { NODE_ENV: "production", E2E_OUTBOX: "1" },
+  ];
+  for (const env of notProduction) {
+    assert.equal(availabilityWordCounts(env), true, JSON.stringify(env));
+    assert.equal(hiddenModuleOn("social", null, { ...env, ...WORDS }, 7), true, JSON.stringify(env));
+    assert.equal(hiddenModuleOn("moderation", null, { ...env, MARKET_AVAILABILITY: "beta" }, 7), true, JSON.stringify(env));
+    assert.equal(pilotScope("social", { ...env, ...WORDS }), "all", JSON.stringify(env));
+    assert.equal(hiddenModuleOn("social", null, env, 7), false, "and without the word it is off");
+  }
+});
+
+test("pilotScope: every club, or exactly the listed ones", () => {
+  assert.deepEqual(pilotScope("social", {}), []);
+  assert.deepEqual(pilotScope("social", { VERCEL_ENV: "production", SOCIAL_PILOT_TENANTS: "12, 1,x" }), [1, 12]);
+  assert.deepEqual(pilotScope("marketplace", { VERCEL_ENV: "production", SOCIAL_PILOT_TENANTS: "1" }), []);
+  assert.equal(pilotScope("marketplace", { MARKET_AVAILABILITY: "available", MARKET_PILOT_TENANTS: "3" }), "all");
+});
+
+test("Juniors' rule is unchanged: only VERCEL_ENV=production closes its override", () => {
+  const ack = { safeguarding: { version: "1", byPlayerId: 1, at: "2026-01-01T00:00:00Z" } };
+  assert.equal(hiddenModuleOn("juniors", ack, { NODE_ENV: "production", JUNIORS_AVAILABILITY: "available" }), true);
+  assert.equal(hiddenModuleOn("juniors", ack, { VERCEL_ENV: "production", JUNIORS_AVAILABILITY: "available" }), false);
 });

@@ -32,9 +32,10 @@ export function readAcknowledgement(settings: unknown): SafeguardingAcknowledgem
 // The manifests say "hidden" until gate Z passes. Until then one of them is
 // on for a club only when that club is in the module's pilot list:
 // SOCIAL_PILOT_TENANTS / MARKET_PILOT_TENANTS, club ids separated by commas,
-// empty by default, read in production too. Outside production
-// SOCIAL_AVAILABILITY / MARKET_AVAILABILITY ("available" or "beta") also
-// opens it, for tests and previews, as JUNIORS_AVAILABILITY does for Juniors.
+// empty by default, read everywhere. On a deployment that is provably not
+// production (availabilityWordCounts below) SOCIAL_AVAILABILITY /
+// MARKET_AVAILABILITY ("available" or "beta") also opens it, for tests and
+// previews.
 // Nothing else switches these on: not a role, not the club's own settings.
 
 export type PilotModule = "social" | "marketplace";
@@ -58,13 +59,45 @@ export function pilotClubs(raw: string | undefined): Set<number> {
   return ids;
 }
 
-/** Whether this deployment lets `clubId` have the module. The club's own switch (its tenant_modules row) is asked separately. */
-export function pilotModuleOn(id: PilotModule, clubId: number | null | undefined, env: Env = process.env): boolean {
+/**
+ * Whether SOCIAL_AVAILABILITY / MARKET_AVAILABILITY are listened to here.
+ * Only on a deployment that is PROVABLY not production:
+ * - Vercel says so: VERCEL_ENV is exactly "preview" or "development";
+ * - or there is no VERCEL_ENV and this is not a production build (NODE_ENV
+ *   is unset, "development" or "test": scripts, the dev server, unit tests;
+ *   `next start` always sets it to "production");
+ * - or there is no VERCEL_ENV and this is the end-to-end harness, which runs
+ *   the built app with captured email (E2E_OUTBOX=1, scripts/e2e/env.mjs).
+ * Everything else counts as production: Vercel's production, a self-hosted
+ * production deployment (no VERCEL_ENV at all), and any value this doesn't
+ * know ("Production", "staging"). There only the pilot list opens a module.
+ */
+export function availabilityWordCounts(env: Env = process.env): boolean {
+  const vercel = env.VERCEL_ENV;
+  if (vercel === "preview" || vercel === "development") return true;
+  if (vercel !== undefined && vercel !== "") return false;
+  const node = env.NODE_ENV;
+  return node === undefined || node === "development" || node === "test" || env.E2E_OUTBOX === "1";
+}
+
+/**
+ * The clubs this deployment lets have the module: "all", or the listed club
+ * ids (lowest first; empty for nobody). The club's own switch (its
+ * tenant_modules row) is asked separately.
+ */
+export function pilotScope(id: PilotModule, env: Env = process.env): "all" | number[] {
   const names = PILOT_SETTINGS[id];
-  if (typeof clubId === "number" && Number.isInteger(clubId) && pilotClubs(env[names.list]).has(clubId)) return true;
-  if (env.VERCEL_ENV === "production") return false;
-  const word = env[names.availability]?.trim().toLowerCase();
-  return word === "available" || word === "beta";
+  if (availabilityWordCounts(env)) {
+    const word = env[names.availability]?.trim().toLowerCase();
+    if (word === "available" || word === "beta") return "all";
+  }
+  return [...pilotClubs(env[names.list])].sort((a, b) => a - b);
+}
+
+/** Whether this deployment lets `clubId` have the module. */
+export function pilotModuleOn(id: PilotModule, clubId: number | null | undefined, env: Env = process.env): boolean {
+  const scope = pilotScope(id, env);
+  return scope === "all" || (typeof clubId === "number" && Number.isInteger(clubId) && scope.includes(clubId));
 }
 
 /**

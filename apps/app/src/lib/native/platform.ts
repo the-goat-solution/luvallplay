@@ -25,3 +25,14 @@ export function platform(): "ios" | "android" | "web" {
 export function plugin<T>(name: string): T | undefined {
   return isNative() ? (capacitor()?.Plugins?.[name] as T | undefined) : undefined;
 }
+
+/**
+ * Whether this app may sell Vision passes. Not in a store app: Google Play
+ * (and Apple) require their own billing for digital purchases inside an app,
+ * and that isn't built yet (build plan §4.5.1, step 5). Memberships and
+ * session fees are real-world club services and are not affected.
+ * Remove this when Play Billing (through RevenueCat) ships.
+ */
+export function sellsPasses(): boolean {
+  return !isNative();
+}

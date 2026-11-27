@@ -5,6 +5,7 @@
 import { Link } from "@tanstack/react-router";
 import { useCurrentClub, useT } from "../hooks.tsx";
 import { money } from "../lib/format.ts";
+import { sellsPasses } from "../lib/native/platform.ts";
 import { usePlace } from "./me/parts.tsx";
 import { useVisionChallenge, useVisionStatus, type VisionChallenge } from "./vision/data.ts";
 import { LoadError } from "../components/LoadError.tsx";
@@ -62,6 +63,7 @@ export default function VisionScreen() {
   const daysLeft = s ? Math.max(0, Math.ceil((ends - Date.now()) / DAY)) : 0;
   const live = s ? money(s.prices.live, currency) : "";
   const upload = s ? money(s.prices.upload, currency) : "";
+  const sells = sellsPasses();
   const search = (challengeId ? { challenge: challengeId } : {}) as never;
 
   const mode = (title: string, sub: string, price: string, icon: "phone" | "image") => (
@@ -72,7 +74,7 @@ export default function VisionScreen() {
         {s?.trial && <Sticker>{t("vision_free_now")}</Sticker>}
       </div>
       <p className="muted small">{sub}</p>
-      <p className="small mode-price">{s?.trial ? t("vision_then", { price }) : price}</p>
+      {sells && <p className="small mode-price">{s?.trial ? t("vision_then", { price }) : price}</p>}
       <div>
         <Link to="/vision/track" search={search} className="button button-accent">{title}</Link>
       </div>
@@ -116,7 +118,7 @@ export default function VisionScreen() {
               <Sticker className="trial-ribbon">{t("vision_free_now")}</Sticker>
               <h2 id="vision-trial">{t("vision_trial_title", { date: lastFree })}</h2>
               <p>{t("vision_trial_text")}</p>
-              <p className="small"><strong>{daysLeft <= 1 ? t("vision_trial_last") : t("vision_trial_days", { n: daysLeft })}</strong> · {t("vision_trial_after", { date: paidFrom, live, upload })}</p>
+              <p className="small"><strong>{daysLeft <= 1 ? t("vision_trial_last") : t("vision_trial_days", { n: daysLeft })}</strong>{sells && <> · {t("vision_trial_after", { date: paidFrom, live, upload })}</>}</p>
             </section>
           )}
           <div className="me-grid">

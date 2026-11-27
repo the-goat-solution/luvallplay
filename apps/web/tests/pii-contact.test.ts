@@ -219,6 +219,39 @@ describe("players' phone numbers, sealed and indexed", { skip: !BASE_URL && !REQ
     await c.query(`DELETE FROM players WHERE id = $1`, [player.id]);
   });
 
+  test("a new account whose number can't be sealed just then is still made a member of its club; the backfill seals it later", async () => {
+    // The database refuses the sealing (it stands for any failure after the account's row exists).
+    await c.query(`CREATE FUNCTION refuse_sealing() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.phone_sealed IS NOT NULL THEN RAISE EXCEPTION 'sealing refused (test)'; END IF; RETURN NEW; END $$`);
+    await c.query(`CREATE TRIGGER refuse_sealing BEFORE UPDATE ON players FOR EACH ROW EXECUTE FUNCTION refuse_sealing()`);
+    const logged: string[] = [];
+    const error = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args.map(String).join(" "));
+    let id = 0;
+    try {
+      const { player, created } = await players.ensurePlayerForEmail("seal.fails@golden.test", { via: "signup", details: { firstName: "Seal", lastName: "Fails", phone: "021 123 4567" } });
+      id = player.id;
+      assert.equal(created, true);
+      const r = await row(id);
+      assert.equal(r.phone_e164, NUMBER, "the plain number is stored as before");
+      nothingSealed(r, "the sealing failed");
+      assert.equal((await c.query(`SELECT count(*)::int AS n FROM club_members WHERE user_id = $1`, [id])).rows[0].n, 1, "a member of the club all the same");
+      // Trying again finds the account (it doesn't join anyone to a club), so the first call had to.
+      assert.equal((await players.ensurePlayerForEmail("seal.fails@golden.test", { via: "signup" })).created, false);
+      // What was logged names the account and nothing of the number.
+      assert.equal(logged.length, 1);
+      assert.ok(logged[0].includes(String(id)));
+      assert.ok(!/\d{7,}/.test(logged[0]) && !logged[0].includes("sealing refused"), "the account's id only");
+    } finally {
+      console.error = error;
+      await c.query(`DROP TRIGGER refuse_sealing ON players`);
+      await c.query(`DROP FUNCTION refuse_sealing()`);
+    }
+    assert.deepEqual(await backfillPhones(c, { apply: true, env: ENV }), { pending: 1, sealed: 1, failed: 0 });
+    sealedFor(await row(id), NUMBER);
+    await c.query(`DELETE FROM club_members WHERE user_id = $1`, [id]);
+    await c.query(`DELETE FROM players WHERE id = $1`, [id]);
+  });
+
   test("with no CONTACT_KEKS a write stores the plain number and leaves the sealed columns empty (as before)", async () => {
     await withEnv({ CONTACT_KEKS: undefined }, async () => {
       await players.updatePlayerProfile(MIA, profile("021 123 4567"));

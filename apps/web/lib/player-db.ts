@@ -220,10 +220,22 @@ export async function ensurePlayerForEmail(
     [email, firstName, lastName, phone, toE164(phone), options.details?.stripeCustomerId ?? null, options.via],
   );
   const id = rows[0]?.id as number | undefined;
-  // The sealed copy is bound to the account's id, which exists only now.
-  if (id) await sealStoredPhone(sql, id);
-  // A new account made on the club's site is a member of that club.
+  // A new account made on the club's site is a member of that club. First:
+  // a second try finds the account and joins nobody, so nothing that can
+  // fail may come between the insert and this.
   if (id) await joinClub(sql, id);
+  // The sealed copy is bound to the account's id, which exists only now. If
+  // it can't be written just then the account stands with its plain number,
+  // and the backfill (scripts/pii/backfill-phone.mjs) seals it later. Only
+  // the account's id is logged: never the number, and not the error either
+  // (a database error can quote the row).
+  if (id) {
+    try {
+      await sealStoredPhone(sql, id);
+    } catch {
+      console.error(`[players] the phone number of new account ${id} could not be sealed; the backfill will seal it.`);
+    }
+  }
   const player = id ? await getPlayerById(id) : await getPlayerByEmail(email);
   if (!player) throw new Error("Could not create player account");
   return { player, created: Boolean(id) };

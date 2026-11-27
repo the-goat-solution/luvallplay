@@ -38,11 +38,11 @@
 1. **CI on Postgres 18:** the schema drift suite against the new `docs/schema/production.sql`.
 2. **The same run on a copy of production, on Postgres 18** (a local copy, or a Neon branch booked with lane T: the project is at 10 of 10 branches), with the data guard before and after, and real counts written here. The numbers above say the steps work; they say nothing about production's data.
 3. **Production, in this order, each step only with the owner's OK, booked in the Phase 3 runbook's calendar.** The app names the new columns only once a key is set (or reads are switched), so this code can be deployed before the migration has run; a key set before the migration has run would break saving a profile, so the order matters:
-   - `node scripts/db/migrate.mjs --production` for this migration: **PENDING**.
+   - `node scripts/db/migrate.mjs --production` for this migration: **PENDING**. Between the deploy and this step the admin System check shows "Migrations waiting to run". That is expected, and clears once the migration has run.
    - The two new settings, **the owner's to set** in the hosting environment's settings (never pasted into a chat, a ticket or a file): `CONTACT_KEKS` and `CONTACT_INDEX_KEYS`, each `id:base64key`, 32 bytes, newest first, their own keys (not a copy of any other purpose's), different per region: **PENDING**. Until both are set the app writes the plain columns only, as today.
    - `node scripts/pii/backfill-phone.mjs --apply --production`, with those two settings in the environment: **PENDING**.
-   - `PII_READS=sealed`, a week after the backfill: **PENDING**. Until then sign-in by phone reads the plain column exactly as before.
-4. Dropping `phone` and `phone_e164` is not part of this plan.
+   - `PII_READS=sealed`, a week after the backfill: **PENDING**. Until then sign-in by phone reads the plain column exactly as before. **Right before switching, run the backfill's dry run again** (`node scripts/pii/backfill-phone.mjs`) and switch only when it reports 0: a number written or verified while the keys were unset (or whose sealing failed) has no index, and reading sealed wouldn't find it.
+4. Dropping `phone` and `phone_e164` is not part of this plan. **A precondition for that later project, recorded here:** today "one verified account per number" is held by `players_phone_verified_idx` on the plain column, whichever index key is in use. Once that index is gone, the check `verifyPhone` makes across several index keys during a rotation is not safe against a race: two server instances with different key lists (mid-deploy) can each verify the same number for a different account, each under its own key's index, and the unique index on `phone_index` sees two different values. Before the plain columns are dropped, either `verifyPhone` takes a per-number advisory lock (in one transaction with its check and write), or verification is refused while more than one index key is listed.
 
 ## Rollback
 

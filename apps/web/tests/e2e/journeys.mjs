@@ -595,7 +595,14 @@ describe("T · tenant isolation at the routes", () => {
     await db.query(`INSERT INTO tenant_modules (tenant_id, module_id, enabled, settings) SELECT $1, module_id, TRUE, settings FROM tenant_modules WHERE tenant_id = 1`, [club2]);
     // The second club's server connects with the app's own login, which has no rights until it steps down
     // to the app's role; TENANT_SCOPE is deliberately "off": with that login every statement is scoped anyway.
-    const second = await startSecondServer(env.serverEnv, { TENANT_SLUG: "hanoi-smash", TENANT_SCOPE: "off", APP_DATABASE_URL: await ensureAppLogin() });
+    // A club other than Three Wolves reads its own stored settings (the built-in ones are Three Wolves'),
+    // and the server refuses to start otherwise (lib/tenant-settings.ts).
+    const second = await startSecondServer(env.serverEnv, {
+      TENANT_SLUG: "hanoi-smash",
+      TENANT_SCOPE: "off",
+      CLUB_SETTINGS_SOURCE: "database",
+      APP_DATABASE_URL: await ensureAppLogin(),
+    });
     const owner = await signedIn(PEOPLE.owner.email, DESKTOP); // an owner here, and a platform admin everywhere
     const clubAdmin = await signedIn(PEOPLE.admin.email, DESKTOP); // an admin of the first club only
     const get = async (base, path, token) => {
@@ -724,6 +731,8 @@ const SESSION_ENDPOINTS = [
   ["POST", "/clubs/{club}/family/{id}/forms/{formId}/sign"],
   ["GET", "/clubs/{club}/family/{id}/export"],
   ["POST", "/clubs/{club}/family/{id}/delete"],
+  ["POST", "/clubs/{club}/family/{id}/delete-request"],
+  ["POST", "/clubs/{club}/family/{id}/delete-request/cancel"],
   ["GET", "/clubs/{club}/family/bookings"],
   ["POST", "/clubs/{club}/family/{id}/bookings"],
   ["POST", "/clubs/{club}/family/{id}/bookings/pay"],

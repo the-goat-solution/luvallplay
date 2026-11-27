@@ -514,11 +514,15 @@ describe("limits and caps across two server instances", { skip: !BASE_URL && !RE
 
   test("a write whose endpoint says failClosed, in production without the shared store, answers 503 rate_limit_unavailable and the handler isn't reached", async () => {
     const me = await someone();
-    const was = { store: process.env.RATE_LIMIT_STORE, where: process.env.VERCEL_ENV };
+    const was = { store: process.env.RATE_LIMIT_STORE, where: process.env.VERCEL_ENV, slug: process.env.TENANT_SLUG, scope: process.env.TENANT_SCOPE, source: process.env.CLUB_SETTINGS_SOURCE };
     console.warn = () => {};
     try {
       delete process.env.RATE_LIMIT_STORE;
       process.env.VERCEL_ENV = "production";
+      // main's database layer refuses production without its deployment settings (lib/tenant-settings.ts).
+      process.env.TENANT_SLUG = "three-wolves";
+      process.env.TENANT_SCOPE = "off";
+      process.env.CLUB_SETTINGS_SOURCE = "constants";
       await declaring(WRITE, { failClosed: true }, async () => {
         const route = instance(WRITE);
         assert.deepEqual(await answers([route.handle(call(WRITE, me.token)), route.handle(call(WRITE, me.token))]), ["503 rate_limit_unavailable", "503 rate_limit_unavailable"]);
@@ -529,7 +533,7 @@ describe("limits and caps across two server instances", { skip: !BASE_URL && !RE
       assert.deepEqual(await answers([route.handle(call(WRITE, me.token))]), ["418 reached"]);
     } finally {
       console.warn = originalWarn;
-      for (const [k, v] of [["RATE_LIMIT_STORE", was.store], ["VERCEL_ENV", was.where]] as const) {
+      for (const [k, v] of [["RATE_LIMIT_STORE", was.store], ["VERCEL_ENV", was.where], ["TENANT_SLUG", was.slug], ["TENANT_SCOPE", was.scope], ["CLUB_SETTINGS_SOURCE", was.source]] as const) {
         if (v === undefined) delete process.env[k];
         else process.env[k] = v;
       }

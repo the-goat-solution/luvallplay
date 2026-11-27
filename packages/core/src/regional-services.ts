@@ -125,6 +125,16 @@ export const REGIONAL_SERVICES: readonly RegionalService[] = [
     regions: { syd: sydney, han: { status: "switched-off", by: { env: "GOOGLE_VISION_ENABLED", isNot: ["1"] }, instead: "A local or self-hosted classifier, because photos are personal data (§6.9); until then photos wait for a person to approve them" } },
   },
   {
+    id: "firebase-messaging",
+    name: "Firebase Cloud Messaging",
+    purpose: "Push notifications to the store app",
+    processedIn: "Outside Vietnam",
+    personalData: ["a device's push address", "the club's name and a short line of the notification"],
+    packages: ["google-auth-library"],
+    hosts: ["fcm.googleapis.com"],
+    regions: { syd: sydney, han: { status: "switched-off", by: { env: "FCM_SERVICE_ACCOUNT", is: [""] }, instead: "A written decision that device addresses may go to Firebase, or a push service inside Vietnam (§6.9); until then notifications go by the other channels." } },
+  },
+  {
     id: "google-calendar",
     name: "Google Calendar",
     purpose: "Reading the club's public session calendar",

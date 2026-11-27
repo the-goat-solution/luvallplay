@@ -7,12 +7,14 @@
 //
 // Channels today:
 //   email  the club's existing notice email.
-//   push   waits for the app's push registration (native app lane).
+//   push   Firebase Cloud Messaging, when FCM_SERVICE_ACCOUNT is set
+//          (lib/push/fcm.ts); otherwise unavailable.
 //   sms    waits for a deployment to register a text sender; never the
 //          sign-in SMS allowance.
 //   zalo   named, not built: it waits for Zalo's rules in writing (§11.4).
 import { emailChannel } from "./channels/email";
 import { pushChannel, type PushSender } from "./channels/push";
+import { fcmPushSender } from "../push/fcm";
 import { smsChannel, type SmsSender } from "./channels/sms";
 import { dispatchAnnouncement, type Announcement, type AnnouncementReport, type ChannelId, type MessageChannel, type Recipient } from "./dispatch";
 
@@ -29,6 +31,16 @@ export function messageChannelsOn(env: Env = process.env): boolean {
 let pushSender: PushSender | null = null;
 let smsSender: { send: SmsSender; isAllowedNumber: (e164: string) => boolean } | null = null;
 
+/**
+ * The deployment's own push sender: Firebase, when FCM_SERVICE_ACCOUNT is set
+ * (lib/push/fcm.ts), else null and the push channel is "unavailable".
+ * Addresses Firebase says are gone are deleted as it goes; the database is
+ * only loaded when that happens.
+ */
+function deploymentPushSender(env: Env = process.env): PushSender | null {
+  return fcmPushSender(env, { onGone: async (tokens) => (await import("../app-push")).forgetGoneAddresses(tokens) });
+}
+
 /** For the lane that owns push: plug the sender in (null removes it). */
 export function registerPushSender(sender: PushSender | null): void {
   pushSender = sender;
@@ -41,7 +53,7 @@ export function registerSmsSender(sender: { send: SmsSender; isAllowedNumber: (e
 
 /** The channels this deployment has, built fresh so a newly registered sender is seen. */
 export function deploymentChannels(): MessageChannel[] {
-  return [emailChannel(), pushChannel({ sender: pushSender }), smsChannel({ sender: smsSender?.send ?? null, isAllowedNumber: smsSender?.isAllowedNumber })];
+  return [emailChannel(), pushChannel({ sender: pushSender ?? deploymentPushSender() }), smsChannel({ sender: smsSender?.send ?? null, isAllowedNumber: smsSender?.isAllowedNumber })];
 }
 
 export type SendOptions = { clubDefault?: readonly ChannelId[]; alreadySent?: ReadonlySet<string>; channels?: readonly MessageChannel[]; env?: Env };

@@ -1630,6 +1630,46 @@ export const form_signatures = pgTable("form_signatures", {
 	foreignKey({ columns: [table.signed_by_user_id], foreignColumns: [players.id], name: "form_signatures_signed_by_user_id_fkey" }).onDelete("restrict"),
 ]);
 
+// Phase 3b step 7: a guardian's request to delete a child's information,
+// waiting for the club. Once confirmed it no longer points at a child.
+export const junior_deletion_requests = pgTable("junior_deletion_requests", {
+	id: serial().primaryKey().notNull(),
+	tenant_id: integer().notNull(),
+	// The child, while they exist. NULL once a request for them is confirmed: the child is gone.
+	junior_profile_id: integer(),
+	// The guardian who asked.
+	requested_by_user_id: integer().notNull(),
+	requested_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	status: text().default('pending').notNull(),
+	// The owner or admin who confirmed, or the guardian who cancelled.
+	decided_by_user_id: integer(),
+	decided_at: timestamp({ withTimezone: true, mode: 'string' }),
+}, (table) => [
+	uniqueIndex("junior_deletion_requests_one_pending").using("btree", table.tenant_id.asc().nullsLast(), table.junior_profile_id.asc().nullsLast()).where(sql`(status = 'pending'::text)`),
+	index("junior_deletion_requests_junior_profile_id_idx").using("btree", table.tenant_id.asc().nullsLast(), table.junior_profile_id.asc().nullsLast()),
+	index("junior_deletion_requests_requested_by_user_id_idx").using("btree", table.requested_by_user_id.asc().nullsLast()),
+	index("junior_deletion_requests_decided_by_user_id_idx").using("btree", table.decided_by_user_id.asc().nullsLast()),
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "junior_deletion_requests_tenant_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.tenant_id, table.junior_profile_id], foreignColumns: [junior_profiles.tenant_id, junior_profiles.id], name: "junior_deletion_requests_junior_in_club_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.requested_by_user_id], foreignColumns: [players.id], name: "junior_deletion_requests_requested_by_user_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.decided_by_user_id], foreignColumns: [players.id], name: "junior_deletion_requests_decided_by_user_id_fkey" }).onDelete("restrict"),
+	check("junior_deletion_requests_status_check", sql`status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])`),
+	check("junior_deletion_requests_child_check", sql`((status <> 'pending'::text) OR (junior_profile_id IS NOT NULL)) AND ((status <> 'confirmed'::text) OR (junior_profile_id IS NULL))`),
+]);
+
+// What the payment code needs after a child is deleted: that this payment was
+// settled for this club, and for how much. No child, no guardian, no play day.
+export const junior_payment_records = pgTable("junior_payment_records", {
+	tenant_id: integer().notNull(),
+	payment_intent_id: text().notNull(),
+	amount_minor: integer().notNull(),
+	currency: text().notNull(),
+	recorded_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.tenant_id], foreignColumns: [tenants.id], name: "junior_payment_records_tenant_id_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.tenant_id, table.payment_intent_id], name: "junior_payment_records_pkey"}),
+]);
+
 // Phase 3b step 6: the safety check a club records for a coach or volunteer.
 // That a check exists and when it expires: never its document or result.
 export const junior_safety_checks = pgTable("junior_safety_checks", {

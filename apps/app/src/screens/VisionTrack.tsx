@@ -12,6 +12,7 @@ import { clubWords } from "../lib/club-words.ts";
 import { clubHost, store } from "../app.ts";
 import { useCurrentClub, useLang, useSession } from "../hooks.tsx";
 import { focus } from "../lib/focus.ts";
+import { sellsPasses } from "../lib/native/platform.ts";
 import { money } from "../lib/format.ts";
 import { usePlace } from "./me/parts.tsx";
 import { useVisionStatus } from "./vision/data.ts";
@@ -112,6 +113,7 @@ export default function VisionTrackScreen() {
       links: { arena: "/arena", tracker: "/vision/track", label: "/vision/label", signIn: () => "/signin" },
       words: clubWords(terms),
       // The prices after the trial, from the club's API, in its money.
+      purchases: sellsPasses(),
       prices: prices ? { live: money(prices.live, currency), upload: money(prices.upload, currency) } : { live: "…", upload: "…" },
       onFocus: setFocus,
       // The club's name and its tracker's on the overlay (and in recordings), in the club's colours.

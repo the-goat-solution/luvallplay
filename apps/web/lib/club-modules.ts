@@ -65,7 +65,8 @@ const ttlMs = () => {
   const v = Number(process.env.MODULES_CACHE_MS);
   return process.env.MODULES_CACHE_MS && Number.isFinite(v) && v >= 0 ? v : 60_000;
 };
-let cached: { at: number; enabled: Set<string> } | null = null;
+// Keyed by the club, so a cached answer is never another club's (audit C7).
+let cached: { at: number; slug: string; enabled: Set<string> } | null = null;
 let lastError = "";
 
 /** After a switch is changed, and for tests. */
@@ -77,10 +78,11 @@ export function resetClubModulesCache(): void {
 /** The ids of the modules that are on for the club. Never throws. */
 export async function enabledModules(db: Db, now = Date.now()): Promise<Set<string>> {
   if (!moduleEnforcementOn()) return everyModule();
-  if (cached && now - cached.at < ttlMs()) return cached.enabled;
+  const slug = defaultTenantSlug();
+  if (cached && cached.slug === slug && now - cached.at < ttlMs()) return cached.enabled;
   let enabled: Set<string>;
   try {
-    const rows = await listClubModules(db);
+    const rows = await listClubModules(db, slug);
     // A hidden module's row saying "on" isn't enough: its own guard has to agree (lib/juniors/switch-rule.ts).
     enabled = new Set([...CORE, ...rows.filter((r) => r.enabled && (!HIDDEN.has(r.id) || hiddenModuleOn(r.id, r.settings))).map((r) => r.id)]);
   } catch (err) {
@@ -91,7 +93,7 @@ export async function enabledModules(db: Db, now = Date.now()): Promise<Set<stri
     }
     enabled = everyModule();
   }
-  cached = { at: now, enabled };
+  cached = { at: now, slug, enabled };
   return enabled;
 }
 

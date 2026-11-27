@@ -21,7 +21,8 @@ export function billingEnabled(): boolean {
 }
 
 const TTL_MS = 60_000;
-let cached: { at: number; plan: Plan | null; tenantId: number | null } | null = null;
+// Keyed by the club, so a cached answer is never another club's (audit C7).
+let cached: { at: number; slug: string; plan: Plan | null; tenantId: number | null } | null = null;
 
 /** For tests, and after a club's plan changes. */
 export function resetEntitlementsCache(): void {
@@ -29,20 +30,21 @@ export function resetEntitlementsCache(): void {
 }
 
 async function load(db: Db, now: number): Promise<{ plan: Plan | null; tenantId: number | null }> {
-  if (cached && now - cached.at < TTL_MS) return cached;
+  const slug = defaultTenantSlug();
+  if (cached && cached.slug === slug && now - cached.at < TTL_MS) return cached;
   const { rows } = await db.query(
     `SELECT t.id AS tenant_id, p.id AS plan_id, p.tiers, p.limits, cp.status
      FROM tenants t
      LEFT JOIN club_plans cp ON cp.tenant_id = t.id AND cp.ends_at IS NULL
      LEFT JOIN plans p ON p.id = cp.plan_id
      WHERE t.slug = $1`,
-    [defaultTenantSlug()],
+    [slug],
   );
   const r = rows[0];
   const plan: Plan | null = r?.plan_id
     ? { id: r.plan_id as string, tiers: (r.tiers as string[]) ?? [], limits: parseLimits(r.limits), status: r.status as Plan["status"] }
     : null;
-  cached = { at: now, plan, tenantId: (r?.tenant_id as number | undefined) ?? null };
+  cached = { at: now, slug, plan, tenantId: (r?.tenant_id as number | undefined) ?? null };
   return cached;
 }
 

@@ -335,7 +335,7 @@ const CONNECTION = ["POSTGRES_URL", "POSTGRES_URL_NON_POOLING", "POSTGRES_URL_NO
 
 /** Runs `run` with only these variables set (of the ones the check reads), then puts the environment back. What it threw, or null. */
 async function withEnv(vars: Env, run: () => unknown): Promise<unknown> {
-  const names = ["NEXT_RUNTIME", "VERCEL_ENV", "PII_READS", "RATE_LIMIT_STORE", "CRYPTO_CHECK_RATE_LIMIT", "DATABASE_URL_VAR", "NEON_LOCAL_WS_PROXY", ...CONNECTION, ...LISTS];
+  const names = ["NEXT_RUNTIME", "VERCEL_ENV", "TENANT_SLUG", "TENANT_SCOPE", "CLUB_SETTINGS_SOURCE", "PII_READS", "RATE_LIMIT_STORE", "CRYPTO_CHECK_RATE_LIMIT", "DATABASE_URL_VAR", "NEON_LOCAL_WS_PROXY", ...CONNECTION, ...LISTS];
   const saved = Object.fromEntries(names.map((n) => [n, process.env[n]]));
   for (const n of names) delete process.env[n];
   for (const [n, v] of Object.entries(vars)) if (v !== undefined) process.env[n] = v;
@@ -401,7 +401,11 @@ describe("next.config.ts: the production build", () => {
 });
 
 describe("instrumentation.ts: register()", () => {
-  const start = (vars: Env) => withEnv(vars, () => register());
+  // main's start-up check of the deployment settings (lib/tenant-settings.ts)
+  // runs first: give it a valid production deployment so only the key check
+  // decides these tests.
+  const DEPLOYMENT: Env = { TENANT_SLUG: "three-wolves", TENANT_SCOPE: "enforce", CLUB_SETTINGS_SOURCE: "constants" };
+  const start = (vars: Env) => withEnv({ ...DEPLOYMENT, ...vars }, () => register());
 
   test("production on the Node runtime: a malformed list stops the server starting", async () => {
     const err = await start({ NEXT_RUNTIME: "nodejs", VERCEL_ENV: "production", ...bad });

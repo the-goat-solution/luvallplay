@@ -68,6 +68,20 @@ export const familyEndpoints = defineEndpoints("family", {
     params: S.familyChildParams, response: S.familyExportResponse,
     rateLimit: { limit: 10, windowMs: 10 * MIN },
   },
+  // Deleting is two steps: the guardian asks here; an owner or admin of the
+  // club confirms in the admin; then everything about the child is deleted.
+  // Refusals: 400 confirm_required; 404 not_found; 409 has_bookings.
+  "family.requestDelete": {
+    method: "POST", path: "/clubs/{club}/family/{id}/delete-request", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.familyDeleteRequest, response: S.familyDeleteRequestResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
+  "family.cancelDelete": {
+    method: "POST", path: "/clubs/{club}/family/{id}/delete-request/cancel", auth: "session", scope: "club", module: "juniors",
+    params: S.familyChildParams, body: S.emptyRequest, response: S.familyDeleteRequestResponse,
+    rateLimit: { limit: 10, windowMs: 10 * MIN },
+  },
+  // Kept for apps that still call it: it deletes nothing and answers 409 ask_the_club.
   "family.remove": {
     method: "POST", path: "/clubs/{club}/family/{id}/delete", auth: "session", scope: "club", module: "juniors",
     params: S.familyChildParams, body: S.familyDeleteRequest, response: S.familyDeleteResponse,

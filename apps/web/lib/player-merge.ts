@@ -1,6 +1,6 @@
 import { visionName } from "./club-terms";
 import { db } from "./database";
-import { mirrorClubMember } from "./tenant-members";
+import { defaultTenantSlug, joinClub, mirrorClubMember } from "./tenant-members";
 import { sealStoredPhone, sealedPhoneCleared } from "./pii/contact";
 import { T } from "./arena-db";
 import { WV } from "./wolf-vision-db";
@@ -20,6 +20,13 @@ import { normalizeEmail as jerseyNormalizeEmail } from "./jersey";
 //   - a play day on both accounts counts once.
 // The duplicate account is retired the way "delete account" does it (soft
 // delete, sign-ins removed, email freed). Afterwards points are recalculated.
+//
+// Accounts are global and a club admin runs this (audit C6). So:
+//   - records found by email move only within this club (another club's
+//     bookings under the same email stay where they are);
+//   - an account is retired or renamed only when it belongs to this club
+//     and to no other club; otherwise the merge is refused, and Luvallplay
+//     staff decide.
 
 export type Q = (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>;
 
@@ -66,6 +73,32 @@ async function playerByEmail(q: Q, email: string): Promise<PlayerRow | null> {
 
 const fullName = (p: PlayerRow | null) => (p ? `${p.first_name} ${p.last_name}`.trim() || null : null);
 
+/** The club the merge runs in: the connection's (enforce), else this deployment's. */
+async function thisClub(q: Q): Promise<number> {
+  const { rows } = await q(`SELECT COALESCE(app_tenant_id(), (SELECT id FROM tenants WHERE slug = $1)) AS id;`, [defaultTenantSlug()]);
+  const id = rows[0]?.id;
+  if (id === null || id === undefined) throw new MergeError(`No club "${defaultTenantSlug()}".`);
+  return Number(id);
+}
+
+/**
+ * A club admin may retire or rename only an account that is in their club
+ * and in no other: it is the person's account everywhere (audit C6).
+ */
+async function assertOnlyInThisClub(q: Q, p: PlayerRow, clubId: number): Promise<void> {
+  const { rows } = await q(
+    `SELECT EXISTS (SELECT 1 FROM club_members WHERE user_id = $1 AND tenant_id = $2) AS here,
+            EXISTS (SELECT 1 FROM club_members WHERE user_id = $1 AND tenant_id <> $2)
+              OR EXISTS (SELECT 1 FROM club_roles WHERE player_id = $1 AND tenant_id <> $2) AS elsewhere,
+            EXISTS (SELECT 1 FROM platform_admins WHERE player_id = $1) AS staff;`,
+    [p.id, clubId],
+  );
+  const r = rows[0] ?? {};
+  if (r.elsewhere) throw new MergeError(`${p.email} also belongs to another club, so this club can't merge it. Nothing was changed; ask Luvallplay support.`);
+  if (r.staff) throw new MergeError(`${p.email} is a Luvallplay staff account, so it can't be merged here. Nothing was changed.`);
+  if (!r.here) throw new MergeError(`${p.email} isn't a member of this club. Nothing was changed.`);
+}
+
 /** The merge itself, on a query function inside an open transaction (exported for tests). */
 export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Promise<Omit<MergeResult, "applied">> {
   const moved: { label: string; n: number }[] = [];
@@ -88,6 +121,8 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
 
   const keep = await playerByEmail(q, keepEmail);
   const dupe = await playerByEmail(q, mergeEmail);
+  const clubId = await thisClub(q);
+  if (dupe) await assertOnlyInThisClub(q, dupe, clubId);
 
   // ── Email-keyed records ──────────────────────────────────────────────
   const emailTables: [string, string][] = [
@@ -100,17 +135,20 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
   ];
   for (const [table, label] of emailTables) {
     if (!(await has(table))) continue;
-    const r = await q(`UPDATE ${table} SET email = $1 WHERE lower(trim(email)) = $2;`, [keepEmail, mergeEmail]);
+    const r = await q(`UPDATE ${table} SET email = $1 WHERE lower(trim(email)) = $2 AND tenant_id = $3;`, [keepEmail, mergeEmail, clubId]);
     count(label, r.rowCount);
   }
   if (await has("day_requests")) {
     // One open request per person per day: the kept one stays if both asked for the same day.
     await q(
-      `DELETE FROM day_requests d WHERE lower(trim(d.email)) = $2 AND d.notified_at IS NULL
-         AND EXISTS (SELECT 1 FROM day_requests k WHERE lower(k.email) = $1 AND k.day = d.day AND k.notified_at IS NULL);`,
-      [keepEmail, mergeEmail],
+      `DELETE FROM day_requests d WHERE lower(trim(d.email)) = $2 AND d.notified_at IS NULL AND d.tenant_id = $3
+         AND EXISTS (SELECT 1 FROM day_requests k WHERE lower(k.email) = $1 AND k.day = d.day AND k.notified_at IS NULL AND k.tenant_id = $3);`,
+      [keepEmail, mergeEmail, clubId],
     );
-    count("play day requests", (await q(`UPDATE day_requests SET email = $1 WHERE lower(trim(email)) = $2;`, [keepEmail, mergeEmail])).rowCount);
+    count(
+      "play day requests",
+      (await q(`UPDATE day_requests SET email = $1 WHERE lower(trim(email)) = $2 AND tenant_id = $3;`, [keepEmail, mergeEmail, clubId])).rowCount,
+    );
   }
   if (await has("jersey_registrations")) {
     // One open (pending or paid) jersey order per email. When both emails have
@@ -118,21 +156,24 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
     // for contact but keeps its own duplicate-check key, and the admin decides.
     const keepNorm = jerseyNormalizeEmail(keepEmail);
     const ACTIVE = `status IN ('pending', 'paid')`;
-    const keepHasOpen = `EXISTS (SELECT 1 FROM jersey_registrations k WHERE k.email_normalized = $3 AND k.${ACTIVE})`;
+    const keepHasOpen = `EXISTS (SELECT 1 FROM jersey_registrations k WHERE k.email_normalized = $3 AND k.tenant_id = $4 AND k.${ACTIVE})`;
     const { rows: both } = await q(
       `SELECT coalesce(ref_code, '#' || id) AS ref, status FROM jersey_registrations
-       WHERE lower(trim(email)) = $2 AND ${ACTIVE} AND ${keepHasOpen.replace("$3", "$1")};`,
-      [keepNorm, mergeEmail],
+       WHERE lower(trim(email)) = $2 AND tenant_id = $3 AND ${ACTIVE} AND ${keepHasOpen.replace("$3", "$1").replace("$4", "$3")};`,
+      [keepNorm, mergeEmail, clubId],
     );
     const { rows: kept } = both.length
-      ? await q(`SELECT coalesce(ref_code, '#' || id) AS ref, status FROM jersey_registrations WHERE email_normalized = $1 AND ${ACTIVE};`, [keepNorm])
+      ? await q(`SELECT coalesce(ref_code, '#' || id) AS ref, status FROM jersey_registrations WHERE email_normalized = $1 AND tenant_id = $2 AND ${ACTIVE};`, [
+          keepNorm,
+          clubId,
+        ])
       : { rows: [] };
     const full = await q(
       `UPDATE jersey_registrations SET email = $1, email_normalized = $3
-       WHERE lower(trim(email)) = $2 AND NOT (${ACTIVE} AND ${keepHasOpen});`,
-      [keepEmail, mergeEmail, keepNorm],
+       WHERE lower(trim(email)) = $2 AND tenant_id = $4 AND NOT (${ACTIVE} AND ${keepHasOpen});`,
+      [keepEmail, mergeEmail, keepNorm, clubId],
     );
-    const contact = await q(`UPDATE jersey_registrations SET email = $1 WHERE lower(trim(email)) = $2;`, [keepEmail, mergeEmail]);
+    const contact = await q(`UPDATE jersey_registrations SET email = $1 WHERE lower(trim(email)) = $2 AND tenant_id = $3;`, [keepEmail, mergeEmail, clubId]);
     count("jersey registrations", (full.rowCount ?? 0) + (contact.rowCount ?? 0));
     if (both.length) {
       const list = (rows: Record<string, unknown>[]) => rows.map((r) => `${r.ref} (${r.status})`).join(", ");
@@ -146,35 +187,36 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
   // Play days: one row per date. A day counts if either row counted.
   if (await has("attendance")) {
     const r = await q(
-      `INSERT INTO attendance (session_date, email, source, verified, removed, recorded_at)
-       SELECT session_date, $1, source, verified, removed, recorded_at FROM attendance WHERE lower(trim(email)) = $2
+      `INSERT INTO attendance (tenant_id, session_date, email, source, verified, removed, recorded_at)
+       SELECT tenant_id, session_date, $1, source, verified, removed, recorded_at FROM attendance WHERE lower(trim(email)) = $2 AND tenant_id = $3
        ON CONFLICT (tenant_id, session_date, email) DO UPDATE SET
          verified = attendance.verified OR EXCLUDED.verified,
          removed = attendance.removed AND EXCLUDED.removed;`,
-      [keepEmail, mergeEmail],
+      [keepEmail, mergeEmail, clubId],
     );
     count("play days", r.rowCount);
-    await q(`DELETE FROM attendance WHERE lower(trim(email)) = $1;`, [mergeEmail]);
+    await q(`DELETE FROM attendance WHERE lower(trim(email)) = $1 AND tenant_id = $2;`, [mergeEmail, clubId]);
   }
   if (await has("player_absences")) {
     const r = await q(
-      `UPDATE player_absences SET email = $1 WHERE lower(trim(email)) = $2
-         AND NOT EXISTS (SELECT 1 FROM player_absences x WHERE x.email = $1 AND x.session_date = player_absences.session_date);`,
-      [keepEmail, mergeEmail],
+      `UPDATE player_absences SET email = $1 WHERE lower(trim(email)) = $2 AND tenant_id = $3
+         AND NOT EXISTS (SELECT 1 FROM player_absences x WHERE x.email = $1 AND x.session_date = player_absences.session_date AND x.tenant_id = $3);`,
+      [keepEmail, mergeEmail, clubId],
     );
     count("“Can’t make it” days", r.rowCount);
-    await q(`DELETE FROM player_absences WHERE lower(trim(email)) = $1;`, [mergeEmail]);
+    await q(`DELETE FROM player_absences WHERE lower(trim(email)) = $1 AND tenant_id = $2;`, [mergeEmail, clubId]);
   }
   if (await has("casual_play_profiles")) {
     // Court board tier: the kept one wins if both have one.
     await q(
-      `UPDATE casual_play_profiles SET email = $1 WHERE email = $2
-         AND NOT EXISTS (SELECT 1 FROM casual_play_profiles x WHERE x.email = $1);`,
-      [keepEmail, mergeEmail],
+      `UPDATE casual_play_profiles SET email = $1 WHERE email = $2 AND tenant_id = $3
+         AND NOT EXISTS (SELECT 1 FROM casual_play_profiles x WHERE x.email = $1 AND x.tenant_id = $3);`,
+      [keepEmail, mergeEmail, clubId],
     );
-    await q(`DELETE FROM casual_play_profiles WHERE email = $1;`, [mergeEmail]);
+    await q(`DELETE FROM casual_play_profiles WHERE email = $1 AND tenant_id = $2;`, [mergeEmail, clubId]);
   }
-  if (await has("auth_codes")) await q(`DELETE FROM auth_codes WHERE lower(trim(email)) = $1;`, [mergeEmail]);
+  // Sign-in codes are the platform's: only a retired or renamed account's go.
+  if (dupe && (await has("auth_codes"))) await q(`DELETE FROM auth_codes WHERE lower(trim(email)) = $1;`, [mergeEmail]);
 
   // ── The accounts ─────────────────────────────────────────────────────
   let account: MergeResult["account"] = "records_only";
@@ -185,7 +227,7 @@ export async function runMerge(q: Q, keepEmail: string, mergeEmail: string): Pro
     notes.push(`The account ${mergeEmail} now signs in as ${keepEmail}.`);
   } else if (dupe && keep) {
     account = "merged";
-    await mergeAccounts(q, keep, dupe, has, count, notes);
+    await mergeAccounts(q, keep, dupe, clubId, has, count, notes);
   } else if (!moved.length) {
     throw new MergeError(`Nothing found under ${mergeEmail}: no account and no records.`);
   } else if (!keep) {
@@ -199,6 +241,7 @@ async function mergeAccounts(
   q: Q,
   keep: PlayerRow,
   dupe: PlayerRow,
+  clubId: number,
   has: (t: string) => Promise<boolean>,
   count: (label: string, n: number | null) => void,
   notes: string[],
@@ -290,14 +333,17 @@ async function mergeAccounts(
   else if (dupeName && keepName && dupeName.toLowerCase() !== keepName.toLowerCase() && (await has("rr_results"))) {
     const clash = await q(
       `SELECT a.draw_id FROM rr_results a JOIN rr_results b ON a.draw_id = b.draw_id
-       WHERE lower(a.mg_name) = lower($1) AND lower(b.mg_name) = lower($2) ORDER BY a.draw_id;`,
-      [dupeName, keepName],
+       WHERE lower(a.mg_name) = lower($1) AND lower(b.mg_name) = lower($2) AND a.tenant_id = $3 AND b.tenant_id = $3 ORDER BY a.draw_id;`,
+      [dupeName, keepName, clubId],
     );
     if (clash.rows.length)
       throw new MergeError(
         `Both round robin names ("${keepName}" and "${dupeName}") are in the same draw (${clash.rows.map((r) => r.draw_id).join(", ")}). Nothing was changed.`,
       );
-    count("round robin results", (await q(`UPDATE rr_results SET mg_name = $2 WHERE lower(mg_name) = lower($1);`, [dupeName, keepName])).rowCount);
+    count(
+      "round robin results",
+      (await q(`UPDATE rr_results SET mg_name = $2 WHERE lower(mg_name) = lower($1) AND tenant_id = $3;`, [dupeName, keepName, clubId])).rowCount,
+    );
     notes.push(`Round robin results under "${dupeName}" now count as "${keepName}".`);
   }
 
@@ -371,7 +417,12 @@ export async function mergeMembers(keepRaw: string, mergeRaw: string, apply: boo
     await client.query(apply ? "COMMIT" : "ROLLBACK");
     // Phase 3: after the commit (a failed mirror must not undo a merge), the
     // retired account's club_members row follows its leaderboard flag.
-    if (apply) await mirrorClubMember(db, null);
+    // The kept account now holds this club's records, so it is in the club.
+    if (apply) {
+      const kept = await db.query(`SELECT id FROM players WHERE email = $1 AND deleted_at IS NULL;`, [keepEmail]);
+      if (kept.rows[0]) await joinClub(db, Number(kept.rows[0].id));
+      await mirrorClubMember(db, null);
+    }
     return { ...result, applied: apply };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

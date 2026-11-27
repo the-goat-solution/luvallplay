@@ -38,6 +38,7 @@ export const playDays = defineModule({
   crons: [
     { id: "headcount-alerts", schedule: "0 18 * * *", path: "/api/cron/headcount-alerts" },
     { id: "send-roster", schedule: "0 3 * * *", path: "/api/cron/send-roster" },
+    { id: "roster-attendance", schedule: "5 19 * * *", path: "/api/cron/roster-attendance" },
   ],
   emails: ["headcount-alert", "play-day-roster"],
   webhooks: ["attendance.recorded"],
@@ -274,6 +275,7 @@ export const shop = defineModule({
     attention: [{ key: "shop", href: "/admin/shop", urgency: 40, sentence: (n) => `${count(n, "shop order", "shop orders")} to hand over`, action: "See orders" }],
   },
   site: { routes: ["/jersey"] },
+  crons: [{ id: "shop-upkeep", schedule: "10 19 * * *", path: "/api/cron/shop-upkeep" }],
 });
 
 export const donations = defineModule({
@@ -339,6 +341,7 @@ export const integrations = defineModule({
   plan: "free",
   name: { en: "Integrations (API, webhooks, MCP)", vi: "Tích hợp (API, webhook, MCP)" },
   api: ["/api/v1/me", "/api/v1/sessions/upcoming", "/api/v1/leaderboard", "/api/mcp"],
+  crons: [{ id: "webhook-retries", schedule: "15 19 * * *", path: "/api/cron/webhook-retries" }],
 });
 
 // ── Juniors (Phase 3b, build plan §6.8) ──────────────────────────────────────

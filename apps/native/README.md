@@ -24,7 +24,7 @@ CI builds the debug APK on every pull request (job "Android shell") and keeps it
 | `@capacitor/filesystem`, `@capacitor/share` | "Download my data": the file is written to the app's cache and offered through the phone's share sheet (a web view can't download) |
 | `@capacitor/app` | The Android back button (a sheet closes first, then one screen back) and opening the app from a link |
 
-Not yet here, in the order they come: push notifications (Firebase), Play Billing for Vision passes.
+Not yet here: Play Billing for Vision passes. Until it exists the store app sells no Vision passes: no prices, no buy button (`sellsPasses()` in `apps/app/src/lib/native/platform.ts`).
 
 ## Settings that are deliberate
 
@@ -49,7 +49,55 @@ Inside the app, a link leads only to a screen of the app (`apps/app/src/lib/nati
 
 1. Create the app in Play Console with the package name **`com.luvallplay.app`** (default language English (Australia)).
 2. Once the first build has been uploaded to any track, open **Test and release → App integrity → App signing** and copy the **SHA-256 certificate fingerprint** under "App signing key certificate" (it looks like `AB:CD:…`, 32 pairs). Send it to lane N, or paste it into `assetlinks.json` in place of `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT`. A fingerprint is public information, not a secret.
-3. Nothing is uploaded from here yet. The upload key and the Play service-account file are secrets: they are given through the environment's secret settings, never pasted into a chat or committed.
+3. The upload key and the Play service-account file are secrets: they go into GitHub's secret settings (below), never into a chat and never into the repository.
+
+## For the owner: the first Play build (internal testing)
+
+The workflow `.github/workflows/android-release.yml` builds the **signed release bundle (AAB)** on every push to `main` and keeps it for 30 days. Play Console needs the first build uploaded by hand; later ones can be sent by the workflow (step 7). Until step 3 is done the workflow finishes green and says it built nothing.
+
+**1. Make the upload key (once, on your computer).** It needs a JDK (`keytool` comes with it).
+
+```
+keytool -genkeypair -v -keystore luvallplay-upload.jks -alias upload \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+It asks for a keystore password, a key password (pressing Enter reuses the keystore's) and your name and organisation. Keep `luvallplay-upload.jks` and both passwords in your password manager, and **never commit or send them**. This is only the *upload* key: Google keeps the real signing key (Play App Signing), so a lost upload key can be reset by Google's support.
+
+**2. Turn the file into text** (a secret can't hold a file):
+
+- Mac: `base64 -i luvallplay-upload.jks | tr -d '\n' | pbcopy`
+- Linux: `base64 -w0 luvallplay-upload.jks`
+- Windows PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("luvallplay-upload.jks")) | Set-Clipboard`
+
+**3. GitHub → the `luvallplay` repository → Settings → Secrets and variables → Actions.** *Secrets* tab → New repository secret, one each:
+
+| Name | Value |
+|---|---|
+| `ANDROID_UPLOAD_KEYSTORE_BASE64` | the text from step 2 |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
+| `ANDROID_KEY_ALIAS` | `upload` (the `-alias` above) |
+| `ANDROID_KEY_PASSWORD` | the key password |
+| `GOOGLE_SERVICES_JSON` | already there if you did the push-notification step |
+
+*Variables* tab → New repository variable: `NATIVE_API_BASE` = the public API host the app talks to (a web address like `https://…`, no slash at the end). The build stops with a message if it is missing.
+
+**4. Run it.** Actions → **Android release** → Run workflow (or merge anything to `main`). When it is green, open the run: the summary shows the **upload key's SHA-256** and the bundle is the `android-release-aab` artifact. Download and unzip it: `app-release.aab`.
+
+**5. Upload by hand the first time.** Play Console → Luvallplay → **Test and release → Testing → Internal testing → Create new release**. Accept Play App Signing when it asks, drop in `app-release.aab`, then add testers (**Testers** tab: create an email list and tick it), save, and roll out. Testers get a link on the same tab. The release notes to paste are in `docs/store/listing-en-AU.md`.
+
+**6. Afterwards**, copy the *App signing key certificate* SHA-256 into `assetlinks.json` (the section above). Only then may a build go to any track after internal testing: `release:check` refuses it until you do.
+
+**7. Optional: let the workflow upload for you.** Needed once:
+
+1. Google Cloud console → pick (or create) a project → **APIs & Services → Library** → enable **Google Play Android Developer API**.
+2. **IAM & Admin → Service accounts → Create service account** (name it `luvallplay-play-upload`, no project roles needed) → its **Keys** tab → **Add key → Create new key → JSON**. A file downloads.
+3. Play Console → **Users and permissions → Invite new users** → paste the service account's email address (`…@….iam.gserviceaccount.com`) → under *App permissions* add **Luvallplay** → tick **Release to testing tracks** (nothing more) → invite. (Google can take a few hours to start honouring it.)
+4. GitHub secret `PLAY_SERVICE_ACCOUNT_JSON` = the whole contents of the downloaded file. Then delete the downloaded file.
+
+From then on: Actions → **Android release** → Run workflow → tick **Upload to Play**. The build lands in the internal testing track as a **draft** release: open it in Play Console and roll it out. Nothing is uploaded unless you tick that box.
+
+If anything fails, the run says why in plain words (the script never prints a key or a token).
 
 ## Push notifications (off until there is a Firebase project)
 
@@ -60,4 +108,14 @@ Inside the app, a link leads only to a screen of the app (`apps/app/src/lib/nati
 - The phone is asked for permission only when the person turns notifications on in Settings, never at first launch.
 - A notification can open a screen of the app (`data.path`, a path only) and nothing else.
 
-For the owner, when the time comes: Firebase console → the Luvallplay project → Project settings → Your apps → Add app → Android → package name `com.luvallplay.app` → download `google-services.json`. It goes into the build through the repository's Actions secrets, and the server's sending key goes into the hosting environment settings; neither is ever pasted into a chat.
+Where the file comes from in a build: the `GOOGLE_SERVICES_JSON` setting (`pnpm --filter native google-services` writes the file from it, and stops if it is another app's file). CI does this on `main` only, from the repository secret of that name; pull requests and local debug builds have no file and no push. `pnpm --filter native release:check` fails when the file is missing.
+
+### For the owner: the Firebase file (a GitHub secret)
+
+1. Firebase console → the **Luvallplay** project → ⚙️ **Project settings → General → Your apps** → the Android app `com.luvallplay.app` → **google-services.json** (download).
+2. GitHub → the `luvallplay` repository → **Settings → Secrets and variables → Actions → New repository secret**:
+   - Name: `GOOGLE_SERVICES_JSON`
+   - Secret: open the downloaded file in a text editor, select everything, paste it.
+3. Save. From the next build on `main`, the Android build has push notifications. Nothing needs to be sent to anyone, and the file is never pasted into a chat or committed.
+
+The server's own keys (`PUSH_KEKS`, `FCM_SERVICE_ACCOUNT`) go into the hosting environment settings: `docs/SETUP-push.md`.

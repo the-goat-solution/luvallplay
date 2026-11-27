@@ -18,12 +18,17 @@ import { memberHasRoom } from "./membership-start";
 import { paymentMethodFromRef, type PaymentMethod } from "./offline-payment";
 
 // A member who said they can't make that play day (see player_absences).
-// `dateExpr` / `alias` as for membershipCoversDateSql.
-export function memberNotAbsentSql(dateExpr: string, alias = ""): string {
-  const c = alias ? `${alias}.` : "";
+// `dateExpr` as for membershipCoversDateSql; `alias` is what the outer query
+// calls the memberships table (the table's own name when it has no alias).
+//
+// The member's email must always be qualified: player_absences has an
+// `email` column too, so a bare `email` inside this subquery means the
+// absence row's own email. Then one absence on a date matched every member
+// and hid them all from that day's roster, headcount and reminders.
+export function memberNotAbsentSql(dateExpr: string, alias = "memberships"): string {
   return `NOT EXISTS (
     SELECT 1 FROM player_absences pa
-    WHERE pa.session_date = ${dateExpr} AND pa.email = lower(trim(${c}email))
+    WHERE pa.session_date = ${dateExpr} AND pa.email = lower(trim(${alias || "memberships"}.email))
   )`;
 }
 
@@ -1020,6 +1025,12 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
   }
   // Membership access only applies on a membership day — see
   // getActiveMemberCountForDate.
+  //
+  // 'expired' counts too: auditMembershipStatuses flips a one-time membership
+  // to 'expired' the day after period_end, and the roster for a play day that
+  // member attended must not lose them afterwards. The date window below
+  // still bounds them to the dates they actually covered, and expiry only
+  // ever applies to non-recurring rows, so they can't reach future dates.
   const rosterDay = getMembershipDayForDate(date);
   const { rows: memberRows } = rosterDay
     ? await sql.query(
@@ -1027,7 +1038,7 @@ export async function getRosterForDate(date: string): Promise<RosterEntry[]> {
                 period_start::text AS period_start, period_end::text AS period_end,
                 recurring, cancel_at_period_end, stripe_payment_intent_id
          FROM memberships
-         WHERE status = 'active' AND day = $2 AND ${membershipCoversDateSql("$1")}
+         WHERE status IN ('active', 'expired') AND day = $2 AND ${membershipCoversDateSql("$1")}
            AND ${memberNotAbsentSql("$1::date")}
          ORDER BY created_at ASC;`,
         [date, rosterDay],

@@ -10,7 +10,9 @@
     "sync:android": "cap sync android",
     "android:debug": "cd android && ./gradlew assembleDebug",
     "android:bundle": "cd android && ./gradlew bundleRelease",
+    "google-services": "node scripts/write-google-services.mjs",
     "release:check": "node scripts/check-release.mjs",
+    "play:upload": "node scripts/play-upload.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.ts"
   },

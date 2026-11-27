@@ -21,6 +21,23 @@ const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
 const NAME = `rate_limit_${process.pid}`;
 const WEBHOOK_SECRET = "whsec_rate_limit_test";
 
+// pool.end() and client.end() resolve once the Terminate message is sent, not
+// once the server has dropped the session. A DROP DATABASE ... WITH (FORCE)
+// right after can then kill a session the client still has open, and the
+// client raises "terminating connection due to administrator command" as an
+// uncaught error in whichever test is running. So: wait until the server
+// reports no session left on the database, and only then drop it. FORCE stays
+// as the backstop for a session that really is stuck.
+async function dropWhenIdle(admin: pg.Client, db: string) {
+  const deadline = Date.now() + 10_000;
+  for (;;) {
+    const { rows } = await admin.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1`, [db]);
+    if (rows[0].n === 0 || Date.now() > deadline) break;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  await admin.query(`DROP DATABASE IF EXISTS ${db} WITH (FORCE)`);
+}
+
 test("the store is the instance's memory unless RATE_LIMIT_STORE=database", () => {
   assert.equal(rateLimitStore({}), "memory");
   assert.equal(rateLimitStore({ RATE_LIMIT_STORE: "" }), "memory");
@@ -70,7 +87,7 @@ describe("rate limits and handled Stripe events in the database", { skip: !BASE_
     await c?.end();
     const admin = new pg.Client({ connectionString: urlFor("postgres") });
     await admin.connect();
-    await admin.query(`DROP DATABASE IF EXISTS ${NAME} WITH (FORCE)`);
+    await dropWhenIdle(admin, NAME);
     await admin.end();
   });
 
@@ -148,8 +165,11 @@ describe("rate limits and handled Stripe events in the database", { skip: !BASE_
     try {
       const oc = new pg.Client({ connectionString: urlFor(old) });
       await oc.connect();
-      await migrate(oc, { migrations: loadMigrations().filter((m: { tag: string }) => !m.tag.endsWith("rate_limits_stripe_events")), log: () => {} });
-      await oc.end();
+      try {
+        await migrate(oc, { migrations: loadMigrations().filter((m: { tag: string }) => !m.tag.endsWith("rate_limits_stripe_events")), log: () => {} });
+      } finally {
+        await oc.end();
+      }
       const k = key();
       assert.deepEqual([await rateLimit(k, 2, 60_000, pool), await rateLimit(k, 2, 60_000, pool), await rateLimit(k, 2, 60_000, pool)], [true, true, false]);
       assert.equal(await stripeEventHandled("evt_any", pool), false);
@@ -157,7 +177,7 @@ describe("rate limits and handled Stripe events in the database", { skip: !BASE_
     } finally {
       console.warn = originalWarn;
       await pool.end();
-      await admin.query(`DROP DATABASE IF EXISTS ${old} WITH (FORCE)`);
+      await dropWhenIdle(admin, old);
       await admin.end();
     }
   });

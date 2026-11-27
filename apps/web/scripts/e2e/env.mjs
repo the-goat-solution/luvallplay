@@ -184,9 +184,9 @@ export async function startEnv({ log = console.log } = {}) {
   const seeded = await seed();
   // The real grant script (as in production). The Phase 1 roles tables are
   // part of the baseline migration.
-  runNode(["scripts/grant-role.mjs", "--role", "owner", "--platform", "--email", PEOPLE.owner.email]);
-  runNode(["scripts/grant-role.mjs", "--role", "admin", "--email", PEOPLE.admin.email]);
-  runNode(["scripts/grant-role.mjs", "--role", "coach", "--email", PEOPLE.coach.email]);
+  runNode(["scripts/grant-role.mjs", "--club", "three-wolves", "--role", "owner", "--platform", "--email", PEOPLE.owner.email]);
+  runNode(["scripts/grant-role.mjs", "--club", "three-wolves", "--role", "admin", "--email", PEOPLE.admin.email]);
+  runNode(["scripts/grant-role.mjs", "--club", "three-wolves", "--role", "coach", "--email", PEOPLE.coach.email]);
   // The seed wrote accounts straight into the table; give each its place in the club, as the app does.
   runNode(["--import", "./tests/register.mjs", "scripts/tenants/verify.mjs", "--reconcile"]);
   log(`e2e: app at ${BASE}, database ${DB}`);

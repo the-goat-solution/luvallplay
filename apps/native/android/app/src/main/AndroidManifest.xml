@@ -50,4 +50,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Vision's live-camera mode (getUserMedia in the WebView). Capacitor's
+         WebChromeClient asks for this at runtime, but only if it is declared. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Camera is optional: phones and tablets without one can still install. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 </manifest>

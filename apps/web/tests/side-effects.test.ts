@@ -98,10 +98,13 @@ test("google calendar: the integration is read-only (no write scope, no write ca
   assert.equal(sideEffectAllowed("calendar_write", { VERCEL_ENV: "preview" }), false);
 });
 
-test("push: nothing sends push notifications yet, and the gate is off outside production", () => {
-  // Push arrives in Phase 5; until then no code may talk to a push service.
+test("push: one file talks to the push service, behind the gate, and the gate is off outside production", () => {
+  // Phase 5: lib/push/fcm.ts is the only place that may talk to a push service.
   const hits = scan((src) => /fcm\.googleapis\.com|web-push|sendNotification\(/.test(src));
-  assert.deepEqual(hits, []);
+  assert.deepEqual(hits, ["lib/push/fcm.ts"]);
+  const src = readFileSync(path.join(ROOT, "lib/push/fcm.ts"), "utf8");
+  assert.match(src, /side-effects/, "lib/push/fcm.ts imports the side-effect gate");
+  assert.match(src, /sideEffectAllowed\("push"\)/);
   assert.equal(sideEffectAllowed("push", { VERCEL_ENV: "preview" }), false);
 });
 

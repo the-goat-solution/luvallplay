@@ -26,12 +26,14 @@ test("the app is bundled (not a remote website), https only, and release builds 
   assert.equal(config.android?.webContentsDebuggingEnabled, false);
 });
 
-test("Android: the newest target Play requires, the internet permission only, no backups of app data, no orientation lock", () => {
+test("Android: the newest target Play requires, the internet and camera permissions only (camera hardware not required), no backups of app data, no orientation lock", () => {
   const vars = read("../android/variables.gradle");
   assert.match(vars, /targetSdkVersion = 36/);
   assert.match(vars, /compileSdkVersion = 36/);
   const manifest = read("../android/app/src/main/AndroidManifest.xml");
-  assert.deepEqual([...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map((m) => m[1]), ["android.permission.INTERNET"]);
+  assert.deepEqual([...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map((m) => m[1]), ["android.permission.INTERNET", "android.permission.CAMERA"]);
+  assert.match(manifest, /<uses-feature android:name="android.hardware.camera" android:required="false" \/>/, "a phone without a camera must still be able to install");
+  assert.deepEqual([...manifest.matchAll(/<uses-feature android:name="([^"]+)" android:required="true"/g)], []);
   assert.match(manifest, /android:allowBackup="false"/, "a restored copy on another phone couldn't read the Keystore anyway");
   assert.doesNotMatch(manifest, /screenOrientation|resizeableActivity="false"|usesCleartextTraffic="true"/);
 });
@@ -68,4 +70,17 @@ test("the plugins the players' app expects are in the Android project", () => {
   for (const name of ["capacitor-android", "capacitor-app", "capacitor-browser", "capacitor-filesystem", "capacitor-push-notifications", "capacitor-share", "capacitor-secure-storage-plugin"]) assert.match(settings, new RegExp(`include ':${name}'`));
   // The name the app looks the secure store up by (apps/app/src/lib/native/secure-storage.ts on its branch).
   assert.match(read("../../../node_modules/capacitor-secure-storage-plugin/dist/esm/index.js"), /registerPlugin\(['"]SecureStoragePlugin['"]/);
+});
+
+test("release signing: the upload key comes from the environment only, and the release workflow never runs for a pull request", () => {
+  const gradle = read("../android/app/build.gradle");
+  for (const name of ["ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD", "ANDROID_VERSION_CODE"]) assert.match(gradle, new RegExp(`System\\.getenv\\("${name}"\\)`));
+  assert.doesNotMatch(gradle, /(storePassword|keyPassword)\s+["'][^"']/, "no password in the repository");
+  assert.doesNotMatch(gradle, /signingConfig signingConfigs\.debug/, "a release is never signed with the debug key");
+  const flow = read("../../../.github/workflows/android-release.yml");
+  assert.doesNotMatch(flow, /pull_request/, "secrets never reach a pull request's code");
+  // Only GitHub's own actions and pnpm's see the build; the Play key goes to our script, not a third-party action.
+  const uses = [...flow.matchAll(/uses:\s*([^\s@]+)@/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(uses)].filter((u) => !/^(actions|pnpm)\//.test(u)), []);
+  assert.match(flow, /PLAY_SERVICE_ACCOUNT_JSON: \$\{\{ secrets\.PLAY_SERVICE_ACCOUNT_JSON \}\}/);
 });

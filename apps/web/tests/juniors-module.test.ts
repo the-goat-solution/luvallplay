@@ -53,7 +53,8 @@ test("where Juniors is offered: the manifest decides in production; an override 
 });
 
 test("the safeguarding policy: a version, and every point in English and Vietnamese", () => {
-  assert.match(SAFEGUARDING_POLICY_VERSION, /^\d{4}-\d{2}$/);
+  // The month the wording was written, with a letter when it changes again within the month.
+  assert.match(SAFEGUARDING_POLICY_VERSION, /^\d{4}-\d{2}[a-z]?$/);
   assert.ok(SAFEGUARDING_POLICY.length >= 5);
   assert.equal(new Set(SAFEGUARDING_POLICY.map((p) => p.id)).size, SAFEGUARDING_POLICY.length);
   for (const p of SAFEGUARDING_POLICY) assert.ok(p.en.trim().length > 20 && p.vi.trim().length > 20, p.id);
@@ -244,11 +245,14 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
       const on = await enabledModules(c);
       assert.deepEqual([on.has("juniors"), on.has("forms-waivers")], [false, false], "hidden on this deployment: neither counts as on, whatever the rows say");
       process.env.VERCEL_ENV = "production";
+      // Production names its club (lib/tenant-settings.ts).
+      process.env.TENANT_SLUG = "three-wolves";
       process.env.JUNIORS_AVAILABILITY = "available";
       resetClubModulesCache();
       assert.equal((await enabledModules(c)).has("juniors"), false, "production ignores the override");
     } finally {
       delete process.env.VERCEL_ENV;
+      delete process.env.TENANT_SLUG;
       process.env.JUNIORS_AVAILABILITY = "available";
       resetClubModulesCache();
     }

@@ -14,7 +14,7 @@ import pg from "pg";
 import { canManageAdmins, type Access } from "@luvallplay/auth";
 import { migrate } from "../scripts/db/migrate.mjs";
 import { decide, type AdminContext } from "../lib/admin-access.ts";
-import { getAccess } from "../lib/admin-roles.ts";
+import { getAccess, isLastOwner, listAdmins, listAudit, removeRole, setRoleByEmail, setRoleForPlayer } from "../lib/admin-roles.ts";
 import { resetClubModulesCache, setClubModule, setModuleLock } from "../lib/club-modules.ts";
 import { scopePool } from "../lib/tenant-scope.ts";
 
@@ -137,6 +137,57 @@ describe("permission matrix, from the database", { skip: !BASE_URL && !REQUIRE_D
     assert.deepEqual(await getAccess(scopePool(pool, async () => club2), PLAYER.admin), { role: null, platformAdmin: false });
     // A platform admin is one in every club: platform_admins isn't a club's table.
     assert.deepEqual(await getAccess(scopePool(pool, async () => club2), PLAYER.platform), { role: null, platformAdmin: true });
+  });
+
+  test("unscoped (TENANT_SCOPE off or shadow), roles and invites are still per club: TENANT_SLUG decides (audit C6)", async () => {
+    const owner = { query: (t: string, p?: unknown[]) => pool.query(t, p) };
+    const script = { kind: "script" } as const;
+    const was = process.env.TENANT_SLUG;
+    try {
+      delete process.env.TENANT_SLUG;
+      assert.deepEqual(await getAccess(owner, PLAYER.otherClubAdmin), { role: null, platformAdmin: false }, "another club's admin is nobody here");
+      const here = await listAdmins(owner);
+      assert.equal(here.admins.some((a) => a.playerId === PLAYER.otherClubAdmin), false, "and isn't listed here");
+      process.env.TENANT_SLUG = "hanoi-smash";
+      assert.deepEqual(await getAccess(owner, PLAYER.otherClubAdmin), { role: "admin", platformAdmin: false });
+      assert.deepEqual(await getAccess(owner, PLAYER.owner), { role: null, platformAdmin: false }, "this club's owner is nobody there");
+      assert.deepEqual((await listAdmins(owner)).admins.filter((a) => a.role).map((a) => a.playerId), [PLAYER.otherClubAdmin]);
+
+      const c = await pool.connect();
+      try {
+        await c.query("BEGIN");
+        const db = { query: (t: string, p?: unknown[]) => c.query(t, p) };
+        // A role given in club 2 lands in club 2 (not in club 1 by the column's default).
+        await setRoleForPlayer(db, script, PLAYER.member, "coach");
+        assert.deepEqual((await c.query(`SELECT tenant_id FROM club_roles WHERE player_id = $1`, [PLAYER.member])).rows, [{ tenant_id: club2 }]);
+        // Removing it there leaves club 1's roles alone.
+        await removeRole(db, script, PLAYER.owner);
+        assert.equal((await c.query(`SELECT count(*)::int AS n FROM club_roles WHERE player_id = $1 AND tenant_id = 1`, [PLAYER.owner])).rows[0].n, 1);
+        // An invite belongs to club 2, and club 1 neither lists nor accepts it.
+        const inv = await setRoleByEmail(db, script, { email: "invitee@example.test", role: "admin" });
+        assert.equal(inv.kind, "invited");
+        assert.deepEqual((await c.query(`SELECT tenant_id FROM admin_invites WHERE email = 'invitee@example.test'`)).rows, [{ tenant_id: club2 }]);
+        delete process.env.TENANT_SLUG;
+        assert.equal((await listAdmins(db)).invites.some((i) => i.email === "invitee@example.test"), false);
+        // The audit log is the club's too.
+        assert.equal((await listAudit(db)).some((r) => r.target === "email:invitee@example.test"), false);
+      } finally {
+        await c.query("ROLLBACK");
+        c.release();
+      }
+      // The last owner of ANY club can't delete their account.
+      assert.equal(await isLastOwner(owner, PLAYER.otherClubAdmin), false, "an admin, not an owner");
+      assert.equal(await isLastOwner(owner, PLAYER.owner), false, "club 1 has another owner (the seed's)");
+      await pool.query(`UPDATE club_roles SET role = 'owner' WHERE player_id = $1`, [PLAYER.otherClubAdmin]);
+      try {
+        assert.equal(await isLastOwner(owner, PLAYER.otherClubAdmin), true, "the only owner of club 2, asked from club 1");
+      } finally {
+        await pool.query(`UPDATE club_roles SET role = 'admin' WHERE player_id = $1`, [PLAYER.otherClubAdmin]);
+      }
+    } finally {
+      if (was === undefined) delete process.env.TENANT_SLUG;
+      else process.env.TENANT_SLUG = was;
+    }
   });
 
   test("the platform's lock: only staff set it, it needs a reason, it puts the module in that state, and owners can't undo it", async () => {

@@ -50,6 +50,13 @@ export type VisionHost = {
   words?: Partial<Record<Lang, ClubWords>>;
   /** A live match's and a video's price after the trial, in the club's money ("NZ$5"). */
   prices: { live: string; upload: string };
+  /**
+   * Whether this host sells passes. Default true. The Android store app sets it
+   * false until Play Billing exists (Play's payments policy: digital purchases
+   * inside the app must use it): no price, no "buy" button, only a note that
+   * says where a pass can be bought.
+   */
+  purchases?: boolean;
   transport: VisionTransport;
   links: {
     /** Back to the Arena. */

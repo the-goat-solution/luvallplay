@@ -3143,6 +3143,11 @@
               "consentVersion": {
                 "t": "string"
               },
+              "deletionRequestedAt": {
+                "t": "string",
+                "nullable": true,
+                "optional": true
+              },
               "guardians": {
                 "t": "number"
               },
@@ -3364,6 +3369,38 @@
                 ]
               }
             }
+          }
+        }
+      }
+    },
+    "family.cancelDelete": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/delete-request/cancel",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {}
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "requested": {
+            "t": "boolean"
+          },
+          "requestedAt": {
+            "t": "string",
+            "nullable": true
           }
         }
       }
@@ -3650,6 +3687,11 @@
               "consentVersion": {
                 "t": "string"
               },
+              "deletionRequestedAt": {
+                "t": "string",
+                "nullable": true,
+                "optional": true
+              },
               "guardians": {
                 "t": "number"
               },
@@ -3928,6 +3970,11 @@
                 "consentVersion": {
                   "t": "string"
                 },
+                "deletionRequestedAt": {
+                  "t": "string",
+                  "nullable": true,
+                  "optional": true
+                },
                 "guardians": {
                   "t": "number"
                 },
@@ -4059,6 +4106,42 @@
         }
       }
     },
+    "family.requestDelete": {
+      "method": "POST",
+      "path": "/clubs/{club}/family/{id}/delete-request",
+      "auth": "session",
+      "params": {
+        "t": "object",
+        "fields": {
+          "club": {
+            "t": "string"
+          },
+          "id": {
+            "t": "number"
+          }
+        }
+      },
+      "body": {
+        "t": "object",
+        "fields": {
+          "confirm": {
+            "t": "boolean"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "requested": {
+            "t": "boolean"
+          },
+          "requestedAt": {
+            "t": "string",
+            "nullable": true
+          }
+        }
+      }
+    },
     "family.signForm": {
       "method": "POST",
       "path": "/clubs/{club}/family/{id}/forms/{formId}/sign",
@@ -4185,6 +4268,11 @@
               },
               "consentVersion": {
                 "t": "string"
+              },
+              "deletionRequestedAt": {
+                "t": "string",
+                "nullable": true,
+                "optional": true
               },
               "guardians": {
                 "t": "number"

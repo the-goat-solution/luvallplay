@@ -9,7 +9,7 @@ import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../scripts/db/migrate.mjs";
 import { PushSealError, pushSeal, pushSealAvailable } from "../lib/push/seal.ts";
-import { MAX_DEVICES, PUSH_CATEGORIES, addressesFor, countDevices, getPrefs, registerDevice, removeAllDevices, removeDevice, setPrefs } from "../lib/push/devices.ts";
+import { MAX_DEVICES, PUSH_CATEGORIES, addressesFor, countDevices, getPrefs, registerDevice, removeAllDevices, removeDevice, removeGoneAddresses, setPrefs } from "../lib/push/devices.ts";
 
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
@@ -144,6 +144,16 @@ describe("push devices and choices", { skip: !BASE_URL && !REQUIRE_DB ? "set DAT
     assert.equal(await countDevices(c, MIA), 1);
     assert.equal(await removeAllDevices(c, MIA), 1);
     assert.equal(await countDevices(c, MIA), 0);
+  });
+
+  test("addresses the push service says are gone: their rows go, and nothing else", async () => {
+    await registerDevice(c, MIA, { token: PHONE, platform: "android" }, ENV);
+    await registerDevice(c, MIA, { token: address(2), platform: "android" }, ENV);
+    await registerDevice(c, PETE, { token: address(3), platform: "ios" }, ENV);
+    assert.equal(await removeGoneAddresses(c, []), 0);
+    assert.equal(await removeGoneAddresses(c, ["not an address", address(77)]), 0);
+    assert.equal(await removeGoneAddresses(c, [PHONE, address(3)]), 2);
+    assert.deepEqual([await countDevices(c, MIA), await countDevices(c, PETE)], [1, 0]);
   });
 
   test(`at most ${MAX_DEVICES} devices: the one unused longest goes`, async () => {

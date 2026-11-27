@@ -1,9 +1,9 @@
-# Rehearsal: players' phone numbers sealed, with an index (`0020_players_contact_sealed`)
+# Rehearsal: players' phone numbers sealed, with an index (`0021_players_contact_sealed`)
 
 - **Change:** three new columns on `players`, all NULL: `phone_sealed` (the E.164 number, encrypted by the application for that one person), `phone_index` (a keyed fingerprint of the number, so it can still be looked up and kept unique) and `phone_index_kid` (which index key made it). Also a check that refuses anything in `phone_sealed` that isn't in the sealed format, a check (`players_phone_sealed_together_check`) that the three columns are all empty or all set, a unique index on `phone_index` for verified live accounts (mirrors `players_phone_verified_idx`), and a trigger, `players_phone_sealed_follows_plain`, that clears the three columns whenever `phone_e164` changes without a new sealing in the same statement, and whenever `phone_e164` is empty after an update (so a row without a number holds nothing sealed, whatever the statement wrote). Then a backfill seals the numbers already there. `phone`, `phone_e164` and `phone_verified_at` are not changed for anyone, and the app keeps reading them until `PII_READS` is switched.
 - **Commands:** `node scripts/db/migrate.mjs`, then `node scripts/pii/backfill-phone.mjs` (dry run), then `node scripts/pii/backfill-phone.mjs --apply`
 - **Expectations:** `apps/web/scripts/data-guard/expectations/2026-11-pii-phone-sealed.json` (and `.production.json` for the live run)
-- **Number:** written as `0020`, the next free number today (`0019_junior_safety_checks` is the last); the migration queue gives the final number at merge.
+- **Number:** written as `0020`, then renumbered `0021` when merged with main (main took `0020` for junior deletion); the migration queue gives the final number at merge.
 - **What it does not do:** while the plain columns exist, sealing adds no secrecy; it prepares their removal, which is a later change. And phone numbers are few, so whoever holds `CONTACT_INDEX_KEYS` and a copy of the database can recover every number by trying them all: that key is as secret as the numbers.
 
 ## Result: the local rehearsal passed on synthetic data. The run on a copy of production, the schema drift suite, and every production step are still to do, and wait for the owner's OK.
@@ -14,7 +14,7 @@
 |---|---|
 | Migrations `0000` to `0019`, then the synthetic accounts | 425 accounts: 228 with a phone number (218 different numbers: 10 unverified accounts hold a number a verified account also holds, which is allowed today), 104 verified, 22 deleted (no number, as the app leaves them) |
 | Data guard snapshot, before | Passed (85 tables, 425 accounts) |
-| Migration `0020_players_contact_sealed` | Applied in 9 ms. Sealed 0, indexed 0: the new columns start empty |
+| Migration `0021_players_contact_sealed` | Applied in 9 ms. Sealed 0, indexed 0: the new columns start empty |
 | Backfill, dry run | "228 account(s) have a phone number that isn't sealed yet." Nothing written |
 | Backfill `--apply` with no keys set | Refused (exit 2), nothing written |
 | Backfill `--apply` | 228 sealed, 0 failed, in two batches (200, then 28) |
@@ -24,14 +24,14 @@
 | Verified live accounts | 104 different numbers, 104 different indexes (the new unique index holds what the old one holds) |
 | Every sealed number opened for its own account and compared with the plain column | 228 matched, 0 wrong |
 | `phone`, `phone_e164`, `phone_verified_at`, `email`, `deleted_at` of every account, before against after | Identical |
-| Data guard, before `0020` against after the backfill, with the expectations | Passed: 403 live accounts checked, 0 problems |
-| Data guard, after `0020` against after the backfill, with the expectations | Passed: 403 live accounts checked, 0 problems. Without the expectations it flags exactly the three new columns |
+| Data guard, before `0021` against after the backfill, with the expectations | Passed: 403 live accounts checked, 0 problems |
+| Data guard, after `0021` against after the backfill, with the expectations | Passed: 403 live accounts checked, 0 problems. Without the expectations it flags exactly the three new columns |
 | The trigger: 5 accounts' numbers cleared with plain SQL | 5 rows cleared, nothing sealed left on them |
-| Rollback (below), then a schema dump | The schema equals the one before `0020`; the migrator shows `0020` as pending again |
+| Rollback (below), then a schema dump | The schema equals the one before `0021`; the migrator shows `0021` as pending again |
 | `tests/pii-contact.test.ts` | Passes (20 of 20), on Postgres 16, including: every writer works as before on a database without the new columns while no key is set |
 | Web journeys (`pnpm --filter web e2e`, local build, Postgres 16) | 51 of 51 pass with no contact key set (as CI runs them), and 51 of 51 again on the same build with throwaway `CONTACT_KEKS` and `CONTACT_INDEX_KEYS` set |
 | `packages/db/schema.ts` against the migrations (tables and indexes, on Postgres 16) | No difference |
-| Schema drift suite, and `db:drift` | **Not run here**: they need Postgres 18 (CI runs them). `docs/schema/production.sql` was extended by hand (18 lines added, none changed) from this run's dump: on Postgres 16 the dump after `0020` equals the new `production.sql` once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside |
+| Schema drift suite, and `db:drift` | **Not run here**: they need Postgres 18 (CI runs them). `docs/schema/production.sql` was extended by hand (18 lines added, none changed) from this run's dump: on Postgres 16 the dump after `0021` equals the new `production.sql` once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside |
 
 ## After the branch reviews: the three columns are set and cleared together
 
@@ -40,7 +40,7 @@ The counts above were taken **before** `players_phone_sealed_together_check` and
 | Step | Result |
 |---|---|
 | Migrations `0000` to `0019`, then the synthetic accounts | 425 accounts: 233 with a phone number (223 different numbers: 10 unverified accounts hold a number a verified account also holds), 104 verified, 22 deleted (no number) |
-| Migration `0020_players_contact_sealed` | Applied in 12 ms. Sealed 0, indexed 0. Both checks are on the table (`players_phone_sealed_check`, `players_phone_sealed_together_check`) |
+| Migration `0021_players_contact_sealed` | Applied in 12 ms. Sealed 0, indexed 0. Both checks are on the table (`players_phone_sealed_check`, `players_phone_sealed_together_check`) |
 | Backfill, dry run | "233 account(s) have a phone number that isn't sealed yet." Nothing written |
 | Backfill `--apply` with no keys set | Refused (exit 2), nothing written |
 | Backfill `--apply` | 233 sealed, 0 failed, in two batches (200, then 33). It said first that no existing row could confirm the two keys (nothing was sealed yet), as it does on a first run |
@@ -53,8 +53,8 @@ The counts above were taken **before** `players_phone_sealed_together_check` and
 | `phone`, `phone_e164`, `phone_verified_at`, `email`, `deleted_at` of every account, before against after | Identical |
 | The trigger: 5 accounts' numbers cleared with plain SQL, 3 by `SET phone_e164 = NULL` and 2 by `SET phone_e164 = NULL, phone_sealed = NULL` (the statement that used to leave the index) | 5 rows cleared, nothing sealed or indexed left on them. Afterwards: 228 with a number, 228 sealed, 228 indexed |
 | The check: clearing only one of the three columns on an account that has a number | Refused each time (`23514`, `players_phone_sealed_together_check`) |
-| Rollback (below, with the new constraint), then a schema dump | The schema equals the one before `0020`; the migrator shows `0020` as pending again |
-| `docs/schema/production.sql` | Extended by hand again (one constraint line added, one line of the trigger function changed): on Postgres 16 the dump after `0020` equals it once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside, and a database built from `packages/db/schema.ts` gives the same tables. **The drift suite on Postgres 18 is still CI's to run** |
+| Rollback (below, with the new constraint), then a schema dump | The schema equals the one before `0021`; the migrator shows `0021` as pending again |
+| `docs/schema/production.sql` | Extended by hand again (one constraint line added, one line of the trigger function changed): on Postgres 16 the dump after `0021` equals it once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside, and a database built from `packages/db/schema.ts` gives the same tables. **The drift suite on Postgres 18 is still CI's to run** |
 | `tests/pii-contact.test.ts` | Passes (22 of 22), on Postgres 16, with the new SQL-level tests |
 
 ## Still to do

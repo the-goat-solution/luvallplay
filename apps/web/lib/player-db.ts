@@ -485,20 +485,27 @@ export async function changePlayerEmail(id: number, newEmailRaw: string): Promis
 // Welcome emails for imported members
 // ---------------------------------------------------------------------------
 
+// Accounts are global: the club's welcome list is its own imported people
+// (audit C6), never another club's. The club is the connection's (enforce),
+// else this deployment's.
+const IN_THIS_CLUB = `EXISTS (SELECT 1 FROM club_members cm WHERE cm.user_id = p.id
+  AND cm.tenant_id = COALESCE(app_tenant_id(), (SELECT id FROM tenants WHERE slug = $1)))`;
+
 export async function countWelcomePending(): Promise<number> {
-  const { rows } = await sql`
-    SELECT count(*)::int AS n FROM players
-    WHERE created_via = 'member_import' AND welcome_sent_at IS NULL AND deleted_at IS NULL;
-  `;
+  const { rows } = await sql.query(
+    `SELECT count(*)::int AS n FROM players p
+     WHERE p.created_via = 'member_import' AND p.welcome_sent_at IS NULL AND p.deleted_at IS NULL AND ${IN_THIS_CLUB};`,
+    [defaultTenantSlug()],
+  );
   return (rows[0]?.n as number) ?? 0;
 }
 
 export async function listWelcomePending(limit: number): Promise<Player[]> {
   const { rows } = await sql.query(
     `SELECT ${PLAYER_COLUMNS} FROM players p
-     WHERE p.created_via = 'member_import' AND p.welcome_sent_at IS NULL AND p.deleted_at IS NULL
-     ORDER BY p.id LIMIT $1;`,
-    [limit],
+     WHERE p.created_via = 'member_import' AND p.welcome_sent_at IS NULL AND p.deleted_at IS NULL AND ${IN_THIS_CLUB}
+     ORDER BY p.id LIMIT $2;`,
+    [defaultTenantSlug(), limit],
   );
   return rows.map((r) => mapPlayer(r as PlayerRow));
 }

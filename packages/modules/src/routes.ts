@@ -64,6 +64,7 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   ["/api/waitlist", "core"],
   ["/api/cron/headcount-alerts", "core"],
   ["/api/cron/send-roster", "core"],
+  ["/api/cron/roster-attendance", "core"],
   // One endpoint for every kind of payment; each handler checks its own module.
   ["/api/stripe-webhook", "core"],
   // ── API: platform ───────────────────────────────────────────────────────
@@ -92,6 +93,7 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   ["/api/jersey", "shop"],
   ["/api/admin/jersey", "shop"],
   ["/api/admin/shop", "shop"],
+  ["/api/cron/shop-upkeep", "shop"],
   ["/api/profile/shop", "shop"],
   ["/api/create-donation-intent", "donations"],
   ["/api/create-donation-subscription", "donations"],
@@ -99,6 +101,7 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   ["/api/profile/integrations", "integrations"],
   ["/api/v1", "integrations"],
   ["/api/mcp", "integrations"],
+  ["/api/cron/webhook-retries", "integrations"],
 ];
 
 const matches = (prefix: string, path: string) => prefix === "/" ? path === "/" : path === prefix || path.startsWith(`${prefix}/`);

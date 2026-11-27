@@ -208,10 +208,13 @@ describe("the Juniors switch, from the database", { skip: !BASE_URL && !REQUIRE_
     assert.equal(await juniorsOn(c, undefined, OPEN), true);
     assert.equal((await enabledModules(c)).has("juniors"), true, "the cache was reset by the switch");
     assert.deepEqual(await tryOn(P.owner), { ok: true, changed: false }, "twice changes nothing");
-    // Every other module is as it was.
-    const others = (await listClubModules(c)).filter((m) => !["juniors", "forms-waivers"].includes(m.id));
+    // Every other module is as it was: the club's own all on, and the other hidden ones (Social, Moderation) still off.
+    const hidden = MODULES.filter((m) => m.availability === "hidden").map((m) => m.id as string);
+    const all = await listClubModules(c);
+    const others = all.filter((m) => !hidden.includes(m.id));
     assert.ok(others.every((m) => m.enabled), "nothing else was switched");
-    assert.equal(others.length, MODULES.length - 2);
+    assert.equal(others.length, MODULES.length - hidden.length);
+    assert.deepEqual(all.filter((m) => hidden.includes(m.id) && m.enabled).map((m) => m.id).sort(), ["forms-waivers", "juniors"], "Juniors didn't bring another hidden module on");
   });
 
   test("fails closed: unreadable switches, a row nobody acknowledged, or a deployment that hides Juniors all mean off", async () => {

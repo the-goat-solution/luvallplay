@@ -1192,7 +1192,7 @@ CREATE TABLE mini_game_scores (
 );
 
 CREATE TABLE moderation_actions (
-  id bigint DEFAULT nextval('moderation_actions_id_seq'::regclass) NOT NULL,
+  id bigint NOT NULL,
   actor_id integer,
   target_type text NOT NULL,
   target_id bigint NOT NULL,
@@ -1362,7 +1362,7 @@ CREATE TABLE player_settings (
 );
 
 CREATE TABLE player_suspensions (
-  id bigint DEFAULT nextval('player_suspensions_id_seq'::regclass) NOT NULL,
+  id bigint NOT NULL,
   player_id integer,
   action text DEFAULT 'suspend'::text NOT NULL,
   scope text NOT NULL,
@@ -1381,6 +1381,7 @@ CREATE TABLE player_suspensions (
   CONSTRAINT player_suspensions_reason_code_check CHECK ((reason_code ~ '^[a-z][a-z0-9_]{0,39}$'::text)),
   CONSTRAINT player_suspensions_scope_check CHECK ((scope = ANY (ARRAY['social'::text, 'market'::text, 'all'::text]))),
   CONSTRAINT player_suspensions_unsuspend_has_no_end_check CHECK (((action <> 'unsuspend'::text) OR (until IS NULL))),
+  CONSTRAINT player_suspensions_unsuspend_names_account_check CHECK (((action <> 'unsuspend'::text) OR ((player_id IS NOT NULL) AND (email_index IS NULL) AND (phone_index IS NULL)))),
   CONSTRAINT player_suspensions_action_not_null NOT NULL action,
   CONSTRAINT player_suspensions_created_at_not_null NOT NULL created_at,
   CONSTRAINT player_suspensions_id_not_null NOT NULL id,

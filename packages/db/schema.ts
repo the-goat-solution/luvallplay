@@ -1972,7 +1972,8 @@ export const user_blocks = pgTable("user_blocks", {
 // foreign key on purpose: the row outlives the account. The email and phone
 // are kept only as keyed indexes.
 export const player_suspensions = pgTable("player_suspensions", {
-	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	// The database gives the id (GENERATED ALWAYS); the app's role can't write it or created_at.
+	id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
 	player_id: integer(),
 	action: text().default('suspend').notNull(),
 	scope: text().notNull(),
@@ -1995,6 +1996,7 @@ export const player_suspensions = pgTable("player_suspensions", {
 	check("player_suspensions_index_kid_check", sql`(index_kid IS NOT NULL) = (email_index IS NOT NULL OR phone_index IS NOT NULL)`),
 	check("player_suspensions_names_someone_check", sql`player_id IS NOT NULL OR email_index IS NOT NULL OR phone_index IS NOT NULL`),
 	check("player_suspensions_unsuspend_has_no_end_check", sql`action <> 'unsuspend'::text OR until IS NULL`),
+	check("player_suspensions_unsuspend_names_account_check", sql`action <> 'unsuspend'::text OR (player_id IS NOT NULL AND email_index IS NULL AND phone_index IS NULL)`),
 ]);
 
 // A report about a profile, a post or a comment (later a listing or a
@@ -2039,7 +2041,8 @@ export const content_reports = pgTable("content_reports", {
 // can't update or delete). Ids and a short reason, never content. actor_id
 // has no foreign key on purpose: the record outlives the account.
 export const moderation_actions = pgTable("moderation_actions", {
-	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	// The database gives the id (GENERATED ALWAYS); the app's role can't write it or created_at.
+	id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
 	actor_id: integer(),
 	target_type: text().notNull(),
 	target_id: bigint({ mode: "number" }).notNull(),

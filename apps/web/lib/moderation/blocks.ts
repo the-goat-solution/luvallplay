@@ -94,7 +94,9 @@ export async function block(db: Db, blockerId: number, publicId: unknown): Promi
 /**
  * Lifts the blocker's own block of the person with this public id. Always
  * the same answer, whether or not there was one: it says nothing about who
- * exists. The other person's block of the blocker, if any, stays.
+ * exists. The other person's block of the blocker, if any, stays. It only
+ * needs the person's profile row, not that the blocker can still see it: a
+ * suspended or out-of-sight person can be unblocked.
  */
 export async function unblock(db: Db, blockerId: number, publicId: unknown): Promise<Result<null, never>> {
   if (Number.isInteger(blockerId) && isPublicId(publicId)) {
@@ -106,11 +108,18 @@ export async function unblock(db: Db, blockerId: number, publicId: unknown): Pro
   return ok(null);
 }
 
-/** The people this person has blocked, newest first, by display name and public id (so each can be unblocked). */
+/**
+ * The people this person has blocked, newest first, by display name and
+ * public id (so each can be unblocked). A suspended or out-of-sight person is
+ * still listed; a deleted account is not. (Deleting an account removes its
+ * profile and its blocks both ways: lib/social/data-rights.ts, Task 6.)
+ */
 export async function listBlocked(db: Db, playerId: number): Promise<BlockedPerson[]> {
   const { rows } = await db.query(
     `SELECT sp.public_id, sp.display_name, b.created_at
-     FROM user_blocks b JOIN social_profiles sp ON sp.player_id = b.blocked_id
+     FROM user_blocks b
+     JOIN social_profiles sp ON sp.player_id = b.blocked_id
+     JOIN players p ON p.id = b.blocked_id AND p.deleted_at IS NULL
      WHERE b.blocker_id = $1 ORDER BY b.created_at DESC, sp.public_id LIMIT 500`,
     [playerId],
   );

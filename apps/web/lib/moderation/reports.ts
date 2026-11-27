@@ -165,8 +165,8 @@ export async function fileReport(db: Db, seal: ModerationSeal, input: ReportInpu
          ON CONFLICT (reporter_id, target_type, target_id) WHERE status = 'open' DO NOTHING
          RETURNING id
        ), kept AS (
-         INSERT INTO moderation_evidence (report_id, sealed, author_player_id, created_at)
-         SELECT report.id, $11::text, $12::int, $10::timestamptz FROM report WHERE $11::text IS NOT NULL
+         INSERT INTO moderation_evidence (report_id, sealed, author_player_id)
+         SELECT report.id, $11::text, $12::int FROM report WHERE $11::text IS NOT NULL
          RETURNING report_id
        )
        SELECT report.id, (SELECT count(*) FROM kept) AS kept FROM report`,

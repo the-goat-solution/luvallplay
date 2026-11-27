@@ -14,8 +14,8 @@
 -- social_club_bans    a club switches a person off in its own space.
 -- user_blocks         one person blocks another (shared with the Marketplace).
 -- player_suspensions  a moderator's decisions about a person. Insert only:
---                     a lift or a change is a new row and the latest row
---                     wins. The row names the account by id WITHOUT a foreign
+--                     a lift is a new row, and the database gives each row
+--                     its id and time. The row names the account by id WITHOUT a foreign
 --                     key, and keeps keyed indexes of the email and phone the
 --                     account had (never the values), so it stands when the
 --                     account is deleted and the same email or phone signing
@@ -153,12 +153,16 @@ CREATE TABLE user_blocks (
 CREATE INDEX user_blocks_blocked_id_idx ON user_blocks (blocked_id);
 --> statement-breakpoint
 CREATE TABLE player_suspensions (
-  id bigserial PRIMARY KEY,
+  -- Which row is later is told by id, so the database alone gives it out:
+  -- the app's role can't write this column, or created_at (grants below).
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   -- The account the decision was made about. No foreign key, on purpose: the
   -- row must stand whatever happens to the account (a foreign key to players
   -- would have to be RESTRICT, and would then tie the account's row to this one).
   player_id integer,
-  -- 'suspend', or 'unsuspend' for a lift. The latest row wins.
+  -- 'suspend', or 'unsuspend' for a lift. Every suspend row stands on its
+  -- own until a LATER unsuspend row for the same player_id covers it ('all'
+  -- lifts everything; 'social' or 'market' lifts rows of that scope only).
   action text DEFAULT 'suspend' NOT NULL,
   scope text NOT NULL,
   -- When a suspension ends. NULL: it doesn't.
@@ -166,9 +170,10 @@ CREATE TABLE player_suspensions (
   -- A short code (a report reason, 'appeal_upheld', ...). Never free text.
   reason_code text NOT NULL,
   -- Keyed indexes (CONTACT_INDEX_KEYS; purposes "suspension.email" and
-  -- "suspension.phone") of the email and phone the account had when the row
-  -- was written. NULL when it had none or no index key was set. index_kid
-  -- names the key: that key must stay listed for as long as the row should match.
+  -- "suspension.phone") of the email and the VERIFIED phone the account had
+  -- when the row was written. NULL when it had none or no index key was set.
+  -- index_kid names the key: that key must stay listed for as long as the
+  -- row should match. A lift never carries one: it is about an account only.
   email_index text,
   phone_index text,
   index_kid text,
@@ -183,7 +188,8 @@ CREATE TABLE player_suspensions (
   CONSTRAINT player_suspensions_phone_index_check CHECK (phone_index ~ '^[A-Za-z0-9_-]{43}$'),
   CONSTRAINT player_suspensions_index_kid_check CHECK ((index_kid IS NOT NULL) = (email_index IS NOT NULL OR phone_index IS NOT NULL)),
   CONSTRAINT player_suspensions_names_someone_check CHECK (player_id IS NOT NULL OR email_index IS NOT NULL OR phone_index IS NOT NULL),
-  CONSTRAINT player_suspensions_unsuspend_has_no_end_check CHECK (action <> 'unsuspend' OR until IS NULL)
+  CONSTRAINT player_suspensions_unsuspend_has_no_end_check CHECK (action <> 'unsuspend' OR until IS NULL),
+  CONSTRAINT player_suspensions_unsuspend_names_account_check CHECK (action <> 'unsuspend' OR (player_id IS NOT NULL AND email_index IS NULL AND phone_index IS NULL))
 );
 --> statement-breakpoint
 CREATE INDEX player_suspensions_player_idx ON player_suspensions (player_id, id DESC) WHERE player_id IS NOT NULL;
@@ -221,15 +227,19 @@ $fn$;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON social_profiles, social_follows, social_posts, social_comments, social_kudos, social_club_bans, user_blocks TO luvallplay_app;
 --> statement-breakpoint
-GRANT USAGE, SELECT ON SEQUENCE social_posts_id_seq, social_comments_id_seq, player_suspensions_id_seq TO luvallplay_app;
+GRANT USAGE, SELECT ON SEQUENCE social_posts_id_seq, social_comments_id_seq TO luvallplay_app;
 --> statement-breakpoint
 DO $$
 BEGIN
   -- New tables get every right by default (0007). Take back what must not
   -- happen: a suspension is written once and never changed or removed by the
   -- app. A lift or a change is a new row.
-  GRANT SELECT, INSERT ON player_suspensions TO luvallplay_app;
-  REVOKE UPDATE, DELETE ON player_suspensions FROM luvallplay_app;
+  -- Nor may it choose a row's id or time (rows are ordered by id): it may
+  -- write every column but those two.
+  REVOKE ALL ON player_suspensions FROM luvallplay_app;
+  REVOKE ALL ON SEQUENCE player_suspensions_id_seq FROM luvallplay_app;
+  GRANT SELECT ON player_suspensions TO luvallplay_app;
+  GRANT INSERT (player_id, action, scope, until, reason_code, email_index, phone_index, index_kid, created_by) ON player_suspensions TO luvallplay_app;
   -- A function can be run by anyone unless that is taken back. These two
   -- read across clubs, so only the app's role may call them.
   REVOKE ALL ON FUNCTION social_clubs_of(integer), shares_social_club(integer, integer) FROM PUBLIC;

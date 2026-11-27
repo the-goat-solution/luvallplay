@@ -77,7 +77,9 @@ CREATE INDEX content_reports_club_idx ON content_reports (club_id, status, due_a
 CREATE INDEX content_reports_target_idx ON content_reports (target_type, target_id);
 --> statement-breakpoint
 CREATE TABLE moderation_actions (
-  id bigserial PRIMARY KEY,
+  -- The database alone gives a row its id and its time: the app's role can't
+  -- write either column (grants below), so the record can't be back-dated.
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   -- The moderator's account id. NULL: the system (a deadline passed). No
   -- foreign key: the record stands whatever happens to that account.
   actor_id integer,
@@ -114,7 +116,7 @@ CREATE TABLE moderation_evidence (
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON content_reports TO luvallplay_app;
 --> statement-breakpoint
-GRANT USAGE, SELECT ON SEQUENCE content_reports_id_seq, moderation_actions_id_seq TO luvallplay_app;
+GRANT USAGE, SELECT ON SEQUENCE content_reports_id_seq TO luvallplay_app;
 --> statement-breakpoint
 DO $$
 BEGIN
@@ -123,6 +125,10 @@ BEGIN
   -- are written once and never changed or removed by the app. (Re-sealing
   -- the evidence after a key rotation is done by the database's owner, as
   -- migrations are.)
-  GRANT SELECT, INSERT ON moderation_actions, moderation_evidence TO luvallplay_app;
-  REVOKE UPDATE, DELETE ON moderation_actions, moderation_evidence FROM luvallplay_app;
+  -- Nor may it choose a row's id or time: it may write every column but those.
+  REVOKE ALL ON moderation_actions, moderation_evidence FROM luvallplay_app;
+  REVOKE ALL ON SEQUENCE moderation_actions_id_seq FROM luvallplay_app;
+  GRANT SELECT ON moderation_actions, moderation_evidence TO luvallplay_app;
+  GRANT INSERT (actor_id, target_type, target_id, action, reason, report_id) ON moderation_actions TO luvallplay_app;
+  GRANT INSERT (report_id, sealed, author_player_id) ON moderation_evidence TO luvallplay_app;
 END $$;

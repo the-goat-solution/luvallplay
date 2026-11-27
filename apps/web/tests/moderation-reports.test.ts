@@ -172,10 +172,21 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
       const appendOnly = r.t !== "content_reports";
       assert.deepEqual(
         { rls: r.rls, tenant_id: r.tenant_id, sel: r.sel, ins: r.ins, upd: r.upd, del: r.del, trunc: r.trunc },
-        { rls: false, tenant_id: false, sel: true, ins: true, upd: !appendOnly, del: !appendOnly, trunc: false },
+        { rls: false, tenant_id: false, sel: true, ins: !appendOnly, upd: !appendOnly, del: !appendOnly, trunc: false },
         r.t,
       );
     }
+    // The app's role adds to the two append-only tables column by column: never a row's id or its time.
+    const writable = await rows(
+      `SELECT c.relname AS t, array_agg(a.attname::text ORDER BY a.attname) AS cols FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+       WHERE c.relname IN ('moderation_actions', 'moderation_evidence') AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege('luvallplay_app', a.attrelid, a.attnum, 'INSERT')
+       GROUP BY 1 ORDER BY 1`,
+    );
+    assert.deepEqual(writable, [
+      { t: "moderation_actions", cols: ["action", "actor_id", "reason", "report_id", "target_id", "target_type"] },
+      { t: "moderation_evidence", cols: ["author_player_id", "report_id", "sealed"] },
+    ]);
+    assert.equal((await rows(`SELECT attidentity FROM pg_attribute WHERE attrelid = 'moderation_actions'::regclass AND attname = 'id'`))[0].attidentity, "a");
     // Keys to accounts: only the reporter's, and it is RESTRICT (tests/account-fks.test.ts).
     const fks = await rows(
       `SELECT conrelid::regclass::text AS t, conname, confrelid::regclass::text AS f, confdeltype FROM pg_constraint
@@ -581,6 +592,11 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
           `DELETE FROM moderation_evidence WHERE report_id = ${id}`,
           `TRUNCATE moderation_evidence`,
           `TRUNCATE content_reports CASCADE`,
+          // The record's own id and time are the database's: the app can't choose them, so it can't back-date or reorder what was done.
+          `INSERT INTO moderation_actions (id, target_type, target_id, action) OVERRIDING SYSTEM VALUE VALUES (1000000, 'profile', ${PETE}, 'restore')`,
+          `INSERT INTO moderation_actions (target_type, target_id, action, created_at) VALUES ('profile', ${PETE}, 'restore', '2020-01-01')`,
+          `INSERT INTO moderation_evidence (report_id, sealed, created_at) VALUES (${id}, 'v1.m1.aa.bb', '2020-01-01')`,
+          `SELECT setval('moderation_actions_id_seq', 1000000)`,
         ];
         // As the app's role itself, whatever this mode connects as.
         const app = new pg.Client({ connectionString: urlFor(NAME) });
@@ -591,6 +607,10 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
           // What it may do: read both, and add.
           assert.equal((await app.query(`SELECT count(*)::int AS n FROM moderation_actions`)).rows[0].n, 1);
           assert.equal((await app.query(`SELECT count(*)::int AS n FROM moderation_evidence`)).rows[0].n, 1);
+          await app.query(`INSERT INTO moderation_actions (actor_id, target_type, target_id, action, reason, report_id) VALUES ($1, 'profile', $2, 'restore', 'appeal_upheld', $3)`, [ADMIN, PETE, id]);
+          const [added] = (await app.query(`SELECT id, created_at FROM moderation_actions ORDER BY id DESC LIMIT 1`)).rows;
+          assert.ok(Number(added.id) < 1_000_000 && Math.abs(added.created_at.getTime() - Date.now()) < 60_000);
+          await rows(`DELETE FROM moderation_actions WHERE id = $1`, [added.id]);
         } finally {
           await app.end();
         }

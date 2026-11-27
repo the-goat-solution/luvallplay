@@ -12,7 +12,7 @@ import { SOCIAL_LIMITS } from "@luvallplay/core/social";
 import { migrate } from "../scripts/db/migrate.mjs";
 import { err, ok, type Result } from "../lib/moderation/result.ts";
 import { block, blockedEitherWay, listBlocked, notBlockedSql, unblock } from "../lib/moderation/blocks.ts";
-import { activeSuspension, notSuspendedSql, suspend, unsuspend } from "../lib/moderation/suspensions.ts";
+import { activeSuspension, carrySuspensions, notSuspendedSql, suspend, unsuspend } from "../lib/moderation/suspensions.ts";
 import { isPublicId, newPublicId } from "../lib/social/public-id.ts";
 import { loadVisibleProfile } from "../lib/social/visible.ts";
 
@@ -148,8 +148,16 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
     assert.deepEqual(found.map((r) => r.t), [...tables].sort());
     for (const r of found) {
       const appendOnly = r.t === "player_suspensions";
-      assert.deepEqual({ rls: r.rls, tenant_id: r.tenant_id, sel: r.sel, ins: r.ins, upd: r.upd, del: r.del }, { rls: false, tenant_id: false, sel: true, ins: true, upd: !appendOnly, del: !appendOnly }, r.t);
+      // No INSERT on the whole of player_suspensions: on its columns, all but two (below).
+      assert.deepEqual({ rls: r.rls, tenant_id: r.tenant_id, sel: r.sel, ins: r.ins, upd: r.upd, del: r.del }, { rls: false, tenant_id: false, sel: true, ins: !appendOnly, upd: !appendOnly, del: !appendOnly }, r.t);
     }
+    // A suspension's id and time are the database's: the app's role may write every other column and not those two.
+    const writable = await rows(
+      `SELECT a.attname AS c FROM pg_attribute a WHERE a.attrelid = 'player_suspensions'::regclass AND a.attnum > 0 AND NOT a.attisdropped
+         AND has_column_privilege('luvallplay_app', a.attrelid, a.attnum, 'INSERT') ORDER BY 1`,
+    );
+    assert.deepEqual(writable.map((r) => r.c), ["action", "created_by", "email_index", "index_kid", "phone_index", "player_id", "reason_code", "scope", "until"]);
+    assert.equal((await rows(`SELECT attidentity FROM pg_attribute WHERE attrelid = 'player_suspensions'::regclass AND attname = 'id'`))[0].attidentity, "a");
     // The report, action and evidence tables are migration 0023's: tests/moderation-reports.test.ts.
   });
 
@@ -373,6 +381,14 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
         assert.deepEqual(await rows(`SELECT blocker_id, blocked_id FROM user_blocks`), [{ blocker_id: PETE, blocked_id: MIA }], "Pete's own block of Mia stays");
         assert.equal(await blockedEitherWay(db, MIA, PETE), true);
         for (const id of [pid(PETE), pid(QUINN), newPublicId(), "nope", null]) assert.deepEqual(await unblock(db, MIA, id), { ok: true, value: null }, String(id));
+        // Someone who has since been suspended, or gone out of sight, can still be unblocked.
+        await block(db, MIA, pid(QUINN));
+        await block(db, SIONE, pid(LINH));
+        await suspend(db, { playerId: QUINN, scope: "all", until: null, reasonCode: "harassment", actorId: 1 }, {});
+        await socialOn(club2, false);
+        assert.deepEqual(await unblock(db, MIA, pid(QUINN)), { ok: true, value: null });
+        assert.deepEqual(await unblock(db, SIONE, pid(LINH)), { ok: true, value: null });
+        assert.deepEqual(await rows(`SELECT blocker_id, blocked_id FROM user_blocks`), [{ blocker_id: PETE, blocked_id: MIA }]);
         // Unblocking doesn't bring the follows back.
         assert.deepEqual(await follows(), []);
       });
@@ -448,9 +464,15 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
         // A blocked person who is suspended or out of sight is still listed, so the block can be lifted.
         await suspend(db, { playerId: PETE, scope: "all", until: null, reasonCode: "harassment", actorId: 1 }, {});
         assert.equal((await listBlocked(db, MIA)).length, 2);
+        // An account that has been deleted is not listed, whatever its profile row still says.
+        await profile(DELETED, "Renamed After Leaving", "everyone");
+        await admin.query(`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [MIA, DELETED]);
+        const after = await listBlocked(db, MIA);
+        assert.deepEqual(after.map((b) => b.displayName).sort(), ["Pete the Smash", "Quinn"]);
+        assert.ok(!JSON.stringify(after).includes(pid(DELETED)));
       });
 
-      test("the app's role can add a suspension and read it, and can't change or delete one", async () => {
+      test("the app's role can add a suspension and read it; it can't change or delete one, or choose a row's id or time", async () => {
         const made = await suspend(db, { playerId: MIA, scope: "social", until: null, reasonCode: "harassment", actorId: 1 }, {});
         assert.equal(made.ok, true);
         const app = new pg.Client({ connectionString: urlFor(NAME) });
@@ -462,6 +484,17 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
           await assert.rejects(app.query(`UPDATE player_suspensions SET action = 'unsuspend' WHERE player_id = $1`, [MIA]), /permission denied/);
           await assert.rejects(app.query(`DELETE FROM player_suspensions`), /permission denied for table player_suspensions/);
           await assert.rejects(app.query(`TRUNCATE player_suspensions`), /permission denied/);
+          // Which row is later is told by its id, so the app can't pick one (a lift dated after everything to come), nor the time.
+          const forged = [
+            `INSERT INTO player_suspensions (id, player_id, action, scope, reason_code) VALUES (9223372036854775807, ${MIA}, 'unsuspend', 'all', 'appeal_upheld')`,
+            `INSERT INTO player_suspensions (id, player_id, action, scope, reason_code) OVERRIDING SYSTEM VALUE VALUES (9223372036854775807, ${MIA}, 'unsuspend', 'all', 'appeal_upheld')`,
+            `INSERT INTO player_suspensions (id, player_id, scope, reason_code) OVERRIDING USER VALUE VALUES (5, ${MIA}, 'all', 'spam')`,
+            `INSERT INTO player_suspensions (player_id, scope, reason_code, created_at) VALUES (${MIA}, 'all', 'spam', '2020-01-01')`,
+            `INSERT INTO player_suspensions (player_id, scope, reason_code, created_at) VALUES (${MIA}, 'all', 'spam', DEFAULT)`,
+          ];
+          // (The first is refused even earlier, as it would be for the owner: the id is GENERATED ALWAYS.)
+          for (const statement of forged) await assert.rejects(app.query(statement), statement === forged[0] ? /non-DEFAULT value into column "id"|permission denied/ : /permission denied for table player_suspensions/, statement);
+          await assert.rejects(app.query(`SELECT setval('player_suspensions_id_seq', 1000000)`), /permission denied/);
           await app.query(`INSERT INTO player_suspensions (player_id, scope, reason_code) VALUES ($1, 'market', 'scam')`, [MIA]);
         } finally {
           await app.end();
@@ -469,8 +502,14 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
         if (mode === "enforce") {
           await assert.rejects(db.query(`UPDATE player_suspensions SET until = now()`), /permission denied/);
           await assert.rejects(db.query(`DELETE FROM player_suspensions`), /permission denied/);
+          await assert.rejects(db.query(`INSERT INTO player_suspensions (id, player_id, scope, reason_code) OVERRIDING SYSTEM VALUE VALUES (99, ${MIA}, 'all', 'spam')`), /permission denied/);
         }
-        assert.equal((await rows(`SELECT count(*)::int AS n FROM player_suspensions WHERE until IS NULL AND action = 'suspend'`))[0].n, 2);
+        const all = await rows(`SELECT id, action, until, created_at FROM player_suspensions ORDER BY id`);
+        assert.equal(all.length, 2);
+        assert.ok(all.every((r) => r.action === "suspend" && r.until === null && Math.abs(r.created_at.getTime() - Date.now()) < 60_000));
+        assert.ok(Number(all[1].id) > Number(all[0].id) && Number(all[1].id) < 1_000_000);
+        // Even the owner is told no unless it says it means to override.
+        await assert.rejects(admin.query(`INSERT INTO player_suspensions (id, player_id, scope, reason_code) VALUES (99, ${MIA}, 'all', 'spam')`), /non-DEFAULT value into column "id"/);
       });
 
       test("a suspension is for Social, the Marketplace, or both", async () => {
@@ -488,56 +527,114 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
         await assert.rejects(activeSuspension(db, { playerId: MIA }, "all" as never, {}), /scope/);
       });
 
-      test("the latest row wins: an end date that has passed, a later lift, a later suspension", async () => {
+      test("every suspension stands on its own: a later row that is shorter, ended, or for something else doesn't erase it", async () => {
+        const ended = (playerId: number, scope: string) => admin.query(`INSERT INTO player_suspensions (player_id, scope, until, reason_code) VALUES ($1, $2, now() - interval '1 minute', 'spam')`, [playerId, scope]);
         const soon = new Date(Date.now() + 7 * 86_400_000);
-        const week = await suspend(db, { playerId: MIA, scope: "social", until: soon, reasonCode: "spam", actorId: 1 }, {});
-        assert.equal((await activeSuspension(db, { playerId: MIA }, "social", {}))?.until, soon.toISOString());
-        // The same suspension seen after its end.
-        await admin.query(`INSERT INTO player_suspensions (player_id, scope, until, reason_code) VALUES ($1, 'social', now() - interval '1 minute', 'spam')`, [PETE]);
+        // A row whose end has passed closes nothing.
+        await ended(PETE, "social");
         assert.equal(await activeSuspension(db, { playerId: PETE }, "social", {}), null);
-        // A lift is a new row.
-        const lifted = await unsuspend(db, { playerId: MIA, scope: "social", reasonCode: "appeal_upheld", actorId: 2 }, {});
-        assert.equal(lifted.ok, true);
-        assert.equal(await activeSuspension(db, { playerId: MIA }, "social", {}), null);
+        // Suspended from everything for good; a Marketplace suspension that has since ended changes nothing.
+        const forGood = await suspend(db, { playerId: MIA, scope: "all", until: null, reasonCode: "harassment", actorId: 1 }, {});
+        await ended(MIA, "market");
+        assert.equal((await activeSuspension(db, { playerId: MIA }, "market", {}))?.id, forGood.ok && forGood.value.id);
+        assert.equal((await activeSuspension(db, { playerId: MIA }, "social", {}))?.reasonCode, "harassment");
+        // Banned from Social for good; an ended suspension from everything doesn't reopen it.
+        await suspend(db, { playerId: QUINN, scope: "social", until: null, reasonCode: "hate", actorId: 1 }, {});
+        await ended(QUINN, "all");
+        assert.equal((await activeSuspension(db, { playerId: QUINN }, "social", {}))?.reasonCode, "hate");
+        assert.equal(await activeSuspension(db, { playerId: QUINN }, "market", {}), null);
+        // A week's suspension written after a permanent one doesn't shorten it: the one that lasts longest is the answer.
+        await suspend(db, { playerId: QUINN, scope: "social", until: soon, reasonCode: "spam", actorId: 1 }, {});
+        assert.deepEqual([(await activeSuspension(db, { playerId: QUINN }, "social", {}))?.until, (await activeSuspension(db, { playerId: QUINN }, "social", {}))?.reasonCode], [null, "hate"]);
+        // On its own, a week's suspension says when it ends; of two with an end, the later end.
+        await suspend(db, { playerId: SIONE, scope: "social", until: soon, reasonCode: "spam", actorId: 1 }, {});
+        await suspend(db, { playerId: SIONE, scope: "all", until: new Date(Date.now() + 86_400_000), reasonCode: "scam", actorId: 1 }, {});
+        assert.equal((await activeSuspension(db, { playerId: SIONE }, "social", {}))?.until, soon.toISOString());
+        assert.equal((await activeSuspension(db, { playerId: SIONE }, "market", {}))?.reasonCode, "scam");
+      });
+
+      test("a suspension is lifted only by a later unsuspend for the same account that covers it", async () => {
+        const social = await suspend(db, { playerId: MIA, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
+        const lifted = await unsuspend(db, { playerId: MIA, scope: "social", reasonCode: "appeal_upheld", actorId: 2 }, KEYS);
+        assert.ok(social.ok && lifted.ok && lifted.value.id > social.value.id);
+        assert.equal(await activeSuspension(db, { playerId: MIA, email: "mia.member@golden.test" }, "social", KEYS), null);
+        // A lift is a new row, about the account only: it carries no index.
         assert.deepEqual(
-          await rows(`SELECT action, scope, reason_code, created_by, until IS NULL AS open FROM player_suspensions WHERE player_id = $1 ORDER BY id`, [MIA]),
+          await rows(`SELECT action, scope, reason_code, created_by, until IS NULL AS open, email_index IS NULL AND phone_index IS NULL AND index_kid IS NULL AS bare FROM player_suspensions WHERE player_id = $1 ORDER BY id`, [MIA]),
           [
-            { action: "suspend", scope: "social", reason_code: "spam", created_by: 1, open: false },
-            { action: "unsuspend", scope: "social", reason_code: "appeal_upheld", created_by: 2, open: true },
+            { action: "suspend", scope: "social", reason_code: "spam", created_by: 1, open: true, bare: false },
+            { action: "unsuspend", scope: "social", reason_code: "appeal_upheld", created_by: 2, open: true, bare: true },
           ],
         );
-        assert.ok(week.ok && lifted.ok && lifted.value.id > week.value.id);
-        // And a later suspension wins over the lift.
-        await suspend(db, { playerId: MIA, scope: "all", until: null, reasonCode: "harassment", actorId: 1 }, {});
-        assert.equal((await activeSuspension(db, { playerId: MIA }, "social", {}))?.reasonCode, "harassment");
-        // A lift for Social leaves the Marketplace closed by the earlier "all".
-        await unsuspend(db, { playerId: MIA, scope: "social", reasonCode: "appeal_upheld", actorId: 2 }, {});
-        assert.equal(await activeSuspension(db, { playerId: MIA }, "social", {}), null);
-        assert.equal((await activeSuspension(db, { playerId: MIA }, "market", {}))?.reasonCode, "harassment");
-        // A lift for everything opens both.
-        await unsuspend(db, { playerId: MIA, scope: "all", reasonCode: "appeal_upheld", actorId: 2 }, {});
-        assert.equal(await activeSuspension(db, { playerId: MIA }, "market", {}), null);
-        // A shorter suspension written later replaces a permanent one (the moderator's newer decision).
-        await suspend(db, { playerId: QUINN, scope: "social", until: null, reasonCode: "harassment", actorId: 1 }, {});
-        await suspend(db, { playerId: QUINN, scope: "social", until: soon, reasonCode: "harassment", actorId: 1 }, {});
-        assert.equal((await activeSuspension(db, { playerId: QUINN }, "social", {}))?.until, soon.toISOString());
+        // A suspension written after the lift counts again: the lift only reaches back.
+        await suspend(db, { playerId: MIA, scope: "all", until: null, reasonCode: "harassment", actorId: 1 }, KEYS);
+        assert.equal((await activeSuspension(db, { playerId: MIA }, "social", KEYS))?.reasonCode, "harassment");
+        // A lift for Social doesn't narrow a suspension from everything: only a lift of everything ends that one.
+        await unsuspend(db, { playerId: MIA, scope: "social", reasonCode: "appeal_upheld", actorId: 2 }, KEYS);
+        assert.equal((await activeSuspension(db, { playerId: MIA }, "social", KEYS))?.reasonCode, "harassment");
+        assert.equal((await activeSuspension(db, { playerId: MIA }, "market", KEYS))?.reasonCode, "harassment");
+        await unsuspend(db, { playerId: MIA, scope: "market", reasonCode: "appeal_upheld", actorId: 2 }, KEYS);
+        assert.equal((await activeSuspension(db, { playerId: MIA }, "market", KEYS))?.reasonCode, "harassment");
+        await unsuspend(db, { playerId: MIA, scope: "all", reasonCode: "appeal_upheld", actorId: 2 }, KEYS);
+        assert.equal(await activeSuspension(db, { playerId: MIA }, "social", KEYS), null);
+        assert.equal(await activeSuspension(db, { playerId: MIA }, "market", KEYS), null);
+        // A lift of everything ends the narrower ones too; a lift of one thing leaves the other.
+        await suspend(db, { playerId: PETE, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
+        await suspend(db, { playerId: PETE, scope: "market", until: null, reasonCode: "scam", actorId: 1 }, KEYS);
+        await unsuspend(db, { playerId: PETE, scope: "social", reasonCode: "appeal_upheld", actorId: 2 }, KEYS);
+        assert.equal(await activeSuspension(db, { playerId: PETE }, "social", KEYS), null);
+        assert.equal((await activeSuspension(db, { playerId: PETE }, "market", KEYS))?.reasonCode, "scam");
+        await unsuspend(db, { playerId: PETE, scope: "all", reasonCode: "appeal_upheld", actorId: 2 }, KEYS);
+        assert.equal(await activeSuspension(db, { playerId: PETE }, "market", KEYS), null);
+        // Someone else's lift is not this person's.
+        await suspend(db, { playerId: QUINN, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
+        await unsuspend(db, { playerId: SIONE, scope: "all", reasonCode: "appeal_upheld", actorId: 2 }, KEYS);
+        assert.equal((await activeSuspension(db, { playerId: QUINN }, "social", KEYS))?.reasonCode, "spam");
+        // The database refuses a lift that carries an index, whoever writes it.
+        await assert.rejects(
+          admin.query(`INSERT INTO player_suspensions (player_id, action, scope, reason_code, email_index, index_kid) VALUES ($1, 'unsuspend', 'all', 'appeal_upheld', $2, 'i1')`, [QUINN, "a".repeat(43)]),
+          /player_suspensions_unsuspend_names_account_check/,
+        );
+        await assert.rejects(admin.query(`INSERT INTO player_suspensions (action, scope, reason_code) VALUES ('unsuspend', 'all', 'appeal_upheld')`), /player_suspensions_(unsuspend_names_account|names_someone)_check/);
+      });
+
+      test("a suspended email or phone isn't washed clean by a newer ended or lifted row that carries the same index", async () => {
+        const made = await suspend(db, { playerId: RUA, scope: "social", until: null, reasonCode: "harassment", actorId: 1 }, KEYS);
+        const [row] = await rows(`SELECT email_index, phone_index FROM player_suspensions WHERE id = $1`, [made.ok && made.value.id]);
+        // Another account's rows, newer, with the same phone index: one that has ended, and that account's lift of everything.
+        await admin.query(`INSERT INTO player_suspensions (player_id, scope, until, reason_code, phone_index, index_kid) VALUES ($1, 'social', now() - interval '1 day', 'spam', $2, 'i1')`, [PETE, row.phone_index]);
+        await admin.query(`INSERT INTO player_suspensions (player_id, scope, until, reason_code, email_index, index_kid) VALUES ($1, 'all', now() - interval '1 day', 'spam', $2, 'i1')`, [PETE, row.email_index]);
+        await unsuspend(db, { playerId: PETE, scope: "all", reasonCode: "appeal_upheld", actorId: 1 }, {});
+        assert.equal((await activeSuspension(db, { phone: "+64215550006" }, "social", KEYS))?.reasonCode, "harassment");
+        assert.equal((await activeSuspension(db, { email: "player6@golden.test" }, "social", KEYS))?.reasonCode, "harassment");
+        assert.equal((await activeSuspension(db, { playerId: RUA }, "social", KEYS))?.reasonCode, "harassment");
+        // And an account with an old, ended suspension of its own is still caught by the suspended email it turns up with.
+        assert.equal((await activeSuspension(db, { playerId: PETE, email: "player6@golden.test" }, "social", KEYS))?.reasonCode, "harassment");
+        assert.equal(await activeSuspension(db, { playerId: PETE, email: "player4@golden.test" }, "social", KEYS), null);
       });
 
       test("what a suspension refuses: nobody, a past end date, a reason that isn't a code", async () => {
         const past = new Date(Date.now() - 1000);
         assert.deepEqual(await suspend(db, { playerId: 999999, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, {}), NOT_FOUND);
         assert.deepEqual(await unsuspend(db, { playerId: 999999, scope: "social", reasonCode: "spam", actorId: 1 }, {}), NOT_FOUND);
+        assert.deepEqual(await carrySuspensions(db, 999999, {}), NOT_FOUND);
         assert.deepEqual(await suspend(db, { playerId: MIA, scope: "social", until: past, reasonCode: "spam", actorId: 1 }, {}), { ok: false, code: "invalid" });
         assert.deepEqual(await suspend(db, { playerId: MIA, scope: "social", until: new Date("nope"), reasonCode: "spam", actorId: 1 }, {}), { ok: false, code: "invalid" });
         assert.deepEqual(await suspend(db, { playerId: MIA, scope: "social", until: null, reasonCode: "Was rude to Pete", actorId: 1 }, {}), { ok: false, code: "invalid" });
         assert.deepEqual(await suspend(db, { playerId: MIA, scope: "club" as never, until: null, reasonCode: "spam", actorId: 1 }, {}), { ok: false, code: "invalid" });
+        assert.deepEqual(await unsuspend(db, { playerId: MIA, scope: "club" as never, reasonCode: "spam", actorId: 1 }, {}), { ok: false, code: "invalid" });
         assert.deepEqual(await rows(`SELECT 1 FROM player_suspensions`), []);
         // A malformed key list is an error, never a quiet "no index".
-        await assert.rejects(suspend(db, { playerId: MIA, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, { CONTACT_INDEX_KEYS: "i1:too-short" }), /32 bytes/);
+        for (const call of [
+          () => suspend(db, { playerId: MIA, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, { CONTACT_INDEX_KEYS: "i1:too-short" }),
+          () => unsuspend(db, { playerId: MIA, scope: "social", reasonCode: "spam", actorId: 1 }, { CONTACT_INDEX_KEYS: "i1:too-short" }),
+          () => carrySuspensions(db, MIA, { CONTACT_INDEX_KEYS: "i1:too-short" }),
+          () => activeSuspension(db, { playerId: MIA, email: "mia.member@golden.test" }, "social", { CONTACT_INDEX_KEYS: "i1:too-short" }),
+        ]) await assert.rejects(call(), /32 bytes/);
         assert.deepEqual(await rows(`SELECT 1 FROM player_suspensions`), []);
       });
 
-      test("with no index key the row is still written, with no index; with one, the email and phone are kept only as indexes", async () => {
+      test("with no index key the row is still written, with no index; with one, the email and the verified phone are kept only as indexes", async () => {
         await suspend(db, { playerId: RUA, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, {});
         assert.deepEqual(await rows(`SELECT player_id, email_index, phone_index, index_kid FROM player_suspensions`), [{ player_id: RUA, email_index: null, phone_index: null, index_kid: null }]);
         assert.equal((await activeSuspension(db, { playerId: RUA, email: "player6@golden.test", phone: "+64215550006" }, "social", {}))?.reasonCode, "spam");
@@ -552,13 +649,46 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
         assert.equal(row.index_kid, "i1");
         const text = JSON.stringify(row);
         for (const secret of ["player6", "golden.test", "5550006", "Rua", "Golden"]) assert.ok(!text.includes(secret), secret);
-        // Someone with no phone number: an email index only.
-        await suspend(db, { playerId: PETE, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
-        const [pete] = await rows(`SELECT email_index, phone_index, index_kid FROM player_suspensions WHERE player_id = $1`, [PETE]);
-        assert.ok(pete.email_index && pete.phone_index === null && pete.index_kid === "i1");
+        // Someone with no phone number, and someone whose number was never verified (Mia): an email index only.
+        for (const id of [PETE, MIA]) {
+          await suspend(db, { playerId: id, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
+          const [r] = await rows(`SELECT email_index, phone_index, index_kid FROM player_suspensions WHERE player_id = $1`, [id]);
+          assert.ok(r.email_index && r.phone_index === null && r.index_kid === "i1", String(id));
+        }
+        assert.deepEqual((await rows(`SELECT phone_e164, phone_verified_at FROM players WHERE id = $1`, [MIA]))[0], { phone_e164: "+64215550003", phone_verified_at: null });
         // The suspension index is its own purpose: it is not the players.phone_index of the same number.
         const { phoneSealing } = await import("../lib/pii/contact.ts");
         assert.notEqual(row.phone_index, phoneSealing({ ...KEYS, CONTACT_KEKS: `c1:${key()}` }).currentIndex("+64215550006").index);
+      });
+
+      test("only a verified phone number counts: typing someone's number in gets nobody suspended, and gets nobody off", async () => {
+        const VICTIM = 12; // seed: +64215550012, verified
+        assert.ok((await rows(`SELECT phone_verified_at FROM players WHERE id = $1 AND phone_e164 = '+64215550012'`, [VICTIM]))[0].phone_verified_at);
+        try {
+          // A troll types the victim's number into their own profile (never verified) and gets suspended.
+          await admin.query(`UPDATE players SET phone = '+64215550012', phone_e164 = '+64215550012', phone_verified_at = NULL WHERE id = $1`, [PETE]);
+          await suspend(db, { playerId: PETE, scope: "all", until: null, reasonCode: "harassment", actorId: 1 }, KEYS);
+          assert.equal((await rows(`SELECT phone_index FROM player_suspensions WHERE player_id = $1`, [PETE]))[0].phone_index, null);
+          assert.equal(await activeSuspension(db, { playerId: VICTIM, email: "player12@golden.test", phone: "+64215550012" }, "social", KEYS), null, "the victim is not suspended");
+          assert.equal(await activeSuspension(db, { phone: "+64215550012" }, "social", KEYS), null);
+          assert.equal((await activeSuspension(db, { playerId: PETE, email: "player4@golden.test", phone: "+64215550012" }, "social", KEYS))?.reasonCode, "harassment");
+
+          // The other way round: Rua (verified +64215550006) is suspended. An account that only typed that number in doesn't match by it.
+          await admin.query(`TRUNCATE player_suspensions`);
+          await suspend(db, { playerId: RUA, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
+          await admin.query(`UPDATE players SET phone = '+64215550006', phone_e164 = '+64215550006', phone_verified_at = NULL WHERE id = $1`, [PETE]);
+          assert.equal(await activeSuspension(db, { playerId: PETE, email: "player4@golden.test", phone: "+64215550006" }, "social", KEYS), null, "a number this account hasn't proved is its own");
+          assert.equal(await activeSuspension(db, { playerId: PETE, email: "player4@golden.test", phone: "+64215559999" }, "social", KEYS), null, "nor a number that isn't the account's at all");
+          // Once that account has verified the number (Rua's own account has let it go), it is the suspended number's holder.
+          await admin.query(`UPDATE players SET phone = NULL, phone_e164 = NULL, phone_verified_at = NULL WHERE id = $1`, [RUA]);
+          await admin.query(`UPDATE players SET phone_verified_at = now() WHERE id = $1`, [PETE]);
+          assert.equal((await activeSuspension(db, { playerId: PETE, email: "player4@golden.test", phone: "021 555 0006" }, "social", KEYS))?.reasonCode, "spam");
+          // With no account named (a number just proved by its code at sign-up), the caller vouches for it.
+          assert.equal((await activeSuspension(db, { phone: "+64215550006" }, "social", KEYS))?.reasonCode, "spam");
+        } finally {
+          await admin.query(`UPDATE players SET phone = NULL, phone_e164 = NULL, phone_verified_at = NULL WHERE id = $1`, [PETE]);
+          await admin.query(`UPDATE players SET phone = '021 555 0006', phone_e164 = '+64215550006', phone_verified_at = now() - interval '30 days' WHERE id = $1`, [RUA]);
+        }
       });
 
       test("Review Focus 7: a suspension outlives the account, and the same email or phone is still suspended", async () => {
@@ -574,12 +704,15 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
           const gone = (await rows(`SELECT email, phone_e164, deleted_at IS NOT NULL AS deleted FROM players WHERE id = $1`, [RUA]))[0];
           assert.deepEqual(gone, { email: `deleted-${RUA}@deleted.invalid`, phone_e164: null, deleted: true });
           assert.equal((await rows(`SELECT count(*)::int AS n FROM player_suspensions`))[0].n, 1, "the row is still there");
+          assert.equal((await activeSuspension(db, { playerId: RUA }, "social", KEYS))?.reasonCode, "harassment");
 
-          // They sign up again: a new account, the same email, or only the same phone, however it is typed.
+          // They sign up again: a new account, the same email, or only the same phone (verified again), however it is typed.
           const [again] = await rows(`INSERT INTO players (email, first_name, last_name) VALUES ('player6@golden.test', 'Rua', 'Again') RETURNING id`);
           const id = Number(again.id);
           assert.equal((await activeSuspension(db, { playerId: id, email: "player6@golden.test" }, "social", KEYS))?.reasonCode, "harassment");
           assert.equal((await activeSuspension(db, { playerId: id, email: "  Player6@Golden.TEST " }, "social", KEYS))?.reasonCode, "harassment");
+          assert.equal(await activeSuspension(db, { playerId: id, email: "new.address@golden.test", phone: "021 555 0006" }, "social", KEYS), null, "the number isn't this account's yet");
+          await admin.query(`UPDATE players SET phone_e164 = '+64215550006', phone_verified_at = now() WHERE id = $1`, [id]);
           assert.equal((await activeSuspension(db, { playerId: id, email: "new.address@golden.test", phone: "021 555 0006" }, "social", KEYS))?.reasonCode, "harassment");
           assert.equal((await activeSuspension(db, { playerId: id, phone: "+64215550006" }, "social", KEYS))?.id, made.ok && made.value.id);
           assert.equal(await activeSuspension(db, { playerId: id, email: "new.address@golden.test", phone: "021 555 9999" }, "social", KEYS), null, "another email and phone");
@@ -593,61 +726,120 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
           assert.equal((await activeSuspension(db, { playerId: id, email: "player6@golden.test" }, "social", rotated))?.reasonCode, "harassment");
           assert.equal((await activeSuspension(db, { playerId: id, phone: "+64215550006" }, "social", rotated))?.reasonCode, "harassment");
 
-          // A moderator lifts it for the new account: that decision is about this account and is newer, so it wins.
-          await admin.query(`UPDATE players SET phone_e164 = '+64215550006' WHERE id = $1`, [id]);
-          assert.equal((await unsuspend(db, { playerId: id, scope: "social", reasonCode: "appeal_upheld", actorId: 1 }, rotated)).ok, true);
+          // A moderator lifts it for the new account. The lift is written for the account the suspension names
+          // too (the deleted one), which is the only thing that ends that row.
+          const lifted = await unsuspend(db, { playerId: id, scope: "social", reasonCode: "appeal_upheld", actorId: 1 }, rotated);
+          assert.equal(lifted.ok, true);
+          assert.deepEqual(
+            (await rows(`SELECT player_id, email_index IS NULL AND phone_index IS NULL AS bare FROM player_suspensions WHERE action = 'unsuspend' ORDER BY player_id`)),
+            [{ player_id: RUA, bare: true }, { player_id: id, bare: true }].sort((a, b) => a.player_id - b.player_id),
+          );
+          assert.equal((await rows(`SELECT player_id FROM player_suspensions WHERE id = $1`, [lifted.ok && lifted.value.id]))[0].player_id, id, "the id returned is this account's row");
           assert.equal(await activeSuspension(db, { playerId: id, email: "player6@golden.test", phone: "+64215550006" }, "social", rotated), null);
-          assert.equal((await rows(`SELECT index_kid FROM player_suspensions ORDER BY id DESC LIMIT 1`))[0].index_kid, "i2");
-          // The lift carries the number's index too, so it holds for that number whoever shows it next.
-          assert.equal(await activeSuspension(db, { playerId: 999998, phone: "+64215550006" }, "social", rotated), null);
+          assert.equal(await activeSuspension(db, { playerId: RUA }, "social", rotated), null);
+          assert.equal(await activeSuspension(db, { phone: "+64215550006" }, "social", rotated), null);
 
           // The row also survives the account's row itself being removed. (An account nothing else points at.)
-          const [fresh] = await rows(`INSERT INTO players (email, first_name, last_name, phone_e164) VALUES ('fresh.start@nowhere.test', 'Fresh', 'Start', '+64215557777') RETURNING id`);
+          const [fresh] = await rows(`INSERT INTO players (email, first_name, last_name, phone_e164, phone_verified_at) VALUES ('fresh.start@nowhere.test', 'Fresh', 'Start', '+64215557777', now()) RETURNING id`);
           const freshId = Number(fresh.id);
           await suspend(db, { playerId: freshId, scope: "all", until: null, reasonCode: "harassment", actorId: 1 }, rotated);
           await db.query(`DELETE FROM players WHERE id = $1`, [freshId]);
           assert.deepEqual(await rows(`SELECT 1 FROM players WHERE id = $1`, [freshId]), []);
           assert.equal((await rows(`SELECT count(*)::int AS n FROM player_suspensions WHERE player_id = $1`, [freshId]))[0].n, 1);
+          assert.equal((await rows(`SELECT index_kid FROM player_suspensions WHERE player_id = $1`, [freshId]))[0].index_kid, "i2");
           assert.equal((await activeSuspension(db, { email: "fresh.start@nowhere.test" }, "social", rotated))?.scope, "all");
           assert.equal((await activeSuspension(db, { phone: "+64215557777" }, "market", rotated))?.scope, "all");
           assert.equal((await activeSuspension(db, { playerId: freshId }, "market", rotated))?.scope, "all");
         } finally {
           // Put the fixture back for the next mode: the second account steps aside, Rua's own returns.
-          await admin.query(`UPDATE players SET email = 'again-' || id || '@nowhere.test', phone_e164 = NULL, deleted_at = now() WHERE email = 'player6@golden.test' AND id <> $1`, [RUA]);
-          await admin.query(`UPDATE players SET deleted_at = NULL, email = 'player6@golden.test', phone = '021 555 0006', phone_e164 = '+64215550006', first_name = 'Rua', last_name = 'Golden6' WHERE id = $1`, [RUA]);
+          await admin.query(`UPDATE players SET email = 'again-' || id || '@nowhere.test', phone_e164 = NULL, phone_verified_at = NULL, deleted_at = now() WHERE email = 'player6@golden.test' AND id <> $1`, [RUA]);
+          await admin.query(`UPDATE players SET deleted_at = NULL, email = 'player6@golden.test', phone = '021 555 0006', phone_e164 = '+64215550006', phone_verified_at = now() - interval '30 days', first_name = 'Rua', last_name = 'Golden6' WHERE id = $1`, [RUA]);
           await admin.query(`INSERT INTO player_sessions (player_id, token_hash, user_agent, expires_at) VALUES ($1, md5('golden-session-again-' || $2), 'golden', now() + interval '60 days')`, [RUA, mode]);
         }
       });
 
-      test("a decision about this account beats an older one about its email or phone, not a newer one", async () => {
-        // Rua is suspended; Pete's account, once suspended for a week and long since free, takes Rua's phone number.
-        await admin.query(`INSERT INTO player_suspensions (player_id, scope, until, reason_code) VALUES ($1, 'social', now() - interval '1 day', 'spam')`, [PETE]);
-        await suspend(db, { playerId: RUA, scope: "social", until: null, reasonCode: "harassment", actorId: 1 }, KEYS);
-        assert.equal((await activeSuspension(db, { playerId: PETE, email: "player4@golden.test", phone: "+64215550006" }, "social", KEYS))?.reasonCode, "harassment", "the newer suspension of that number counts");
-        // A friend's number with an old, ended suspension doesn't wash a suspended email clean.
-        await admin.query(`TRUNCATE player_suspensions`);
-        await suspend(db, { playerId: MIA, scope: "social", until: null, reasonCode: "harassment", actorId: 1 }, KEYS);
-        await suspend(db, { playerId: RUA, scope: "social", until: new Date(Date.now() + 60_000), reasonCode: "spam", actorId: 1 }, KEYS);
-        await unsuspend(db, { playerId: RUA, scope: "social", reasonCode: "appeal_upheld", actorId: 1 }, KEYS);
-        assert.equal((await activeSuspension(db, { playerId: 999997, email: "mia.member@golden.test", phone: "+64215550006" }, "social", KEYS))?.reasonCode, "harassment");
-        assert.equal(await activeSuspension(db, { playerId: 999997, email: "someone.else@golden.test", phone: "+64215550006" }, "social", KEYS), null);
+      test("Review Focus 7, the long way round: a new email and phone before deleting; the suspension is carried over to them", async () => {
+        const { deletePlayerAccount } = await import("../lib/player-db.ts");
+        const week = new Date(Date.now() + 7 * 86_400_000);
+        await suspend(db, { playerId: RUA, scope: "social", until: null, reasonCode: "harassment", actorId: 2 }, KEYS);
+        await suspend(db, { playerId: RUA, scope: "market", until: week, reasonCode: "scam", actorId: 1 }, KEYS);
+        // Not carried: one already lifted, one already over.
+        await suspend(db, { playerId: RUA, scope: "market", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
+        await unsuspend(db, { playerId: RUA, scope: "market", reasonCode: "appeal_upheld", actorId: 1 }, KEYS);
+        await suspend(db, { playerId: RUA, scope: "market", until: week, reasonCode: "scam", actorId: 1 }, KEYS);
+        await admin.query(`INSERT INTO player_suspensions (player_id, scope, until, reason_code) VALUES ($1, 'all', now() - interval '1 minute', 'hate')`, [RUA]);
+        try {
+          // Nothing to carry while the email and phone are the ones on the rows.
+          assert.deepEqual(await carrySuspensions(db, RUA, KEYS), { ok: true, value: { carried: 0 } });
+          // They change both, then would delete the account and come back with the new ones.
+          await admin.query(`UPDATE players SET email = 'rua.new@nowhere.test', phone = '+64215558888', phone_e164 = '+64215558888', phone_verified_at = now() WHERE id = $1`, [RUA]);
+          assert.equal(await activeSuspension(db, { email: "rua.new@nowhere.test" }, "social", KEYS), null, "the hole: the rows only know the old email and phone");
+          assert.equal(await activeSuspension(db, { phone: "+64215558888" }, "social", KEYS), null);
+          // Without a key there is nothing to write.
+          assert.deepEqual(await carrySuspensions(db, RUA, {}), { ok: true, value: { carried: 0 } });
+          const count = async () => (await rows(`SELECT count(*)::int AS n FROM player_suspensions`))[0].n;
+          const was = await count();
+          assert.deepEqual(await carrySuspensions(db, RUA, KEYS), { ok: true, value: { carried: 2 } });
+          assert.equal(await count(), was + 2);
+          assert.deepEqual(await carrySuspensions(db, RUA, KEYS), { ok: true, value: { carried: 0 } }, "again: nothing new");
+          assert.equal(await count(), was + 2);
+          const carried = await rows(`SELECT player_id, action, scope, until, reason_code, created_by, index_kid, email_index, phone_index FROM player_suspensions ORDER BY id DESC LIMIT 2`);
+          assert.deepEqual(
+            carried.map((r) => [r.player_id, r.action, r.scope, r.until?.toISOString() ?? null, r.reason_code, r.created_by, r.index_kid]).sort(),
+            [[RUA, "suspend", "market", week.toISOString(), "scam", 1, "i1"], [RUA, "suspend", "social", null, "harassment", 2, "i1"]].sort(),
+          );
+          assert.ok(carried.every((r) => /^[A-Za-z0-9_-]{43}$/.test(r.email_index) && /^[A-Za-z0-9_-]{43}$/.test(r.phone_index)));
+
+          await deletePlayerAccount(RUA);
+          const [again] = await rows(`INSERT INTO players (email, first_name, last_name) VALUES ('rua.new@nowhere.test', 'Rua', 'Again') RETURNING id`);
+          const id = Number(again.id);
+          assert.deepEqual(await activeSuspension(db, { playerId: id, email: "rua.new@nowhere.test" }, "social", KEYS).then((s) => [s?.reasonCode, s?.until]), ["harassment", null]);
+          assert.deepEqual(await activeSuspension(db, { playerId: id, email: "rua.new@nowhere.test" }, "market", KEYS).then((s) => [s?.reasonCode, s?.until]), ["scam", week.toISOString()]);
+          await admin.query(`UPDATE players SET email = 'third.address@nowhere.test', phone_e164 = '+64215558888', phone_verified_at = now() WHERE id = $1`, [id]);
+          assert.equal((await activeSuspension(db, { playerId: id, email: "third.address@nowhere.test", phone: "+64215558888" }, "social", KEYS))?.reasonCode, "harassment", "by the new phone alone");
+          // The old email and phone are still suspended too.
+          assert.equal((await activeSuspension(db, { email: "player6@golden.test" }, "social", KEYS))?.reasonCode, "harassment");
+          assert.equal((await activeSuspension(db, { phone: "+64215550006" }, "social", KEYS))?.reasonCode, "harassment");
+          // An account caught by an earlier account's suspension carries it on to its own new email as well.
+          assert.deepEqual(await carrySuspensions(db, id, KEYS), { ok: true, value: { carried: 2 } });
+          assert.equal((await activeSuspension(db, { email: "third.address@nowhere.test" }, "social", KEYS))?.reasonCode, "harassment");
+          // One lift for the person in front of the moderator ends the rows of every account it came through.
+          await unsuspend(db, { playerId: id, scope: "all", reasonCode: "appeal_upheld", actorId: 1 }, KEYS);
+          for (const who of [{ playerId: id, email: "third.address@nowhere.test", phone: "+64215558888" }, { playerId: RUA }, { email: "rua.new@nowhere.test" }, { email: "third.address@nowhere.test" }]) {
+            assert.equal(await activeSuspension(db, who, "social", KEYS), null, JSON.stringify(who));
+            assert.equal(await activeSuspension(db, who, "market", KEYS), null, JSON.stringify(who));
+          }
+        } finally {
+          await admin.query(`UPDATE players SET email = 'again-' || id || '@nowhere.test', phone_e164 = NULL, phone_verified_at = NULL, deleted_at = now() WHERE email IN ('rua.new@nowhere.test', 'third.address@nowhere.test') AND id <> $1`, [RUA]);
+          await admin.query(`UPDATE players SET deleted_at = NULL, email = 'player6@golden.test', phone = '021 555 0006', phone_e164 = '+64215550006', phone_verified_at = now() - interval '30 days', first_name = 'Rua', last_name = 'Golden6' WHERE id = $1`, [RUA]);
+          await admin.query(`INSERT INTO player_sessions (player_id, token_hash, user_agent, expires_at) VALUES ($1, md5('golden-session-carry-' || $2), 'golden', now() + interval '60 days')`, [RUA, mode]);
+        }
       });
 
       test("the SQL fragment for feeds agrees with activeSuspension, by account", async () => {
+        const ended = (playerId: number, scope: string) => admin.query(`INSERT INTO player_suspensions (player_id, scope, until, reason_code) VALUES ($1, $2, now() - interval '1 minute', 'spam')`, [playerId, scope]);
         await suspend(db, { playerId: MIA, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, {});
+        await ended(MIA, "all");
         await suspend(db, { playerId: PETE, scope: "market", until: null, reasonCode: "scam", actorId: 1 }, {});
         await suspend(db, { playerId: QUINN, scope: "all", until: null, reasonCode: "spam", actorId: 1 }, {});
+        await unsuspend(db, { playerId: QUINN, scope: "social", reasonCode: "appeal_upheld", actorId: 1 }, {});
+        await ended(QUINN, "market");
         await suspend(db, { playerId: SIONE, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, {});
         await unsuspend(db, { playerId: SIONE, scope: "social", reasonCode: "appeal_upheld", actorId: 1 }, {});
-        await admin.query(`INSERT INTO player_suspensions (player_id, scope, until, reason_code) VALUES ($1, 'social', now() - interval '1 minute', 'spam')`, [LINH]);
+        await ended(LINH, "social");
+        await suspend(db, { playerId: NAM, scope: "all", until: new Date(Date.now() + 60_000), reasonCode: "spam", actorId: 1 }, {});
+        await unsuspend(db, { playerId: NAM, scope: "all", reasonCode: "appeal_upheld", actorId: 1 }, {});
+        await suspend(db, { playerId: NAM, scope: "market", until: new Date(Date.now() + 60_000), reasonCode: "spam", actorId: 1 }, {});
         const everyone = [MIA, PETE, QUINN, SIONE, LINH, NAM];
+        const suspended: Record<string, number[]> = { social: [MIA, QUINN], market: [PETE, QUINN, NAM] };
         for (const scope of ["social", "market"] as const) {
           const free = (await db.query(`SELECT sp.player_id FROM social_profiles sp WHERE ${notSuspendedSql("sp.player_id", scope)} ORDER BY 1`)).rows.map((r) => r.player_id);
           const expected: number[] = [];
           for (const id of everyone) if (!(await activeSuspension(db, { playerId: id }, scope, {}))) expected.push(id);
           assert.deepEqual(free, expected.sort((a, b) => a - b), scope);
+          assert.deepEqual(free, everyone.filter((id) => !suspended[scope].includes(id)).sort((a, b) => a - b), scope);
+          assert.deepEqual((await db.query(`SELECT sp.player_id FROM social_profiles sp WHERE NOT (${notSuspendedSql("sp.player_id", scope)}) ORDER BY 1`)).rows.map((r) => r.player_id), [...suspended[scope]].sort((a, b) => a - b), scope);
         }
-        assert.deepEqual((await db.query(`SELECT sp.player_id FROM social_profiles sp WHERE NOT (${notSuspendedSql("sp.player_id", "social")}) ORDER BY 1`)).rows.map((r) => r.player_id), [MIA, QUINN]);
       });
     });
   }

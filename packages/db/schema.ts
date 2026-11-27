@@ -1845,3 +1845,154 @@ export const usage_counters = pgTable("usage_counters", {
 	check("usage_counters_period_check", sql`EXTRACT(day FROM period) = 1`),
 	check("usage_counters_quantity_check", sql`quantity >= 0`),
 ]);
+
+// ── Social and moderation (lane S; migration 0022). Platform-wide: no
+// tenant_id and no row-level security. A row in one club's space says so in
+// club_id. ──
+
+// A person's opt-in social profile. public_id is what other people see.
+export const social_profiles = pgTable("social_profiles", {
+	player_id: integer().primaryKey().notNull(),
+	public_id: text().notNull(),
+	display_name: text().notNull(),
+	bio: text(),
+	visibility: text().default('club').notNull(),
+	adult_confirmed_at: timestamp({ withTimezone: true, mode: 'string' }).notNull(),
+	rules_version: text().notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updated_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.player_id], foreignColumns: [players.id], name: "social_profiles_player_id_fkey" }).onDelete("restrict"),
+	unique("social_profiles_public_id_key").on(table.public_id),
+	check("social_profiles_public_id_check", sql`public_id ~ '^[0-9A-Za-z]{12}$'::text`),
+	check("social_profiles_display_name_check", sql`char_length(display_name) BETWEEN 1 AND 40`),
+	check("social_profiles_bio_check", sql`char_length(bio) <= 160`),
+	check("social_profiles_visibility_check", sql`visibility = ANY (ARRAY['club'::text, 'everyone'::text])`),
+	check("social_profiles_rules_version_check", sql`char_length(rules_version) BETWEEN 1 AND 20`),
+]);
+
+export const social_follows = pgTable("social_follows", {
+	follower_id: integer().notNull(),
+	followee_id: integer().notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("social_follows_followee_id_idx").using("btree", table.followee_id.asc().nullsLast()),
+	foreignKey({ columns: [table.follower_id], foreignColumns: [players.id], name: "social_follows_follower_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.followee_id], foreignColumns: [players.id], name: "social_follows_followee_id_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.follower_id, table.followee_id], name: "social_follows_pkey" }),
+	check("social_follows_not_self_check", sql`follower_id <> followee_id`),
+]);
+
+// A post in one club's space. Automatic posts carry ref_key, unique per author and kind.
+export const social_posts = pgTable("social_posts", {
+	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	author_id: integer().notNull(),
+	club_id: integer().notNull(),
+	kind: text().notNull(),
+	body: text(),
+	ref_key: text(),
+	photo_id: integer(),
+	state: text().default('visible').notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("social_posts_created_idx").using("btree", table.created_at.desc().nullsFirst(), table.id.desc().nullsFirst()),
+	index("social_posts_club_created_idx").using("btree", table.club_id.asc().nullsLast(), table.created_at.desc().nullsFirst(), table.id.desc().nullsFirst()),
+	index("social_posts_author_created_idx").using("btree", table.author_id.asc().nullsLast(), table.created_at.desc().nullsFirst(), table.id.desc().nullsFirst()),
+	index("social_posts_photo_id_idx").using("btree", table.photo_id.asc().nullsLast()).where(sql`(photo_id IS NOT NULL)`),
+	foreignKey({ columns: [table.author_id], foreignColumns: [players.id], name: "social_posts_author_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.club_id], foreignColumns: [tenants.id], name: "social_posts_club_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.photo_id], foreignColumns: [player_photos.id], name: "social_posts_photo_id_fkey" }).onDelete("restrict"),
+	unique("social_posts_author_kind_ref_key").on(table.author_id, table.kind, table.ref_key),
+	check("social_posts_kind_check", sql`kind = ANY (ARRAY['match'::text, 'rank_up'::text, 'photo'::text, 'text'::text])`),
+	check("social_posts_state_check", sql`state = ANY (ARRAY['visible'::text, 'held'::text, 'hidden'::text, 'removed'::text])`),
+	check("social_posts_body_check", sql`char_length(body) <= 500`),
+	check("social_posts_ref_key_check", sql`char_length(ref_key) BETWEEN 1 AND 80`),
+	check("social_posts_text_has_body_check", sql`kind <> 'text'::text OR (body IS NOT NULL AND char_length(body) >= 1)`),
+	check("social_posts_auto_has_key_check", sql`(kind <> ALL (ARRAY['match'::text, 'rank_up'::text])) OR ref_key IS NOT NULL`),
+]);
+
+export const social_comments = pgTable("social_comments", {
+	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	post_id: bigint({ mode: "number" }).notNull(),
+	author_id: integer().notNull(),
+	body: text().notNull(),
+	state: text().default('visible').notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("social_comments_post_idx").using("btree", table.post_id.asc().nullsLast(), table.created_at.asc().nullsLast(), table.id.asc().nullsLast()),
+	index("social_comments_author_id_idx").using("btree", table.author_id.asc().nullsLast()),
+	foreignKey({ columns: [table.post_id], foreignColumns: [social_posts.id], name: "social_comments_post_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.author_id], foreignColumns: [players.id], name: "social_comments_author_id_fkey" }).onDelete("restrict"),
+	check("social_comments_body_check", sql`char_length(body) BETWEEN 1 AND 300`),
+	check("social_comments_state_check", sql`state = ANY (ARRAY['visible'::text, 'held'::text, 'hidden'::text, 'removed'::text])`),
+]);
+
+export const social_kudos = pgTable("social_kudos", {
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	post_id: bigint({ mode: "number" }).notNull(),
+	player_id: integer().notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("social_kudos_player_id_idx").using("btree", table.player_id.asc().nullsLast()),
+	foreignKey({ columns: [table.post_id], foreignColumns: [social_posts.id], name: "social_kudos_post_id_fkey" }).onDelete("cascade"),
+	foreignKey({ columns: [table.player_id], foreignColumns: [players.id], name: "social_kudos_player_id_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.post_id, table.player_id], name: "social_kudos_pkey" }),
+]);
+
+// A club switches a person off in its own space.
+export const social_club_bans = pgTable("social_club_bans", {
+	club_id: integer().notNull(),
+	player_id: integer().notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	created_by: integer(),
+}, (table) => [
+	index("social_club_bans_player_id_idx").using("btree", table.player_id.asc().nullsLast()),
+	foreignKey({ columns: [table.club_id], foreignColumns: [tenants.id], name: "social_club_bans_club_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.player_id], foreignColumns: [players.id], name: "social_club_bans_player_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.created_by], foreignColumns: [players.id], name: "social_club_bans_created_by_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.club_id, table.player_id], name: "social_club_bans_pkey" }),
+]);
+
+// One person blocks another (shared with the Marketplace).
+export const user_blocks = pgTable("user_blocks", {
+	blocker_id: integer().notNull(),
+	blocked_id: integer().notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("user_blocks_blocked_id_idx").using("btree", table.blocked_id.asc().nullsLast()),
+	foreignKey({ columns: [table.blocker_id], foreignColumns: [players.id], name: "user_blocks_blocker_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.blocked_id], foreignColumns: [players.id], name: "user_blocks_blocked_id_fkey" }).onDelete("restrict"),
+	primaryKey({ columns: [table.blocker_id, table.blocked_id], name: "user_blocks_pkey" }),
+	check("user_blocks_not_self_check", sql`blocker_id <> blocked_id`),
+]);
+
+// A moderator's decisions about a person. Insert only (the app's role can't
+// update or delete); the latest row wins. player_id and created_by have no
+// foreign key on purpose: the row outlives the account. The email and phone
+// are kept only as keyed indexes.
+export const player_suspensions = pgTable("player_suspensions", {
+	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	player_id: integer(),
+	action: text().default('suspend').notNull(),
+	scope: text().notNull(),
+	until: timestamp({ withTimezone: true, mode: 'string' }),
+	reason_code: text().notNull(),
+	email_index: text(),
+	phone_index: text(),
+	index_kid: text(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	created_by: integer(),
+}, (table) => [
+	index("player_suspensions_player_idx").using("btree", table.player_id.asc().nullsLast(), table.id.desc().nullsFirst()).where(sql`(player_id IS NOT NULL)`),
+	index("player_suspensions_email_index_idx").using("btree", table.email_index.asc().nullsLast(), table.id.desc().nullsFirst()).where(sql`(email_index IS NOT NULL)`),
+	index("player_suspensions_phone_index_idx").using("btree", table.phone_index.asc().nullsLast(), table.id.desc().nullsFirst()).where(sql`(phone_index IS NOT NULL)`),
+	check("player_suspensions_action_check", sql`action = ANY (ARRAY['suspend'::text, 'unsuspend'::text])`),
+	check("player_suspensions_scope_check", sql`scope = ANY (ARRAY['social'::text, 'market'::text, 'all'::text])`),
+	check("player_suspensions_reason_code_check", sql`reason_code ~ '^[a-z][a-z0-9_]{0,39}$'::text`),
+	check("player_suspensions_email_index_check", sql`email_index ~ '^[A-Za-z0-9_-]{43}$'::text`),
+	check("player_suspensions_phone_index_check", sql`phone_index ~ '^[A-Za-z0-9_-]{43}$'::text`),
+	check("player_suspensions_index_kid_check", sql`(index_kid IS NOT NULL) = (email_index IS NOT NULL OR phone_index IS NOT NULL)`),
+	check("player_suspensions_names_someone_check", sql`player_id IS NOT NULL OR email_index IS NOT NULL OR phone_index IS NOT NULL`),
+	check("player_suspensions_unsuspend_has_no_end_check", sql`action <> 'unsuspend'::text OR until IS NULL`),
+]);

@@ -97,9 +97,17 @@ export const PLATFORM_TABLES = [
   "players", // the global identity
   "rate_limits", // shared rate-limit counters (hashed keys)
   "schema_runs", // unused since Phase 2; dropped in a later release
+  "player_suspensions", // a moderator's decisions about a person; they outlive the account (insert only)
   "sms_sends", // sign-in texts
+  "social_club_bans", // a club switches a person off in its own space (club_id, not tenant_id)
+  "social_comments",
+  "social_follows",
+  "social_kudos",
+  "social_posts", // a post in one club's space (club_id); the queries name the club
+  "social_profiles", // a person's opt-in social profile, one across clubs
   "stripe_events", // Stripe events already handled
   "tenants",
+  "user_blocks", // one person blocks another (Social and the Marketplace)
   // Unused copies from before previews had their own database (Phase 0).
   "pv_arena_after_game",
   "pv_arena_challenges",

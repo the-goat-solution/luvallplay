@@ -1282,6 +1282,37 @@ CREATE TABLE player_settings (
   CONSTRAINT player_settings_pkey PRIMARY KEY (key)
 );
 
+CREATE TABLE player_suspensions (
+  id bigint DEFAULT nextval('player_suspensions_id_seq'::regclass) NOT NULL,
+  player_id integer,
+  action text DEFAULT 'suspend'::text NOT NULL,
+  scope text NOT NULL,
+  until timestamp with time zone,
+  reason_code text NOT NULL,
+  email_index text,
+  phone_index text,
+  index_kid text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  created_by integer,
+  CONSTRAINT player_suspensions_action_check CHECK ((action = ANY (ARRAY['suspend'::text, 'unsuspend'::text]))),
+  CONSTRAINT player_suspensions_email_index_check CHECK ((email_index ~ '^[A-Za-z0-9_-]{43}$'::text)),
+  CONSTRAINT player_suspensions_index_kid_check CHECK (((index_kid IS NOT NULL) = ((email_index IS NOT NULL) OR (phone_index IS NOT NULL)))),
+  CONSTRAINT player_suspensions_names_someone_check CHECK (((player_id IS NOT NULL) OR (email_index IS NOT NULL) OR (phone_index IS NOT NULL))),
+  CONSTRAINT player_suspensions_phone_index_check CHECK ((phone_index ~ '^[A-Za-z0-9_-]{43}$'::text)),
+  CONSTRAINT player_suspensions_reason_code_check CHECK ((reason_code ~ '^[a-z][a-z0-9_]{0,39}$'::text)),
+  CONSTRAINT player_suspensions_scope_check CHECK ((scope = ANY (ARRAY['social'::text, 'market'::text, 'all'::text]))),
+  CONSTRAINT player_suspensions_unsuspend_has_no_end_check CHECK (((action <> 'unsuspend'::text) OR (until IS NULL))),
+  CONSTRAINT player_suspensions_action_not_null NOT NULL action,
+  CONSTRAINT player_suspensions_created_at_not_null NOT NULL created_at,
+  CONSTRAINT player_suspensions_id_not_null NOT NULL id,
+  CONSTRAINT player_suspensions_reason_code_not_null NOT NULL reason_code,
+  CONSTRAINT player_suspensions_scope_not_null NOT NULL scope,
+  CONSTRAINT player_suspensions_pkey PRIMARY KEY (id)
+);
+CREATE INDEX player_suspensions_email_index_idx ON public.player_suspensions USING btree (email_index, id DESC) WHERE (email_index IS NOT NULL);
+CREATE INDEX player_suspensions_phone_index_idx ON public.player_suspensions USING btree (phone_index, id DESC) WHERE (phone_index IS NOT NULL);
+CREATE INDEX player_suspensions_player_idx ON public.player_suspensions USING btree (player_id, id DESC) WHERE (player_id IS NOT NULL);
+
 CREATE TABLE players (
   id integer DEFAULT nextval('players_id_seq'::regclass) NOT NULL,
   email text NOT NULL,
@@ -1862,6 +1893,131 @@ CREATE TABLE sms_sends (
 );
 CREATE INDEX sms_sends_sent_at_idx ON public.sms_sends USING btree (sent_at);
 
+CREATE TABLE social_club_bans (
+  club_id integer NOT NULL,
+  player_id integer NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  created_by integer,
+  CONSTRAINT social_club_bans_club_id_fkey FOREIGN KEY (club_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT social_club_bans_created_by_fkey FOREIGN KEY (created_by) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT social_club_bans_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT social_club_bans_club_id_not_null NOT NULL club_id,
+  CONSTRAINT social_club_bans_created_at_not_null NOT NULL created_at,
+  CONSTRAINT social_club_bans_player_id_not_null NOT NULL player_id,
+  CONSTRAINT social_club_bans_pkey PRIMARY KEY (club_id, player_id)
+);
+CREATE INDEX social_club_bans_player_id_idx ON public.social_club_bans USING btree (player_id);
+
+CREATE TABLE social_comments (
+  id bigint DEFAULT nextval('social_comments_id_seq'::regclass) NOT NULL,
+  post_id bigint NOT NULL,
+  author_id integer NOT NULL,
+  body text NOT NULL,
+  state text DEFAULT 'visible'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT social_comments_body_check CHECK (((char_length(body) >= 1) AND (char_length(body) <= 300))),
+  CONSTRAINT social_comments_state_check CHECK ((state = ANY (ARRAY['visible'::text, 'held'::text, 'hidden'::text, 'removed'::text]))),
+  CONSTRAINT social_comments_author_id_fkey FOREIGN KEY (author_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT social_comments_post_id_fkey FOREIGN KEY (post_id) REFERENCES social_posts(id) ON DELETE CASCADE,
+  CONSTRAINT social_comments_author_id_not_null NOT NULL author_id,
+  CONSTRAINT social_comments_body_not_null NOT NULL body,
+  CONSTRAINT social_comments_created_at_not_null NOT NULL created_at,
+  CONSTRAINT social_comments_id_not_null NOT NULL id,
+  CONSTRAINT social_comments_post_id_not_null NOT NULL post_id,
+  CONSTRAINT social_comments_state_not_null NOT NULL state,
+  CONSTRAINT social_comments_pkey PRIMARY KEY (id)
+);
+CREATE INDEX social_comments_author_id_idx ON public.social_comments USING btree (author_id);
+CREATE INDEX social_comments_post_idx ON public.social_comments USING btree (post_id, created_at, id);
+
+CREATE TABLE social_follows (
+  follower_id integer NOT NULL,
+  followee_id integer NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT social_follows_not_self_check CHECK ((follower_id <> followee_id)),
+  CONSTRAINT social_follows_followee_id_fkey FOREIGN KEY (followee_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT social_follows_follower_id_fkey FOREIGN KEY (follower_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT social_follows_created_at_not_null NOT NULL created_at,
+  CONSTRAINT social_follows_followee_id_not_null NOT NULL followee_id,
+  CONSTRAINT social_follows_follower_id_not_null NOT NULL follower_id,
+  CONSTRAINT social_follows_pkey PRIMARY KEY (follower_id, followee_id)
+);
+CREATE INDEX social_follows_followee_id_idx ON public.social_follows USING btree (followee_id);
+
+CREATE TABLE social_kudos (
+  post_id bigint NOT NULL,
+  player_id integer NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT social_kudos_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT social_kudos_post_id_fkey FOREIGN KEY (post_id) REFERENCES social_posts(id) ON DELETE CASCADE,
+  CONSTRAINT social_kudos_created_at_not_null NOT NULL created_at,
+  CONSTRAINT social_kudos_player_id_not_null NOT NULL player_id,
+  CONSTRAINT social_kudos_post_id_not_null NOT NULL post_id,
+  CONSTRAINT social_kudos_pkey PRIMARY KEY (post_id, player_id)
+);
+CREATE INDEX social_kudos_player_id_idx ON public.social_kudos USING btree (player_id);
+
+CREATE TABLE social_posts (
+  id bigint DEFAULT nextval('social_posts_id_seq'::regclass) NOT NULL,
+  author_id integer NOT NULL,
+  club_id integer NOT NULL,
+  kind text NOT NULL,
+  body text,
+  ref_key text,
+  photo_id integer,
+  state text DEFAULT 'visible'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT social_posts_auto_has_key_check CHECK (((kind <> ALL (ARRAY['match'::text, 'rank_up'::text])) OR (ref_key IS NOT NULL))),
+  CONSTRAINT social_posts_body_check CHECK ((char_length(body) <= 500)),
+  CONSTRAINT social_posts_kind_check CHECK ((kind = ANY (ARRAY['match'::text, 'rank_up'::text, 'photo'::text, 'text'::text]))),
+  CONSTRAINT social_posts_ref_key_check CHECK (((char_length(ref_key) >= 1) AND (char_length(ref_key) <= 80))),
+  CONSTRAINT social_posts_state_check CHECK ((state = ANY (ARRAY['visible'::text, 'held'::text, 'hidden'::text, 'removed'::text]))),
+  CONSTRAINT social_posts_text_has_body_check CHECK (((kind <> 'text'::text) OR ((body IS NOT NULL) AND (char_length(body) >= 1)))),
+  CONSTRAINT social_posts_author_id_fkey FOREIGN KEY (author_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT social_posts_club_id_fkey FOREIGN KEY (club_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT social_posts_photo_id_fkey FOREIGN KEY (photo_id) REFERENCES player_photos(id) ON DELETE RESTRICT,
+  CONSTRAINT social_posts_author_id_not_null NOT NULL author_id,
+  CONSTRAINT social_posts_club_id_not_null NOT NULL club_id,
+  CONSTRAINT social_posts_created_at_not_null NOT NULL created_at,
+  CONSTRAINT social_posts_id_not_null NOT NULL id,
+  CONSTRAINT social_posts_kind_not_null NOT NULL kind,
+  CONSTRAINT social_posts_state_not_null NOT NULL state,
+  CONSTRAINT social_posts_pkey PRIMARY KEY (id),
+  CONSTRAINT social_posts_author_kind_ref_key UNIQUE (author_id, kind, ref_key)
+);
+CREATE INDEX social_posts_author_created_idx ON public.social_posts USING btree (author_id, created_at DESC, id DESC);
+CREATE INDEX social_posts_club_created_idx ON public.social_posts USING btree (club_id, created_at DESC, id DESC);
+CREATE INDEX social_posts_created_idx ON public.social_posts USING btree (created_at DESC, id DESC);
+CREATE INDEX social_posts_photo_id_idx ON public.social_posts USING btree (photo_id) WHERE (photo_id IS NOT NULL);
+
+CREATE TABLE social_profiles (
+  player_id integer NOT NULL,
+  public_id text NOT NULL,
+  display_name text NOT NULL,
+  bio text,
+  visibility text DEFAULT 'club'::text NOT NULL,
+  adult_confirmed_at timestamp with time zone NOT NULL,
+  rules_version text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT social_profiles_bio_check CHECK ((char_length(bio) <= 160)),
+  CONSTRAINT social_profiles_display_name_check CHECK (((char_length(display_name) >= 1) AND (char_length(display_name) <= 40))),
+  CONSTRAINT social_profiles_public_id_check CHECK ((public_id ~ '^[0-9A-Za-z]{12}$'::text)),
+  CONSTRAINT social_profiles_rules_version_check CHECK (((char_length(rules_version) >= 1) AND (char_length(rules_version) <= 20))),
+  CONSTRAINT social_profiles_visibility_check CHECK ((visibility = ANY (ARRAY['club'::text, 'everyone'::text]))),
+  CONSTRAINT social_profiles_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT social_profiles_adult_confirmed_at_not_null NOT NULL adult_confirmed_at,
+  CONSTRAINT social_profiles_created_at_not_null NOT NULL created_at,
+  CONSTRAINT social_profiles_display_name_not_null NOT NULL display_name,
+  CONSTRAINT social_profiles_player_id_not_null NOT NULL player_id,
+  CONSTRAINT social_profiles_public_id_not_null NOT NULL public_id,
+  CONSTRAINT social_profiles_rules_version_not_null NOT NULL rules_version,
+  CONSTRAINT social_profiles_updated_at_not_null NOT NULL updated_at,
+  CONSTRAINT social_profiles_visibility_not_null NOT NULL visibility,
+  CONSTRAINT social_profiles_pkey PRIMARY KEY (player_id),
+  CONSTRAINT social_profiles_public_id_key UNIQUE (public_id)
+);
+
 CREATE TABLE stripe_events (
   event_id text NOT NULL,
   type text NOT NULL,
@@ -1977,6 +2133,20 @@ CREATE TABLE usage_counters (
   CONSTRAINT usage_counters_updated_at_not_null NOT NULL updated_at,
   CONSTRAINT usage_counters_pkey PRIMARY KEY (tenant_id, metric, period)
 );
+
+CREATE TABLE user_blocks (
+  blocker_id integer NOT NULL,
+  blocked_id integer NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT user_blocks_not_self_check CHECK ((blocker_id <> blocked_id)),
+  CONSTRAINT user_blocks_blocked_id_fkey FOREIGN KEY (blocked_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT user_blocks_blocker_id_fkey FOREIGN KEY (blocker_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT user_blocks_blocked_id_not_null NOT NULL blocked_id,
+  CONSTRAINT user_blocks_blocker_id_not_null NOT NULL blocker_id,
+  CONSTRAINT user_blocks_created_at_not_null NOT NULL created_at,
+  CONSTRAINT user_blocks_pkey PRIMARY KEY (blocker_id, blocked_id)
+);
+CREATE INDEX user_blocks_blocked_id_idx ON public.user_blocks USING btree (blocked_id);
 
 CREATE TABLE waitlist (
   id integer DEFAULT nextval('waitlist_id_seq'::regclass) NOT NULL,
@@ -2165,6 +2335,7 @@ CREATE SEQUENCE mini_game_draws_id_seq AS integer OWNED BY mini_game_draws.id;
 CREATE SEQUENCE player_events_id_seq AS integer OWNED BY player_events.id;
 CREATE SEQUENCE player_photos_id_seq AS integer OWNED BY player_photos.id;
 CREATE SEQUENCE player_sessions_id_seq AS integer OWNED BY player_sessions.id;
+CREATE SEQUENCE player_suspensions_id_seq AS bigint OWNED BY player_suspensions.id;
 CREATE SEQUENCE players_id_seq AS integer OWNED BY players.id;
 CREATE SEQUENCE push_devices_id_seq AS integer OWNED BY push_devices.id;
 CREATE SEQUENCE pv_arena_challenges_id_seq AS integer OWNED BY pv_arena_challenges.id;
@@ -2181,6 +2352,8 @@ CREATE SEQUENCE shop_products_id_seq AS integer OWNED BY shop_products.id;
 CREATE SEQUENCE shop_stock_log_id_seq AS integer OWNED BY shop_stock_log.id;
 CREATE SEQUENCE shop_variants_id_seq AS integer OWNED BY shop_variants.id;
 CREATE SEQUENCE sms_sends_id_seq AS integer OWNED BY sms_sends.id;
+CREATE SEQUENCE social_comments_id_seq AS bigint OWNED BY social_comments.id;
+CREATE SEQUENCE social_posts_id_seq AS bigint OWNED BY social_posts.id;
 CREATE SEQUENCE tenants_id_seq AS integer OWNED BY tenants.id;
 CREATE SEQUENCE waitlist_id_seq AS integer OWNED BY waitlist.id;
 CREATE SEQUENCE webhook_deliveries_id_seq AS integer OWNED BY webhook_deliveries.id;
@@ -2254,6 +2427,28 @@ BEGIN
   END IF;
   RETURN NEW;
 END $function$;
+CREATE OR REPLACE FUNCTION public.shares_social_club(p_a integer, p_b integer)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT EXISTS (SELECT 1 FROM social_clubs_of(p_a) a(club_id) JOIN social_clubs_of(p_b) b(club_id) USING (club_id))
+$function$;
+CREATE OR REPLACE FUNCTION public.social_clubs_of(p_player_id integer)
+ RETURNS SETOF bigint
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT cm.tenant_id::bigint
+  FROM club_members cm
+  JOIN tenants t ON t.id = cm.tenant_id
+  JOIN tenant_modules m ON m.tenant_id = cm.tenant_id
+  WHERE cm.user_id = p_player_id AND cm.status = 'active' AND t.status = 'active'
+    AND m.module_id = 'social' AND m.enabled
+  ORDER BY 1
+$function$;
 
 -- Triggers
 CREATE TRIGGER attendance_link_account BEFORE INSERT OR UPDATE OF email ON public.attendance FOR EACH ROW EXECUTE FUNCTION link_row_to_account();

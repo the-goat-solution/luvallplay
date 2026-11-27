@@ -1,0 +1,4 @@
+{
+  "change": "2026-12-social-moderation",
+  "description": "Social plan Task 2a (lane S; migration 0022_social_moderation): eight new, empty, platform-wide tables (social_profiles, social_follows, social_posts, social_comments, social_kudos, social_club_bans, user_blocks, player_suspensions) and two functions that read a person's social clubs across clubs (social_clubs_of, shares_social_club; SECURITY DEFINER, callable by the app's role only). The app's role can add and read player_suspensions and cannot update or delete it. Nothing existing is altered. Additive: no row, account, email, phone, session, role or membership may change. Rehearsal on a copy, so nothing is volatile."
+}

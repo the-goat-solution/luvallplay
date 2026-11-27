@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { getPointsBoard, type PointsBoardRow, type PointsSource } from "./arena-db";
 import { getClubToday } from "./dates";
 import { firstNameOnly } from "./first-name";
+import { defaultTenantSlug } from "./tenant-members";
 import { PERIODS, periodFromKey, periodRange, type Period, type PeriodRange } from "./stats-db";
 
 // The Wolf Points board, shared by the Arena's Leaderboard segment and the
@@ -14,14 +15,20 @@ export const SOURCES: PointsSource[] = ["all", "challenges", "play", "rr"];
 // Old links (?metric=…) still land on the matching list.
 const FROM_METRIC: Record<string, PointsSource> = { wp: "all", challenges: "challenges", attendance: "play", rr: "rr" };
 
-export const cachedBoard = unstable_cache(
-  async (source: PointsSource, period: Period, key: string): Promise<PointsBoardRow[]> => {
+const boardForClub = unstable_cache(
+  // `club` is unused inside: it is part of the cache key (the arguments are),
+  // so one club's board is never served to another (audit C7).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async (source: PointsSource, period: Period, key: string, _club: string): Promise<PointsBoardRow[]> => {
     const range = periodFromKey(period, key) ?? periodRange(period, getClubToday(new Date(), await clubClock()).dateKey);
     return getPointsBoard(source, range);
   },
   [`points-board-v2-${process.env.VERCEL_ENV ?? "local"}`],
   { tags: ["leaderboard"], revalidate: 300 },
 );
+
+export const cachedBoard = (source: PointsSource, period: Period, key: string): Promise<PointsBoardRow[]> =>
+  boardForClub(source, period, key, defaultTenantSlug());
 
 export type BoardQuery = { source?: string; metric?: string; period?: string; key?: string };
 

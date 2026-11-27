@@ -16,7 +16,11 @@
 //                         malformed falls back to the built-in value for
 //                         that field, with a warning.
 //
-// A database error never breaks a page: the built-in values answer.
+// A database error never breaks a page: the built-in values answer. Except
+// for a club other than the built-in one (audit C7): the built-in values are
+// Three Wolves' name, time zone and currency, so such a club always reads its
+// stored settings, and getClubConfig throws when it has none rather than
+// serve Three Wolves' values under another club's name.
 import {
   type ClubConfig,
   type ModuleSettingsRow,
@@ -26,6 +30,7 @@ import {
 } from "@luvallplay/core/club-config";
 import * as C from "./constants.ts";
 import { defaultTenantSlug } from "./tenant-members.ts";
+import { BUILT_IN_CLUB, settingsSourceSetting } from "./tenant-settings.ts";
 
 export type { ClubConfig } from "@luvallplay/core/club-config";
 
@@ -65,9 +70,9 @@ export const DEFAULT_CLUB_CONFIG: ClubConfig = {
 };
 
 export type SettingsSource = "constants" | "shadow" | "database";
+/** CLUB_SETTINGS_SOURCE. Production must set it; a value it doesn't know is refused (lib/tenant-settings.ts). */
 export function settingsSource(): SettingsSource {
-  const v = process.env.CLUB_SETTINGS_SOURCE?.trim().toLowerCase();
-  return v === "shadow" || v === "database" ? v : "constants";
+  return settingsSourceSetting();
 }
 
 function isMissingTable(err: unknown): boolean {
@@ -113,7 +118,8 @@ export async function compareClubConfig(db: Db, slug = defaultTenantSlug()): Pro
 // One answer per server instance per minute: settings are read on most
 // requests and change a few times a year.
 const TTL_MS = 60_000;
-let cached: { at: number; config: ClubConfig } | null = null;
+// Keyed by the club, so a cached answer is never another club's (audit C7).
+let cached: { at: number; slug: string; config: ClubConfig } | null = null;
 let lastLogged = "";
 
 /** For tests, and after an admin saves settings. */
@@ -139,28 +145,37 @@ export function onClubConfigDifference(fn: typeof onDifference): void {
 }
 
 /**
- * The settings the app should use right now. Never throws.
+ * The settings the app should use right now. Never throws for the built-in
+ * club. For any other club it always reads the stored settings (whatever
+ * CLUB_SETTINGS_SOURCE says) and throws when they are missing or unreadable:
+ * the built-in values are Three Wolves' (audit C7).
  * `db` is injected (lib/database's sql in the app), so this file stays free
  * of the database client and usable from scripts and tests.
  */
 export async function getClubConfig(db: Db, now = Date.now()): Promise<ClubConfig> {
-  const source = settingsSource();
+  const slug = defaultTenantSlug();
+  const builtIn = slug === BUILT_IN_CLUB;
+  const source = builtIn ? settingsSource() : "database";
   if (source === "constants") return DEFAULT_CLUB_CONFIG;
-  if (cached && now - cached.at < TTL_MS) return cached.config;
+  if (cached && cached.slug === slug && now - cached.at < TTL_MS) return cached.config;
   let config = DEFAULT_CLUB_CONFIG;
   try {
-    const stored = await loadClubConfigFromDb(db);
+    const stored = await loadClubConfigFromDb(db, slug);
     if (!stored) {
+      if (!builtIn) throw new Error(`The club "${slug}" has no stored settings.`);
       logOnce("missing", ["the club has no stored settings; using the built-in values"]);
     } else {
       if (stored.problems.length) logOnce("problems", stored.problems);
-      const differences = diffClubConfig(DEFAULT_CLUB_CONFIG, stored.config);
-      if (differences.length && logOnce("differ", differences)) await onDifference?.(db, differences);
+      if (builtIn) {
+        const differences = diffClubConfig(DEFAULT_CLUB_CONFIG, stored.config);
+        if (differences.length && logOnce("differ", differences)) await onDifference?.(db, differences);
+      }
       if (source === "database") config = stored.config;
     }
   } catch (err) {
+    if (!builtIn) throw err;
     logOnce("unreadable", [String((err as Error)?.message ?? err).slice(0, 200)]);
   }
-  cached = { at: now, config };
+  cached = { at: now, slug, config };
   return config;
 }

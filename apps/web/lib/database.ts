@@ -36,6 +36,7 @@ import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import type pg from "pg";
 import * as schema from "@luvallplay/db/schema";
 import { createPgDatabase, type PgDatabase } from "./database-pg.ts";
+import { tenantScopeSetting } from "./tenant-settings.ts";
 import { defaultTenantSlug } from "./tenant-members.ts";
 import { isReadOnlyStatement, readScoped, scopePool, scopeStatement, textOf, type PoolLike, type Queryable } from "./tenant-scope.ts";
 
@@ -96,7 +97,8 @@ function viaPg(): PgDatabase | null {
 //
 // TENANT_SCOPE chooses how queries reach the database:
 //
-//   off      (default) as the connection's own role (the owner), as before.
+//   off      as the connection's own role (the owner), as before. The
+//            default off production only; production must say which.
 //   shadow   as before, and a sample of the reads is run a second time as
 //            the app's role for the club, through row-level security; a
 //            read that answers differently is put on the shadow record.
@@ -113,7 +115,8 @@ export function tenantScopeMode(): TenantScopeMode {
   // The app's own login can't read as the owner, so there is nothing to
   // compare with and nothing to fall back to: every statement is scoped.
   if (appLogin()) return "enforce";
-  const v = process.env.TENANT_SCOPE?.trim().toLowerCase();
+  // Production must set it (audit H1, lib/tenant-settings.ts): unset used to mean "off".
+  const v = tenantScopeSetting();
   if (!v || v === "off") return "off";
   if (v === "shadow") return "shadow";
   return "enforce";
@@ -180,12 +183,20 @@ export function unscopedPool(): PoolLike {
 // The club this deployment serves, looked up once: as the connection's own
 // role, or, with the app's own login (which has no rights of its own), as
 // the app's role with no club named. The clubs table is a platform table.
+// Remembered with its slug, so a changed TENANT_SLUG is never answered
+// with the previous club's id (audit C7).
 let tenantIdPromise: Promise<number> | null = null;
+let tenantIdSlug: string | null = null;
 /** Whether that lookup has answered (so asking again needs no connection). */
 let tenantIdKnown = false;
 function scopeTenantId(): Promise<number> {
+  const slug = defaultTenantSlug();
+  if (tenantIdPromise && tenantIdSlug !== slug) {
+    tenantIdPromise = null;
+    tenantIdKnown = false;
+  }
   if (!tenantIdPromise) {
-    const slug = defaultTenantSlug();
+    tenantIdSlug = slug;
     const text = `SELECT id FROM tenants WHERE slug = $1`;
     const found = (appLogin() ? readScoped(rawPool(), null, text, [slug]) : rawPool().query(text, [slug])) as Promise<{ rows: { id: number }[] }>;
     const lookup = found

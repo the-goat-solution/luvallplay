@@ -1,9 +1,13 @@
 import { cronAuthorized } from "@/lib/cron";
+import { cronStatus, forEachClub } from "@/lib/tenant-context";
+import { sql } from "@/lib/database";
 import { NextResponse } from "next/server";
 import { runShopDailyUpkeep } from "@/lib/shop-notify";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const PATH = "/api/cron/shop-upkeep";
 
 // Shop: a heads-up for cash reservations ending within a day, then release
 // lapsed holds (and tell those players). Its own job, owned by the Shop
@@ -16,10 +20,16 @@ export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL) {
     return NextResponse.json({ skipped: true });
   }
-  try {
-    return NextResponse.json({ ok: true, ...(await runShopDailyUpkeep()) });
-  } catch (err) {
-    console.error("Shop upkeep failed", err);
-    return NextResponse.json({ error: "Shop upkeep failed" }, { status: 500 });
-  }
+
+  // Once for each club of the region, each as that club, and only where the
+  // job's module is on (audit H2; lib/tenant-context.ts).
+  const clubs = await forEachClub(sql, PATH, async () => {
+    try {
+      return { ok: true, ...(await runShopDailyUpkeep()) };
+    } catch (err) {
+      console.error("Shop upkeep failed", err);
+      throw new Error("Shop upkeep failed");
+    }
+  });
+  return NextResponse.json({ clubs }, { status: cronStatus(clubs) });
 }

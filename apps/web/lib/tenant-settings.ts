@@ -33,8 +33,20 @@ export class DeploymentSettingsError extends Error {
 const isProduction = (env: Env) => env.VERCEL_ENV === "production";
 const value = (env: Env, key: string) => env[key]?.trim() || undefined;
 
-/** The club this deployment serves. Production must name it. */
+// A job running for one club at a time (lib/tenant-context.ts, the
+// scheduled jobs' loop over the region's clubs) names that club here. Kept
+// as a hook so this file stays free of node:async_hooks: client components
+// load it through lib/club-terms.ts.
+let clubInContext: (() => string | undefined) | null = null;
+/** For lib/tenant-context.ts only. */
+export function setClubContextReader(read: () => string | undefined): void {
+  clubInContext = read;
+}
+
+/** The club this deployment serves (or the one a job is running for). Production must name it. */
 export function tenantSlugSetting(env: Env = process.env): string {
+  const running = clubInContext?.();
+  if (running) return running;
   const v = value(env, "TENANT_SLUG");
   if (v) return v;
   if (isProduction(env)) throw new DeploymentSettingsError("TENANT_SLUG is not set: production must name its club.");

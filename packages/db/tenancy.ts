@@ -87,6 +87,9 @@ export const CLUB_OWNED_TABLES = [
 export const PLATFORM_TABLES = [
   "admin_handoffs", // single-use sign-in handoff for an account
   "auth_codes", // sign-in codes
+  "content_reports", // a report about a profile, post or comment (club_id, not tenant_id; the reporter's words sealed)
+  "moderation_actions", // what a moderator did, by id (insert only)
+  "moderation_evidence", // a sealed copy of the content of a child-safety report (insert only)
   "plans", // what Luvallplay offers, per country and sport
   "platform_admins",
   "player_events", // account events (sign-in, install)

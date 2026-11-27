@@ -150,8 +150,7 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
       const appendOnly = r.t === "player_suspensions";
       assert.deepEqual({ rls: r.rls, tenant_id: r.tenant_id, sel: r.sel, ins: r.ins, upd: r.upd, del: r.del }, { rls: false, tenant_id: false, sel: true, ins: true, upd: !appendOnly, del: !appendOnly }, r.t);
     }
-    // 2b's tables are not here yet.
-    assert.deepEqual(await rows(`SELECT relname FROM pg_class WHERE relname IN ('content_reports', 'moderation_actions', 'moderation_evidence')`), []);
+    // The report, action and evidence tables are migration 0023's: tests/moderation-reports.test.ts.
   });
 
   test("the two cross-club functions run as their owner with a fixed search path, and only the app's role may call them", async () => {

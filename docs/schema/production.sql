@@ -571,6 +571,49 @@ CREATE TABLE club_settings (
   CONSTRAINT club_settings_pkey PRIMARY KEY (tenant_id, key)
 );
 
+CREATE TABLE content_reports (
+  id bigint DEFAULT nextval('content_reports_id_seq'::regclass) NOT NULL,
+  reporter_id integer,
+  target_type text NOT NULL,
+  target_id bigint NOT NULL,
+  club_id integer,
+  reason text NOT NULL,
+  severity text NOT NULL,
+  queue text NOT NULL,
+  details_sealed text,
+  status text DEFAULT 'open'::text NOT NULL,
+  due_at timestamp with time zone NOT NULL,
+  alerted_at timestamp with time zone,
+  handled_by integer,
+  handled_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT content_reports_club_queue_has_club_check CHECK (((queue <> 'club'::text) OR (club_id IS NOT NULL))),
+  CONSTRAINT content_reports_details_sealed_check CHECK ((details_sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'::text)),
+  CONSTRAINT content_reports_handled_check CHECK (((status = 'open'::text) = (handled_at IS NULL))),
+  CONSTRAINT content_reports_queue_check CHECK ((queue = ANY (ARRAY['club'::text, 'platform'::text]))),
+  CONSTRAINT content_reports_reason_check CHECK ((reason = ANY (ARRAY['spam'::text, 'harassment'::text, 'hate'::text, 'sexual'::text, 'violence'::text, 'self_harm'::text, 'child_safety'::text, 'scam'::text, 'prohibited_item'::text, 'other'::text]))),
+  CONSTRAINT content_reports_serious_is_platform_check CHECK (((severity <> 'serious'::text) OR (queue = 'platform'::text))),
+  CONSTRAINT content_reports_severity_check CHECK ((severity = ANY (ARRAY['normal'::text, 'serious'::text]))),
+  CONSTRAINT content_reports_status_check CHECK ((status = ANY (ARRAY['open'::text, 'actioned'::text, 'dismissed'::text]))),
+  CONSTRAINT content_reports_target_type_check CHECK ((target_type = ANY (ARRAY['profile'::text, 'post'::text, 'comment'::text, 'listing'::text, 'question'::text]))),
+  CONSTRAINT content_reports_club_id_fkey FOREIGN KEY (club_id) REFERENCES tenants(id) ON DELETE RESTRICT,
+  CONSTRAINT content_reports_reporter_id_fkey FOREIGN KEY (reporter_id) REFERENCES players(id) ON DELETE RESTRICT,
+  CONSTRAINT content_reports_created_at_not_null NOT NULL created_at,
+  CONSTRAINT content_reports_due_at_not_null NOT NULL due_at,
+  CONSTRAINT content_reports_id_not_null NOT NULL id,
+  CONSTRAINT content_reports_queue_not_null NOT NULL queue,
+  CONSTRAINT content_reports_reason_not_null NOT NULL reason,
+  CONSTRAINT content_reports_severity_not_null NOT NULL severity,
+  CONSTRAINT content_reports_status_not_null NOT NULL status,
+  CONSTRAINT content_reports_target_id_not_null NOT NULL target_id,
+  CONSTRAINT content_reports_target_type_not_null NOT NULL target_type,
+  CONSTRAINT content_reports_pkey PRIMARY KEY (id)
+);
+CREATE INDEX content_reports_club_idx ON public.content_reports USING btree (club_id, status, due_at) WHERE (club_id IS NOT NULL);
+CREATE UNIQUE INDEX content_reports_one_open_idx ON public.content_reports USING btree (reporter_id, target_type, target_id) WHERE (status = 'open'::text);
+CREATE INDEX content_reports_status_due_idx ON public.content_reports USING btree (status, due_at);
+CREATE INDEX content_reports_target_idx ON public.content_reports USING btree (target_type, target_id);
+
 CREATE TABLE day_requests (
   id integer DEFAULT nextval('day_requests_id_seq'::regclass) NOT NULL,
   day text NOT NULL,
@@ -1146,6 +1189,42 @@ CREATE TABLE mini_game_scores (
   CONSTRAINT mini_game_scores_score_b_not_null NOT NULL score_b,
   CONSTRAINT mini_game_scores_tenant_id_not_null NOT NULL tenant_id,
   CONSTRAINT mini_game_scores_pkey PRIMARY KEY (draw_id, match_id)
+);
+
+CREATE TABLE moderation_actions (
+  id bigint DEFAULT nextval('moderation_actions_id_seq'::regclass) NOT NULL,
+  actor_id integer,
+  target_type text NOT NULL,
+  target_id bigint NOT NULL,
+  action text NOT NULL,
+  reason text,
+  report_id bigint,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT moderation_actions_action_check CHECK ((action = ANY (ARRAY['hide'::text, 'restore'::text, 'remove'::text, 'suspend'::text, 'unsuspend'::text, 'club_ban'::text, 'club_unban'::text, 'dismiss'::text]))),
+  CONSTRAINT moderation_actions_reason_check CHECK (((char_length(reason) >= 1) AND (char_length(reason) <= 200))),
+  CONSTRAINT moderation_actions_target_type_check CHECK ((target_type = ANY (ARRAY['profile'::text, 'post'::text, 'comment'::text, 'listing'::text, 'question'::text]))),
+  CONSTRAINT moderation_actions_report_id_fkey FOREIGN KEY (report_id) REFERENCES content_reports(id) ON DELETE RESTRICT,
+  CONSTRAINT moderation_actions_action_not_null NOT NULL action,
+  CONSTRAINT moderation_actions_created_at_not_null NOT NULL created_at,
+  CONSTRAINT moderation_actions_id_not_null NOT NULL id,
+  CONSTRAINT moderation_actions_target_id_not_null NOT NULL target_id,
+  CONSTRAINT moderation_actions_target_type_not_null NOT NULL target_type,
+  CONSTRAINT moderation_actions_pkey PRIMARY KEY (id)
+);
+CREATE INDEX moderation_actions_report_id_idx ON public.moderation_actions USING btree (report_id) WHERE (report_id IS NOT NULL);
+CREATE INDEX moderation_actions_target_idx ON public.moderation_actions USING btree (target_type, target_id, id DESC);
+
+CREATE TABLE moderation_evidence (
+  report_id bigint NOT NULL,
+  sealed text NOT NULL,
+  author_player_id integer,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT moderation_evidence_sealed_check CHECK ((sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'::text)),
+  CONSTRAINT moderation_evidence_report_id_fkey FOREIGN KEY (report_id) REFERENCES content_reports(id) ON DELETE RESTRICT,
+  CONSTRAINT moderation_evidence_created_at_not_null NOT NULL created_at,
+  CONSTRAINT moderation_evidence_report_id_not_null NOT NULL report_id,
+  CONSTRAINT moderation_evidence_sealed_not_null NOT NULL sealed,
+  CONSTRAINT moderation_evidence_pkey PRIMARY KEY (report_id)
 );
 
 CREATE TABLE plans (
@@ -2318,6 +2397,7 @@ CREATE SEQUENCE bookings_id_seq AS integer OWNED BY bookings.id;
 CREATE SEQUENCE cancellation_feedback_id_seq AS integer OWNED BY cancellation_feedback.id;
 CREATE SEQUENCE club_forms_id_seq AS integer OWNED BY club_forms.id;
 CREATE SEQUENCE club_plans_id_seq AS integer OWNED BY club_plans.id;
+CREATE SEQUENCE content_reports_id_seq AS bigint OWNED BY content_reports.id;
 CREATE SEQUENCE day_requests_id_seq AS integer OWNED BY day_requests.id;
 CREATE SEQUENCE donations_id_seq AS integer OWNED BY donations.id;
 CREATE SEQUENCE finance_entries_id_seq AS integer OWNED BY finance_entries.id;
@@ -2332,6 +2412,7 @@ CREATE SEQUENCE memberships_id_seq AS integer OWNED BY memberships.id;
 CREATE SEQUENCE message_threads_id_seq AS integer OWNED BY message_threads.id;
 CREATE SEQUENCE messages_id_seq AS integer OWNED BY messages.id;
 CREATE SEQUENCE mini_game_draws_id_seq AS integer OWNED BY mini_game_draws.id;
+CREATE SEQUENCE moderation_actions_id_seq AS bigint OWNED BY moderation_actions.id;
 CREATE SEQUENCE player_events_id_seq AS integer OWNED BY player_events.id;
 CREATE SEQUENCE player_photos_id_seq AS integer OWNED BY player_photos.id;
 CREATE SEQUENCE player_sessions_id_seq AS integer OWNED BY player_sessions.id;

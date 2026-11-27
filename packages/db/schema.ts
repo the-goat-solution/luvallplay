@@ -1996,3 +1996,75 @@ export const player_suspensions = pgTable("player_suspensions", {
 	check("player_suspensions_names_someone_check", sql`player_id IS NOT NULL OR email_index IS NOT NULL OR phone_index IS NOT NULL`),
 	check("player_suspensions_unsuspend_has_no_end_check", sql`action <> 'unsuspend'::text OR until IS NULL`),
 ]);
+
+// A report about a profile, a post or a comment (later a listing or a
+// question). It names the target by type and id and holds no content; the
+// reporter's words are kept only sealed. target_id and handled_by have no
+// foreign key: the report outlives its target and its moderator's account.
+export const content_reports = pgTable("content_reports", {
+	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	reporter_id: integer(),
+	target_type: text().notNull(),
+	target_id: bigint({ mode: "number" }).notNull(),
+	club_id: integer(),
+	reason: text().notNull(),
+	severity: text().notNull(),
+	queue: text().notNull(),
+	details_sealed: text(),
+	status: text().default('open').notNull(),
+	due_at: timestamp({ withTimezone: true, mode: 'string' }).notNull(),
+	alerted_at: timestamp({ withTimezone: true, mode: 'string' }),
+	handled_by: integer(),
+	handled_at: timestamp({ withTimezone: true, mode: 'string' }),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("content_reports_one_open_idx").using("btree", table.reporter_id.asc().nullsLast(), table.target_type.asc().nullsLast(), table.target_id.asc().nullsLast()).where(sql`(status = 'open'::text)`),
+	index("content_reports_status_due_idx").using("btree", table.status.asc().nullsLast(), table.due_at.asc().nullsLast()),
+	index("content_reports_club_idx").using("btree", table.club_id.asc().nullsLast(), table.status.asc().nullsLast(), table.due_at.asc().nullsLast()).where(sql`(club_id IS NOT NULL)`),
+	index("content_reports_target_idx").using("btree", table.target_type.asc().nullsLast(), table.target_id.asc().nullsLast()),
+	foreignKey({ columns: [table.reporter_id], foreignColumns: [players.id], name: "content_reports_reporter_id_fkey" }).onDelete("restrict"),
+	foreignKey({ columns: [table.club_id], foreignColumns: [tenants.id], name: "content_reports_club_id_fkey" }).onDelete("restrict"),
+	check("content_reports_target_type_check", sql`target_type = ANY (ARRAY['profile'::text, 'post'::text, 'comment'::text, 'listing'::text, 'question'::text])`),
+	check("content_reports_reason_check", sql`reason = ANY (ARRAY['spam'::text, 'harassment'::text, 'hate'::text, 'sexual'::text, 'violence'::text, 'self_harm'::text, 'child_safety'::text, 'scam'::text, 'prohibited_item'::text, 'other'::text])`),
+	check("content_reports_severity_check", sql`severity = ANY (ARRAY['normal'::text, 'serious'::text])`),
+	check("content_reports_queue_check", sql`queue = ANY (ARRAY['club'::text, 'platform'::text])`),
+	check("content_reports_status_check", sql`status = ANY (ARRAY['open'::text, 'actioned'::text, 'dismissed'::text])`),
+	check("content_reports_serious_is_platform_check", sql`severity <> 'serious'::text OR queue = 'platform'::text`),
+	check("content_reports_club_queue_has_club_check", sql`queue <> 'club'::text OR club_id IS NOT NULL`),
+	check("content_reports_handled_check", sql`(status = 'open'::text) = (handled_at IS NULL)`),
+	check("content_reports_details_sealed_check", sql`details_sealed ~ '^v1\\.[a-z0-9-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$'::text`),
+]);
+
+// Everything a moderator does, one row each. Insert only (the app's role
+// can't update or delete). Ids and a short reason, never content. actor_id
+// has no foreign key on purpose: the record outlives the account.
+export const moderation_actions = pgTable("moderation_actions", {
+	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	actor_id: integer(),
+	target_type: text().notNull(),
+	target_id: bigint({ mode: "number" }).notNull(),
+	action: text().notNull(),
+	reason: text(),
+	report_id: bigint({ mode: "number" }),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("moderation_actions_target_idx").using("btree", table.target_type.asc().nullsLast(), table.target_id.asc().nullsLast(), table.id.desc().nullsFirst()),
+	index("moderation_actions_report_id_idx").using("btree", table.report_id.asc().nullsLast()).where(sql`(report_id IS NOT NULL)`),
+	foreignKey({ columns: [table.report_id], foreignColumns: [content_reports.id], name: "moderation_actions_report_id_fkey" }).onDelete("restrict"),
+	check("moderation_actions_target_type_check", sql`target_type = ANY (ARRAY['profile'::text, 'post'::text, 'comment'::text, 'listing'::text, 'question'::text])`),
+	check("moderation_actions_action_check", sql`action = ANY (ARRAY['hide'::text, 'restore'::text, 'remove'::text, 'suspend'::text, 'unsuspend'::text, 'club_ban'::text, 'club_unban'::text, 'dismiss'::text])`),
+	check("moderation_actions_reason_check", sql`char_length(reason) >= 1 AND char_length(reason) <= 200`),
+]);
+
+// For a child_safety report: a sealed copy of the content as it was when
+// reported, and the author's account id (no foreign key: it stands when the
+// account goes). Insert only.
+export const moderation_evidence = pgTable("moderation_evidence", {
+	report_id: bigint({ mode: "number" }).primaryKey().notNull(),
+	sealed: text().notNull(),
+	author_player_id: integer(),
+	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({ columns: [table.report_id], foreignColumns: [content_reports.id], name: "moderation_evidence_report_id_fkey" }).onDelete("restrict"),
+	check("moderation_evidence_sealed_check", sql`sealed ~ '^v1\\.[a-z0-9-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$'::text`),
+]);

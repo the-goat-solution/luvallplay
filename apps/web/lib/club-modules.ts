@@ -13,7 +13,8 @@
 //   off. The failure is logged.
 // - A module the platform keeps hidden counts as on only when its own guard
 //   agrees (Juniors: offered on this deployment, and an owner's
-//   acknowledgement stored). A row that merely says "enabled" isn't enough.
+//   acknowledgement stored; Social, Marketplace and Moderation: the club is
+//   in the pilot list). A row that merely says "enabled" isn't enough.
 // - MODULE_ENFORCEMENT=off turns enforcement off altogether (every module
 //   on), as an escape hatch.
 //
@@ -40,13 +41,19 @@ export type ModuleRow = { id: string; enabled: boolean; locked: "on" | "off" | n
 
 /** The club's row for every module in the registry (a missing row reads as off, unlocked). */
 export async function listClubModules(db: Db, slug = defaultTenantSlug()): Promise<ModuleRow[]> {
+  return (await readClubModules(db, slug)).rows;
+}
+
+/** The rows, and the club's id (null while the club has no row at all). */
+async function readClubModules(db: Db, slug: string): Promise<{ clubId: number | null; rows: ModuleRow[] }> {
   const { rows } = await db.query(
-    `SELECT m.module_id, m.enabled, m.locked, m.lock_reason, m.settings
+    `SELECT m.tenant_id, m.module_id, m.enabled, m.locked, m.lock_reason, m.settings
      FROM tenant_modules m JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1`,
     [slug],
   );
   const byId = new Map(rows.map((r) => [String(r.module_id), r]));
-  return MODULES.map((m) => {
+  const clubId = rows[0] ? Number(rows[0].tenant_id) : null;
+  const list = MODULES.map((m): ModuleRow => {
     const r = byId.get(m.id);
     return {
       id: m.id,
@@ -56,6 +63,7 @@ export async function listClubModules(db: Db, slug = defaultTenantSlug()): Promi
       settings: r?.settings,
     };
   });
+  return { clubId, rows: list };
 }
 
 // How long an instance remembers the club's switches. A switch reaches every
@@ -82,9 +90,9 @@ export async function enabledModules(db: Db, now = Date.now()): Promise<Set<stri
   if (cached && cached.slug === slug && now - cached.at < ttlMs()) return cached.enabled;
   let enabled: Set<string>;
   try {
-    const rows = await listClubModules(db, slug);
+    const { clubId, rows } = await readClubModules(db, slug);
     // A hidden module's row saying "on" isn't enough: its own guard has to agree (lib/juniors/switch-rule.ts).
-    enabled = new Set([...CORE, ...rows.filter((r) => r.enabled && (!HIDDEN.has(r.id) || hiddenModuleOn(r.id, r.settings))).map((r) => r.id)]);
+    enabled = new Set([...CORE, ...rows.filter((r) => r.enabled && (!HIDDEN.has(r.id) || hiddenModuleOn(r.id, r.settings, process.env, clubId))).map((r) => r.id)]);
   } catch (err) {
     const message = String((err as Error)?.message ?? err).slice(0, 200);
     if (message !== lastError) {

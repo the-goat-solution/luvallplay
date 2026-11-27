@@ -89,11 +89,10 @@ export function registerReportTarget(type: TargetType, loader: TargetLoader | nu
 const loadProfileTarget: TargetLoader = async (db, reporterId, publicId) => {
   const profile = await loadVisibleProfile(db, reporterId, publicId);
   if (!profile) return null;
+  // The clubs the gate itself says the two share (so never one this deployment doesn't let have Social).
   const { rows } = await db.query(
-    `SELECT a.club_id::int AS club_id
-     FROM social_clubs_of($1) a(club_id) JOIN social_clubs_of($2) b(club_id) USING (club_id)
-     ORDER BY (a.club_id = app_tenant_id()) DESC NULLS LAST, a.club_id LIMIT 1`,
-    [reporterId, profile.playerId],
+    `SELECT c AS club_id FROM unnest($1::int[]) AS c ORDER BY (c = app_tenant_id()) DESC NULLS LAST, c LIMIT 1`,
+    [profile.sharedClubIds],
   );
   return {
     targetId: profile.playerId,

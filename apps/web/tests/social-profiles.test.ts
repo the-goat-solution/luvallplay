@@ -9,7 +9,9 @@ import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { COMMUNITY_RULES_VERSION, SOCIAL_LIMITS } from "@luvallplay/core/social";
 import { migrate } from "../scripts/db/migrate.mjs";
-import { block } from "../lib/moderation/blocks.ts";
+import { block, unblock } from "../lib/moderation/blocks.ts";
+import { fileReport } from "../lib/moderation/reports.ts";
+import { moderationSeal } from "../lib/moderation/seal.ts";
 import { suspend, unsuspend } from "../lib/moderation/suspensions.ts";
 import { countOpenClubReports } from "../lib/moderation/attention.ts";
 import { enabledModules, resetClubModulesCache } from "../lib/club-modules.ts";
@@ -26,6 +28,8 @@ const key = () => randomBytes(32).toString("base64");
 const NOT_FOUND = { ok: false, code: "not_found" } as const;
 const OFF = { ok: false, code: "module_off" } as const;
 const SUSPENDED = { ok: false, code: "suspended" } as const;
+type TxClient = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; command?: string }>; release(destroy?: Error | boolean): void };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 test("initials come from the display name, never from the account's name", () => {
   assert.equal(initialsOf("Mia G"), "MG");
@@ -148,7 +152,7 @@ describe("opting in, profiles, follows and access", { skip: !BASE_URL && !REQUIR
 
   for (const mode of ["off", "enforce"] as const) {
     describe(`TENANT_SCOPE=${mode}`, () => {
-      let db: { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
+      let db: { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; connect: () => Promise<TxClient> };
       const input = (displayName: unknown, more: Record<string, unknown> = {}) => ({ displayName, visibility: "club", adultConfirmed: true, rulesVersion: COMMUNITY_RULES_VERSION, ...more });
       /** Opts a person in the real way and remembers their public id. */
       async function join(playerId: number, displayName: string, visibility: "club" | "everyone" = "club") {
@@ -160,7 +164,7 @@ describe("opting in, profiles, follows and access", { skip: !BASE_URL && !REQUIR
       before(async () => {
         await database.closeDatabase();
         process.env.TENANT_SCOPE = mode;
-        db = { query: (text, params) => database.sql.query(text, params) };
+        db = { query: (text, params) => database.sql.query(text, params), connect: () => database.sql.connect() };
       });
       beforeEach(async () => {
         await admin.query(`TRUNCATE content_reports, moderation_evidence, moderation_actions CASCADE`);
@@ -355,7 +359,7 @@ describe("opting in, profiles, follows and access", { skip: !BASE_URL && !REQUIR
         await join(MIA, "Smash Queen");
         await join(PETE, "Pete the Smash");
         await join(QUINN, "Quinn", "everyone");
-        assert.deepEqual(await block(db, MIA, pid(PETE)), { ok: true, value: null });
+        assert.deepEqual(await block(db, MIA, pid(PETE), { env: ON }), { ok: true, value: null });
         assert.deepEqual(await getProfile(db, MIA, pid(PETE), { env: ON }), NOT_FOUND);
         assert.deepEqual(await getProfile(db, PETE, pid(MIA), { env: ON }), NOT_FOUND);
         assert.equal((await getProfile(db, QUINN, pid(PETE), { env: ON })).ok, true, "others still see both");
@@ -545,15 +549,15 @@ describe("opting in, profiles, follows and access", { skip: !BASE_URL && !REQUIR
         assert.deepEqual(await follow(db, LINH, pid(QUINN), { env: ON }), { ok: true, value: null });
         assert.deepEqual(await follow(db, QUINN, pid(PETE), { env: ON }), { ok: true, value: null });
         assert.deepEqual(await follows(), [`${MIA}>${NAM}`, `${MIA}>${PETE}`, `${QUINN}>${PETE}`, `${LINH}>${QUINN}`].sort());
-        assert.deepEqual(await followCounts(db, PETE), { followers: 2, following: 0 });
-        assert.deepEqual(await followCounts(db, MIA), { followers: 0, following: 2 });
+        assert.deepEqual(await followCounts(db, PETE, { env: ON }), { followers: 2, following: 0 });
+        assert.deepEqual(await followCounts(db, MIA, { env: ON }), { followers: 0, following: 2 });
         const pete = await getProfile(db, MIA, pid(PETE), { env: ON });
         assert.ok(pete.ok);
         assert.deepEqual([pete.value.followers, pete.value.following, pete.value.followedByMe], [2, 0, true]);
         assert.equal(((await getProfile(db, PETE, pid(MIA), { env: ON })) as { value: { followedByMe: boolean } }).value.followedByMe, false, "following isn't mutual");
         // A suspended follower isn't counted while suspended.
         await suspend(db, { playerId: QUINN, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
-        assert.deepEqual(await followCounts(db, PETE), { followers: 1, following: 0 });
+        assert.deepEqual(await followCounts(db, PETE, { env: ON }), { followers: 1, following: 0 });
 
         // Someone with access who hasn't opted in can't follow.
         assert.deepEqual(await follow(db, TAMA, pid(MIA), { env: ON }), { ok: false, code: "not_joined" });
@@ -569,34 +573,150 @@ describe("opting in, profiles, follows and access", { skip: !BASE_URL && !REQUIR
         assert.deepEqual(await follows(), [`${MIA}>${NAM}`, `${QUINN}>${PETE}`, `${LINH}>${QUINN}`].sort(), "only Mia's own follow of Pete went");
       });
 
-      test("nobody follows across a block, either way, and a block made at the same moment wins", async () => {
+      test("nobody follows across a block, either way", async () => {
         await join(MIA, "Smash Queen");
         await join(PETE, "Pete the Smash");
         await join(QUINN, "Quinn");
         assert.deepEqual(await follow(db, PETE, pid(MIA), { env: ON }), { ok: true, value: null });
-        assert.deepEqual(await block(db, MIA, pid(PETE)), { ok: true, value: null });
+        assert.deepEqual(await block(db, MIA, pid(PETE), { env: ON }), { ok: true, value: null });
         assert.deepEqual(await follows(), [], "the block removed the follow");
         assert.deepEqual(await follow(db, PETE, pid(MIA), { env: ON }), NOT_FOUND);
         assert.deepEqual(await follow(db, MIA, pid(PETE), { env: ON }), NOT_FOUND);
         assert.deepEqual(await follow(db, MIA, newPublicId(), { env: ON }), NOT_FOUND, "the same answer as nobody");
         assert.deepEqual(await follows(), []);
+      });
 
-        // The block lands after the follower was allowed to see the profile and before the follow is written.
-        const blockBeforeWrite = { query: async (text: string, params?: unknown[]) => {
-          if (/INSERT INTO social_follows/.test(text)) await admin.query(`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [QUINN, MIA]);
-          return db.query(text, params);
-        } };
-        assert.deepEqual(await follow(blockBeforeWrite, MIA, pid(QUINN), { env: ON }), NOT_FOUND);
+      test("a block and a follow of the same two people at the same moment: one waits for the other, and no follow is left across the block", async () => {
+        await join(MIA, "Smash Queen");
+        await join(PETE, "Pete the Smash");
+        /** A database whose transactions stop just before COMMIT until `open()` is called. */
+        const held = () => {
+          let open = () => {};
+          let reached = () => {};
+          const gate = new Promise<void>((r) => (open = r));
+          const atCommit = new Promise<void>((r) => (reached = r));
+          const connect = async () => {
+            const c = await db.connect();
+            return { query: async (text: string, params?: unknown[]) => { if (text === "COMMIT") { reached(); await gate; } return c.query(text, params); }, release: (e?: Error | boolean) => c.release(e) };
+          };
+          const inTime = Promise.race([atCommit, sleep(5000).then(() => Promise.reject(new Error("the work never reached its COMMIT: it isn't running in a transaction")))]);
+          return { db: { query: db.query, connect }, open, atCommit: inTime };
+        };
+        const settled = async (p: Promise<unknown>) => Promise.race([p.then(() => true), sleep(200).then(() => false)]);
+        const gates: (() => void)[] = [];
+        const heldOpen = () => { const h = held(); gates.push(h.open); return h; };
+        try {
+
+        // The block has done its work and not yet committed; the follow arrives.
+        const slowBlock = heldOpen();
+        const blocking = block(slowBlock.db, MIA, pid(PETE), { env: ON });
+        await slowBlock.atCommit;
+        const following = follow(db, MIA, pid(PETE), { env: ON });
+        assert.equal(await settled(following), false, "the follow waits for the block");
+        slowBlock.open();
+        assert.deepEqual(await blocking, { ok: true, value: null });
+        assert.deepEqual(await following, NOT_FOUND);
         assert.deepEqual(await follows(), []);
-        // The block lands while the follow is being written: neither statement saw the other.
-        await admin.query(`DELETE FROM user_blocks WHERE blocker_id = $1`, [QUINN]);
-        const blockAfterWrite = { query: async (text: string, params?: unknown[]) => {
-          const result = await db.query(text, params);
-          if (/INSERT INTO social_follows/.test(text)) await admin.query(`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [MIA, QUINN]);
-          return result;
-        } };
-        assert.deepEqual(await follow(blockAfterWrite, MIA, pid(QUINN), { env: ON }), NOT_FOUND);
-        assert.deepEqual(await follows(), [], "the follow didn't survive the block");
+        assert.deepEqual(await followCounts(db, PETE, { env: ON }), { followers: 0, following: 0 });
+        assert.deepEqual(await unblock(db, MIA, pid(PETE)), { ok: true, value: null });
+        assert.deepEqual(await follows(), [], "no follow comes back with the unblock");
+
+        // The other way round: the follow is written and not yet committed; the block arrives.
+        const slowFollow = heldOpen();
+        const following2 = follow(slowFollow.db, PETE, pid(MIA), { env: ON });
+        await slowFollow.atCommit;
+        const blocking2 = block(db, MIA, pid(PETE), { env: ON });
+        assert.equal(await settled(blocking2), false, "the block waits for the follow");
+        slowFollow.open();
+        assert.deepEqual(await following2, { ok: true, value: null });
+        assert.deepEqual(await blocking2, { ok: true, value: null });
+        assert.deepEqual(await follows(), [], "the block removed the follow it waited for");
+        assert.deepEqual((await rows(`SELECT blocker_id, blocked_id FROM user_blocks`)), [{ blocker_id: MIA, blocked_id: PETE }]);
+        // Other pairs don't wait for these two.
+        await join(QUINN, "Quinn");
+        const slow3 = heldOpen();
+        const blocking3 = block(slow3.db, QUINN, pid(PETE), { env: ON });
+        await slow3.atCommit;
+        assert.deepEqual(await follow(db, QUINN, pid(MIA), { env: ON }), { ok: true, value: null });
+        slow3.open();
+        await blocking3;
+        } finally {
+          // A failed check must not leave a transaction waiting at its COMMIT.
+          for (const open of gates) open();
+        }
+      });
+
+      test("the counts leave out anyone a list wouldn't show: blocked, suspended, deleted, or with no social club left", async () => {
+        await join(MIA, "Smash Queen");
+        await join(PETE, "Pete the Smash");
+        await join(QUINN, "Quinn");
+        await join(TAMA, "Tama");
+        await join(LINH, "Linh N", "everyone");
+        await join(SIONE, "Sione S");
+        for (const id of [PETE, QUINN, TAMA, SIONE]) assert.deepEqual(await follow(db, id, pid(MIA), { env: ON }), { ok: true, value: null });
+        assert.deepEqual(await follow(db, MIA, pid(LINH), { env: ON }), { ok: true, value: null });
+        assert.deepEqual(await follow(db, MIA, pid(PETE), { env: ON }), { ok: true, value: null });
+        assert.deepEqual(await followCounts(db, MIA, { env: ON }), { followers: 4, following: 2 });
+        // A follow row left across a block (written by hand: the library can't make one).
+        await admin.query(`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [PETE, MIA]);
+        assert.deepEqual(await followCounts(db, MIA, { env: ON }), { followers: 3, following: 1 });
+        await suspend(db, { playerId: QUINN, scope: "all", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
+        assert.deepEqual(await followCounts(db, MIA, { env: ON }), { followers: 2, following: 1 });
+        await admin.query(`UPDATE club_members SET status = 'disabled' WHERE user_id = $1`, [TAMA]);
+        assert.deepEqual(await followCounts(db, MIA, { env: ON }), { followers: 1, following: 1 });
+        // Linh's only club isn't a pilot club: she is out of sight, so she isn't counted.
+        assert.deepEqual(await followCounts(db, MIA, { env: prod("1") }), { followers: 1, following: 0 });
+        assert.deepEqual(await followCounts(db, MIA, { env: prod("") }), { followers: 0, following: 0 });
+        await admin.query(`INSERT INTO social_profiles (player_id, public_id, display_name, adult_confirmed_at, rules_version) VALUES ($1, 'Gone00000000', 'Gone', now(), $2)`, [DELETED, COMMUNITY_RULES_VERSION]);
+        await admin.query(`INSERT INTO social_follows (follower_id, followee_id) VALUES ($1, $2)`, [DELETED, MIA]);
+        assert.deepEqual(await followCounts(db, MIA, { env: ON }), { followers: 1, following: 1 });
+        const seen = await getProfile(db, SIONE, pid(MIA), { env: ON });
+        assert.ok(seen.ok);
+        assert.deepEqual([seen.value.followers, seen.value.following], [1, 1]);
+      });
+
+      test("Review Focus 6: a profile out of sight through the pilot list answers like no profile at all, for looking, following, blocking and reporting", async () => {
+        await join(MIA, "Smash Queen");
+        await join(LINH, "Linh N", "everyone");
+        await join(SIONE, "Sione S");
+        const pilot = prod("1");
+        const nobody = "AAAAAAAAAAAA";
+        const was = { ...process.env };
+        const report = (targetId: unknown) => fileReport(db, moderationSeal({}), { reporterId: MIA, targetType: "profile", targetId, reason: "spam" });
+        try {
+          // fileReport's loaders read the deployment's own settings.
+          Object.assign(process.env, pilot);
+          for (const viewer of [MIA, SIONE]) {
+            assert.deepEqual(await getProfile(db, viewer, pid(LINH), { env: pilot }), await getProfile(db, viewer, nobody, { env: pilot }));
+            assert.deepEqual(await follow(db, viewer, pid(LINH), { env: pilot }), await follow(db, viewer, nobody, { env: pilot }));
+            assert.deepEqual(await block(db, viewer, pid(LINH), { env: pilot }), await block(db, viewer, nobody, { env: pilot }));
+            assert.deepEqual(await block(db, viewer, pid(LINH), { env: pilot }), NOT_FOUND);
+          }
+          assert.deepEqual(await report(pid(LINH)), await report(nobody));
+          assert.deepEqual(await report(pid(LINH)), NOT_FOUND);
+          assert.deepEqual(await rows(`SELECT 1 FROM user_blocks UNION ALL SELECT 1 FROM content_reports UNION ALL SELECT 1 FROM social_follows`), []);
+          // The same calls reach someone in the pilot club.
+          assert.equal((await report(pid(SIONE))).ok, true);
+          assert.deepEqual((await rows(`SELECT club_id, queue FROM content_reports`)), [{ club_id: 1, queue: "club" }], "and the report's club is the pilot club they share");
+          assert.deepEqual(await block(db, MIA, pid(SIONE), { env: pilot }), { ok: true, value: null });
+          // A blocker whose own club isn't a pilot club finds nobody.
+          assert.deepEqual(await block(db, LINH, pid(SIONE), { env: pilot }), NOT_FOUND);
+          // Hanoi Smash joins the pilot: Linh is there.
+          Object.assign(process.env, prod(`1,${club2}`));
+          assert.deepEqual(await block(db, MIA, pid(LINH), { env: prod(`1,${club2}`) }), { ok: true, value: null });
+        } finally {
+          process.env = was;
+        }
+      });
+
+      test("a viewer who may not use Social sees and follows nobody", async () => {
+        await join(MIA, "Smash Queen");
+        await join(PETE, "Pete the Smash");
+        await suspend(db, { playerId: PETE, scope: "social", until: null, reasonCode: "spam", actorId: 1 }, KEYS);
+        assert.deepEqual(await getProfile(db, PETE, pid(MIA), { env: ON }), NOT_FOUND);
+        assert.deepEqual(await getProfile(db, PETE, pid(PETE), { env: ON }), NOT_FOUND, "not their own either: they are told `suspended` by socialAccess");
+        assert.deepEqual(await follow(db, PETE, pid(MIA), { env: ON }), NOT_FOUND);
+        assert.deepEqual(await follows(), []);
       });
 
       test("a person banned in every club they share with someone can't follow them", async () => {

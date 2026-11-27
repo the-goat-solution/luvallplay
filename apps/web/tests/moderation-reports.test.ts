@@ -144,6 +144,12 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
     delete process.env.CONTACT_INDEX_KEYS;
     delete process.env.MODERATION_KEKS;
     delete process.env.PII_READS;
+    // Social is open for every club here, as on a preview (lib/juniors/switch-rule.ts); the pilot list has its own tests.
+    process.env.SOCIAL_AVAILABILITY = "available";
+    delete process.env.SOCIAL_PILOT_TENANTS;
+    delete process.env.VERCEL_ENV;
+    delete process.env.E2E_OUTBOX;
+    process.env.NODE_ENV = "test";
     database = await import("../lib/database.ts");
   });
   after(async () => {
@@ -275,12 +281,12 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
 
   for (const mode of ["off", "enforce"] as const) {
     describe(`TENANT_SCOPE=${mode}`, () => {
-      let db: { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
+      let db: { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; connect: () => ReturnType<typeof database.sql.connect> };
 
       before(async () => {
         await database.closeDatabase();
         process.env.TENANT_SCOPE = mode;
-        db = { query: (text, params) => database.sql.query(text, params) };
+        db = { query: (text, params) => database.sql.query(text, params), connect: () => database.sql.connect() };
       });
       beforeEach(async () => {
         await admin.query(`TRUNCATE moderation_evidence, moderation_actions, content_reports, social_follows, user_blocks, social_kudos, social_comments, social_posts, social_club_bans, social_profiles, player_suspensions`);

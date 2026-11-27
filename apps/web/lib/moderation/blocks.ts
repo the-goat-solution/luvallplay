@@ -14,9 +14,28 @@
 // Takes a small `Db`, like lib/juniors/family.ts, so tests and scripts share it.
 import { err, ok, type Result } from "./result.ts";
 import { isPublicId } from "../social/public-id.ts";
-import { profileVisibleSql } from "../social/visible.ts";
+import { profileVisibleSql, socialClubsParam } from "../social/visible.ts";
+import { withPlayerLock, type LockPool } from "../player-lock.ts";
 
 export type Db = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
+/** A database that can also give one connection, for a transaction (lib/database.ts's `sql`, a pg Pool). */
+export type PairDb = Db & LockPool;
+type Env = Record<string, string | undefined>;
+
+/**
+ * Runs `fn` in a short transaction that holds the lock of these two people
+ * as a pair. Blocking and following both write through here, so for one pair
+ * they happen one after the other, each seeing what the other committed: a
+ * follow can't be written across a block made at the same moment.
+ *
+ * The lock is withPlayerLock's (lib/player-lock.ts), on the lower of the two
+ * ids, so it is the same whichever way round the two are named. It must not
+ * be called inside another withPlayerLock (locks don't nest; it throws).
+ */
+export function withPairLock<T>(db: PairDb, a: number, b: number, fn: (tx: Db) => Promise<T>): Promise<T> {
+  if (typeof (db as Partial<LockPool>)?.connect !== "function") throw new Error("withPairLock: the database must be able to give a connection (connect()), for the transaction.");
+  return withPlayerLock(db, Math.min(a, b), "social.pair", fn);
+}
 
 export type BlockedPerson = { publicId: string; displayName: string; blockedAt: string };
 
@@ -48,7 +67,7 @@ export async function blockedEitherWay(db: Db, a: number, b: number): Promise<bo
  * a deleted account. Null for everyone else. One statement, so two blocks of
  * the same person at once both see the same state.
  */
-async function blockable(db: Db, blockerId: number, publicId: string): Promise<number | null> {
+async function blockable(db: Db, blockerId: number, publicId: string, env: Env): Promise<number | null> {
   const { rows } = await db.query(
     `SELECT sp.player_id
      FROM social_profiles sp
@@ -58,8 +77,8 @@ async function blockable(db: Db, blockerId: number, publicId: string): Promise<n
          OR EXISTS (SELECT 1 FROM social_follows f WHERE f.follower_id = sp.player_id AND f.followee_id = $1)
          OR EXISTS (SELECT 1 FROM social_comments c JOIN social_posts po ON po.id = c.post_id WHERE c.author_id = sp.player_id AND po.author_id = $1)
          OR EXISTS (SELECT 1 FROM social_kudos k JOIN social_posts po ON po.id = k.post_id WHERE k.player_id = sp.player_id AND po.author_id = $1)
-         OR ${profileVisibleSql("$1")})`,
-    [blockerId, publicId],
+         OR ${profileVisibleSql("$1", "$3")})`,
+    [blockerId, publicId, socialClubsParam(env)],
   );
   return rows[0] ? Number(rows[0].player_id) : null;
 }
@@ -70,19 +89,21 @@ async function blockable(db: Db, blockerId: number, publicId: string): Promise<n
  * an id nobody has, a person the blocker can't see and who never interacted
  * with them, the blocker themselves, and a blocker that isn't an account.
  */
-export async function block(db: Db, blockerId: number, publicId: unknown): Promise<Result<null, "not_found">> {
+export async function block(db: PairDb, blockerId: number, publicId: unknown, { env = process.env }: { env?: Env } = {}): Promise<Result<null, "not_found">> {
   if (!Number.isInteger(blockerId) || !isPublicId(publicId)) return err("not_found");
-  const blockedId = await blockable(db, blockerId, publicId);
+  const blockedId = await blockable(db, blockerId, publicId, env);
   if (blockedId === null) return err("not_found");
   try {
-    // One statement, so the block and the two follows going are one change.
-    await db.query(
-      `WITH blocked AS (
-         INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT (blocker_id, blocked_id) DO NOTHING
-       )
-       DELETE FROM social_follows WHERE (follower_id = $1 AND followee_id = $2) OR (follower_id = $2 AND followee_id = $1)`,
-      [blockerId, blockedId],
-    );
+    // Behind the pair's lock: a follow of the same two has either committed (and goes here) or waits and then sees the block.
+    await withPairLock(db, blockerId, blockedId, async (tx) => {
+      await tx.query(
+        `WITH blocked AS (
+           INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT (blocker_id, blocked_id) DO NOTHING
+         )
+         DELETE FROM social_follows WHERE (follower_id = $1 AND followee_id = $2) OR (follower_id = $2 AND followee_id = $1)`,
+        [blockerId, blockedId],
+      );
+    });
   } catch (e) {
     // An account that isn't there (or went between the two statements): the same answer as any other missing person.
     if ((e as { code?: string }).code === "23503") return err("not_found");

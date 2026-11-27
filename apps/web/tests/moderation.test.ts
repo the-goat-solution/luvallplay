@@ -123,6 +123,12 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
     delete process.env.CONTACT_KEKS;
     delete process.env.CONTACT_INDEX_KEYS;
     delete process.env.PII_READS;
+    // Social is open for every club here, as on a preview (lib/juniors/switch-rule.ts); the pilot list has its own tests.
+    process.env.SOCIAL_AVAILABILITY = "available";
+    delete process.env.SOCIAL_PILOT_TENANTS;
+    delete process.env.VERCEL_ENV;
+    delete process.env.E2E_OUTBOX;
+    process.env.NODE_ENV = "test";
     database = await import("../lib/database.ts");
   });
   after(async () => {
@@ -231,12 +237,12 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
 
   for (const mode of ["off", "enforce"] as const) {
     describe(`TENANT_SCOPE=${mode}`, () => {
-      let db: { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
+      let db: { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; connect: () => ReturnType<typeof database.sql.connect> };
 
       before(async () => {
         await database.closeDatabase();
         process.env.TENANT_SCOPE = mode;
-        db = { query: (text, params) => database.sql.query(text, params) };
+        db = { query: (text, params) => database.sql.query(text, params), connect: () => database.sql.connect() };
       });
       beforeEach(async () => {
         await admin.query(`TRUNCATE social_follows, user_blocks, social_kudos, social_comments, social_posts, social_club_bans, social_profiles, player_suspensions`);
@@ -300,8 +306,8 @@ describe("blocks, suspensions and the social tables", { skip: !BASE_URL && !REQU
 
       test("who can see a profile: club mates, or anyone for an `everyone` profile; never a real name", async () => {
         const mia = await loadVisibleProfile(db, PETE, pid(MIA));
-        assert.deepEqual(Object.keys(mia!).sort(), ["bio", "displayName", "joinedAt", "playerId", "publicId", "visibility"]);
-        assert.deepEqual({ ...mia, joinedAt: "" }, { playerId: MIA, publicId: pid(MIA), displayName: "Mia G", bio: null, visibility: "club", joinedAt: "" });
+        assert.deepEqual(Object.keys(mia!).sort(), ["bio", "displayName", "joinedAt", "mine", "playerId", "publicId", "sharedClubIds", "visibility"]);
+        assert.deepEqual({ ...mia, joinedAt: "" }, { playerId: MIA, publicId: pid(MIA), displayName: "Mia G", bio: null, visibility: "club", joinedAt: "", mine: false, sharedClubIds: [1] });
         assert.ok(!JSON.stringify(mia).includes("Golden"), "no real name");
         // `club`: only someone who shares a social club.
         assert.equal(await loadVisibleProfile(db, LINH, pid(MIA)), null);

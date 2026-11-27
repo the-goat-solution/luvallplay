@@ -25,7 +25,6 @@
 import { COMMUNITY_RULES_VERSION, type SocialVisibility } from "@luvallplay/core/social";
 import { activeSuspension } from "../moderation/suspensions.ts";
 import { pilotModuleOn, type Env } from "../juniors/switch-rule.ts";
-import { loadVisibleProfile, type VisibleProfile } from "./visible.ts";
 
 export type Db = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
 
@@ -93,31 +92,4 @@ export async function socialAccess(db: Db, playerId: number, env: Env = process.
   if (suspension) return { ok: false, code: "suspended" };
   const profile = r.public_id ? ownProfile(r) : null;
   return { ok: true, clubIds, profile, rulesCurrent: profile !== null && r.rules_version === COMMUNITY_RULES_VERSION };
-}
-
-/**
- * The profile with this public id, if `viewerId` may see it, with the clubs
- * the two share. loadVisibleProfile decides by the clubs' own switches; this
- * also applies the deployment's switch, so a club that isn't in the pilot
- * list doesn't count for either person. Null for every reason alike.
- */
-export async function loadProfileFor(
-  db: Db,
-  viewerId: number,
-  publicId: unknown,
-  env: Env = process.env,
-): Promise<(VisibleProfile & { mine: boolean; sharedClubIds: number[] }) | null> {
-  const profile = await loadVisibleProfile(db, viewerId, publicId);
-  if (!profile) return null;
-  const { rows } = await db.query(
-    `SELECT ARRAY(SELECT c::int FROM social_clubs_of($1) AS c) AS viewer, ARRAY(SELECT c::int FROM social_clubs_of($2) AS c) AS theirs`,
-    [viewerId, profile.playerId],
-  );
-  const viewer = allowed(rows[0]?.viewer, env);
-  const theirs = allowed(rows[0]?.theirs, env);
-  if (viewer.length === 0 || theirs.length === 0) return null;
-  const mine = profile.playerId === viewerId;
-  const sharedClubIds = theirs.filter((id) => viewer.includes(id));
-  if (!mine && profile.visibility === "club" && sharedClubIds.length === 0) return null;
-  return { ...profile, mine, sharedClubIds };
 }

@@ -16,9 +16,10 @@
 import { COMMUNITY_RULES_VERSION, SOCIAL_LIMITS, SOCIAL_VISIBILITIES, cleanText, screenText, type SocialVisibility } from "@luvallplay/core/social";
 import { err, ok, type Result } from "../moderation/result.ts";
 import type { Env } from "../juniors/switch-rule.ts";
-import { loadProfileFor, ownProfile, socialAccess, type SocialProfile } from "./access.ts";
+import { ownProfile, socialAccess, type SocialProfile } from "./access.ts";
 import { followCounts } from "./follows.ts";
 import { newPublicId } from "./public-id.ts";
+import { loadVisibleProfile } from "./visible.ts";
 
 export type Db = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
 
@@ -163,13 +164,16 @@ export async function updateProfile(
  * The profile with this public id, as `viewerId` may see it. `not_found`
  * for an id nobody has and for every profile out of the viewer's sight:
  * blocked either way, suspended, deleted, a `club` profile with no shared
- * club, a person with no social club left, and a viewer with none.
+ * club, a person with no social club left. A viewer who may not use Social
+ * themselves (no club with it, suspended, not an account) sees nobody, their
+ * own profile included: socialAccess is what tells them why.
  */
 export async function getProfile(db: Db, viewerId: number, publicId: unknown, { env = process.env }: Options = {}): Promise<Result<PublicProfile, "not_found">> {
-  const profile = await loadProfileFor(db, viewerId, publicId, env);
+  if (!(await socialAccess(db, viewerId, env)).ok) return err("not_found");
+  const profile = await loadVisibleProfile(db, viewerId, publicId, env);
   if (!profile) return err("not_found");
   const [counts, mine] = await Promise.all([
-    followCounts(db, profile.playerId),
+    followCounts(db, profile.playerId, { env }),
     db.query(`SELECT 1 FROM social_follows WHERE follower_id = $1 AND followee_id = $2`, [viewerId, profile.playerId]),
   ]);
   return ok({

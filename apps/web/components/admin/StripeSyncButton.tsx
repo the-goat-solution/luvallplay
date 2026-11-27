@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { LoadingIcon } from "@/components/LoadingIcon";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import type { StripeSyncReport } from "@/lib/stripe-sync";
+import { useAdminText } from "@/components/admin/AdminLang";
 
 // Runs the membership ⇄ Stripe sync on demand and shows what it changed.
 export function StripeSyncButton() {
   const router = useRouter();
+  const { t } = useAdminText();
   const [busy, setBusy] = useState(false);
   const showBusy = useDelayedLoading(busy);
   const [error, setError] = useState<string | null>(null);
@@ -25,11 +27,11 @@ export function StripeSyncButton() {
         return;
       }
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error ?? "Sync failed");
+      if (!res.ok) throw new Error(data?.error ?? t("sync_failed"));
       setReport(data.report);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Sync failed");
+      setError(e instanceof Error ? e.message : t("sync_failed"));
     } finally {
       setBusy(false);
     }
@@ -58,14 +60,14 @@ export function StripeSyncButton() {
         {showBusy ? (
           <>
             <LoadingIcon size="sm" />
-            Syncing with Stripe…
+            {t("sync_syncing")}
           </>
         ) : (
-          "Sync with Stripe now"
+          t("sync_btn")
         )}
       </button>
       <span style={{ marginLeft: 10, fontSize: 12, color: "#666" }}>
-        Also runs automatically every day.
+        {t("sync_auto")}
       </span>
       {error && (
         <p style={{ color: "#b00020", fontSize: 13, marginTop: 8 }}>{error}</p>
@@ -83,11 +85,8 @@ export function StripeSyncButton() {
           }}
         >
           <p style={{ margin: 0, fontWeight: 600 }}>
-            Checked {report.checked} membership{report.checked === 1 ? "" : "s"} against
-            Stripe —{" "}
-            {report.changed.length === 0
-              ? "everything already matched."
-              : `fixed ${report.changed.length}:`}
+            {t(report.checked === 1 ? "sync_checked_one" : "sync_checked_many", { n: report.checked })}
+            {report.changed.length === 0 ? t("sync_all_match") : t("sync_fixed", { n: report.changed.length })}
           </p>
           {report.changed.length > 0 && (
             <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
@@ -101,7 +100,7 @@ export function StripeSyncButton() {
           {report.issues.length > 0 && (
             <>
               <p style={{ margin: "10px 0 0", fontWeight: 600, color: "#8a4b00" }}>
-                Needs a look ({report.issues.length}):
+                {t("sync_needs_look", { n: report.issues.length })}
               </p>
               <ul style={{ margin: "6px 0 0", paddingLeft: 18, color: "#8a4b00" }}>
                 {report.issues.map((issue) => (
@@ -112,7 +111,7 @@ export function StripeSyncButton() {
           )}
           {report.errors > 0 && (
             <p style={{ margin: "10px 0 0", color: "#b00020" }}>
-              {report.errors} couldn&apos;t be checked (Stripe error) — try again shortly.
+              {t("sync_errors", { n: report.errors })}
             </p>
           )}
         </div>

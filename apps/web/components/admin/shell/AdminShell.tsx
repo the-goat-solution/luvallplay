@@ -125,7 +125,7 @@ export function AdminShell({
 
       {/* useSearchParams needs a Suspense boundary of its own. */}
       <Suspense fallback={null}>
-        <FlashToast pathname={pathname} />
+        <FlashToast pathname={pathname} lang={lang} />
       </Suspense>
       <main className={s.main}>{children}</main>
     </div>

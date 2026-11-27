@@ -21,21 +21,19 @@ import {
 import {
   offlineInvoiceIdFromRef,
   parseOfflineMethod,
-  PAYMENT_METHOD_LABEL,
 } from "@/lib/offline-payment";
 import { reconcileOfflinePayment, recordOfflinePayment } from "@/lib/offline-payment-stripe";
 import { getOfflinePaymentReconciliation, type OfflineReconciliation } from "@/lib/bank-db";
 import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMethodField";
 import { clubMoney } from "@/lib/money";
 import { clubLocale, membershipDayList } from "@/lib/club-brand";
+import { adminText } from "@/lib/admin-lang";
+import { navLabel, type AdminKey } from "@luvallplay/i18n/admin";
 
 export const dynamic = "force-dynamic";
 
-const PLAN_LABEL = {
-  casual: "Casual",
-  monthly: "Monthly member",
-  quarterly: "Quarterly member",
-} as const;
+const PLAN_KEY = { casual: "play_plan_casual", monthly: "play_plan_monthly", quarterly: "play_plan_quarterly" } as const satisfies Record<string, AdminKey>;
+const METHOD_KEY = { card: "play_method_card", cash: "play_method_cash", bank_transfer: "play_method_bank_transfer" } as const satisfies Record<string, AdminKey>;
 
 // Adds a player who paid outside the online checkout — cash at the
 // session or a bank transfer to the club account. The payment is recorded
@@ -44,6 +42,7 @@ const PLAN_LABEL = {
 // away if it's already in, otherwise automatically when it arrives.
 async function addOfflinePlayer(date: string, formData: FormData) {
   "use server";
+  const { t } = await adminText();
 
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
@@ -52,14 +51,14 @@ async function addOfflinePlayer(date: string, formData: FormData) {
   const method = parseOfflineMethod(formData.get("method"));
 
   if (!firstName || !lastName || !email) {
-    redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent("Name and email are required")}`);
+    redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent(t("play_err_required"))}`);
   }
 
   // Admin adds go through even when registration is locked — the lock only
   // closes public sign-ups.
   const spots = await getAvailableSpots(date, { ignoreLock: true });
   if (spots <= 0) {
-    redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent("Session is full")}`);
+    redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent(t("play_err_full"))}`);
   }
 
   let recorded: Awaited<ReturnType<typeof recordOfflinePayment>>;
@@ -82,7 +81,7 @@ async function addOfflinePlayer(date: string, formData: FormData) {
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to record the payment";
+    const message = e instanceof Error ? e.message : t("play_err_record");
     redirect(`/admin/play-days?date=${date}&cashError=${encodeURIComponent(message)}`);
   }
 
@@ -97,8 +96,7 @@ async function addOfflinePlayer(date: string, formData: FormData) {
   if (!ok) {
     redirect(
       `/admin/play-days?date=${date}&cashError=${encodeURIComponent(
-        "Payment recorded in Stripe, but the session filled up before the slot could be reserved — check Stripe invoice " +
-          recorded.invoiceId,
+        t("play_err_filled", { id: recorded.invoiceId }),
       )}`,
     );
   }
@@ -125,11 +123,12 @@ async function removePlayer(date: string, bookingId: number) {
 
 async function updateCourts(date: string, formData: FormData) {
   "use server";
+  const { t } = await adminText();
   const courts = Number(formData.get("courts"));
 
   if (![1, 2, 3, 4].includes(courts)) {
     redirect(
-      `/admin/play-days?date=${date}&courtsError=${encodeURIComponent("Choose a valid number of courts")}`,
+      `/admin/play-days?date=${date}&courtsError=${encodeURIComponent(t("play_err_courts"))}`,
     );
   }
 
@@ -196,6 +195,7 @@ async function saveFillIn(
 ) {
   "use server";
 
+  const { t } = await adminText();
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
@@ -207,7 +207,7 @@ async function saveFillIn(
     );
 
   if (!firstName || !lastName || !email) {
-    fail("A stand-in needs a first name, last name and email");
+    fail(t("play_err_standin_required"));
   }
 
   // One person can't hold two spots on the same day, so reject a fill-in
@@ -223,14 +223,10 @@ async function saveFillIn(
   for (const entry of roster) {
     if (isTarget(entry)) continue;
     if (entry.email.toLowerCase() === emailKey) {
-      fail(
-        `${entry.name} is already on this roster with that email — one person can't take two spots.`,
-      );
+      fail(t("play_err_roster_dup", { name: entry.name }));
     }
     if (entry.fillIn && entry.fillIn.email.toLowerCase() === emailKey) {
-      fail(
-        `That email is already standing in for ${entry.name} on this date.`,
-      );
+      fail(t("play_err_standin_dup", { name: entry.name }));
     }
   }
 
@@ -281,23 +277,24 @@ function dayLabel(key: string, opts: Intl.DateTimeFormatOptions = { weekday: "sh
   return new Date(`${key}T00:00:00Z`).toLocaleDateString(clubLocale(), { timeZone: "UTC", ...opts });
 }
 
-function TransferStatus({ status }: { status: OfflineReconciliation | undefined }) {
+function TransferStatus({ status, t }: { status: OfflineReconciliation | undefined; t: T }) {
   return status?.reconciled ? (
     <span className={kit.sub} style={{ color: "#1a7a3c" }}>
-      ✓ Matched to the bank{status.bankDate ? ` (${dayLabel(status.bankDate)})` : ""}
+      {status.bankDate ? t("play_matched_on", { date: dayLabel(status.bankDate) }) : t("play_matched")}
     </span>
   ) : (
     <span className={kit.sub} style={{ color: "#8a4b00" }}>
-      Waiting for the bank transfer
+      {t("play_waiting_transfer")}
     </span>
   );
 }
 
 // The mini-game cap is the club's setting, so the text is built per request.
-const modeHelp = (miniGameMax: number): Record<SignupMode, string> => ({
-  open: "Anyone can sign up while there are spots. Members are always in.",
-  closed: "No new casual sign-ups or memberships start on this day, even with spots left. Everyone already in keeps their place, and you can still add players.",
-  mini: `Mini game: members are in automatically (they tap "Can't make it" if they can't come). Casual sign-ups are closed and the day is capped at ${miniGameMax} players. You can still add players.`,
+type T = Awaited<ReturnType<typeof adminText>>["t"];
+const modeHelp = (miniGameMax: number, t: T): Record<SignupMode, string> => ({
+  open: t("play_help_open"),
+  closed: t("play_help_closed"),
+  mini: t("play_help_mini", { n: miniGameMax }),
 });
 
 export default async function PlayDaysAdminPage({
@@ -305,6 +302,7 @@ export default async function PlayDaysAdminPage({
 }: {
   searchParams: Promise<{ date?: string; tab?: string }>;
 }) {
+  const { t, lang } = await adminText();
   const { date: dateParam, tab: tabParam } = await searchParams;
   const tab: Tab = tabParam === "waitlist" || tabParam === "attendance" ? tabParam : "roster";
   const hasDb = Boolean(process.env.POSTGRES_URL);
@@ -316,14 +314,14 @@ export default async function PlayDaysAdminPage({
 
   const header = (
     <PageHeader
-      title="Play days"
-      subtitle="One play day at a time: who's coming, who can sign up, the waitlist and who played."
+      title={t("play_title")}
+      subtitle={t("play_subtitle")}
       actions={
         selectedDate ? (
           <PlayDayPicker
             options={sessionKeys.map((key) => ({
               key,
-              label: `${dayLabel(key, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}${key === todayKey ? " (today)" : key < todayKey ? " (past)" : ""}`,
+              label: `${dayLabel(key, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}${key === todayKey ? t("play_today") : key < todayKey ? t("play_past") : ""}`,
             }))}
             selected={selectedDate}
             prev={sessionKeys[sessionKeys.indexOf(selectedDate) - 1] ?? null}
@@ -338,7 +336,7 @@ export default async function PlayDaysAdminPage({
     return (
       <div className={adminStyles.page}>
         {header}
-        <EmptyState>{hasDb ? "No play days yet. They appear here once they're in the club calendar." : "Database is not configured."}</EmptyState>
+        <EmptyState>{hasDb ? t("play_none") : t("play_no_db")}</EmptyState>
       </div>
     );
   }
@@ -376,13 +374,9 @@ export default async function PlayDaysAdminPage({
     .filter(Boolean)
     .join(" · ");
   const modeButtons: { mode: SignupMode; label: string; confirm?: string }[] = [
-    { mode: "open", label: "Open" },
-    { mode: "closed", label: "Closed", confirm: "Close sign-ups for this play day? Everyone already in keeps their place." },
-    {
-      mode: "mini",
-      label: "Mini game",
-      confirm: `Make this a mini game day? Casual sign-ups close and the day is capped at ${miniGameMax} players. Members stay included.`,
-    },
+    { mode: "open", label: t("play_mode_open") },
+    { mode: "closed", label: t("play_mode_closed"), confirm: t("play_confirm_close") },
+    { mode: "mini", label: t("play_mode_mini"), confirm: t("play_confirm_mini", { n: miniGameMax }) },
   ];
 
   return (
@@ -392,16 +386,16 @@ export default async function PlayDaysAdminPage({
       <Section title={dayLabel(selectedDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} id="day">
         {when && <p className={kit.muted} style={{ marginTop: -6, fontSize: 14 }}>{when}</p>}
         <StatGrid>
-          <StatTile label="Signed up" value={roster.length} hint={`of ${maxPlayers} places`} />
-          <StatTile label="Casual spots left" value={casualSpotsRemaining} tone={casualSpotsRemaining <= 0 ? "warn" : undefined} hint={mode === "open" ? "open to sign-ups" : "not open to the public"} />
-          <StatTile label="Waitlist" value={waitlist.length} tone={canNotify ? "warn" : undefined} hint={canNotify ? "spots are free" : waiting ? `${waiting} not emailed yet` : "people waiting"} />
-          <StatTile label="Courts" value={courts} hint={miniGame ? `mini game: ${miniGameMax} max` : `up to ${maxPlayers} players`} />
+          <StatTile label={t("play_signed_up")} value={roster.length} hint={t("play_of_places", { n: maxPlayers })} />
+          <StatTile label={t("play_casual_left")} value={casualSpotsRemaining} tone={casualSpotsRemaining <= 0 ? "warn" : undefined} hint={mode === "open" ? t("play_open_to_signups") : t("play_not_public")} />
+          <StatTile label={t("play_waitlist")} value={waitlist.length} tone={canNotify ? "warn" : undefined} hint={canNotify ? t("play_spots_free") : waiting ? t("play_not_emailed", { n: waiting }) : t("play_people_waiting")} />
+          <StatTile label={t("play_courts")} value={courts} hint={miniGame ? t("play_mini_max", { n: miniGameMax }) : t("play_up_to", { n: maxPlayers })} />
         </StatGrid>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "14px 28px", alignItems: "flex-start" }}>
           <div style={{ flex: "1 1 320px" }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Sign-ups</div>
-            <div className={kit.segmented} role="group" aria-label="Sign-ups">
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t("play_signups")}</div>
+            <div className={kit.segmented} role="group" aria-label={t("play_signups")}>
               {modeButtons.map((b) =>
                 mode === b.mode ? (
                   <span key={b.mode} className={`${kit.segment} ${kit.segmentOn}`} aria-current="true">
@@ -409,7 +403,7 @@ export default async function PlayDaysAdminPage({
                   </span>
                 ) : (
                   <form key={b.mode} action={setSignupMode.bind(null, selectedDate, b.mode)}>
-                    <SubmitButton className={kit.segment} loadingText="Saving…" confirmMessage={b.confirm}>
+                    <SubmitButton className={kit.segment} loadingText={t("play_saving")} confirmMessage={b.confirm}>
                       {b.label}
                     </SubmitButton>
                   </form>
@@ -417,92 +411,90 @@ export default async function PlayDaysAdminPage({
               )}
             </div>
             <p className={kit.muted} style={{ fontSize: 13, margin: "8px 0 0", maxWidth: 560 }}>
-              {modeHelp(miniGameMax)[mode]}
+              {modeHelp(miniGameMax, t)[mode]}
             </p>
           </div>
           <form action={updateCourts.bind(null, selectedDate)} style={{ flex: "0 0 auto" }}>
             <label htmlFor="courts" style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-              Courts booked
+              {t("play_courts_booked")}
             </label>
             <div style={{ display: "flex", gap: 6 }}>
               <select id="courts" name="courts" defaultValue={courts} className={kit.select}>
                 {[1, 2, 3, 4].map((n) => (
                   <option key={n} value={n}>
-                    {n} court{n === 1 ? "" : "s"} · up to {sessionCapacityFor(cfg, n)}
+                    {t(n === 1 ? "play_court_one" : "play_court_many", { n, max: sessionCapacityFor(cfg, n) })}
                   </option>
                 ))}
               </select>
-              <SubmitButton className={kit.btn} loadingText="Saving…">
-                Save
+              <SubmitButton className={kit.btn} loadingText={t("play_saving")}>
+                {t("common_save")}
               </SubmitButton>
             </div>
           </form>
         </div>
       </Section>
 
-      <InfoDisclosure summary="How spots are counted">
-        <p>
-          Places = the courts&apos; capacity ({sessionCapacityFor(cfg, courts)} at {courts} court{courts === 1 ? "" : "s"}), or {miniGameMax} on a mini game day.
-          Members whose membership covers this day take their places first; casual sign-ups get what&apos;s left.
-        </p>
-        <p>Auto-renewing members count for play days after their current billing period too: their membership renews before the play day.</p>
-        <p>Only {membershipDayList()} play days have members. Play days on other days start with 1 court, casual sign-ups only.</p>
+      <InfoDisclosure summary={t("play_how_summary")}>
+        <p>{t(courts === 1 ? "play_how_1_one" : "play_how_1_many", { cap: sessionCapacityFor(cfg, courts), n: courts, mini: miniGameMax })}</p>
+        <p>{t("play_how_2")}</p>
+        <p>{t("play_how_3", { days: membershipDayList() })}</p>
       </InfoDisclosure>
 
       <Tabs
-        label="Play day"
+        label={t("play_tab_label")}
         current={tab}
         items={[
-          { key: "roster", label: "Roster", href: tabHref("roster"), count: roster.length },
-          { key: "waitlist", label: "Waitlist", href: tabHref("waitlist"), count: waitlist.length },
-          { key: "attendance", label: "Attendance", href: tabHref("attendance") },
+          { key: "roster", label: t("play_tab_roster"), href: tabHref("roster"), count: roster.length },
+          { key: "waitlist", label: t("play_tab_waitlist"), href: tabHref("waitlist"), count: waitlist.length },
+          { key: "attendance", label: t("play_tab_attendance"), href: tabHref("attendance") },
         ]}
       />
 
       {tab === "roster" && (
         <>
-          <FormPanel summary="＋ Add a player" title="Add a player who paid cash or by bank transfer" id="add">
+          <FormPanel summary={t("play_add_summary")} title={t("play_add_title")} id="add">
             <p className={kit.muted} style={{ fontSize: 13, margin: 0 }}>
-              Records the {clubMoney(CASUAL_PRICE_CENTS)} payment and adds them to this play day, even when sign-ups are closed. A bank transfer is matched on the{" "}
-              <AdminLink href="/admin/financials/bank">Bank</AdminLink> page as soon as it shows up.
+              {t("play_add_intro_a", { price: clubMoney(CASUAL_PRICE_CENTS) })}
+              <AdminLink href="/admin/financials/bank">{navLabel(lang, "Bank")}</AdminLink>
+              {t("play_add_intro_b")}
             </p>
             <form action={addOfflinePlayer.bind(null, selectedDate)} className={kit.formGrid}>
               <label className={kit.field}>
-                First name
+                {t("play_first_name")}
                 <input name="firstName" required className={kit.input} autoComplete="off" />
               </label>
               <label className={kit.field}>
-                Last name
+                {t("play_last_name")}
                 <input name="lastName" required className={kit.input} autoComplete="off" />
               </label>
               <label className={kit.field}>
-                Email
+                {t("play_email")}
                 <input type="email" name="email" required className={kit.input} autoComplete="off" />
               </label>
               <label className={kit.field}>
-                Phone (optional)
+                {t("play_phone_optional")}
                 <input name="phone" className={kit.input} autoComplete="off" />
               </label>
               <OfflinePaymentMethodField />
-              <SubmitButton className={kit.btn} loadingText="Adding…">
-                Add player
+              <SubmitButton className={kit.btn} loadingText={t("play_adding")}>
+                {t("play_add_btn")}
               </SubmitButton>
             </form>
           </FormPanel>
 
           {roster.length === 0 ? (
-            <EmptyState>Nobody has signed up for this play day yet.</EmptyState>
+            <EmptyState>{t("play_roster_empty")}</EmptyState>
           ) : (
             <div className={kit.tableWrap}>
               <table className={kit.table}>
-                <caption className={kit.srOnly}>Players on {selectedDate}</caption>
+                <caption className={kit.srOnly}>{t("play_caption_roster", { date: selectedDate })}</caption>
                 <thead>
                   <tr>
-                    <th scope="col">Player</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Payment</th>
+                    <th scope="col">{t("play_col_player")}</th>
+                    <th scope="col">{t("play_col_type")}</th>
+                    <th scope="col">{t("play_col_payment")}</th>
                     <th scope="col">
-                      <span className={kit.srOnly}>Actions</span>
+                      <span className={kit.srOnly}>{t("play_col_actions")}</span>
                     </th>
                   </tr>
                 </thead>
@@ -513,7 +505,7 @@ export default async function PlayDaysAdminPage({
                     const target = p.membershipId !== null ? { membershipId: p.membershipId } : { bookingId: p.bookingId! };
                     return (
                       <tr key={`${p.email}-${i}`}>
-                        <td data-label="Player">
+                        <td data-label={t("play_col_player")}>
                           <div>
                             <span className={p.fillIn ? kit.strike : undefined}>{p.name}</span>
                             <span className={kit.sub}>
@@ -522,26 +514,26 @@ export default async function PlayDaysAdminPage({
                             </span>
                             {p.fillIn && (
                               <span className={kit.sub} style={{ color: "#1a2a4a", marginTop: 4 }}>
-                                ↳ Stand-in: <strong>{p.fillIn.name}</strong> ({p.fillIn.email}
+                                {t("play_standin")} <strong>{p.fillIn.name}</strong> ({p.fillIn.email}
                                 {p.fillIn.phone ? ` · ${p.fillIn.phone}` : ""})
                               </span>
                             )}
                           </div>
                         </td>
-                        <td data-label="Type">
+                        <td data-label={t("play_col_type")}>
                           <div>
-                            {PLAN_LABEL[p.type]}
+                            {t(PLAN_KEY[p.type])}
                             {p.type !== "casual" && p.periodStart ? (
                               <span className={kit.sub}>
-                                since {dayLabel(p.periodStart)} · {p.autoRenews ? "renews automatically" : p.periodEnd ? `ends ${dayLabel(p.periodEnd)}` : ""}
+                                {t("play_since", { date: dayLabel(p.periodStart) })} · {p.autoRenews ? t("play_renews_auto") : p.periodEnd ? t("play_ends", { date: dayLabel(p.periodEnd) }) : ""}
                               </span>
                             ) : null}
                           </div>
                         </td>
-                        <td data-label="Payment">
+                        <td data-label={t("play_col_payment")}>
                           <div>
-                            {PAYMENT_METHOD_LABEL[p.method]}
-                            {p.method === "bank_transfer" ? <TransferStatus status={reconciliation.get(offlineInvoiceIdFromRef(p.paymentRef) ?? "")} /> : null}
+                            {t(METHOD_KEY[p.method])}
+                            {p.method === "bank_transfer" ? <TransferStatus t={t} status={reconciliation.get(offlineInvoiceIdFromRef(p.paymentRef) ?? "")} /> : null}
                           </div>
                         </td>
                         <td data-label="">
@@ -556,10 +548,10 @@ export default async function PlayDaysAdminPage({
                               <form action={removePlayer.bind(null, selectedDate, p.bookingId)}>
                                 <SubmitButton
                                   className={kit.btnDanger}
-                                  loadingText="Removing…"
-                                  confirmMessage={`Remove ${p.name} from ${dayLabel(selectedDate)}? Their spot is offered to the waitlist. (No refund is made here.)`}
+                                  loadingText={t("play_removing")}
+                                  confirmMessage={t("play_remove_confirm", { name: p.name, date: dayLabel(selectedDate) })}
                                 >
-                                  Remove
+                                  {t("play_remove")}
                                 </SubmitButton>
                               </form>
                             ) : null}
@@ -579,48 +571,47 @@ export default async function PlayDaysAdminPage({
         <>
           <Toolbar>
             <p className={kit.muted} style={{ fontSize: 13, margin: 0, flex: "1 1 320px" }}>
-              People waiting for a spot on this play day. They&apos;re emailed automatically when a spot opens (a player is removed, courts are added or
-              sign-ups reopen).
+              {t("play_waitlist_intro")}
             </p>
             {canNotify && (
               <form action={notifyWaitlistNow.bind(null, selectedDate)}>
-                <SubmitButton className={kit.btn} loadingText="Emailing…">
-                  Email the waitlist now ({casualSpotsRemaining} spot{casualSpotsRemaining === 1 ? "" : "s"} free)
+                <SubmitButton className={kit.btn} loadingText={t("play_emailing")}>
+                  {t(casualSpotsRemaining === 1 ? "play_notify_one" : "play_notify_many", { n: casualSpotsRemaining })}
                 </SubmitButton>
               </form>
             )}
           </Toolbar>
           {waitlist.length === 0 ? (
-            <EmptyState>Nobody is on the waitlist for this play day.</EmptyState>
+            <EmptyState>{t("play_waitlist_empty")}</EmptyState>
           ) : (
             <div className={kit.tableWrap}>
               <table className={kit.table}>
-                <caption className={kit.srOnly}>Waitlist for {selectedDate}</caption>
+                <caption className={kit.srOnly}>{t("play_caption_waitlist", { date: selectedDate })}</caption>
                 <thead>
                   <tr>
-                    <th scope="col">Person</th>
-                    <th scope="col">Joined</th>
-                    <th scope="col">Status</th>
+                    <th scope="col">{t("play_col_person")}</th>
+                    <th scope="col">{t("play_col_joined")}</th>
+                    <th scope="col">{t("play_col_status")}</th>
                     <th scope="col">
-                      <span className={kit.srOnly}>Actions</span>
+                      <span className={kit.srOnly}>{t("play_col_actions")}</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {waitlist.map((w) => (
                     <tr key={w.id}>
-                      <td data-label="Person">
+                      <td data-label={t("play_col_person")}>
                         <div>
                           {w.name}
                           <span className={kit.sub}>{w.email}</span>
                         </div>
                       </td>
-                      <td data-label="Joined">{dayLabel(new Date(w.createdAt).toLocaleDateString("en-CA", { timeZone: CLUB_TIME_ZONE }))}</td>
-                      <td data-label="Status">{w.notifiedAt ? <Badge tone="good">Emailed</Badge> : <Badge>Waiting</Badge>}</td>
+                      <td data-label={t("play_col_joined")}>{dayLabel(new Date(w.createdAt).toLocaleDateString("en-CA", { timeZone: CLUB_TIME_ZONE }))}</td>
+                      <td data-label={t("play_col_status")}>{w.notifiedAt ? <Badge tone="good">{t("play_emailed")}</Badge> : <Badge>{t("play_waiting")}</Badge>}</td>
                       <td data-label="">
                         <form action={removeWaitlistEntry.bind(null, selectedDate, w.id)}>
-                          <SubmitButton className={kit.btnDanger} loadingText="Removing…" confirmMessage={`Take ${w.name} off the waitlist?`}>
-                            Remove
+                          <SubmitButton className={kit.btnDanger} loadingText={t("play_removing")} confirmMessage={t("play_wl_remove_confirm", { name: w.name })}>
+                            {t("play_remove")}
                           </SubmitButton>
                         </form>
                       </td>

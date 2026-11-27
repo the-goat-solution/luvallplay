@@ -16,10 +16,14 @@
 // encrypted environment variables today; a KMS can replace this file behind
 // the same TokenVault interface). With no key set, nothing can be connected:
 // it fails closed, and never stores a token unencrypted.
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+//
+// The envelope itself is @luvallplay/crypto, shared with every other sealed
+// value. This file binds it to a club's connection and keeps the vault's own
+// errors and wording.
+import { createSeal, parseKeks as parseKeyList, SealError, type Kek } from "@luvallplay/crypto";
 import type { TokenVault, VaultContext } from "@luvallplay/integrations";
 
-const VERSION = "v1";
+export { sealedWith } from "@luvallplay/crypto";
 
 export class VaultError extends Error {
   constructor(message: string) {
@@ -28,82 +32,64 @@ export class VaultError extends Error {
   }
 }
 
-type Kek = { id: string; key: Buffer };
+const NO_KEY = "No encryption key is set (INTEGRATIONS_KEKS), so nothing can be connected.";
+
+/** The shared envelope's error as the vault's own, in the vault's words. Anything else is passed on as it is. */
+function vaultError(err: unknown): unknown {
+  if (!(err instanceof SealError)) return err;
+  if (err.code === "unavailable") return new VaultError(NO_KEY);
+  // Wrong club, wrong connection or changed text all look the same, on purpose.
+  if (err.code === "unopenable") return new VaultError("The sealed text can't be opened for this connection.");
+  return new VaultError(err.message);
+}
 
 /** Reads INTEGRATIONS_KEKS. Throws on anything malformed: a bad key must never silently become "no encryption". */
 export function parseKeks(raw: string | undefined): Kek[] {
-  const out: Kek[] = [];
-  for (const part of (raw ?? "").split(",").map((p) => p.trim()).filter(Boolean)) {
-    const colon = part.indexOf(":");
-    const id = part.slice(0, colon);
-    const key = Buffer.from(part.slice(colon + 1), "base64");
-    if (colon < 1 || !/^[a-z0-9-]{1,32}$/.test(id)) throw new VaultError("INTEGRATIONS_KEKS: each key needs an id (lower-case letters, digits, hyphens).");
-    if (key.length !== 32) throw new VaultError(`INTEGRATIONS_KEKS: key "${id}" must be 32 bytes, base64.`);
-    if (out.some((k) => k.id === id)) throw new VaultError(`INTEGRATIONS_KEKS: key id "${id}" is listed twice.`);
-    out.push({ id, key });
+  try {
+    return parseKeyList(raw, "INTEGRATIONS_KEKS");
+  } catch (err) {
+    throw vaultError(err);
   }
-  return out;
 }
 
-function aad(context: VaultContext, part: "dek" | "data"): Buffer {
+/** What a sealed text is bound to: the club, the connector and the connection. */
+function bindingOf(context: VaultContext): [number, string, string] {
   if (!Number.isSafeInteger(context.tenantId) || context.tenantId <= 0) throw new VaultError("The vault needs the club.");
   if (!context.connector || !context.connectionId) throw new VaultError("The vault needs the connector and the connection.");
-  return Buffer.from(JSON.stringify([VERSION, part, context.tenantId, context.connector, context.connectionId]));
-}
-
-function encrypt(key: Buffer, plaintext: Buffer, bound: Buffer): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  cipher.setAAD(bound);
-  const body = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  return Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
-}
-
-function decrypt(key: Buffer, packed: string, bound: Buffer): Buffer {
-  const raw = Buffer.from(packed, "base64url");
-  if (raw.length < 28) throw new VaultError("The sealed text is too short.");
-  const decipher = createDecipheriv("aes-256-gcm", key, raw.subarray(0, 12));
-  decipher.setAAD(bound);
-  decipher.setAuthTag(raw.subarray(12, 28));
-  return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]);
+  return [context.tenantId, context.connector, context.connectionId];
 }
 
 export function tokenVault(keks: () => Kek[]): TokenVault {
+  const envelope = createSeal({ purpose: "integrations", keks });
   return {
     async seal(context, plaintext) {
-      const current = keks()[0];
-      if (!current) throw new VaultError("No encryption key is set (INTEGRATIONS_KEKS), so nothing can be connected.");
-      const dek = randomBytes(32);
+      // A missing key is said before anything about the context, as it always was.
+      if (!keks().length) throw new VaultError(NO_KEY);
+      const binding = bindingOf(context);
       try {
-        return [VERSION, current.id, encrypt(current.key, dek, aad(context, "dek")), encrypt(dek, Buffer.from(plaintext, "utf8"), aad(context, "data"))].join(".");
-      } finally {
-        dek.fill(0);
+        return envelope.seal(binding, plaintext);
+      } catch (err) {
+        throw vaultError(err);
       }
     },
     async open(context, sealed) {
-      const [version, kekId, wrappedDek, data, ...rest] = sealed.split(".");
-      if (version !== VERSION || !kekId || !wrappedDek || !data || rest.length) throw new VaultError("The sealed text isn't in a known format.");
-      const kek = keks().find((k) => k.id === kekId);
-      if (!kek) throw new VaultError("The key this was sealed with isn't available.");
-      let dek: Buffer | null = null;
+      let binding: [number, string, string];
       try {
-        dek = decrypt(kek.key, wrappedDek, aad(context, "dek"));
-        return decrypt(dek, data, aad(context, "data")).toString("utf8");
+        binding = bindingOf(context);
+      } catch (refused) {
+        // The text's format and its key are checked before the context, as they always were.
+        const [version, kekId, wrappedDek, data, ...rest] = String(sealed).split(".");
+        if (version !== "v1" || !kekId || !wrappedDek || !data || rest.length) throw new VaultError("The sealed text isn't in a known format.");
+        if (!keks().some((k) => k.id === kekId)) throw new VaultError("The key this was sealed with isn't available.");
+        throw refused;
+      }
+      try {
+        return envelope.open(binding, sealed);
       } catch (err) {
-        if (err instanceof VaultError) throw err;
-        // Wrong club, wrong connection or changed text all look the same, on purpose.
-        throw new VaultError("The sealed text can't be opened for this connection.");
-      } finally {
-        dek?.fill(0);
+        throw vaultError(err);
       }
     },
   };
-}
-
-/** The KEK id a sealed text used: to find what still needs re-sealing after a key rotation. */
-export function sealedWith(sealed: string): string | null {
-  const parts = sealed.split(".");
-  return parts.length === 4 && parts[0] === VERSION ? parts[1] : null;
 }
 
 let cached: { raw: string | undefined; keks: Kek[] } | null = null;

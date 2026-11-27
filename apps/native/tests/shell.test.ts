@@ -26,12 +26,14 @@ test("the app is bundled (not a remote website), https only, and release builds 
   assert.equal(config.android?.webContentsDebuggingEnabled, false);
 });
 
-test("Android: the newest target Play requires, the internet permission only, no backups of app data, no orientation lock", () => {
+test("Android: the newest target Play requires, the internet and camera permissions only (camera hardware not required), no backups of app data, no orientation lock", () => {
   const vars = read("../android/variables.gradle");
   assert.match(vars, /targetSdkVersion = 36/);
   assert.match(vars, /compileSdkVersion = 36/);
   const manifest = read("../android/app/src/main/AndroidManifest.xml");
-  assert.deepEqual([...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map((m) => m[1]), ["android.permission.INTERNET"]);
+  assert.deepEqual([...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map((m) => m[1]), ["android.permission.INTERNET", "android.permission.CAMERA"]);
+  assert.match(manifest, /<uses-feature android:name="android.hardware.camera" android:required="false" \/>/, "a phone without a camera must still be able to install");
+  assert.deepEqual([...manifest.matchAll(/<uses-feature android:name="([^"]+)" android:required="true"/g)], []);
   assert.match(manifest, /android:allowBackup="false"/, "a restored copy on another phone couldn't read the Keystore anyway");
   assert.doesNotMatch(manifest, /screenOrientation|resizeableActivity="false"|usesCleartextTraffic="true"/);
 });

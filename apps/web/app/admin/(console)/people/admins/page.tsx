@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { auditLabel, auditOutcomeNote } from "@/lib/admin-audit-labels";
+import { auditDetailsIn, auditLabelIn, auditOutcomeNoteIn, roleName } from "@/lib/admin-audit-text";
+import { adminText } from "@/lib/admin-lang";
+import type { AdminKey } from "@luvallplay/i18n/admin";
+import type { Lang } from "@luvallplay/i18n";
 import { Badge, ConfirmButton, DataTable, EmptyState, Notice, PageHeader, Section, Toolbar, kit } from "@/components/admin/kit";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import adminStyles from "@/components/admin/admin.module.css";
@@ -37,27 +40,24 @@ export const dynamic = "force-dynamic";
 
 const PATH = "/admin/people/admins";
 
-const ROLE_HELP: Record<ClubRole, string> = {
-  owner: "Everything, including adding and removing admins.",
-  admin: "Everything except managing admins.",
-  coach: "Play days, Schedule and Arena only.",
-};
+type T = Awaited<ReturnType<typeof adminText>>["t"];
+const roleHelp = (t: T, r: ClubRole) => t(`role_${r}_help` as AdminKey);
 
 function back(kind: "toast" | "toastError", message: string): never {
   revalidatePath(PATH);
   redirect(`${PATH}?${kind}=${encodeURIComponent(message)}`);
 }
 
-function roleErrorMessage(err: unknown): string {
+function roleErrorMessage(t: T, err: unknown): string {
   if (err instanceof RoleError) {
-    if (err.code === "last_owner") return "The club needs at least one owner. Make someone else an owner first.";
-    if (err.code === "forbidden") return "Only owners can change admins.";
-    if (err.code === "invalid_email") return "That doesn't look like an email address.";
-    if (err.code === "invalid_role") return "Pick owner, admin or coach.";
-    if (err.code === "not_found") return "That account no longer exists.";
+    if (err.code === "last_owner") return t("adm_err_last_owner");
+    if (err.code === "forbidden") return t("adm_err_forbidden");
+    if (err.code === "invalid_email") return t("adm_err_email");
+    if (err.code === "invalid_role") return t("adm_err_role");
+    if (err.code === "not_found") return t("adm_err_not_found");
   }
   console.error("[admin] role change failed:", err);
-  return "Something went wrong. Nothing was changed.";
+  return t("adm_err_generic");
 }
 
 function actorName(ctx: Awaited<ReturnType<typeof requireAdminActor>>["ctx"]): string {
@@ -68,13 +68,14 @@ async function addAdmin(formData: FormData) {
   "use server";
   // Changing who is an admin needs a code entered in the last five minutes (H8).
   const { ctx, actor } = await requireFreshAdminActor(PATH, "admin.granted");
+  const { t, lang } = await adminText();
   const email = String(formData.get("email") ?? "");
   const role = String(formData.get("role") ?? "");
   let message: string;
   try {
     const r = await setRoleByEmail(db, actor, { email, role });
     if (r.kind === "granted") await mirrorClubMember(db, r.playerId);
-    if (r.kind === "unchanged") back("toast", `${email.trim()} is already ${r.role}.`);
+    if (r.kind === "unchanged") back("toast", t("adm_msg_already", { email: email.trim(), role: roleName(lang, r.role) }));
     const { admins } = await listAdmins(db);
     const person = r.kind === "invited" ? null : admins.find((a) => a.playerId === r.playerId);
     await notifyRoleChange({
@@ -87,11 +88,11 @@ async function addAdmin(formData: FormData) {
     });
     message =
       r.kind === "invited"
-        ? `Invite sent: ${r.email} becomes ${r.role} the first time they sign in.`
-        : `${person?.name || email.trim()} is now ${r.role}.`;
+        ? t("adm_msg_invited", { email: r.email, role: roleName(lang, r.role) })
+        : t("adm_msg_now", { name: person?.name || email.trim(), role: roleName(lang, r.role) });
   } catch (err) {
     if (err && typeof err === "object" && "digest" in err) throw err; // redirect()
-    back("toastError", roleErrorMessage(err));
+    back("toastError", roleErrorMessage(t, err));
   }
   back("toast", message);
 }
@@ -100,6 +101,7 @@ async function changeRole(formData: FormData) {
   "use server";
   const playerId = Number(formData.get("playerId"));
   const { ctx, actor } = await requireFreshAdminActor(PATH, "admin.role_changed", `player:${playerId}`);
+  const { t, lang } = await adminText();
   const role = String(formData.get("role") ?? "");
   let message: string;
   try {
@@ -110,9 +112,9 @@ async function changeRole(formData: FormData) {
     if (r.kind === "granted" && person) {
       await notifyRoleChange({ email: person.email, name: person.name, role, invited: false, by: actorName(ctx), ownerEmails: await ownerEmails(db) });
     }
-    message = r.kind === "unchanged" ? "No change." : `${person?.name || "Admin"} is now ${role}.`;
+    message = r.kind === "unchanged" ? t("adm_msg_no_change") : t("adm_msg_now", { name: person?.name || t("adm_fallback_name"), role: roleName(lang, role) });
   } catch (err) {
-    back("toastError", roleErrorMessage(err));
+    back("toastError", roleErrorMessage(t, err));
   }
   back("toast", message);
 }
@@ -121,6 +123,7 @@ async function removeAdmin(formData: FormData) {
   "use server";
   const playerId = Number(formData.get("playerId"));
   const { ctx, actor } = await requireFreshAdminActor(PATH, "admin.removed", `player:${playerId}`);
+  const { t } = await adminText();
   let message: string;
   try {
     const before = (await listAdmins(db)).admins.find((a) => a.playerId === playerId);
@@ -129,9 +132,9 @@ async function removeAdmin(formData: FormData) {
     if (removed && before) {
       await notifyRoleChange({ email: before.email, name: before.name, role: null, invited: false, by: actorName(ctx), ownerEmails: await ownerEmails(db) });
     }
-    message = removed ? `${before?.name || "Admin"} no longer has admin access.` : "They didn't have a club role.";
+    message = removed ? t("adm_msg_removed", { name: before?.name || t("adm_fallback_name") }) : t("adm_msg_no_role");
   } catch (err) {
-    back("toastError", roleErrorMessage(err));
+    back("toastError", roleErrorMessage(t, err));
   }
   back("toast", message);
 }
@@ -139,47 +142,32 @@ async function removeAdmin(formData: FormData) {
 async function cancelInvite(formData: FormData) {
   "use server";
   const { actor } = await requireAdminActor(PATH);
+  const { t } = await adminText();
   const id = Number(formData.get("inviteId"));
   let ok = false;
   try {
     ok = await revokeInvite(db, actor, id);
   } catch (err) {
-    back("toastError", roleErrorMessage(err));
+    back("toastError", roleErrorMessage(t, err));
   }
-  back(ok ? "toast" : "toastError", ok ? "Invite cancelled." : "That invite was already used or cancelled.");
+  back(ok ? "toast" : "toastError", ok ? t("adm_msg_invite_cancelled") : t("adm_err_invite_used"));
 }
 
-function roleBadge(a: AdminRow) {
+function roleBadge(a: AdminRow, lang: Lang, t: T) {
   return (
     <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
-      {a.role && <Badge tone={a.role === "owner" ? "owner" : "default"}>{a.role}</Badge>}
-      {a.platformAdmin && <Badge tone="good">platform</Badge>}
+      {a.role && <Badge tone={a.role === "owner" ? "owner" : "default"}>{roleName(lang, a.role)}</Badge>}
+      {a.platformAdmin && <Badge tone="good">{t("adm_badge_platform")}</Badge>}
     </span>
   );
 }
 
-function describe(row: AuditRow): string {
-  const note = auditOutcomeNote(row.meta);
-  const details = describeDetails(row);
-  return [note, details].filter(Boolean).join(" · ");
-}
-
-function describeDetails(row: AuditRow): string {
-  const meta = row.meta ?? {};
-  if (row.action === "admin.role_changed") return `role ${String(meta.from)} → ${String(meta.to)}`;
-  if (row.action === "admin.granted" || row.action === "admin.invited") return `${row.action.replace("admin.", "")} as ${String(meta.to ?? meta.role)}`;
-  if (row.action === "module.switch") return meta.changed === false ? "no change" : `turned ${meta.on ? "on" : "off"}`;
-  if (row.action === "module.lock") return meta.changed === false ? "no change" : meta.lock === "unlocked" ? "unlocked" : `locked ${String(meta.lock)}`;
-  if (meta.fields && typeof meta.fields === "object") {
-    return Object.entries(meta.fields as Record<string, string>)
-      .slice(0, 4)
-      .map(([k, v]) => `${k}=${v}`)
-      .join(", ");
-  }
-  return "";
+function describe(lang: Lang, row: AuditRow): string {
+  return [auditOutcomeNoteIn(lang, row.meta), auditDetailsIn(lang, row)].filter(Boolean).join(" · ");
 }
 
 export default async function AdminsPage() {
+  const { t, lang } = await adminText();
   const ctx = await currentAdmin();
   const canManage = ctx?.kind === "player" && canManageAdmins(ctx.access);
   const [{ admins, invites }, log] = await Promise.all([listAdmins(db).catch(() => ({ admins: [], invites: [] })), listAudit(db, 60).catch(() => [])]);
@@ -187,75 +175,75 @@ export default async function AdminsPage() {
 
   return (
     <div className={adminStyles.page}>
-      <PageHeader title="Admins" subtitle="Who can open club admin, and what they can do. Every change asks for a recent sign-in, is emailed to the person and all owners, and is written to the audit log." />
+      <PageHeader title={t("adm_title")} subtitle={t("adm_subtitle")} />
 
-      {!canManage && <Notice>Only owners (and platform admins) can change admins. You can see the list.</Notice>}
+      {!canManage && <Notice>{t("adm_notice_readonly")}</Notice>}
 
       {canManage && (
-        <Section title="Add an admin" id="add">
+        <Section title={t("adm_add_title")} id="add">
           <form action={addAdmin}>
             <Toolbar>
               <label className={kit.field}>
-                Email
+                {t("adm_col_email")}
                 <input className={kit.input} type="email" name="email" required autoComplete="off" placeholder="name@example.com" style={{ minWidth: 240 }} />
               </label>
               <label className={kit.field}>
-                Role
+                {t("adm_role_label")}
                 <select className={kit.select} name="role" defaultValue="admin">
                   {CLUB_ROLES.map((r) => (
                     <option key={r} value={r}>
-                      {r[0].toUpperCase() + r.slice(1)}: {ROLE_HELP[r].replace(/\.$/, "").toLowerCase()}
+                      {t(`role_${r}_cap` as AdminKey)}: {roleHelp(t, r).replace(/\.$/, "").toLowerCase()}
                     </option>
                   ))}
                 </select>
               </label>
-              <SubmitButton loadingText="Adding…" className={kit.btn}>
-                Add
+              <SubmitButton loadingText={t("adm_adding")} className={kit.btn}>
+                {t("adm_add")}
               </SubmitButton>
             </Toolbar>
             <p className={kit.muted} style={{ margin: 0 }}>
-              Someone without an account yet gets an invite that applies when they first sign in.
+              {t("adm_add_note")}
             </p>
           </form>
         </Section>
       )}
 
-      <Section title={`Club admins (${admins.length})`} id="list">
+      <Section title={t("adm_list_title", { n: admins.length })} id="list">
         <DataTable
           rows={admins}
           rowKey={(a) => a.playerId}
-          empty="No one has a club role yet. Ask the website's developer to set up the first owner."
+          empty={t("adm_list_empty")}
           columns={[
-            { key: "name", label: "Name", render: (a) => <strong>{a.name || "—"}</strong> },
-            { key: "email", label: "Email", render: (a) => a.email },
-            { key: "role", label: "Role", render: roleBadge },
-            { key: "since", label: "Since", render: (a) => (a.grantedAt ? formatNz(a.grantedAt) : "—") },
+            { key: "name", label: t("adm_col_name"), render: (a) => <strong>{a.name || "—"}</strong> },
+            { key: "email", label: t("adm_col_email"), render: (a) => a.email },
+            { key: "role", label: t("adm_col_role"), render: (a) => roleBadge(a, lang, t) },
+            { key: "since", label: t("adm_col_since"), render: (a) => (a.grantedAt ? formatNz(a.grantedAt) : "—") },
             {
               key: "actions",
-              label: "Change",
+              label: t("adm_col_change"),
               render: (a) =>
                 canManage && a.role ? (
                   <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
                     <form action={changeRole} style={{ display: "inline-flex", gap: 6 }}>
                       <input type="hidden" name="playerId" value={a.playerId} />
-                      <select className={kit.select} name="role" defaultValue={a.role} aria-label={`Role for ${a.name || a.email}`}>
+                      <select className={kit.select} name="role" defaultValue={a.role} aria-label={t("adm_role_for", { name: a.name || a.email })}>
                         {CLUB_ROLES.map((r) => (
                           <option key={r} value={r} disabled={a.role === "owner" && r !== "owner" && owners <= 1}>
-                            {r}
+                            {roleName(lang, r)}
                           </option>
                         ))}
                       </select>
-                      <SubmitButton loadingText="Saving…" className={kit.btnSecondary}>
-                        Save
+                      <SubmitButton loadingText={t("play_saving")} className={kit.btnSecondary}>
+                        {t("common_save")}
                       </SubmitButton>
                     </form>
                     {!(a.role === "owner" && owners <= 1) && (
                       <form action={removeAdmin}>
                         <input type="hidden" name="playerId" value={a.playerId} />
-                        <ConfirmButton confirm={`Remove ${a.name || a.email} from admin?`}>Remove</ConfirmButton>
+                        <ConfirmButton confirm={t("adm_remove_confirm", { name: a.name || a.email })}>{t("play_remove")}</ConfirmButton>
                       </form>
                     )}
-                    {a.role === "owner" && owners <= 1 && <span className={kit.muted}>Last owner</span>}
+                    {a.role === "owner" && owners <= 1 && <span className={kit.muted}>{t("adm_last_owner")}</span>}
                   </span>
                 ) : null,
             },
@@ -264,14 +252,14 @@ export default async function AdminsPage() {
       </Section>
 
       {invites.length > 0 && (
-        <Section title="Pending invites" id="invites">
+        <Section title={t("adm_invites_title")} id="invites">
           <DataTable
             rows={invites}
             rowKey={(i) => i.id}
             columns={[
-              { key: "email", label: "Email", render: (i) => i.email },
-              { key: "role", label: "Role", render: (i) => <Badge>{i.role}</Badge> },
-              { key: "sent", label: "Sent", render: (i) => formatNz(i.createdAt) },
+              { key: "email", label: t("adm_col_email"), render: (i) => i.email },
+              { key: "role", label: t("adm_col_role"), render: (i) => <Badge>{roleName(lang, i.role)}</Badge> },
+              { key: "sent", label: t("adm_col_sent"), render: (i) => formatNz(i.createdAt) },
               {
                 key: "x",
                 label: "",
@@ -279,8 +267,8 @@ export default async function AdminsPage() {
                   canManage ? (
                     <form action={cancelInvite}>
                       <input type="hidden" name="inviteId" value={i.id} />
-                      <ConfirmButton confirm={`Cancel the invite for ${i.email}?`} tone="secondary">
-                        Cancel invite
+                      <ConfirmButton confirm={t("adm_cancel_invite_confirm", { email: i.email })} tone="secondary">
+                        {t("adm_cancel_invite")}
                       </ConfirmButton>
                     </form>
                   ) : null,
@@ -290,19 +278,19 @@ export default async function AdminsPage() {
         </Section>
       )}
 
-      <Section title="Audit log (latest 60)" id="audit">
+      <Section title={t("adm_audit_title")} id="audit">
         {log.length === 0 ? (
-          <EmptyState>Nothing recorded yet.</EmptyState>
+          <EmptyState>{t("adm_audit_empty")}</EmptyState>
         ) : (
           <DataTable
             rows={log}
             rowKey={(r) => r.id}
             columns={[
-              { key: "at", label: "When", render: (r) => formatNz(r.at, true) },
-              { key: "who", label: "Who", render: (r) => r.actorName ?? (r.actorKind === "player" ? `player ${r.actorPlayerId}` : r.actorKind) },
-              { key: "what", label: "What", render: (r) => <span title={r.action}>{auditLabel(r.action)}</span> },
-              { key: "target", label: "Target", render: (r) => r.target ?? "" },
-              { key: "detail", label: "Detail", render: (r) => <span className={kit.muted}>{describe(r)}</span> },
+              { key: "at", label: t("adm_col_when"), render: (r) => formatNz(r.at, true) },
+              { key: "who", label: t("adm_col_who"), render: (r) => r.actorName ?? (r.actorKind === "player" ? t("adm_who_player", { id: String(r.actorPlayerId) }) : r.actorKind) },
+              { key: "what", label: t("adm_col_what"), render: (r) => <span title={r.action}>{auditLabelIn(lang, r.action)}</span> },
+              { key: "target", label: t("adm_col_target"), render: (r) => r.target ?? "" },
+              { key: "detail", label: t("adm_col_detail"), render: (r) => <span className={kit.muted}>{describe(lang, r)}</span> },
             ]}
           />
         )}

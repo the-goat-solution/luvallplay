@@ -1263,6 +1263,10 @@ CREATE TABLE players (
   leaderboard_optout_token text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   deleted_at timestamp with time zone,
+  phone_sealed text,
+  phone_index text,
+  phone_index_kid text,
+  CONSTRAINT players_phone_sealed_check CHECK ((phone_sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'::text)),
   CONSTRAINT players_created_at_not_null NOT NULL created_at,
   CONSTRAINT players_created_via_not_null NOT NULL created_via,
   CONSTRAINT players_email_not_null NOT NULL email,
@@ -1276,6 +1280,7 @@ CREATE TABLE players (
   CONSTRAINT players_leaderboard_optout_token_key UNIQUE (leaderboard_optout_token)
 );
 CREATE UNIQUE INDEX players_minigame_name_idx ON public.players USING btree (lower(minigame_name)) WHERE (minigame_name IS NOT NULL);
+CREATE UNIQUE INDEX players_phone_index_verified ON public.players USING btree (phone_index) WHERE ((phone_verified_at IS NOT NULL) AND (deleted_at IS NULL));
 CREATE UNIQUE INDEX players_phone_verified_idx ON public.players USING btree (phone_e164) WHERE ((phone_verified_at IS NOT NULL) AND (deleted_at IS NULL));
 
 CREATE TABLE pricing_plans (
@@ -2193,6 +2198,18 @@ BEGIN
   END IF;
   RETURN NEW;
 END $function$;
+CREATE OR REPLACE FUNCTION public.players_phone_sealed_follows_plain()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164 AND NEW.phone_sealed IS NOT DISTINCT FROM OLD.phone_sealed THEN
+    NEW.phone_sealed := NULL;
+    NEW.phone_index := NULL;
+    NEW.phone_index_kid := NULL;
+  END IF;
+  RETURN NEW;
+END $function$;
 
 -- Triggers
 CREATE TRIGGER attendance_link_account BEFORE INSERT OR UPDATE OF email ON public.attendance FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
@@ -2204,6 +2221,7 @@ CREATE TRIGGER jersey_registrations_link_account BEFORE INSERT OR UPDATE OF emai
 CREATE TRIGGER memberships_link_account BEFORE INSERT OR UPDATE OF email ON public.memberships FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
 CREATE TRIGGER player_absences_link_account BEFORE INSERT OR UPDATE OF email ON public.player_absences FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
 CREATE TRIGGER players_link_rows AFTER INSERT OR UPDATE OF email, deleted_at ON public.players FOR EACH ROW EXECUTE FUNCTION link_account_to_rows();
+CREATE TRIGGER players_phone_sealed_follows_plain BEFORE UPDATE ON public.players FOR EACH ROW EXECUTE FUNCTION players_phone_sealed_follows_plain();
 CREATE TRIGGER session_fill_ins_link_account BEFORE INSERT OR UPDATE OF email ON public.session_fill_ins FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
 CREATE TRIGGER waitlist_link_account BEFORE INSERT OR UPDATE OF email ON public.waitlist FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
 

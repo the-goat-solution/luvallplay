@@ -1,6 +1,7 @@
 import { visionName } from "./club-terms";
 import { db } from "./database";
 import { mirrorClubMember } from "./tenant-members";
+import { sealStoredPhone, sealedPhoneCleared } from "./pii/contact";
 import { T } from "./arena-db";
 import { WV } from "./wolf-vision-db";
 import { normalizeEmail as jerseyNormalizeEmail } from "./jersey";
@@ -305,7 +306,7 @@ async function mergeAccounts(
   await q(
     `UPDATE players SET deleted_at = NOW(), email = 'deleted-' || id || '@deleted.invalid',
        phone = NULL, phone_e164 = NULL, phone_verified_at = NULL, display_name = NULL, minigame_name = NULL,
-       stripe_customer_id = NULL, avatar_url = NULL, first_name = '', last_name = '', leaderboard_visible = FALSE
+       stripe_customer_id = NULL, avatar_url = NULL, first_name = '', last_name = '', leaderboard_visible = FALSE${sealedPhoneCleared()}
      WHERE id = $1;`,
     [d],
   );
@@ -342,6 +343,9 @@ async function mergeAccounts(
       dupe.installed_at,
     ],
   );
+  // The duplicate's sealed number was bound to the duplicate's id, so it can't
+  // be copied over: the number the kept account just took is sealed anew for it.
+  if (takePhone) await sealStoredPhone({ query: q }, k);
   if (takeName) notes.push(`${keep.email} takes the round robin name "${takeName}".`);
   if (takePhone) notes.push(`${keep.email} takes the phone number from the duplicate.`);
   if (dupe.stripe_customer_id && keep.stripe_customer_id && dupe.stripe_customer_id !== keep.stripe_customer_id)

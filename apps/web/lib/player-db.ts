@@ -3,6 +3,7 @@ import { sql } from "./database";
 import { getClubToday } from "./dates";
 import type { Lang } from "./i18n";
 import { toE164 } from "./phone";
+import { findVerifiedByPhone, phoneSealing, sealStoredPhone, sealedPhoneCleared, sealedPhoneUpdate, verifyPhone } from "./pii/contact";
 import { defaultTenantSlug, joinClub, mirrorClubMember } from "./tenant-members";
 
 // Player accounts. Everything a player has done is already stored under
@@ -120,13 +121,14 @@ export async function getPlayerByEmail(email: string): Promise<Player | null> {
   return rows[0] ? mapPlayer(rows[0] as PlayerRow) : null;
 }
 
+/**
+ * The verified account that holds this number. Which copy of the number is
+ * matched (the plain column, or the sealed one's index) follows PII_READS
+ * (lib/pii/contact.ts); either way only a verified, not-deleted account.
+ */
 export async function getPlayerByVerifiedPhone(phoneE164: string): Promise<Player | null> {
-  const { rows } = await sql.query(
-    `SELECT ${PLAYER_COLUMNS} FROM players p
-     WHERE p.phone_e164 = $1 AND p.phone_verified_at IS NOT NULL AND p.deleted_at IS NULL;`,
-    [phoneE164],
-  );
-  return rows[0] ? mapPlayer(rows[0] as PlayerRow) : null;
+  const id = await findVerifiedByPhone(sql, phoneE164);
+  return id ? getPlayerById(id) : null;
 }
 
 type MemberDetails = {
@@ -178,21 +180,25 @@ export async function ensurePlayerForEmail(
     // Fill gaps only: a player's own edits always win.
     const d = options.details;
     if (d) {
+      // A number that fills a gap is sealed with it (lib/pii/contact.ts); one the player already has is left as it is.
+      const e164 = toE164(d.phone);
+      const sealed = sealedPhoneUpdate(existing.id, e164, { e164Param: "$5", firstParam: 7, onlyIfEmpty: true });
       await sql.query(
         `UPDATE players SET
            first_name = CASE WHEN first_name = '' THEN coalesce($2, first_name) ELSE first_name END,
            last_name = CASE WHEN last_name = '' THEN coalesce($3, last_name) ELSE last_name END,
            phone = coalesce(phone, $4),
            phone_e164 = coalesce(phone_e164, $5),
-           stripe_customer_id = coalesce(stripe_customer_id, $6)
+           stripe_customer_id = coalesce(stripe_customer_id, $6)${sealed.set}
          WHERE id = $1;`,
         [
           existing.id,
           d.firstName?.trim() || null,
           d.lastName?.trim() || null,
           d.phone?.trim() || null,
-          toE164(d.phone),
+          e164,
           d.stripeCustomerId ?? null,
+          ...sealed.params,
         ],
       );
       return { player: (await getPlayerById(existing.id)) ?? existing, created: false };
@@ -204,6 +210,8 @@ export async function ensurePlayerForEmail(
   const firstName = options.details?.firstName?.trim() || fromHistory?.firstName || "";
   const lastName = options.details?.lastName?.trim() || fromHistory?.lastName || "";
   const phone = options.details?.phone?.trim() || fromHistory?.phone || null;
+  // A malformed key list is refused here, before the account exists, not after.
+  phoneSealing().available();
   const { rows } = await sql.query(
     `INSERT INTO players (email, first_name, last_name, phone, phone_e164, stripe_customer_id, created_via)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -212,6 +220,8 @@ export async function ensurePlayerForEmail(
     [email, firstName, lastName, phone, toE164(phone), options.details?.stripeCustomerId ?? null, options.via],
   );
   const id = rows[0]?.id as number | undefined;
+  // The sealed copy is bound to the account's id, which exists only now.
+  if (id) await sealStoredPhone(sql, id);
   // A new account made on the club's site is a member of that club.
   if (id) await joinClub(sql, id);
   const player = id ? await getPlayerById(id) : await getPlayerByEmail(email);
@@ -240,14 +250,25 @@ export async function updatePlayerProfile(
   input: { firstName: string; lastName: string; displayName: string | null; phone: string | null; lang: Lang },
 ): Promise<void> {
   const phoneE164 = toE164(input.phone);
+  const sealed = sealedPhoneUpdate(id, phoneE164, { e164Param: "$6", firstParam: 8 });
   // Changing the number drops its confirmation: the new one hasn't been proven.
+  // The sealed copy and its index change with it (lib/pii/contact.ts).
   await sql.query(
     `UPDATE players SET
        first_name = $2, last_name = $3, display_name = $4, lang = $7,
        phone_verified_at = CASE WHEN phone_e164 IS DISTINCT FROM $6 THEN NULL ELSE phone_verified_at END,
-       phone = $5, phone_e164 = $6
+       phone = $5, phone_e164 = $6${sealed.set}
      WHERE id = $1;`,
-    [id, input.firstName.trim(), input.lastName.trim(), input.displayName?.trim() || null, input.phone?.trim() || null, phoneE164, input.lang],
+    [
+      id,
+      input.firstName.trim(),
+      input.lastName.trim(),
+      input.displayName?.trim() || null,
+      input.phone?.trim() || null,
+      phoneE164,
+      input.lang,
+      ...sealed.params,
+    ],
   );
 }
 
@@ -256,18 +277,13 @@ export async function setLeaderboardVisible(id: number, visible: boolean): Promi
   await mirrorClubMember(sql, id);
 }
 
+/**
+ * The number is proven to be this player's. "taken" when another verified
+ * account holds it. Also writes the sealed copy and its index, and during a
+ * key rotation checks "taken" against every index key (lib/pii/contact.ts).
+ */
 export async function markPhoneVerified(id: number, phoneE164: string): Promise<"ok" | "taken"> {
-  try {
-    await sql`
-      UPDATE players SET phone_e164 = ${phoneE164}, phone_verified_at = NOW(),
-        phone = coalesce(phone, ${phoneE164})
-      WHERE id = ${id};
-    `;
-    return "ok";
-  } catch (err) {
-    if ((err as { code?: string }).code === "23505") return "taken";
-    throw err;
-  }
+  return verifyPhone(sql, id, phoneE164);
 }
 
 export async function markClaimed(id: number): Promise<void> {
@@ -297,12 +313,14 @@ export async function setPlayerSetting(key: string, value: string): Promise<void
  */
 export async function deletePlayerAccount(id: number): Promise<void> {
   await sql`DELETE FROM player_sessions WHERE player_id = ${id};`;
-  await sql`
-    UPDATE players SET deleted_at = NOW(), email = 'deleted-' || id || '@deleted.invalid',
+  // The sealed copy of the number and its index go too (lib/pii/contact.ts).
+  await sql.query(
+    `UPDATE players SET deleted_at = NOW(), email = 'deleted-' || id || '@deleted.invalid',
       phone = NULL, phone_e164 = NULL, phone_verified_at = NULL, display_name = NULL,
-      first_name = '', last_name = '', leaderboard_visible = FALSE
-    WHERE id = ${id};
-  `;
+      first_name = '', last_name = '', leaderboard_visible = FALSE${sealedPhoneCleared()}
+    WHERE id = $1;`,
+    [id],
+  );
   await mirrorClubMember(sql, id);
 }
 

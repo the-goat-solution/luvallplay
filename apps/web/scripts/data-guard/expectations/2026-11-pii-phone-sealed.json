@@ -1,0 +1,18 @@
+{
+  "change": "2026-11-pii-phone-sealed",
+  "description": "Encryption layers Task 4 (lane H): migration players_contact_sealed adds three columns to players (phone_sealed, phone_index, phone_index_kid), all NULL, a format check, a unique index on phone_index for verified live accounts, and a trigger that clears the three when phone_e164 changes without a new sealing. Then scripts/pii/backfill-phone.mjs fills the three columns for every account that has a phone number. Additive: phone, phone_e164 and phone_verified_at must not change for anyone; no row, account, email, session, role or membership may change. Rehearsal on a copy of production, so nothing is volatile.",
+  "allowChangedColumns": [
+    {
+      "target": "players.phone_sealed",
+      "reason": "The intended change: the backfill writes the sealed copy of each account's existing phone number (NULL before). Applies when the 'before' snapshot is taken after the migration."
+    },
+    {
+      "target": "players.phone_index",
+      "reason": "The intended change: the backfill writes the keyed index of each account's existing phone number (NULL before)."
+    },
+    {
+      "target": "players.phone_index_kid",
+      "reason": "The intended change: the backfill records which index key made phone_index (NULL before)."
+    }
+  ]
+}

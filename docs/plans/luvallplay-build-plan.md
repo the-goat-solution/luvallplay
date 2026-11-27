@@ -1468,6 +1468,10 @@ Every remaining phase starts now as a **lane**: one build thread, one set of dir
 
 **Not engineering, and still the longest wait:** Track B (the four hard gates) and Vietnam discovery. Three items decide when the engineering can be used, so start them this week: **a GitHub organisation on a paid plan** (CI can't be required today, C3), **Vercel Pro and a paid Neon plan in company accounts** (Hobby isn't for commercial use; Neon's free plan keeps 6 hours of history and is at 10 of 10 branches), and **the D-U-N-S number and organisation developer accounts** (lane N's store testing waits on them).
 
+#### Lane H delivery log
+
+- **PII-2: email to user_id joins, then seal (27 Nov, not started).** Players' phone numbers are now sealed beside the plain column, with a keyed index (encryption plan Task 4, [`2026-11-pii-phone-sealed.md`](../rehearsals/2026-11-pii-phone-sealed.md)). Email stays in plain text: it is the join key in `attendance`, `player_absences`, `auth_codes`, `casual_play_profiles` and `players`. Those tables move to `user_id` first (the links from migration `0005`); only then can email be sealed. Its own project.
+
 ### 9.3 Order of the gates
 
 ```

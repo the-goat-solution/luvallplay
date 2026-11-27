@@ -8,6 +8,8 @@
 // - CORS: an allow-list (the app's host, the Capacitor web view origins),
 //   never "*", because these routes accept credentials.
 // - Bad input is always a 400 with a stable code, never a 500.
+// - An endpoint can have an `access` check (Social, Moderation): asked right
+//   after the session, before the limiter and before anything sent is read.
 // - The answer is parsed with the contract's schema, which also drops any
 //   field the contract doesn't name.
 import { NextResponse } from "next/server";
@@ -175,7 +177,7 @@ export async function deploymentClub(now = Date.now()): Promise<ClubConfig | nul
 
 // ── The wrapper ─────────────────────────────────────────────────────────────
 
-export type Ctx<K extends EndpointId> = {
+export type Ctx<K extends EndpointId, A = undefined> = {
   request: Request;
   ip: string;
   params: ParamsOf<K>;
@@ -187,11 +189,28 @@ export type Ctx<K extends EndpointId> = {
   player: Player;
   /** The club in the path (scope "club" endpoints). */
   club: ClubConfig;
+  /** What the route's `access` check answered (undefined for a route without one). */
+  access: A;
 };
 
-type Handler<K extends EndpointId> = (ctx: Ctx<K>) => Promise<ResponseOf<K> | AppApiError>;
+/** Who an `access` check is asked about: always a signed-in person on a "session" endpoint. */
+export type AccessAsk = { request: Request; session: AppSession; player: Player };
+
+type Handler<K extends EndpointId, A> = (ctx: Ctx<K, A>) => Promise<ResponseOf<K> | AppApiError>;
 type RouteArgs = { params?: Promise<Record<string, string | string[] | undefined>> };
-type Options = {
+type Options<A> = {
+  /**
+   * Whether this endpoint is there at all for the person asking, for
+   * endpoints the club's module switch can't answer for (an account-scoped
+   * module such as Social: `module` is only checked on club endpoints).
+   * Asked after the session check and BEFORE the rate limiter, the path, the
+   * query and the body: answer an error (`fail(404, "module_off")`) and
+   * nothing that was sent is looked at or counted. Anything else it answers
+   * is handed to the handler as `access`. Only for "session" endpoints.
+   */
+  access?: (who: AccessAsk) => Promise<A | AppApiError>;
+  /** The status of a good answer (default 200; 201 for something made). */
+  status?: number;
   /** The rate-limit bucket, when it should be shared with another surface (e.g. the web's sign-in or message routes). */
   rateKey?: (ip: string, session: AppSession | null) => string;
   /** The error code for a body that doesn't validate (default "bad_request"). */
@@ -204,7 +223,7 @@ type Options = {
   rateLimitStore?: Parameters<typeof rateLimit>[3];
 };
 
-export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, options: Options = {}) {
+export function appRoute<K extends EndpointId, A = undefined>(id: K, handler: Handler<K, A>, options: Options<A> = {}) {
   const endpoint = ENDPOINTS[id] as (typeof ENDPOINTS)[EndpointId] & { params?: import("zod").ZodTypeAny; query?: import("zod").ZodTypeAny; body?: import("zod").ZodTypeAny; module?: string };
 
   const answer = (request: Request, data: unknown, status = 200) => NextResponse.json(data, { status, headers: corsHeaders(request) });
@@ -218,6 +237,16 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
       const session = endpoint.auth === "session" || sessionTokenFrom(request) ? await sessionFrom(request) : null;
       if (endpoint.auth === "session" && !session) return error(request, fail(401, "unauthorized"));
       if (session?.via === "cookie" && endpoint.method !== "GET" && !cookieWriteAllowed(request)) return error(request, fail(403, "bad_origin"));
+
+      // Is the endpoint there for this person? Before anything they sent is
+      // read, and before the request is counted.
+      let access: A | undefined;
+      if (options.access) {
+        if (!session) return error(request, fail(401, "unauthorized"));
+        const allowed = await options.access({ request, session, player: session.player });
+        if (allowed instanceof AppApiError) return error(request, allowed);
+        access = allowed;
+      }
 
       const limits: Endpoint["rateLimit"] = endpoint.rateLimit;
       const { limit, windowMs } = limits;
@@ -272,14 +301,14 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
         body = parsed.data;
       }
 
-      const result = await handler({ request, ip, params, query, body, session, player: session?.player as Player, club: club as ClubConfig } as Ctx<K>);
+      const result = await handler({ request, ip, params, query, body, session, player: session?.player as Player, club: club as ClubConfig, access } as Ctx<K, A>);
       if (result instanceof AppApiError) return error(request, result);
       const checked = endpoint.response.safeParse(result);
       if (!checked.success) {
         console.error(`[app-api] ${id} answer doesn't match the contract:`, checked.error.issues.slice(0, 5));
         return error(request, fail(500, "contract"));
       }
-      return answer(request, checked.data);
+      return answer(request, checked.data, options.status ?? 200);
     } catch (err) {
       if (err instanceof AppApiError) return error(request, err);
       console.error(`[app-api] ${id} failed:`, err);

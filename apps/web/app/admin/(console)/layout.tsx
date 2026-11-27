@@ -29,7 +29,7 @@ export default async function AdminConsoleLayout({ children }: { children: React
     ctx?.kind === "player" ? `${ctx.player.firstName} ${ctx.player.lastName}`.trim() || ctx.player.email : null;
 
   return (
-    <AdminShell groups={groups} badges={badges} who={who}>
+    <AdminShell groups={groups} badges={badges} who={who} lang={ctx?.player.lang ?? "en"}>
       {children}
     </AdminShell>
   );

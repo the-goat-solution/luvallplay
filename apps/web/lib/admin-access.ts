@@ -37,7 +37,7 @@ export const db: Db = {
   },
 };
 
-export type AdminPlayer = { id: number; email: string; firstName: string; lastName: string };
+export type AdminPlayer = { id: number; email: string; firstName: string; lastName: string; lang?: "en" | "vi" };
 
 export type AdminContext = { kind: "player"; player: AdminPlayer; access: Access; signedInAt: Date; stepUpFresh: boolean };
 
@@ -56,7 +56,7 @@ export async function adminContextFromCookies(read: CookieReader): Promise<Admin
   const access = await getAccess(db, player.id, player.email);
   return {
     kind: "player",
-    player: { id: player.id, email: player.email, firstName: player.firstName, lastName: player.lastName },
+    player: { id: player.id, email: player.email, firstName: player.firstName, lastName: player.lastName, lang: player.lang === "vi" ? "vi" : "en" },
     access,
     signedInAt,
     stepUpFresh: isStepUpFresh(signedInAt),

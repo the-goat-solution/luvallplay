@@ -6,8 +6,9 @@
 // keys: a row sealed then must still open now.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import crypto, { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { createSeal, parseKeks, sealedWith, SealError, type Binding } from "@luvallplay/crypto";
 
 type Vectors = { keks: string; cases: { sealedBy: string; binding: (string | number)[]; plaintext: string; sealed: string }[] };
@@ -152,4 +153,75 @@ test("an empty binding or a non-positive number is refused", () => {
   // Anything that isn't a string or a number (a caller without types) is refused too.
   for (const bad of [[null], [undefined], [true], [{}], [[1]], [1n]] as unknown as Binding[]) assert.throws(() => seal.seal(bad, "x"), SealError);
   assert.throws(() => seal.seal(undefined as unknown as Binding, "x"), SealError);
+});
+
+test("parseKeks refuses key text that isn't clean base64 of 32 bytes: a list split by line breaks never drops keys", () => {
+  const [a, b] = [key(), key()];
+  // Line breaks instead of commas: base64 decoding used to stop at the first "=", so this read as [k1] alone.
+  assert.throws(() => parseKeks(`k1:${a}\nk2:${b}`, "PUSH_KEKS"), /PUSH_KEKS.*32 bytes/);
+  assert.throws(() => parseKeks(`k1:${a}\r\nk2:${b}\n`, "PUSH_KEKS"), /PUSH_KEKS.*32 bytes/);
+  assert.throws(() => parseKeks(`k1:${a} k2:${b}`, "PUSH_KEKS"), /PUSH_KEKS.*32 bytes/);
+  assert.throws(() => parseKeks(`k1:${a};k2:${b}`), /INTEGRATIONS_KEKS.*32 bytes/);
+  // Anything after the key, or inside it, that isn't base64.
+  assert.throws(() => parseKeks(`k1:${a}=`, "X"), /32 bytes/);
+  assert.throws(() => parseKeks(`k1:${a}junk`, "X"), /32 bytes/);
+  assert.throws(() => parseKeks(`k1:"${a}"`, "X"), /32 bytes/);
+  assert.throws(() => parseKeks(`k1:${a.slice(0, 20)} ${a.slice(20)}`, "X"), /32 bytes/);
+  assert.throws(() => parseKeks(`k1:${a.slice(0, 20)}!${a.slice(20)}`, "X"), /32 bytes/);
+  assert.throws(() => parseKeks(`k1:${randomBytes(32).toString("hex")}`, "X"), /32 bytes/);
+  for (const bad of [`k1:${a}\nk2:${b}`, `k1:${a.slice(0, 20)}!${a.slice(20)}`]) {
+    assert.throws(() => parseKeks(bad, "X"), (err: unknown) => err instanceof SealError && err.code === "keys" && !err.message.includes(a.slice(0, 20)));
+  }
+  // Still read: with or without the padding, and base64url.
+  const raw = randomBytes(32);
+  for (const text of [raw.toString("base64"), raw.toString("base64").replace(/=$/, ""), raw.toString("base64url")]) {
+    assert.deepEqual(parseKeks(`k1:${text}`, "X")[0].key, raw, text.length === 44 ? "padded" : "unpadded or base64url");
+  }
+});
+
+test("text to seal that isn't text is refused, and the error never shows it", () => {
+  for (const bad of [64211234567, null, undefined, { phone: "+64211234567" }, ["+64211234567"], Buffer.from("+64211234567")]) {
+    let out: string | undefined;
+    assert.throws(() => { out = seal.seal([1, "a"], bad as unknown as string); }, (err: unknown) => {
+      assert.ok(err instanceof SealError, String(err));
+      assert.ok(!/64211234567/.test(err.message) && !/64211234567/.test(String(err.stack)), "the value is not in the error");
+      return true;
+    });
+    assert.equal(out, undefined);
+  }
+});
+
+test("the data key is zeroed whether opening works or not", () => {
+  const sealed = seal.seal([1, "x", "y"], "hello");
+  // Watch every chunk the decipher hands back: the first of each opening is the unwrapped data key.
+  const chunks: Buffer[] = [];
+  const real = crypto.createDecipheriv;
+  (crypto as { createDecipheriv: unknown }).createDecipheriv = (...args: Parameters<typeof real>) => {
+    const decipher = real(...args);
+    const update = decipher.update.bind(decipher) as (data: Buffer) => Buffer;
+    (decipher as { update: unknown }).update = (data: Buffer) => {
+      const out = update(data);
+      chunks.push(out);
+      return out;
+    };
+    return decipher;
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.equal(seal.open([1, "x", "y"], sealed), "hello");
+    // A wrong binding: the key is unwrapped (GCM hands back the bytes before it checks them), then refused.
+    assert.throws(() => seal.open([2, "x", "y"], sealed), /can't be opened/);
+    // The right binding for the key, changed data: the key is used, then the data is refused.
+    assert.throws(() => seal.open([1, "x", "y"], `${sealed.slice(0, -2)}${sealed.endsWith("AA") ? "BB" : "AA"}`), /can't be opened/);
+  } finally {
+    (crypto as { createDecipheriv: unknown }).createDecipheriv = real;
+    syncBuiltinESMExports();
+  }
+  assert.deepEqual(chunks.map((c) => c.length), [32, 5, 32, 32, 5], "key and data; key refused; key, then data refused");
+  for (const c of chunks) assert.ok(c.every((b) => b === 0), `a ${c.length}-byte chunk was left in memory`);
+});
+
+test("sealedWith answers null for anything that isn't sealed text", () => {
+  for (const bad of [null, undefined, 7, {}, ["v1", "k1", "a", "b"]]) assert.equal(sealedWith(bad as unknown as string), null);
+  assert.equal(sealedWith(""), null);
 });

@@ -66,7 +66,19 @@ function decrypt(key: Buffer, packed: string, bound: Buffer): Buffer {
   const decipher = createDecipheriv("aes-256-gcm", key, raw.subarray(0, IV_BYTES), { authTagLength: TAG_BYTES });
   decipher.setAAD(bound);
   decipher.setAuthTag(raw.subarray(IV_BYTES, IV_BYTES + TAG_BYTES));
-  return Buffer.concat([decipher.update(raw.subarray(IV_BYTES + TAG_BYTES)), decipher.final()]);
+  // GCM hands back the bytes before it has checked them: `head` holds the
+  // data key (or the text) even when final() then refuses it. The caller gets
+  // a copy to zero; these are zeroed here, whichever way it ends.
+  let head: Buffer | null = null;
+  let tail: Buffer | null = null;
+  try {
+    head = decipher.update(raw.subarray(IV_BYTES + TAG_BYTES));
+    tail = decipher.final();
+    return Buffer.concat([head, tail]);
+  } finally {
+    head?.fill(0);
+    tail?.fill(0);
+  }
 }
 
 /**
@@ -81,6 +93,8 @@ export function createSeal(opts: { purpose: string; keks: () => Kek[] }): Seal {
     seal(binding, plaintext) {
       const boundDek = aad(binding, "dek");
       const boundData = aad(binding, "data");
+      // Said without the value: an error message is logged, the text must not be.
+      if (typeof plaintext !== "string") throw new SealError("Only text can be sealed.", "plaintext");
       const current = keks()[0];
       if (!current) throw new SealError(`No encryption key is set (${purpose}), so nothing can be sealed.`, "unavailable");
       const dek = randomBytes(32);
@@ -98,15 +112,18 @@ export function createSeal(opts: { purpose: string; keks: () => Kek[] }): Seal {
       const kek = keks().find((k) => k.id === kekId);
       if (!kek) throw new SealError("The key this was sealed with isn't available.", "unknown_key");
       let dek: Buffer | null = null;
+      let plain: Buffer | null = null;
       try {
         dek = decrypt(kek.key, wrappedDek, boundDek);
-        return decrypt(dek, data, boundData).toString("utf8");
+        plain = decrypt(dek, data, boundData);
+        return plain.toString("utf8");
       } catch (err) {
         if (err instanceof SealError) throw err;
         // A wrong binding, wrong key bytes or changed text all look the same, on purpose.
         throw new SealError("The sealed text can't be opened.", "unopenable");
       } finally {
         dek?.fill(0);
+        plain?.fill(0);
       }
     },
     available() {
@@ -121,6 +138,7 @@ export function createSeal(opts: { purpose: string; keks: () => Kek[] }): Seal {
 
 /** The KEK id a sealed text used: to find what still needs re-sealing after a key rotation. */
 export function sealedWith(sealed: string): string | null {
+  if (typeof sealed !== "string") return null;
   const parts = sealed.split(".");
   return parts.length === 4 && parts[0] === VERSION ? parts[1] : null;
 }

@@ -65,6 +65,8 @@ export function parseKeks(raw: string | undefined, name = "INTEGRATIONS_KEKS"): 
       key?.fill(0);
       throw new SealError(`${name}: key "${id}" must be 32 bytes, base64.`, "keys");
     }
+    // Thirty-two zero bytes are a placeholder somebody pasted, not a key.
+    if (key.every((byte) => byte === 0)) throw new SealError(`${name}: key "${id}" is all zeros, which is not a key.`, "keys");
     if (out.some((k) => k.id === id)) throw new SealError(`${name}: key id "${id}" is listed twice.`, "keys");
     out.push({ id, key });
   }

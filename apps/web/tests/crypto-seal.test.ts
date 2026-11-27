@@ -225,3 +225,49 @@ test("sealedWith answers null for anything that isn't sealed text", () => {
   for (const bad of [null, undefined, 7, {}, ["v1", "k1", "a", "b"]]) assert.equal(sealedWith(bad as unknown as string), null);
   assert.equal(sealedWith(""), null);
 });
+
+test("sealed text written any other way than this library writes it is refused: one value, one text", () => {
+  const binding: Binding = [1, "x", "y"];
+  // Six bytes of text: the data part then needs padding in standard base64. And a wrapped key
+  // with a "-" or "_" in it, so its standard-alphabet spelling is another text (it never needs padding).
+  let sealed = seal.seal(binding, "hello!");
+  while (!/[-_]/.test(sealed.split(".")[2])) sealed = seal.seal(binding, "hello!");
+  const [v, kid, dek, data] = sealed.split(".");
+  const standard = (part: string) => Buffer.from(part, "base64url").toString("base64");
+  const others = [
+    `${sealed}!!**`,
+    `${sealed}=`,
+    [v, kid, `${dek}!!**`, data].join("."),
+    [v, kid, standard(dek), data].join("."),
+    [v, kid, dek, standard(data)].join("."),
+    [v, kid, dek, `${standard(data).replace(/=+$/, "")}==`].join("."),
+    [v, kid, `${dek.slice(0, 10)} ${dek.slice(10)}`, data].join("."),
+    [v, kid, dek, `${data.slice(0, 6)}\n${data.slice(6)}`].join("."),
+    ` ${sealed}`,
+    `${sealed}\n`,
+  ];
+  for (const other of others) {
+    assert.notEqual(other, sealed);
+    assert.throws(() => seal.open(binding, other), (err: unknown) => err instanceof SealError && err.code === "format" && /isn't in a known format/.test(err.message), JSON.stringify(other.length));
+  }
+  // Left-over bits in a part's last character decode to the same bytes: still another spelling, still refused.
+  const last = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const twin = [...last].map((ch) => data.slice(0, -1) + ch).find((t) => t !== data && Buffer.from(t, "base64url").equals(Buffer.from(data, "base64url")));
+  if (twin) assert.throws(() => seal.open(binding, [v, kid, dek, twin].join(".")), /isn't in a known format/);
+  // What the library (and the code before it) wrote opens as ever.
+  assert.equal(seal.open(binding, sealed), "hello!");
+  for (const c of vectors.cases) {
+    for (const part of c.sealed.split(".").slice(2)) assert.equal(Buffer.from(part, "base64url").toString("base64url"), part, "an old vector is canonical base64url");
+    assert.equal(old.open(c.binding, c.sealed), c.plaintext);
+  }
+});
+
+test("parseKeks refuses a key of all zeros, naming the variable and the id", () => {
+  const zeros = Buffer.alloc(32).toString("base64");
+  assert.throws(() => parseKeks(`k1:${zeros}`, "PUSH_KEKS"), (err: unknown) => err instanceof SealError && err.code === "keys" && /PUSH_KEKS: key "k1" is all zeros/.test(err.message));
+  assert.throws(() => parseKeks(`k2:${key()},k1:${Buffer.alloc(32).toString("base64url")}`, "CONTACT_INDEX_KEYS"), /CONTACT_INDEX_KEYS: key "k1" is all zeros/);
+  // One byte set is a key like any other.
+  const almost = Buffer.alloc(32);
+  almost[31] = 1;
+  assert.equal(parseKeks(`k1:${almost.toString("base64")}`, "PUSH_KEKS").length, 1);
+});

@@ -60,6 +60,16 @@ function encrypt(key: Buffer, plaintext: Buffer, bound: Buffer): string {
   return Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
 }
 
+/**
+ * Whether a part is the base64url this library writes: its alphabet only (no
+ * padding, no "+" or "/", no spaces), and exactly the text its bytes encode
+ * to. Node's decoder skips what it doesn't know, so without this one sealed
+ * value could be written many ways.
+ */
+function canonical(part: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(part) && Buffer.from(part, "base64url").toString("base64url") === part;
+}
+
 function decrypt(key: Buffer, packed: string, bound: Buffer): Buffer {
   const raw = Buffer.from(packed, "base64url");
   if (raw.length < IV_BYTES + TAG_BYTES) throw new SealError("The sealed text is too short.", "format");
@@ -111,6 +121,8 @@ export function createSeal(opts: { purpose: string; keks: () => Kek[] }): Seal {
       if (version !== VERSION || !kekId || !wrappedDek || !data || rest.length) throw new SealError("The sealed text isn't in a known format.", "format");
       const kek = keks().find((k) => k.id === kekId);
       if (!kek) throw new SealError("The key this was sealed with isn't available.", "unknown_key");
+      // After the key, as the length check always was: a malformed key list or an unlisted key is still said first.
+      if (!canonical(wrappedDek) || !canonical(data)) throw new SealError("The sealed text isn't in a known format.", "format");
       let dek: Buffer | null = null;
       let plain: Buffer | null = null;
       try {

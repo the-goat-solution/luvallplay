@@ -118,7 +118,8 @@ export function sealedColumnsInUse(env: Env = process.env): boolean {
  * from `firstParam`, that keep the sealed columns in step.
  *
  * With sealing on: a changed number takes the new sealing (or none, when the
- * number is removed); an unchanged one is sealed if it wasn't. `onlyIfEmpty`
+ * number is removed); an unchanged one is sealed again (every save with a
+ * number present writes a fresh sealing and the current index). `onlyIfEmpty`
  * is for an UPDATE that only fills a missing number (coalesce): the sealed
  * columns are then written only where the row had no number.
  *
@@ -239,6 +240,58 @@ export async function sealStoredPhone(db: Db, playerId: number, env: Env = proce
   return typeof e164 === "string" ? sealRow(db, sealing, playerId, e164) : false;
 }
 
+/**
+ * A script was about to write with a key that isn't proven to be the servers'
+ * own: the id is right and the bytes may not be. What it sealed, no server
+ * could open. The message names the variable and the key id, never a key.
+ */
+export class KeyNotConfirmedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "KeyNotConfirmedError";
+  }
+}
+
+/** How many rows already on a key are tried before the key held here is called a different one. */
+const CANARY_ROWS = 20;
+
+/**
+ * Before the backfill writes: do the two keys held here agree with what the
+ * servers already sealed and indexed with keys of the same ids? A row on the
+ * current sealing key must open for its own account; a row on the current
+ * index key must give the same index for its (opened) number. Throws
+ * KeyNotConfirmedError when rows are on a key and none agrees. Returns the
+ * lists no row could confirm (the very first backfill: nothing is sealed yet).
+ */
+async function unconfirmedPhoneKeys(db: Db, sealing: PhoneSealing, env: Env): Promise<string[]> {
+  const first = (name: "CONTACT_KEKS" | "CONTACT_INDEX_KEYS") => parseKeks(env[name], name)[0].id;
+  const agrees = (check: () => boolean): boolean => {
+    try {
+      return check();
+    } catch (err) {
+      // A row that can't be opened here confirms nothing; a malformed list is thrown.
+      if (err instanceof SealError && ["unknown_key", "unopenable", "format"].includes(err.code)) return false;
+      throw err;
+    }
+  };
+  type Sealed = { id: unknown; phone_sealed: unknown; phone_index: unknown };
+  const checks = [
+    { env: "CONTACT_KEKS", kid: first("CONTACT_KEKS"), made: "sealed", on: `split_part(phone_sealed, '.', 2) = $1`, confirms: (r: Sealed) => typeof sealing.open(Number(r.id), String(r.phone_sealed)) === "string" },
+    { env: "CONTACT_INDEX_KEYS", kid: first("CONTACT_INDEX_KEYS"), made: "indexed", on: `phone_index_kid = $1`, confirms: (r: Sealed) => sealing.currentIndex(sealing.open(Number(r.id), String(r.phone_sealed))).index === r.phone_index },
+  ];
+  const unconfirmed: string[] = [];
+  for (const check of checks) {
+    const { rows } = await db.query(`SELECT id, phone_sealed, phone_index FROM players WHERE phone_sealed IS NOT NULL AND ${check.on} ORDER BY id LIMIT $2`, [check.kid, CANARY_ROWS]);
+    if (!rows.length) unconfirmed.push(check.env);
+    else if (!rows.some((row) => agrees(() => check.confirms(row as Sealed)))) {
+      throw new KeyNotConfirmedError(
+        `${check.env}: the key "${check.kid}" in this shell differs from the one that ${check.made} the existing rows on "${check.kid}" (none of the ${rows.length} tried agrees with it). Nothing was written. Compare this shell's list with the deployed value.`,
+      );
+    }
+  }
+  return unconfirmed;
+}
+
 export type BackfillResult = { pending: number; sealed: number; failed: number };
 
 /**
@@ -247,6 +300,12 @@ export type BackfillResult = { pending: number; sealed: number; failed: number }
  * only counts. It can be stopped and run again: a sealed row is never
  * touched, so a second run changes nothing. `log` gets counts and row ids
  * only, never a number, a sealed text or an index.
+ *
+ * Before it writes, the keys held here are confirmed against rows already
+ * sealed and indexed under the same key ids (KeyNotConfirmedError when they
+ * differ: the right id with other key bytes would seal numbers no server can
+ * open or find). The very first backfill has no such row, so it goes ahead
+ * and says that nothing confirmed the keys.
  */
 export async function backfillPhones(db: Db, opts: { apply: boolean; batch?: number; env?: Env; log?: (line: string) => void }): Promise<BackfillResult> {
   const { apply, batch = 200, env = process.env, log = () => {} } = opts;
@@ -257,6 +316,10 @@ export async function backfillPhones(db: Db, opts: { apply: boolean; batch?: num
   log(`${pending} account(s) have a phone number that isn't sealed yet.`);
   const result: BackfillResult = { pending, sealed: 0, failed: 0 };
   if (!apply) return result;
+  const unconfirmed = await unconfirmedPhoneKeys(db, sealing, env);
+  if (unconfirmed.length) {
+    log(`No existing row could confirm ${unconfirmed.join(" and ")} (nothing is on ${unconfirmed.length === 1 ? "its" : "their"} current key yet). Once the servers have the keys, verify one sign-in by phone.`);
+  }
   let after = 0;
   for (;;) {
     const { rows } = await db.query(`SELECT id, phone_e164 FROM players WHERE phone_e164 IS NOT NULL AND phone_sealed IS NULL AND id > $1 ORDER BY id LIMIT $2`, [after, batch]);

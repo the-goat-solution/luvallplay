@@ -28,6 +28,14 @@
 //   (the first key of the list in THIS shell). Compare it with the first key
 //   of the list the servers run with before adding --apply: a list in the
 //   wrong order here would re-seal everything back onto the old key.
+// - Before it writes anything, --apply proves the key in THIS shell is the
+//   servers' own: a row a server already sealed with the current key id must
+//   open with it (for a phone number's index: give the same index). The right
+//   key id with different key bytes would otherwise re-seal every row under a
+//   key no server has. If rows are on the current key and none agrees, the
+//   run is refused (exit 2) and nothing is written. If no row is on it yet,
+//   let the servers seal one first, or check the key against the deployed
+//   value by hand and add --first-use-of-key.
 // - Connect as the database's owner, as for migrations. A club-owned table
 //   is worked through one club at a time, each transaction naming its club.
 // - DB_DRIVER=neon-ws works as in the other operator scripts (db-client.mjs).
@@ -37,7 +45,7 @@ import { dbClient } from "../db-client.mjs";
 import { RESEAL_PURPOSES, reseal } from "../../lib/crypto-purposes.ts";
 
 const args = process.argv.slice(2);
-const flags = ["--apply", "--production"];
+const flags = ["--apply", "--production", "--first-use-of-key"];
 let purpose = null;
 const unknown = [];
 for (let i = 0; i < args.length; i++) {
@@ -96,7 +104,7 @@ try {
   } catch (err) {
     throw new CannotConnect(typeof err?.code === "string" && /^[0-9A-Za-z_]{1,40}$/.test(err.code) ? err.code : null);
   }
-  const result = await reseal(c, { purpose, apply, batch: 100, log: (line) => console.log(line) });
+  const result = await reseal(c, { purpose, apply, batch: 100, firstUseOfKey: args.includes("--first-use-of-key"), log: (line) => console.log(line) });
   if (!apply && result.current) console.log("Dry run: nothing was written. Add --apply to do it.");
   if (result.problems) code = 1;
 } catch (err) {

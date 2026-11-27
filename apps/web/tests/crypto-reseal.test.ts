@@ -19,12 +19,12 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { createSeal, parseKeks, SealError, sealedWith } from "@luvallplay/crypto";
 import { migrate } from "../scripts/db/migrate.mjs";
-import { PURPOSES, RESEAL_PURPOSES, reseal } from "../lib/crypto-purposes.ts";
+import { KeyNotConfirmedError, PURPOSES, RESEAL_PURPOSES, reseal } from "../lib/crypto-purposes.ts";
 import { pushSeal } from "../lib/push/seal.ts";
 import { addressesFor, setPrefs } from "../lib/push/devices.ts";
 import { addChild } from "../lib/juniors/family.ts";
 import { juniorsVault, readMedicalNotesAsGuardian, setMedicalNotes } from "../lib/juniors/care.ts";
-import { findVerifiedByPhone, phoneSealing, verifyPhone } from "../lib/pii/contact.ts";
+import { backfillPhones, findVerifiedByPhone, phoneSealing, verifyPhone } from "../lib/pii/contact.ts";
 
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
@@ -138,9 +138,9 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
   });
 
   /** `count` devices for Mia and Pete, sealed by the app's own seal. */
-  const devices = async (count: number, env: { PUSH_KEKS: string }) => {
+  const devices = async (count: number, env: { PUSH_KEKS: string }, from = 1) => {
     const seal = pushSeal(env);
-    for (let n = 1; n <= count; n++) {
+    for (let n = from; n < from + count; n++) {
       const playerId = n % 2 ? MIA : PETE;
       const id = Number((await c.query(`SELECT nextval('push_devices_id_seq') AS id`)).rows[0].id);
       await c.query(`INSERT INTO push_devices (id, player_id, platform, token_hash, sealed) VALUES ($1, $2, 'android', $3, $4)`, [
@@ -175,10 +175,13 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
     assert.equal(lines[0], "current key: p2", "the key every row is brought to is said first, to compare with the deployed list");
 
     // Stopped after the first batch of 100 (an injected failure: a lost connection, a closed laptop).
+    // No row is on p2 yet (the first use of the key), which has to be said;
+    // every later run confirms its key against the rows now on p2 by itself.
     await assert.rejects(
       reseal(c, {
         purpose: "push_devices.sealed",
         apply: true,
+        firstUseOfKey: true,
         env: ROTATED,
         log,
         onStep: (step) => {
@@ -254,7 +257,7 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
     try {
       assert.equal((await c.query(`SELECT count(*)::int AS n FROM junior_medical_notes`)).rows[0].n, 0, "outside a club's transaction this role sees no note");
       assert.deepEqual(await reseal(c, { purpose: "junior_medical_notes.sealed", apply: false, env: ROTATED, log }), { purpose: "junior_medical_notes.sealed", current: "j2", byKey: { j1: 3 }, todo: 3, done: 0, skipped: 0, problems: 0 });
-      assert.deepEqual(await reseal(c, { purpose: "junior_medical_notes.sealed", apply: true, batch: 1, env: ROTATED, log }), { purpose: "junior_medical_notes.sealed", current: "j2", byKey: { j1: 3 }, todo: 3, done: 3, skipped: 0, problems: 0 });
+      assert.deepEqual(await reseal(c, { purpose: "junior_medical_notes.sealed", apply: true, batch: 1, firstUseOfKey: true, env: ROTATED, log }), { purpose: "junior_medical_notes.sealed", current: "j2", byKey: { j1: 3 }, todo: 3, done: 3, skipped: 0, problems: 0 });
     } finally {
       await c.query(`RESET ROLE`);
     }
@@ -275,6 +278,28 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
 
     // As the database's owner (who sees every club's rows) it is still one club at a time, and finds the same.
     assert.deepEqual((await reseal(c, { purpose: "junior_medical_notes.sealed", apply: false, env: ROTATED })).byKey, { j2: 3 });
+
+    // The next rotation, without the flag: a server has already sealed ONE note
+    // with j3, in the second club only. That row confirms the key for every club.
+    const J3 = key();
+    const AGAIN = { JUNIORS_KEKS: `j3:${J3},${ROTATED.JUNIORS_KEKS}` };
+    await assert.rejects(reseal(c, { purpose: "junior_medical_notes.sealed", apply: true, env: AGAIN }), (err: unknown) => err instanceof KeyNotConfirmedError && /JUNIORS_KEKS/.test(err.message) && /"j3"/.test(err.message) && /--first-use-of-key/.test(err.message));
+    assert.deepEqual(await kids("junior_medical_notes", "sealed"), { j2: 3 }, "refused: nothing was written");
+    value(await setMedicalNotes(c, juniorsVault(AGAIN), club2, MIA, linh, NOTES[2][3], AGAIN));
+    // A shell with the right id and other key bytes is refused, as the app's role too.
+    const WRONG = { JUNIORS_KEKS: `j3:${key()},${ROTATED.JUNIORS_KEKS}` };
+    await c.query(`SET ROLE luvallplay_app`);
+    try {
+      await assert.rejects(reseal(c, { purpose: "junior_medical_notes.sealed", apply: true, firstUseOfKey: true, env: WRONG }), (err: unknown) => err instanceof KeyNotConfirmedError && /differs from the one that sealed/.test(err.message));
+      assert.deepEqual(await kids("junior_medical_notes", "sealed"), { j2: 2, j3: 1 }, "refused: nothing was written");
+      assert.deepEqual(await reseal(c, { purpose: "junior_medical_notes.sealed", apply: true, env: AGAIN }), { purpose: "junior_medical_notes.sealed", current: "j3", byKey: { j2: 2, j3: 1 }, todo: 2, done: 2, skipped: 0, problems: 0 });
+    } finally {
+      await c.query(`RESET ROLE`);
+    }
+    const NEWEST = { JUNIORS_KEKS: `j3:${J3}` };
+    for (const [tenantId, guardianId, childId, text] of NOTES) {
+      assert.equal(value(await readMedicalNotesAsGuardian(c, juniorsVault(NEWEST), tenantId, guardianId, childId, NEWEST)).notes, text);
+    }
   });
 
   test("a row that can't be opened is counted and left exactly as it was; the others are re-sealed; a write made meanwhile wins", async () => {
@@ -293,6 +318,7 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
     const result = await reseal(c, {
       purpose: "push_devices.sealed",
       apply: true,
+      firstUseOfKey: true,
       env: ROTATED,
       log: (line) => lines.push(line),
       onStep: async (step) => {
@@ -310,6 +336,82 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
     await printsNoSecrets(lines, allAddresses(6));
     // A run over a table with problems left says so again, and still changes nothing.
     assert.deepEqual(await reseal(c, { purpose: "push_devices.sealed", apply: true, env: ROTATED }), { purpose: "push_devices.sealed", current: "p2", byKey: { p0: 1, p1: 1, p2: 4 }, todo: 2, done: 0, skipped: 0, problems: 2 });
+  });
+
+  test("the right key id with the wrong key bytes: refused before anything is written, and every row still opens with the true keys", async () => {
+    // The servers run with p2:S,p1:O and have sealed three devices with p2 already.
+    const OLD = `p1:${key()}`;
+    const SERVERS = { PUSH_KEKS: `p2:${key()},${OLD}` };
+    await devices(120, { PUSH_KEKS: OLD });
+    await devices(3, SERVERS, 121);
+    // The operator's shell: the same ids, but p2 is other bytes (a key made twice, a paste from the wrong place).
+    const SHELL = { PUSH_KEKS: `p2:${key()},${OLD}` };
+    const before = (await c.query(`SELECT * FROM push_devices ORDER BY id`)).rows;
+    const lines: string[] = [];
+    for (const firstUseOfKey of [false, true]) {
+      await assert.rejects(
+        reseal(c, { purpose: "push_devices.sealed", apply: true, firstUseOfKey, env: SHELL, log: (l) => lines.push(l) }),
+        (err: unknown) => err instanceof KeyNotConfirmedError && /PUSH_KEKS/.test(err.message) && /"p2"/.test(err.message) && /differs from the one that sealed/.test(err.message) && /Nothing was written/.test(err.message),
+        "the flag is for a key no row is on yet; it never lets a key through that existing rows contradict",
+      );
+    }
+    assert.deepEqual((await other.query(`SELECT * FROM push_devices ORDER BY id`)).rows, before, "nothing was written");
+    assert.equal((await openDevices(SERVERS)).length, 123, "every row still opens with the servers' keys");
+    // A dry run with the same shell still only counts (it writes nothing, so it needs no proof).
+    assert.deepEqual((await reseal(c, { purpose: "push_devices.sealed", apply: false, env: SHELL })).byKey, { p1: 120, p2: 3 });
+    // The true keys: confirmed by the three rows already on p2, no flag needed.
+    assert.deepEqual(await reseal(c, { purpose: "push_devices.sealed", apply: true, env: SERVERS, log: (l) => lines.push(l) }), { purpose: "push_devices.sealed", current: "p2", byKey: { p1: 120, p2: 3 }, todo: 120, done: 120, skipped: 0, problems: 0 });
+    assert.equal((await openDevices({ PUSH_KEKS: SERVERS.PUSH_KEKS.split(",")[0] })).length, 123);
+    await printsNoSecrets(lines);
+  });
+
+  test("no row on the new key yet: refused without --first-use-of-key (also for an empty table); with it the run goes ahead and says nothing confirmed the key", async () => {
+    const K1 = { PUSH_KEKS: `p1:${key()}` };
+    const ROTATED = { PUSH_KEKS: `p2:${key()},${K1.PUSH_KEKS}` };
+    const refused = (err: unknown) => err instanceof KeyNotConfirmedError && /PUSH_KEKS/.test(err.message) && /no row is on key "p2"/.test(err.message) && /seal at least one row with the new key first/.test(err.message) && /--first-use-of-key/.test(err.message);
+    // An empty table.
+    await assert.rejects(reseal(c, { purpose: "push_devices.sealed", apply: true, env: ROTATED }), refused);
+    await devices(5, K1);
+    const before = (await c.query(`SELECT * FROM push_devices ORDER BY id`)).rows;
+    await assert.rejects(reseal(c, { purpose: "push_devices.sealed", apply: true, env: ROTATED }), refused);
+    assert.deepEqual((await other.query(`SELECT * FROM push_devices ORDER BY id`)).rows, before, "nothing was written");
+    const lines: string[] = [];
+    assert.deepEqual(await reseal(c, { purpose: "push_devices.sealed", apply: true, firstUseOfKey: true, env: ROTATED, log: (l) => lines.push(l) }), { purpose: "push_devices.sealed", current: "p2", byKey: { p1: 5 }, todo: 5, done: 5, skipped: 0, problems: 0 });
+    assert.ok(lines.some((l) => /No row is on key p2/.test(l) && /--first-use-of-key/.test(l)), "it says that nothing in the database confirmed the key");
+    assert.deepEqual(await openDevices({ PUSH_KEKS: ROTATED.PUSH_KEKS.split(",")[0] }), allAddresses(5));
+    // A row of the current key that can't be opened (copied from another device) is no proof, but one good row is enough.
+    const ids = (await c.query(`SELECT id FROM push_devices ORDER BY id`)).rows.map((r) => Number(r.id));
+    await c.query(`UPDATE push_devices SET sealed = (SELECT sealed FROM push_devices WHERE id = $2) WHERE id = $1`, [ids[0], ids[1]]);
+    assert.deepEqual(await reseal(c, { purpose: "push_devices.sealed", apply: true, env: ROTATED }), { purpose: "push_devices.sealed", current: "p2", byKey: { p2: 5 }, todo: 0, done: 0, skipped: 0, problems: 0 });
+  });
+
+  test("reseal.mjs: --apply with a key no row confirms exits 2 and writes nothing; --first-use-of-key lets the first rotation through", async () => {
+    const K1 = { PUSH_KEKS: `p1:${key()}` };
+    await devices(3, K1);
+    const ROTATED = `p2:${key()},${K1.PUSH_KEKS}`;
+    const web = fileURLToPath(new URL("..", import.meta.url));
+    const run = (list: string, ...flags: string[]) =>
+      spawnSync(process.execPath, ["scripts/crypto/reseal.mjs", "--purpose", "push_devices.sealed", "--apply", ...flags], {
+        cwd: web,
+        env: { PATH: process.env.PATH, NODE_NO_WARNINGS: "1", POSTGRES_URL: urlFor(NAME), PUSH_KEKS: list },
+        encoding: "utf8",
+        timeout: 60_000,
+      });
+    const refused = run(ROTATED);
+    assert.equal(refused.status, 2, refused.stderr);
+    assert.match(refused.stderr, /PUSH_KEKS: no row is on key "p2" yet/);
+    assert.match(refused.stderr, /--first-use-of-key/);
+    assert.equal(refused.stderr.trim().split("\n").length, 1, "one line, no stack");
+    assert.deepEqual(await kids("push_devices", "sealed"), { p1: 3 });
+    const first = run(ROTATED, "--first-use-of-key");
+    assert.equal(first.status, 0, first.stderr);
+    assert.deepEqual(await kids("push_devices", "sealed"), { p2: 3 });
+    // Afterwards: a shell whose p2 is other bytes is refused, with or without the flag.
+    const differs = run(`p2:${key()},${K1.PUSH_KEKS}`, "--first-use-of-key");
+    assert.equal(differs.status, 2, differs.stderr);
+    assert.match(differs.stderr, /PUSH_KEKS: the key "p2" in this shell differs from the one that sealed the existing rows/);
+    assert.deepEqual(await kids("push_devices", "sealed"), { p2: 3 });
+    for (const out of [refused, first, differs]) assert.ok(!/[A-Za-z0-9_+/-]{40,}/.test(out.stdout + out.stderr), "nothing that looks like a key or sealed text");
   });
 
   test("what is refused before anything is read or written", async () => {
@@ -353,7 +455,7 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
       const n = people.length;
       const expected = { purpose: "players.phone_sealed", current: "c2", byKey: { c1: n }, todo: n };
       assert.deepEqual(await reseal(c, { purpose: "players.phone_sealed", apply: false, env: ROTATED, log: (l) => lines.push(l) }), { ...expected, done: 0, skipped: 0, problems: 0 });
-      assert.deepEqual(await reseal(c, { purpose: "players.phone_sealed", apply: true, batch: 7, env: ROTATED, log: (l) => lines.push(l) }), { ...expected, done: n, skipped: 0, problems: 0 });
+      assert.deepEqual(await reseal(c, { purpose: "players.phone_sealed", apply: true, batch: 7, firstUseOfKey: true, env: ROTATED, log: (l) => lines.push(l) }), { ...expected, done: n, skipped: 0, problems: 0 });
       const NEW_ONLY = { CONTACT_KEKS: ROTATED.CONTACT_KEKS.split(",")[0], CONTACT_INDEX_KEYS: ROTATED.CONTACT_INDEX_KEYS.split(",")[0] };
       const sealing = phoneSealing(NEW_ONLY);
       for (const r of await rows()) {
@@ -382,6 +484,7 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
           purpose: "contact-index",
           apply: true,
           batch: 10,
+          firstUseOfKey: true,
           env: ROTATED,
           log,
           onStep: (step) => {
@@ -405,6 +508,68 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
       await printsNoSecrets(lines);
     });
 
+    test("the index key: the right id with the wrong bytes is refused before any number is re-indexed or re-sealed; a first use needs the flag", async () => {
+      const I2 = key();
+      const SERVERS = { CONTACT_KEKS: C1, CONTACT_INDEX_KEYS: `i2:${I2},${I1}` };
+      const refusedFirst = (err: unknown) => err instanceof KeyNotConfirmedError && /CONTACT_INDEX_KEYS/.test(err.message) && /no row is on key "i2"/.test(err.message) && /--first-use-of-key/.test(err.message);
+      const before = await rows();
+      // Nothing is on i2 yet.
+      await assert.rejects(reseal(c, { purpose: "contact-index", apply: true, env: SERVERS }), refusedFirst);
+      // The same holds when the sealing key is rotated: that write re-indexes too, so both of its keys need a row.
+      const BOTH = { CONTACT_KEKS: `c2:${key()},${C1}`, CONTACT_INDEX_KEYS: SERVERS.CONTACT_INDEX_KEYS };
+      await assert.rejects(reseal(c, { purpose: "players.phone_sealed", apply: true, env: BOTH }), (err: unknown) => err instanceof KeyNotConfirmedError && /CONTACT_KEKS/.test(err.message) && /no row is on key "c2"/.test(err.message));
+      assert.deepEqual(await rows(), before, "nothing was written");
+
+      // A server verifies one person's number again: that row is now indexed with the servers' i2.
+      assert.equal(await verifyPhone(c, people[0], numberOf(people[0]), SERVERS), "ok");
+      const after = await rows();
+      // The operator's shell has i2 with other bytes.
+      const SHELL = { CONTACT_KEKS: C1, CONTACT_INDEX_KEYS: `i2:${key()},${I1}` };
+      const differs = (err: unknown) => err instanceof KeyNotConfirmedError && /CONTACT_INDEX_KEYS/.test(err.message) && /"i2"/.test(err.message) && /differs from the one that indexed/.test(err.message);
+      for (const firstUseOfKey of [false, true]) {
+        await assert.rejects(reseal(c, { purpose: "contact-index", apply: true, firstUseOfKey, env: SHELL }), differs);
+        // Re-sealing would write the index as well: refused for the same reason, though its sealing key is right.
+        await assert.rejects(reseal(c, { purpose: "players.phone_sealed", apply: true, firstUseOfKey, env: SHELL }), differs);
+      }
+      assert.deepEqual(await rows(), after, "nothing was written");
+      await everyoneFound(SERVERS);
+
+      // The true keys, no flag: confirmed by the one row a server indexed.
+      const n = people.length;
+      assert.deepEqual(await reseal(c, { purpose: "contact-index", apply: true, env: SERVERS }), { purpose: "contact-index", current: "i2", byKey: { i1: n - 1, i2: 1 }, todo: n - 1, done: n - 1, skipped: 0, problems: 0 });
+      await everyoneFound({ CONTACT_KEKS: C1, CONTACT_INDEX_KEYS: `i2:${I2}` });
+    });
+
+    test("the backfill: keys that differ from the ones existing rows were sealed or indexed with are refused before anything is written", async () => {
+      // Two accounts hold a number from before the keys existed: plain only.
+      const [A, B] = people;
+      await c.query(`UPDATE players SET phone_sealed = NULL, phone_index = NULL, phone_index_kid = NULL WHERE id IN ($1, $2)`, [A, B]);
+      const before = (await c.query(`SELECT id, phone_e164, phone_sealed, phone_index, phone_index_kid FROM players ORDER BY id`)).rows;
+      const unchanged = async () => assert.deepEqual((await other.query(`SELECT id, phone_e164, phone_sealed, phone_index, phone_index_kid FROM players ORDER BY id`)).rows, before, "nothing was written");
+      const lines: string[] = [];
+      const log = (l: string) => lines.push(l);
+      // The sealing key's bytes differ.
+      await assert.rejects(backfillPhones(c, { apply: true, env: { CONTACT_KEKS: `c1:${key()}`, CONTACT_INDEX_KEYS: I1 }, log }), (err: unknown) => err instanceof KeyNotConfirmedError && /CONTACT_KEKS/.test(err.message) && /"c1"/.test(err.message) && /differs from the one that sealed/.test(err.message));
+      await unchanged();
+      // The index key's bytes differ.
+      await assert.rejects(backfillPhones(c, { apply: true, env: { CONTACT_KEKS: C1, CONTACT_INDEX_KEYS: `i1:${key()}` }, log }), (err: unknown) => err instanceof KeyNotConfirmedError && /CONTACT_INDEX_KEYS/.test(err.message) && /"i1"/.test(err.message) && /differs from the one that indexed/.test(err.message));
+      await unchanged();
+      // A dry run needs no proof: it writes nothing.
+      assert.deepEqual(await backfillPhones(c, { apply: false, env: { CONTACT_KEKS: `c1:${key()}`, CONTACT_INDEX_KEYS: I1 }, log }), { pending: 2, sealed: 0, failed: 0 });
+      // The true keys: confirmed by the rows already sealed, and it says nothing about unconfirmed keys.
+      assert.deepEqual(await backfillPhones(c, { apply: true, env: ENV, log }), { pending: 2, sealed: 2, failed: 0 });
+      assert.ok(!lines.some((l) => /could confirm/.test(l)));
+      await everyoneFound(ENV);
+
+      // The very first backfill (nothing sealed at all) goes ahead, and says no row could confirm the keys.
+      await c.query(`UPDATE players SET phone_sealed = NULL, phone_index = NULL, phone_index_kid = NULL`);
+      const first: string[] = [];
+      assert.deepEqual(await backfillPhones(c, { apply: true, env: ENV, log: (l) => first.push(l) }), { pending: people.length, sealed: people.length, failed: 0 });
+      assert.ok(first.some((l) => /No existing row could confirm CONTACT_KEKS and CONTACT_INDEX_KEYS/.test(l) && /verify one sign-in by phone/.test(l)), first.join(" | "));
+      await everyoneFound(ENV);
+      await printsNoSecrets([...lines, ...first]);
+    });
+
     test("a sealed number whose plain column is empty or different is counted as a problem and left alone, never guessed at", async () => {
       // Neither can happen through the app (the trigger clears the sealed copy); made here behind the trigger's back.
       const [EMPTY, DIFFERENT] = people;
@@ -420,8 +585,8 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
       const n = people.length;
       for (const [purpose, current, old] of [["players.phone_sealed", "c2", "c1"], ["contact-index", "i2", "i1"]] as const) {
         const lines: string[] = [];
-        const result = await reseal(c, { purpose, apply: true, env: ROTATED, log: (l) => lines.push(l) });
-        // contact-index runs second: the first run already brought the other rows to i2.
+        // contact-index runs second: the first run already brought the other rows to i2, and they confirm its key.
+        const result = await reseal(c, { purpose, apply: true, firstUseOfKey: purpose === "players.phone_sealed", env: ROTATED, log: (l) => lines.push(l) });
         const byKey = purpose === "contact-index" ? { [old]: 2, [current]: n - 2 } : { [old]: n };
         assert.deepEqual(result, { purpose, current, byKey, todo: purpose === "contact-index" ? 2 : n, done: purpose === "contact-index" ? 0 : n - 2, skipped: 0, problems: 2 });
         assert.deepEqual((await rows()).filter((r) => r.id === EMPTY || r.id === DIFFERENT), before, "left exactly as they were");
@@ -450,4 +615,21 @@ test("reseal.mjs: a database it can't connect to is one line and exit 2 (never 1
   assert.equal(said.split("\n").length, 1, `one line, no stack: ${said}`);
   assert.match(said, /Could not connect to the database/);
   for (const secret of ["reseal_user", "reseal-made-up-password", "reseal_db", "127.0.0.1", kek]) assert.ok(!(run.stdout + run.stderr).includes(secret), `"${secret}" is not printed`);
+});
+
+test("backfill-phone.mjs: a database it can't connect to is one line and exit 2, without the connection string", () => {
+  const web = fileURLToPath(new URL("..", import.meta.url));
+  const url = "postgres://backfill_user:backfill-made-up-password@127.0.0.1:1/backfill_db";
+  const keys = [randomBytes(32).toString("base64"), randomBytes(32).toString("base64")];
+  const run = spawnSync(process.execPath, ["scripts/pii/backfill-phone.mjs"], {
+    cwd: web,
+    env: { PATH: process.env.PATH, NODE_NO_WARNINGS: "1", POSTGRES_URL: url, CONTACT_KEKS: `c1:${keys[0]}`, CONTACT_INDEX_KEYS: `i1:${keys[1]}` },
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  assert.equal(run.status, 2, run.stderr);
+  const said = run.stderr.trim();
+  assert.equal(said.split("\n").length, 1, `one line, no stack: ${said}`);
+  assert.match(said, /Could not connect to the database/);
+  for (const secret of ["backfill_user", "backfill-made-up-password", "backfill_db", "127.0.0.1", ...keys]) assert.ok(!(run.stdout + run.stderr).includes(secret), `"${secret}" is not printed`);
 });

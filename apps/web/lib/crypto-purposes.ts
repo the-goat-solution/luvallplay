@@ -26,11 +26,22 @@
 //   was, counted, and named by its key.
 // - It says counts, key ids and row keys only: never the plain text, a sealed
 //   text, an index or a key.
+// - Before the first write, the keys held HERE are proven to be the servers'
+//   own: a row already on the current key id (sealed by a server) must open
+//   with this shell's key, and a phone number already on the current index
+//   key must give the same index. A shell with the right key id and other key
+//   BYTES would otherwise re-seal everything under a key no server has, and
+//   its own "does it open?" check would pass. If rows are on the current key
+//   and none can be confirmed, the run is refused whole. If no row is on it
+//   yet, the run is refused unless `firstUseOfKey` says the key was checked
+//   against the deployed value by hand.
 // - A club-owned table (forced row-level security) is handled one club at a
 //   time, with the club named for each transaction (app.tenant_id), which is
 //   the only way the app's database role sees its rows at all.
 import { createSeal, parseKeks, SealError, sealedWith, type Binding } from "@luvallplay/crypto";
-import { phoneBinding, phoneSealing } from "./pii/contact.ts";
+import { KeyNotConfirmedError, phoneBinding, phoneSealing } from "./pii/contact.ts";
+
+export { KeyNotConfirmedError };
 
 type Row = Record<string, unknown>;
 type Env = Record<string, string | undefined>;
@@ -60,14 +71,35 @@ export type Purpose = {
    * sealed one (a phone number's index). `read` names what else is read;
    * `ready` throws when they can't be computed here; `problem` says why a row
    * must be left alone (in words that hold nothing of the row), or null; `set`
-   * gives their new values, written by the same UPDATE as the sealed text.
+   * gives their new values, written by the same UPDATE as the sealed text;
+   * `canary` is how their own key is confirmed before anything is written
+   * (null with no key).
    */
   beside?: {
     read: readonly string[];
     ready: (env: Env) => void;
     problem: (row: Row, plaintext: string) => string | null;
     set: (plaintext: string, env: Env) => Record<string, string>;
+    canary: (env: Env) => Canary | null;
   };
+};
+
+/**
+ * How one key held here is confirmed against rows a server already wrote
+ * with the key of the same id, before a run writes anything.
+ */
+type Canary = {
+  /** The key list (its environment variable) and the key id to confirm: the first one listed. */
+  env: string;
+  kid: string;
+  /** What the key did to those rows, for the message. */
+  made: "sealed" | "indexed";
+  /** Columns it reads beside the row's key. */
+  read: readonly string[];
+  /** SQL: the row is on the key id in this parameter. */
+  on: (param: string) => string;
+  /** Whether this row, already on that key id, agrees with the key held here. Never throws for a row that just doesn't. */
+  confirms: (row: Row) => boolean;
 };
 
 const int = (v: unknown): number => {
@@ -94,6 +126,20 @@ function phoneProblem(row: Row, e164: string): string | null {
 }
 function phoneReady(env: Env): void {
   if (!phoneSealing(env).available()) throw new SealError("CONTACT_KEKS and CONTACT_INDEX_KEYS must both be set.", "unavailable");
+}
+/** The index key held here is the servers' when a row they indexed with it gives the same index for its own (opened) number. */
+function phoneIndexCanary(env: Env): Canary | null {
+  const kid = parseKeks(env.CONTACT_INDEX_KEYS, "CONTACT_INDEX_KEYS")[0]?.id;
+  if (!kid) return null;
+  const sealing = phoneSealing(env);
+  return {
+    env: "CONTACT_INDEX_KEYS",
+    kid,
+    made: "indexed",
+    read: ["phone_sealed", "phone_index"],
+    on: (param) => `phone_index_kid = ${param}`,
+    confirms: (row) => opens(() => sealing.currentIndex(sealing.open(int(row.id), String(row.phone_sealed))).index === row.phone_index),
+  };
 }
 
 export const PURPOSES: readonly Purpose[] = [
@@ -143,6 +189,7 @@ export const PURPOSES: readonly Purpose[] = [
         const { index, indexKid } = phoneSealing(env).currentIndex(e164);
         return { phone_index: index, phone_index_kid: indexKid };
       },
+      canary: phoneIndexCanary,
     },
   },
 ];
@@ -176,6 +223,8 @@ type Job = {
   guard: readonly string[];
   /** Throws unless everything needed to write is here. */
   ready: () => void;
+  /** Each key this job writes with, to be confirmed against existing rows before the first write. */
+  canaries: () => Canary[];
   /** The row's new values. Throws SealError or RowProblem for a row to leave alone. */
   next: (row: Row) => Record<string, string>;
   /** What the rows are, and what is done to them, for the log. */
@@ -200,6 +249,14 @@ function sealJob(p: Purpose, env: Env): Job {
     ready() {
       if (!keks().length) throw new SealError(`No encryption key is set (${p.env}), so nothing can be re-sealed.`, "unavailable");
       p.beside?.ready(env);
+    },
+    canaries() {
+      const kid = keks()[0]?.id;
+      const mine: Canary[] = kid
+        ? [{ env: p.env, kid, made: "sealed", read: [], on: (param) => `split_part(${p.column}, '.', 2) = ${param}`, confirms: (row) => opens(() => (envelope.open(p.binding(row), String(row[p.column])), true)) }]
+        : [];
+      const beside = p.beside?.canary(env);
+      return beside ? [...mine, beside] : mine;
     },
     next(row) {
       const binding = p.binding(row);
@@ -235,6 +292,10 @@ function contactIndexJob(env: Env): Job {
     stale: (param) => `phone_index_kid IS DISTINCT FROM ${param}`,
     guard: ["phone_sealed", "phone_index_kid"],
     ready: () => phoneReady(env),
+    canaries() {
+      const canary = phoneIndexCanary(env);
+      return canary ? [canary] : [];
+    },
     next(row) {
       const e164 = sealing.open(int(row.id), String(row.phone_sealed));
       const problem = phoneProblem(row, e164);
@@ -273,6 +334,13 @@ export type ResealOptions = {
   apply: boolean;
   /** Rows per transaction. */
   batch?: number;
+  /**
+   * `--first-use-of-key`. No row is on the current key id yet, so nothing in
+   * the database can confirm that the key held here is the servers'. True
+   * says the operator checked it against the deployed value. It never lets a
+   * run through when rows ARE on the key and can't be confirmed with it.
+   */
+  firstUseOfKey?: boolean;
   env?: Env;
   /** Gets counts, key ids and row keys. Never plain text, sealed text, an index or a key. */
   log?: (line: string) => void;
@@ -285,9 +353,20 @@ export type ResealOptions = {
 };
 
 const NO_KEY = "(none)";
+/** How many rows already on the current key are tried before the key held here is called a different one. */
+const CANARY_ROWS = 20;
 const isDatabaseRefusal = (err: unknown): err is { code: string } => /^[0-9A-Z]{5}$/.test(String((err as { code?: unknown } | null)?.code ?? ""));
 /** A row that can't be opened: a key that isn't listed, a wrong binding or changed text, or not sealed text at all. */
 const isRowProblem = (err: unknown): boolean => err instanceof RowProblem || (err instanceof SealError && ["unknown_key", "unopenable", "format"].includes(err.code));
+/** True or false from `check`; false too when the row can't be opened here. Anything else (a malformed key list) is thrown. */
+function opens(check: () => boolean): boolean {
+  try {
+    return check();
+  } catch (err) {
+    if (!isRowProblem(err)) throw err;
+    return false;
+  }
+}
 const reasonOf = (err: unknown): string => {
   if (err instanceof RowProblem) return err.message;
   const code = (err as SealError).code;
@@ -300,10 +379,11 @@ const reasonOf = (err: unknown): string => {
  * not on the current key to it. Safe to stop and to run again (the rules are
  * at the top of this file). Throws before reading anything on an unknown
  * purpose or a malformed key list, and before writing anything when a key
- * that is needed isn't set.
+ * that is needed isn't set, or when a key held here can't be confirmed
+ * against rows already on its id (KeyNotConfirmedError).
  */
 export async function reseal(db: ResealDb, opts: ResealOptions): Promise<ResealResult> {
-  const { purpose, apply, batch = 100, env = process.env, log = () => {}, onStep = () => {} } = opts;
+  const { purpose, apply, batch = 100, firstUseOfKey = false, env = process.env, log = () => {}, onStep = () => {} } = opts;
   if (!Number.isSafeInteger(batch) || batch < 1) throw new Error("The batch size must be a whole number above 0.");
   const entry = PURPOSES.find((p) => p.purpose === purpose);
   if (!entry && purpose !== CONTACT_INDEX) throw new Error(`"${purpose}" is not a purpose. Known: ${RESEAL_PURPOSES.join(", ")}.`);
@@ -318,7 +398,8 @@ export async function reseal(db: ResealDb, opts: ResealOptions): Promise<ResealR
   log(`current key: ${job.current ?? NO_KEY}`);
 
   const nameOf = (row: Row) => `${job.table} ${job.keyColumns.map((k) => `${k}=${int(row[k])}`).join(" ")}`;
-  const columns = [...new Set([...job.keyColumns, ...job.read])].join(", ");
+  const canaries = apply ? job.canaries() : [];
+  const columns = [...new Set([...job.keyColumns, ...job.read, ...canaries.flatMap((canary) => canary.read)])].join(", ");
   const keyList = job.keyColumns.join(", ");
 
   /** One transaction; for a club-owned table, the club's. */
@@ -376,7 +457,36 @@ export async function reseal(db: ResealDb, opts: ResealOptions): Promise<ResealR
   log(`${todo} to ${job.words.verb} onto key ${job.current}.`);
   if (!apply) return result;
 
-  // 2. Bring the rest to the current key, a batch per transaction.
+  // 2. Before any write: each key held here is confirmed against rows the
+  // servers already wrote with it. A row in any club is enough.
+  for (const canary of canaries) {
+    let tried = 0;
+    let confirmed = false;
+    for (const tenantId of scopes) {
+      if (confirmed || tried >= CANARY_ROWS) break;
+      const rows: Row[] = await transaction(tenantId, () => page(tenantId, null, CANARY_ROWS - tried, { sql: canary.on, value: canary.kid }));
+      for (const row of rows) {
+        if (job.tenant && job.tenant(row) !== tenantId) continue;
+        tried++;
+        confirmed = canary.confirms(row);
+        if (confirmed) break;
+      }
+    }
+    if (confirmed) continue;
+    if (tried) {
+      throw new KeyNotConfirmedError(
+        `${canary.env}: the key "${canary.kid}" in this shell differs from the one that ${canary.made} the existing rows on "${canary.kid}" (none of the ${tried} tried agrees with it). Nothing was written. Compare this shell's list with the deployed value.`,
+      );
+    }
+    if (!firstUseOfKey) {
+      throw new KeyNotConfirmedError(
+        `${canary.env}: no row is on key "${canary.kid}" yet, so nothing confirms that the key in this shell is the servers'. Nothing was written. Let the servers ${canary.made === "sealed" ? "seal" : "index"} at least one row with the new key first, or check the key against the deployed value and add --first-use-of-key.`,
+      );
+    }
+    log(`No row is on key ${canary.kid} (${canary.env}) yet: nothing in the database confirmed it (--first-use-of-key).`);
+  }
+
+  // 3. Bring the rest to the current key, a batch per transaction.
   for (const tenantId of scopes) {
     let after: number[] | null = null;
     for (;;) {

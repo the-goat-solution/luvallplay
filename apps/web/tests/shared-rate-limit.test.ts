@@ -11,7 +11,9 @@
 //   503 rate_limit_unavailable instead of counting on its own instance.
 //   Without it, today's fallback stays.
 // - withPlayerLock(): "count, then insert" under a cap, twelve at once across
-//   two instances, leaves exactly the cap.
+//   two instances, leaves exactly the cap. It never says "done" for work
+//   that wasn't committed, refuses to be nested, and gives up on a lock it
+//   has waited too long for instead of hanging.
 //
 // Needs Postgres (DATA_GUARD_TEST_URL's server). CI sets
 // DATA_GUARD_REQUIRE_DB=1, so it can't be skipped silently.
@@ -50,7 +52,8 @@ test("the limit options are additive: the contract old apps were built against i
 
 describe("withPlayerLock: what it is given, and what it does with the connection", () => {
   type Call = string;
-  const fakePool = (failOn: Record<string, Error> = {}) => {
+  /** `failOn`: statements that throw. `answers`: what the server says a statement did, when not the statement's own first word. */
+  const fakePool = (failOn: Record<string, Error> = {}, answers: Record<string, string> = {}) => {
     const calls: Call[] = [];
     const released: unknown[][] = [];
     const client = {
@@ -58,7 +61,8 @@ describe("withPlayerLock: what it is given, and what it does with the connection
         calls.push(params ? `${text} ${JSON.stringify(params)}` : text);
         const key = Object.keys(failOn).find((k) => text.startsWith(k));
         if (key) throw failOn[key];
-        return { rows: [] as Record<string, unknown>[] };
+        const said = Object.keys(answers).find((k) => text.startsWith(k));
+        return { rows: [] as Record<string, unknown>[], command: said ? answers[said] : text.split(" ")[0] };
       },
       release: (...args: unknown[]) => void released.push(args),
     };
@@ -73,7 +77,7 @@ describe("withPlayerLock: what it is given, and what it does with the connection
       return "done";
     });
     assert.equal(out, "done");
-    assert.deepEqual(f.calls, ["BEGIN", `SELECT pg_advisory_xact_lock(hashtext($1), $2::int4) ["social.posts",42]`, "SELECT 1", "COMMIT"]);
+    assert.deepEqual(f.calls, ["BEGIN", "SET LOCAL lock_timeout = '5000ms'", `SELECT pg_advisory_xact_lock(hashtext($1), $2::int4) ["social.posts",42]`, "SELECT 1", "COMMIT"]);
     assert.deepEqual(f.released, [[]]);
   });
 
@@ -102,6 +106,45 @@ describe("withPlayerLock: what it is given, and what it does with the connection
     await assert.rejects(withPlayerLock(f.pool, 42, "social.posts", async () => "x"), (e) => e === commit);
     assert.deepEqual(f.calls.slice(-2), ["COMMIT", "ROLLBACK"]);
     assert.deepEqual(f.released, [[]]);
+  });
+
+  test("the server answers COMMIT with ROLLBACK (a statement failed and the work carried on): an error, never the work's answer", async () => {
+    const f = fakePool({}, { COMMIT: "ROLLBACK" });
+    await assert.rejects(withPlayerLock(f.pool, 42, "social.posts", async () => "saved"), /withPlayerLock: nothing was saved/);
+    assert.ok(f.calls.includes("COMMIT"));
+    assert.deepEqual(f.released, [[]]);
+    // A driver that doesn't say what the COMMIT did can't be taken at its word either.
+    const mute = fakePool();
+    const plain = { connect: async () => ({ query: async (text: string, params?: unknown[]) => ({ rows: (await (await mute.pool.connect()).query(text, params)).rows }), release: () => {} }) };
+    await assert.rejects(withPlayerLock(plain, 42, "social.posts", async () => "saved"), /nothing was saved/);
+  });
+
+  test("a lock inside a lock is refused at once, before a second connection is taken", async () => {
+    const f = fakePool();
+    let innerRan = false;
+    await assert.rejects(
+      withPlayerLock(f.pool, 42, "social.posts", async () => withPlayerLock(f.pool, 42, "marketplace.listings", async () => (innerRan = true))),
+      /withPlayerLock: locks must not be nested/,
+    );
+    assert.equal(innerRan, false);
+    assert.equal(f.connects(), 1);
+    assert.deepEqual(f.calls.slice(-1), ["ROLLBACK"]);
+    assert.deepEqual(f.released, [[]]);
+    // One after the other is not nesting, and nor are two side by side.
+    assert.equal(await withPlayerLock(f.pool, 42, "marketplace.listings", async () => "after"), "after");
+    assert.deepEqual(await Promise.all([withPlayerLock(f.pool, 42, "social.posts", async () => 1), withPlayerLock(f.pool, 43, "social.posts", async () => 2)]), [1, 2]);
+  });
+
+  test("the wait for a lock is bounded: 5 seconds unless the caller says, and only a sensible number of milliseconds is taken", async () => {
+    const f = fakePool();
+    await withPlayerLock(f.pool, 42, "social.posts", async () => "x", { lockTimeoutMs: 250 });
+    assert.equal(f.calls[1], "SET LOCAL lock_timeout = '250ms'");
+    const never = async () => assert.fail("must not run");
+    const before = f.connects();
+    for (const ms of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 60_001, "5s" as unknown as number, "1; DROP TABLE players" as unknown as number, null as unknown as number]) {
+      await assert.rejects(withPlayerLock(f.pool, 42, "social.posts", never, { lockTimeoutMs: ms }), /lock timeout/, String(ms));
+    }
+    assert.equal(f.connects(), before);
   });
 
   test("a player id that isn't a positive whole number fitting the lock's 32 bits, or a scope that isn't a plain name, is refused before a connection is taken", async () => {
@@ -338,6 +381,23 @@ describe("limits and caps across two server instances", { skip: !BASE_URL && !RE
     assert.ok(!got.some((x) => x.startsWith("503")), got.join(", "));
   });
 
+  test("rateLimit(): a store that answers with no row is \"unavailable\" with failClosed; without it, refused (as before)", async () => {
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    const empty = { query: async () => ({ rows: [] as Record<string, unknown>[] }) };
+    try {
+      assert.deepEqual([await rateLimit("shared:empty:open", 3, 60_000, empty), await rateLimit("shared:empty:open", 3, 60_000, empty, {}), await rateLimit("shared:empty:open", 3, 60_000, empty, { failClosed: false })], [false, false, false]);
+      assert.equal(await rateLimit("shared:empty:closed", 3, 60_000, empty, { failClosed: true }), "unavailable");
+      // Neither counted on this instance on the way.
+      const { checkRateLimit } = await import("../lib/security.ts");
+      assert.deepEqual([checkRateLimit("shared:empty:open", 1, 60_000), checkRateLimit("shared:empty:closed", 1, 60_000)], [true, true]);
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.equal(warnings.length, 1, "the refusal with failClosed is said, once");
+    for (const w of warnings) assert.doesNotMatch(String(w[0]), /shared:empty/);
+  });
+
   // ── The per-player lock ───────────────────────────────────────────────────
 
   /** "Count, then insert" under a cap of 10, with a pause between the two so every request has counted before any has inserted. */
@@ -408,6 +468,118 @@ describe("limits and caps across two server instances", { skip: !BASE_URL && !RE
     assert.equal(await withPlayerLock(instanceB, 505, "test.posts", countThenInsert(505, "test.posts")), true);
     assert.equal(await rowsFor(505, "test.posts"), 1);
     assert.deepEqual([instanceA.idleCount, instanceA.waitingCount], [instanceA.totalCount, 0]);
+  });
+
+  /** Connections of this test's database left with a transaction open and nobody working in it. */
+  const idleInTransaction = async () => Number((await c.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1 AND state LIKE 'idle in transaction%'`, [NAME])).rows[0].n);
+  const poolsWhole = () => {
+    for (const pool of [instanceA, instanceB]) assert.deepEqual([pool.idleCount, pool.waitingCount], [pool.totalCount, 0]);
+  };
+  /** A test that must not hang: it fails if `p` hasn't settled in `ms`. */
+  const within = <T>(ms: number, p: Promise<T>): Promise<T> => {
+    let timer: NodeJS.Timeout;
+    return Promise.race([p, new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`still waiting after ${ms} ms`)), ms)))]).finally(() => clearTimeout(timer));
+  };
+
+  test("the work swallows a failed statement and returns: withPlayerLock throws, and nothing it wrote is kept", { timeout: 20_000 }, async () => {
+    await assert.rejects(
+      within(5_000, withPlayerLock(instanceA, 506, "test.posts", async (tx) => {
+        await tx.query(`INSERT INTO cap_test_posts (player_id, scope) VALUES (506, 'test.posts')`);
+        // Fails, and aborts the transaction; the work carries on as if it hadn't.
+        await tx.query(`INSERT INTO cap_test_posts (player_id, scope) VALUES (506, NULL)`).catch(() => {});
+        return "saved";
+      })),
+      /withPlayerLock: nothing was saved/,
+    );
+    assert.equal(await rowsFor(506, "test.posts"), 0);
+    poolsWhole();
+    assert.equal(await idleInTransaction(), 0);
+    // The connection and the lock are fine for the next request.
+    assert.equal(await within(5_000, withPlayerLock(instanceA, 506, "test.posts", countThenInsert(506, "test.posts"))), true);
+    assert.equal(await rowsFor(506, "test.posts"), 1);
+  });
+
+  test("a lock inside a lock (same cap, or another cap of the same player) throws at once; both connections go back and nothing is written", { timeout: 20_000 }, async () => {
+    for (const [outer, inner] of [["test.posts", "test.posts"], ["test.posts", "test.listings"], ["test.listings", "test.posts"]] as const) {
+      const started = Date.now();
+      let innerRan = false;
+      await assert.rejects(
+        within(3_000, withPlayerLock(instanceA, 507, outer, async (tx) => {
+          await tx.query(`INSERT INTO cap_test_posts (player_id, scope) VALUES (507, $1)`, [outer]);
+          return withPlayerLock(instanceB, 507, inner, async () => (innerRan = true));
+        })),
+        /withPlayerLock: locks must not be nested/,
+        `${outer} then ${inner}`,
+      );
+      assert.equal(innerRan, false);
+      assert.ok(Date.now() - started < 1_000, `at once, not after a wait (${Date.now() - started} ms)`);
+      poolsWhole();
+    }
+    assert.equal(await rowsFor(507, "test.posts") + await rowsFor(507, "test.listings"), 0);
+    assert.equal(await idleInTransaction(), 0);
+    // The two orders at the same moment (a then b, b then a): the deadlock Postgres couldn't see. Both refused, neither hangs.
+    const crossed = await within(3_000, Promise.allSettled([
+      withPlayerLock(instanceA, 507, "test.posts", async () => withPlayerLock(instanceB, 507, "test.listings", async () => "in")),
+      withPlayerLock(instanceB, 507, "test.listings", async () => withPlayerLock(instanceA, 507, "test.posts", async () => "in")),
+    ]));
+    assert.deepEqual(crossed.map((r) => (r.status === "rejected" ? /nested/.test(String(r.reason)) : r.value)), [true, true]);
+    poolsWhole();
+    assert.equal(await idleInTransaction(), 0);
+  });
+
+  test("a caller that waits for the lock past the timeout gets an error, its work never runs, and no connection is left in a transaction", { timeout: 20_000 }, async () => {
+    const holder = await instanceA.connect();
+    try {
+      await holder.query("BEGIN");
+      await holder.query(`SELECT pg_advisory_xact_lock(hashtext($1), $2::int4)`, ["test.posts", 508]);
+      let entered = false;
+      const started = Date.now();
+      await assert.rejects(
+        within(5_000, withPlayerLock(instanceB, 508, "test.posts", async () => (entered = true), { lockTimeoutMs: 200 })),
+        (e: Error & { cause?: { code?: string } }) => /withPlayerLock: gave up after 200 ms waiting for this player's "test\.posts" lock/.test(e.message) && e.cause?.code === "55P03",
+      );
+      assert.equal(entered, false);
+      assert.ok(Date.now() - started >= 180 && Date.now() - started < 3_000, `${Date.now() - started} ms`);
+      // The waiter's connection is back in its pool, with no transaction open; only the holder's is.
+      assert.deepEqual([instanceB.idleCount, instanceB.waitingCount], [instanceB.totalCount, 0]);
+      assert.equal(await idleInTransaction(), 1);
+    } finally {
+      await holder.query("ROLLBACK").catch(() => {});
+      holder.release();
+    }
+    assert.equal(await idleInTransaction(), 0);
+    poolsWhole();
+    // Free again: the next request gets the lock.
+    assert.equal(await within(5_000, withPlayerLock(instanceB, 508, "test.posts", async () => "got it", { lockTimeoutMs: 200 })), "got it");
+  });
+
+  test("the timeout is the transaction's own: 5 s inside the work (its statements' waits on row locks too), nothing left on the pooled connection", { timeout: 20_000 }, async () => {
+    const one = new pg.Pool({ connectionString: urlFor(NAME), max: 1 });
+    try {
+      const show = async (tx: { query: (text: string) => Promise<{ rows: Record<string, unknown>[] }> }) => String((await tx.query("SHOW lock_timeout")).rows[0].lock_timeout);
+      assert.equal(await withPlayerLock(one, 509, "test.posts", show), "5s");
+      assert.equal(await withPlayerLock(one, 509, "test.posts", show, { lockTimeoutMs: 1_500 }), "1500ms");
+      assert.equal(await show(one), "0");
+      // A statement of the work that waits on a row someone else holds is bounded by it too, and its own error comes out.
+      await c.query(`INSERT INTO cap_test_posts (player_id, scope) VALUES (509, 'held')`);
+      const holder = await instanceA.connect();
+      try {
+        await holder.query("BEGIN");
+        await holder.query(`SELECT 1 FROM cap_test_posts WHERE player_id = 509 FOR UPDATE`);
+        await assert.rejects(
+          within(5_000, withPlayerLock(one, 509, "test.posts", async (tx) => tx.query(`UPDATE cap_test_posts SET scope = 'mine' WHERE player_id = 509`), { lockTimeoutMs: 200 })),
+          (e: Error & { code?: string }) => e.code === "55P03" && !/withPlayerLock/.test(e.message),
+        );
+      } finally {
+        await holder.query("ROLLBACK").catch(() => {});
+        holder.release();
+      }
+      assert.equal(await rowsFor(509, "held"), 1);
+      assert.deepEqual([one.idleCount, one.waitingCount], [one.totalCount, 0]);
+      assert.equal(await idleInTransaction(), 0);
+    } finally {
+      await one.end();
+    }
   });
 });
 

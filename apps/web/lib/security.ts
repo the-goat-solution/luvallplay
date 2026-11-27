@@ -104,7 +104,15 @@ export async function rateLimit(key: string, limit = 20, windowMs = 60_000, db: 
     );
     // Now and then, clear out counters whose window passed long ago.
     if (Math.random() < 0.005) await db.query(`DELETE FROM rate_limits WHERE reset_at < NOW() - INTERVAL '1 day';`).catch(() => {});
-    return Number(rows[0]?.count) <= limit;
+    const count = Number(rows[0]?.count);
+    // No row back (the statement always returns one): the store didn't
+    // answer. A caller that fails closed is told so; for any other, as it
+    // always was, the request is refused.
+    if (failClosed && !Number.isFinite(count)) {
+      warnStore("it returned no count", "refusing (this limit fails closed)");
+      return "unavailable";
+    }
+    return count <= limit;
   } catch (err) {
     if (failClosed) {
       warnStore(err, "refusing (this limit fails closed)");

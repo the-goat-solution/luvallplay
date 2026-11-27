@@ -218,3 +218,49 @@ Most of this is already done: `apps/app/src/hooks.tsx:20-35` keys queries by `ow
 ---
 
 **After all tasks:** the production setting `RATE_LIMIT_STORE=database` is the owner's (it's needed before the Task 6 check is deployed: book it with the deploy). Then `pnpm typecheck`, `pnpm --filter web exec eslint . --max-warnings 0`, `pnpm --filter web test`, `pnpm --filter web build`. Then dispatch `backend-design:security-reviewer` on the branch diff and fix what it confirms.
+
+---
+
+## Build notes
+
+Built 27 Nov 2026 on `claude/encryption-layers-build` (from `claude/modest-heisenberg-f0ir0i`), one implementer and one fresh reviewer per task. Where the build differs from the plan above, and why:
+
+**Environment**
+- **No Postgres 18 on the build machine** (the package source is blocked by its network policy). Database tests and the Task 4 rehearsal ran on a local Postgres 16, as lane N's `0018` did. The schema drift suite (10 tests) refuses anything but 18, so it was not run here: CI runs it. `docs/schema/production.sql` was extended by hand from before/after dumps.
+- **The rehearsal used synthetic data** (425 made-up accounts), not a copy of production. The run on a copy of production on Postgres 18 with the data guard is still to do (`docs/rehearsals/2026-11-pii-phone-sealed.md`).
+- **`pnpm --filter @luvallplay/api compat` against `origin/main` fails on this branch**, before and after Task 8: main has `family.requestDelete`/`family.cancelDelete` and the base branch doesn't. It passes against the branch's own snapshot. It needs a rebase on main, not a code change.
+
+**Task 1**
+- `SealError` carries a `code` (`keys`, `unavailable`, `binding`, `format`, `unknown_key`, `unopenable`, `plaintext`). The library's messages are generic; the wrappers in Task 2 keep each caller's wording ("…for this connection", "…for this device").
+- The fixture has six vectors (three plaintexts, each sealed by the old vault and the old push seal, before and after a rotation), not three.
+- **Key text is stricter than the old parser** (review finding): a key must be exactly 32 bytes of base64 or base64url on one line. The old parser stopped at the first `=`, so a list separated by new lines silently used only its first key. Double padding, quotes round a key, or stray characters now throw. Production's three existing lists must be checked against the parser before this deploys.
+- `parseKeks` also accepts spaces round the colon. Non-text can't be sealed (and the value isn't echoed). The data key is zeroed on every path, including the buffer `update()` returns when a wrong binding is refused. `sealedWith(null)` is `null`.
+
+**Task 2** — no test was edited. Old and new were compared over about 3,000 calls: identical for every well-typed input.
+
+**Task 3** — `all()` with no keys is `[]` (a lookup finds nothing); `current()` throws. A purpose can't be empty or hold a NUL.
+
+**Task 4**
+- Migration written as **`0020_players_contact_sealed`**, the next free number now; the queue gives the final number at merge.
+- **With no contact key set (and `PII_READS` not `sealed`), the app's SQL names none of the new columns.** The code can merge and deploy before the owner OKs the production migration; always-on writes to `phone_sealed` would have broken sign-up, profile save, verify, delete and merge until then. So the explicit nulling in `deletePlayerAccount` and the merge wipe runs when a key is set, and the trigger covers the rest. **Production order: migrate, then set the two keys, then backfill, then switch reads.** A key set before the migration breaks writes.
+- New accounts are sealed just after the insert (the id is in the binding). A failed seal is logged by account id only and left for the backfill; the account still joins its club (review finding).
+- `contact.ts` exports more than `phoneSealing` (`findVerifiedByPhone`, `verifyPhone`, `sealStoredPhone`, `backfillPhones`, …). The test drives the real `player-db.ts` and `player-merge.ts` against Postgres, which the plan thought it couldn't. The web journeys also ran here: 51 of 51, with and without contact keys.
+- `packages/db/schema.ts` is in its own `[lane T]` commit. The lane H log didn't exist; it's a new heading at the end of §9.2 with the PII-2 entry.
+- **Recorded for the later "drop the plain columns" project:** once the plain unique index is gone, the rotation-time "taken" check across two index keys is racy between instances with different key lists. Add a per-number advisory lock in `verifyPhone` first, or forbid verification while two index keys are listed.
+
+**Task 5**
+- `PURPOSES` entries have three more fields than the plan's interface (`keyColumns`, `bindingColumns`, `beside`). `contact-index` is handled by the same `reseal()` function, not as a `PURPOSES` entry, and needs `CONTACT_KEKS` too (it reads each number from the row's sealed copy, so it still works when the plain columns are gone).
+- The logic lives in `lib/crypto-purposes.ts` (`reseal()`), the script is a thin wrapper. Every run prints `current key: <id>` first, to compare with the deployed list.
+
+**Task 6**
+- **The check also runs in the production build** (`next.config.ts`, beside `guardPreviewDatabase`). Review found that a throw in `register()` doesn't stop a deploy: Next skips it while building, the deployment goes live, and every request answers 500. Now a bad key fails the build and the previous deployment keeps serving; `instrumentation.ts` is the backstop. `turbo.json` lists the key settings in the build's cache key.
+- `cryptoStatus` covers all six lists (every `env` in `PURPOSES` plus `INTEGRATIONS_KEKS`, `CONTACT_INDEX_KEYS`, `MODERATION_KEKS`). Only one of the two contact lists set doesn't throw; it shows as a warning.
+- The `[lane A]` commit edits `lib/setup-check.ts` (the page's data source), not `page.tsx`, which already renders rows by area. It adds a "Start-up check" row. `INTEGRATIONS_KEKS` and `MODERATION_KEKS` show red though nothing uses them yet, as the plan says.
+- **"503 `<purpose>_unavailable`, as push does today" doesn't match the code.** Push answers `503 unavailable`; juniors' notes answer `503 notes_unavailable`; phone has no 503 (plain only with no key). Nothing was renamed: that would change the API contract. New features should use `<purpose>_unavailable`.
+
+**Task 7** — committed as `[lane N]`. The token test passed without an app change. The Android rules file wasn't compiled here (no Android SDK): run `./gradlew :app:lintRelease` before a store build.
+
+**Task 8**
+- With `RATE_LIMIT_STORE` unset (production today) nothing changes and no extra statement is sent. With `database`, every signed-in write costs one more statement and counts once across instances.
+- `rateLimit()` is overloaded: only a call that passes `opts` can get `"unavailable"`, so no existing caller can read it as "allowed". No endpoint sets `shared` or `failClosed` yet (Social and Marketplace will).
+- `appRoute` has a `rateLimitStore` option so a test can stand two pools in for two instances. `withPlayerLock`'s pool type allows `release(err)` so a broken client is discarded.

@@ -11,6 +11,8 @@ import {
 } from "@/lib/finance";
 import styles from "./financials.module.css";
 import { clubCurrencyCode } from "@/lib/club-brand";
+import { useAdminText } from "@/components/admin/AdminLang";
+import { categoryLabelIn, methodLabelIn } from "@/lib/finance-text";
 
 // On a validation error the action echoes back what was submitted: React
 // resets a form after its action runs, and these become the reset values so
@@ -95,6 +97,7 @@ export function EntryForm({
   cancelHref: string;
   defaultOpen: boolean;
 }) {
+  const { t, lang } = useAdminText();
   const [state, formAction] = useActionState(action, {});
   const [open, setOpen] = useState(defaultOpen);
   const [kind, setKind] = useState<FinanceKind>(initial?.kind ?? prefill?.kind ?? "spent");
@@ -135,7 +138,7 @@ export function EntryForm({
       input.files = dt.files;
     }
     if (file.size > 4 * 1024 * 1024) {
-      setFileNote("This file is over 4 MB — please choose a smaller one.");
+      setFileNote(t("fin_form_too_big"));
     } else {
       setFileNote(`${file.name} · ${Math.max(1, Math.round(file.size / 1024))} KB`);
     }
@@ -149,7 +152,7 @@ export function EntryForm({
     return (
       <div className={styles.addRow}>
         <button type="button" className={styles.buttonPrimary} onClick={() => setOpen(true)}>
-          + Record expense or income
+          {t("fin_form_add_btn")}
         </button>
       </div>
     );
@@ -160,20 +163,20 @@ export function EntryForm({
       <div className={styles.formHead}>
         <h2 className={styles.formTitle}>
           {editing
-            ? "Edit entry"
+            ? t("fin_form_edit")
             : prefill
-              ? "Record this bank line in the ledger"
+              ? t("fin_form_from_bank")
               : kind === "spent"
-                ? "Record money spent"
-                : "Record money received"}
+                ? t("fin_form_spent")
+                : t("fin_form_received")}
         </h2>
         {editing || prefill ? (
           <AdminLink href={cancelHref} className={styles.buttonGhost}>
-            Cancel
+            {t("common_cancel")}
           </AdminLink>
         ) : (
           <button type="button" className={styles.buttonGhost} onClick={() => setOpen(false)}>
-            Close
+            {t("fin_form_close")}
           </button>
         )}
       </div>
@@ -191,8 +194,8 @@ export function EntryForm({
 
         <div className={styles.formGrid}>
           <div className={styles.field}>
-            <span className={styles.label}>Type</span>
-            <div className={styles.segmented} role="group" aria-label="Type">
+            <span className={styles.label}>{t("fin_col_type")}</span>
+            <div className={styles.segmented} role="group" aria-label={t("fin_col_type")}>
               {(["spent", "received"] as const).map((k) => (
                 <button
                   key={k}
@@ -206,14 +209,14 @@ export function EntryForm({
                     }
                   }}
                 >
-                  {k === "spent" ? "Spent" : "Received"}
+                  {k === "spent" ? t("fin_spent") : t("fin_received")}
                 </button>
               ))}
             </div>
           </div>
 
           <label className={styles.field}>
-            <span className={styles.label}>Date *</span>
+            <span className={styles.label}>{t("fin_form_date")}</span>
             <input
               type="date"
               name="entryDate"
@@ -224,7 +227,7 @@ export function EntryForm({
           </label>
 
           <label className={styles.field}>
-            <span className={styles.label}>Amount ({clubCurrencyCode()}) *</span>
+            <span className={styles.label}>{t("fin_form_amount", { code: clubCurrencyCode() })}</span>
             <span className={styles.amountWrap}>
               <span className={styles.amountPrefix}>$</span>
               <input
@@ -234,7 +237,7 @@ export function EntryForm({
                 autoComplete="off"
                 placeholder="0.00"
                 pattern="^\$?\s*[0-9][0-9,]*(\.[0-9]{1,2})?$"
-                title="An amount like 45 or 45.50"
+                title={t("fin_form_amount_title")}
                 className={`${styles.input} ${styles.num}`}
                 defaultValue={v?.amount ?? initial?.amount ?? prefill?.amount ?? ""}
               />
@@ -242,7 +245,7 @@ export function EntryForm({
           </label>
 
           <label className={styles.field}>
-            <span className={styles.label}>Paid {kind === "spent" ? "with" : "by"}</span>
+            <span className={styles.label}>{kind === "spent" ? t("fin_form_paid_with") : t("fin_form_paid_by")}</span>
             <select
               name="method"
               className={styles.select}
@@ -250,26 +253,26 @@ export function EntryForm({
             >
               {FINANCE_METHODS.filter((m) => m.value !== "stripe").map((m) => (
                 <option key={m.value} value={m.value}>
-                  {m.label}
+                  {methodLabelIn(lang, m.value)}
                 </option>
               ))}
             </select>
           </label>
 
           <label className={`${styles.field} ${styles.span2}`}>
-            <span className={styles.label}>Name / description *</span>
+            <span className={styles.label}>{t("fin_form_name")}</span>
             <input
               name="name"
               required
               maxLength={200}
               className={styles.input}
-              placeholder={kind === "spent" ? "e.g. Court hire — Pioneer Stadium, October" : "e.g. Sponsorship — Joe's Bakery"}
+              placeholder={kind === "spent" ? t("fin_form_name_ph_spent") : t("fin_form_name_ph_received")}
               defaultValue={v?.name ?? initial?.name ?? prefill?.name ?? ""}
             />
           </label>
 
           <label className={styles.field}>
-            <span className={styles.label}>Category *</span>
+            <span className={styles.label}>{t("fin_form_category")}</span>
             <select
               name="category"
               required
@@ -278,25 +281,25 @@ export function EntryForm({
               onChange={(e) => setCategory(e.target.value)}
             >
               <option value="" disabled>
-                Choose…
+                {t("fin_form_choose")}
               </option>
               {categories.map((c) => (
                 <option key={c.value} value={c.value}>
-                  {c.label}
+                  {categoryLabelIn(lang, c.value)}
                 </option>
               ))}
             </select>
           </label>
 
           <label className={styles.field}>
-            <span className={styles.label}>Person</span>
+            <span className={styles.label}>{t("fin_col_person")}</span>
             <input
               name="person"
               maxLength={200}
               list="finance-people"
               autoComplete="off"
               className={styles.input}
-              placeholder={kind === "spent" ? "Who paid / was reimbursed" : "Who it came from"}
+              placeholder={kind === "spent" ? t("fin_form_person_ph_spent") : t("fin_form_person_ph_received")}
               defaultValue={v?.person ?? initial?.person ?? ""}
             />
             <datalist id="finance-people">
@@ -307,28 +310,28 @@ export function EntryForm({
           </label>
 
           <label className={`${styles.field} ${styles.span2}`}>
-            <span className={styles.label}>Notes</span>
+            <span className={styles.label}>{t("fin_form_notes")}</span>
             <textarea
               name="notes"
               rows={2}
               maxLength={1000}
               className={styles.textarea}
-              placeholder="Anything the treasurer should know — invoice number, what it covered…"
+              placeholder={t("fin_form_notes_ph")}
               defaultValue={v?.notes ?? initial?.notes ?? prefill?.notes ?? ""}
             />
           </label>
 
           <div className={`${styles.field} ${styles.span2}`}>
-            <span className={styles.label}>Invoice / receipt image</span>
+            <span className={styles.label}>{t("fin_form_receipt")}</span>
             {receiptsEnabled ? (
               <div className={styles.receiptBox}>
                 {preview ? (
-                  <img src={preview} alt="Receipt preview" className={styles.receiptPreview} />
+                  <img src={preview} alt={t("fin_form_receipt_preview")} className={styles.receiptPreview} />
                 ) : initial?.hasReceipt && !removeReceipt ? (
                   initial.receiptIsImage ? (
                     <img
                       src={`/api/admin/finance/receipts/${initial.id}`}
-                      alt="Current receipt"
+                      alt={t("fin_form_receipt_current")}
                       className={styles.receiptPreview}
                     />
                   ) : (
@@ -346,12 +349,12 @@ export function EntryForm({
                     {preparing ? (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <LoadingIcon size="sm" />
-                        Preparing photo…
+                        {t("fin_form_preparing")}
                       </span>
                     ) : fileNote ??
                       (initial?.hasReceipt
-                        ? "Choose a file to replace the current receipt."
-                        : "Photo or PDF, up to 4 MB. Phone photos are shrunk automatically.")}
+                        ? t("fin_form_replace_hint")
+                        : t("fin_form_file_hint"))}
                   </span>
                   {initial?.hasReceipt && !preview ? (
                     <label className={styles.hint}>
@@ -361,14 +364,14 @@ export function EntryForm({
                         checked={removeReceipt}
                         onChange={(e) => setRemoveReceipt(e.target.checked)}
                       />{" "}
-                      Remove current receipt
+                      {t("fin_form_remove_receipt")}
                     </label>
                   ) : null}
                 </div>
               </div>
             ) : (
               <span className={styles.hint}>
-                Receipt uploads need Vercel Blob storage — see README (BLOB_READ_WRITE_TOKEN).
+                {t("fin_form_no_blob")}
               </span>
             )}
           </div>
@@ -383,11 +386,11 @@ export function EntryForm({
         <div className={styles.formActions}>
           {editing || prefill ? (
             <AdminLink href={cancelHref} className={styles.button}>
-              Cancel
+              {t("common_cancel")}
             </AdminLink>
           ) : null}
-          <SubmitButton loadingText="Saving…" className={styles.buttonPrimary} disabled={preparing}>
-            {editing ? "Save changes" : kind === "spent" ? "Add expense" : "Add income"}
+          <SubmitButton loadingText={t("play_saving")} className={styles.buttonPrimary} disabled={preparing}>
+            {editing ? t("fin_form_save") : kind === "spent" ? t("fin_form_add_expense") : t("fin_form_add_income")}
           </SubmitButton>
         </div>
       </form>

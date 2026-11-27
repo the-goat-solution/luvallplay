@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { formatCents, monthLabel } from "@/lib/finance";
+import { formatCents } from "@/lib/finance";
+import { useAdminText } from "@/components/admin/AdminLang";
+import { monthLabelIn } from "@/lib/finance-text";
 import styles from "./financials.module.css";
 import { clubMajor } from "@/lib/money";
 
@@ -49,6 +51,8 @@ function columnPath(x: number, y: number, w: number, h: number): string {
 }
 
 export function MonthlyChart({ months, title }: { months: Month[]; title: string }) {
+  const { t: tr, lang } = useAdminText();
+  const monthLabel = (m: string, o?: { year?: boolean }) => monthLabelIn(lang, m, o);
   const [hover, setHover] = useState<number | null>(null);
 
   const nets = months.map((m) => m.receivedCents - m.spentCents);
@@ -77,14 +81,14 @@ export function MonthlyChart({ months, title }: { months: Month[]; title: string
       <div className={styles.chartHead}>
         <span className={styles.cardTitle}>{title}</span>
         <div className={styles.legend}>
-          <span><i className={styles.swatch} style={{ background: RECEIVED }} />Received</span>
-          <span><i className={styles.swatch} style={{ background: SPENT }} />Spent</span>
-          <span><i className={styles.lineKey} style={{ background: NET }} />Net</span>
+          <span><i className={styles.swatch} style={{ background: RECEIVED }} />{tr("fin_received")}</span>
+          <span><i className={styles.swatch} style={{ background: SPENT }} />{tr("fin_spent")}</span>
+          <span><i className={styles.lineKey} style={{ background: NET }} />{tr("fin_net")}</span>
         </div>
       </div>
 
       <div className={styles.chartArea} onMouseLeave={() => setHover(null)}>
-        <svg viewBox={`0 0 ${W} ${H}`} className={styles.chartSvg} role="img" aria-label={`${title}: received, spent and net by month. A table view follows.`}>
+        <svg viewBox={`0 0 ${W} ${H}`} className={styles.chartSvg} role="img" aria-label={tr("fin_chart_aria", { title })}>
           {ticks.map((t) => (
             <g key={t}>
               <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke={t === 0 ? "#c9ccd2" : GRID} strokeWidth={1} />
@@ -131,7 +135,7 @@ export function MonthlyChart({ months, title }: { months: Month[]; title: string
               onFocus={() => setHover(i)}
               onBlur={() => setHover(null)}
               tabIndex={0}
-              aria-label={`${monthLabel(m.month, { year: true })}: received ${formatCents(m.receivedCents)}, spent ${formatCents(m.spentCents)}, net ${formatCents(nets[i], { signed: true })}`}
+              aria-label={tr("fin_chart_point", { month: monthLabel(m.month, { year: true }), r: formatCents(m.receivedCents), s: formatCents(m.spentCents), n: formatCents(nets[i], { signed: true }) })}
             />
           ))}
         </svg>
@@ -145,22 +149,22 @@ export function MonthlyChart({ months, title }: { months: Month[]; title: string
             }}
           >
             <strong>{monthLabel(active.month, { year: true })}</strong>
-            <span><i className={styles.swatch} style={{ background: RECEIVED }} />Received <b className={styles.num}>{formatCents(active.receivedCents)}</b></span>
-            <span><i className={styles.swatch} style={{ background: SPENT }} />Spent <b className={styles.num}>{formatCents(active.spentCents)}</b></span>
-            <span><i className={styles.lineKey} style={{ background: NET }} />Net <b className={styles.num}>{formatCents(nets[hover], { signed: true })}</b></span>
+            <span><i className={styles.swatch} style={{ background: RECEIVED }} />{tr("fin_received")} <b className={styles.num}>{formatCents(active.receivedCents)}</b></span>
+            <span><i className={styles.swatch} style={{ background: SPENT }} />{tr("fin_spent")} <b className={styles.num}>{formatCents(active.spentCents)}</b></span>
+            <span><i className={styles.lineKey} style={{ background: NET }} />{tr("fin_net")} <b className={styles.num}>{formatCents(nets[hover], { signed: true })}</b></span>
           </div>
         ) : null}
       </div>
 
       <details className={styles.chartTable}>
-        <summary>View as table</summary>
+        <summary>{tr("fin_chart_table")}</summary>
         <table className={styles.breakdownTable}>
           <thead>
             <tr>
-              <th>Month</th>
-              <th>Received</th>
-              <th>Spent</th>
-              <th>Net</th>
+              <th>{tr("fin_chart_month")}</th>
+              <th>{tr("fin_received")}</th>
+              <th>{tr("fin_spent")}</th>
+              <th>{tr("fin_net")}</th>
             </tr>
           </thead>
           <tbody>

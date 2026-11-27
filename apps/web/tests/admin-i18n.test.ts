@@ -48,7 +48,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 
 // Ratchet: admin screens (.tsx) that don't read the admin namespace yet.
 // Lower this number when you translate a screen; it must never go up.
-const UNTRANSLATED_MAX = 28;
+const UNTRANSLATED_MAX = 23;
 
 test("ratchet: admin screens still written in inline English only go down", () => {
   const left = [join(WEB, "app/admin"), join(WEB, "components/admin")]
@@ -100,4 +100,17 @@ test("every audit code the admin can log has a Vietnamese description", async ()
   assert.equal(auditDetailsIn("vi", { action: "admin.role_changed", meta: { from: "admin", to: "owner" } }), "vai trò quản trị viên → chủ sở hữu");
   assert.equal(auditOutcomeNoteIn("vi", { outcome: "refused", reason: "x" }), "chưa thực hiện: x");
   assert.equal(roleName("vi", "coach"), "huấn luyện viên");
+});
+
+test("finance labels follow the language, and every category, method and period has a name", async () => {
+  const { FINANCE_CATEGORIES, FINANCE_METHODS, FINANCE_PRESETS } = await import("../lib/finance.ts");
+  const t = await import("../lib/finance-text.ts");
+  for (const c of FINANCE_CATEGORIES) assert.notEqual(t.categoryLabelIn("vi", c.value), c.label, c.value);
+  for (const m of FINANCE_METHODS) assert.notEqual(t.methodLabelIn("vi", m.value), m.label === "Other" ? "" : m.label, m.value);
+  for (const p of FINANCE_PRESETS) assert.ok(t.presetLabelIn("vi", p.value).trim(), p.value);
+  for (const c of FINANCE_CATEGORIES) assert.equal(t.categoryLabelIn("en", c.value), c.label);
+  assert.equal(t.formatDateKeyIn("en", "2026-10-09"), "9 Oct 2026");
+  assert.equal(t.formatDateKeyIn("vi", "2026-10-09"), "9 thg 10 2026");
+  assert.equal(t.monthLabelIn("vi", "2026-11", { year: true }), "thg 11 2026");
+  assert.equal(t.formatRangeIn("vi", null, null), "Mọi thời gian");
 });

@@ -48,7 +48,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 
 // Ratchet: admin screens (.tsx) that don't read the admin namespace yet.
 // Lower this number when you translate a screen; it must never go up.
-const UNTRANSLATED_MAX = 44;
+const UNTRANSLATED_MAX = 43;
 
 test("ratchet: admin screens still written in inline English only go down", () => {
   const left = [join(WEB, "app/admin"), join(WEB, "components/admin")]
@@ -58,4 +58,14 @@ test("ratchet: admin screens still written in inline English only go down", () =
     .filter((f) => /[>"'`]\s*[A-Z][a-z]+ [a-z]+/.test(readFileSync(f, "utf8").replace(/import .*|\/\/.*|\/\*[\s\S]*?\*\//g, "")))
     .map((f) => relative(WEB, f));
   assert.ok(left.length <= UNTRANSLATED_MAX, `${left.length} untranslated (max ${UNTRANSLATED_MAX}):\n${left.join("\n")}`);
+});
+
+test("the Play days toasts follow the language", async () => {
+  const { playDaysFor } = await import("../components/admin/flash-rules.ts");
+  const en = playDaysFor(16, "en");
+  const vi = playDaysFor(16, "vi");
+  assert.equal(en.courtsUpdated!("2")?.text, "Courts saved: 2 courts.");
+  assert.equal(vi.courtsUpdated!("2")?.text, "Đã lưu số sân: 2 sân.");
+  assert.match(vi.miniGame!("on")!.text, /16 người/);
+  assert.match(vi.cashAdded!("cash")!.text, /^Đã thêm Người chơi/);
 });

@@ -39,7 +39,11 @@ Nothing was rehearsed for this note: it is the list of what must be true before 
 
 5. **`CRYPTO_CHECK_RATE_LIMIT=1` goes in with it, in the same change: PENDING.** With it, a production build (and, as a backstop, start-up) refuses unless `RATE_LIMIT_STORE` is `database` (`lib/crypto-health.ts`), so the setting can't be dropped later without anyone noticing. Set the check without the store and the next production build fails; the previous deployment keeps serving.
 
-6. **Social and Marketplace are not waiting on this note**, but they must not go to production before it is done: their caps rely on the shared count, and on `withPlayerLock` (`lib/player-lock.ts`), which needs no setting.
+6. **The value must be exactly `database`: PENDING (check when setting it).** Upper or lower case and spaces round it don't matter; anything else does. Two guards were added after the branch reviews, because an unset or mistyped value (`db`, `postgres`) used to count per instance without a word:
+   - **A value that names no store fails the production build**, with or without `CRYPTO_CHECK_RATE_LIMIT` (`lib/crypto-health.ts`): only `database`, `memory` or nothing is accepted, and the System check shows the same on any deployment. So a typo stops at the build and the previous deployment keeps serving.
+   - **An endpoint that sets `failClosed` answers `503 rate_limit_unavailable` in production whenever `RATE_LIMIT_STORE` isn't `database`** (unset included), instead of counting on one instance. No endpoint sets it yet; Social and Marketplace writes will, so in production they answer 503 until this switch is made. That is on purpose: it is what makes "they must not go to production before it" hold by itself. Outside production (`VERCEL_ENV` not `production`: previews, development, tests) such a limit counts in the instance's memory, so a preview's caps are per instance.
+
+7. **Social and Marketplace are not waiting on this note**, but they must not go to production before it is done: their caps rely on the shared count, and on `withPlayerLock` (`lib/player-lock.ts`), which needs no setting.
 
 ## Rollback
 

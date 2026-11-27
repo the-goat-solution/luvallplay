@@ -26,7 +26,7 @@ import { ENDPOINTS, type Endpoint, type EndpointId } from "@luvallplay/api/contr
 import { contractBreaks, currentSnapshot, type ContractSnapshot } from "../../../packages/api/src/snapshot.ts";
 import { migrate } from "../scripts/db/migrate.mjs";
 import { rateLimit } from "../lib/security.ts";
-import { withPlayerLock } from "../lib/player-lock.ts";
+import { playerLocksQueued, withPlayerLock } from "../lib/player-lock.ts";
 
 const BASE_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
@@ -159,6 +159,96 @@ describe("withPlayerLock: what it is given, and what it does with the connection
     assert.equal(f.connects(), 0);
     // The largest id the lock can take.
     assert.equal(await withPlayerLock(f.pool, 2 ** 31 - 1, "marketplace.listings", async () => "ok"), "ok");
+  });
+});
+
+describe("withPlayerLock: one player's requests queue in memory, not on connections", () => {
+  /** A pool that counts how many connections are out at once. The lock itself always answers at once. */
+  const countingPool = () => {
+    let out = 0;
+    let most = 0;
+    let connects = 0;
+    const pool = {
+      connect: async () => {
+        connects++;
+        most = Math.max(most, ++out);
+        return { query: async (text: string) => ({ rows: [] as Record<string, unknown>[], command: text.split(" ")[0] }), release: () => void out-- };
+      },
+    };
+    return { pool, out: () => out, most: () => most, connects: () => connects };
+  };
+  const gate = () => {
+    let open!: () => void;
+    const wait = new Promise<void>((r) => (open = r));
+    return { wait, open };
+  };
+  const tick = () => new Promise((r) => setTimeout(r, 20));
+
+  test("12 at once for one player and cap: one connection at a time, in the order they came; another player or cap takes its own", async () => {
+    const f = countingPool();
+    const first = gate();
+    const order: number[] = [];
+    const all = Array.from({ length: 12 }, (_, i) =>
+      withPlayerLock(f.pool, 42, "social.posts", async () => {
+        if (i === 0) await first.wait;
+        order.push(i);
+        return i;
+      }),
+    );
+    await tick();
+    assert.deepEqual([f.connects(), f.out()], [1, 1], "eleven wait without a connection");
+    assert.equal(playerLocksQueued(f.pool), 1);
+    // Someone else, and this player's other cap, are not behind them.
+    assert.equal(await withPlayerLock(f.pool, 43, "social.posts", async () => "other player"), "other player");
+    assert.equal(await withPlayerLock(f.pool, 42, "marketplace.listings", async () => "other cap"), "other cap");
+    first.open();
+    assert.deepEqual(await Promise.all(all), Array.from({ length: 12 }, (_, i) => i));
+    assert.deepEqual(order, Array.from({ length: 12 }, (_, i) => i));
+    assert.equal(f.most(), 2, "never more than the holder and one other player's");
+    assert.deepEqual([f.out(), playerLocksQueued(f.pool)], [0, 0], "nothing is left: no connection out, no queue kept");
+  });
+
+  test("the queue is bounded: past 20 waiting for one player and cap, the next gives up at once; a waiter gives up after the lock timeout; neither takes a connection", async () => {
+    const f = countingPool();
+    const first = gate();
+    const holder = withPlayerLock(f.pool, 42, "social.posts", async () => (await first.wait, "holder"));
+    await tick();
+    // One waits only 60 ms.
+    const started = Date.now();
+    const impatient = withPlayerLock(f.pool, 42, "social.posts", async () => assert.fail("must not run"), { lockTimeoutMs: 60 });
+    await assert.rejects(impatient, /withPlayerLock: gave up after 60 ms waiting for this player's "social\.posts" lock/);
+    assert.ok(Date.now() - started >= 50 && Date.now() - started < 2_000, `${Date.now() - started} ms`);
+    // Twenty wait; the twenty-first is refused at once.
+    const waiting = Array.from({ length: 20 }, (_, i) => withPlayerLock(f.pool, 42, "social.posts", async () => i));
+    const refusedAt = Date.now();
+    await assert.rejects(withPlayerLock(f.pool, 42, "social.posts", async () => assert.fail("must not run")), /withPlayerLock: gave up waiting for this player's "social\.posts" lock: 20 of their requests are already waiting/);
+    assert.ok(Date.now() - refusedAt < 500);
+    assert.equal(f.connects(), 1, "only the holder has a connection");
+    // Another player is not refused.
+    assert.equal(await withPlayerLock(f.pool, 43, "social.posts", async () => "other"), "other");
+    first.open();
+    assert.equal(await holder, "holder");
+    assert.deepEqual(await Promise.all(waiting), Array.from({ length: 20 }, (_, i) => i));
+    assert.deepEqual([f.out(), f.most(), playerLocksQueued(f.pool)], [0, 2, 0]);
+  });
+
+  test("a holder whose work throws, or whose connection can't be had, lets the next one in", async () => {
+    const f = countingPool();
+    const first = gate();
+    const failing = withPlayerLock(f.pool, 42, "social.posts", async () => {
+      await first.wait;
+      throw new Error("cap reached");
+    });
+    const next = withPlayerLock(f.pool, 42, "social.posts", async () => "next");
+    await tick();
+    first.open();
+    await assert.rejects(failing, /cap reached/);
+    assert.equal(await next, "next");
+    assert.equal(playerLocksQueued(f.pool), 0);
+    // The pool itself refuses (it is closed, or full for too long): the turn is given back.
+    const down = { connect: async (): Promise<never> => { throw new Error("pool is closed"); } };
+    await assert.rejects(withPlayerLock(down, 42, "social.posts", async () => "x"), /pool is closed/);
+    assert.equal(playerLocksQueued(down), 0);
   });
 });
 
@@ -381,6 +471,71 @@ describe("limits and caps across two server instances", { skip: !BASE_URL && !RE
     assert.ok(!got.some((x) => x.startsWith("503")), got.join(", "));
   });
 
+  test("failClosed without the shared store: in production it is \"unavailable\" (never a quiet count per instance); elsewhere this instance counts, so development works", async () => {
+    const was = { store: process.env.RATE_LIMIT_STORE, where: process.env.VERCEL_ENV };
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    const before = await stored();
+    const run = async (key: string, opts?: { failClosed?: boolean }) => {
+      const out = [];
+      for (let i = 0; i < 4; i++) out.push(opts ? await rateLimit(key, 3, 60_000, instanceA, opts) : await rateLimit(key, 3, 60_000, instanceA));
+      return out;
+    };
+    try {
+      for (const [n, store] of [undefined, "", "memory", "db", "postgres"].entries()) {
+        if (store === undefined) delete process.env.RATE_LIMIT_STORE;
+        else process.env.RATE_LIMIT_STORE = store;
+        process.env.VERCEL_ENV = "production";
+        assert.deepEqual(await run(`shared:nostore:prod:closed:${n}`, { failClosed: true }), ["unavailable", "unavailable", "unavailable", "unavailable"], String(store));
+        // A limit that doesn't fail closed is as it always was, in production too.
+        assert.deepEqual(await run(`shared:nostore:prod:open:${n}`), [true, true, true, false], String(store));
+        assert.deepEqual(await run(`shared:nostore:prod:open2:${n}`, { failClosed: false }), [true, true, true, false], String(store));
+        for (const where of [undefined, "preview", "development"]) {
+          if (where === undefined) delete process.env.VERCEL_ENV;
+          else process.env.VERCEL_ENV = where;
+          assert.deepEqual(await run(`shared:nostore:${where}:closed:${n}`, { failClosed: true }), [true, true, true, false], `${store} ${where}`);
+        }
+      }
+      // With the store set, production counts in the database as everywhere.
+      process.env.RATE_LIMIT_STORE = "database";
+      process.env.VERCEL_ENV = "production";
+      assert.deepEqual(await run("shared:store:prod:closed", { failClosed: true }), [true, true, true, false]);
+    } finally {
+      console.warn = originalWarn;
+      for (const [k, v] of [["RATE_LIMIT_STORE", was.store], ["VERCEL_ENV", was.where]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    assert.equal(await stored(), before + 1, "only the last one was counted in the database");
+    assert.ok(warnings.length >= 1, "it is said (once per kind), not silent");
+    for (const w of warnings) assert.doesNotMatch(String(w[0]), /shared:nostore/, "the key isn't logged");
+  });
+
+  test("a write whose endpoint says failClosed, in production without the shared store, answers 503 rate_limit_unavailable and the handler isn't reached", async () => {
+    const me = await someone();
+    const was = { store: process.env.RATE_LIMIT_STORE, where: process.env.VERCEL_ENV };
+    console.warn = () => {};
+    try {
+      delete process.env.RATE_LIMIT_STORE;
+      process.env.VERCEL_ENV = "production";
+      await declaring(WRITE, { failClosed: true }, async () => {
+        const route = instance(WRITE);
+        assert.deepEqual(await answers([route.handle(call(WRITE, me.token)), route.handle(call(WRITE, me.token))]), ["503 rate_limit_unavailable", "503 rate_limit_unavailable"]);
+        assert.equal(route.reached(), 0);
+      });
+      // The same endpoint without failClosed is served as before.
+      const route = instance(WRITE);
+      assert.deepEqual(await answers([route.handle(call(WRITE, me.token))]), ["418 reached"]);
+    } finally {
+      console.warn = originalWarn;
+      for (const [k, v] of [["RATE_LIMIT_STORE", was.store], ["VERCEL_ENV", was.where]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  });
+
   test("rateLimit(): a store that answers with no row is \"unavailable\" with failClosed; without it, refused (as before)", async () => {
     const warnings: unknown[][] = [];
     console.warn = (...args: unknown[]) => warnings.push(args);
@@ -432,8 +587,35 @@ describe("limits and caps across two server instances", { skip: !BASE_URL && !RE
     assert.equal(results.filter(Boolean).length, 10);
     assert.equal(results.filter((r) => r === false).length, 2);
     assert.equal(await rowsFor(502, "test.posts"), 10);
-    // Every connection went back: both pools are whole and idle.
-    for (const pool of [instanceA, instanceB]) assert.deepEqual([pool.totalCount, pool.idleCount, pool.waitingCount], [6, 6, 0]);
+    // Every connection went back: both pools are idle, and nothing is queued in memory.
+    for (const pool of [instanceA, instanceB]) assert.deepEqual([pool.idleCount, pool.waitingCount, playerLocksQueued(pool)], [pool.totalCount, 0, 0]);
+  });
+
+  test("12 at once from ONE player on a pool of 3 don't take its connections: another player's lock and an unrelated query answer at once", { timeout: 20_000 }, async () => {
+    const small = new pg.Pool({ connectionString: urlFor(NAME), max: 3 });
+    try {
+      // The first of the twelve holds the lock for 1.5 s; the other eleven are behind it.
+      const twelve = Array.from({ length: 12 }, (_, i) =>
+        withPlayerLock(small, 520, "test.posts", async (tx) => {
+          if (i === 0) await tx.query(`SELECT pg_sleep(1.5)`);
+          return countThenInsert(520, "test.posts")(tx);
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 150));
+      const started = Date.now();
+      assert.equal(await within(5_000, withPlayerLock(small, 521, "test.posts", async () => "other player")), "other player");
+      assert.equal((await within(5_000, small.query(`SELECT 1 AS one`))).rows[0].one, 1);
+      const took = Date.now() - started;
+      assert.ok(took < 500, `another player and an unrelated query waited ${took} ms behind one player's requests`);
+      assert.ok(small.totalCount - small.idleCount <= 1 && small.waitingCount === 0, "one connection is out for that player, none is waited for");
+      // The twelve still finish, and the cap still holds.
+      const results = await Promise.all(twelve);
+      assert.equal(results.filter(Boolean).length, 10);
+      assert.equal(await rowsFor(520, "test.posts"), 10);
+      assert.deepEqual([small.idleCount, small.waitingCount, playerLocksQueued(small)], [small.totalCount, 0, 0]);
+    } finally {
+      await small.end();
+    }
   });
 
   test("the lock is this player's, for this scope: another player, or another cap of the same player, doesn't wait", async () => {

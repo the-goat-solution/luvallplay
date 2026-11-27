@@ -59,6 +59,7 @@ Both say which variable, and which key ids, never a key. They refuse when:
 - a key list is malformed;
 - two lists hold the same key (every key of every list is compared, older keys and index keys too);
 - `PII_READS` is `sealed` without `CONTACT_KEKS` or `CONTACT_INDEX_KEYS`, or is anything but `plain` or `sealed`;
+- `RATE_LIMIT_STORE` is set to anything but `database` or `memory` (a typo such as `db` would quietly count per server);
 - `CRYPTO_CHECK_RATE_LIMIT=1` and `RATE_LIMIT_STORE` isn't `database`. (The switch lets this check be deployed before the owner sets `RATE_LIMIT_STORE`; set both together.)
 
 A list that is **not set** doesn't stop it: that purpose is unavailable, its feature refuses when used, and Admin → System check shows it red. The System check lists every key list with its state and key ids, and says whether production would start with the settings of the deployment you are looking at.

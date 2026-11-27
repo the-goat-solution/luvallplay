@@ -28,6 +28,9 @@
 // - PII_READS=sealed without CONTACT_KEKS or CONTACT_INDEX_KEYS stops it:
 //   nobody could be found by phone. So does a PII_READS that is neither
 //   "plain" nor "sealed" (every phone lookup would throw).
+// - A RATE_LIMIT_STORE that names no store stops it, always: anything but
+//   "database", "memory" or nothing ("db", "postgres", a typo) would quietly
+//   count per server instance while looking switched on.
 // - In production, and only while CRYPTO_CHECK_RATE_LIMIT=1: RATE_LIMIT_STORE
 //   not "database" stops it (limits must hold across server instances before
 //   Social and Marketplace). The switch exists so this check can be deployed
@@ -151,8 +154,12 @@ export function cryptoStatus(env: Env = process.env): KeyListStatus[] {
   return inspect(env).statuses;
 }
 
-/** The same reading as rateLimitStore() (lib/security.ts), which can't be loaded here: it brings the database with it. */
-const sharedRateLimits = (env: Env) => env.RATE_LIMIT_STORE?.trim().toLowerCase() === "database";
+/** The same reading as rateLimitStoreSetting() (lib/security.ts), which can't be loaded here: it brings the database with it. tests/crypto-health.test.ts holds the two together. */
+function rateLimitSetting(env: Env): "database" | "memory" | "unknown" {
+  const value = env.RATE_LIMIT_STORE?.trim().toLowerCase() ?? "";
+  if (value === "database") return "database";
+  return value === "" || value === "memory" ? "memory" : "unknown";
+}
 
 /**
  * Everything that must stop production starting, one line each, in words
@@ -176,7 +183,11 @@ export function cryptoProblems(env: Env = process.env): string[] {
     }
   }
 
-  if (env.VERCEL_ENV === "production" && env.CRYPTO_CHECK_RATE_LIMIT?.trim() === "1" && !sharedRateLimits(env)) {
+  const store = rateLimitSetting(env);
+  if (store === "unknown") {
+    // The value isn't repeated: only what it may be.
+    problems.push(`RATE_LIMIT_STORE must be "database" or "memory" (or not set, which is "memory"). What is set names no store, so limits would quietly count on each server by itself.`);
+  } else if (env.VERCEL_ENV === "production" && env.CRYPTO_CHECK_RATE_LIMIT?.trim() === "1" && store !== "database") {
     problems.push(`RATE_LIMIT_STORE must be "database" in production, so limits hold on every server (checked because CRYPTO_CHECK_RATE_LIMIT is 1).`);
   }
   return problems;

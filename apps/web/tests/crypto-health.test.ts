@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { PURPOSES } from "../lib/crypto-purposes.ts";
-import { rateLimitStore } from "../lib/security.ts";
+import { rateLimitStore, rateLimitStoreSetting } from "../lib/security.ts";
 import { assertCryptoReady, cryptoCheckRows, cryptoStatus, CryptoNotReadyError, guardProductionKeys, KEY_LISTS } from "../lib/crypto-health.ts";
 import { register } from "../instrumentation.ts";
 
@@ -234,8 +234,9 @@ describe("assertCryptoReady refuses", () => {
 
   test("production without the shared rate-limit store, but only once CRYPTO_CHECK_RATE_LIMIT=1 says to check it", () => {
     const prod = { ...full(), VERCEL_ENV: "production" };
-    for (const store of [undefined, "", "memory", "db", "Database "]) {
+    for (const store of [undefined, "", " ", "memory", " Memory", "database", "Database "]) {
       const env = { ...prod, RATE_LIMIT_STORE: store };
+      assert.notEqual(rateLimitStoreSetting(env), "unknown");
       // What the check reads is what the limiter reads.
       const shared = rateLimitStore(env) === "database";
       // Without the switch: never checked (so this change can't stop production on its own).
@@ -249,6 +250,32 @@ describe("assertCryptoReady refuses", () => {
       for (const where of [undefined, "preview", "development"]) assert.doesNotThrow(() => assertCryptoReady({ ...checked, VERCEL_ENV: where }));
     }
     assert.doesNotThrow(() => assertCryptoReady({ ...prod, CRYPTO_CHECK_RATE_LIMIT: "1", RATE_LIMIT_STORE: "database" }));
+  });
+
+  test("a RATE_LIMIT_STORE that names no store (a typo) is refused wherever it is, with or without the switch: it would quietly count per instance", () => {
+    for (const store of ["db", "postgres", "redis", "databse", "database,memory", "true", "1"]) {
+      for (const where of [undefined, "preview", "production"]) {
+        for (const check of [undefined, "1"]) {
+          const env = { ...full(), VERCEL_ENV: where, CRYPTO_CHECK_RATE_LIMIT: check, RATE_LIMIT_STORE: store };
+          // What the check reads is what the limiter reads: it would have counted in memory.
+          assert.equal(rateLimitStoreSetting(env), "unknown", store);
+          assert.equal(rateLimitStore(env), "memory", store);
+          const err = refusal(env);
+          assert.match(err.message, /RATE_LIMIT_STORE must be "database" or "memory" \(or not set, which is "memory"\)/, store);
+          assert.equal(err.problems.filter((p) => /RATE_LIMIT_STORE/.test(p)).length, 1, "said once, not twice");
+        }
+      }
+    }
+    // The values the limiter knows are not refused (the production switch aside), and both read them alike.
+    for (const store of [undefined, "", " ", "memory", "MEMORY ", "database", " Database "]) {
+      const env = { ...full(), RATE_LIMIT_STORE: store };
+      assert.doesNotThrow(() => assertCryptoReady(env), String(store));
+      assert.equal(rateLimitStoreSetting(env), rateLimitStore(env));
+    }
+    // The System check shows it too, on any deployment.
+    const row = cryptoCheckRows({ ...full(), RATE_LIMIT_STORE: "db" }).find((r) => r.name === "Start-up check")!;
+    assert.equal(row.status, "fail");
+    assert.match(row.detail, /RATE_LIMIT_STORE/);
   });
 
   test("everything wrong is said at once, one line each", () => {

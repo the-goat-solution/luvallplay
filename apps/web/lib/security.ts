@@ -51,8 +51,21 @@ export function checkRateLimit(
 
 export type RateLimitStore = "memory" | "database";
 
+/**
+ * What RATE_LIMIT_STORE says: "database", "memory" (also when unset or
+ * empty), or "unknown" for a value that names no store (a typo: "db",
+ * "postgres"). lib/crypto-health.ts reads it the same way and refuses an
+ * unknown value at build time.
+ */
+export function rateLimitStoreSetting(env: Record<string, string | undefined> = process.env): RateLimitStore | "unknown" {
+  const value = env.RATE_LIMIT_STORE?.trim().toLowerCase() ?? "";
+  if (value === "database") return "database";
+  return value === "" || value === "memory" ? "memory" : "unknown";
+}
+
+/** Where counts are kept. Anything but "database" (an unknown value too) counts in this instance's memory. */
 export function rateLimitStore(env: Record<string, string | undefined> = process.env): RateLimitStore {
-  return env.RATE_LIMIT_STORE?.trim().toLowerCase() === "database" ? "database" : "memory";
+  return rateLimitStoreSetting(env) === "database" ? "database" : "memory";
 }
 
 type RateLimitDb = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
@@ -78,14 +91,22 @@ export type RateLimitOptions = {
  * count starts again once it has passed.
  *
  * With `failClosed`, and only then, the answer can also be "unavailable":
- * the shared store is this deployment's store and it couldn't answer. Compare
- * with `=== true`; "unavailable" is not "allowed".
+ * the shared store couldn't answer, or (in production) this deployment has
+ * no shared store at all: RATE_LIMIT_STORE unset, or a value that isn't
+ * "database". A limit that fails closed is never quietly a count per
+ * instance in production. Outside production it counts on this instance, so
+ * development and tests work without the setting. Compare with `=== true`;
+ * "unavailable" is not "allowed".
  */
 export async function rateLimit(key: string, limit?: number, windowMs?: number, db?: RateLimitDb): Promise<boolean>;
 export async function rateLimit(key: string, limit: number, windowMs: number, db: RateLimitDb | undefined, opts: RateLimitOptions): Promise<boolean | "unavailable">;
 export async function rateLimit(key: string, limit = 20, windowMs = 60_000, db: RateLimitDb = sql, opts: RateLimitOptions = {}): Promise<boolean | "unavailable"> {
   const failClosed = opts.failClosed === true;
-  if (rateLimitStore() !== "database") return checkRateLimit(key, limit, windowMs);
+  if (rateLimitStore() !== "database") {
+    if (!failClosed || process.env.VERCEL_ENV !== "production") return checkRateLimit(key, limit, windowMs);
+    warnStore("RATE_LIMIT_STORE is not \"database\"", "refusing (this limit fails closed, and production has no shared store)");
+    return "unavailable";
+  }
   if (db === sql && !process.env.POSTGRES_URL) {
     if (!failClosed) return checkRateLimit(key, limit, windowMs);
     warnStore("POSTGRES_URL is not set", "refusing (this limit fails closed)");

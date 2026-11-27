@@ -45,6 +45,8 @@ type Env = Record<string, string | undefined>;
 
 /** The purpose: first in every binding, and part of what the index hashes. */
 const PURPOSE = "player.phone";
+/** What a sealed number is bound to: the purpose, then the account. (Key rotation re-seals with it: lib/crypto-purposes.ts.) */
+export const phoneBinding = (playerId: number): [string, number] => [PURPOSE, playerId];
 
 export type SealedPhone = { sealed: string; index: string; indexKid: string };
 export type PhoneSealing = {
@@ -56,6 +58,8 @@ export type PhoneSealing = {
   open(playerId: number, sealed: string): string;
   /** The number's index under every listed index key, newest first: what a lookup matches. Empty with no key. */
   indexes(e164: string): string[];
+  /** The number's index under the first index key listed, and that key's id: what a row is re-indexed to after a rotation. Throws SealError with no key. */
+  currentIndex(e164: string): { index: string; indexKid: string };
 };
 
 /** The deployment's phone sealing, from CONTACT_KEKS and CONTACT_INDEX_KEYS. */
@@ -74,13 +78,17 @@ export function phoneSealing(env: Env = process.env): PhoneSealing {
     seal(playerId, e164) {
       // The index first: with no index key nothing is sealed either (a sealed number nobody could find).
       const { kid, mac } = index.current(e164);
-      return { sealed: envelope.seal([PURPOSE, playerId], e164), index: mac, indexKid: kid };
+      return { sealed: envelope.seal(phoneBinding(playerId), e164), index: mac, indexKid: kid };
     },
     open(playerId, sealed) {
-      return envelope.open([PURPOSE, playerId], sealed);
+      return envelope.open(phoneBinding(playerId), sealed);
     },
     indexes(e164) {
       return index.all(e164).map((entry) => entry.mac);
+    },
+    currentIndex(e164) {
+      const { kid, mac } = index.current(e164);
+      return { index: mac, indexKid: kid };
     },
   };
 }

@@ -23,6 +23,7 @@
     "@luvallplay/api": "workspace:*",
     "@luvallplay/auth": "workspace:*",
     "@luvallplay/core": "workspace:*",
+    "@luvallplay/crypto": "workspace:*",
     "@luvallplay/db": "workspace:*",
     "@luvallplay/i18n": "workspace:*",
     "@luvallplay/integrations": "workspace:*",

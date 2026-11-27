@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { QueryClient } from "@tanstack/react-query";
 import { readFileSync, readdirSync } from "node:fs";
 import { clearOffline, dropped, enqueue, flushQueue, forgetDropped, ownerOf, queued, restoreCache, saveCache, watchQueue, withPending } from "../src/lib/offline.ts";
-import { memoryStorage } from "../src/lib/storage.ts";
+import { browserStorage, memoryStorage, type SecretStore } from "../src/lib/storage.ts";
+import { createStore } from "../src/lib/store.ts";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -67,6 +68,78 @@ test("the saved screens never hold the session token, and a new build starts fro
   storage.set("cache", JSON.stringify({ owner: ownerOf(token), build: "build-1", at: Date.now(), state: { mutations: [], queries: [{ queryKey: ["me", "club", token] }] } }));
   assert.equal(restoreCache(new QueryClient(), storage, token, Date.now(), "build-1"), false);
   assert.equal(storage.get("cache"), null);
+});
+
+// The whole path, as the app wires it (src/app.ts, src/main.tsx): the real
+// storage under its "lp." prefix, the real store holding the session, the
+// real saving of screens. Then everything this device was asked to keep is
+// read back and searched for the token.
+test("signed in and used: nothing kept in lp.cache holds the session token, and in the store app nothing in the page's storage does", async () => {
+  const token = "tw_Zq7-RECOGNISABLE_session.token_0123456789abcdef";
+  // Every way the token could be written down: as it is, in base64 or hex, backwards, or a part of it.
+  const forms = [token, Buffer.from(token).toString("base64"), Buffer.from(token).toString("base64url"), Buffer.from(token).toString("hex"), [...token].reverse().join(""), token.slice(0, 16), token.slice(-16)];
+  const holdsToken = (text: string) => forms.some((f) => text.includes(f));
+
+  for (const where of ["browser", "store app"] as const) {
+    // What the browser would write to disk.
+    const disk = new Map<string, string>();
+    const storage = browserStorage("lp.", { getItem: (k) => disk.get(k) ?? null, setItem: (k, v) => void disk.set(k, v), removeItem: (k) => void disk.delete(k) });
+    // The phone's Keychain or Keystore (the store app only).
+    const keychain = new Map<string, string>();
+    const secrets: SecretStore | undefined = where === "browser" ? undefined : { get: async (k) => keychain.get(k) ?? null, set: async (k, v) => void keychain.set(k, v), remove: async (k) => void keychain.delete(k) };
+
+    const store = createStore(storage, secrets);
+    await store.ready();
+    const client = new QueryClient();
+    restoreCache(client, storage, store.get().token);
+    const stop = saveCache(client, storage, () => store.get().token, 5);
+
+    // Signing in, then every screen that is saved, with the keys the hooks give them (src/hooks.tsx).
+    store.set({ token, club: "three-wolves", homeClub: "three-wolves", needsDetails: true, lang: "vi", theme: "dark" });
+    const who = ownerOf(store.get().token as string);
+    assert.equal(holdsToken(who), false, "the fingerprint in the keys isn't the token");
+    const saved: [unknown[], unknown][] = [
+      [["session", who], { player: { id: 7, name: "An" } }],
+      [["clubs", who], { clubs: [{ slug: "three-wolves" }] }],
+      [["config", "three-wolves"], { club: { slug: "three-wolves" }, modules: ["arena"] }],
+      [["me", "three-wolves", who], { calendar: [] }],
+      [["arena", "three-wolves", who], { board: [] }],
+      [["leaderboard", "three-wolves", who], { rows: [] }],
+      [["player-stats", "three-wolves", who], { games: 3 }],
+      [["vision", "three-wolves", who], { passes: 1 }],
+    ];
+    for (const [key, data] of saved) client.setQueryData(key, data);
+    client.setQueryData(["messages", "three-wolves", who], { inbox: [] });
+    // A change made without a connection, and one the club refused.
+    enqueue(storage, { club: "three-wolves", date: "2026-12-01", absent: true }, 1);
+    enqueue(storage, { club: "three-wolves", date: "2026-12-08", absent: true }, 2);
+    await flushQueue(storage, async (q) => (q.date === "2026-12-01" ? { refused: "too_late" } : "later"));
+    await wait(30);
+    stop();
+
+    const cache = disk.get("lp.cache") ?? "";
+    for (const [key] of saved) assert.ok(cache.includes(`"${String(key[0])}"`), `${where}: ${String(key[0])} is saved`);
+    assert.equal(holdsToken(cache), false, `${where}: lp.cache holds no token`);
+    assert.ok(disk.has("lp.queue") && disk.has("lp.dropped"));
+
+    // Everything on disk. The token is in one place only: lp.token in a browser, the Keychain or Keystore in the store app.
+    const holders = [...disk].filter(([k, v]) => holdsToken(k) || holdsToken(v)).map(([k]) => k);
+    assert.deepEqual(holders, where === "browser" ? ["lp.token"] : [], `${where}: where the token is kept`);
+    assert.equal(where === "browser" ? disk.get("lp.token") : keychain.get("token"), token);
+
+    // The next start: the screens come back for the same person, from a cache that still has no token.
+    const next = new QueryClient();
+    assert.equal(restoreCache(next, storage, token), true);
+    assert.deepEqual(next.getQueryData(["me", "three-wolves", who]), { calendar: [] });
+    assert.equal(holdsToken(disk.get("lp.cache") ?? ""), false);
+
+    // Signing out (src/main.tsx): the token and what was saved for that person are gone from the device.
+    store.signOut();
+    clearOffline(storage);
+    await wait(10);
+    assert.deepEqual([...disk].filter(([k, v]) => holdsToken(k) || holdsToken(v)), []);
+    assert.deepEqual([disk.has("lp.cache"), disk.has("lp.queue"), disk.has("lp.dropped"), keychain.size], [false, false, false, 0]);
+  }
 });
 
 test("no query key in the app is built from the session token", () => {

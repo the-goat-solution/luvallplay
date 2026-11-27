@@ -18,10 +18,17 @@ import { isAdminApiRequest } from "./admin-access";
 //             instance (audit H6). One small statement per check.
 //
 // checkRateLimit() is the in-memory one and stays synchronous. rateLimit()
-// follows RATE_LIMIT_STORE and is what sign-in uses; move a caller to it
-// when its limit has to hold across instances. If the database can't answer
-// (or the table isn't there yet), rateLimit() falls back to this instance's
-// own count rather than letting everything through or locking everyone out.
+// follows RATE_LIMIT_STORE and is what sign-in and every write of the
+// players' app API use (lib/app-api.ts); move a caller to it when its limit
+// has to hold across instances. If the database can't answer (or the table
+// isn't there yet), rateLimit() falls back to this instance's own count
+// rather than letting everything through or locking everyone out.
+//
+// A caller for whom a limit that quietly stops holding is worse than a
+// refusal passes { failClosed: true }: a store that can't answer is then
+// "unavailable", nothing is counted, and the caller refuses (503). Only that
+// caller ever sees "unavailable": without the option the answer is a boolean,
+// as it always was.
 // ---------------------------------------------------------------------------
 
 const rateLimitMap = new Map<string, { count: number; reset: number }>();
@@ -44,21 +51,67 @@ export function checkRateLimit(
 
 export type RateLimitStore = "memory" | "database";
 
+/**
+ * What RATE_LIMIT_STORE says: "database", "memory" (also when unset or
+ * empty), or "unknown" for a value that names no store (a typo: "db",
+ * "postgres"). lib/crypto-health.ts reads it the same way and refuses an
+ * unknown value at build time.
+ */
+export function rateLimitStoreSetting(env: Record<string, string | undefined> = process.env): RateLimitStore | "unknown" {
+  const value = env.RATE_LIMIT_STORE?.trim().toLowerCase() ?? "";
+  if (value === "database") return "database";
+  return value === "" || value === "memory" ? "memory" : "unknown";
+}
+
+/** Where counts are kept. Anything but "database" (an unknown value too) counts in this instance's memory. */
 export function rateLimitStore(env: Record<string, string | undefined> = process.env): RateLimitStore {
-  return env.RATE_LIMIT_STORE?.trim().toLowerCase() === "database" ? "database" : "memory";
+  return rateLimitStoreSetting(env) === "database" ? "database" : "memory";
 }
 
 type RateLimitDb = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
 
 let lastStoreError = "";
 
+/** Said once per distinct problem, not on every request. Never the key: it holds an address or a person's id. */
+function warnStore(err: unknown, then: string): void {
+  const message = `${then}: ${String((err as Error)?.message ?? err).slice(0, 200)}`;
+  if (message === lastStoreError) return;
+  lastStoreError = message;
+  console.warn(`[rate-limit] the database store can't answer, ${message}`);
+}
+
+export type RateLimitOptions = {
+  /** A store that can't answer is "unavailable" (refuse), not a count on this instance. */
+  failClosed?: boolean;
+};
+
 /**
  * One more request for `key`: true when it is within `limit` per `windowMs`.
  * A fixed window, like checkRateLimit: the first request opens it, and the
  * count starts again once it has passed.
+ *
+ * With `failClosed`, and only then, the answer can also be "unavailable":
+ * the shared store couldn't answer, or (in production) this deployment has
+ * no shared store at all: RATE_LIMIT_STORE unset, or a value that isn't
+ * "database". A limit that fails closed is never quietly a count per
+ * instance in production. Outside production it counts on this instance, so
+ * development and tests work without the setting. Compare with `=== true`;
+ * "unavailable" is not "allowed".
  */
-export async function rateLimit(key: string, limit = 20, windowMs = 60_000, db: RateLimitDb = sql): Promise<boolean> {
-  if (rateLimitStore() !== "database" || (db === sql && !process.env.POSTGRES_URL)) return checkRateLimit(key, limit, windowMs);
+export async function rateLimit(key: string, limit?: number, windowMs?: number, db?: RateLimitDb): Promise<boolean>;
+export async function rateLimit(key: string, limit: number, windowMs: number, db: RateLimitDb | undefined, opts: RateLimitOptions): Promise<boolean | "unavailable">;
+export async function rateLimit(key: string, limit = 20, windowMs = 60_000, db: RateLimitDb = sql, opts: RateLimitOptions = {}): Promise<boolean | "unavailable"> {
+  const failClosed = opts.failClosed === true;
+  if (rateLimitStore() !== "database") {
+    if (!failClosed || process.env.VERCEL_ENV !== "production") return checkRateLimit(key, limit, windowMs);
+    warnStore("RATE_LIMIT_STORE is not \"database\"", "refusing (this limit fails closed, and production has no shared store)");
+    return "unavailable";
+  }
+  if (db === sql && !process.env.POSTGRES_URL) {
+    if (!failClosed) return checkRateLimit(key, limit, windowMs);
+    warnStore("POSTGRES_URL is not set", "refusing (this limit fails closed)");
+    return "unavailable";
+  }
   try {
     // One statement, so two instances can't both read "9" and both allow the tenth.
     const { rows } = await db.query(
@@ -72,13 +125,21 @@ export async function rateLimit(key: string, limit = 20, windowMs = 60_000, db: 
     );
     // Now and then, clear out counters whose window passed long ago.
     if (Math.random() < 0.005) await db.query(`DELETE FROM rate_limits WHERE reset_at < NOW() - INTERVAL '1 day';`).catch(() => {});
-    return Number(rows[0]?.count) <= limit;
-  } catch (err) {
-    const message = String((err as Error)?.message ?? err).slice(0, 200);
-    if (message !== lastStoreError) {
-      lastStoreError = message;
-      console.warn(`[rate-limit] the database store can't answer, counting on this instance instead: ${message}`);
+    const count = Number(rows[0]?.count);
+    // No row back (the statement always returns one): the store didn't
+    // answer. A caller that fails closed is told so; for any other, as it
+    // always was, the request is refused.
+    if (failClosed && !Number.isFinite(count)) {
+      warnStore("it returned no count", "refusing (this limit fails closed)");
+      return "unavailable";
     }
+    return count <= limit;
+  } catch (err) {
+    if (failClosed) {
+      warnStore(err, "refusing (this limit fails closed)");
+      return "unavailable";
+    }
+    warnStore(err, "counting on this instance instead");
     return checkRateLimit(key, limit, windowMs);
   }
 }

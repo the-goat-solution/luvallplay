@@ -8,6 +8,7 @@ import { sql, unscopedPool } from "./database";
 import journal from "@luvallplay/db/migrations/meta/_journal.json";
 import { compareClubConfig } from "./club-config";
 import { newestMigrationApplied } from "./migration-history";
+import { cryptoCheckRows } from "./crypto-health";
 
 // Live checks behind Admin → Setup check: each piece the player accounts
 // rely on, tested for real (no secrets are shown), with what to do if it
@@ -217,6 +218,11 @@ export async function runSetupChecks(): Promise<Check[]> {
       ? { area: "Basics", name: "Daily jobs", status: "ok", detail: "CRON_SECRET is set (shop reminders, releasing lapsed holds and webhook retries run with the daily reminders job)." }
       : { area: "Basics", name: "Daily jobs", status: "warn", detail: "CRON_SECRET isn't set.", fix: "Vercel sets it automatically for projects with cron jobs; check Settings → Environment Variables." },
   );
+
+  // --- Encryption keys ------------------------------------------------------
+  // One row per key list (lib/crypto-health.ts): its state and its key ids,
+  // never a key. A list that isn't set is red: that purpose is unavailable.
+  checks.push(...cryptoCheckRows());
 
   return checks;
 }

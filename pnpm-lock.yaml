@@ -226,6 +226,9 @@ importers:
       '@luvallplay/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@luvallplay/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@luvallplay/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -363,6 +366,15 @@ importers:
 
   packages/core:
     devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/crypto:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.20.5
       typescript:
         specifier: ^5
         version: 5.9.3

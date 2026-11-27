@@ -1,0 +1,66 @@
+{
+  "note": "TEST-ONLY keys and ciphertext. Sealed on 2026-11-27 by the code as it was before @luvallplay/crypto (apps/web/lib/integrations/token-vault.ts and apps/web/lib/push/seal.ts at commit b4ec411), to prove rows sealed then still open. The keys are sha256 of a public phrase and protect nothing. Do not regenerate: the point is that this ciphertext is old.",
+  "keks": "k2:j5fCHYcoK4I+PEtXvNjskuKv5LYXZyETkeT1qvo1zrs=,k1:gpmfp8URRw9cle42PGgrUKFjC3dOZp4CdunAupL+N+c=",
+  "cases": [
+    {
+      "sealedBy": "token-vault.ts",
+      "binding": [
+        1,
+        "juniors.medical",
+        "child:9"
+      ],
+      "plaintext": "hello",
+      "sealed": "v1.k1.tdS4dclHgjPRcace2RwknFWnJhtldAOAx69OgplIJ8T1BOmN3Phud6uwnxZcKqb9OfH431J4qwiAiDiE.hffRvP6hzJ8NUt_opFTZrECesdKsrRDMYcBJfiRrZYEP"
+    },
+    {
+      "sealedBy": "push/seal.ts",
+      "binding": [
+        "push",
+        3,
+        7
+      ],
+      "plaintext": "hello",
+      "sealed": "v1.k1.tS6mHHynFRH0BA8j_KP3862DY4tU2x9o24Q-vxh4h67elxn14X_x50MInpHm3lZO_3jsbKDz43mxf1Zc.mZY3BbdKqYolootW700Fg5z8dawhT66tD-apWyJZef2e"
+    },
+    {
+      "sealedBy": "token-vault.ts",
+      "binding": [
+        1,
+        "juniors.medical",
+        "child:9"
+      ],
+      "plaintext": "{\"accessToken\":\"access-AAA-111\",\"refreshToken\":\"refresh-BBB-222\",\"expiresAt\":\"2026-12-01T00:00:00.000Z\"}",
+      "sealed": "v1.k2.B-pCWrReokiC69vDWR9JThM3CLIq5d_NkDn9YtpEAGyP3uJP1GS-5b3DuRghddFd2PFORvN4ESLXK7Vy.YFL_N3G14mE9HUIIns1lp8xQrV5aVsrx2kif9d2XQQf52ELr6SekkShqvIa0AM0i6M3HdLdUduzZAHxIiBN5HghGSxHVd-kiERXgJ677UY5_L90rnuTnN8RCVjtwqI0JVp6XOhVzihOenJmjJ0QcxoF53G0UvIsxDlKkCuZz8hEuATVS"
+    },
+    {
+      "sealedBy": "push/seal.ts",
+      "binding": [
+        "push",
+        3,
+        7
+      ],
+      "plaintext": "{\"accessToken\":\"access-AAA-111\",\"refreshToken\":\"refresh-BBB-222\",\"expiresAt\":\"2026-12-01T00:00:00.000Z\"}",
+      "sealed": "v1.k2.QkomquaPQmK0JSlUeAWUrzUYJijHiOfF7HY4-p1TJ-HL6bPhCFP57RaFqb02A34jfhJrf9QlV3hGReLl.7080n-d3f-Z0UrN38GQW9xikXgkcZ0oJHYSk_Sl6oaYUmpyokeEX1gWnuwO8XQKGivOkWJe45eJaf85ru4EwcbFvEwWfdui7HJymI6li8bv6IVfoHMbZeTcRARGtO67nG0esZfjl2p_P92W_EURKzBU36ilcPoYEqtnYj2cHRc783SVl"
+    },
+    {
+      "sealedBy": "token-vault.ts",
+      "binding": [
+        1,
+        "juniors.medical",
+        "child:9"
+      ],
+      "plaintext": "Dị ứng đậu phộng — EpiPen in the red bag 🏸",
+      "sealed": "v1.k2.Nycn6SDNWiOdQcXofB9gpFyBoIb0z0_yIARrFsYfB1W_ZRoeTSNeQMsfSl-S52KFBFanviQXOxfltIg0.bfVhq-qrgBKUuu3-A9Asz-M3knQAOhdt9-6le8rpHWkJ80rQRIZRUIIbJgdt_yn5OdVJbzI3KgxD9AZcJCttjGW2rXARaHxeuVEdoFz0w2669DDH"
+    },
+    {
+      "sealedBy": "push/seal.ts",
+      "binding": [
+        "push",
+        3,
+        7
+      ],
+      "plaintext": "Dị ứng đậu phộng — EpiPen in the red bag 🏸",
+      "sealed": "v1.k2.PpnaQ8JebYI8UXxn1lIY1MbjIt4C-j16yg8DAYEqklKLtIfpPLLubN0pw4bP2I4KH9lpCN7uOUgZPM5A.LFtFMiZ6zof1HoBr16H0N6JZAvNs18qYeAricdwf2KuNVvDJEypejxtZ3bPTUe9AqYHe1Mn3su6cyEkTK-FmQiGgRso0BQaHq08_y3_GtFCi08l6"
+    }
+  ]
+}

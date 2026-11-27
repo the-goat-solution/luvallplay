@@ -11,7 +11,7 @@
 // - The answer is parsed with the contract's schema, which also drops any
 //   field the contract doesn't name.
 import { NextResponse } from "next/server";
-import { ENDPOINTS, type BodyOf, type EndpointId, type ParamsOf, type QueryOf, type ResponseOf } from "@luvallplay/api/contract";
+import { ENDPOINTS, type BodyOf, type Endpoint, type EndpointId, type ParamsOf, type QueryOf, type ResponseOf } from "@luvallplay/api/contract";
 import { clubConfig } from "./club";
 import { loadClubConfigFromDb, type ClubConfig } from "./club-config";
 import { enabledModules } from "./club-modules";
@@ -196,6 +196,12 @@ type Options = {
   rateKey?: (ip: string, session: AppSession | null) => string;
   /** The error code for a body that doesn't validate (default "bad_request"). */
   badRequestCode?: string;
+  /**
+   * Where the shared count is kept, in place of the app's own database
+   * connection. For tests, which stand up two "server instances" as two
+   * pools on one database; routes don't set it.
+   */
+  rateLimitStore?: Parameters<typeof rateLimit>[3];
 };
 
 export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, options: Options = {}) {
@@ -213,12 +219,19 @@ export function appRoute<K extends EndpointId>(id: K, handler: Handler<K>, optio
       if (endpoint.auth === "session" && !session) return error(request, fail(401, "unauthorized"));
       if (session?.via === "cookie" && endpoint.method !== "GET" && !cookieWriteAllowed(request)) return error(request, fail(403, "bad_origin"));
 
-      const { limit, windowMs } = endpoint.rateLimit;
+      const limits: Endpoint["rateLimit"] = endpoint.rateLimit;
+      const { limit, windowMs } = limits;
       const key = options.rateKey ? options.rateKey(ip, session) : `app:${id}:${session ? `p${session.player.id}` : ip}`;
-      // Sign-in (the public endpoints) is counted in the shared store, so its
-      // limits hold across server instances; the rest count per instance.
-      const within = endpoint.auth === "public" && endpoint.method !== "GET" ? await rateLimit(key, limit, windowMs) : checkRateLimit(key, limit, windowMs);
-      if (!within) return error(request, fail(429, "rate_limited"));
+      // Every write (anything but a GET, signed in or not) is counted where
+      // RATE_LIMIT_STORE says: with "database", one count for every server
+      // instance; without it, this instance's own count, as before. A GET
+      // counts on its own instance unless its endpoint says `shared`.
+      // `failClosed`: when that store can't answer, refuse rather than count
+      // on one instance.
+      const shared = endpoint.method !== "GET" || limits.shared === true;
+      const within = shared ? await rateLimit(key, limit, windowMs, options.rateLimitStore, { failClosed: limits.failClosed === true }) : checkRateLimit(key, limit, windowMs);
+      if (within === "unavailable") return error(request, fail(503, "rate_limit_unavailable"));
+      if (within !== true) return error(request, fail(429, "rate_limited"));
 
       const bad = fail(400, options.badRequestCode ?? "bad_request");
       let params: unknown;

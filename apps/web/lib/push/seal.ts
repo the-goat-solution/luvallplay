@@ -12,10 +12,11 @@
 // newest first: the format of INTEGRATIONS_KEKS). It is a secret of the
 // deployment, with its own keys so that a leak of one purpose's key opens
 // nothing else. With no key set nothing is stored: it fails closed.
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+//
+// The envelope itself is @luvallplay/crypto; this file binds it to a person's
+// device and keeps this module's own errors and wording.
+import { createSeal, SealError } from "@luvallplay/crypto";
 import { parseKeks } from "../integrations/token-vault.ts";
-
-const VERSION = "v1";
 
 export class PushSealError extends Error {
   constructor(message: string) {
@@ -31,26 +32,21 @@ export type PushSeal = {
 };
 type Env = Record<string, string | undefined>;
 
-function aad({ playerId, deviceId }: DeviceBinding, part: "dek" | "data"): Buffer {
+const NO_KEY = "No encryption key is set (PUSH_KEKS), so no device can be registered.";
+
+/** The shared envelope's error as this module's own, in its words. Anything else (a malformed key list) is passed on as it is. */
+function pushSealError(err: unknown): unknown {
+  if (!(err instanceof SealError)) return err;
+  if (err.code === "unavailable") return new PushSealError(NO_KEY);
+  // Wrong person, wrong device or changed text all look the same, on purpose.
+  if (err.code === "unopenable") return new PushSealError("The sealed text can't be opened for this device.");
+  return new PushSealError(err.message);
+}
+
+/** What a sealed address is bound to: "push", the person and the device row. */
+function bindingOf({ playerId, deviceId }: DeviceBinding): ["push", number, number] {
   if (!Number.isSafeInteger(playerId) || playerId <= 0 || !Number.isSafeInteger(deviceId) || deviceId <= 0) throw new PushSealError("Sealing needs the person and the device.");
-  return Buffer.from(JSON.stringify([VERSION, part, "push", playerId, deviceId]));
-}
-
-function encrypt(key: Buffer, plaintext: Buffer, bound: Buffer): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  cipher.setAAD(bound);
-  const body = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  return Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
-}
-
-function decrypt(key: Buffer, packed: string, bound: Buffer): Buffer {
-  const raw = Buffer.from(packed, "base64url");
-  if (raw.length < 28) throw new PushSealError("The sealed text is too short.");
-  const decipher = createDecipheriv("aes-256-gcm", key, raw.subarray(0, 12));
-  decipher.setAAD(bound);
-  decipher.setAuthTag(raw.subarray(12, 28));
-  return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]);
+  return ["push", playerId, deviceId];
 }
 
 /** Whether a device can be registered here at all (a usable PUSH_KEKS). */
@@ -65,32 +61,33 @@ export function pushSealAvailable(env: Env = process.env): boolean {
 /** The deployment's seal, from PUSH_KEKS. A malformed key throws: it must never silently become "no encryption". */
 export function pushSeal(env: Env = process.env): PushSeal {
   const keks = () => parseKeks(env.PUSH_KEKS);
+  const envelope = createSeal({ purpose: "push", keks });
   return {
     seal(binding, address) {
-      const current = keks()[0];
-      if (!current) throw new PushSealError("No encryption key is set (PUSH_KEKS), so no device can be registered.");
-      const dek = randomBytes(32);
+      // A missing key is said before anything about the device, as it always was.
+      if (!keks().length) throw new PushSealError(NO_KEY);
+      const bound = bindingOf(binding);
       try {
-        return [VERSION, current.id, encrypt(current.key, dek, aad(binding, "dek")), encrypt(dek, Buffer.from(address, "utf8"), aad(binding, "data"))].join(".");
-      } finally {
-        dek.fill(0);
+        return envelope.seal(bound, address);
+      } catch (err) {
+        throw pushSealError(err);
       }
     },
     open(binding, sealed) {
-      const [version, kekId, wrappedDek, data, ...rest] = sealed.split(".");
-      if (version !== VERSION || !kekId || !wrappedDek || !data || rest.length) throw new PushSealError("The sealed text isn't in a known format.");
-      const kek = keks().find((k) => k.id === kekId);
-      if (!kek) throw new PushSealError("The key this was sealed with isn't available.");
-      let dek: Buffer | null = null;
+      let bound: ["push", number, number];
       try {
-        dek = decrypt(kek.key, wrappedDek, aad(binding, "dek"));
-        return decrypt(dek, data, aad(binding, "data")).toString("utf8");
+        bound = bindingOf(binding);
+      } catch (refused) {
+        // The text's format and its key are checked before the device, as they always were.
+        const [version, kekId, wrappedDek, data, ...rest] = String(sealed).split(".");
+        if (version !== "v1" || !kekId || !wrappedDek || !data || rest.length) throw new PushSealError("The sealed text isn't in a known format.");
+        if (!keks().some((k) => k.id === kekId)) throw new PushSealError("The key this was sealed with isn't available.");
+        throw refused;
+      }
+      try {
+        return envelope.open(bound, sealed);
       } catch (err) {
-        if (err instanceof PushSealError) throw err;
-        // Wrong person, wrong device or changed text all look the same, on purpose.
-        throw new PushSealError("The sealed text can't be opened for this device.");
-      } finally {
-        dek?.fill(0);
+        throw pushSealError(err);
       }
     },
   };

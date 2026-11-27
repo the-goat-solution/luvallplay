@@ -774,11 +774,21 @@ export const players = pgTable("players", {
 	leaderboard_optout_token: text(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	deleted_at: timestamp({ withTimezone: true, mode: 'string' }),
+	// The phone number sealed for this person, and a keyed index of it
+	// (apps/web/lib/pii/contact.ts; migration players_contact_sealed, which
+	// also adds the trigger that clears these when phone_e164 changes or is
+	// empty). The three are set and cleared together (the second check below).
+	phone_sealed: text(),
+	phone_index: text(),
+	phone_index_kid: text(),
 }, (table) => [
 	uniqueIndex("players_minigame_name_idx").using("btree", sql`lower(minigame_name)`).where(sql`(minigame_name IS NOT NULL)`),
+	uniqueIndex("players_phone_index_verified").using("btree", table.phone_index.asc().nullsLast()).where(sql`((phone_verified_at IS NOT NULL) AND (deleted_at IS NULL))`),
 	uniqueIndex("players_phone_verified_idx").using("btree", table.phone_e164.asc().nullsLast()).where(sql`((phone_verified_at IS NOT NULL) AND (deleted_at IS NULL))`),
 	unique("players_email_key").on(table.email),
 	unique("players_leaderboard_optout_token_key").on(table.leaderboard_optout_token),
+	check("players_phone_sealed_check", sql`phone_sealed ~ '^v1\\.[a-z0-9-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$'::text`),
+	check("players_phone_sealed_together_check", sql`((phone_sealed IS NULL) = (phone_index IS NULL)) AND ((phone_index IS NULL) = (phone_index_kid IS NULL))`),
 ]);
 
 export const platform_admins = pgTable("platform_admins", {

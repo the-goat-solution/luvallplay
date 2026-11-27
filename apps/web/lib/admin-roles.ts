@@ -33,7 +33,16 @@ import {
   NO_ACCESS,
   normalizeEmail,
 } from "@luvallplay/auth";
-import { mirrorClubMember } from "./tenant-members.ts";
+import { defaultTenantSlug, mirrorClubMember } from "./tenant-members.ts";
+
+// Roles, invites and the audit log belong to a club (audit C6). Every
+// statement here names the club itself, whatever TENANT_SCOPE says: an
+// account can hold a role in more than one club, and a role in one club must
+// never open another club's admin. The club is the one the connection is
+// scoped to (TENANT_SCOPE=enforce), else this deployment's (TENANT_SLUG);
+// never "every club", as an unscoped statement was. The argument is the
+// slug's parameter number.
+const club = (n: number) => `COALESCE(app_tenant_id(), (SELECT id FROM tenants WHERE slug = $${n}))`;
 export {
   CLUB_ROLES,
   type ClubRole,
@@ -78,10 +87,10 @@ export async function getAccess(db: Db, playerId: number, email?: string | null)
     if (email && (await acceptPendingInvite(db, playerId, email))) await mirrorClubMember(db, playerId);
     const { rows } = await db.query(
       `SELECT
-         (SELECT r.role FROM club_roles r WHERE r.player_id = p.id) AS role,
+         (SELECT r.role FROM club_roles r WHERE r.player_id = p.id AND r.tenant_id = ${club(2)}) AS role,
          EXISTS (SELECT 1 FROM platform_admins a WHERE a.player_id = p.id) AS platform
        FROM players p WHERE p.id = $1 AND p.deleted_at IS NULL;`,
-      [playerId],
+      [playerId, defaultTenantSlug()],
     );
     const row = rows[0];
     if (!row) return NO_ACCESS;
@@ -98,16 +107,16 @@ async function acceptPendingInvite(db: Db, playerId: number, rawEmail: string): 
   const { rows } = await db.query(
     `WITH inv AS (
        UPDATE admin_invites SET accepted_at = NOW(), accepted_player_id = $1
-       WHERE email = $2 AND accepted_at IS NULL AND revoked_at IS NULL
-       RETURNING id, role, invited_by
+       WHERE email = $2 AND accepted_at IS NULL AND revoked_at IS NULL AND tenant_id = ${club(3)}
+       RETURNING id, role, invited_by, tenant_id
      ), granted AS (
-       INSERT INTO club_roles (player_id, role, granted_by)
-       SELECT $1, role, invited_by FROM inv
+       INSERT INTO club_roles (tenant_id, player_id, role, granted_by)
+       SELECT tenant_id, $1, role, invited_by FROM inv
        ON CONFLICT (tenant_id, player_id) DO NOTHING
        RETURNING role
      )
      SELECT inv.id, inv.role, inv.invited_by, (SELECT count(*) FROM granted)::int AS granted FROM inv;`,
-    [playerId, email],
+    [playerId, email, defaultTenantSlug()],
   );
   const inv = rows[0];
   if (!inv) return false;
@@ -137,14 +146,16 @@ export async function listAdmins(db: Db): Promise<{ admins: AdminRow[]; invites:
     `SELECT p.id, p.first_name, p.last_name, p.email, r.role, (a.player_id IS NOT NULL) AS platform,
             coalesce(r.granted_at, a.granted_at) AS granted_at
      FROM players p
-     LEFT JOIN club_roles r ON r.player_id = p.id
+     LEFT JOIN club_roles r ON r.player_id = p.id AND r.tenant_id = ${club(1)}
      LEFT JOIN platform_admins a ON a.player_id = p.id
      WHERE p.deleted_at IS NULL AND (r.player_id IS NOT NULL OR a.player_id IS NOT NULL)
      ORDER BY CASE r.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'coach' THEN 2 ELSE 3 END, lower(p.first_name), p.id;`,
+    [defaultTenantSlug()],
   );
   const invites = await db.query(
     `SELECT id, email, role, created_at FROM admin_invites
-     WHERE accepted_at IS NULL AND revoked_at IS NULL ORDER BY created_at;`,
+     WHERE accepted_at IS NULL AND revoked_at IS NULL AND tenant_id = ${club(1)} ORDER BY created_at;`,
+    [defaultTenantSlug()],
   );
   return {
     admins: rows.map((r) => ({
@@ -168,22 +179,30 @@ export async function listAdmins(db: Db): Promise<{ admins: AdminRow[]; invites:
 export async function ownerEmails(db: Db): Promise<string[]> {
   const { rows } = await db.query(
     `SELECT p.email FROM club_roles r JOIN players p ON p.id = r.player_id
-     WHERE r.role = 'owner' AND p.deleted_at IS NULL ORDER BY p.id;`,
+     WHERE r.role = 'owner' AND r.tenant_id = ${club(1)} AND p.deleted_at IS NULL ORDER BY p.id;`,
+    [defaultTenantSlug()],
   );
   return rows.map((r) => String(r.email));
 }
 
-/** True when this player is the only live owner (account deletion checks it). */
+/**
+ * True when this player is the only live owner of a club (account deletion
+ * checks it). The account is the person's in every club, so this asks about
+ * every club they own, not only this deployment's.
+ */
 export async function isLastOwner(db: Db, playerId: number): Promise<boolean> {
   try {
     const { rows } = await db.query(
-      `SELECT
-         EXISTS (SELECT 1 FROM club_roles WHERE player_id = $1 AND role = 'owner') AS is_owner,
-         (SELECT count(*) FROM club_roles r JOIN players p ON p.id = r.player_id
-          WHERE r.role = 'owner' AND p.deleted_at IS NULL AND r.player_id <> $1)::int AS others;`,
+      `SELECT EXISTS (
+         SELECT 1 FROM club_roles mine
+         WHERE mine.player_id = $1 AND mine.role = 'owner'
+           AND NOT EXISTS (
+             SELECT 1 FROM club_roles r JOIN players p ON p.id = r.player_id
+             WHERE r.tenant_id = mine.tenant_id AND r.role = 'owner' AND p.deleted_at IS NULL AND r.player_id <> $1)
+       ) AS last;`,
       [playerId],
     );
-    return rows[0]?.is_owner === true && Number(rows[0]?.others) === 0;
+    return rows[0]?.last === true;
   } catch (err) {
     if (isMissingTable(err)) return false;
     throw err;
@@ -239,12 +258,13 @@ export async function setRoleByEmail(db: Db, actor: Actor, input: { email: strin
   if (playerId === null) {
     // Replace any pending invite for this email with the new role.
     await db.query(
-      `UPDATE admin_invites SET revoked_at = NOW() WHERE email = $1 AND accepted_at IS NULL AND revoked_at IS NULL;`,
-      [email],
+      `UPDATE admin_invites SET revoked_at = NOW()
+       WHERE email = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND tenant_id = ${club(2)};`,
+      [email, defaultTenantSlug()],
     );
     const { rows } = await db.query(
-      `INSERT INTO admin_invites (email, role, invited_by) VALUES ($1, $2, $3) RETURNING id;`,
-      [email, role, actorPlayerId],
+      `INSERT INTO admin_invites (tenant_id, email, role, invited_by) VALUES (${club(4)}, $1, $2, $3) RETURNING id;`,
+      [email, role, actorPlayerId, defaultTenantSlug()],
     );
     const inviteId = Number(rows[0].id);
     await writeAudit(db, { actorPlayerId, actorKind, action: "admin.invited", target: `email:${email}`, meta: { role, inviteId } });
@@ -259,30 +279,32 @@ export async function setRoleForPlayer(db: Db, actor: Actor, playerId: number, r
   if (!isClubRole(role)) throw new RoleError("invalid_role");
   const { actorPlayerId, actorKind } = actorFields(actor);
 
-  const before = await db.query(`SELECT role FROM club_roles WHERE player_id = $1;`, [playerId]);
+  const slug = defaultTenantSlug();
+  const before = await db.query(`SELECT role FROM club_roles WHERE player_id = $1 AND tenant_id = ${club(2)};`, [playerId, slug]);
   const previousRole = isClubRole(before.rows[0]?.role) ? (before.rows[0].role as ClubRole) : null;
   if (previousRole === role) return { kind: "unchanged", playerId, role };
 
   if (previousRole === null) {
     const ins = await db.query(
-      `INSERT INTO club_roles (player_id, role, granted_by)
-       SELECT id, $2, $3 FROM players WHERE id = $1 AND deleted_at IS NULL
+      `INSERT INTO club_roles (tenant_id, player_id, role, granted_by)
+       SELECT ${club(4)}, p.id, $2, $3 FROM players p
+       WHERE p.id = $1 AND p.deleted_at IS NULL
        ON CONFLICT (tenant_id, player_id) DO NOTHING RETURNING role;`,
-      [playerId, role, actorPlayerId],
+      [playerId, role, actorPlayerId, slug],
     );
     if (!ins.rows[0]) throw new RoleError("not_found");
   } else {
-    // One statement: the owner rows are locked, and an owner is only changed
-    // while another live owner remains.
+    // One statement: the club's owner rows are locked, and an owner is only
+    // changed while another live owner of the club remains.
     const upd = await db.query(
-      `WITH owners AS (SELECT player_id FROM club_roles WHERE role = 'owner' FOR UPDATE)
+      `WITH owners AS (SELECT player_id FROM club_roles WHERE role = 'owner' AND tenant_id = ${club(4)} FOR UPDATE)
        UPDATE club_roles SET role = $2, granted_by = $3, updated_at = NOW()
-       WHERE player_id = $1
+       WHERE player_id = $1 AND tenant_id = ${club(4)}
          AND (role <> 'owner' OR $2 = 'owner' OR (
            SELECT count(*) FROM owners o JOIN players p ON p.id = o.player_id
            WHERE p.deleted_at IS NULL AND o.player_id <> $1) > 0)
        RETURNING role;`,
-      [playerId, role, actorPlayerId],
+      [playerId, role, actorPlayerId, slug],
     );
     if (!upd.rows[0]) throw new RoleError("last_owner", "The last owner can't be demoted.");
   }
@@ -300,18 +322,19 @@ export async function setRoleForPlayer(db: Db, actor: Actor, playerId: number, r
 export async function removeRole(db: Db, actor: Actor, playerId: number): Promise<{ removed: ClubRole | null }> {
   assertCanManage(actor);
   const { actorPlayerId, actorKind } = actorFields(actor);
+  const slug = defaultTenantSlug();
   const { rows } = await db.query(
-    `WITH owners AS (SELECT player_id FROM club_roles WHERE role = 'owner' FOR UPDATE)
+    `WITH owners AS (SELECT player_id FROM club_roles WHERE role = 'owner' AND tenant_id = ${club(2)} FOR UPDATE)
      DELETE FROM club_roles
-     WHERE player_id = $1
+     WHERE player_id = $1 AND tenant_id = ${club(2)}
        AND (role <> 'owner' OR (
          SELECT count(*) FROM owners o JOIN players p ON p.id = o.player_id
          WHERE p.deleted_at IS NULL AND o.player_id <> $1) > 0)
      RETURNING role;`,
-    [playerId],
+    [playerId, slug],
   );
   if (!rows[0]) {
-    const exists = await db.query(`SELECT role FROM club_roles WHERE player_id = $1;`, [playerId]);
+    const exists = await db.query(`SELECT role FROM club_roles WHERE player_id = $1 AND tenant_id = ${club(2)};`, [playerId, slug]);
     if (exists.rows[0]) throw new RoleError("last_owner", "The last owner can't be removed.");
     return { removed: null };
   }
@@ -324,8 +347,9 @@ export async function revokeInvite(db: Db, actor: Actor, inviteId: number): Prom
   assertCanManage(actor);
   const { actorPlayerId, actorKind } = actorFields(actor);
   const { rows } = await db.query(
-    `UPDATE admin_invites SET revoked_at = NOW() WHERE id = $1 AND accepted_at IS NULL AND revoked_at IS NULL RETURNING email, role;`,
-    [inviteId],
+    `UPDATE admin_invites SET revoked_at = NOW()
+     WHERE id = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND tenant_id = ${club(2)} RETURNING email, role;`,
+    [inviteId, defaultTenantSlug()],
   );
   if (!rows[0]) return false;
   await writeAudit(db, { actorPlayerId, actorKind, action: "admin.invite_revoked", target: `email:${rows[0].email}`, meta: { inviteId, role: rows[0].role } });
@@ -372,8 +396,9 @@ export type AuditEntry = {
 
 export async function writeAudit(db: Db, e: AuditEntry): Promise<void> {
   await db.query(
-    `INSERT INTO admin_audit_log (actor_player_id, actor_kind, action, target, meta) VALUES ($1, $2, $3, $4, $5::jsonb);`,
-    [e.actorPlayerId, e.actorKind, e.action.slice(0, 200), e.target?.slice(0, 300) ?? null, JSON.stringify(e.meta ?? {})],
+    `INSERT INTO admin_audit_log (tenant_id, actor_player_id, actor_kind, action, target, meta)
+     VALUES (${club(6)}, $1, $2, $3, $4, $5::jsonb);`,
+    [e.actorPlayerId, e.actorKind, e.action.slice(0, 200), e.target?.slice(0, 300) ?? null, JSON.stringify(e.meta ?? {}), defaultTenantSlug()],
   );
 }
 
@@ -384,8 +409,9 @@ export async function listAudit(db: Db, limit = 100): Promise<AuditRow[]> {
     `SELECT l.id, l.at, l.actor_player_id, l.actor_kind, l.action, l.target, l.meta,
             nullif(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), '') AS actor_name
      FROM admin_audit_log l LEFT JOIN players p ON p.id = l.actor_player_id
+     WHERE l.tenant_id = ${club(2)}
      ORDER BY l.at DESC, l.id DESC LIMIT $1;`,
-    [Math.min(Math.max(limit, 1), 500)],
+    [Math.min(Math.max(limit, 1), 500), defaultTenantSlug()],
   );
   return rows.map((r) => ({
     id: Number(r.id),

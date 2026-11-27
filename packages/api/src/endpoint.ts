@@ -20,8 +20,26 @@ export type Endpoint = {
   query?: z.ZodTypeAny;
   body?: z.ZodTypeAny;
   response: z.ZodTypeAny;
-  /** Requests per window per caller (the signed-in person, else the address). */
-  rateLimit: { limit: number; windowMs: number };
+  /**
+   * Requests per window per caller (the signed-in person, else the address).
+   * Server-side only: none of this is part of what apps are built against.
+   */
+  rateLimit: {
+    limit: number;
+    windowMs: number;
+    /**
+     * Count in the store every server instance shares (when the deployment
+     * has one: RATE_LIMIT_STORE=database). Every non-GET endpoint already
+     * does; this is for a GET whose limit has to hold across instances.
+     */
+    shared?: boolean;
+    /**
+     * When the shared store can't answer, refuse (503 rate_limit_unavailable)
+     * instead of counting on the one instance. For writes where a limit that
+     * quietly stops holding is worse than a refusal (Social, Marketplace).
+     */
+    failClosed?: boolean;
+  };
 };
 
 export const MIN = 60_000;

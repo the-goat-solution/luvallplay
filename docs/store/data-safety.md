@@ -1,6 +1,6 @@
 # Data safety form: draft answers
 
-For Play Console → App content → Data safety. Answers describe the Android app **as built on 26 Nov 2026** (`com.luvallplay.app`, permissions: `INTERNET`, plus the push-notification permission the plugin adds). The form must match what the app really collects (§4.5.1 step 5): re-check every row against the app and the server before submitting, and again whenever a feature ships.
+For Play Console → App content → Data safety. Answers describe the Android app **as built on 26 Nov 2026** (`com.luvallplay.app`, permissions: `INTERNET`, `CAMERA` (Vision live-camera mode; camera hardware is optional), plus the push-notification permission the plugin adds). The form must match what the app really collects (§4.5.1 step 5): re-check every row against the app and the server before submitting, and again whenever a feature ships.
 
 ## Overview questions
 
@@ -26,7 +26,7 @@ For Play Console → App content → Data safety. Answers describe the Android a
 | **Financial info → Purchase history** (memberships, session fees, orders) | Yes | No | Required to buy | App functionality |
 | **Financial info → Payment info** (card number etc.) | **No**: card details go to Stripe's secure form and never reach our servers | n/a | n/a | n/a |
 | **Photos and videos → Photos** (profile photo, club gallery) | Yes | No | Optional | App functionality |
-| **Photos and videos → Videos** | **No**: the Vision tracker analyses the camera or a chosen video **on the phone**; video is not uploaded | n/a | n/a | n/a |
+| **Photos and videos → Videos** | **No**: the Vision tracker analyses the live camera (`CAMERA` permission, asked when you start live mode) or a chosen video **on the phone**; the vision code makes no network calls, so frames and video are not uploaded or stored | n/a | n/a | n/a |
 | **Audio → Voice or sound recordings** | **No** (the tracker doesn't send audio anywhere) | n/a | n/a | n/a |
 | **Messages → Other in-app messages** (club inbox, challenges) | Yes | No | Required to use messaging | App functionality |
 | **App activity → App interactions** (bookings, challenges, match results, points) | Yes | No | Required | App functionality |

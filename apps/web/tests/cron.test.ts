@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { routeOwner } from "@luvallplay/modules";
+import { MODULES, blockedByModule, routeOwner } from "@luvallplay/modules";
 import { CRON_JOBS, cronAuthorized } from "../lib/cron.ts";
 import { cronManifests } from "../scripts/cron/k8s.mjs";
 
@@ -64,4 +64,20 @@ test("the Kubernetes manifests call the same routes with the same header, and ne
   }
   assert.throws(() => cronManifests({ url: "http://hanoi.example", secretName: "app-secrets" }), /https/);
   assert.throws(() => cronManifests({ url: "https://hanoi.example", secretName: "Bad Name" }), /Kubernetes name/);
+});
+
+test("a module switched off stops its own jobs and no other module's (audit H2)", () => {
+  const all = new Set(MODULES.map((m) => m.id));
+  const without = (id: string) => new Set([...all].filter((m) => m !== id));
+  const stopped = (off: string) => CRON_JOBS.filter((j) => blockedByModule(j.path, without(off))).map((j) => j.id).sort();
+  // Memberships off: only the membership reminders stop. Webhook retries,
+  // shop upkeep and roster attendance used to ride on that job and stopped with it.
+  assert.deepEqual(stopped("memberships"), ["membership-reminders"]);
+  assert.deepEqual(stopped("integrations"), ["webhook-retries"]);
+  assert.deepEqual(stopped("shop"), ["shop-upkeep"]);
+  // The core's jobs never stop.
+  for (const id of ["headcount-alerts", "send-roster", "roster-attendance"]) assert.equal(routeOwner(`/api/cron/${id}`), "core", id);
+  // And the reminders job no longer does the others' work.
+  const reminders = fs.readFileSync(path.join(root, "app/api/cron/membership-reminders/route.ts"), "utf8");
+  assert.doesNotMatch(reminders, /retryWebhookDeliveries|runShopDailyUpkeep|recordRosterAttendance/);
 });

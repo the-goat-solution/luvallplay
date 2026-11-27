@@ -29,6 +29,9 @@ export const CRON_JOBS: readonly CronJob[] = [
   { id: "sync-finance", path: "/api/cron/sync-finance", schedule: "0 13 * * *", purpose: "Payments into the ledger" },
   { id: "headcount-alerts", path: "/api/cron/headcount-alerts", schedule: "0 18 * * *", purpose: "Low or full headcount alerts" },
   { id: "membership-reminders", path: "/api/cron/membership-reminders", schedule: "0 19 * * *", purpose: "Play-day and renewal reminders" },
+  { id: "roster-attendance", path: "/api/cron/roster-attendance", schedule: "5 19 * * *", purpose: "Play days counted from past rosters" },
+  { id: "shop-upkeep", path: "/api/cron/shop-upkeep", schedule: "10 19 * * *", purpose: "Shop reservation reminders and lapsed holds" },
+  { id: "webhook-retries", path: "/api/cron/webhook-retries", schedule: "15 19 * * *", purpose: "Failed outgoing webhooks, retried" },
 ];
 
 /**

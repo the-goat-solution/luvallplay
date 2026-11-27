@@ -10,9 +10,6 @@ import {
 import { sendRenewalReminders } from "@/lib/membership-renewal";
 import { auditMembershipStatuses } from "@/lib/membership-status";
 import { syncMembershipsWithStripe } from "@/lib/stripe-sync";
-import { runShopDailyUpkeep } from "@/lib/shop-notify";
-import { recordRosterAttendance } from "@/lib/stats-db";
-import { retryWebhookDeliveries } from "@/lib/webhooks";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -66,27 +63,9 @@ export async function GET(request: Request) {
     renewals = { error: "Renewal reminders failed" };
   }
 
-  // Shop: heads-up for cash reservations ending within a day, then release
-  // lapsed holds (and tell those players). Retry failed outgoing webhooks.
-  let shop: { reminded: number; released: number } | { error: string };
-  try {
-    shop = await runShopDailyUpkeep();
-  } catch (err) {
-    console.error("Shop upkeep failed", err);
-    shop = { error: "Shop upkeep failed" };
-  }
-  const webhookRetries = await retryWebhookDeliveries().catch((err) => {
-    console.error("Webhook retries failed", err);
-    return { error: "Webhook retries failed" };
-  });
-  // Yesterday's play day (and any earlier one) without a saved court board:
-  // record attendance from the roster so streaks and the leaderboard stay
-  // current.
-  const rosterAttendance = await recordRosterAttendance().catch((err) => {
-    console.error("Roster attendance failed", err);
-    return { error: "Roster attendance failed" };
-  });
-  console.log("Shop upkeep", shop, "webhook retries", webhookRetries, "roster attendance", rosterAttendance);
+  // Shop upkeep, webhook retries and roster attendance are jobs of their own
+  // (shop-upkeep, webhook-retries, roster-attendance), owned by the modules
+  // they belong to, so switching Memberships off doesn't stop them (audit H2).
 
   const tomorrow = addDays(getClubToday(new Date(), await clubClock()).dateKey, 1);
 

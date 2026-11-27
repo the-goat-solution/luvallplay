@@ -9,6 +9,7 @@ import { runStatsBackfill, syncRosterAttendance } from "./stats-db";
 import { after } from "next/server";
 import { hmac } from "./player-auth";
 import { clubDateKeyForInstant, getClubToday } from "./dates";
+import { postConfirmedMatch, postRankUp } from "./social/auto-posts";
 import { DISPLAY_NAME_SQL, computeStreaks, initialsOf, periodRange, rankRows, type PeriodRange } from "./stats-periods";
 import {
   ACCEPTED_LAPSE_DAYS,
@@ -84,6 +85,21 @@ function refresh(): void {
     revalidateTag("leaderboard", { expire: 0 });
   } catch {
     // outside a request
+  }
+}
+
+/**
+ * Social's automatic posts (lib/social/auto-posts.ts), after the response so
+ * nobody waits for them. They do nothing for a person without a social
+ * profile and never throw. Not on a preview's test tables.
+ */
+function socialLater(work: () => Promise<void>): void {
+  if (ARENA_SANDBOX || !process.env.POSTGRES_URL) return;
+  try {
+    after(work);
+  } catch {
+    // outside a request
+    void work();
   }
 }
 
@@ -860,6 +876,8 @@ export async function confirmScore(playerId: number, id: number): Promise<void> 
     [id, playerId],
   );
   refresh();
+  // The post re-reads the challenge: a dispute that got in first makes none.
+  socialLater(() => postConfirmedMatch(sql, id));
 }
 
 export async function disputeScore(playerId: number, id: number, note: string): Promise<void> {
@@ -940,6 +958,8 @@ export async function syncPlayerRank(world: World, playerId: number): Promise<{ 
          polished_at = CASE WHEN $4 THEN NOW() ELSE polished_at END, updated_at = NOW() WHERE player_id = $1;`,
       [playerId, r.earned, r.tarnishing, polished],
     );
+    // A new best rank: it posts itself, once per rank.
+    if (r.earned > stored.peak) socialLater(() => postRankUp(sql, playerId, String(r.earned)));
   }
   return { seen: stored.seen, polishedAt };
 }
@@ -1160,6 +1180,7 @@ export async function adminResolve(id: number, outcome: "posting" | "accepting" 
     );
   }
   refresh();
+  if (outcome !== "void") socialLater(() => postConfirmedMatch(sql, id));
 }
 
 export async function countDisputes(): Promise<number> {

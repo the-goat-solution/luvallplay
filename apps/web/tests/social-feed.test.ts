@@ -1,6 +1,6 @@
 // Social plan, Task 4: posts (lib/social/posts.ts), comments and kudos
 // (comments.ts), the feed (feed.ts) and the posts that write themselves
-// (auto-posts.ts). Against a real Postgres, with two
+// (auto-posts.ts, with the Arena's hooks). Against a real Postgres, with two
 // clubs, once as the database owner (TENANT_SCOPE=off) and once as the app's
 // role for one club (TENANT_SCOPE=enforce). Made-up people only.
 import { test, describe, before, after, beforeEach } from "node:test";
@@ -26,6 +26,7 @@ const STORE = "https://store.example/files";
 const key = () => randomBytes(32).toString("base64");
 const NOT_FOUND = { ok: false, code: "not_found" } as const;
 type TxClient = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; command?: string }>; release(destroy?: Error | boolean): void };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 test("the SQL pieces take only parameters, so nothing typed can reach them", () => {
   assert.throws(() => postVisibleSql("1", "$2", "$3"), /not a parameter/);
@@ -43,6 +44,7 @@ describe("posts, comments, kudos, the feed and automatic posts", { skip: !BASE_U
   const saved = { ...process.env };
   let admin: pg.Client;
   let database: typeof import("../lib/database.ts");
+  let arena: typeof import("../lib/arena-db.ts");
   let club2 = 0;
   // Seed accounts in Three Wolves (club 1): 3 Mia, 4 Pete, 5 Quinn, 7 Sione (also in club 2), 8 Tama.
   const MIA = 3;
@@ -158,6 +160,7 @@ describe("posts, comments, kudos, the feed and automatic posts", { skip: !BASE_U
     // How a test or a preview opens Social; production has only the pilot list.
     process.env.SOCIAL_AVAILABILITY = "available";
     database = await import("../lib/database.ts");
+    arena = await import("../lib/arena-db.ts");
   });
   after(async () => {
     await database?.closeDatabase();
@@ -893,6 +896,46 @@ describe("posts, comments, kudos, the feed and automatic posts", { skip: !BASE_U
           console.error = error;
         }
         assert.deepEqual(logged, [["[social] match post failed:", "Error", "23505"], ["[social] rank-up post failed:", "Error", "23505"]]);
+      });
+
+      test("the Arena's hooks: confirming a score and an admin's ruling post the match; the timer's auto-confirm and a void don't; a new best rank posts", async () => {
+        await everyone();
+        const settle = async (want: number) => {
+          for (let i = 0; i < 60 && (await posts()).length < want; i++) await sleep(50);
+          await sleep(150);
+          return posts();
+        };
+        // The other pair confirms.
+        const c = await challenge("awaiting", { enteredBy: MIA });
+        await arena.confirmScore(QUINN, c);
+        assert.deepEqual((await settle(2)).map((p) => p.ref_key), [`challenge:${c}:posting`, `challenge:${c}:accepting`]);
+        // A dispute, then the admin rules "as entered": that posts. A void doesn't.
+        const d = await challenge("awaiting", { enteredBy: MIA });
+        await arena.disputeScore(QUINN, d, "not that score");
+        assert.equal((await settle(2)).length, 2);
+        await arena.adminResolve(d, "as_entered", "");
+        assert.deepEqual((await settle(4)).map((p) => p.ref_key).slice(2), [`challenge:${d}:posting`, `challenge:${d}:accepting`]);
+        const e = await challenge("disputed");
+        await arena.adminResolve(e, "void", "rained off");
+        // The timer confirms a score nobody answered: no post (those games are left out elsewhere too).
+        const f = await challenge("awaiting", { enteredAgo: "30 days" });
+        await arena.tick(true);
+        assert.equal((await rows(`SELECT status, auto_confirmed FROM arena_challenges WHERE id = $1`, [f]))[0].auto_confirmed, true);
+        assert.equal((await settle(5)).length, 4);
+
+        // A rank: the first sight of a player posts nothing, the same rank again nothing, a better one once.
+        const world = (earned: number, tarnishing = false) => ({ ranks: new Map([[MIA, { earned, tarnishing }]]) }) as unknown as Parameters<typeof arena.syncPlayerRank>[0];
+        await arena.syncPlayerRank(world(4), MIA);
+        await arena.syncPlayerRank(world(4), MIA);
+        await arena.syncPlayerRank(world(3), MIA);
+        assert.equal((await settle(5)).length, 4);
+        await arena.syncPlayerRank(world(5), MIA);
+        const after = await settle(5);
+        assert.deepEqual([after.length, after[4].author_id, after[4].kind, after[4].ref_key, after[4].club_id], [5, MIA, "rank_up", "rank:5", 1]);
+        await arena.syncPlayerRank(world(5), MIA);
+        // A rank that starts to tarnish below the best one is a change to store, not a rank-up.
+        await arena.syncPlayerRank(world(4, true), MIA);
+        assert.equal((await settle(6)).length, 5);
       });
 
       test("reporting a post or a comment: through the gate, filed in the post's club, to the platform when it is about that club's admin", async () => {

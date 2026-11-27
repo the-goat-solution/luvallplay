@@ -19,7 +19,7 @@ Social adds **user content: posts, photos and comments**. It is **linked to the 
 | Comments (≤300) and kudos | `social_comments`, `social_kudos` | Whoever can see the post | Yes |
 | Follows | `social_follows` | Counts on a profile | Yes, both ways |
 | Blocks | `user_blocks` | Only the person who blocked | Yes, both ways |
-| A club switching a person off in its space | `social_club_bans` | That club's admins | **To confirm in Task 6** (the plan's delete list doesn't name it) |
+| A club switching a person off in its space | `social_club_bans` | That club's admins | Yes (the row about them; a ban they made as an admin stays, without their id) |
 | Reports a person files: the reason, and optional details (≤1,000) | `content_reports`; the details are stored only sealed (`MODERATION_KEKS`) | Moderators | The report stays with no reporter and no details |
 | What a moderator did | `moderation_actions` (ids and a short reason, never the content) | Platform moderators | **Kept** |
 | A suspension, with keyed fingerprints of the email and phone (not the values) | `player_suspensions` | Platform moderators | **Kept**, so signing up again stays suspended |

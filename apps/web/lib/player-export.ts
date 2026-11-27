@@ -1,6 +1,7 @@
 import { arenaExport } from "./arena-db";
 import { sql } from "./database";
 import type { Player } from "./player-db";
+import { exportSocial, type SocialExport } from "./social/data-rights";
 
 // Everything the club holds about a player, for "Download my data". Tables
 // from features that aren't set up yet are skipped rather than failing.
@@ -13,6 +14,16 @@ async function rowsOrEmpty(query: string, params: unknown[]): Promise<Record<str
     return rows;
   } catch (err) {
     if ((err as { code?: string }).code === "42P01") return [];
+    throw err;
+  }
+}
+
+/** Their Social data (lib/social/data-rights.ts), or null where Social's tables aren't set up. */
+async function socialOrNull(playerId: number): Promise<SocialExport | null> {
+  try {
+    return await exportSocial(sql, playerId);
+  } catch (err) {
+    if ((err as { code?: string }).code === "42P01") return null;
     throw err;
   }
 }
@@ -83,5 +94,7 @@ export async function collectPlayerData(player: Player): Promise<Record<string, 
     roundRobin,
     photos,
     challenges: await arenaExport(player.id).catch(() => null),
+    // Their own profile, posts, comments, follows, blocks and reports; nothing anyone else wrote.
+    social: await socialOrNull(player.id),
   };
 }

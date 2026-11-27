@@ -6,10 +6,12 @@ import { createHandoff, getAccess, hasAdminAccess, isLastOwner, isStepUpFresh } 
 import { endPlayerArena } from "./arena-db";
 import type { AppSession } from "./app-api";
 import { forgetPushDevices } from "./app-push";
+import { sql } from "./database";
 import { deletePlayerAccount, setPlayerAvatar } from "./player-db";
 import { sendAdminAlertEmail } from "./player-email";
 import { EVENTS, createApiToken, createWebhookEndpoint, isAllowedWebhookUrl, listApiTokens, listWebhookEndpoints, type Scope, type WebhookEvent } from "./webhooks";
 import { deletePublicBlobs } from "./public-blob";
+import { forgetSocial } from "./social/data-rights";
 import { publicStorage } from "./storage";
 import { countUpload } from "./usage-hooks";
 
@@ -75,12 +77,25 @@ export async function adminHandoff(session: AppSession, requestUrl: string): Pro
 /**
  * Deleting the account, as the website's /api/profile/delete: the club keeps
  * an owner, the arena and the picture go, every session ends, the admins hear.
+ *
+ * Their Social data goes first (lib/social/data-rights.ts), and if that
+ * fails nothing else is done: `500 delete_failed`, the account as it was and
+ * still signed in, so the person can try again. Nobody is signed out with
+ * their posts still online.
  */
-export async function deleteAccount(player: AppSession["player"]): Promise<{ ok: true } | { ok: false; status: 409; code: "last_owner" }> {
+export async function deleteAccount(player: AppSession["player"]): Promise<{ ok: true } | { ok: false; status: 409; code: "last_owner" } | { ok: false; status: 500; code: "delete_failed" }> {
   if (await isLastOwner(adminDb, player.id)) return { ok: false, status: 409, code: "last_owner" };
+  try {
+    await forgetSocial(sql, player.id);
+  } catch (err) {
+    console.error("[app-api] account not deleted: its Social data couldn't be removed:", err);
+    return { ok: false, status: 500, code: "delete_failed" };
+  }
   await endPlayerArena(player.id).catch((err) => console.error("[app-api] arena cleanup failed:", err));
   await deletePublicBlobs([await setPlayerAvatar(player.id, null).catch(() => null)]);
   await deletePlayerAccount(player.id);
+  // Once more, now that no request of theirs can sign in: anything sent while the account was going.
+  await forgetSocial(sql, player.id, { carry: false }).catch((err) => console.error("[app-api] second Social sweep failed:", err));
   await forgetPushDevices(player.id, { all: true });
   refreshLeaderboard();
   await sendAdminAlertEmail({

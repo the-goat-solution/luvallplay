@@ -33,7 +33,7 @@ const csp = [
 const REPO_ROOT = path.join(__dirname, "../..");
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@luvallplay/api", "@luvallplay/auth", "@luvallplay/core", "@luvallplay/db", "@luvallplay/i18n", "@luvallplay/modules", "@luvallplay/site-templates", "@luvallplay/ui", "@luvallplay/vision"],
+  transpilePackages: ["@luvallplay/api", "@luvallplay/auth", "@luvallplay/core", "@luvallplay/crypto", "@luvallplay/db", "@luvallplay/i18n", "@luvallplay/modules", "@luvallplay/site-templates", "@luvallplay/ui", "@luvallplay/vision"],
   outputFileTracingRoot: REPO_ROOT,
   turbopack: { root: REPO_ROOT },
   // End-to-end test builds only (E2E_BUILD=1): one shared copy of the

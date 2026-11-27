@@ -1,0 +1,17 @@
+{
+  "name": "@luvallplay/crypto",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The one envelope every sealed value uses (AES-256-GCM, a data key per sealing wrapped by a key-encryption key, bound to its context). node:crypto only; keys are passed in.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "typescript": "^5"
+  }
+}

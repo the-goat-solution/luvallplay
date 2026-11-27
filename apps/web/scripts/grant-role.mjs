@@ -1,8 +1,11 @@
 // One-off grant of a club role (and optionally platform admin) by email.
 // Build plan §2.4: the first owners (Timba and Kelcee) are granted this way.
 //
-//   POSTGRES_URL=... node scripts/grant-role.mjs --role owner --platform \
+//   POSTGRES_URL=... node scripts/grant-role.mjs --club three-wolves --role owner --platform \
 //     --email first@example.com --email second@example.com
+//
+// - --club is required: a role is always in one named club (audit C6), and
+//   the script never guesses which.
 //
 // - Emails are passed in at run time and never committed to the repo.
 // - Idempotent: running it twice changes nothing the second time.
@@ -16,11 +19,12 @@ import { setPlatformAdmin, setRoleByEmail, normalizeEmail } from "../lib/admin-r
 import { mirrorClubMember } from "../lib/tenant-members.ts";
 
 function parseArgs(argv) {
-  const out = { emails: [], role: null, platform: false, dryRun: false };
+  const out = { emails: [], role: null, club: null, platform: false, dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--email") out.emails.push(argv[++i]);
     else if (a === "--role") out.role = argv[++i];
+    else if (a === "--club") out.club = argv[++i];
     else if (a === "--platform") out.platform = true;
     else if (a === "--dry-run") out.dryRun = true;
     else throw new Error(`Unknown argument: ${a}`);
@@ -29,10 +33,12 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-if (args.emails.length === 0 || (!args.role && !args.platform) || args.emails.some((e) => !e)) {
-  console.error("Usage: node scripts/grant-role.mjs --email <email> [--email <email> ...] [--role owner|admin|coach] [--platform] [--dry-run]");
+if (args.emails.length === 0 || (!args.role && !args.platform) || args.emails.some((e) => !e) || !args.club?.trim()) {
+  console.error("Usage: node scripts/grant-role.mjs --club <slug> --email <email> [--email <email> ...] [--role owner|admin|coach] [--platform] [--dry-run]");
   process.exit(2);
 }
+// lib/admin-roles.ts and lib/tenant-members.ts name the club by TENANT_SLUG.
+process.env.TENANT_SLUG = args.club.trim();
 const url = process.env.POSTGRES_URL;
 if (!url) {
   console.error("POSTGRES_URL is not set.");
@@ -47,6 +53,9 @@ await client.connect();
 const db = { query: (text, params) => client.query(text, params) };
 const actor = { kind: "script" };
 try {
+  const { rows: clubs } = await client.query(`SELECT id, name FROM tenants WHERE slug = $1;`, [process.env.TENANT_SLUG]);
+  if (!clubs[0]) throw new Error(`no club "${process.env.TENANT_SLUG}" in tenants`);
+  console.log(`Club: ${clubs[0].name} (${process.env.TENANT_SLUG}, #${clubs[0].id}).`);
   await client.query("BEGIN");
   for (const raw of args.emails) {
     const email = normalizeEmail(raw);

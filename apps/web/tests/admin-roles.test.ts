@@ -188,7 +188,7 @@ describe("admin roles on Postgres", { skip: DB_URL ? false : "set DATA_GUARD_TES
   test("REHEARSAL · migration + grant of two owners: data guard reports 0 problems", { skip: hasPsql || REQUIRE_DB ? false : "psql not installed" }, () => {
     assert.ok(hasPsql, "psql must be installed: this rehearsal can't be skipped (DATA_GUARD_REQUIRE_DB=1)");
     const dir = mkdtempSync(join(tmpdir(), "roles-"));
-    const run = `node scripts/run-migration.mjs ${MIGRATION} && node scripts/run-migration.mjs ${CURRENT_KEYS} && node scripts/grant-role.mjs --role owner --platform --email player1@example.test --email ' Player2@Example.TEST '`;
+    const run = `node scripts/run-migration.mjs ${MIGRATION} && node scripts/run-migration.mjs ${CURRENT_KEYS} && node scripts/grant-role.mjs --club three-wolves --role owner --platform --email player1@example.test --email ' Player2@Example.TEST '`;
     const r = spawnSync(process.execPath, ["scripts/data-guard/cli.ts", "rehearse", "--expect", EXPECT, "--out-dir", dir, "--run", run], {
       encoding: "utf8",
       env: { ...process.env, POSTGRES_URL: undefined, DATA_GUARD_URL: branchUrl },
@@ -211,7 +211,7 @@ describe("admin roles on Postgres", { skip: DB_URL ? false : "set DATA_GUARD_TES
     assert.equal(m.status, 0, m.stderr);
     const k = node(["scripts/run-migration.mjs", CURRENT_KEYS]);
     assert.equal(k.status, 0, k.stderr);
-    const g = node(["scripts/grant-role.mjs", "--role", "owner", "--platform", "--email", "player1@example.test"]);
+    const g = node(["scripts/grant-role.mjs", "--club", "three-wolves", "--role", "owner", "--platform", "--email", "player1@example.test"]);
     assert.equal(g.status, 0, g.stderr);
     assert.match(g.stdout, /already owner/);
     assert.match(g.stdout, /platform admin already/);

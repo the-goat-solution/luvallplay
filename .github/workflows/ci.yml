@@ -278,9 +278,9 @@ jobs:
   # builds on every pull request; signing and the release bundle (AAB) come
   # with the release pipeline (build plan §4.5.1), and need Play's keys.
   android:
-    name: Android shell (types, tests, debug build)
+    name: Android shell (types, tests, debug build, launch smoke)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -335,3 +335,25 @@ jobs:
           path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+      # Launch smoke run (build plan §4.5.1, check 1): the debug APK installs
+      # on an emulator, opens and stays up with no crash.
+      - name: Let the emulator use hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Launch smoke run on an emulator (API 34)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: apps/native/scripts/smoke-launch.sh
+      - name: The launch screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-launch-smoke
+          path: smoke-launch.png
+          if-no-files-found: ignore
+          retention-days: 7

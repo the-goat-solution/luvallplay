@@ -46,7 +46,29 @@ export const STATIC_PATHS = [
   "/get-the-app",
   "/privacy",
   "/terms",
+  "/safety/child-safety",
 ] as const;
+
+/** The notices kept in content/legal, one file per language. */
+export const LEGAL_SLUGS = ["privacy", "terms", "child-safety"] as const;
+export type LegalSlug = (typeof LEGAL_SLUGS)[number];
+
+/** Where a notice lives. The child-safety standards have the address the stores are given. */
+export function legalPath(slug: LegalSlug): string {
+  return slug === "child-safety" ? "/safety/child-safety" : `/${slug}`;
+}
+
+/**
+ * The address for child-safety concerns: SAFETY_CONTACT_EMAIL (the setting
+ * the app's Help screen also shows) when it holds one address, else the
+ * site's general contact. Undefined when there is neither: the page then
+ * points at the contact form.
+ */
+export function safetyContact(settings: Pick<SiteSettings, "contactEmail">, env: Env = process.env): string | undefined {
+  const own = (env.SAFETY_CONTACT_EMAIL ?? "").trim();
+  if (/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(own)) return own;
+  return settings.contactEmail || undefined;
+}
 
 export function href(lang: Lang, path: string): string {
   if (/^(https?:|mailto:|#)/.test(path)) return path;

@@ -5,6 +5,7 @@ import path from "node:path";
 import { markdownToBlocks, parseFrontmatter } from "../lib/markdown.ts";
 import { clubs, home, pages, settings, sports } from "../content/site-content.ts";
 import { availability } from "../content/availability.ts";
+import { LEGAL_SLUGS } from "../lib/site.ts";
 import type { Doc, FaqItem, HelpArticle, LegalPage } from "../lib/types.ts";
 
 const root = path.join(import.meta.dirname, "..", "content");
@@ -37,7 +38,7 @@ if (existsSync(helpDir)) {
 }
 
 const legal: LegalPage[] = [];
-for (const slug of ["privacy", "terms"] as const) {
+for (const slug of LEGAL_SLUGS) {
   if (!existsSync(path.join(root, "legal", `${slug}.en.md`))) continue;
   const en = parseFrontmatter(read("legal", `${slug}.en.md`));
   const vi = parseFrontmatter(read("legal", `${slug}.vi.md`));

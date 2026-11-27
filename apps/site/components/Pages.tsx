@@ -10,7 +10,7 @@ import { SiteForm } from "./SiteForm";
 import type { Kind } from "@/lib/forms-shared";
 import { jsonLd } from "@/lib/meta";
 import { t } from "@/lib/messages";
-import { availabilityOf, ctaTarget, href, originFor } from "@/lib/site";
+import { availabilityOf, ctaTarget, href, originFor, safetyContact, type LegalSlug } from "@/lib/site";
 import type { AvailabilityItem, Content, Lang, Page } from "@/lib/types";
 
 type P = { lang: Lang; content: Content };
@@ -262,10 +262,13 @@ function fmtDate(iso: string, lang: Lang): string {
 
 export function docVars(content: Content, lang: Lang): Record<string, string> {
   const s = content.settings;
+  // With no address set, the notices name the contact page.
+  const contactPage = `${originFor(lang).replace(/^https?:\/\//, "")}/${lang}/contact`;
   return {
     company: s.companyName,
     address: s.companyAddress || (lang === "vi" ? "(địa chỉ sẽ được bổ sung trước khi trang chính thức ra mắt)" : "(address to be added before this site goes live)"),
-    contactEmail: s.contactEmail || `${originFor(lang).replace(/^https?:\/\//, "")}/${lang}/contact`,
+    contactEmail: s.contactEmail || contactPage,
+    safetyEmail: safetyContact(s) || contactPage,
   };
 }
 
@@ -300,7 +303,7 @@ export function HelpArticlePage({ lang, content, slug }: P & { slug: string }) {
   );
 }
 
-export function LegalPageView({ lang, content, slug }: P & { slug: "privacy" | "terms" }) {
+export function LegalPageView({ lang, content, slug }: P & { slug: LegalSlug }) {
   const m = t(lang);
   const doc = content.legal[slug];
   return (

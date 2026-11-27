@@ -85,7 +85,7 @@ export function Shell({ lang, path, content, children, mainId = "main" }: Props)
           <div className="ftr-row">
             <a href={href(lang, "/")} aria-label={m.home}><Logo dark height={32} /></a>
             <nav aria-label={m.nav.footer}>
-              {([["/about", m.nav.about], ["/availability", m.availability.nav], ["/help", m.nav.help], ["/contact", m.nav.contact], ["/privacy", m.nav.privacy], ["/terms", m.nav.terms]] as const).map(([p, label]) => (
+              {([["/about", m.nav.about], ["/availability", m.availability.nav], ["/help", m.nav.help], ["/contact", m.nav.contact], ["/privacy", m.nav.privacy], ["/terms", m.nav.terms], ["/safety/child-safety", m.nav.childSafety]] as const).map(([p, label]) => (
                 <a key={p} href={href(lang, p)}>{label}</a>
               ))}
               <a href={href(other, path)} hrefLang={other} lang={other}>{m.switchTo}</a>

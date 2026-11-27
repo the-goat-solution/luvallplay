@@ -145,6 +145,7 @@ test("robots, sitemap, 404, language redirect, Open Graph images", async () => {
   assert.match(robots, /Disallow: \/\s*$/m, "robots.txt disallows everything until go-live");
   const sitemap = await (await fetch(`${BASE}/sitemap.xml`)).text();
   for (const l of LANGS) assert.match(sitemap, new RegExp(`/${l}/help/what-is-luvallplay</loc>`));
+  for (const l of LANGS) assert.match(sitemap, new RegExp(`/${l}/safety/child-safety</loc>`));
   for (const l of LANGS) {
     const res = await fetch(`${BASE}/${l}/no-such-page`);
     assert.equal(res.status, 404);
@@ -182,7 +183,7 @@ test("the language switch is remembered, and `lang` is the only cookie", async (
 });
 
 test("axe: no violations, both languages, light and dark, phone and desktop", { timeout: 240000 }, async () => {
-  const paths = ["", "/vision", "/for-clubs", "/find-a-club", "/pricing", "/about", "/help", "/help/what-is-luvallplay", "/contact", "/waitlist", "/privacy", "/no-such-page"];
+  const paths = ["", "/vision", "/for-clubs", "/find-a-club", "/pricing", "/about", "/help", "/help/what-is-luvallplay", "/contact", "/waitlist", "/privacy", "/safety/child-safety", "/no-such-page"];
   const problems = [];
   for (const scheme of ["light", "dark"]) {
     for (const lang of LANGS) {

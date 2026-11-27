@@ -144,7 +144,7 @@ export type HelpArticle = {
 export type LegalPage = {
   _id: string;
   _type: "legalPage";
-  slug: "privacy" | "terms";
+  slug: "privacy" | "terms" | "child-safety";
   title: L;
   summary: L;
   updated: string;

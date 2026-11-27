@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { messages } from "../lib/messages.ts";
 import { blocksToText } from "../lib/markdown.ts";
-import { STATIC_PATHS } from "../lib/site.ts";
+import { LEGAL_SLUGS, STATIC_PATHS, legalPath } from "../lib/site.ts";
 import type { Doc, HelpArticle, LegalPage, PtBlock } from "../lib/types.ts";
 
 const docs = JSON.parse(readFileSync(new URL("../content/generated/seed.json", import.meta.url), "utf8")) as Doc[];
@@ -72,7 +72,7 @@ test("every page has SEO text in both languages, within length", () => {
   }
   for (const path of STATIC_PATHS) {
     const key = path.slice(1);
-    if (!key || key === "privacy" || key === "terms") continue;
+    if (!key || LEGAL_SLUGS.some((slug) => legalPath(slug) === path)) continue;
     if (!pages.some((p) => p._id === `page.${key}`)) problems.push(`no page document for ${path}`);
   }
   assert.deepEqual(problems, []);
@@ -89,8 +89,28 @@ test("help centre has 12 to 15 articles, and legal pages are dated", () => {
   assert.ok(help.length >= 12 && help.length <= 15, `help articles: ${help.length}`);
   for (const h of help) assert.ok(blocksToText(h.body.vi).length > 800, `${h.slug} (vi) is too short`);
   const legal = docs.filter((d): d is LegalPage => d._type === "legalPage");
-  assert.deepEqual(legal.map((l) => l.slug).sort(), ["privacy", "terms"]);
+  assert.deepEqual(legal.map((l) => l.slug).sort(), [...LEGAL_SLUGS].sort());
   for (const l of legal) assert.match(l.updated, /^\d{4}-\d{2}-\d{2}$/);
+  for (const slug of LEGAL_SLUGS) assert.ok((STATIC_PATHS as readonly string[]).includes(legalPath(slug)), `${slug} is not in the sitemap`);
+});
+
+// Google Play's Child Safety Standards policy: a public page that names the
+// standards, how to report in the app, and a contact.
+test("the child-safety standards page says what Play asks for, in both languages", () => {
+  const doc = docs.find((d): d is LegalPage => d._type === "legalPage" && d.slug === "child-safety");
+  assert.ok(doc, "content/legal/child-safety.{en,vi}.md");
+  assert.equal(legalPath("child-safety"), "/safety/child-safety");
+  const says: Record<"en" | "vi", RegExp[]> = {
+    en: [/child sexual abuse/i, /18 or older/i, /\bReport\b/, /\{\{safetyEmail\}\}/],
+    vi: [/xâm hại tình dục trẻ em/i, /18 tuổi/i, /Báo cáo/, /\{\{safetyEmail\}\}/],
+  };
+  for (const lang of ["en", "vi"] as const) {
+    const text = blocksToText(doc.body[lang]);
+    for (const re of says[lang]) assert.match(text, re, `${lang}: ${re}`);
+    assert.ok(doc.summary[lang].length >= 40 && doc.summary[lang].length <= 200, `${lang}: the summary is the page's description (40 to 200 characters)`);
+    assert.ok(`${doc.title[lang]} · Luvallplay`.length <= 70, `${lang}: title over 70 characters`);
+    assert.ok(doc.body[lang].some((b) => b.markDefs?.some((m) => m.href === "/contact")), `${lang}: links to the contact page`);
+  }
 });
 
 test("content rules: no prices, no invented placeholders, tagline exact", () => {
@@ -98,6 +118,6 @@ test("content rules: no prices, no invented placeholders, tagline exact", () => 
   assert.doesNotMatch(text, /\[(#|Name|Club name|YOUR PRICE)[^\]]*\]/i, "design placeholders must not ship");
   assert.doesNotMatch(text, /(NZ)?\$\s?\d|\d+\s?(₫|VND|NZD)/, "no price numbers anywhere");
   assert.doesNotMatch(text, /Love all play|Love all, play(?!\.)/, "the tagline is exactly “Love all, play.”");
-  const allowed = new Set(["company", "address", "contactEmail"]);
+  const allowed = new Set(["company", "address", "contactEmail", "safetyEmail"]);
   for (const m of text.matchAll(/\{\{(\w+)\}\}/g)) assert.ok(allowed.has(m[1]), `unknown placeholder {{${m[1]}}}`);
 });

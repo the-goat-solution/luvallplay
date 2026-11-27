@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { ctaTarget, fold, indexingAllowed, originFor } from "../lib/site.ts";
+import { ctaTarget, fold, indexingAllowed, originFor, safetyContact } from "../lib/site.ts";
 import { pickLang } from "../proxy.ts";
 import { parseSubmission, rateBucket } from "../lib/forms.ts";
 import { emailAllowed } from "../lib/email.ts";
@@ -117,4 +117,15 @@ test("the publish webhook needs a valid, fresh signature", () => {
   assert.equal(validSignature(body + " ", sig(now, "s3cret"), "s3cret", now), false);
   assert.equal(validSignature(body, sig(now - 3_600_000, "s3cret"), "s3cret", now), false);
   assert.equal(validSignature(body, null, "s3cret", now), false);
+});
+
+test("the child-safety contact: its own setting, else the general contact, else none", () => {
+  const s = { contactEmail: "hello@example.test" };
+  assert.equal(safetyContact(s, { SAFETY_CONTACT_EMAIL: " safety@example.test " }), "safety@example.test");
+  assert.equal(safetyContact(s, {}), "hello@example.test");
+  assert.equal(safetyContact(s, { SAFETY_CONTACT_EMAIL: "" }), "hello@example.test");
+  // Something that isn't an address is never published.
+  assert.equal(safetyContact(s, { SAFETY_CONTACT_EMAIL: "see the website" }), "hello@example.test");
+  assert.equal(safetyContact(s, { SAFETY_CONTACT_EMAIL: "a@b.test, c@d.test" }), "hello@example.test");
+  assert.equal(safetyContact({}, {}), undefined);
 });

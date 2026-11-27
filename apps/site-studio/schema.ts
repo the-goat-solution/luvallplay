@@ -321,9 +321,9 @@ const legalPage = defineType({
   name: "legalPage",
   title: "Legal page",
   type: "document",
-  description: "Website notices only. Use {{company}}, {{address}} and {{contactEmail}} where the company details go (set in Site settings).",
+  description: "Website notices only. Use {{company}}, {{address}} and {{contactEmail}} where the company details go (set in Site settings), and {{safetyEmail}} for the child-safety contact (the SAFETY_CONTACT_EMAIL setting, else the contact email).",
   fields: [
-    defineField({ name: "slug", title: "Page", type: "string", options: { list: ["privacy", "terms"] }, readOnly: true, validation: both }),
+    defineField({ name: "slug", title: "Page", type: "string", options: { list: ["privacy", "terms", "child-safety"] }, readOnly: true, validation: both }),
     s("title", "Title"),
     t("summary", "Summary"),
     defineField({ name: "updated", title: "Last updated (change it whenever the text changes)", type: "date", validation: both }),

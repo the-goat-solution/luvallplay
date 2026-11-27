@@ -279,3 +279,7 @@ Built 27 Nov 2026 on `claude/encryption-layers-build` (from `claude/modest-heise
   - Runtime errors for a malformed `PUSH_KEKS` or `JUNIORS_KEKS` still name `INTEGRATIONS_KEKS` (old behaviour the plan kept); the build check names the right variable.
   - The operator scripts' production guard does nothing if `PRODUCTION_DATABASE_HOSTS` isn't set in the operator's shell (the same as `migrate.mjs`).
   - `failClosed` outside production counts in memory (so previews and development work without the setting; a preview's caps are per instance).
+
+**After the fixes were verified** (a last reviewer reproduced each finding and confirmed it closed):
+- **`0020` was edited in place after it was first pushed** (`37e0ff8`; it has not run on production). Any database that ran the first version (a preview's own branch, built from this branch between `3083860` and `37e0ff8`, or a developer's) will refuse to migrate with "changed after it was applied". Roll it back with the SQL in `docs/rehearsals/2026-11-pii-phone-sealed.md`, or recreate the preview branch.
+- Left as they are (low, no app path reaches them): `reseal --apply` on an empty table asks for `--first-use-of-key` though there is nothing to do; the key check samples the 20 lowest ids on the current key, so 20 rows broken for another reason would blame the key; the trigger doesn't clear an old `phone_index` when a writer changes the number and `phone_sealed` together without the index, and doesn't look at inserts.

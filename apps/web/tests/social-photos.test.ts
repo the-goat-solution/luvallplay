@@ -10,7 +10,7 @@ import fs from "node:fs";
 import pg from "pg";
 import { migrate } from "../scripts/db/migrate.mjs";
 import type { ModerationResult } from "../lib/photo-moderation.ts";
-import { GALLERY_FOLDER, ownBlob } from "../lib/photos-service.ts";
+import { GALLERY_FOLDER, ownBlob, ownStoreHost } from "../lib/photos-service.ts";
 import {
   SOCIAL_PHOTO_FOLDERS,
   SOCIAL_PHOTOS_PER_DAY,
@@ -27,30 +27,74 @@ const BASE_URL = process.env.DATA_GUARD_TEST_URL;
 const REQUIRE_DB = process.env.DATA_GUARD_REQUIRE_DB === "1";
 const NAME = `social_photos_${process.pid}`;
 const SEED = fs.readFileSync(new URL("./fixtures/golden/seed.sql", import.meta.url), "utf8");
-const STORE = "https://store.public.blob.vercel-storage.com";
+// The photo store this deployment is connected to, for the whole file: its
+// token names the store, and the store's id is the host its files are read from.
+const TOKEN = "vercel_blob_rw_OurStore1_notarealsecret";
+const HOST = "ourstore1.public.blob.vercel-storage.com";
+const STORE = `https://${HOST}`;
+const OUR = { host: HOST };
+process.env.PHOTO_BLOB_READ_WRITE_TOKEN = TOKEN;
+delete process.env.PHOTO_STORE_ID;
 
-test("a file is the player's own only in the folder it was uploaded for", () => {
+test("our own store's host comes from the store's token or id; nothing connected gives none", () => {
+  const env = { token: process.env.PHOTO_BLOB_READ_WRITE_TOKEN, id: process.env.PHOTO_STORE_ID };
+  try {
+    assert.equal(ownStoreHost(), HOST);
+    delete process.env.PHOTO_BLOB_READ_WRITE_TOKEN;
+    assert.equal(ownStoreHost(), null);
+    process.env.PHOTO_STORE_ID = "store_AbC123xyz";
+    assert.equal(ownStoreHost(), "abc123xyz.public.blob.vercel-storage.com");
+    process.env.PHOTO_STORE_ID = "AbC123xyz";
+    assert.equal(ownStoreHost(), "abc123xyz.public.blob.vercel-storage.com");
+    for (const bad of ["store_", "store_a.evil.test/", "store_a b", "a_b"]) {
+      process.env.PHOTO_STORE_ID = bad;
+      assert.equal(ownStoreHost(), null, bad);
+    }
+    delete process.env.PHOTO_STORE_ID;
+    for (const bad of ["vercel_blob_rw", "vercel_blob_rw__secret", "vercel_blob_rw_a.evil.test_secret", "nonsense"]) {
+      process.env.PHOTO_BLOB_READ_WRITE_TOKEN = bad;
+      assert.equal(ownStoreHost(), null, bad);
+    }
+  } finally {
+    process.env.PHOTO_BLOB_READ_WRITE_TOKEN = env.token;
+    if (env.id === undefined) delete process.env.PHOTO_STORE_ID;
+    else process.env.PHOTO_STORE_ID = env.id;
+  }
+});
+
+test("a file is the player's own only in our own store, in the folder it was uploaded for", () => {
   assert.equal(GALLERY_FOLDER, "photos");
   assert.deepEqual(SOCIAL_PHOTO_FOLDERS, { social: "social-photos", market: "market-photos" });
-  assert.equal(ownBlob(`${STORE}/photos/3/a.jpg`, 3), true, "the Gallery's folder is the default");
-  assert.equal(ownBlob(`${STORE}/social-photos/3/a.jpg`, 3, "social-photos"), true);
+  // The Gallery's check, as it has always been: its own folder, any Vercel public store.
+  assert.equal(ownBlob(`${STORE}/photos/3/a.jpg`, 3), true);
+  assert.equal(ownBlob(`https://store.public.blob.vercel-storage.com/photos/3/a.jpg`, 3), true);
+  assert.equal(ownBlob(`${STORE}/social-photos/3/a.jpg`, 3), false);
+  assert.equal(ownBlob(`${STORE}/photos/3/../../social-photos/3/a.jpg`, 3), false);
+  // Pinned (posts and listings): our store's exact host, nothing else.
+  assert.equal(ownBlob(`${STORE}/social-photos/3/a.jpg`, 3, "social-photos", OUR), true);
   for (const [url, playerId, folder] of [
-    [`${STORE}/social-photos/3/a.jpg`, 3, undefined],
+    [`https://attacker-own-store.public.blob.vercel-storage.com/social-photos/3/a.jpg`, 3, "social-photos"],
+    [`https://x${HOST}/social-photos/3/a.jpg`, 3, "social-photos"],
+    [`https://x.${HOST}/social-photos/3/a.jpg`, 3, "social-photos"],
+    [`https://${HOST}.evil.test/social-photos/3/a.jpg`, 3, "social-photos"],
+    [`https://${HOST}:8443/social-photos/3/a.jpg`, 3, "social-photos"],
+    [`https://user@${HOST}/social-photos/3/a.jpg`, 3, "social-photos"],
+    [`https://evil.test/social-photos/3/a.jpg?${HOST}`, 3, "social-photos"],
+    [`http://${HOST}/social-photos/3/a.jpg`, 3, "social-photos"],
     [`${STORE}/photos/3/a.jpg`, 3, "social-photos"],
     [`${STORE}/market-photos/3/a.jpg`, 3, "social-photos"],
     [`${STORE}/social-photos/4/a.jpg`, 3, "social-photos"],
     [`${STORE}/social-photos/33/a.jpg`, 3, "social-photos"],
-    [`${STORE}/photos/3/../../social-photos/3/a.jpg`, 3, undefined],
     [`${STORE}/social-photos/3/%2e%2e/4/a.jpg`, 3, "social-photos"],
-    [`http://store.public.blob.vercel-storage.com/social-photos/3/a.jpg`, 3, "social-photos"],
-    [`https://evil.test/social-photos/3/a.jpg`, 3, "social-photos"],
-    [`https://public.blob.vercel-storage.com.evil.test/social-photos/3/a.jpg`, 3, "social-photos"],
     [`${STORE}/social-photos/3/a.jpg`, 3, "social-photos/3/.."],
     [`${STORE}/social-photos/3/a.jpg`, 3, ""],
     ["not a url", 3, "social-photos"],
   ] as const) {
-    assert.equal(ownBlob(url, playerId, folder as string | undefined), false, `${url} for ${playerId} in ${folder}`);
+    assert.equal(ownBlob(url, playerId, folder, OUR), false, `${url} for ${playerId} in ${folder}`);
   }
+  // No store connected: a pinned check accepts nothing.
+  assert.equal(ownBlob(`${STORE}/social-photos/3/a.jpg`, 3, "social-photos", { host: null }), false);
+  assert.equal(ownBlob(`${STORE}/social-photos/3/a.jpg`, 3, "social-photos", { host: "" }), false);
 });
 
 test("the feed's photo join takes two table aliases and nothing else", () => {
@@ -81,22 +125,27 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
   let LINH = 0;
   const rows = async (text: string, params: unknown[] = []) => (await admin.query(text, params)).rows;
   let n = 0;
-  /** What a device sends after uploading a photo's three files into the player's own folder. */
-  const files = (playerId: number, purpose: SocialPhotoPurpose, clubId = 1) => {
-    const base = `${STORE}/${SOCIAL_PHOTO_FOLDERS[purpose]}/${playerId}/${++n}`;
-    return { clubId, purpose, originalUrl: `${base}-original.jpg`, displayUrl: `${base}-display.jpg`, thumbUrl: `${base}-thumb.jpg`, width: 1200, height: 800, bytes: 345_678 };
-  };
+  /** What a device sends after uploading a photo's one file into the player's own folder. */
+  const files = (playerId: number, purpose: SocialPhotoPurpose, clubId = 1) => ({
+    clubId,
+    purpose,
+    url: `${STORE}/${SOCIAL_PHOTO_FOLDERS[purpose]}/${playerId}/${++n}-display.jpg`,
+    width: 1200,
+    height: 800,
+    bytes: 345_678,
+  });
   const says = (status: ModerationResult["status"]) => ({
     moderate: async (): Promise<ModerationResult> => ({ status, safesearch: { adult: "UNLIKELY" }, reason: "checked" }),
-    alert: async () => {},
   });
   /** A photo written straight to the table, as the owner. */
   async function photo(playerId: number, purpose: string, status = "approved", o: { clubId?: number; deleted?: boolean; age?: string } = {}) {
     const base = `${STORE}/${purpose === "gallery" ? "photos" : SOCIAL_PHOTO_FOLDERS[purpose as SocialPhotoPurpose]}/${playerId}/${++n}`;
+    // A Gallery photo has three files; a post's or a listing's has one, in all three columns.
+    const urls = purpose === "gallery" ? [`${base}-o.jpg`, `${base}-d.jpg`, `${base}-t.jpg`] : Array(3).fill(`${base}-d.jpg`);
     const r = await rows(
       `INSERT INTO player_photos (tenant_id, player_id, purpose, status, original_url, display_url, thumb_url, width, height, bytes, consent_at, deleted_at, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 1200, 800, 1000, CASE WHEN $3 = 'gallery' THEN now() END, CASE WHEN $8 THEN now() END, now() - $9::interval) RETURNING id`,
-      [o.clubId ?? 1, playerId, purpose, status, `${base}-o.jpg`, `${base}-d.jpg`, `${base}-t.jpg`, o.deleted ?? false, o.age ?? "0"],
+      [o.clubId ?? 1, playerId, purpose, status, ...urls, o.deleted ?? false, o.age ?? "0"],
     );
     return Number(r[0].id);
   }
@@ -127,8 +176,6 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
     process.env.TENANT_SLUG = "three-wolves";
     delete process.env.TENANT_SCOPE;
     delete process.env.APP_DATABASE_URL;
-    delete process.env.PHOTO_BLOB_READ_WRITE_TOKEN;
-    delete process.env.PHOTO_STORE_ID;
     database = await import("../lib/database.ts");
     photosDb = await import("../lib/photos-db.ts");
   });
@@ -147,7 +194,7 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
     const column = (await rows(`SELECT column_default, is_nullable FROM information_schema.columns WHERE table_name = 'player_photos' AND column_name = 'purpose'`))[0];
     assert.deepEqual(column, { column_default: "'gallery'::text", is_nullable: "NO" });
     const insert = (purpose: string, consent: string) =>
-      admin.query(`INSERT INTO player_photos (player_id, purpose, original_url, display_url, thumb_url, consent_at) VALUES ($1, $2, 'o', 'd', 't', ${consent}) RETURNING id`, [MIA, purpose]);
+      admin.query(`INSERT INTO player_photos (player_id, purpose, original_url, display_url, thumb_url, consent_at) VALUES ($1, $2, 'o', 'd-' || $2, 't', ${consent}) RETURNING id`, [MIA, purpose]);
     await assert.rejects(insert("avatar", "now()"), /player_photos_purpose_check/);
     await assert.rejects(insert("gallery", "NULL"), /player_photos_gallery_consent_check/);
     const made = [(await insert("social", "NULL")).rows[0].id, (await insert("market", "NULL")).rows[0].id];
@@ -156,6 +203,39 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
     const table = (await rows(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = 'player_photos'`))[0];
     assert.deepEqual(table, { relrowsecurity: true, relforcerowsecurity: true });
     assert.deepEqual(await rows(`SELECT policyname FROM pg_policies WHERE tablename = 'player_photos'`), [{ policyname: "tenant_isolation" }]);
+  });
+
+  test("0024: a photo's purpose never changes; one file is one photo for posts and listings; one photo is in at most one post", async () => {
+    try {
+      // Not even the owner can move a photo between the Gallery and a post.
+      for (const [id, to] of [[1, "social"], [1, "market"]] as const) await assert.rejects(admin.query(`UPDATE player_photos SET purpose = $2 WHERE id = $1`, [id, to]), /purpose cannot be changed/);
+      const social = await photo(MIA, "social");
+      for (const to of ["gallery", "market"]) await assert.rejects(admin.query(`UPDATE player_photos SET purpose = $2, consent_at = now() WHERE id = $1`, [social, to]), /purpose cannot be changed/);
+      // Writing the same purpose again, or anything else, is not a change.
+      await admin.query(`UPDATE player_photos SET purpose = 'social', status = 'hidden' WHERE id = $1`, [social]);
+      await admin.query(`UPDATE player_photos SET purpose = purpose, featured = featured`);
+
+      // The same file again: refused for a post or a listing, whoever asks and whatever it is for.
+      const url = (await rows(`SELECT display_url FROM player_photos WHERE id = $1`, [social]))[0].display_url;
+      const again = (playerId: number, purpose: string) =>
+        admin.query(`INSERT INTO player_photos (player_id, purpose, original_url, display_url, thumb_url, consent_at) VALUES ($1, $2, $3, $3, $3, CASE WHEN $2 = 'gallery' THEN now() END)`, [playerId, purpose, url]);
+      await assert.rejects(again(MIA, "social"), /player_photos_file_key/);
+      await assert.rejects(again(PETE, "market"), /player_photos_file_key/);
+      // The Gallery's rows are outside the rule, as they always were.
+      await again(MIA, "gallery");
+      await again(MIA, "gallery");
+
+      const first = await post(MIA, 1, social);
+      await assert.rejects(post(MIA, 1, social), /social_posts_photo_id_key/);
+      await assert.rejects(post(PETE, 1, social), /social_posts_photo_id_key/);
+      await admin.query(`INSERT INTO social_posts (author_id, club_id, kind, body) VALUES ($1, 1, 'text', 'No photo'), ($1, 1, 'text', 'No photo either')`, [MIA]);
+      await admin.query(`DELETE FROM social_posts WHERE id = $1`, [first]);
+      await post(MIA, 1, social);
+      assert.deepEqual(await rows(`SELECT indexname FROM pg_indexes WHERE tablename = 'social_posts' AND indexname LIKE '%photo%'`), [{ indexname: "social_posts_photo_id_key" }]);
+    } finally {
+      await admin.query(`TRUNCATE social_kudos, social_comments, social_posts`);
+      await admin.query(`DELETE FROM player_photos WHERE id > 10`);
+    }
   });
 
   for (const mode of ["off", "enforce"] as const) {
@@ -220,37 +300,54 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
         assert.equal((await photosDb.getPhotoById(id))?.purpose, "social");
       });
 
-      test("registering: the check's answer is the status; no Gallery consent is stored; the files must be in the purpose's own folder", async () => {
-        const alerts: string[] = [];
-        const check = (status: ModerationResult["status"]) => ({ ...says(status), alert: async (kind: string, purpose: string) => void alerts.push(`${kind}:${purpose}`) });
-        const approved = await registerSocialPhoto(db, MIA, files(MIA, "social"), check("approved"));
-        const held = await registerSocialPhoto(db, MIA, files(MIA, "market"), check("needs_review"));
-        const blocked = await registerSocialPhoto(db, MIA, files(MIA, "social"), check("rejected"));
+      test("registering: one file, in our own store and the purpose's own folder; the check reads that file and its answer is the status; no Gallery consent is stored", async () => {
+        const seen: string[][] = [];
+        const check = (status: ModerationResult["status"]) => ({
+          moderate: async (...urls: string[]): Promise<ModerationResult> => {
+            seen.push(urls);
+            return { status, safesearch: { adult: "UNLIKELY" }, reason: "checked" };
+          },
+        });
+        const sent = [files(MIA, "social"), files(MIA, "market"), files(MIA, "social")];
+        const approved = await registerSocialPhoto(db, MIA, sent[0], check("approved"));
+        const held = await registerSocialPhoto(db, MIA, sent[1], check("needs_review"));
+        const blocked = await registerSocialPhoto(db, MIA, sent[2], check("rejected"));
         assert.deepEqual([approved, held, blocked].map((r) => r.ok && r.value.status), ["approved", "needs_review", "rejected"]);
-        assert.deepEqual(alerts, ["needs_review:market", "rejected:social"], "the admins hear about a held and a blocked photo only");
-        const stored = await rows(`SELECT purpose, status, tenant_id, consent_at, safesearch, caption, featured FROM player_photos WHERE id > 10 ORDER BY id`);
+        // The check was given the one file that is stored, and nothing else.
+        assert.deepEqual(seen, sent.map((f) => [f.url]));
+        const stored = await rows(`SELECT purpose, status, tenant_id, consent_at, safesearch, featured, original_url, display_url, thumb_url FROM player_photos WHERE id > 10 ORDER BY id`);
         assert.deepEqual(stored.map((r) => [r.purpose, r.status, r.tenant_id, r.consent_at, r.featured]), [
           ["social", "approved", 1, null, false],
           ["market", "needs_review", 1, null, false],
           ["social", "rejected", 1, null, false],
         ]);
+        // Every column a page could show holds the file that was checked.
+        for (const [i, r] of stored.entries()) assert.deepEqual([r.original_url, r.display_url, r.thumb_url], Array(3).fill(sent[i].url));
         assert.deepEqual(stored[0].safesearch, { adult: "UNLIKELY" });
         // A check that breaks, or can't say, holds the photo. It never approves by failing.
-        const broken = await registerSocialPhoto(db, MIA, files(MIA, "social"), { moderate: async () => Promise.reject(new Error("vision is down")), alert: async () => {} });
+        const broken = await registerSocialPhoto(db, MIA, files(MIA, "social"), { moderate: async () => Promise.reject(new Error("vision is down")) });
         const odd = await registerSocialPhoto(db, MIA, files(MIA, "social"), says("pending"));
         assert.deepEqual([broken, odd].map((r) => r.ok && r.value.status), ["needs_review", "needs_review"]);
-        // An alert that fails doesn't lose the photo.
-        const quiet = await registerSocialPhoto(db, MIA, files(MIA, "social"), { ...says("needs_review"), alert: async () => Promise.reject(new Error("no email")) });
-        assert.equal(quiet.ok, true);
 
         const count = async () => Number((await rows(`SELECT count(*)::int AS n FROM player_photos WHERE id > 10`))[0].n);
         const had = await count();
+        // The same file a second time, by anyone, for anything: refused, and the check isn't asked.
+        seen.length = 0;
+        assert.deepEqual(await registerSocialPhoto(db, MIA, { ...sent[0] }, check("approved")), { ok: false, code: "duplicate" });
+        assert.deepEqual(seen, []);
+
         const good = files(MIA, "social");
         for (const bad of [
-          { ...good, displayUrl: good.displayUrl.replace("/social-photos/", "/photos/") },
-          { ...good, originalUrl: good.originalUrl.replace("/social-photos/", "/market-photos/") },
-          { ...good, thumbUrl: good.thumbUrl.replace(`/${MIA}/`, `/${PETE}/`) },
-          { ...good, displayUrl: "https://evil.test/social-photos/3/x.jpg" },
+          // Somebody else's store: its owner could swap the file after the check.
+          { ...good, url: good.url.replace(HOST, "attacker-own-store.public.blob.vercel-storage.com") },
+          { ...good, url: good.url.replace(HOST, `x.${HOST}`) },
+          { ...good, url: good.url.replace("https://", "http://") },
+          { ...good, url: good.url.replace("/social-photos/", "/photos/") },
+          { ...good, url: good.url.replace("/social-photos/", "/market-photos/") },
+          { ...good, url: good.url.replace(`/${MIA}/`, `/${PETE}/`) },
+          { ...good, url: "https://evil.test/social-photos/3/x.jpg" },
+          { ...good, url: undefined },
+          { ...good, url: `${good.url}${"x".repeat(500)}` },
           { ...good, purpose: "gallery" },
           { ...good, purpose: undefined },
           { ...good, clubId: "1" },
@@ -262,7 +359,34 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
           assert.deepEqual(await registerSocialPhoto(db, MIA, bad as never, says("approved")), { ok: false, code: "invalid" }, JSON.stringify(bad));
         }
         assert.deepEqual(await registerSocialPhoto(db, 0, good, says("approved")), { ok: false, code: "invalid" });
+        // No store connected, so no host to hold a file to: nothing is accepted.
+        delete process.env.PHOTO_BLOB_READ_WRITE_TOKEN;
+        try {
+          assert.deepEqual(await registerSocialPhoto(db, MIA, good, says("approved")), { ok: false, code: "invalid" });
+        } finally {
+          process.env.PHOTO_BLOB_READ_WRITE_TOKEN = TOKEN;
+        }
         assert.equal(await count(), had, "nothing was stored for any of them");
+      });
+
+      test("registering answers with what the row ended as: an admin who blocked it during the check is not overruled", async () => {
+        const during = (change: string, says: ModerationResult["status"]) => ({
+          moderate: async (url: string): Promise<ModerationResult> => {
+            await admin.query(`${change} WHERE display_url = $1`, [url]);
+            return { status: says, safesearch: null, reason: "checked" };
+          },
+        });
+        const blocked = await registerSocialPhoto(db, MIA, files(MIA, "social"), during(`UPDATE player_photos SET status = 'rejected'`, "approved"));
+        assert.deepEqual(blocked.ok && blocked.value.status, "rejected");
+        const hidden = await registerSocialPhoto(db, MIA, files(MIA, "social"), during(`UPDATE player_photos SET status = 'hidden'`, "approved"));
+        assert.deepEqual(hidden.ok && hidden.value.status, "rejected", "hidden is not usable: told as blocked");
+        const allowed = await registerSocialPhoto(db, MIA, files(MIA, "social"), during(`UPDATE player_photos SET status = 'approved'`, "needs_review"));
+        assert.deepEqual(allowed.ok && allowed.value.status, "approved");
+        assert.deepEqual((await rows(`SELECT status FROM player_photos WHERE id > 10 ORDER BY id`)).map((r) => r.status), ["rejected", "hidden", "approved"]);
+        assert.equal(await usablePostPhoto(db, MIA, blocked.ok ? blocked.value.id : 0), null);
+        assert.equal(await usablePostPhoto(db, MIA, hidden.ok ? hidden.value.id : 0), null);
+        // Removed during the check (the account was deleted): there is no photo to answer with.
+        assert.deepEqual(await registerSocialPhoto(db, MIA, files(MIA, "social"), during(`DELETE FROM player_photos`, "approved")), { ok: false, code: "invalid" });
       });
 
       test("registering needs an active membership of that club", async () => {
@@ -294,11 +418,18 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
           id: mine,
           status: "approved",
           clubId: 1,
-          displayUrl: (await rows(`SELECT display_url FROM player_photos WHERE id = $1`, [mine]))[0].display_url,
-          thumbUrl: (await rows(`SELECT thumb_url FROM player_photos WHERE id = $1`, [mine]))[0].thumb_url,
+          url: (await rows(`SELECT display_url FROM player_photos WHERE id = $1`, [mine]))[0].display_url,
           width: 1200,
           height: 800,
         });
+        // Already in a post (even one since removed from view): not for a second one.
+        const used = await photo(MIA, "social", "approved");
+        const usedIn = await post(MIA, 1, used);
+        assert.equal(await usablePostPhoto(db, MIA, used), null, "in a post already");
+        await admin.query(`UPDATE social_posts SET state = 'removed' WHERE id = $1`, [usedIn]);
+        assert.equal(await usablePostPhoto(db, MIA, used), null);
+        await admin.query(`DELETE FROM social_posts WHERE id = $1`, [usedIn]);
+        assert.equal((await usablePostPhoto(db, MIA, used))?.id, used);
         assert.equal((await usablePostPhoto(db, MIA, await photo(MIA, "social", "needs_review")))?.status, "needs_review");
         assert.equal(await usablePostPhoto(db, PETE, mine), null, "someone else's photo");
         assert.equal(await usablePostPhoto(db, MIA, await photo(MIA, "gallery", "approved")), null, "a Gallery photo");
@@ -324,7 +455,6 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
           [`status = 'rejected'`, `status = 'approved'`],
           [`status = 'needs_review'`, `status = 'approved'`],
           [`deleted_at = now()`, `deleted_at = NULL`],
-          [`purpose = 'market'`, `purpose = 'social'`],
           [`player_id = ${PETE}`, `player_id = ${MIA}`],
         ]) {
           await admin.query(`UPDATE player_photos SET ${change} WHERE id = $1`, [photoId]);
@@ -332,6 +462,8 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
           await admin.query(`UPDATE player_photos SET ${undo} WHERE id = $1`, [photoId]);
         }
         assert.ok((await read(postId)).display_url, "and back when the photo is approved again");
+        // The join is to the checked file's column and to nothing a request could name.
+        assert.match(String((await read(postId)).display_url), /-d\.jpg$/);
         // A photo filed under another club than the post's doesn't show.
         const elsewhere = await post(SIONE, 1, await photo(SIONE, "social", "approved", { clubId: club2 }));
         assert.equal((await read(elsewhere)).display_url, null);
@@ -363,9 +495,13 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
           socialPhotoUploadAnswer(db, request, playerId, { clubId, purpose: purpose as SocialPhotoPurpose }, { type: "blob.generate-client-token", payload: { pathname, callbackUrl: "", clientPayload: null, multipart: false } });
         assert.deepEqual(await ask(LINH, "social", `social-photos/${LINH}/a.jpg`), { status: 403, json: { error: "not_member" } });
         assert.deepEqual(await ask(MIA, "gallery", `photos/${MIA}/a.jpg`), { status: 400, json: { error: "invalid" } });
-        assert.deepEqual(await ask(MIA, "social", `social-photos/${MIA}/a.jpg`), { status: 503, json: { error: "not_configured" } }, "no photo store connected");
-        process.env.PHOTO_BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_teststore_notarealsecret";
+        delete process.env.PHOTO_BLOB_READ_WRITE_TOKEN;
         try {
+          assert.deepEqual(await ask(MIA, "social", `social-photos/${MIA}/a.jpg`), { status: 503, json: { error: "not_configured" } }, "no photo store connected");
+        } finally {
+          process.env.PHOTO_BLOB_READ_WRITE_TOKEN = TOKEN;
+        }
+        {
           const good = await ask(MIA, "social", `social-photos/${MIA}/a.jpg`);
           assert.deepEqual([good.status, good.json.type, typeof good.json.clientToken], [200, "blob.generate-client-token", "string"]);
           assert.equal((await ask(MIA, "market", `market-photos/${MIA}/a.jpg`)).status, 200);
@@ -375,25 +511,46 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
           for (let i = 0; i < SOCIAL_PHOTOS_PER_DAY; i++) await photo(MIA, "social");
           assert.deepEqual(await ask(MIA, "social", `social-photos/${MIA}/b.jpg`), { status: 400, json: { error: "Daily photo limit reached" } });
           assert.equal((await ask(MIA, "market", `market-photos/${MIA}/b.jpg`)).status, 200, "the other purpose has its own count");
-        } finally {
-          delete process.env.PHOTO_BLOB_READ_WRITE_TOKEN;
         }
       });
 
-      test("deleteSocialPhotos: the person's post and listing photos go, with their files; Gallery photos and other people's stay", async () => {
+      test("deleteSocialPhotos: the person's post and listing photos go, files first; Gallery photos and other people's stay", async () => {
         const gallery = await photo(MIA, "gallery");
         const loose = await photo(MIA, "social");
         const listing = await photo(MIA, "market", "needs_review");
         const posted = await photo(MIA, "social");
-        const goneBefore = await photo(MIA, "social", "approved", { deleted: true });
         const petes = await photo(PETE, "social");
         const postId = await post(MIA, 1, posted);
+        const urlOf = async (id: number) => String((await rows(`SELECT display_url FROM player_photos WHERE id = $1`, [id]))[0].display_url);
+        const mine = [await urlOf(loose), await urlOf(listing), await urlOf(posted)].sort();
         const removed: string[] = [];
-        const deleteBlobs = async (urls: string[]) => void removed.push(...urls);
+        const deleteFiles = async (urls: string[]) => void removed.push(...urls);
         const fixture = await rows(`SELECT id, deleted_at FROM player_photos WHERE id <= 10 ORDER BY id`);
+        const table = () => rows(`SELECT id, purpose, deleted_at IS NOT NULL AS deleted FROM player_photos WHERE id > 10 ORDER BY id`);
+        const untouched = await table();
 
-        assert.deepEqual(await deleteSocialPhotos(db, MIA, { deleteBlobs }), { photos: 3 });
-        const left = await rows(`SELECT id, purpose, deleted_at IS NOT NULL AS deleted FROM player_photos WHERE id > 10 ORDER BY id`);
+        // The store says no: the error comes out, and every row is as it was, so asking again asks the store again.
+        const down = async () => Promise.reject(new Error("the store is down"));
+        await assert.rejects(deleteSocialPhotos(db, MIA, { deleteFiles: down }), /the store is down/);
+        assert.deepEqual(await table(), untouched);
+        await assert.rejects(deleteSocialPhotos(db, MIA, { only: loose, deleteFiles: down }), /the store is down/);
+        assert.deepEqual(await table(), untouched);
+        assert.equal((await usablePostPhoto(db, MIA, loose))?.id, loose);
+
+        // The files go before any row does.
+        let rowsWhenFilesWent: unknown[] = [];
+        assert.deepEqual(
+          await deleteSocialPhotos(db, MIA, {
+            deleteFiles: async (urls) => {
+              rowsWhenFilesWent = await table();
+              removed.push(...urls);
+            },
+          }),
+          { photos: 3 },
+        );
+        assert.deepEqual(rowsWhenFilesWent, untouched);
+        assert.deepEqual([...removed].sort(), mine, "one file for each photo, each asked for once");
+        const left = await table();
         assert.deepEqual(left, [
           { id: gallery, purpose: "gallery", deleted: false },
           // Still pointed at by the post: marked, not removed.
@@ -401,37 +558,70 @@ describe("photos for posts and listings", { skip: !BASE_URL && !REQUIRE_DB ? "se
           { id: petes, purpose: "social", deleted: false },
         ]);
         assert.deepEqual(await rows(`SELECT id, deleted_at FROM player_photos WHERE id <= 10 ORDER BY id`), fixture);
-        assert.equal(removed.length, 9, "three files for each of the three live photos");
-        assert.ok(removed.every((u) => u.includes(`/${MIA}/`) && !u.includes("/photos/")));
-        assert.ok(![loose, listing, goneBefore].some((id) => left.some((r) => r.id === id)));
         assert.equal(await usablePostPhoto(db, MIA, posted), null);
         assert.equal((await db.query(`SELECT ph.id FROM social_posts p ${postPhotoJoinSql("p", "ph")} WHERE p.id = $1`, [postId])).rows[0].id, null);
 
-        // Again: nothing more to remove, no file asked for twice. With the post gone, the last row goes.
+        // Again: no photo newly removed. The marked row's file is asked for again (harmless, and it covers a row marked by hand).
         removed.length = 0;
-        assert.deepEqual(await deleteSocialPhotos(db, MIA, { deleteBlobs }), { photos: 0 });
-        assert.deepEqual(removed, []);
+        assert.deepEqual(await deleteSocialPhotos(db, MIA, { deleteFiles }), { photos: 0 });
+        assert.deepEqual(removed, [await urlOf(posted)]);
+        // With the post gone, the last row goes.
         await admin.query(`DELETE FROM social_posts WHERE id = $1`, [postId]);
-        assert.deepEqual(await deleteSocialPhotos(db, MIA, { deleteBlobs }), { photos: 0 });
-        assert.deepEqual((await rows(`SELECT id FROM player_photos WHERE id > 10 ORDER BY id`)).map((r) => r.id), [gallery, petes]);
+        assert.deepEqual(await deleteSocialPhotos(db, MIA, { deleteFiles }), { photos: 0 });
+        assert.deepEqual((await table()).map((r) => r.id), [gallery, petes]);
+        removed.length = 0;
+        assert.deepEqual(await deleteSocialPhotos(db, MIA, { deleteFiles }), { photos: 0 });
+        assert.deepEqual(removed, [], "nothing left: the store isn't asked");
 
         // One photo only: a post's photo, when its author deletes the post.
         const a = await photo(PETE, "social");
-        assert.deepEqual(await deleteSocialPhotos(db, PETE, { only: gallery, deleteBlobs }), { photos: 0 }, "not theirs, and a Gallery photo");
-        assert.deepEqual(await deleteSocialPhotos(db, MIA, { only: a, deleteBlobs }), { photos: 0 }, "someone else's");
-        assert.deepEqual(await deleteSocialPhotos(db, PETE, { only: a, deleteBlobs }), { photos: 1 });
-        assert.deepEqual((await rows(`SELECT id FROM player_photos WHERE id > 10 ORDER BY id`)).map((r) => r.id), [gallery, petes]);
-        assert.equal(removed.length, 3);
-        for (const bad of [0, 1.5, Number.NaN, "7"]) assert.deepEqual(await deleteSocialPhotos(db, PETE, { only: bad as never, deleteBlobs }), { photos: 0 });
-        assert.deepEqual(await deleteSocialPhotos(db, 0, { deleteBlobs }), { photos: 0 });
+        assert.deepEqual(await deleteSocialPhotos(db, PETE, { only: gallery, deleteFiles }), { photos: 0 }, "not theirs, and a Gallery photo");
+        assert.deepEqual(await deleteSocialPhotos(db, MIA, { only: a, deleteFiles }), { photos: 0 }, "someone else's");
+        assert.deepEqual(removed, []);
+        assert.deepEqual(await deleteSocialPhotos(db, PETE, { only: a, deleteFiles }), { photos: 1 });
+        assert.deepEqual((await table()).map((r) => r.id), [gallery, petes]);
+        assert.equal(removed.length, 1);
+        for (const bad of [0, 1.5, Number.NaN, "7"]) assert.deepEqual(await deleteSocialPhotos(db, PETE, { only: bad as never, deleteFiles }), { photos: 0 });
+        assert.deepEqual(await deleteSocialPhotos(db, 0, { deleteFiles }), { photos: 0 });
         assert.equal((await rows(`SELECT count(*)::int AS n FROM player_photos WHERE id = $1`, [petes]))[0].n, 1);
 
         // Under enforce, another club's photos are out of this connection's reach.
         const abroad = await photo(SIONE, "social", "approved", { clubId: club2 });
         const here = await photo(SIONE, "social");
-        assert.deepEqual(await deleteSocialPhotos(db, SIONE, { deleteBlobs }), { photos: mode === "enforce" ? 1 : 2 });
+        assert.deepEqual(await deleteSocialPhotos(db, SIONE, { deleteFiles }), { photos: mode === "enforce" ? 1 : 2 });
         const kept = (await rows(`SELECT id FROM player_photos WHERE id = ANY($1::int[])`, [[abroad, here]])).map((r) => r.id);
         assert.deepEqual(kept, mode === "enforce" ? [abroad] : []);
+      });
+
+      test("deleteSocialPhotos without a store that can delete: it says so, and removes no row", async () => {
+        const storage = await import("../lib/storage.ts");
+        const mine = await photo(MIA, "social");
+        const table = () => rows(`SELECT id, deleted_at FROM player_photos WHERE id > 10 ORDER BY id`);
+        const untouched = await table();
+        try {
+          // A store that answers with an error (the Gallery's own delete would only log it).
+          storage.setPublicStorage({ ...storage.memoryStorage(STORE), delete: async () => Promise.reject(new Error("503 from the store")) });
+          await assert.rejects(deleteSocialPhotos(db, MIA), /503 from the store/);
+          assert.deepEqual(await table(), untouched);
+          // A file the store says isn't its own can't be removed by it.
+          storage.setPublicStorage(storage.memoryStorage("https://files.test"));
+          await assert.rejects(deleteSocialPhotos(db, MIA), /not in this deployment's photo store/);
+          assert.deepEqual(await table(), untouched);
+          // No store connected at all.
+          storage.setPublicStorage({ ...storage.memoryStorage(STORE), configured: () => false });
+          await assert.rejects(deleteSocialPhotos(db, MIA), /no photo store is connected/);
+          assert.deepEqual(await table(), untouched);
+          // A store that deletes: the file goes, then the row.
+          const working = storage.memoryStorage(STORE);
+          const url = String((await rows(`SELECT display_url FROM player_photos WHERE id = $1`, [mine]))[0].display_url);
+          working.objects.set(url.slice(STORE.length + 1), { body: Buffer.from("x"), contentType: "image/jpeg" });
+          storage.setPublicStorage(working);
+          assert.deepEqual(await deleteSocialPhotos(db, MIA), { photos: 1 });
+          assert.equal(working.objects.size, 0);
+          assert.deepEqual(await table(), []);
+        } finally {
+          storage.setPublicStorage(null);
+        }
       });
     });
   }

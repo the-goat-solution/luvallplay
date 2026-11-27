@@ -91,26 +91,50 @@ export async function photoUploadAnswer(request: Request, playerId: number, body
 }
 
 const url = z.string().url().max(500);
-/** The three uploaded files of one photo and their size, as the device reports them. */
-export const photoFilesSchema = z.object({
+export const photoRegisterSchema = z.object({
   originalUrl: url,
   displayUrl: url,
   thumbUrl: url,
   width: z.number().int().positive().max(20000).nullable(),
   height: z.number().int().positive().max(20000).nullable(),
   bytes: z.number().int().nonnegative().max(100 * 1024 * 1024),
-});
-export const photoRegisterSchema = photoFilesSchema.extend({
   caption: z.string().trim().max(140).nullable().optional(),
   consent: z.literal(true),
 });
 
-/** Only files in this player's own folder of our public Blob store (the Gallery's folder unless another is named). */
-export function ownBlob(raw: string, playerId: number, folder: string = GALLERY_FOLDER): boolean {
+/**
+ * The host our own public Blob store serves files from
+ * (<store id>.public.blob.vercel-storage.com), from the store's token or its
+ * id, as the Blob library itself builds it. Null when no store is connected
+ * or the id can't be read: a caller that pins to it then accepts nothing.
+ */
+export function ownStoreHost(): string | null {
+  const auth = publicBlobAuth();
+  if (!auth) return null;
+  // The read-write token is vercel_blob_rw_<store id>_<secret>; a connected store's id is store_<store id>.
+  const storeId = "token" in auth ? (auth.token.split("_")[3] ?? "") : auth.storeId.replace(/^store_/, "");
+  return /^[A-Za-z0-9]+$/.test(storeId) ? `${storeId.toLowerCase()}.public.blob.vercel-storage.com` : null;
+}
+
+/**
+ * Only files in this player's own folder of a public Blob store (the
+ * Gallery's folder unless another is named).
+ *
+ * Without `pin` any Vercel public store's host passes, which is how the
+ * Gallery has always checked it: a file in somebody else's store, under the
+ * same folder name, is accepted, and its owner could change it after the
+ * image check. With `pin` the host must be exactly `pin.host` (ownStoreHost());
+ * a null host accepts nothing. Photos for posts and listings pin. The
+ * Gallery's own check is left as it was for lane H to tighten, once the
+ * derived host has been compared with the live store's real URLs.
+ */
+export function ownBlob(raw: string, playerId: number, folder: string = GALLERY_FOLDER, pin?: { host: string | null }): boolean {
   if (!FOLDER.test(folder) || !Number.isSafeInteger(playerId) || playerId < 1) return false;
+  if (pin && !pin.host) return false;
   try {
     const u = new URL(raw);
-    return u.protocol === "https:" && u.hostname.endsWith(".public.blob.vercel-storage.com") && u.pathname.startsWith(`/${folder}/${playerId}/`) && !u.pathname.includes("..");
+    const host = pin ? u.hostname === pin.host && !u.port && !u.username && !u.password : u.hostname.endsWith(".public.blob.vercel-storage.com");
+    return u.protocol === "https:" && host && u.pathname.startsWith(`/${folder}/${playerId}/`) && !u.pathname.includes("..");
   } catch {
     return false;
   }

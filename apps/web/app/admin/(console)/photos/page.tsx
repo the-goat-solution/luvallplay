@@ -9,6 +9,7 @@ import { attentionCount } from "@/lib/admin-attention";
 import {
   adminSetFeatured,
   adminSetPhotoStatus,
+  getPhotoById,
   listPhotosForAdmin,
   photoStorageBytes,
   type PhotoPurpose,
@@ -41,8 +42,10 @@ const CHECK_LABEL: Record<string, string> = { adult: "Adult content", racy: "Rac
 // A photo uploaded for a post or a listing is reviewed here and never joins the Gallery.
 const PURPOSE_LABEL: Record<Exclude<PhotoPurpose, "gallery">, string> = { social: "For a post", market: "For a listing" };
 
-async function setStatus(id: number, status: PhotoStatus, tab: Tab, purpose: PhotoPurpose) {
+async function setStatus(id: number, status: PhotoStatus, tab: Tab) {
   "use server";
+  // What the photo is for is read from its row, never from the form.
+  const purpose: PhotoPurpose = (await getPhotoById(id))?.purpose ?? "gallery";
   await adminSetPhotoStatus(id, status);
   revalidatePath("/admin/photos");
   if (purpose === "gallery") {
@@ -151,7 +154,7 @@ export default async function PhotosAdminPage({ searchParams }: { searchParams: 
                 </div>
                 <div className={kit.rowActions} style={{ marginTop: 8 }}>
                   {ph.status !== "approved" && (
-                    <form action={setStatus.bind(null, ph.id, "approved", tab, ph.purpose)}>
+                    <form action={setStatus.bind(null, ph.id, "approved", tab)}>
                       <SubmitButton
                         className={kit.btn}
                         loadingText="Saving…"
@@ -176,7 +179,7 @@ export default async function PhotosAdminPage({ searchParams }: { searchParams: 
                           </SubmitButton>
                         </form>
                       )}
-                      <form action={setStatus.bind(null, ph.id, "hidden", tab, ph.purpose)}>
+                      <form action={setStatus.bind(null, ph.id, "hidden", tab)}>
                         <SubmitButton
                           className={kit.btnSecondary}
                           loadingText="Saving…"
@@ -188,7 +191,7 @@ export default async function PhotosAdminPage({ searchParams }: { searchParams: 
                     </>
                   )}
                   {ph.status !== "rejected" && (
-                    <form action={setStatus.bind(null, ph.id, "rejected", tab, ph.purpose)}>
+                    <form action={setStatus.bind(null, ph.id, "rejected", tab)}>
                       <SubmitButton className={kit.btnDanger} loadingText="Saving…" confirmMessage="Block this photo as inappropriate?">
                         Block
                       </SubmitButton>

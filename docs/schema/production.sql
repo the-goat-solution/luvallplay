@@ -1332,6 +1332,7 @@ CREATE TABLE player_photos (
   CONSTRAINT player_photos_thumb_url_not_null NOT NULL thumb_url,
   CONSTRAINT player_photos_pkey PRIMARY KEY (id)
 );
+CREATE UNIQUE INDEX player_photos_file_key ON public.player_photos USING btree (display_url) WHERE (purpose <> 'gallery'::text);
 CREATE INDEX player_photos_player_idx ON public.player_photos USING btree (player_id, created_at DESC);
 CREATE INDEX player_photos_status_idx ON public.player_photos USING btree (status, created_at DESC);
 
@@ -2071,7 +2072,7 @@ CREATE TABLE social_posts (
 CREATE INDEX social_posts_author_created_idx ON public.social_posts USING btree (author_id, created_at DESC, id DESC);
 CREATE INDEX social_posts_club_created_idx ON public.social_posts USING btree (club_id, created_at DESC, id DESC);
 CREATE INDEX social_posts_created_idx ON public.social_posts USING btree (created_at DESC, id DESC);
-CREATE INDEX social_posts_photo_id_idx ON public.social_posts USING btree (photo_id) WHERE (photo_id IS NOT NULL);
+CREATE UNIQUE INDEX social_posts_photo_id_key ON public.social_posts USING btree (photo_id) WHERE (photo_id IS NOT NULL);
 
 CREATE TABLE social_profiles (
   player_id integer NOT NULL,
@@ -2510,6 +2511,16 @@ BEGIN
   END IF;
   RETURN NULL;
 END $function$;
+CREATE OR REPLACE FUNCTION public.player_photos_purpose_is_fixed()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.purpose IS DISTINCT FROM OLD.purpose THEN
+    RAISE EXCEPTION 'player_photos.purpose cannot be changed (photo %)', OLD.id USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $function$;
 CREATE OR REPLACE FUNCTION public.players_phone_sealed_follows_plain()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2555,6 +2566,7 @@ CREATE TRIGGER jersey_registrations_link_account BEFORE INSERT OR UPDATE OF emai
 CREATE TRIGGER memberships_link_account BEFORE INSERT OR UPDATE OF email ON public.memberships FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
 CREATE TRIGGER moderation_evidence_for_child_safety AFTER INSERT ON public.moderation_evidence FOR EACH ROW EXECUTE FUNCTION moderation_evidence_for_child_safety();
 CREATE TRIGGER player_absences_link_account BEFORE INSERT OR UPDATE OF email ON public.player_absences FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER player_photos_purpose_is_fixed BEFORE UPDATE OF purpose ON public.player_photos FOR EACH ROW EXECUTE FUNCTION player_photos_purpose_is_fixed();
 CREATE TRIGGER players_link_rows AFTER INSERT OR UPDATE OF email, deleted_at ON public.players FOR EACH ROW EXECUTE FUNCTION link_account_to_rows();
 CREATE TRIGGER players_phone_sealed_follows_plain BEFORE UPDATE ON public.players FOR EACH ROW EXECUTE FUNCTION players_phone_sealed_follows_plain();
 CREATE TRIGGER session_fill_ins_link_account BEFORE INSERT OR UPDATE OF email ON public.session_fill_ins FOR EACH ROW EXECUTE FUNCTION link_row_to_account();

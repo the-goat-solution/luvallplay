@@ -146,10 +146,13 @@ Once a report has been filed, `moderation_actions` and `moderation_evidence` are
 
 ## The third migration: `0024_player_photos_purpose`
 
-- **Change:** one new column on an existing table, and one constraint loosened. Lane H's table, changed for lane S (Social plan Task 4, the photo groundwork).
+- **Change:** one new column on an existing table, one constraint loosened, a trigger and two unique indexes. Lane H's table, changed for lane S (Social plan Task 4, the photo groundwork).
   - `player_photos.purpose text NOT NULL DEFAULT 'gallery'`, checked to be `gallery`, `social` or `market`. Every existing photo becomes a Gallery photo. A photo uploaded for a Social post or a Marketplace listing gets its own purpose, goes through the same image check and the same admin review, and never joins the Gallery, "My photos" or the Gallery's 20 a day.
   - `player_photos.consent_at` may now be empty. It is the "share this in the Gallery" tick, which isn't asked for a post's or a listing's photo. A new check, `player_photos_gallery_consent_check`, keeps it required for every Gallery photo, so nothing changes for the rows there are.
-  - No new index, no new table, no new grant (`player_photos` is already granted to `luvallplay_app`). The table stays a club's table: `tenant_id`, row-level security enabled and forced, the `tenant_isolation` policy. None of that is touched.
+  - A photo's purpose never changes: the trigger `player_photos_purpose_is_fixed` (`BEFORE UPDATE OF purpose`) refuses an update that would, for every role. Without it one `UPDATE` would put a post's photo in the Gallery.
+  - `player_photos_file_key`: a unique index on `display_url` over the rows that are **not** Gallery photos. One stored file is one photo for posts and listings, so deleting one photo can't remove another's file. It covers no existing row (they are all `gallery`), so existing data can't make it fail, and the Gallery is as before.
+  - `social_posts_photo_id_idx` (from `0022`) is dropped and made again as the unique index `social_posts_photo_id_key`: one photo is in at most one post. `social_posts` is empty everywhere; nothing has written a post yet. This is the one statement here that removes something.
+  - No new table, no new grant (`player_photos` is already granted to `luvallplay_app`). The table stays a club's table: `tenant_id`, row-level security enabled and forced, the `tenant_isolation` policy. None of that is touched.
 - **Command:** `node scripts/db/migrate.mjs`
 - **Expectations:** `apps/web/scripts/data-guard/expectations/2026-12-player-photos-purpose.json` (and `.production.json` for the live run). After the run every row of `player_photos` must have `purpose = 'gallery'`: `SELECT purpose, count(*) FROM player_photos GROUP BY 1`.
 - **Number:** written as `0024`; the migration queue gives the final number at merge.
@@ -164,23 +167,24 @@ Once a report has been filed, `moderation_actions` and `moderation_evidence` are
 |---|---|
 | A scratch database migrated to `0023` (`node scripts/db/migrate.mjs --to 0023`), then the fixture | 106 tables, 468 rows; `player_photos` has 10 rows |
 | Data guard snapshot, before | Taken (exit 0) |
-| `node scripts/db/migrate.mjs` | `applied 0024_player_photos_purpose (4 ms)`, exit 0 |
+| `node scripts/db/migrate.mjs` | `applied 0024_player_photos_purpose (8 ms)`, exit 0 |
 | Tables before and after | **106 before, 106 after.** None new, none gone |
 | `player_photos`, before against after | **10 rows before, 10 after.** A hash of every row over the 18 columns it had before is identical. After: `purpose = 'gallery'` for all 10 |
 | The other 105 tables, row count and a hash of every row, before against after | Identical |
 | Data guard, before against after, with the expectations | Passed: 24 live accounts checked, 0 problems. Without the expectations file the result is the same |
 | Migrating a second time | **A no-op:** "Nothing to migrate: the database is up to date."; the history has 25 rows |
+| The trigger and the two indexes | As the owner: `UPDATE player_photos SET purpose = 'social' WHERE id = 1` is refused ("purpose cannot be changed"). As the app's role: a second `social` or `market` row with the same `display_url` is refused by `player_photos_file_key`. In the tests: two Gallery rows with one URL are still accepted, and a second post with the same photo is refused by `social_posts_photo_id_key` |
 | The app's role, scoped to club 1 | Can store a `social` photo with no `consent_at` (the row gets club 1's `tenant_id`); tried in a transaction that was rolled back. In `tests/social-photos.test.ts`: a `gallery` photo without `consent_at` and a purpose outside the three are refused by the checks; under `TENANT_SCOPE=enforce` a photo for another club can't be registered or read |
-| Rollback (below), then a schema dump | The schema (`pg_dump --schema-only`) equals the one before `0024`, and every table's rows hash as before; the migrator applies `0024` again afterwards (3 ms) |
+| Rollback (below), then a schema dump | The schema (`pg_dump --schema-only`) equals the one before `0024`, and every table's rows hash as before; the migrator applies `0024` again afterwards (8 ms) |
 | `tests/social-photos.test.ts` | Passes on Postgres 16, each database test once as the owner and once under `TENANT_SCOPE=enforce` with two clubs |
 | `packages/db/schema.ts` against the migrations (tables and indexes, on Postgres 16) | No difference |
-| Schema drift suite, and `db:drift` | **Not run here**: they need Postgres 18 (CI runs them). `docs/schema/production.sql` was changed by hand in `player_photos` only (5 lines added, 2 removed): on Postgres 16 the dump after `0024` equals it once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside. Of those, `player_photos_consent_at_not_null` was removed and `player_photos_purpose_not_null` added, to the pattern of the other lines; neither has been checked against a real Postgres 18 |
+| Schema drift suite, and `db:drift` | **Not run here**: they need Postgres 18 (CI runs them). `docs/schema/production.sql` was changed by hand (in `player_photos`: the column, the two checks, `consent_at`, the file index; the post index; the trigger and its function): on Postgres 16 the dump after `0024` equals it once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside. Of those, `player_photos_consent_at_not_null` was removed and `player_photos_purpose_not_null` added, to the pattern of the other lines; neither has been checked against a real Postgres 18 |
 
 ### Still to do
 
 1. The schema drift suite on Postgres 18 (CI).
 2. A run on a copy of production on Postgres 18 with the data guard before and after. `player_photos` has real rows, unlike the tables of `0022` and `0023`: check the count by purpose afterwards (all `gallery`), and that no row's status, files or consent time moved.
-3. Lane H's OK for the change to its table (the column, and `consent_at` no longer `NOT NULL`), and lane T's for a club table gaining a column (its row-level security is untouched).
+3. Lane H's OK for the change to its table (the column, `consent_at` no longer `NOT NULL`, the trigger, the file index), and lane T's for a club table gaining a column (its row-level security is untouched).
 4. The production run itself, with the owner's OK, **before** the code that reads the column is deployed.
 
 ### Settings
@@ -192,6 +196,11 @@ None.
 While no photo has been stored for a post or a listing (nothing writes one until Social is switched on for a pilot club):
 
 ```sql
+DROP INDEX social_posts_photo_id_key;
+CREATE INDEX social_posts_photo_id_idx ON social_posts (photo_id) WHERE photo_id IS NOT NULL;
+DROP INDEX player_photos_file_key;
+DROP TRIGGER player_photos_purpose_is_fixed ON player_photos;
+DROP FUNCTION player_photos_purpose_is_fixed();
 ALTER TABLE player_photos
   DROP CONSTRAINT player_photos_gallery_consent_check,
   DROP CONSTRAINT player_photos_purpose_check,
@@ -200,4 +209,8 @@ ALTER TABLE player_photos
 DELETE FROM drizzle.__drizzle_migrations WHERE hash = (SELECT hash FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1); -- only if 0024 is the last one applied
 ```
 
-Roll the code back first: the Gallery's queries name the column. Once a `social` or `market` photo exists, `SET NOT NULL` fails on purpose (those rows have no consent time), and dropping the column would turn them into Gallery photos: don't roll back then; roll forward instead.
+Run it in one transaction (`psql -1`). Roll the code back first: the Gallery's queries name the column. Once a `social` or `market` photo exists, `SET NOT NULL` fails on purpose (those rows have no consent time), and dropping the column would turn them into Gallery photos: don't roll back then; roll forward instead.
+
+### After the review: `0024` edited in place
+
+`0024` had been applied nowhere but local scratch databases, so it was edited in place (its journal date is unchanged), 27 Nov 2026: the trigger, `player_photos_file_key` and `social_posts_photo_id_key` were added. The whole rehearsal above was run again from a fresh database at `0023` with the migration as it now is, and the table shows that run: the same counts and hashes, the data guard passed, a second run applied nothing, the rollback (with its five new lines) gives back the schema of before, and it is refused once a `social` row exists. **A local database that ran the first `0024` will refuse to migrate** ("changed after it was applied"): recreate it. The tests make fresh databases.

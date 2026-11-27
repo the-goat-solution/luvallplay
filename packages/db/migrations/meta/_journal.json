@@ -169,6 +169,13 @@
       "when": 1795770759979,
       "tag": "0023_moderation_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795773018388,
+      "tag": "0024_player_photos_purpose",
+      "breakpoints": true
     }
   ]
 }

@@ -621,13 +621,16 @@ export const player_photos = pgTable("player_photos", {
 	safesearch: jsonb(),
 	caption: text(),
 	featured: boolean().default(false).notNull(),
-	consent_at: timestamp({ withTimezone: true, mode: 'string' }).notNull(),
+	// The "share this in the Gallery" tick. Empty only for a post's or a listing's photo (0024).
+	consent_at: timestamp({ withTimezone: true, mode: 'string' }),
 	reviewed_at: timestamp({ withTimezone: true, mode: 'string' }),
 	reviewed_by: text(),
 	created_at: timestamp({ withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	deleted_at: timestamp({ withTimezone: true, mode: 'string' }),
 	// Phase 3 step 2: the club that owns the row. Nullable with a default until step 10.
 	tenant_id: integer().default(sql`COALESCE(app_tenant_id(), 1)`).notNull().references(() => tenants.id, { onDelete: "restrict" }),
+	// 0024: what the photo is for. Only 'gallery' photos join the Gallery.
+	purpose: text().default('gallery').notNull(),
 }, (table) => [
 	index("player_photos_player_idx").using("btree", table.player_id.asc().nullsLast(), table.created_at.desc().nullsFirst()),
 	index("player_photos_status_idx").using("btree", table.status.asc().nullsLast(), table.created_at.desc().nullsFirst()),
@@ -637,6 +640,8 @@ export const player_photos = pgTable("player_photos", {
 			name: "player_photos_player_id_fkey"
 		}).onDelete("restrict"),
 	check("player_photos_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'needs_review'::text, 'rejected'::text, 'hidden'::text])`),
+	check("player_photos_purpose_check", sql`purpose = ANY (ARRAY['gallery'::text, 'social'::text, 'market'::text])`),
+	check("player_photos_gallery_consent_check", sql`(purpose <> 'gallery'::text) OR (consent_at IS NOT NULL)`),
 ]);
 
 export const player_sessions = pgTable("player_sessions", {

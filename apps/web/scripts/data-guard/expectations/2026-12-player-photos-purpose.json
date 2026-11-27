@@ -1,0 +1,4 @@
+{
+  "change": "2026-12-player-photos-purpose",
+  "description": "Social plan Task 4, the photo groundwork (lane H; migration 0024_player_photos_purpose): one new column on player_photos, purpose ('gallery', 'social' or 'market'), NOT NULL with the default 'gallery', so every existing photo becomes a Gallery photo. consent_at may now be empty, for photos that are not Gallery photos only (a check keeps it required for Gallery photos). No row is added or removed and no existing value changes: every photo keeps its player, status, files, consent time and club. Additive: no row, account, email, phone, session, role or membership may change. After the run every player_photos row must have purpose = 'gallery'. Rehearsal on a copy, so nothing is volatile."
+}

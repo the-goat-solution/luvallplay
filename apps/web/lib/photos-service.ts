@@ -3,6 +3,11 @@
 // Blob store, only into the player's own folder, only images, at most 20 a
 // day), registering an uploaded photo (SafeSearch, then the Gallery, an
 // admin's review or hidden, with the admins emailed), and deleting one.
+//
+// These are the Gallery's photos. Photos for Social posts and Marketplace
+// listings (lib/social/photos.ts) use the same upload answer and the same
+// own-folder check with their own folder and their own daily count, and are
+// never registered here.
 import { revalidatePath } from "next/cache";
 import { issueSignedToken } from "@vercel/blob";
 import { handleUpload, handleUploadPresigned, type HandleUploadBody, type HandleUploadPresignedBody } from "@vercel/blob/client";
@@ -20,17 +25,33 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 25 * 1024 * 1024;
 const VALID_MS = 10 * 60 * 1000;
 
+/** The store's top folder for Gallery photos: photos/<player id>/… */
+export const GALLERY_FOLDER = "photos";
+const FOLDER = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * Where an upload may go and whether it may go at all. `folder` is a top
+ * folder of the store, a plain name from the code. `refuse` answers the
+ * reason to say no (a daily limit), or null.
+ */
+export type UploadRules = { folder: string; refuse: () => Promise<string | null> };
+
 /**
  * Answers the Blob client's upload call, in the flavour the store is set up
  * for (lib/public-blob.ts): a client token signed with the read-write
- * token, or a presigned upload URL.
+ * token, or a presigned upload URL. Without `rules` it is a Gallery upload:
+ * the player's own photos/ folder, at most 20 a day.
  */
-export async function photoUploadAnswer(request: Request, playerId: number, body: unknown): Promise<Answer> {
+export async function photoUploadAnswer(request: Request, playerId: number, body: unknown, rules?: UploadRules): Promise<Answer> {
   const auth = publicBlobAuth();
   if (!auth) return { status: 503, json: { error: "not_configured" } };
+  const folder = rules?.folder ?? GALLERY_FOLDER;
+  if (!FOLDER.test(folder)) throw new Error(`photoUploadAnswer: "${folder}" is not a folder name.`);
+  const refuse = rules?.refuse ?? (async () => ((await countPhotosToday(playerId)) >= PHOTOS_PER_DAY ? "Daily photo limit reached" : null));
   const guard = async (pathname: string) => {
-    if (!pathname.startsWith(`photos/${playerId}/`) || pathname.includes("..")) throw new Error("Wrong folder");
-    if ((await countPhotosToday(playerId)) >= PHOTOS_PER_DAY) throw new Error("Daily photo limit reached");
+    if (!pathname.startsWith(`${folder}/${playerId}/`) || pathname.includes("..")) throw new Error("Wrong folder");
+    const no = await refuse();
+    if (no) throw new Error(no);
   };
   try {
     if ("token" in auth) {
@@ -70,28 +91,37 @@ export async function photoUploadAnswer(request: Request, playerId: number, body
 }
 
 const url = z.string().url().max(500);
-export const photoRegisterSchema = z.object({
+/** The three uploaded files of one photo and their size, as the device reports them. */
+export const photoFilesSchema = z.object({
   originalUrl: url,
   displayUrl: url,
   thumbUrl: url,
   width: z.number().int().positive().max(20000).nullable(),
   height: z.number().int().positive().max(20000).nullable(),
   bytes: z.number().int().nonnegative().max(100 * 1024 * 1024),
+});
+export const photoRegisterSchema = photoFilesSchema.extend({
   caption: z.string().trim().max(140).nullable().optional(),
   consent: z.literal(true),
 });
 
-/** Only files in this player's own folder of our public Blob store. */
-function ownBlob(raw: string, playerId: number): boolean {
+/** Only files in this player's own folder of our public Blob store (the Gallery's folder unless another is named). */
+export function ownBlob(raw: string, playerId: number, folder: string = GALLERY_FOLDER): boolean {
+  if (!FOLDER.test(folder) || !Number.isSafeInteger(playerId) || playerId < 1) return false;
   try {
     const u = new URL(raw);
-    return u.protocol === "https:" && u.hostname.endsWith(".public.blob.vercel-storage.com") && u.pathname.startsWith(`/photos/${playerId}/`);
+    return u.protocol === "https:" && u.hostname.endsWith(".public.blob.vercel-storage.com") && u.pathname.startsWith(`/${folder}/${playerId}/`) && !u.pathname.includes("..");
   } catch {
     return false;
   }
 }
 
-/** Registers an uploaded photo, runs the SafeSearch check and files it. */
+/**
+ * Registers an uploaded Gallery photo, runs the SafeSearch check and files
+ * it. Only Gallery photos come through here (insertPhoto stores no other
+ * purpose), so the Gallery pages are the ones to refresh; a photo for a post
+ * or a listing is registered by lib/social/photos.ts and refreshes none.
+ */
 export async function registerPhoto(player: Who, body: z.infer<typeof photoRegisterSchema>): Promise<Answer> {
   if (![body.originalUrl, body.displayUrl, body.thumbUrl].every((u) => ownBlob(u, player.id))) {
     return { status: 400, json: { error: "invalid" } };
@@ -136,7 +166,7 @@ export async function registerPhoto(player: Who, body: z.infer<typeof photoRegis
   return { status: 200, json: { ok: true, id, status: result.status } };
 }
 
-/** A player deletes their own photo: it leaves the Gallery and the files go. False when it isn't theirs. */
+/** A player deletes their own Gallery photo: it leaves the Gallery and the files go. False when it isn't theirs, or isn't a Gallery photo. */
 export async function deleteOwnPhoto(playerId: number, id: number): Promise<boolean> {
   const photo = Number.isInteger(id) ? await deletePlayerPhoto(playerId, id) : null;
   if (!photo) return false;

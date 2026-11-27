@@ -11,6 +11,7 @@ import {
   adminSetPhotoStatus,
   listPhotosForAdmin,
   photoStorageBytes,
+  type PhotoPurpose,
   type PhotoStatus,
 } from "@/lib/photos-db";
 
@@ -37,14 +38,21 @@ const LIKELIHOOD: Record<string, string> = {
   UNKNOWN: "unknown",
 };
 const CHECK_LABEL: Record<string, string> = { adult: "Adult content", racy: "Racy", violence: "Violence" };
+// A photo uploaded for a post or a listing is reviewed here and never joins the Gallery.
+const PURPOSE_LABEL: Record<Exclude<PhotoPurpose, "gallery">, string> = { social: "For a post", market: "For a listing" };
 
-async function setStatus(id: number, status: PhotoStatus, tab: Tab) {
+async function setStatus(id: number, status: PhotoStatus, tab: Tab, purpose: PhotoPurpose) {
   "use server";
   await adminSetPhotoStatus(id, status);
   revalidatePath("/admin/photos");
-  revalidatePath("/");
-  revalidatePath("/gallery");
-  const label = status === "approved" ? "Approved: it's in the Gallery." : status === "rejected" ? "Blocked." : "Hidden from the Gallery.";
+  if (purpose === "gallery") {
+    revalidatePath("/");
+    revalidatePath("/gallery");
+  }
+  const label =
+    purpose === "gallery"
+      ? status === "approved" ? "Approved: it's in the Gallery." : status === "rejected" ? "Blocked." : "Hidden from the Gallery."
+      : status === "approved" ? "Approved: it can be shown." : status === "rejected" ? "Blocked." : "Hidden.";
   redirect(`/admin/photos?tab=${tab}&toast=${encodeURIComponent(label)}`);
 }
 
@@ -126,6 +134,7 @@ export default async function PhotosAdminPage({ searchParams }: { searchParams: 
                 </a>
                 <div style={{ fontSize: 13, marginTop: 8 }}>
                   <strong>{ph.playerName}</strong> {ph.featured && <Badge tone="warn">Featured</Badge>}
+                  {ph.purpose !== "gallery" && <Badge>{PURPOSE_LABEL[ph.purpose]}</Badge>}
                   <span className={kit.sub}>{formatNz(ph.createdAt, true)}</span>
                   {ph.caption && <div style={{ color: "#555", marginTop: 4 }}>&ldquo;{ph.caption}&rdquo;</div>}
                   {checks.length > 0 && (
@@ -142,11 +151,17 @@ export default async function PhotosAdminPage({ searchParams }: { searchParams: 
                 </div>
                 <div className={kit.rowActions} style={{ marginTop: 8 }}>
                   {ph.status !== "approved" && (
-                    <form action={setStatus.bind(null, ph.id, "approved", tab)}>
+                    <form action={setStatus.bind(null, ph.id, "approved", tab, ph.purpose)}>
                       <SubmitButton
                         className={kit.btn}
                         loadingText="Saving…"
-                        confirmMessage={ph.status === "rejected" ? "This photo was blocked as inappropriate. Put it in the Gallery anyway?" : undefined}
+                        confirmMessage={
+                          ph.status !== "rejected"
+                            ? undefined
+                            : ph.purpose === "gallery"
+                              ? "This photo was blocked as inappropriate. Put it in the Gallery anyway?"
+                              : "This photo was blocked as inappropriate. Approve it anyway?"
+                        }
                       >
                         Approve
                       </SubmitButton>
@@ -154,20 +169,26 @@ export default async function PhotosAdminPage({ searchParams }: { searchParams: 
                   )}
                   {ph.status === "approved" && (
                     <>
-                      <form action={feature.bind(null, ph.id, !ph.featured, tab)}>
-                        <SubmitButton className={kit.btnSecondary} loadingText="Saving…">
-                          {ph.featured ? "Unfeature" : "Feature"}
-                        </SubmitButton>
-                      </form>
-                      <form action={setStatus.bind(null, ph.id, "hidden", tab)}>
-                        <SubmitButton className={kit.btnSecondary} loadingText="Saving…" confirmMessage="Take this photo out of the Gallery?">
+                      {ph.purpose === "gallery" && (
+                        <form action={feature.bind(null, ph.id, !ph.featured, tab)}>
+                          <SubmitButton className={kit.btnSecondary} loadingText="Saving…">
+                            {ph.featured ? "Unfeature" : "Feature"}
+                          </SubmitButton>
+                        </form>
+                      )}
+                      <form action={setStatus.bind(null, ph.id, "hidden", tab, ph.purpose)}>
+                        <SubmitButton
+                          className={kit.btnSecondary}
+                          loadingText="Saving…"
+                          confirmMessage={ph.purpose === "gallery" ? "Take this photo out of the Gallery?" : "Hide this photo? It drops out of the post or listing it is in."}
+                        >
                           Hide
                         </SubmitButton>
                       </form>
                     </>
                   )}
                   {ph.status !== "rejected" && (
-                    <form action={setStatus.bind(null, ph.id, "rejected", tab)}>
+                    <form action={setStatus.bind(null, ph.id, "rejected", tab, ph.purpose)}>
                       <SubmitButton className={kit.btnDanger} loadingText="Saving…" confirmMessage="Block this photo as inappropriate?">
                         Block
                       </SubmitButton>

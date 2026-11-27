@@ -8,9 +8,16 @@
 //
 //   cryptoStatus()       each list's state (ok, missing, malformed) and its
 //                        key ids. The System check shows one row per list.
-//   assertCryptoReady()  production calls it once as a server starts
-//                        (instrumentation.ts) and does not start when it
-//                        throws.
+//   assertCryptoReady()  throws when the keys must not be started with.
+//   guardProductionKeys() calls it, in production only, in two places:
+//                        as the build's configuration loads (next.config.ts),
+//                        so a bad key FAILS THE BUILD and the previous
+//                        deployment keeps serving; and as a server starts
+//                        (instrumentation.ts), the backstop for a variable
+//                        changed without a build. Next does not run the
+//                        start-up hook during a build, so the start-up check
+//                        alone would let the build through and then answer
+//                        500 to every request.
 //
 // What stops a start, and what doesn't:
 // - A MALFORMED list stops it. A bad paste must never quietly become "no
@@ -193,6 +200,16 @@ export class CryptoNotReadyError extends Error {
 export function assertCryptoReady(env: Env = process.env): void {
   const problems = cryptoProblems(env);
   if (problems.length) throw new CryptoNotReadyError(problems);
+}
+
+/**
+ * Production only: throws CryptoNotReadyError when the keys must not be
+ * started with. Called as the build's configuration loads (next.config.ts)
+ * and as a server starts (instrumentation.ts). Everywhere else it does
+ * nothing: the System check shows the same problems there.
+ */
+export function guardProductionKeys(env: Env = process.env): void {
+  if (env.VERCEL_ENV === "production") assertCryptoReady(env);
 }
 
 // ── The System check ────────────────────────────────────────────────────────

@@ -11,9 +11,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { PURPOSES } from "../lib/crypto-purposes.ts";
 import { rateLimitStore } from "../lib/security.ts";
-import { assertCryptoReady, cryptoCheckRows, cryptoStatus, CryptoNotReadyError, KEY_LISTS } from "../lib/crypto-health.ts";
+import { assertCryptoReady, cryptoCheckRows, cryptoStatus, CryptoNotReadyError, guardProductionKeys, KEY_LISTS } from "../lib/crypto-health.ts";
 import { register } from "../instrumentation.ts";
 
 type Env = Record<string, string | undefined>;
@@ -302,26 +303,78 @@ describe("the System check rows", () => {
   });
 });
 
-describe("instrumentation.ts: register()", () => {
-  /** Runs register() with these variables set, then puts the environment back. */
-  async function start(vars: Env): Promise<unknown> {
-    const names = ["NEXT_RUNTIME", "VERCEL_ENV", "PII_READS", "RATE_LIMIT_STORE", "CRYPTO_CHECK_RATE_LIMIT", "DATABASE_URL_VAR", "NEON_LOCAL_WS_PROXY", ...LISTS];
-    const saved = Object.fromEntries(names.map((n) => [n, process.env[n]]));
-    for (const n of names) delete process.env[n];
-    for (const [n, v] of Object.entries(vars)) if (v !== undefined) process.env[n] = v;
-    try {
-      await register();
-      return null;
-    } catch (err) {
-      return err;
-    } finally {
-      for (const n of names) {
-        if (saved[n] === undefined) delete process.env[n];
-        else process.env[n] = saved[n];
-      }
+/** The connection variables the preview guard may remove (lib/db-switch.ts): set aside too, so loading the config as a preview can't touch this process's. */
+const CONNECTION = ["POSTGRES_URL", "POSTGRES_URL_NON_POOLING", "POSTGRES_URL_NO_SSL", "POSTGRES_PRISMA_URL", "DATABASE_URL", "DATABASE_URL_UNPOOLED", "APP_DATABASE_URL", "PREVIEW_DATABASE_BLOCKED"];
+
+/** Runs `run` with only these variables set (of the ones the check reads), then puts the environment back. What it threw, or null. */
+async function withEnv(vars: Env, run: () => unknown): Promise<unknown> {
+  const names = ["NEXT_RUNTIME", "VERCEL_ENV", "PII_READS", "RATE_LIMIT_STORE", "CRYPTO_CHECK_RATE_LIMIT", "DATABASE_URL_VAR", "NEON_LOCAL_WS_PROXY", ...CONNECTION, ...LISTS];
+  const saved = Object.fromEntries(names.map((n) => [n, process.env[n]]));
+  for (const n of names) delete process.env[n];
+  for (const [n, v] of Object.entries(vars)) if (v !== undefined) process.env[n] = v;
+  try {
+    await run();
+    return null;
+  } catch (err) {
+    return err;
+  } finally {
+    for (const n of names) {
+      if (saved[n] === undefined) delete process.env[n];
+      else process.env[n] = saved[n];
     }
   }
-  const bad = { PUSH_KEKS: "not-a-key-list" };
+}
+const bad = { PUSH_KEKS: "not-a-key-list" };
+
+// Next does not run register() during `next build`, so a start-up check alone
+// lets a bad key through the build: the deployment is promoted and then every
+// request answers 500. The same check therefore runs as the build's
+// configuration loads (next.config.ts): the build fails, nothing is promoted,
+// and the previous deployment keeps serving.
+describe("next.config.ts: the production build", () => {
+  // Next compiles the config as CommonJS, where __dirname exists; under this
+  // test's ES module loader it doesn't, so it is given here (the app folder).
+  (globalThis as { __dirname?: string }).__dirname ??= fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
+  let n = 0;
+  /** Loads next.config.ts afresh (as `next build` does, once) with these variables set. */
+  const build = (vars: Env) => withEnv(vars, () => import(`../next.config.ts?build=${++n}`));
+
+  test("a malformed list fails the production build, naming the variable and no key", async () => {
+    const env = { VERCEL_ENV: "production", ...bad };
+    const err = await build(env);
+    assert.ok(err instanceof CryptoNotReadyError, `a CryptoNotReadyError, not ${String(err)}`);
+    assert.match(err.message, /PUSH_KEKS: /);
+    holdsNoKey(err.message, env);
+  });
+
+  test("so does a key used for two purposes", async () => {
+    const shared = key();
+    const env = { VERCEL_ENV: "production", PUSH_KEKS: `p1:${shared}`, JUNIORS_KEKS: `j1:${shared}` };
+    const err = await build(env);
+    assert.ok(err instanceof CryptoNotReadyError);
+    assert.ok(err.message.includes("PUSH_KEKS") && err.message.includes("JUNIORS_KEKS"));
+    holdsNoKey(err.message, env);
+  });
+
+  test("a production build with today's settings, or with every list set, goes through", async () => {
+    assert.equal(await build({ VERCEL_ENV: "production" }), null);
+    assert.equal(await build({ VERCEL_ENV: "production", ...full() }), null);
+  });
+
+  test("a build anywhere else isn't stopped (local, CI, a preview: the System check shows it instead)", async () => {
+    for (const where of [undefined, "preview", "development"]) assert.equal(await build({ VERCEL_ENV: where, ...bad }), null, String(where));
+  });
+
+  test("guardProductionKeys: production only, and it reads the environment it is given", () => {
+    assert.throws(() => guardProductionKeys({ VERCEL_ENV: "production", ...bad }), CryptoNotReadyError);
+    assert.doesNotThrow(() => guardProductionKeys({ VERCEL_ENV: "production" }));
+    assert.doesNotThrow(() => guardProductionKeys({ VERCEL_ENV: "preview", ...bad }));
+    assert.doesNotThrow(() => guardProductionKeys({ ...bad }));
+  });
+});
+
+describe("instrumentation.ts: register()", () => {
+  const start = (vars: Env) => withEnv(vars, () => register());
 
   test("production on the Node runtime: a malformed list stops the server starting", async () => {
     const err = await start({ NEXT_RUNTIME: "nodejs", VERCEL_ENV: "production", ...bad });

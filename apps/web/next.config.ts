@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { NextConfig } from "next";
+import { guardProductionKeys } from "./lib/crypto-health";
 import { applyDatabaseSwitch, guardPreviewDatabase } from "./lib/db-switch";
 import { REDIRECTS } from "./lib/redirects";
 
@@ -7,6 +8,11 @@ import { REDIRECTS } from "./lib/redirects";
 applyDatabaseSwitch();
 // Previews never touch the production database (lib/db-switch.ts).
 guardPreviewDatabase();
+// A production build fails on a malformed key list or a key used for two
+// purposes (lib/crypto-health.ts), so the previous deployment keeps serving.
+// The start-up check alone (instrumentation.ts) can't do that: Next doesn't
+// run it during a build. Environment only, no database.
+guardProductionKeys();
 
 // Player accounts add: Vercel Blob (player photos, shop images: shown from
 // *.public.blob.vercel-storage.com, uploaded straight from the browser via

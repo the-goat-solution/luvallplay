@@ -49,16 +49,21 @@ It prints the key ids in order (the first is the one new sealings will use) and 
 
 ### What production checks as it starts
 
-`apps/web/lib/crypto-health.ts`, called from `instrumentation.ts` when `VERCEL_ENV` is `production`. It reads the environment only. A server **does not start** (and says which variable, and which key ids, never a key) when:
+`apps/web/lib/crypto-health.ts`, when `VERCEL_ENV` is `production`. It reads the environment only, and runs twice:
+
+- **As the production build starts** (`next.config.ts`). The **build fails**, nothing is promoted, and the previous deployment keeps serving. This is the check that protects the site.
+- **As each server starts** (`instrumentation.ts`), the backstop for a variable that reached a deployment without passing the build. If it trips, the site is not protected: **every request answers 500** until the variable is put right and production is redeployed. (Next doesn't run this hook during a build, which is why the build checks too.)
+
+Both say which variable, and which key ids, never a key. They refuse when:
 
 - a key list is malformed;
 - two lists hold the same key (every key of every list is compared, older keys and index keys too);
 - `PII_READS` is `sealed` without `CONTACT_KEKS` or `CONTACT_INDEX_KEYS`, or is anything but `plain` or `sealed`;
 - `CRYPTO_CHECK_RATE_LIMIT=1` and `RATE_LIMIT_STORE` isn't `database`. (The switch lets this check be deployed before the owner sets `RATE_LIMIT_STORE`; set both together.)
 
-A list that is **not set** doesn't stop it: that purpose is unavailable, its feature refuses when used, and Admin → System check shows it red. The System check lists every key list with its state and key ids, and says whether production would start with the current settings. A preview isn't stopped at start, so check there first.
+A list that is **not set** doesn't stop it: that purpose is unavailable, its feature refuses when used, and Admin → System check shows it red. The System check lists every key list with its state and key ids, and says whether production would start with the settings of the deployment you are looking at.
 
-So a change to any key list, or to `PII_READS`, can stop production starting: check the value against the parser (above) and on a preview's System check before it goes to production.
+So a change to any key list, or to `PII_READS`, can fail the next production build, or, at worst, take the site down. **Before deploying, validate the production values themselves against the parser (above). This is a hard gate, not a courtesy:** the parser is stricter than the one the existing production keys were first accepted by, so a value that has worked for months can still be refused. A preview's System check doesn't answer the question: a preview reads its own environment, not production's.
 
 ### `CONTACT_INDEX_KEYS` is as secret as the phone numbers
 

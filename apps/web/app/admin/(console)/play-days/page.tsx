@@ -26,7 +26,7 @@ import { reconcileOfflinePayment, recordOfflinePayment } from "@/lib/offline-pay
 import { getOfflinePaymentReconciliation, type OfflineReconciliation } from "@/lib/bank-db";
 import { OfflinePaymentMethodField } from "@/components/admin/OfflinePaymentMethodField";
 import { clubMoney } from "@/lib/money";
-import { clubLocale, membershipDayList } from "@/lib/club-brand";
+import { clubLocale, membershipDays } from "@/lib/club-brand";
 import { adminText } from "@/lib/admin-lang";
 import { navLabel, type AdminKey } from "@luvallplay/i18n/admin";
 
@@ -291,6 +291,11 @@ function TransferStatus({ status, t }: { status: OfflineReconciliation | undefin
 
 // The mini-game cap is the club's setting, so the text is built per request.
 type T = Awaited<ReturnType<typeof adminText>>["t"];
+// "Friday and Wednesday", in the admin's language.
+const dayList = (t: T, days: readonly string[]) => {
+  const names = days.map((d) => t(`weekday_${d}` as AdminKey));
+  return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")}${t("list_and")}${names[names.length - 1]}`;
+};
 const modeHelp = (miniGameMax: number, t: T): Record<SignupMode, string> => ({
   open: t("play_help_open"),
   closed: t("play_help_closed"),
@@ -437,7 +442,7 @@ export default async function PlayDaysAdminPage({
       <InfoDisclosure summary={t("play_how_summary")}>
         <p>{t(courts === 1 ? "play_how_1_one" : "play_how_1_many", { cap: sessionCapacityFor(cfg, courts), n: courts, mini: miniGameMax })}</p>
         <p>{t("play_how_2")}</p>
-        <p>{t("play_how_3", { days: membershipDayList() })}</p>
+        <p>{t("play_how_3", { days: dayList(t, membershipDays()) })}</p>
       </InfoDisclosure>
 
       <Tabs

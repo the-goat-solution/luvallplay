@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { AdminLink } from "@/components/admin/AdminLink";
 import { LoadingIcon } from "@/components/LoadingIcon";
+import { useAdminText } from "@/components/admin/AdminLang";
 import k from "@/components/admin/kit/kit.module.css";
 
 export type PlayDayOption = { key: string; label: string };
@@ -22,12 +23,13 @@ export function PlayDayPicker({
   next: string | null;
 }) {
   const router = useRouter();
+  const { t } = useAdminText();
   const [pending, start] = useTransition();
   const go = (key: string) => start(() => router.push(`/admin/play-days?date=${key}`));
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
       {prev ? (
-        <AdminLink href={`/admin/play-days?date=${prev}`} className={k.btnSecondary} title="Previous play day">
+        <AdminLink href={`/admin/play-days?date=${prev}`} className={k.btnSecondary} title={t("play_prev")}>
           ‹
         </AdminLink>
       ) : (
@@ -36,7 +38,7 @@ export function PlayDayPicker({
         </span>
       )}
       <label className={k.srOnly} htmlFor="date">
-        Play day
+        {t("play_tab_label")}
       </label>
       <select id="date" className={k.select} value={selected} onChange={(e) => go(e.target.value)} disabled={pending}>
         {options.map((o) => (
@@ -46,7 +48,7 @@ export function PlayDayPicker({
         ))}
       </select>
       {next ? (
-        <AdminLink href={`/admin/play-days?date=${next}`} className={k.btnSecondary} title="Next play day">
+        <AdminLink href={`/admin/play-days?date=${next}`} className={k.btnSecondary} title={t("play_next")}>
           ›
         </AdminLink>
       ) : (

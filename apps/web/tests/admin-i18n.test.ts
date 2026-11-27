@@ -48,7 +48,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 
 // Ratchet: admin screens (.tsx) that don't read the admin namespace yet.
 // Lower this number when you translate a screen; it must never go up.
-const UNTRANSLATED_MAX = 43;
+const UNTRANSLATED_MAX = 38;
 
 test("ratchet: admin screens still written in inline English only go down", () => {
   const left = [join(WEB, "app/admin"), join(WEB, "components/admin")]
@@ -68,4 +68,12 @@ test("the Play days toasts follow the language", async () => {
   assert.equal(vi.courtsUpdated!("2")?.text, "Đã lưu số sân: 2 sân.");
   assert.match(vi.miniGame!("on")!.text, /16 người/);
   assert.match(vi.cashAdded!("cash")!.text, /^Đã thêm Người chơi/);
+});
+
+test("every weekday the club can use has a name in both languages", async () => {
+  const { WEEKDAYS } = await import("../lib/constants.ts");
+  for (const d of WEEKDAYS) {
+    assert.ok(`weekday_${d}` in admin.en, `weekday_${d}`);
+    assert.ok(at("vi", `weekday_${d}` as keyof typeof admin.en).trim());
+  }
 });

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingIcon } from "@/components/LoadingIcon";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
+import { useAdminText } from "@/components/admin/AdminLang";
 
 export function MemberCancelButton({
   membershipId,
@@ -20,15 +21,14 @@ export function MemberCancelButton({
   mode?: "cancel" | "remove";
 }) {
   const router = useRouter();
+  const { t } = useAdminText();
   const [busy, setBusy] = useState(false);
   const showBusy = useDelayedLoading(busy);
   const [error, setError] = useState<string | null>(null);
 
   const onClick = async () => {
     const confirmMessage =
-      mode === "remove"
-        ? `End ${memberName}'s membership now? It ends today and their spot is freed straight away. No refund is made here.`
-        : `Stop ${memberName}'s membership from renewing? They keep playing until the end of the period they've paid for, then it ends.`;
+      mode === "remove" ? t("mem_confirm_end", { name: memberName }) : t("mem_confirm_stop", { name: memberName });
     if (!window.confirm(confirmMessage)) {
       return;
     }
@@ -50,13 +50,13 @@ export function MemberCancelButton({
       }
       const data = await res.json();
       if (!res.ok)
-        throw new Error(data.error ?? `Failed to ${mode === "remove" ? "remove" : "cancel"}`);
+        throw new Error(data.error ?? (mode === "remove" ? t("mem_err_remove") : t("mem_err_cancel")));
       router.refresh();
     } catch (e) {
       setError(
         e instanceof Error
           ? e.message
-          : `Failed to ${mode === "remove" ? "remove" : "cancel"}`,
+          : mode === "remove" ? t("mem_err_remove") : t("mem_err_cancel"),
       );
       setBusy(false);
     }
@@ -74,12 +74,12 @@ export function MemberCancelButton({
         {showBusy ? (
           <>
             <LoadingIcon size="sm" />
-            {mode === "remove" ? "Ending…" : "Stopping…"}
+            {mode === "remove" ? t("mem_btn_ending") : t("mem_btn_stopping")}
           </>
         ) : mode === "remove" ? (
-          "End now"
+          t("mem_btn_end_now")
         ) : (
-          "Stop renewing"
+          t("mem_btn_stop_renewing")
         )}
       </button>
       {error && <div style={{ color: "#b00020", fontSize: 11, marginTop: 4 }}>{error}</div>}

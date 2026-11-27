@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingIcon } from "@/components/LoadingIcon";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
+import { useAdminText } from "@/components/admin/AdminLang";
 
 // Gives any active member a free month (e.g. a competition prize). What
 // that means depends on the membership — see app/api/admin/free-month:
@@ -24,16 +25,17 @@ export function MemberFreeMonthButton({
   recurring: boolean;
 }) {
   const router = useRouter();
+  const { t } = useAdminText();
   const [busy, setBusy] = useState(false);
   const showBusy = useDelayedLoading(busy);
   const [error, setError] = useState<string | null>(null);
   const [succeeded, setSucceeded] = useState<string | null>(null);
 
   const confirmText = !recurring
-    ? `Give ${memberName} a free month? 4 weeks will be added to the end of their membership${periodEnd ? ` (currently ${periodEnd})` : ""}.`
+    ? t("mem_free_confirm_onetime", { name: memberName, current: periodEnd ? t("mem_free_confirm_onetime_current", { date: periodEnd }) : "" })
     : plan === "quarterly"
-      ? `Give ${memberName} a free month? They get 4 free weeks after their current quarter${periodEnd ? ` (ends ${periodEnd})` : ""}, then quarterly billing carries on.`
-      : `Give ${memberName} their next month free? Their next renewal${periodEnd ? ` (${periodEnd})` : ""} won't be charged, and normal billing resumes the month after.`;
+      ? t("mem_free_confirm_quarter", { name: memberName, ends: periodEnd ? t("mem_free_confirm_quarter_ends", { date: periodEnd }) : "" })
+      : t("mem_free_confirm_month", { name: memberName, date: periodEnd ? t("mem_free_confirm_month_date", { date: periodEnd }) : "" });
 
   const onClick = async () => {
     if (
@@ -57,18 +59,18 @@ export function MemberFreeMonthButton({
         return;
       }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to give a free month");
+      if (!res.ok) throw new Error(data.error ?? t("mem_free_err"));
       setSucceeded(
         data.kind === "extended"
-          ? `Done — membership now ends ${data.periodEnd}.`
+          ? t("mem_free_done_extended", { date: data.periodEnd })
           : data.kind === "deferred"
-            ? `Done — next charge moved to ${data.billingResumes}.`
-            : "Done — their next renewal won't be charged.",
+            ? t("mem_free_done_deferred", { date: data.billingResumes })
+            : t("mem_free_done_waived"),
       );
       setBusy(false);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to give a free month");
+      setError(e instanceof Error ? e.message : t("mem_free_err"));
       setBusy(false);
     }
   };
@@ -85,10 +87,10 @@ export function MemberFreeMonthButton({
         {showBusy ? (
           <>
             <LoadingIcon size="sm" />
-            Applying…
+            {t("mem_free_applying")}
           </>
         ) : (
-          "Give free month"
+          t("mem_free_btn")
         )}
       </button>
       {succeeded ? (

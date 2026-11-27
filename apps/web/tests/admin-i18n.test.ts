@@ -48,7 +48,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 
 // Ratchet: admin screens (.tsx) that don't read the admin namespace yet.
 // Lower this number when you translate a screen; it must never go up.
-const UNTRANSLATED_MAX = 30;
+const UNTRANSLATED_MAX = 29;
 
 test("ratchet: admin screens still written in inline English only go down", () => {
   const left = [join(WEB, "app/admin"), join(WEB, "components/admin")]
@@ -76,4 +76,17 @@ test("every weekday the club can use has a name in both languages", async () => 
     assert.ok(`weekday_${d}` in admin.en, `weekday_${d}`);
     assert.ok(at("vi", `weekday_${d}` as keyof typeof admin.en).trim());
   }
+});
+
+test("every Today attention item a module declares has an English and a Vietnamese sentence and action", () => {
+  const missing: string[] = [];
+  for (const m of MODULES) {
+    for (const a of m.admin?.attention ?? []) {
+      for (const part of ["one", "many", "action"]) {
+        const key = `att_${a.key}_${part}`;
+        if (!(key in admin.en)) missing.push(key);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], "add att_… keys to packages/i18n/src/admin.ts");
 });

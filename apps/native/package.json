@@ -12,6 +12,7 @@
     "android:debug": "cd android && ./gradlew assembleDebug",
     "android:bundle": "cd android && ./gradlew bundleRelease",
     "google-services": "node scripts/write-google-services.mjs",
+    "google-service-info": "node scripts/write-google-service-info.mjs",
     "release:check": "node scripts/check-release.mjs",
     "play:upload": "node scripts/play-upload.mjs",
     "typecheck": "tsc --noEmit",

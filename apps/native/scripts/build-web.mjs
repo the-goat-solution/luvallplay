@@ -20,8 +20,8 @@ const out = path.resolve(import.meta.dirname, "..", "www");
 // Push notifications are in the build only when the Firebase project's file is
 // there (android/app/google-services.json, not in the repository): without
 // it, asking Android for a device address would stop the app.
-const push = existsSync(path.resolve(import.meta.dirname, "..", "android", "app", "google-services.json"));
-console.log(push ? "Push notifications: on (google-services.json found)." : "Push notifications: off (no android/app/google-services.json).");
+const push = ["android/app/google-services.json", "ios/App/App/GoogleService-Info.plist"].some((f) => existsSync(path.resolve(import.meta.dirname, "..", f)));
+console.log(push ? "Push notifications: on (Firebase file found)." : "Push notifications: off (no android/app/google-services.json or ios/App/App/GoogleService-Info.plist).");
 const build = spawnSync("npx", ["vite", "build", "--outDir", out, "--emptyOutDir"], {
   cwd: appDir,
   stdio: "inherit",

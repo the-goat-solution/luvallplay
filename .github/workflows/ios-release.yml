@@ -9,7 +9,8 @@
 # Signing is automatic through the App Store Connect API key (App Manager
 # role); no certificate or profile files are kept in the repository. Secrets
 # (set by the owner): ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (the AuthKey .p8
-# file's contents). Variable: NATIVE_API_BASE, shared with the Android build.
+# file's contents), GOOGLE_SERVICE_INFO_PLIST (the Firebase iOS app's
+# GoogleService-Info.plist; without it the build has no push). Variable: NATIVE_API_BASE, shared with the Android build.
 name: iOS release
 
 on:
@@ -45,6 +46,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter native typecheck && pnpm --filter native test
+      - name: The Firebase file, from its secret (push notifications)
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: pnpm --filter native google-service-info
       - name: The players' app, built for the shell
         env:
           NATIVE_API_BASE: ${{ vars.NATIVE_API_BASE }}

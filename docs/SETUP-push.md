@@ -38,4 +38,4 @@ Without this setting the server has no sender: the push channel reports "unavail
 ## What is still switched off after this
 
 - Club announcements only go out on the new channels when `MESSAGE_CHANNELS` is `on`, which is a separate decision of yours.
-- The store app itself needs its Firebase file at build time (the Android build's own step; see `apps/native/README.md`).
+- The store app itself needs its Firebase file at build time: `google-services.json` for Android and `GoogleService-Info.plist` for iPhone, plus an APNs key uploaded in Firebase (see `apps/native/README.md`).

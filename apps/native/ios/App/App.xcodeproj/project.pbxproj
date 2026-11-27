@@ -17,6 +17,8 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A1B2C3D40000000000E10003 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000E10002 /* PrivacyInfo.xcprivacy */; };
+		A1B2C3D40000000000E20002 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D40000000000E20012 /* FirebaseCore */; };
+		A1B2C3D40000000000E20003 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D40000000000E20013 /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +43,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				A1B2C3D40000000000E20002 /* FirebaseCore in Frameworks */,
+				A1B2C3D40000000000E20003 /* FirebaseMessaging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -92,6 +96,7 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				A1B2C3D40000000000E20004 /* Firebase file (when present) */,
 			);
 			buildRules = (
 			);
@@ -100,6 +105,8 @@
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				A1B2C3D40000000000E20012 /* FirebaseCore */,
+				A1B2C3D40000000000E20013 /* FirebaseMessaging */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -132,6 +139,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				A1B2C3D40000000000E20001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -158,6 +166,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A1B2C3D40000000000E20004 /* Firebase file (when present) */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Firebase file (when present)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# GoogleService-Info.plist is not in the repository; CI writes it from a secret (pnpm --filter native google-service-info).\n# Without it the app builds with push notifications off.\nSRC=\"${SRCROOT}/App/GoogleService-Info.plist\"\nif [ -f \"$SRC\" ]; then\n  cp \"$SRC\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist\"\nelse\n  echo \"note: no GoogleService-Info.plist, push notifications are off in this build\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		504EC3001FED79650016851F /* Sources */ = {
@@ -306,6 +335,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -329,6 +359,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -376,11 +407,32 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		A1B2C3D40000000000E20001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		A1B2C3D40000000000E20012 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D40000000000E20001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		A1B2C3D40000000000E20013 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D40000000000E20001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

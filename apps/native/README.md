@@ -119,3 +119,11 @@ Where the file comes from in a build: the `GOOGLE_SERVICES_JSON` setting (`pnpm 
 3. Save. From the next build on `main`, the Android build has push notifications. Nothing needs to be sent to anyone, and the file is never pasted into a chat or committed.
 
 The server's own keys (`PUSH_KEKS`, `FCM_SERVICE_ACCOUNT`) go into the hosting environment settings: `docs/SETUP-push.md`.
+
+### Push notifications on iPhone
+
+Same server sender (Firebase), so iOS needs Firebase's own token, not Apple's: `ios/App/App/AppDelegate.swift` starts Firebase, gives it the APNs token and passes the FCM token to the push plugin. Firebase is added to the Xcode project (not `CapApp-SPM`, which `cap sync` rewrites).
+
+- `ios/App/App/GoogleService-Info.plist` is **not in the repository**. `pnpm --filter native google-service-info` writes it from the `GOOGLE_SERVICE_INFO_PLIST` setting (the file's contents, or base64) and stops if it is another app's file. `ios-release.yml` does this; the pull-request build has none, so push is off there.
+- Without the file Firebase isn't started and the app still builds and runs.
+- Owner steps: Firebase console → **Project settings → Your apps → Add app → iOS**, bundle id `com.luvallplay.app` → download `GoogleService-Info.plist` → repository secret `GOOGLE_SERVICE_INFO_PLIST`. Then Apple Developer → **Keys** → new key with *Apple Push Notifications service (APNs)* (a separate key, not the App Store Connect one) → Firebase → **Project settings → Cloud Messaging → Apple app configuration** → upload the `.p8` with its Key ID and Team ID `75XLUPLLJ9`.

@@ -1905,6 +1905,8 @@ export const social_posts = pgTable("social_posts", {
 	index("social_posts_created_idx").using("btree", table.created_at.desc().nullsFirst(), table.id.desc().nullsFirst()),
 	index("social_posts_club_created_idx").using("btree", table.club_id.asc().nullsLast(), table.created_at.desc().nullsFirst(), table.id.desc().nullsFirst()),
 	index("social_posts_author_created_idx").using("btree", table.author_id.asc().nullsLast(), table.created_at.desc().nullsFirst(), table.id.desc().nullsFirst()),
+	// One post per side of a match, whoever of the pair writes it.
+	uniqueIndex("social_posts_match_ref_key").using("btree", table.ref_key.asc().nullsLast()).where(sql`(kind = 'match'::text)`),
 	// 0024: one photo is in at most one post.
 	uniqueIndex("social_posts_photo_id_key").using("btree", table.photo_id.asc().nullsLast()).where(sql`(photo_id IS NOT NULL)`),
 	foreignKey({ columns: [table.author_id], foreignColumns: [players.id], name: "social_posts_author_id_fkey" }).onDelete("restrict"),

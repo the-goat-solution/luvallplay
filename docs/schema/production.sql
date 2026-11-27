@@ -2072,6 +2072,7 @@ CREATE TABLE social_posts (
 CREATE INDEX social_posts_author_created_idx ON public.social_posts USING btree (author_id, created_at DESC, id DESC);
 CREATE INDEX social_posts_club_created_idx ON public.social_posts USING btree (club_id, created_at DESC, id DESC);
 CREATE INDEX social_posts_created_idx ON public.social_posts USING btree (created_at DESC, id DESC);
+CREATE UNIQUE INDEX social_posts_match_ref_key ON public.social_posts USING btree (ref_key) WHERE (kind = 'match'::text);
 CREATE UNIQUE INDEX social_posts_photo_id_key ON public.social_posts USING btree (photo_id) WHERE (photo_id IS NOT NULL);
 
 CREATE TABLE social_profiles (

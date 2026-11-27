@@ -49,6 +49,7 @@ Neither migration has been applied anywhere but local scratch databases, so both
 
 - `player_suspensions.id` and `moderation_actions.id` are `bigint GENERATED ALWAYS AS IDENTITY` (they were `bigserial`). The app's role has `INSERT` on the other columns only, not on `id` or `created_at` (nor on `moderation_evidence.created_at`), and no right on the two id sequences. Before, the role could insert a row with any id or time, and rows are ordered by id: a lift with the largest possible id was accepted.
 - `player_suspensions` has one more check, `player_suspensions_unsuspend_names_account_check`: a lift names an account and carries no index.
+- Later the same day (the Task 4 review): `social_posts_match_ref_key`, a unique index on `social_posts (ref_key) WHERE kind = 'match'`. One post per side of a match, whichever of the pair writes it, also when two confirmations run at once. The table is new and empty; the rollback below already drops it with its indexes. Not rehearsed again step by step: the test databases are built from the migrations as they now are (`tests/social-feed.test.ts` reads the index back and is refused a second match post with the same key), and `schema.ts` and `production.sql` carry the same line. **A local database that ran the earlier `0022` will refuse to migrate**: recreate it.
 
 | Step | Result |
 |---|---|

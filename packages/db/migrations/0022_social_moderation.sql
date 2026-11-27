@@ -98,6 +98,10 @@ CREATE INDEX social_posts_author_created_idx ON social_posts (author_id, created
 --> statement-breakpoint
 CREATE INDEX social_posts_photo_id_idx ON social_posts (photo_id) WHERE photo_id IS NOT NULL;
 --> statement-breakpoint
+-- One post per side of a match ("challenge:<id>:<side>"), whoever of the pair
+-- writes it: two confirmations at once, naming different authors, make one.
+CREATE UNIQUE INDEX social_posts_match_ref_key ON social_posts (ref_key) WHERE kind = 'match';
+--> statement-breakpoint
 CREATE TABLE social_comments (
   id bigserial PRIMARY KEY,
   post_id bigint NOT NULL,

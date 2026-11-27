@@ -24,7 +24,8 @@
     "./rank-art": "./src/rank-art.ts",
     "./exif-gps": "./src/exif-gps.ts",
     "./rating": "./src/rating/index.ts",
-    "./scoring": "./src/scoring/index.ts"
+    "./scoring": "./src/scoring/index.ts",
+    "./social": "./src/social/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

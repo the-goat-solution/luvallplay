@@ -8,6 +8,7 @@
     "web": "node scripts/build-web.mjs",
     "sync": "cap sync",
     "sync:android": "cap sync android",
+    "sync:ios": "cap sync ios",
     "android:debug": "cd android && ./gradlew assembleDebug",
     "android:bundle": "cd android && ./gradlew bundleRelease",
     "google-services": "node scripts/write-google-services.mjs",
@@ -22,6 +23,7 @@
     "@capacitor/browser": "^8.0.5",
     "@capacitor/core": "^8.6.3",
     "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/ios": "^8.6.3",
     "@capacitor/push-notifications": "^8.1.3",
     "@capacitor/share": "^8.0.3",
     "capacitor-secure-storage-plugin": "^0.14.2"

@@ -357,3 +357,31 @@ jobs:
           path: smoke-launch.png
           if-no-files-found: ignore
           retention-days: 7
+
+  # The store app's iOS shell (apps/native/ios): the players' app bundled into
+  # the Capacitor project and compiled for the simulator, unsigned. Proves the
+  # project builds on every pull request; signing and TestFlight need the
+  # Apple account's certificates and come in a later step (build plan §4.5).
+  ios:
+    name: iOS shell (simulator build)
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The players' app, built for the shell
+        run: pnpm --filter native web
+        env:
+          NATIVE_API_BASE: https://api.luvallplay.com
+      - run: pnpm --filter native sync:ios
+      - name: Simulator build (no signing)
+        working-directory: apps/native/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build

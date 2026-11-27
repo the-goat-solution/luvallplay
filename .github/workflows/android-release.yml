@@ -92,7 +92,7 @@ jobs:
         if: env.HAVE_KEY == 'true'
         # Internal testing may go out before Play has an app-signing fingerprint
         # for assetlinks.json (that needs a first upload); a later track may not.
-        run: pnpm --filter native release:check --allow-placeholder-links
+        run: pnpm --filter native release:check --allow-placeholder-links --android-only
       - name: The players' app, built for the shell
         if: env.HAVE_KEY == 'true'
         run: |

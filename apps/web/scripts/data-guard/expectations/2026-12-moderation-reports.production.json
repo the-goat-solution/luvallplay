@@ -1,0 +1,19 @@
+{
+  "change": "2026-12-moderation-reports (production run)",
+  "description": "Social plan Task 2b (lane S; migration 0023_moderation_reports): three new, empty, platform-wide tables: content_reports (a report names its target by type and id; the reporter's words are kept only sealed), moderation_actions (what a moderator did) and moderation_evidence (a sealed copy of the content for a child-safety report). The app's role can add and read moderation_actions and moderation_evidence and cannot update or delete them. Nothing existing is altered. Additive: no row, account, email, phone, session, role or membership may change. Live traffic keeps writing while the migration runs, so the tables below are listed as volatile.",
+  "volatile": [
+    "player_sessions",
+    "players.claimed_at",
+    "player_settings",
+    "player_events",
+    "message_threads",
+    "messages",
+    "finance_sync_state",
+    "admin_audit_log",
+    "admin_handoffs",
+    "admin_invites",
+    "auth_codes",
+    "sms_sends",
+    "usage_counters"
+  ]
+}

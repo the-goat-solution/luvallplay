@@ -422,7 +422,58 @@ describe("players' phone numbers, sealed and indexed", { skip: !BASE_URL && !REQ
     sealedFor(await row(QUINN), OTHER);
   });
 
+  test("the three sealed columns are set and cleared together: an index can't be left without its sealed number, by any statement", async () => {
+    await players.markPhoneVerified(MIA, NUMBER);
+    await players.markPhoneVerified(PETE, OTHER);
+    // The raw statement a script might write: the plain number and the sealed copy cleared, the index forgotten.
+    await c.query(`UPDATE players SET phone_e164 = NULL, phone_sealed = NULL WHERE id = $1`, [MIA]);
+    nothingSealed(await row(MIA), "the index and its key id went with them");
+    assert.equal(await findVerifiedByPhone(c, NUMBER, SEALED_READS), null, "nobody is found by a number no account holds");
+    // A row without a plain number holds nothing sealed, whatever the statement tried to write.
+    const stray = phoneSealing(ENV).seal(MIA, NUMBER);
+    await c.query(`UPDATE players SET phone_sealed = $2, phone_index = $3, phone_index_kid = $4 WHERE id = $1`, [MIA, stray.sealed, stray.index, stray.indexKid]);
+    nothingSealed(await row(MIA), "no plain number: nothing sealed is kept");
+    await c.query(`UPDATE players SET phone_e164 = NULL, phone_sealed = $2, phone_index = $3, phone_index_kid = $4 WHERE id = $1`, [PETE, stray.sealed, stray.index, stray.indexKid]);
+    nothingSealed(await row(PETE), "cleared with a sealing written beside it: still nothing kept");
+
+    // With a number present, each way of leaving the three out of step is refused by the table itself.
+    await players.markPhoneVerified(QUINN, NUMBER);
+    const before = await row(QUINN);
+    for (const set of [
+      `phone_sealed = NULL`,
+      `phone_index = NULL`,
+      `phone_index_kid = NULL`,
+      `phone_sealed = NULL, phone_index = NULL`,
+      `phone_sealed = NULL, phone_index_kid = NULL`,
+      `phone_index = NULL, phone_index_kid = NULL`,
+    ]) {
+      await assert.rejects(c.query(`UPDATE players SET ${set} WHERE id = $1`, [QUINN]), /players_phone_sealed_together_check/, set);
+    }
+    assert.deepEqual(await row(QUINN), before);
+    // A new row can't start out of step either (the trigger only sees updates).
+    for (const [columns, values] of [
+      [`phone_index, phone_index_kid`, [stray.index, stray.indexKid]],
+      [`phone_sealed`, [stray.sealed]],
+      [`phone_sealed, phone_index`, [stray.sealed, stray.index]],
+    ] as const) {
+      await assert.rejects(
+        c.query(`INSERT INTO players (email, first_name, last_name, phone_e164, ${columns}) VALUES ('together@golden.test', 'T', 'Gether', $1, ${values.map((_, i) => `$${i + 2}`).join(", ")})`, [OTHER, ...values]),
+        /players_phone_sealed_together_check/,
+        columns,
+      );
+    }
+    // All three cleared, with the number kept, is allowed (it is what the backfill then finds).
+    await c.query(`UPDATE players SET phone_sealed = NULL, phone_index = NULL, phone_index_kid = NULL WHERE id = $1`, [QUINN]);
+    assert.equal((await row(QUINN)).phone_e164, NUMBER);
+    assert.deepEqual(await backfillPhones(c, { apply: true, env: ENV }), { pending: 1, sealed: 1, failed: 0 });
+    sealedFor(await row(QUINN), NUMBER);
+    // No row anywhere holds one of the three without the others, or any of them without a number.
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM players WHERE num_nonnulls(phone_sealed, phone_index, phone_index_kid) NOT IN (0, 3) OR (phone_e164 IS NULL AND phone_index IS NOT NULL)`)).rows[0].n, 0);
+  });
+
   test("the database refuses anything in phone_sealed that isn't in the sealed format", async () => {
+    // An account with a number: a row without one holds nothing sealed at all (the trigger empties it).
+    await players.markPhoneVerified(MIA, NUMBER);
     await assert.rejects(c.query(`UPDATE players SET phone_sealed = $2 WHERE id = $1`, [MIA, NUMBER]), /players_phone_sealed_check/);
     await assert.rejects(c.query(`UPDATE players SET phone_sealed = 'v1.c1.only-three' WHERE id = $1`, [MIA]), /players_phone_sealed_check/);
   });

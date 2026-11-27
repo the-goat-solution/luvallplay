@@ -776,7 +776,8 @@ export const players = pgTable("players", {
 	deleted_at: timestamp({ withTimezone: true, mode: 'string' }),
 	// The phone number sealed for this person, and a keyed index of it
 	// (apps/web/lib/pii/contact.ts; migration players_contact_sealed, which
-	// also adds the trigger that clears these when phone_e164 changes).
+	// also adds the trigger that clears these when phone_e164 changes or is
+	// empty). The three are set and cleared together (the second check below).
 	phone_sealed: text(),
 	phone_index: text(),
 	phone_index_kid: text(),
@@ -787,6 +788,7 @@ export const players = pgTable("players", {
 	unique("players_email_key").on(table.email),
 	unique("players_leaderboard_optout_token_key").on(table.leaderboard_optout_token),
 	check("players_phone_sealed_check", sql`phone_sealed ~ '^v1\\.[a-z0-9-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$'::text`),
+	check("players_phone_sealed_together_check", sql`((phone_sealed IS NULL) = (phone_index IS NULL)) AND ((phone_index IS NULL) = (phone_index_kid IS NULL))`),
 ]);
 
 export const platform_admins = pgTable("platform_admins", {

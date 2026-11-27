@@ -1267,6 +1267,7 @@ CREATE TABLE players (
   phone_index text,
   phone_index_kid text,
   CONSTRAINT players_phone_sealed_check CHECK ((phone_sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'::text)),
+  CONSTRAINT players_phone_sealed_together_check CHECK ((((phone_sealed IS NULL) = (phone_index IS NULL)) AND ((phone_index IS NULL) = (phone_index_kid IS NULL)))),
   CONSTRAINT players_created_at_not_null NOT NULL created_at,
   CONSTRAINT players_created_via_not_null NOT NULL created_via,
   CONSTRAINT players_email_not_null NOT NULL email,
@@ -2203,7 +2204,7 @@ CREATE OR REPLACE FUNCTION public.players_phone_sealed_follows_plain()
  LANGUAGE plpgsql
 AS $function$
 BEGIN
-  IF NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164 AND NEW.phone_sealed IS NOT DISTINCT FROM OLD.phone_sealed THEN
+  IF NEW.phone_e164 IS NULL OR (NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164 AND NEW.phone_sealed IS NOT DISTINCT FROM OLD.phone_sealed) THEN
     NEW.phone_sealed := NULL;
     NEW.phone_index := NULL;
     NEW.phone_index_kid := NULL;

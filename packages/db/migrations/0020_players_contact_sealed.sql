@@ -28,7 +28,12 @@ ALTER TABLE players
   ADD COLUMN phone_index text,
   ADD COLUMN phone_index_kid text,
   -- The sealed format (version.key-id.wrapped-key.data): a plain number can't be stored here by mistake.
-  ADD CONSTRAINT players_phone_sealed_check CHECK (phone_sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$');
+  ADD CONSTRAINT players_phone_sealed_check CHECK (phone_sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'),
+  -- The three are set together and cleared together: an index is never left
+  -- behind without its sealed number (it would still be found by, and still
+  -- hold the number for anyone with the index key), nor a sealed number
+  -- without its index (nobody could find it).
+  ADD CONSTRAINT players_phone_sealed_together_check CHECK ((phone_sealed IS NULL) = (phone_index IS NULL) AND (phone_index IS NULL) = (phone_index_kid IS NULL));
 --> statement-breakpoint
 -- One verified, live account per number: mirrors players_phone_verified_idx on the plain column.
 CREATE UNIQUE INDEX players_phone_index_verified ON players (phone_index) WHERE phone_verified_at IS NOT NULL AND deleted_at IS NULL;
@@ -38,9 +43,15 @@ CREATE UNIQUE INDEX players_phone_index_verified ON players (phone_index) WHERE 
 -- nobody remembered) without writing a new sealed copy in the same statement
 -- loses the old one: it would be the sealing of a number the row no longer
 -- has. A writer that seals sets all three columns itself and is left alone.
+--
+-- And a row with no plain number holds nothing sealed, whatever the statement
+-- wrote: all three are cleared whenever phone_e164 is NULL afterwards. So a
+-- statement that clears the number and only one or two of the three
+-- (SET phone_e164 = NULL, phone_sealed = NULL) can't leave the index behind.
+-- (This rule goes with the plain column, when that is dropped.)
 CREATE FUNCTION players_phone_sealed_follows_plain() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164 AND NEW.phone_sealed IS NOT DISTINCT FROM OLD.phone_sealed THEN
+  IF NEW.phone_e164 IS NULL OR (NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164 AND NEW.phone_sealed IS NOT DISTINCT FROM OLD.phone_sealed) THEN
     NEW.phone_sealed := NULL;
     NEW.phone_index := NULL;
     NEW.phone_index_kid := NULL;

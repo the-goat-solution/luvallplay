@@ -254,6 +254,8 @@ async function deleteStoredFiles(urls: string[]): Promise<void> {
 export type DeleteOptions = {
   /** Only this photo (a post's photo, when its author deletes the post). Default: all of them. */
   only?: number;
+  /** Photos to leave alone, rows and files (kept as evidence: lib/social/data-rights.ts). */
+  keep?: number[];
   /** Removes the files, and throws when it can't. Default: this deployment's photo store. */
   deleteFiles?: (urls: string[]) => Promise<void>;
 };
@@ -273,13 +275,14 @@ export type DeleteOptions = {
  * asked of the store again each time (removing a file that is gone is not an
  * error) and are dropped once no post points at them.
  */
-export async function deleteSocialPhotos(db: Db, playerId: number, { only, deleteFiles = deleteStoredFiles }: DeleteOptions = {}): Promise<{ photos: number }> {
+export async function deleteSocialPhotos(db: Db, playerId: number, { only, keep = [], deleteFiles = deleteStoredFiles }: DeleteOptions = {}): Promise<{ photos: number }> {
   if (!id(playerId) || (only !== undefined && !id(only))) return { photos: 0 };
+  if (!Array.isArray(keep) || !keep.every(id)) throw new Error("deleteSocialPhotos: `keep` must be a list of photo ids.");
   const mine = (
     await db.query(
       `SELECT id, original_url, display_url, thumb_url, deleted_at FROM player_photos
-       WHERE player_id = $1 AND purpose IN ('social', 'market') AND ($2::int IS NULL OR id = $2) ORDER BY id`,
-      [playerId, only ?? null],
+       WHERE player_id = $1 AND purpose IN ('social', 'market') AND ($2::int IS NULL OR id = $2) AND NOT (id = ANY($3::int[])) ORDER BY id`,
+      [playerId, only ?? null, keep],
     )
   ).rows;
   if (mine.length === 0) return { photos: 0 };

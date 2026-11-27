@@ -11,7 +11,7 @@ import { deletePlayerAccount, setPlayerAvatar } from "./player-db";
 import { sendAdminAlertEmail } from "./player-email";
 import { EVENTS, createApiToken, createWebhookEndpoint, isAllowedWebhookUrl, listApiTokens, listWebhookEndpoints, type Scope, type WebhookEvent } from "./webhooks";
 import { deletePublicBlobs } from "./public-blob";
-import { forgetSocial } from "./social/data-rights";
+import { errorLabel, forgetSocial } from "./social/data-rights";
 import { publicStorage } from "./storage";
 import { countUpload } from "./usage-hooks";
 
@@ -88,14 +88,15 @@ export async function deleteAccount(player: AppSession["player"]): Promise<{ ok:
   try {
     await forgetSocial(sql, player.id);
   } catch (err) {
-    console.error("[app-api] account not deleted: its Social data couldn't be removed:", err);
+    // The error's name and code only: a store's message can carry a photo's URL, which names the account.
+    console.error(`[app-api] account not deleted: its Social data couldn't be removed: ${errorLabel(err)}`);
     return { ok: false, status: 500, code: "delete_failed" };
   }
   await endPlayerArena(player.id).catch((err) => console.error("[app-api] arena cleanup failed:", err));
   await deletePublicBlobs([await setPlayerAvatar(player.id, null).catch(() => null)]);
   await deletePlayerAccount(player.id);
   // Once more, now that no request of theirs can sign in: anything sent while the account was going.
-  await forgetSocial(sql, player.id, { carry: false }).catch((err) => console.error("[app-api] second Social sweep failed:", err));
+  await forgetSocial(sql, player.id, { carry: false }).catch((err) => console.error(`[app-api] second Social sweep failed: ${errorLabel(err)}`));
   await forgetPushDevices(player.id, { all: true });
   refreshLeaderboard();
   await sendAdminAlertEmail({

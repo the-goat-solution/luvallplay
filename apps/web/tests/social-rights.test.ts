@@ -10,6 +10,7 @@ import { createHash, randomBytes } from "node:crypto";
 import pg from "pg";
 import { COMMUNITY_RULES_VERSION } from "@luvallplay/core/social";
 import { migrate } from "../scripts/db/migrate.mjs";
+import { block } from "../lib/moderation/blocks.ts";
 import { fileReport } from "../lib/moderation/reports.ts";
 import { moderationSeal } from "../lib/moderation/seal.ts";
 import { activeSuspension, suspend } from "../lib/moderation/suspensions.ts";
@@ -29,13 +30,23 @@ const key = () => randomBytes(32).toString("base64");
 type TxClient = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; command?: string }>; release(destroy?: Error | boolean): void };
 type TestDb = { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; connect: () => Promise<TxClient> };
 
-// Every table Social and moderation added, and the photos that aren't the Gallery's.
-const TABLES = [
-  "social_profiles", "social_follows", "social_posts", "social_comments", "social_kudos", "social_club_bans", "user_blocks",
-  "content_reports", "moderation_actions", "moderation_evidence", "player_suspensions",
-] as const;
-// Columns that hold an account's id, in any of them.
-const PERSON_COLUMN = /^(player_id|author_id|follower_id|followee_id|blocker_id|blocked_id|reporter_id|actor_id|author_player_id|created_by|handled_by)$/;
+// Every table a migration from 0022 on creates (Social, moderation, and whatever comes next: the Marketplace's
+// tables are searched the day their migration lands, with nothing to add here), read from the migrations themselves.
+const MIGRATIONS = new URL("../../../packages/db/migrations/", import.meta.url);
+const TABLES = fs
+  .readdirSync(MIGRATIONS)
+  .filter((f) => /^\d{4}_.*\.sql$/.test(f) && Number(f.slice(0, 4)) >= 22)
+  .sort()
+  .flatMap((f) => [...fs.readFileSync(new URL(f, MIGRATIONS), "utf8").matchAll(/^CREATE TABLE (?:IF NOT EXISTS )?(?:public\.)?"?([a-z_0-9]+)"?/gm)].map((m) => m[1]));
+// Sealed columns, and how each opens: the search reads inside them too.
+const SEALED: Record<string, "details" | "evidence"> = { "content_reports.details_sealed": "details", "moderation_evidence.sealed": "evidence" };
+
+test("the tables searched are read from the migrations, and hold every one Social and moderation made", () => {
+  for (const t of ["social_profiles", "social_follows", "social_posts", "social_comments", "social_kudos", "social_club_bans", "user_blocks", "content_reports", "moderation_actions", "moderation_evidence", "player_suspensions"]) {
+    assert.ok(TABLES.includes(t), t);
+  }
+  assert.equal(new Set(TABLES).size, TABLES.length);
+});
 
 describe("deleting an account deletes its Social data; the download includes it", { skip: !BASE_URL && !REQUIRE_DB ? "set DATA_GUARD_TEST_URL" : false }, () => {
   const urlFor = (db: string) => {
@@ -113,22 +124,92 @@ describe("deleting an account deletes its Social data; the download includes it"
   }
   const accountRow = (id: number) => one(`SELECT email, first_name, last_name, deleted_at, (SELECT count(*)::int FROM player_sessions s WHERE s.player_id = p.id) AS sessions FROM players p WHERE id = $1`, [id]);
   /**
-   * Where this account's id, or any of the words given, still appears.
-   * Sealed columns can't be read for words; what they may hold is checked by opening them.
+   * Where this account's id, or any of the words given, still appears:
+   * `table.column` for every column of every table above (and of the post and
+   * listing photos) that holds it. The columns come from the database, so a
+   * new one is searched without being named here. Every whole-number column
+   * is compared with the id (accounts made here have ids from 700000, which
+   * no post, report or club has); every text and JSON column is searched for
+   * the words and for the id written out (a photo's URL carries it); sealed
+   * columns are opened and searched the same way.
    */
   async function traces(id: number, words: string[]) {
     const found = new Set<string>();
-    const tables: [string, string][] = [...TABLES.map((t): [string, string] => [t, `SELECT to_jsonb(t) AS row FROM ${t} t`]), ["player_photos", `SELECT to_jsonb(t) AS row FROM player_photos t WHERE purpose <> 'gallery'`]];
-    for (const [table, query] of tables) {
-      for (const { row } of await rows(query)) {
-        const text = JSON.stringify(row);
-        for (const w of words) if (text.includes(w)) found.add(`${table}: "${w}"`);
-        for (const [column, value] of Object.entries(row as Record<string, unknown>)) if (PERSON_COLUMN.test(column) && value === id) found.add(`${table}.${column}`);
-        if ((row as { target_type?: string }).target_type === "profile" && (row as { target_id?: unknown }).target_id === id) found.add(`${table}: the subject`);
+    const needles = [...words, String(id)];
+    const within = (text: string) => needles.some((w) => text.includes(w));
+    for (const table of [...TABLES, "player_photos"]) {
+      const columns = await rows(`SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`, [table]);
+      assert.ok(columns.length > 0, `${table} has no columns: is it a table?`);
+      const kind = new Map(columns.map((c) => [String(c.column_name), String(c.data_type)]));
+      for (const { row } of await rows(`SELECT to_jsonb(t) AS row FROM ${table} t ${table === "player_photos" ? "WHERE purpose <> 'gallery'" : ""}`)) {
+        for (const [column, value] of Object.entries(row as Record<string, unknown>)) {
+          if (value === null) continue;
+          const type = kind.get(column)!;
+          const sealed = SEALED[`${table}.${column}`];
+          if (sealed) {
+            const key = Number((row as Record<string, unknown>)[sealed === "details" ? "id" : "report_id"]);
+            const opened = sealed === "details" ? seal.open(key, String(value)) : seal.openEvidence(key, String(value));
+            if (within(opened)) found.add(`${table}.${column} (opened)`);
+          } else if (["integer", "bigint", "smallint", "numeric"].includes(type)) {
+            if (Number(value) === id) found.add(`${table}.${column}`);
+          } else if (["text", "character varying", "jsonb", "json", "ARRAY"].includes(type)) {
+            if (within(typeof value === "string" ? value : JSON.stringify(value))) found.add(`${table}.${column}`);
+          } else {
+            assert.ok(["timestamp with time zone", "boolean", "date"].includes(type), `${table}.${column} is ${type}: say how to search it`);
+          }
+        }
       }
     }
     return [...found].sort();
   }
+  // What deleting leaves of a person who had one of everything: the action log, the suspension, the evidence, and reports about them.
+  const KEPT = [
+    "content_reports.target_id",
+    "moderation_actions.actor_id",
+    "moderation_actions.target_id",
+    "moderation_evidence.author_player_id",
+    "moderation_evidence.sealed (opened)",
+    "player_suspensions.player_id",
+  ];
+  /** Runs `fn` with console.error caught; answers the lines. */
+  async function quietly(fn: () => Promise<unknown>): Promise<string[]> {
+    const lines: string[] = [];
+    const real = console.error;
+    console.error = (...args: unknown[]) => void lines.push(args.map(String).join(" "));
+    try {
+      await fn();
+    } finally {
+      console.error = real;
+    }
+    return lines;
+  }
+  /** A database whose transaction client goes through `wrap`, and which remembers what was sent where. */
+  function spying(db: TestDb, fail: (text: string, nth: number) => unknown = () => null) {
+    const sent: { on: "pool" | "tx"; text: string }[] = [];
+    const seen = new Map<string, number>();
+    const spy: TestDb = {
+      query: (text, params) => {
+        sent.push({ on: "pool", text });
+        return db.query(text, params);
+      },
+      connect: async () => {
+        const client = await db.connect();
+        return {
+          release: (e) => client.release(e),
+          query: async (text, params) => {
+            sent.push({ on: "tx", text });
+            const nth = (seen.get(text) ?? 0) + 1;
+            seen.set(text, nth);
+            const error = fail(text, nth);
+            if (error) throw error;
+            return client.query(text, params);
+          },
+        };
+      },
+    };
+    return { spy, sent };
+  }
+  const deadlock = () => Object.assign(new Error("deadlock detected"), { code: "40P01" });
 
   before(async () => {
     assert.ok(BASE_URL, "DATA_GUARD_TEST_URL must be set (DATA_GUARD_REQUIRE_DB=1)");
@@ -141,6 +222,8 @@ describe("deleting an account deletes its Social data; the download includes it"
     await admin.connect();
     await migrate(admin, { log: () => {} });
     await admin.query(SEED);
+    // Accounts made here get ids no post, report or club will ever have, so an id found anywhere is the person.
+    await admin.query(`SELECT setval(pg_get_serial_sequence('players', 'id'), 700000)`);
     club2 = (
       await admin.query(
         `INSERT INTO tenants (slug, name, status, country, region, timezone, currency, languages, sports, payment_mode, incorporated, stripe_status, bank_details, theme, terms)
@@ -259,15 +342,9 @@ describe("deleting an account deletes its Social data; the download includes it"
         const wasEvidence = await rows(`SELECT to_jsonb(t) AS row FROM moderation_evidence t ORDER BY report_id`);
 
         const done = await forgetSocial(db, zed);
-        assert.deepEqual(done, { posts: 4, comments: 1, photos: 2, unreachablePhotoIds: [] });
+        assert.deepEqual(done, { posts: 4, comments: 1, photos: 2, unreachablePhotoIds: [], retainedForEvidence: [] });
 
-        assert.deepEqual(await traces(zed, [...ZED_WORDS, s.pic.url, s.listing.url]), [
-          "content_reports: the subject",
-          "moderation_actions.actor_id",
-          "moderation_actions: the subject",
-          "moderation_evidence.author_player_id",
-          "player_suspensions.player_id",
-        ]);
+        assert.deepEqual(await traces(zed, [...ZED_WORDS, s.pic.url, s.listing.url]), KEPT);
         // Their rows are deleted, not marked.
         for (const [table, where] of [["social_profiles", "player_id = $1"], ["social_posts", "author_id = $1"], ["social_comments", "author_id = $1"], ["social_kudos", "player_id = $1"], ["social_follows", "follower_id = $1 OR followee_id = $1"], ["user_blocks", "blocker_id = $1 OR blocked_id = $1"], ["social_club_bans", "player_id = $1"]] as const) {
           assert.equal((await one(`SELECT count(*)::int AS n FROM ${table} WHERE ${where}`, [zed])).n, 0, table);
@@ -308,8 +385,8 @@ describe("deleting an account deletes its Social data; the download includes it"
         assert.deepEqual(await accountRow(zed), { email: s.zed.email, first_name: "Zedekiah", last_name: "Smashington", deleted_at: null, sessions: 1 });
 
         // Again: nothing left to do, nothing breaks. And an account with no Social data at all.
-        assert.deepEqual(await forgetSocial(db, zed), { posts: 0, comments: 0, photos: 0, unreachablePhotoIds: [] });
-        assert.deepEqual(await forgetSocial(db, (await person("Nobody", "Social")).id), { posts: 0, comments: 0, photos: 0, unreachablePhotoIds: [] });
+        assert.deepEqual(await forgetSocial(db, zed), { posts: 0, comments: 0, photos: 0, unreachablePhotoIds: [], retainedForEvidence: [] });
+        assert.deepEqual(await forgetSocial(db, (await person("Nobody", "Social")).id), { posts: 0, comments: 0, photos: 0, unreachablePhotoIds: [], retainedForEvidence: [] });
         await assert.rejects(() => forgetSocial(db, 0), /account id/);
         await assert.rejects(() => forgetSocial({ query: db.query } as TestDb, zed), /connect\(\)/);
       });
@@ -318,13 +395,7 @@ describe("deleting an account deletes its Social data; the download includes it"
         const s = await zedWithEverything();
         const zed = s.zed.id;
         assert.deepEqual(await account.deleteAccount(asPlayer(s.zed)), { ok: true });
-        assert.deepEqual(await traces(zed, [...ZED_WORDS, s.zed.email, s.pic.url, s.listing.url]), [
-          "content_reports: the subject",
-          "moderation_actions.actor_id",
-          "moderation_actions: the subject",
-          "moderation_evidence.author_player_id",
-          "player_suspensions.player_id",
-        ]);
+        assert.deepEqual(await traces(zed, [...ZED_WORDS, s.zed.email, s.pic.url, s.listing.url]), KEPT);
         assert.deepEqual([...store.objects.keys()], [s.gallery.path]);
         const gone = await accountRow(zed);
         assert.deepEqual([gone.email, gone.first_name, gone.last_name, gone.deleted_at !== null, gone.sessions], [`deleted-${zed}@deleted.invalid`, "", "", true, 0]);
@@ -350,17 +421,11 @@ describe("deleting an account deletes its Social data; the download includes it"
         const s = await zedWithEverything();
         const before = await everything();
         const account0 = await accountRow(s.zed.id);
-        setPublicStorage({ ...store, delete: async () => { throw new Error("the store said no"); } });
-        const errors: unknown[][] = [];
-        const realError = console.error;
-        console.error = (...args: unknown[]) => void errors.push(args);
-        try {
-          assert.deepEqual(await account.deleteAccount(asPlayer(s.zed)), { ok: false, status: 500, code: "delete_failed" });
-        } finally {
-          console.error = realError;
-        }
-        assert.equal(errors.length, 1);
-        assert.match(String(errors[0][1]), /the store said no/);
+        // A store's error can carry the file's URL, and the URL carries the account's id.
+        setPublicStorage({ ...store, delete: async (urls) => { throw Object.assign(new Error(`the store said no to ${urls.join(", ")}`), { name: "BlobError", code: "store_down" }); } });
+        const lines = await quietly(async () => assert.deepEqual(await account.deleteAccount(asPlayer(s.zed)), { ok: false, status: 500, code: "delete_failed" }));
+        // One line, saying what kind of error and nothing from its message: no URL, no id, no email.
+        assert.deepEqual(lines, ["[app-api] account not deleted: its Social data couldn't be removed: BlobError (store_down)"]);
         assert.deepEqual(await everything(), before);
         assert.deepEqual(await accountRow(s.zed.id), account0);
         assert.equal((await auth.sessionForToken(s.zed.token))?.player.id, s.zed.id, "still signed in");
@@ -412,22 +477,19 @@ describe("deleting an account deletes its Social data; the download includes it"
         const plain = await person("Plain", "Texter");
         await join(plain.id, "Plain Texter");
         await rawPost(plain.id, "words only");
-        assert.deepEqual(await forgetSocial(db, plain.id), { posts: 1, comments: 0, photos: 0, unreachablePhotoIds: [] });
+        assert.deepEqual(await forgetSocial(db, plain.id), { posts: 1, comments: 0, photos: 0, unreachablePhotoIds: [], retainedForEvidence: [] });
       });
 
       test("the website's delete path does the same: 500 delete_failed and still signed in when it can't, everything gone when it can", async () => {
         const s = await zedWithEverything();
         const before = await everything();
         const request = () => new Request("https://club.test/api/profile/delete", { method: "POST", headers: { cookie: `${auth.PLAYER_COOKIE}=${s.zed.token}`, "content-type": "application/json" }, body: JSON.stringify({ confirm: "DELETE" }) });
-        setPublicStorage({ ...store, delete: async () => { throw new Error("the store said no"); } });
-        const realError = console.error;
-        console.error = () => {};
-        let refused: Response;
-        try {
+        setPublicStorage({ ...store, delete: async (urls) => { throw new Error(`the store said no to ${urls.join(", ")}`); } });
+        let refused!: Response;
+        const lines = await quietly(async () => {
           refused = await website.POST(request());
-        } finally {
-          console.error = realError;
-        }
+        });
+        assert.deepEqual(lines, ["[profile] account not deleted: its Social data couldn't be removed: Error"]);
         assert.equal(refused.status, 500);
         assert.deepEqual(await refused.json(), { error: "delete_failed" });
         assert.equal(refused.headers.get("set-cookie"), null, "the sign-in cookie is not cleared");
@@ -439,13 +501,7 @@ describe("deleting an account deletes its Social data; the download includes it"
         const done = await website.POST(request());
         assert.equal(done.status, 200);
         assert.match(String(done.headers.get("set-cookie")), new RegExp(`${auth.PLAYER_COOKIE}=;`));
-        assert.deepEqual(await traces(s.zed.id, [...ZED_WORDS, s.zed.email, s.pic.url]), [
-          "content_reports: the subject",
-          "moderation_actions.actor_id",
-          "moderation_actions: the subject",
-          "moderation_evidence.author_player_id",
-          "player_suspensions.player_id",
-        ]);
+        assert.deepEqual(await traces(s.zed.id, [...ZED_WORDS, s.zed.email, s.pic.url]), KEPT);
         assert.notEqual((await accountRow(s.zed.id)).deleted_at, null);
       });
 
@@ -499,31 +555,169 @@ describe("deleting an account deletes its Social data; the download includes it"
         const there = await photo(vy.id, club2);
         await rawPost(vy.id, null, { photoId: here.id });
         await rawPost(vy.id, null, { photoId: there.id, clubId: club2 });
-        const errors: unknown[][] = [];
-        const realError = console.error;
-        console.error = (...args: unknown[]) => void errors.push(args);
-        let done;
-        try {
+        // Filed under the other club and never posted: no post points at these.
+        const loose = await photo(vy.id, club2);
+        const listing = await photo(vy.id, club2, "market");
+        let done: Awaited<ReturnType<typeof forgetSocial>> | undefined;
+        const lines = await quietly(async () => {
           done = await forgetSocial(db, vy.id);
-        } finally {
-          console.error = realError;
-        }
+        });
         // Both posts go either way: the posts table is platform-wide.
         assert.equal((await one(`SELECT count(*)::int AS n FROM social_posts WHERE author_id = $1`, [vy.id])).n, 0);
         if (mode === "off") {
-          assert.deepEqual(done, { posts: 2, comments: 0, photos: 2, unreachablePhotoIds: [] });
+          assert.deepEqual(done, { posts: 2, comments: 0, photos: 4, unreachablePhotoIds: [], retainedForEvidence: [] });
           assert.equal((await one(`SELECT count(*)::int AS n FROM player_photos WHERE player_id = $1`, [vy.id])).n, 0);
           assert.deepEqual([...store.objects.keys()], []);
-          assert.deepEqual(errors, []);
+          assert.deepEqual(lines, []);
         } else {
-          // The known limit: the other club's photo row and file are out of this connection's reach.
-          assert.deepEqual(done, { posts: 2, comments: 0, photos: 1, unreachablePhotoIds: [there.id] });
-          assert.deepEqual((await rows(`SELECT id FROM player_photos WHERE player_id = $1`, [vy.id])).map((r) => r.id), [there.id]);
-          assert.deepEqual([...store.objects.keys()], [there.path]);
-          assert.equal(errors.length, 1);
-          assert.match(String(errors[0][0]), new RegExp(`player_photos ids ${there.id}\\.`));
-          assert.ok(!String(errors[0][0]).includes(String(vy.id)) || String(there.id).includes(String(vy.id)), "the line names no person");
+          // The known limit. The other club's rows are out of this connection's reach: the posted one is at least
+          // known by its post and reported; the two no post points at can't even be counted.
+          assert.deepEqual((await db.query(`SELECT id FROM player_photos WHERE player_id = $1`, [vy.id])).rows, [], "this connection sees none of them");
+          assert.deepEqual(done, { posts: 2, comments: 0, photos: 1, unreachablePhotoIds: [there.id], retainedForEvidence: [] });
+          assert.deepEqual((await rows(`SELECT id FROM player_photos WHERE player_id = $1 ORDER BY id`, [vy.id])).map((r) => r.id), [there.id, loose.id, listing.id]);
+          assert.deepEqual([...store.objects.keys()].sort(), [there.path, loose.path, listing.path].sort());
+          assert.deepEqual(lines, [`[social] account deletion: 1 post photo(s) filed under another club can't be reached from this deployment and are still in the store: player_photos ids ${there.id}.`]);
         }
+      });
+
+      test("a photo that child-safety evidence is about is kept, file and row, out of every read; every other photo goes", async () => {
+        const zed = await person("Zara", "Evidence");
+        await join(zed.id, "Zara E");
+        const reported = await photo(zed.id);
+        const closed = await photo(zed.id);
+        const plain = await photo(zed.id);
+        const spamOnly = await photo(zed.id);
+        const posts = [await rawPost(zed.id, null, { photoId: reported.id }), await rawPost(zed.id, null, { photoId: closed.id }), await rawPost(zed.id, "zaraword", { photoId: plain.id }), await rawPost(zed.id, null, { photoId: spamOnly.id })];
+        const a = await fileReport(db, seal, { reporterId: MIA, targetType: "post", targetId: posts[0], reason: "child_safety" });
+        const b = await fileReport(db, seal, { reporterId: PETE, targetType: "post", targetId: posts[0], reason: "child_safety" });
+        const c = await fileReport(db, seal, { reporterId: MIA, targetType: "post", targetId: posts[1], reason: "child_safety" });
+        const d = await fileReport(db, seal, { reporterId: MIA, targetType: "post", targetId: posts[3], reason: "spam" });
+        assert.deepEqual([a.ok, b.ok, c.ok, d.ok], [true, true, true, true]);
+        const reportId = (r: typeof a) => (r.ok ? r.value.id : 0);
+        // A report already closed keeps its evidence, and so its photo.
+        await admin.query(`UPDATE content_reports SET status = 'actioned', handled_at = now(), handled_by = $2 WHERE id = $1`, [reportId(c), ADMIN]);
+
+        const lines = await quietly(async () => assert.deepEqual(await account.deleteAccount(asPlayer(zed)), { ok: true }));
+        assert.deepEqual(lines, [`[social] account deletion: 2 post photo(s) kept, file and row, as evidence for a child-safety report: player_photos ids ${reported.id}, ${closed.id}.`]);
+
+        // The evidence still opens, and what it points at is still there.
+        for (const [report, post, pic] of [[reportId(a), posts[0], reported], [reportId(b), posts[0], reported], [reportId(c), posts[1], closed]] as const) {
+          const sealed = String((await one(`SELECT sealed FROM moderation_evidence WHERE report_id = $1`, [report])).sealed);
+          assert.deepEqual(JSON.parse(seal.openEvidence(report, sealed)), { targetType: "post", targetId: post, content: { body: null, photoUrl: pic.url } });
+          assert.ok(store.objects.has(pic.path), "the file is still in the store");
+        }
+        assert.deepEqual([...store.objects.keys()].sort(), [reported.path, closed.path].sort(), "the other files are gone");
+        // The rows: kept, marked deleted, and marked with the (first) report they are kept for. The others are gone.
+        assert.deepEqual(
+          await rows(`SELECT id, player_id, purpose, deleted_at IS NOT NULL AS deleted, caption FROM player_photos WHERE player_id = $1 ORDER BY id`, [zed.id]),
+          [
+            { id: reported.id, player_id: zed.id, purpose: "social", deleted: true, caption: `retained-evidence:report:${reportId(a)}` },
+            { id: closed.id, player_id: zed.id, purpose: "social", deleted: true, caption: `retained-evidence:report:${reportId(c)}` },
+          ],
+        );
+        // No post is left to show them, and the account is gone.
+        assert.equal((await one(`SELECT count(*)::int AS n FROM social_posts`)).n, 0);
+        assert.notEqual((await accountRow(zed.id)).deleted_at, null);
+        // So the person is now also found on those two photo rows (the id, and the URLs that carry it), and nowhere new besides.
+        assert.deepEqual(await traces(zed.id, ["zaraword", "Zara E", "Zara", "Evidence", zed.email]), [
+          "moderation_evidence.author_player_id",
+          "moderation_evidence.sealed (opened)",
+          "player_photos.display_url",
+          "player_photos.original_url",
+          "player_photos.player_id",
+          "player_photos.thumb_url",
+        ]);
+        // Asking again (the second pass did, already) keeps them: the mark is on the row, the post is not needed.
+        assert.deepEqual(await forgetSocial(db, zed.id, { carry: false }), { posts: 0, comments: 0, photos: 0, unreachablePhotoIds: [], retainedForEvidence: [reported.id, closed.id] });
+        assert.deepEqual([...store.objects.keys()].sort(), [reported.path, closed.path].sort());
+      });
+
+      test("suspensions are carried inside the transaction, under the account's lock: a failed delete carries nothing, a finished one does", async () => {
+        const rex = await person("Rex", "Locked");
+        await join(rex.id, "Rex L");
+        assert.equal((await suspend(db, { playerId: rex.id, scope: "social", until: null, reasonCode: "harassment", actorId: ADMIN })).ok, true);
+        await admin.query(`UPDATE players SET email = $2 WHERE id = $1`, [rex.id, `rex.moved.${rex.id}@rights.test`]);
+        const count = async () => (await one(`SELECT count(*)::int AS n FROM player_suspensions WHERE player_id = $1`, [rex.id])).n;
+        const failing = spying(db, (text) => (/DELETE FROM social_profiles/.test(text) ? new Error("injected failure") : null));
+        await assert.rejects(() => forgetSocial(failing.spy, rex.id), /injected failure/);
+        assert.equal(await count(), 1, "rolled back with the rest");
+        const { spy, sent } = spying(db);
+        await forgetSocial(spy, rex.id);
+        assert.equal(await count(), 2);
+        // Every statement went to the transaction's own connection, and the carry came after the lock.
+        assert.deepEqual(sent.filter((q) => q.on === "pool"), []);
+        const at = (re: RegExp) => sent.findIndex((q) => re.test(q.text));
+        assert.ok(at(/FROM players WHERE id = \$1 FOR UPDATE/) > at(/^BEGIN$/));
+        assert.ok(at(/INSERT INTO player_suspensions/) > at(/FROM players WHERE id = \$1 FOR UPDATE/));
+        assert.ok(at(/INSERT INTO player_suspensions/) < at(/DELETE FROM social_kudos/));
+        assert.equal((await activeSuspension(db, { email: `rex.moved.${rex.id}@rights.test` }, "social"))?.reasonCode, "harassment");
+      });
+
+      test("a deadlock is tried again, three times in all: forgetSocial and block", async () => {
+        const s = await zedWithEverything();
+        const before = await everything();
+        // Twice the loser, then through.
+        const twice = spying(db, (text, nth) => (/DELETE FROM social_follows/.test(text) && nth <= 2 ? deadlock() : null));
+        // Three times: it gives up with the database's own error, and nothing has changed.
+        const always = spying(db, (text) => (/DELETE FROM social_follows/.test(text) ? deadlock() : null));
+        await assert.rejects(() => forgetSocial(always.spy, s.zed.id), (e: { code?: string }) => e.code === "40P01");
+        assert.equal(always.sent.filter((q) => q.text === "BEGIN").length, 3);
+        assert.deepEqual(await everything(), before);
+        assert.equal((await forgetSocial(twice.spy, s.zed.id)).posts, 4);
+        assert.equal(twice.sent.filter((q) => q.text === "BEGIN").length, 3);
+        assert.equal(twice.sent.filter((q) => q.text === "ROLLBACK").length, 2);
+        // Any other error is not tried again.
+        const other = spying(db, (text) => (/DELETE FROM social_kudos/.test(text) ? Object.assign(new Error("no"), { code: "23505" }) : null));
+        await assert.rejects(() => forgetSocial(other.spy, s.zed.id), /^Error: no$/);
+        assert.equal(other.sent.filter((q) => q.text === "BEGIN").length, 1);
+
+        // block(): the same, from the other side.
+        await followRow(PETE, MIA);
+        const blockTwice = spying(db, (text, nth) => (/INSERT INTO user_blocks/.test(text) && nth <= 2 ? deadlock() : null));
+        assert.deepEqual(await block(blockTwice.spy, MIA, pid(PETE)), { ok: true, value: null });
+        assert.equal((await one(`SELECT count(*)::int AS n FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`, [MIA, PETE])).n, 1);
+        assert.equal((await one(`SELECT count(*)::int AS n FROM social_follows WHERE follower_id = $1`, [PETE])).n, 0);
+        const blockAlways = spying(db, (text) => (/INSERT INTO user_blocks/.test(text) ? deadlock() : null));
+        await assert.rejects(() => block(blockAlways.spy, MIA, pid(QUINN)), (e: { code?: string }) => e.code === "40P01");
+        assert.equal(blockAlways.sent.filter((q) => /INSERT INTO user_blocks/.test(q.text)).length, 3);
+      });
+
+      test("a real deadlock with someone blocking them at that moment: the deletion still finishes", async () => {
+        const dee = await person("Dee", "Deadlock");
+        await join(dee.id, "Dee D");
+        await rawPost(dee.id, "deeword");
+        await followRow(dee.id, MIA);
+        // As block() does: the follow's row is taken first, the account's row is needed second.
+        const other = new pg.Client({ connectionString: urlFor(NAME) });
+        await other.connect();
+        try {
+          await other.query("BEGIN");
+          await other.query(`DELETE FROM social_follows WHERE follower_id = $1 AND followee_id = $2`, [dee.id, MIA]);
+          // forgetSocial takes the account's row, then waits for the follow's.
+          const forgetting = forgetSocial(db, dee.id);
+          forgetting.catch(() => {});
+          for (let i = 0; ; i++) {
+            const waiting = await rows(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE 'DELETE FROM social_follows%'`);
+            if (waiting.length > 0) break;
+            assert.ok(i < 200, "forgetSocial never reached the follow's row");
+            await new Promise((r) => setTimeout(r, 25));
+          }
+          // Now the other side needs the account's row (the block's foreign key): a deadlock. Postgres stops one of the two.
+          const blocking = other.query(`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [MIA, dee.id]).then(
+            () => other.query("COMMIT").then(() => "committed"),
+            (e: { code?: string }) => other.query("ROLLBACK").then(() => e.code),
+          );
+          const [done, theirs] = await Promise.all([forgetting, blocking]);
+          assert.ok(theirs === "committed" || theirs === "40P01", String(theirs));
+          assert.equal(done.posts, 1);
+        } finally {
+          await other.end();
+        }
+        assert.equal((await one(`SELECT count(*)::int AS n FROM social_posts WHERE author_id = $1`, [dee.id])).n, 0);
+        assert.equal((await one(`SELECT count(*)::int AS n FROM social_profiles WHERE player_id = $1`, [dee.id])).n, 0);
+        // A block that committed after the deletion's last look is the one thing left; the second pass takes it.
+        await forgetSocial(db, dee.id, { carry: false });
+        assert.deepEqual(await traces(dee.id, ["deeword", "Dee D"]), []);
       });
 
       test("the export holds what they wrote and chose, and nothing written by others; other people by display name and public id only", async () => {
@@ -569,10 +763,34 @@ describe("deleting an account deletes its Social data; the download includes it"
         assert.equal((await exportSocial(db, zed, { env: {} })).reports[0].details, null);
         assert.equal((await exportSocial(db, zed, { env: { MODERATION_KEKS: `m9:${key()}` } })).reports[0].details, null);
         assert.equal((await exportSocial(db, zed, { env: { MODERATION_KEKS: "not a key list" } })).reports[0].details, null);
-        // Someone they follow or blocked who has since deleted their account is no longer named.
+        // Someone they follow or blocked who is no longer in sight is listed by public id, without a name: a name taken
+        // after a suspension, after leaving the club, or left on a retired account is not handed out.
+        const named = async () => {
+          const e = await exportSocial(db, zed);
+          return [e.following.map((p) => [p.publicId, p.displayName]), e.blocked.map((p) => [p.publicId, p.displayName])];
+        };
+        assert.deepEqual(await named(), [[[pid(MIA), "Smash Queen"]], [[pid(QUINN), "Quinn Q"]]]);
         await admin.query(`UPDATE players SET deleted_at = now() WHERE id = $1`, [QUINN]);
-        assert.deepEqual((await exportSocial(db, zed)).blocked, []);
+        assert.deepEqual(await named(), [[[pid(MIA), "Smash Queen"]], [[pid(QUINN), null]]]);
         await admin.query(`UPDATE players SET deleted_at = NULL WHERE id = $1`, [QUINN]);
+        await admin.query(`INSERT INTO player_suspensions (player_id, scope, reason_code) VALUES ($1, 'social', 'spam')`, [MIA]);
+        await admin.query(`UPDATE social_profiles SET display_name = 'Renamed In Anger' WHERE player_id = $1`, [MIA]);
+        assert.deepEqual(await named(), [[[pid(MIA), null]], [[pid(QUINN), "Quinn Q"]]]);
+        assert.ok(!JSON.stringify(await exportSocial(db, zed)).includes("Renamed In Anger"));
+        await admin.query(`DELETE FROM player_suspensions WHERE player_id = $1 AND reason_code = 'spam'`, [MIA]);
+        await admin.query(`UPDATE club_members SET status = 'disabled' WHERE user_id = $1`, [QUINN]);
+        assert.deepEqual(await named(), [[[pid(MIA), "Renamed In Anger"]], [[pid(QUINN), null]]]);
+        // An `everyone` profile in a club the exporter isn't in is still in sight; with no club left it is not.
+        await admin.query(`UPDATE social_profiles SET visibility = 'everyone' WHERE player_id = $1`, [QUINN]);
+        assert.deepEqual((await named())[1], [[pid(QUINN), null]]);
+        await admin.query(`UPDATE club_members SET status = 'active', tenant_id = $2 WHERE user_id = $1`, [QUINN, club2]);
+        assert.deepEqual((await named())[1], [[pid(QUINN), "Quinn Q"]]);
+        await admin.query(`UPDATE social_profiles SET visibility = 'club' WHERE player_id = $1`, [QUINN]);
+        assert.deepEqual((await named())[1], [[pid(QUINN), null]]);
+        await admin.query(`UPDATE club_members SET tenant_id = 1 WHERE user_id = $1`, [QUINN]);
+        await admin.query(`UPDATE social_profiles SET display_name = 'Smash Queen' WHERE player_id = $1`, [MIA]);
+        const out2 = await exportSocial(db, zed);
+        assert.deepEqual(out2, out);
 
         // "Download my data" carries it, on both the app's and the website's route (one function).
         const download = await exporter.collectPlayerData((await players.getPlayerById(zed))!);

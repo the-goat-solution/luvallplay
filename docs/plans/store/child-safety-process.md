@@ -76,6 +76,17 @@ In the reason, write codes, not content: for example `child_safety: suspended pe
 
 Kept outside the app, by the child-safety lead, in the company's own restricted store (**owner decision: where**): the authority's reference number, the date and channel of the report, and any instruction the authority gave. **Counsel**: how long each of these, the evidence copy and the suspension record must be kept, and when they must be destroyed.
 
+## When the reported person deletes their account
+
+Deleting an account deletes the person's posts, comments and photos. It does **not** delete what a child-safety report needs:
+
+- The sealed evidence copy, the report and the action log stay (the app can't delete them).
+- **The photo of a reported post stays too, file and row.** The evidence copy holds the photo's address, not the picture, so the file is the evidence. The post is deleted; the photo's row in `player_photos` is kept, marked deleted (nothing in the app shows it) and marked with the report it is kept for (`caption` = `retained-evidence:report:<id>`). The account deletion logs the photo ids, nothing else. This holds for every child-safety report that has an evidence copy, open or closed.
+- **Who deletes a kept file, and when: nobody yet.** Nothing in the app removes it. It is removed by hand, by the child-safety lead, after the authority has what it needs and the retention period has passed. **Retention period: ______ (counsel, decision 4).**
+- **Open: the kept file's address still works.** The photo store is public: anyone who already has the file's address can still fetch it, although no page shows it. The proper fix is to move a kept file to a private store when it is kept, and delete the public one. **Not built.** Until it is, the lead removes the public file as soon as the authority has its copy, or sooner if the authority says to.
+- **Not covered: a post the author deletes themselves** before deleting the account (or without deleting it). Deleting a post removes its photo's file at once, reported or not. That is the post-delete path's (decision 8 below, with Remove).
+- Under `TENANT_SCOPE=enforce` a photo filed under another club isn't touched at all by the deletion, so it stays as well.
+
 ## What isn't built yet (27 Nov 2026)
 
 The tables, the sealing, the 12-hour deadline and the routing to the platform queue exist (migrations `0022`, `0023`; `apps/web/lib/moderation`). The platform review page, the suspend button, the blur, opening the evidence copy and the deadline emails are Social plan Task 7. Until they exist, this process can't be run, and Social must not be on for any real club.
@@ -91,4 +102,5 @@ The tables, the sealing, the 12-hour deadline and the routing to the platform qu
 | 5 | Vietnam: the reporting channel and the platform's duties | Counsel |
 | 6 | NCMEC CyberTipline: whether to register and report | Counsel |
 | 7 | Where the authority's references are kept outside the app | Owner |
-| 8 | Whether Remove keeps a photo's file while a child-safety report is open | Lane S, Task 7 |
+| 8 | Whether Remove, and the author's own delete of a post, keep a photo's file while a child-safety report has evidence about it (account deletion does) | Lane S, Task 7 and Task 4 |
+| 9 | How long a kept photo file is held, who deletes it, and moving kept files to a private store | Counsel and owner; lane S to build |

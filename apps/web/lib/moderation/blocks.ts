@@ -37,6 +37,10 @@ export function withPairLock<T>(db: PairDb, a: number, b: number, fn: (tx: Db) =
   return withPlayerLock(db, Math.min(a, b), "social.pair", fn);
 }
 
+// Postgres: "deadlock detected".
+const DEADLOCK = "40P01";
+const BLOCK_TRIES = 3;
+
 export type BlockedPerson = { publicId: string; displayName: string; blockedAt: string };
 
 /**
@@ -93,9 +97,9 @@ export async function block(db: PairDb, blockerId: number, publicId: unknown, { 
   if (!Number.isInteger(blockerId) || !isPublicId(publicId)) return err("not_found");
   const blockedId = await blockable(db, blockerId, publicId, env);
   if (blockedId === null) return err("not_found");
-  try {
-    // Behind the pair's lock: a follow of the same two has either committed (and goes here) or waits and then sees the block.
-    await withPairLock(db, blockerId, blockedId, async (tx) => {
+  // Behind the pair's lock: a follow of the same two has either committed (and goes here) or waits and then sees the block.
+  const write = () =>
+    withPairLock(db, blockerId, blockedId, async (tx) => {
       await tx.query(
         `WITH blocked AS (
            INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT (blocker_id, blocked_id) DO NOTHING
@@ -104,12 +108,19 @@ export async function block(db: PairDb, blockerId: number, publicId: unknown, { 
         [blockerId, blockedId],
       );
     });
-  } catch (e) {
-    // An account that isn't there (or went between the two statements): the same answer as any other missing person.
-    if ((e as { code?: string }).code === "23503") return err("not_found");
-    throw e;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await write();
+      return ok(null);
+    } catch (e) {
+      const code = (e as { code?: string } | null)?.code;
+      // An account that isn't there (or went between the two statements): the same answer as any other missing person.
+      if (code === "23503") return err("not_found");
+      // A deadlock with one of the two deleting their account at this moment (lib/social/data-rights.ts takes the
+      // same rows the other way round): the loser has written nothing and goes again.
+      if (code !== DEADLOCK || attempt >= BLOCK_TRIES) throw e;
+    }
   }
-  return ok(null);
 }
 
 /**

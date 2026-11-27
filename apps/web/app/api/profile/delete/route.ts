@@ -8,7 +8,7 @@ import { sendAdminAlertEmail } from "@/lib/player-email";
 import { endPlayerArena } from "@/lib/arena-db";
 import { db } from "@/lib/admin-access";
 import { sql } from "@/lib/database";
-import { forgetSocial } from "@/lib/social/data-rights";
+import { errorLabel, forgetSocial } from "@/lib/social/data-rights";
 import { isLastOwner } from "@/lib/admin-roles";
 import { forgetPushDevices } from "@/lib/app-push";
 
@@ -29,7 +29,8 @@ export async function POST(request: Request) {
   try {
     await forgetSocial(sql, player.id);
   } catch (err) {
-    console.error("[profile] account not deleted: its Social data couldn't be removed:", err);
+    // The error's name and code only: a store's message can carry a photo's URL, which names the account.
+    console.error(`[profile] account not deleted: its Social data couldn't be removed: ${errorLabel(err)}`);
     return NextResponse.json({ error: "delete_failed" }, { status: 500 });
   }
   await endPlayerArena(player.id).catch((err) => console.error("[profile] arena cleanup failed:", err));
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   await deletePublicBlobs([await setPlayerAvatar(player.id, null).catch(() => null)]);
   await deletePlayerAccount(player.id);
   // Once more, now that no request of theirs can sign in: anything sent while the account was going.
-  await forgetSocial(sql, player.id, { carry: false }).catch((err) => console.error("[profile] second Social sweep failed:", err));
+  await forgetSocial(sql, player.id, { carry: false }).catch((err) => console.error(`[profile] second Social sweep failed: ${errorLabel(err)}`));
   await forgetPushDevices(player.id, { all: true });
   await sendAdminAlertEmail({
     subject: `Account deleted: ${player.email}`,

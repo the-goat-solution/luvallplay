@@ -1,9 +1,13 @@
 import { cronAuthorized } from "@/lib/cron";
+import { cronStatus, forEachClub } from "@/lib/tenant-context";
+import { sql } from "@/lib/database";
 import { NextResponse } from "next/server";
 import { recordRosterAttendance } from "@/lib/stats-db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const PATH = "/api/cron/roster-attendance";
 
 // Yesterday's play day (and any earlier one) without a saved court board:
 // record attendance from the roster so streaks and the leaderboard stay
@@ -17,10 +21,16 @@ export async function GET(request: Request) {
   if (!process.env.POSTGRES_URL) {
     return NextResponse.json({ skipped: true });
   }
-  try {
-    return NextResponse.json({ ok: true, recorded: await recordRosterAttendance() });
-  } catch (err) {
-    console.error("Roster attendance failed", err);
-    return NextResponse.json({ error: "Roster attendance failed" }, { status: 500 });
-  }
+
+  // Once for each club of the region, each as that club, and only where the
+  // job's module is on (audit H2; lib/tenant-context.ts).
+  const clubs = await forEachClub(sql, PATH, async () => {
+    try {
+      return { ok: true, recorded: await recordRosterAttendance() };
+    } catch (err) {
+      console.error("Roster attendance failed", err);
+      throw new Error("Roster attendance failed");
+    }
+  });
+  return NextResponse.json({ clubs }, { status: cronStatus(clubs) });
 }

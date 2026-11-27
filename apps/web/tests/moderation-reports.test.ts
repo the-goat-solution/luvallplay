@@ -172,7 +172,7 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
       const appendOnly = r.t !== "content_reports";
       assert.deepEqual(
         { rls: r.rls, tenant_id: r.tenant_id, sel: r.sel, ins: r.ins, upd: r.upd, del: r.del, trunc: r.trunc },
-        { rls: false, tenant_id: false, sel: true, ins: !appendOnly, upd: !appendOnly, del: !appendOnly, trunc: false },
+        { rls: false, tenant_id: false, sel: true, ins: !appendOnly, upd: false, del: !appendOnly, trunc: false },
         r.t,
       );
     }
@@ -187,6 +187,14 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
       { t: "moderation_evidence", cols: ["author_player_id", "report_id", "sealed"] },
     ]);
     assert.equal((await rows(`SELECT attidentity FROM pg_attribute WHERE attrelid = 'moderation_actions'::regclass AND attname = 'id'`))[0].attidentity, "a");
+    // A report is changed only where the app has a reason to: never what it is about, where it is, or when it was filed.
+    const changeable = await rows(
+      `SELECT c.relname AS t, array_agg(a.attname::text ORDER BY a.attname) AS cols FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+       WHERE c.relname = ANY($1) AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege('luvallplay_app', a.attrelid, a.attnum, 'UPDATE')
+       GROUP BY 1 ORDER BY 1`,
+      [tables],
+    );
+    assert.deepEqual(changeable, [{ t: "content_reports", cols: ["alerted_at", "details_sealed", "due_at", "handled_at", "handled_by", "queue", "reason", "reporter_id", "severity", "status"] }]);
     // Keys to accounts: only the reporter's, and it is RESTRICT (tests/account-fks.test.ts).
     const fks = await rows(
       `SELECT conrelid::regclass::text AS t, conname, confrelid::regclass::text AS f, confdeltype FROM pg_constraint
@@ -252,8 +260,12 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
     await assert.rejects(admin.query(`INSERT INTO moderation_evidence (report_id, sealed) VALUES ($1, 'the words of the post')`, [first]), /moderation_evidence_sealed_check/);
     await assert.rejects(admin.query(`INSERT INTO moderation_evidence (report_id, sealed) VALUES (999999, $1)`, [seal.sealEvidence(999999, "x")]), /moderation_evidence_report_id_fkey/);
     await assert.rejects(admin.query(`INSERT INTO moderation_evidence (report_id) VALUES ($1)`, [first]), /sealed/);
-    await admin.query(`INSERT INTO moderation_evidence (report_id, sealed, author_player_id) VALUES ($1, $2, $3)`, [first, seal.sealEvidence(first, "x"), PETE]);
-    await assert.rejects(admin.query(`INSERT INTO moderation_evidence (report_id, sealed) VALUES ($1, $2)`, [first, seal.sealEvidence(first, "y")]), /moderation_evidence_pkey/);
+    // Evidence is for a child_safety report: no other report can be given a row (which would hold its place for good).
+    await assert.rejects(admin.query(`INSERT INTO moderation_evidence (report_id, sealed, author_player_id) VALUES ($1, $2, $3)`, [first, seal.sealEvidence(first, "x"), PETE]), /only a child_safety report/);
+    const child = Number((await insert({ reporter_id: QUINN, reason: "child_safety", severity: "serious", queue: "platform" })).rows[0].id);
+    await admin.query(`INSERT INTO moderation_evidence (report_id, sealed, author_player_id) VALUES ($1, $2, $3)`, [child, seal.sealEvidence(child, "x"), PETE]);
+    await assert.rejects(admin.query(`INSERT INTO moderation_evidence (report_id, sealed) VALUES ($1, $2)`, [child, seal.sealEvidence(child, "y")]), /moderation_evidence_pkey/);
+    await assert.rejects(admin.query(`DELETE FROM content_reports WHERE id = $1`, [child]), (e: { code?: string }) => e.code === "23001" || e.code === "23503");
     // A report with a record or evidence can't be removed from under them.
     await assert.rejects(admin.query(`DELETE FROM content_reports WHERE id = $1`, [first]), (e: { code?: string }) => e.code === "23001" || e.code === "23503");
     // The account ids in the record have no foreign key: they stand whatever happens to the account.
@@ -597,6 +609,13 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
           `INSERT INTO moderation_actions (target_type, target_id, action, created_at) VALUES ('profile', ${PETE}, 'restore', '2020-01-01')`,
           `INSERT INTO moderation_evidence (report_id, sealed, created_at) VALUES (${id}, 'v1.m1.aa.bb', '2020-01-01')`,
           `SELECT setval('moderation_actions_id_seq', 1000000)`,
+          // A report can't be pointed at something else, moved to another club, or re-dated.
+          `UPDATE content_reports SET target_id = ${MIA} WHERE id = ${id}`,
+          `UPDATE content_reports SET target_type = 'post' WHERE id = ${id}`,
+          `UPDATE content_reports SET club_id = NULL WHERE id = ${id}`,
+          `UPDATE content_reports SET created_at = '2020-01-01' WHERE id = ${id}`,
+          `UPDATE content_reports SET id = 1000000 WHERE id = ${id}`,
+          `UPDATE content_reports SET status = 'dismissed', handled_at = now(), created_at = now() WHERE id = ${id}`,
         ];
         // As the app's role itself, whatever this mode connects as.
         const app = new pg.Client({ connectionString: urlFor(NAME) });
@@ -604,6 +623,10 @@ describe("reports, evidence and the action log", { skip: !BASE_URL && !REQUIRE_D
         try {
           await app.query(`SET ROLE luvallplay_app`);
           for (const statement of statements) await assert.rejects(app.query(statement), denied, statement);
+          // Evidence can't be planted on a report that isn't a child_safety one (refused by the table, not by a right).
+          const other = (await app.query(`INSERT INTO content_reports (reporter_id, target_type, target_id, club_id, reason, severity, queue, due_at) VALUES ($1, 'profile', $2, 1, 'spam', 'normal', 'club', now()) RETURNING id`, [QUINN, PETE])).rows[0].id;
+          await assert.rejects(app.query(`INSERT INTO moderation_evidence (report_id, sealed) VALUES ($1, 'v1.m1.aa.bb')`, [other]), /only a child_safety report/);
+          await app.query(`DELETE FROM content_reports WHERE id = $1`, [other]);
           // What it may do: read both, and add.
           assert.equal((await app.query(`SELECT count(*)::int AS n FROM moderation_actions`)).rows[0].n, 1);
           assert.equal((await app.query(`SELECT count(*)::int AS n FROM moderation_evidence`)).rows[0].n, 1);

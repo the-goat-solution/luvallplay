@@ -2497,6 +2497,16 @@ BEGIN
   END IF;
   RETURN NEW;
 END $function$;
+CREATE OR REPLACE FUNCTION public.moderation_evidence_for_child_safety()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM content_reports r WHERE r.id = NEW.report_id AND r.reason = 'child_safety') THEN
+    RAISE EXCEPTION 'moderation_evidence: only a child_safety report keeps evidence' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END $function$;
 CREATE OR REPLACE FUNCTION public.players_phone_sealed_follows_plain()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2540,6 +2550,7 @@ CREATE TRIGGER day_requests_link_account BEFORE INSERT OR UPDATE OF email ON pub
 CREATE TRIGGER donations_link_account BEFORE INSERT OR UPDATE OF email ON public.donations FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
 CREATE TRIGGER jersey_registrations_link_account BEFORE INSERT OR UPDATE OF email ON public.jersey_registrations FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
 CREATE TRIGGER memberships_link_account BEFORE INSERT OR UPDATE OF email ON public.memberships FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
+CREATE TRIGGER moderation_evidence_for_child_safety AFTER INSERT ON public.moderation_evidence FOR EACH ROW EXECUTE FUNCTION moderation_evidence_for_child_safety();
 CREATE TRIGGER player_absences_link_account BEFORE INSERT OR UPDATE OF email ON public.player_absences FOR EACH ROW EXECUTE FUNCTION link_row_to_account();
 CREATE TRIGGER players_link_rows AFTER INSERT OR UPDATE OF email, deleted_at ON public.players FOR EACH ROW EXECUTE FUNCTION link_account_to_rows();
 CREATE TRIGGER players_phone_sealed_follows_plain BEFORE UPDATE ON public.players FOR EACH ROW EXECUTE FUNCTION players_phone_sealed_follows_plain();

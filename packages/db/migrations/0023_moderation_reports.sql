@@ -114,7 +114,21 @@ CREATE TABLE moderation_evidence (
   CONSTRAINT moderation_evidence_sealed_check CHECK (sealed ~ '^v1\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$')
 );
 --> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE ON content_reports TO luvallplay_app;
+-- Evidence is for a child_safety report only. Without this, anything that
+-- can insert could give any other report a row, which would then hold that
+-- report's place for good (rows here are never changed or removed). Checked
+-- after the statement, so a report and its evidence can be written by one.
+CREATE FUNCTION moderation_evidence_for_child_safety() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM content_reports r WHERE r.id = NEW.report_id AND r.reason = 'child_safety') THEN
+    RAISE EXCEPTION 'moderation_evidence: only a child_safety report keeps evidence' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER moderation_evidence_for_child_safety AFTER INSERT ON moderation_evidence FOR EACH ROW EXECUTE FUNCTION moderation_evidence_for_child_safety();
+--> statement-breakpoint
+GRANT SELECT, INSERT, DELETE ON content_reports TO luvallplay_app;
 --> statement-breakpoint
 GRANT USAGE, SELECT ON SEQUENCE content_reports_id_seq TO luvallplay_app;
 --> statement-breakpoint
@@ -131,4 +145,12 @@ BEGIN
   GRANT SELECT ON moderation_actions, moderation_evidence TO luvallplay_app;
   GRANT INSERT (actor_id, target_type, target_id, action, reason, report_id) ON moderation_actions TO luvallplay_app;
   GRANT INSERT (report_id, sealed, author_player_id) ON moderation_evidence TO luvallplay_app;
+  -- A report is changed only where the app has a reason to: a serious repeat
+  -- raises it (reason, severity, queue, due_at, details_sealed), a moderator
+  -- or the deadlines job handles it (status, handled_by, handled_at, queue,
+  -- alerted_at), and the reporter leaving clears reporter_id and
+  -- details_sealed. Never what it is about (target_type, target_id), where
+  -- (club_id), its id, or when it was filed (created_at).
+  REVOKE UPDATE ON content_reports FROM luvallplay_app;
+  GRANT UPDATE (reason, severity, queue, due_at, details_sealed, reporter_id, status, handled_by, handled_at, alerted_at) ON content_reports TO luvallplay_app;
 END $$;

@@ -1,0 +1,122 @@
+# The signed iOS build for TestFlight (build plan §4.5), started by the owner
+# from the Actions tab ("Run workflow"); never on a push, so TestFlight only
+# gets a build when someone asks for one.
+#
+# - upload off (default): archives and signs the app and keeps the .ipa for 30
+#   days as the "ios-release-ipa" artifact. Proves signing works.
+# - upload on: also sends the build to App Store Connect (TestFlight).
+#
+# Signing is automatic through the App Store Connect API key (App Manager
+# role); no certificate or profile files are kept in the repository. Secrets
+# (set by the owner): ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (the AuthKey .p8
+# file's contents). Variable: NATIVE_API_BASE, shared with the Android build.
+name: iOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload to TestFlight (off means only build and sign)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TEAM_ID: 75XLUPLLJ9
+  BUNDLE_ID: com.luvallplay.app
+
+jobs:
+  archive:
+    name: Signed iOS build (IPA)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter native typecheck && pnpm --filter native test
+      - name: The players' app, built for the shell
+        env:
+          NATIVE_API_BASE: ${{ vars.NATIVE_API_BASE }}
+        run: |
+          if [ -z "$NATIVE_API_BASE" ]; then
+            echo "::error title=NATIVE_API_BASE::Set the repository variable NATIVE_API_BASE (the public API host)."
+            exit 1
+          fi
+          pnpm --filter native web
+      - run: pnpm --filter native sync:ios
+      - name: The API key, from its secret
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          if [ -z "$ASC_KEY_P8" ] || [ -z "$ASC_KEY_ID" ] || [ -z "${{ secrets.ASC_ISSUER_ID }}" ]; then
+            echo "::error title=App Store Connect::ASC_KEY_P8, ASC_KEY_ID and ASC_ISSUER_ID must all be set."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+          chmod 600 "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+      - name: Archive
+        working-directory: apps/native/ios/App
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            archive
+      - name: Export (and upload, when asked)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          DEST: ${{ inputs.upload && 'upload' || 'export' }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>$DEST</string>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          ls -l "$RUNNER_TEMP/export" || true
+      - name: The signed IPA (the "ios-release-ipa" artifact)
+        if: ${{ !inputs.upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

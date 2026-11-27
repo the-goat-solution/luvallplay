@@ -4,7 +4,7 @@ Two migrations, one note. `0022` first; `0023` is under "The second migration" b
 
 - **Change:** eight new, empty tables and two functions. Nothing existing is altered.
   - `social_profiles`, `social_follows`, `social_posts`, `social_comments`, `social_kudos`, `social_club_bans`: Social's own. `user_blocks`: one person blocks another (shared with the Marketplace).
-  - `player_suspensions`: a moderator's decisions about a person. Insert only: the app's role can add and read rows and can't update or delete them; a lift or a change is a new row and the latest row wins. It names the account by id **without a foreign key** and keeps keyed indexes of the email and phone the account had (never the values), so a row stands when the account is deleted and the same email or phone signing up again is found.
+  - `player_suspensions`: a moderator's decisions about a person. Insert only: the app's role can add and read rows and can't update or delete them, and can't choose a row's `id` or `created_at` (the id is `GENERATED ALWAYS`, and the role's `INSERT` right is on the other columns only). Every suspension stands on its own until a later `unsuspend` row for the same account covers it. It names the account by id **without a foreign key** and keeps keyed indexes of the email and the verified phone the account had (never the values), so a row stands when the account is deleted and the same email or phone signing up again is found.
   - `social_clubs_of(player_id)` and `shares_social_club(a, b)`: `SECURITY DEFINER` with a fixed search path, as `link_account_to_rows` is (`0007`), callable by `luvallplay_app` only. They read `club_members` and `tenant_modules` across clubs, which row-level security otherwise hides from the app's role.
   - All eight tables are platform-wide, like `player_sessions`: no `tenant_id`, no row-level security. Where a row sits in one club's space the column is `club_id`.
 - **Command:** `node scripts/db/migrate.mjs`
@@ -27,10 +27,10 @@ Two migrations, one note. `0022` first; `0023` is under "The second migration" b
 | The eight new tables | 0 rows each |
 | Data guard, before against after, with the expectations | Passed: 24 live accounts checked, 0 problems. It reports the eight new tables and nothing else; without the expectations file the result is the same |
 | Migrating a second time | **A no-op:** nothing applied, 103 tables, the history still has 23 rows |
-| The app's role on `player_suspensions` | `SELECT` and `INSERT` yes; `UPDATE` and `DELETE` no |
+| The app's role on `player_suspensions` | `SELECT` yes; `INSERT` on every column but `id` and `created_at`; `UPDATE` and `DELETE` no |
 | The two functions | Both `SECURITY DEFINER`, `search_path=public, pg_temp`; the app's role may call them, `PUBLIC` may not. Called as the app's role scoped to club 1 with Social's module row on: `social_clubs_of(3)` gives `{1}`, `shares_social_club(3, 4)` is true |
 | Rollback (below), then a schema dump | The schema equals the one before `0022` (95 tables); the migrator applies `0022` again afterwards |
-| `tests/moderation.test.ts` | Passes (42 of 42) on Postgres 16, each database test once as the owner and once under `TENANT_SCOPE=enforce` with two clubs |
+| `tests/moderation.test.ts` | Passes (48 of 48, after the review fixes below) on Postgres 16, each database test once as the owner and once under `TENANT_SCOPE=enforce` with two clubs |
 | `packages/db/schema.ts` against the migrations (tables and indexes, on Postgres 16) | No difference |
 | Schema drift suite, and `db:drift` | **Not run here**: they need Postgres 18 (CI runs them). `docs/schema/production.sql` was extended from this run's dump (195 lines added, none changed): on Postgres 16 the dump after `0022` equals the new `production.sql` once the `NOT NULL` constraint lines that only Postgres 18 lists are set aside. Those lines for the eight new tables were written to the pattern of the existing tables and have not been checked against a real Postgres 18 |
 
@@ -43,11 +43,29 @@ The first run of this rehearsal could not use the plain command for this step: o
 | A scratch database migrated to `0021` (`node scripts/db/migrate.mjs --to 0021`), then the fixture | 95 tables, 468 rows |
 | `node scripts/db/migrate.mjs --to 0022` | `applied 0022_social_moderation (52 ms)`; 103 tables. (`--to` only because `0023` exists by now and has its own step below) |
 
+## After the review: `0022` and `0023` edited in place
+
+Neither migration has been applied anywhere but local scratch databases, so both were edited in place (their journal dates are unchanged). What changed, 27 Nov 2026:
+
+- `player_suspensions.id` and `moderation_actions.id` are `bigint GENERATED ALWAYS AS IDENTITY` (they were `bigserial`). The app's role has `INSERT` on the other columns only, not on `id` or `created_at` (nor on `moderation_evidence.created_at`), and no right on the two id sequences. Before, the role could insert a row with any id or time, and rows are ordered by id: a lift with the largest possible id was accepted.
+- `player_suspensions` has one more check, `player_suspensions_unsuspend_names_account_check`: a lift names an account and carries no index.
+
+| Step | Result |
+|---|---|
+| A scratch database at `0021` with the fixture, then `0022` as it now is (the plain migrator, nothing worked around) | Applied in 36 ms; 95 tables before, 103 after; the 95 existing tables' rows identical; the data guard passed with the expectations (24 accounts, 0 problems); a second run applied nothing |
+| The app's role on `player_suspensions` | `has_table_privilege(…, 'INSERT')` is now false (the right is per column); `UPDATE`, `DELETE` false. In the tests, as the role: an insert naming `id` (with or without `OVERRIDING SYSTEM VALUE`) or `created_at` is "permission denied", as is `setval` on the sequence; an ordinary insert works |
+| The same for `moderation_actions` and `moderation_evidence` | In `tests/moderation-reports.test.ts`, as the role: the same refusals; an ordinary insert works and gets the database's id and time |
+| Rollback SQL (both blocks below, unchanged: dropping a table drops its identity sequence), then a schema dump | `0022`'s was run again: the schema equals the one before, and `0022` applies again. `0023`'s was not run again |
+| `docs/schema/production.sql` | Three lines changed by hand (the two `id` columns no longer show a default; the new check): on Postgres 16 the dump after `0023` equals it once the `NOT NULL` lines are set aside, and a database built from `packages/db/schema.ts` gives the same tables. The dump does not show that a column is an identity column, so the drift suite can't tell `bigserial` from identity; the tests check `attidentity` instead |
+| `tests/moderation.test.ts`, `tests/moderation-reports.test.ts` | 48 of 48 and 35 of 35, on fresh databases |
+
+**A local database that ran the first `0022` or `0023` will refuse to migrate** ("changed after it was applied"). Roll both back with the SQL below and migrate again, or recreate the database. The tests make fresh databases and are not affected.
+
 ## Still to do
 
 1. The schema drift suite on Postgres 18 (CI), for both migrations.
 2. A run on a copy of production on Postgres 18 with the data guard before and after (a Neon branch when one is booked with lane T; Neon is at 10 of 10 branches). All eleven tables are new and empty, so the guard should report no change for any account.
-3. Lane T's agreement on the two `SECURITY DEFINER` functions before the migration merges (Social plan, Task 3 code review): **agreement pending**. They rely, as `link_account_to_rows` does, on the tables' owner not being bound by row-level security (`BYPASSRLS` on production's owner; checked there for `0007`).
+3. Lane T's agreement on the two `SECURITY DEFINER` functions before the migration merges (Social plan, Task 3 code review): **agreement pending**. They rely, as `link_account_to_rows` does, on their owner **bypassing row-level security** on `club_members` and `tenant_modules`. Both tables have row-level security enabled **and forced**, so being the tables' owner is not enough: the functions' owner has to hold `BYPASSRLS` (or be a superuser). **The tests here can't show what happens otherwise:** the local owner is a superuser, so no test has run the functions as an owner that is bound by the policy. Such an owner would see only the club named in `app.tenant_id` (the functions don't change it), and `social_clubs_of` would quietly return one club instead of all of a person's. `0007` recorded that production's owner has `BYPASSRLS`; that was not checked again for this change. **Before Social is switched on anywhere, check it on the real owner role** (`SELECT rolbypassrls FROM pg_roles WHERE rolname = '<owner>'`, and that the functions are owned by that role), and call `social_clubs_of` as `luvallplay_app` scoped to one club for a person who is in two.
 4. The production run itself, with the owner's OK. Nothing depends on it until a pilot club is listed.
 
 ## Settings
@@ -101,7 +119,7 @@ Once Social is on for anyone, `player_suspensions` is a record that must be kept
 | The three new tables | 0 rows each |
 | Data guard, before against after, with the expectations | Passed: 24 live accounts checked, 0 problems. It reports the three new tables and nothing else; without the expectations file the result is the same |
 | Migrating a second time | **A no-op:** "Nothing to migrate: the database is up to date."; the history has 24 rows |
-| The app's role | `content_reports`: `SELECT`, `INSERT`, `UPDATE`, `DELETE`. `moderation_actions` and `moderation_evidence`: `SELECT` and `INSERT` yes; `UPDATE` and `DELETE` no (tried as the role: "permission denied for table moderation_actions"). `TRUNCATE` on none of the three |
+| The app's role | `content_reports`: `SELECT`, `INSERT`, `UPDATE`, `DELETE`. `moderation_actions` and `moderation_evidence`: `SELECT` yes; `INSERT` on every column but `moderation_actions.id` and the two `created_at` (after the review fixes below); `UPDATE` and `DELETE` no (tried as the role: "permission denied for table moderation_actions"). `TRUNCATE` on none of the three |
 | Rollback (below), then a schema dump | The schema equals the one before `0023` (103 tables); the migrator applies `0023` again afterwards (10 ms) |
 | `tests/moderation-reports.test.ts` | Passes (35 of 35) on Postgres 16, each database test once as the owner and once under `TENANT_SCOPE=enforce` with two clubs |
 | `packages/db/schema.ts` against the migration (the three tables, their indexes and sequences, on Postgres 16) | No difference |

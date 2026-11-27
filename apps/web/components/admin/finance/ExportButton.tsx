@@ -6,6 +6,7 @@ import { useToast } from "@/context/ToastContext";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import styles from "./financials.module.css";
 import { clubSlug } from "@/lib/club-brand";
+import { useAdminText } from "@/components/admin/AdminLang";
 
 // Downloads an Excel export with visible progress. A plain <a download>
 // gave no feedback at all while the server built the workbook (a few
@@ -16,6 +17,7 @@ export function ExportButton({ href, children }: { href: string; children: React
   const [busy, setBusy] = useState(false);
   const showBusy = useDelayedLoading(busy, 200);
   const { showToast } = useToast();
+  const { t } = useAdminText();
 
   async function download() {
     if (busy) return;
@@ -30,7 +32,7 @@ export function ExportButton({ href, children }: { href: string; children: React
       }
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `Export failed (${res.status})`);
+        throw new Error(body?.error ?? t("fin_export_failed_code", { code: res.status }));
       }
       const blob = await res.blob();
       const name =
@@ -45,7 +47,7 @@ export function ExportButton({ href, children }: { href: string; children: React
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Export failed", "error");
+      showToast(err instanceof Error ? err.message : t("fin_export_failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -63,7 +65,7 @@ export function ExportButton({ href, children }: { href: string; children: React
       {showBusy ? (
         <>
           <LoadingIcon size="sm" />
-          Preparing Excel…
+          {t("fin_export_preparing")}
         </>
       ) : (
         children

@@ -17,23 +17,16 @@ import styles from "@/components/admin/finance/financials.module.css";
 import { PageHeader } from "@/components/admin/kit";
 import { getClubToday } from "@/lib/dates";
 import {
-  categoryLabel,
   centsToInputValue,
-  describeNonDateFilters,
   financeFiltersToSearchParams,
   formatCents,
-  formatDateKey,
   financialYearLabel,
   financialYearOf,
-  formatRange,
   isDateKey,
   isFinanceCategory,
   isFinanceMethod,
-  methodLabel,
-  monthLabel,
   parseAmountToCents,
   parseFinanceFilters,
-  presetLabel,
   signedCents,
   type FinanceFilters as Filters,
   type FinanceKind,
@@ -53,6 +46,10 @@ import {
   syncStripeFinance,
 } from "@/lib/finance-stripe";
 import { clubRoundAmount } from "@/lib/club-brand";
+import { adminText } from "@/lib/admin-lang";
+import { categoryLabelIn, describeNonDateFiltersIn, formatDateKeyIn, formatRangeIn, methodLabelIn, monthLabelIn, presetLabelIn } from "@/lib/finance-text";
+
+type T = Awaited<ReturnType<typeof adminText>>["t"];
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +78,7 @@ async function saveEntry(
 ): Promise<EntryFormState> {
   "use server";
 
+  const { t, lang } = await adminText();
   const returnTo = sanitizeReturnTo(formData.get("returnTo"), getClubToday(new Date(), await clubClock()).dateKey);
   const values: Record<string, string> = {};
   for (const key of ["entryDate", "amount", "method", "name", "person", "notes"]) {
@@ -91,7 +89,7 @@ async function saveEntry(
   const rawId = formData.get("id");
   const id = rawId ? Number(rawId) : null;
   if (rawId && (!Number.isSafeInteger(id) || (id as number) <= 0)) {
-    return fail("That entry no longer exists.");
+    return fail(t("fin_err_gone"));
   }
 
   const kind: FinanceKind = formData.get("kind") === "received" ? "received" : "spent";
@@ -103,18 +101,18 @@ async function saveEntry(
   const entryDate = text(formData, "entryDate", 10);
   const amountCents = parseAmountToCents(String(formData.get("amount") ?? ""));
 
-  if (!name) return fail("Please give the entry a name.");
-  if (!isFinanceCategory(category)) return fail("Please choose a source.");
-  if (!isDateKey(entryDate)) return fail("Please enter a valid date.");
+  if (!name) return fail(t("fin_err_name"));
+  if (!isFinanceCategory(category)) return fail(t("fin_err_source"));
+  if (!isDateKey(entryDate)) return fail(t("fin_err_date"));
   if (amountCents === null) {
-    return fail(`Please enter an amount greater than ${clubRoundAmount(0)}, like 45 or 45.50 (max ${clubRoundAmount(1_000_000)}).`);
+    return fail(t("fin_err_amount", { zero: clubRoundAmount(0), max: clubRoundAmount(1_000_000) }));
   }
-  if (method && !isFinanceMethod(method)) return fail("Please choose how it was paid.");
+  if (method && !isFinanceMethod(method)) return fail(t("fin_err_method"));
 
   const file = formData.get("receipt");
   const receiptFile = file instanceof File && file.size > 0 ? file : null;
   if (receiptFile && !receiptsConfigured()) {
-    return fail("Receipt storage isn't set up yet — save without the image, or add BLOB_READ_WRITE_TOKEN.");
+    return fail(t("fin_err_receipts_off"));
   }
 
   const input: ManualEntryInput = {
@@ -132,9 +130,9 @@ async function saveEntry(
   let previousReceipt: string | null = null;
   if (id) {
     const existing = await getManualEntry(id);
-    if (!existing) return fail("That entry no longer exists — it may have been deleted.");
+    if (!existing) return fail(t("fin_err_gone2"));
     if (!(await updateManualEntry(id, input))) {
-      return fail("That entry can't be edited.");
+      return fail(t("fin_err_cant_edit"));
     }
     entryId = id;
     previousReceipt = existing.receiptUrl;
@@ -167,10 +165,10 @@ async function saveEntry(
         });
       } catch (err) {
         if (!(err instanceof MatchError)) throw err;
-        bankNote = `Entry saved, but not matched to the bank line: ${err.message}`;
+        bankNote = t("fin_note_not_matched", { error: err.message });
       }
     } else if (line) {
-      bankNote = "Entry saved, but it wasn't matched to the bank line because the amounts differ.";
+      bankNote = t("fin_note_amount_differs");
     }
   }
 
@@ -181,7 +179,7 @@ async function saveEntry(
       await setEntryReceipt(entryId, stored);
       if (previousReceipt) await deleteReceipt(previousReceipt);
     } catch (err) {
-      receiptError = err instanceof Error ? err.message : "Receipt upload failed";
+      receiptError = err instanceof Error ? err.message : t("fin_err_receipt_upload");
     }
   }
 
@@ -189,7 +187,7 @@ async function saveEntry(
   const extra = {
     saved: id ? "updated" : "new",
     ...(receiptError
-      ? { financeError: `Entry saved, but the receipt didn't upload: ${receiptError}` }
+      ? { financeError: t("fin_err_receipt_saved", { error: receiptError }) }
       : bankNote
         ? { financeError: bankNote }
         : {}),
@@ -197,7 +195,7 @@ async function saveEntry(
   if (formData.get("after") === "bank") {
     // Say where the entry went: it's dated on the bank line, which is often
     // outside the ledger's default "This month" view.
-    const notice = `Added “${name}” to the ledger, dated ${formatDateKey(entryDate)}.`;
+    const notice = t("fin_notice_added", { name, date: formatDateKeyIn(lang, entryDate) });
     const { saved: _saved, ...rest } = extra;
     void _saved;
     redirect(`/admin/financials/bank?${new URLSearchParams({ notice, ...rest }).toString()}`);
@@ -208,14 +206,15 @@ async function saveEntry(
 async function deleteEntry(formData: FormData) {
   "use server";
 
+  const { t } = await adminText();
   const returnTo = sanitizeReturnTo(formData.get("returnTo"), getClubToday(new Date(), await clubClock()).dateKey);
   const id = Number(formData.get("id"));
   if (!Number.isSafeInteger(id) || id <= 0) {
-    redirect(backTo(returnTo, { financeError: "That entry no longer exists." }));
+    redirect(backTo(returnTo, { financeError: t("fin_err_gone") }));
   }
   const deleted = await deleteManualEntry(id);
   if (!deleted) {
-    redirect(backTo(returnTo, { financeError: "That entry no longer exists or can't be deleted." }));
+    redirect(backTo(returnTo, { financeError: t("fin_err_gone_or_locked") }));
   }
   await deleteReceipt(deleted.receiptUrl);
   revalidatePath("/admin/financials");
@@ -225,38 +224,42 @@ async function deleteEntry(formData: FormData) {
 async function syncNow(formData: FormData) {
   "use server";
 
+  const { t } = await adminText();
   const returnTo = sanitizeReturnTo(formData.get("returnTo"), getClubToday(new Date(), await clubClock()).dateKey);
   let destination: string;
   try {
     const result = await syncStripeFinance({ full: formData.get("full") === "1" });
     destination = backTo(returnTo, { synced: String(result.imported) });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Stripe sync failed";
-    destination = backTo(returnTo, { financeError: `Stripe sync failed: ${message}` });
+    const message = err instanceof Error ? err.message : t("fin_err_sync");
+    destination = backTo(returnTo, { financeError: t("fin_err_sync_msg", { error: message }) });
   }
   revalidatePath("/admin/financials");
   redirect(destination);
 }
 
-function timeAgo(date: Date): string {
+function timeAgo(t: T, date: Date): string {
   const minutes = Math.round((Date.now() - date.getTime()) / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return t("fin_ago_now");
+  if (minutes < 60) return t("fin_ago_min", { n: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  if (hours < 24) return t(hours === 1 ? "fin_ago_hour_one" : "fin_ago_hour_many", { n: hours });
   const days = Math.round(hours / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
+  return t(days === 1 ? "fin_ago_day_one" : "fin_ago_day_many", { n: days });
 }
 
 function SummaryCard({
   title,
   subtitle,
   totals,
+  t,
 }: {
   title: string;
   subtitle: string;
   totals: FinanceTotals;
+  t: T;
 }) {
+  const entries = (n: number) => t(n === 1 ? "fin_entry_one" : "fin_entry_many", { n });
   return (
     <section className={styles.card}>
       <div className={styles.cardHead}>
@@ -265,27 +268,27 @@ function SummaryCard({
       </div>
       <div className={styles.stats}>
         <div>
-          <div className={styles.statLabel}>Received</div>
+          <div className={styles.statLabel}>{t("fin_received")}</div>
           <div className={`${styles.statValue} ${styles.pos}`}>{formatCents(totals.receivedCents)}</div>
           <div className={styles.statCount}>
-            {totals.receivedCount} {totals.receivedCount === 1 ? "entry" : "entries"}
+            {entries(totals.receivedCount)}
           </div>
         </div>
         <div>
-          <div className={styles.statLabel}>Spent</div>
+          <div className={styles.statLabel}>{t("fin_spent")}</div>
           <div className={`${styles.statValue} ${styles.neg}`}>{formatCents(totals.spentCents)}</div>
           <div className={styles.statCount}>
-            {totals.spentCount} {totals.spentCount === 1 ? "entry" : "entries"}
+            {entries(totals.spentCount)}
           </div>
         </div>
         <div>
-          <div className={styles.statLabel}>Net</div>
+          <div className={styles.statLabel}>{t("fin_net")}</div>
           <div
             className={`${styles.statValue} ${totals.netCents < 0 ? styles.neg : totals.netCents > 0 ? styles.pos : ""}`}
           >
             {formatCents(totals.netCents, { signed: true })}
           </div>
-          <div className={styles.statCount}>received − spent</div>
+          <div className={styles.statCount}>{t("fin_received_minus_spent")}</div>
         </div>
       </div>
     </section>
@@ -322,6 +325,7 @@ export default async function FinancialsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const { t, lang } = await adminText();
   const params = await searchParams;
   const { dateKey: today } = getClubToday(new Date(), await clubClock());
   const filters = parseFinanceFilters(params, today);
@@ -337,8 +341,8 @@ export default async function FinancialsPage({
 
   const header = (
     <PageHeader
-      title="Ledger"
-      subtitle="Every dollar in and out of the club. Stripe payments (card and recorded cash) come in automatically; record expenses and any other income here."
+      title={t("fin_title")}
+      subtitle={t("fin_subtitle")}
     />
   );
 
@@ -346,7 +350,7 @@ export default async function FinancialsPage({
     return (
       <div className={styles.page}>
         {header}
-        <p>Database is not configured.</p>
+        <p>{t("play_no_db")}</p>
       </div>
     );
   }
@@ -365,7 +369,7 @@ export default async function FinancialsPage({
     try {
       await syncStripeFinance();
     } catch (err) {
-      syncError = err instanceof Error ? err.message : "Stripe sync failed";
+      syncError = err instanceof Error ? err.message : t("fin_err_sync");
     }
     syncState = await getStripeSyncState();
   }
@@ -405,8 +409,8 @@ export default async function FinancialsPage({
       }
     : null;
 
-  const nonDateFilters = describeNonDateFilters(filters);
-  const rangeText = formatRange(filters.from, filters.to);
+  const nonDateFilters = describeNonDateFiltersIn(lang, filters);
+  const rangeText = formatRangeIn(lang, filters.from, filters.to);
   const exportHref = `/api/admin/finance/export${returnTo ? `?${returnTo}` : ""}`;
   const { entries, totals, ytd, breakdown } = report;
 
@@ -420,28 +424,27 @@ export default async function FinancialsPage({
             <span
               className={`${styles.syncDot} ${syncError || syncState.lastError ? styles.syncDotWarn : ""}`}
             />
-            Stripe{" "}
             {syncState.lastFinishedAt
-              ? `synced ${timeAgo(syncState.lastFinishedAt)}`
-              : "not synced yet"}
+              ? t("fin_stripe_synced", { ago: timeAgo(t, syncState.lastFinishedAt) })
+              : t("fin_stripe_not_synced")}
           </span>
           <form action={syncNow} style={{ display: "inline" }}>
             <input type="hidden" name="returnTo" value={returnTo} />
-            <SubmitButton loadingText="Syncing…" className={styles.buttonGhost}>
-              Sync now
+            <SubmitButton loadingText={t("fin_syncing")} className={styles.buttonGhost}>
+              {t("fin_sync_now")}
             </SubmitButton>
           </form>
           <details className={styles.advanced}>
-            <summary>Advanced</summary>
+            <summary>{t("fin_advanced")}</summary>
             <form action={syncNow}>
               <input type="hidden" name="returnTo" value={returnTo} />
               <input type="hidden" name="full" value="1" />
               <SubmitButton
-                loadingText="Re-importing…"
+                loadingText={t("fin_reimporting")}
                 className={styles.buttonGhost}
-                confirmMessage="Re-import the whole Stripe history? It takes a while; entries already here aren't duplicated."
+                confirmMessage={t("fin_reimport_confirm")}
               >
-                Re-import full Stripe history
+                {t("fin_reimport")}
               </SubmitButton>
             </form>
           </details>
@@ -450,12 +453,13 @@ export default async function FinancialsPage({
 
       {!stripeConfigured ? (
         <p className={styles.banner}>
-          Stripe isn&apos;t configured, so only entries recorded on this page are shown.
+          {t("fin_no_stripe")}
         </p>
       ) : syncError || syncState?.lastError ? (
         <p className={styles.banner}>
-          Couldn&apos;t sync with Stripe ({syncError ?? syncState?.lastError}). Figures below may
-          be missing the latest payments: try &ldquo;Sync now&rdquo;.
+          {t("fin_sync_problem_a", { error: syncError ?? syncState?.lastError ?? "" })}
+          {t("fin_sync_now")}
+          {t("fin_sync_problem_b")}
         </p>
       ) : null}
 
@@ -465,47 +469,49 @@ export default async function FinancialsPage({
         <span className={styles.rangeText}>
           {rangeText}
           {filters.preset !== "custom" ? (
-            <span className={styles.rangePreset}>· {presetLabel(filters.preset)}</span>
+            <span className={styles.rangePreset}>· {presetLabelIn(lang, filters.preset)}</span>
           ) : null}
         </span>
-        <ExportButton href={exportHref}>⤓ Export to Excel</ExportButton>
+        <ExportButton href={exportHref}>{t("fin_export")}</ExportButton>
       </div>
 
       <div className={styles.summary}>
         <SummaryCard
-          title={nonDateFilters.length ? "Filtered total" : "Selected period"}
+          title={nonDateFilters.length ? t("fin_filtered_total") : t("fin_selected_period")}
           subtitle={rangeText}
           totals={totals}
+          t={t}
         />
         <SummaryCard
-          title={`Year to date · FY ${financialYearLabel(financialYearOf(today))}`}
-          subtitle={`${formatRange(report.ytdRange.from, report.ytdRange.to)}${
-            nonDateFilters.length ? " · same filters" : ""
+          title={t("fin_ytd", { fy: financialYearLabel(financialYearOf(today)) })}
+          subtitle={`${formatRangeIn(lang, report.ytdRange.from, report.ytdRange.to)}${
+            nonDateFilters.length ? t("fin_same_filters") : ""
           }`}
           totals={ytd}
+          t={t}
         />
       </div>
 
       <MonthlyChart
         months={report.monthly}
-        title={`Monthly trend · ${monthLabel(report.monthly[0].month, { year: true })} – ${monthLabel(
-          report.monthly[report.monthly.length - 1].month,
-          { year: true },
-        )}`}
+        title={t("fin_trend", {
+          from: monthLabelIn(lang, report.monthly[0].month, { year: true }),
+          to: monthLabelIn(lang, report.monthly[report.monthly.length - 1].month, { year: true }),
+        })}
       />
 
       {breakdown.length > 0 ? (
         <details className={styles.breakdown} open={breakdown.length > 1}>
-          <summary>Breakdown by category</summary>
+          <summary>{t("fin_breakdown")}</summary>
           <div className={styles.breakdownScroll}>
           <table className={styles.breakdownTable}>
             <thead>
               <tr>
-                <th>Category</th>
-                <th>Received</th>
-                <th>Spent</th>
-                <th>Net</th>
-                <th>Entries</th>
+                <th>{t("fin_col_category")}</th>
+                <th>{t("fin_received")}</th>
+                <th>{t("fin_spent")}</th>
+                <th>{t("fin_net")}</th>
+                <th>{t("fin_col_entries")}</th>
               </tr>
             </thead>
             <tbody>
@@ -516,7 +522,7 @@ export default async function FinancialsPage({
                   <tr key={b.category}>
                     <td>
                       <AdminLink className={styles.sortLink} href={`/admin/financials?${qs}`} scroll={false}>
-                        {categoryLabel(b.category)}
+                        {categoryLabelIn(lang, b.category)}
                       </AdminLink>
                     </td>
                     <td className={styles.num}>{b.receivedCents ? formatCents(b.receivedCents) : "—"}</td>
@@ -531,7 +537,7 @@ export default async function FinancialsPage({
             </tbody>
             <tfoot>
               <tr>
-                <td>Total</td>
+                <td>{t("fin_total")}</td>
                 <td className={styles.num}>{formatCents(totals.receivedCents)}</td>
                 <td className={styles.num}>{formatCents(totals.spentCents)}</td>
                 <td className={styles.num}>{formatCents(totals.netCents, { signed: true })}</td>
@@ -560,22 +566,22 @@ export default async function FinancialsPage({
         <table className={`${styles.table} ${styles.ledgerStack}`}>
           <thead>
             <tr>
-              <th>No.</th>
-              <SortHeader label="Date" field="date" filters={filters} />
-              <th>Name</th>
-              <th>Type</th>
-              <th>Category</th>
-              <th>Person</th>
-              <SortHeader label="Amount" field="amount" filters={filters} alignRight />
-              <th>Invoice</th>
-              <th aria-label="Actions" />
+              <th>{t("fin_col_no")}</th>
+              <SortHeader label={t("fin_sort_date")} field="date" filters={filters} />
+              <th>{t("fin_col_name")}</th>
+              <th>{t("fin_col_type")}</th>
+              <th>{t("fin_col_category")}</th>
+              <th>{t("fin_col_person")}</th>
+              <SortHeader label={t("fin_sort_amount")} field="amount" filters={filters} alignRight />
+              <th>{t("fin_col_invoice")}</th>
+              <th aria-label={t("fin_col_actions")} />
             </tr>
           </thead>
           <tbody>
             {entries.length === 0 ? (
               <tr>
                 <td colSpan={9} className={styles.empty}>
-                  No transactions {nonDateFilters.length ? "match these filters" : "in this period"}.
+                  {nonDateFilters.length ? t("fin_none_filtered") : t("fin_none_period")}
                 </td>
               </tr>
             ) : (
@@ -592,19 +598,19 @@ export default async function FinancialsPage({
                     }
                   >
                     <td className={`${styles.rowNo} ${styles.num}`}>{i + 1}</td>
-                    <td className={styles.num}>{formatDateKey(e.entryDate)}</td>
+                    <td className={styles.num}>{formatDateKeyIn(lang, e.entryDate)}</td>
                     <td>
                       <div className={styles.entryName}>{e.name}</div>
                       {e.notes ? <div className={styles.entryNotes}>{e.notes}</div> : null}
                     </td>
                     <td>
                       <span className={`${styles.pill} ${e.kind === "received" ? styles.pillReceived : styles.pillSpent}`}>
-                        {e.kind === "received" ? "Received" : "Spent"}
+                        {e.kind === "received" ? t("fin_received") : t("fin_spent")}
                       </span>
                     </td>
                     <td>
-                      {categoryLabel(e.category)}
-                      {e.method ? <span className={styles.method}>{methodLabel(e.method)}</span> : null}
+                      {categoryLabelIn(lang, e.category)}
+                      {e.method ? <span className={styles.method}>{methodLabelIn(lang, e.method)}</span> : null}
                     </td>
                     <td>{e.person ?? <span className={styles.hint}>—</span>}</td>
                     <td className={`${styles.right} ${styles.num} ${e.kind === "received" ? styles.amountIn : styles.amountOut}`}>
@@ -616,12 +622,12 @@ export default async function FinancialsPage({
                           href={`/api/admin/finance/receipts/${e.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title="Open receipt"
+                          title={t("fin_open_receipt")}
                         >
                           {e.receiptContentType?.startsWith("image/") && !e.receiptContentType.includes("hei") ? (
                             <img
                               src={`/api/admin/finance/receipts/${e.id}`}
-                              alt={`Receipt for ${e.name}`}
+                              alt={t("fin_receipt_for", { name: e.name })}
                               loading="lazy"
                               className={styles.thumb}
                             />
@@ -644,23 +650,23 @@ export default async function FinancialsPage({
                         <div className={styles.actions} style={{ marginBottom: 4 }}>
                           <span
                             className={`${styles.badge} ${styles.badgeBank}`}
-                            title={`Reconciled to the bank line on ${formatDateKey(e.bankDate)}`}
+                            title={t("fin_bank_reconciled", { date: formatDateKeyIn(lang, e.bankDate) })}
                           >
-                            ✓ Bank
+                            {t("fin_bank_badge")}
                           </span>
                         </div>
                       ) : null}
                       {e.origin === "manual" ? (
                         <div className={styles.actions}>
                           <AdminLink className={styles.actionLink} href={`/admin/financials?${editQs.toString()}`}>
-                            Edit
+                            {t("fin_edit")}
                           </AdminLink>
                           <DeleteEntryButton action={deleteEntry} id={e.id} label={e.name} returnTo={returnTo} />
                         </div>
                       ) : (
                         <div className={styles.actions}>
-                          <span className={styles.badge} title="Imported from Stripe: change it in Stripe">
-                            From Stripe
+                          <span className={styles.badge} title={t("fin_from_stripe_title")}>
+                            {t("fin_from_stripe")}
                           </span>
                         </div>
                       )}
@@ -676,16 +682,16 @@ export default async function FinancialsPage({
                 <td colSpan={9}>
                   <div className={styles.footTotals}>
                     <span>
-                      {entries.length} {entries.length === 1 ? "entry" : "entries"}
+                      {t(entries.length === 1 ? "fin_entry_one" : "fin_entry_many", { n: entries.length })}
                     </span>
                     <span>
-                      Received <span className={`${styles.num} ${styles.pos}`}>{formatCents(totals.receivedCents)}</span>
+                      {t("fin_received")} <span className={`${styles.num} ${styles.pos}`}>{formatCents(totals.receivedCents)}</span>
                     </span>
                     <span>
-                      Spent <span className={`${styles.num} ${styles.neg}`}>{formatCents(totals.spentCents)}</span>
+                      {t("fin_spent")} <span className={`${styles.num} ${styles.neg}`}>{formatCents(totals.spentCents)}</span>
                     </span>
                     <span>
-                      Net{" "}
+                      {t("fin_net")}{" "}
                       <span className={`${styles.num} ${totals.netCents < 0 ? styles.neg : styles.pos}`}>
                         {formatCents(totals.netCents, { signed: true })}
                       </span>

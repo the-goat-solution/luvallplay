@@ -15,6 +15,8 @@ import {
   type FinancePreset,
 } from "@/lib/finance";
 import styles from "./financials.module.css";
+import { useAdminText } from "@/components/admin/AdminLang";
+import { categoryLabelIn, methodLabelIn, presetLabelIn } from "@/lib/finance-text";
 
 // Filter bar for the Financials page. Every change navigates straight away
 // (no Apply button) — the URL is the single source of truth for the filters,
@@ -22,6 +24,7 @@ import styles from "./financials.module.css";
 // and any view can be bookmarked or shared with another admin.
 export function FinanceFilters({ filters, today }: { filters: Filters; today: string }) {
   const router = useRouter();
+  const { t, lang } = useAdminText();
   const [isPending, startTransition] = useTransition();
   const [q, setQ] = useState(filters.q);
   // Local copies so typing a date doesn't navigate on every keystroke of a
@@ -68,9 +71,9 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
   }
 
   const kinds: { value: FinanceKind | null; label: string; className?: string }[] = [
-    { value: null, label: "All" },
-    { value: "received", label: "Received", className: styles.segmentReceived },
-    { value: "spent", label: "Spent", className: styles.segmentSpent },
+    { value: null, label: t("fin_filter_all") },
+    { value: "received", label: t("fin_received"), className: styles.segmentReceived },
+    { value: "spent", label: t("fin_spent"), className: styles.segmentSpent },
   ];
 
   const isDefault =
@@ -81,9 +84,9 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
     !filters.q;
 
   return (
-    <div className={styles.filters} role="search" aria-label="Filter transactions">
+    <div className={styles.filters} role="search" aria-label={t("fin_filter_label")}>
       <label className={styles.field}>
-        <span className={styles.label}>Period</span>
+        <span className={styles.label}>{t("fin_filter_period")}</span>
         <select
           className={styles.select}
           value={filters.preset}
@@ -91,14 +94,14 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
         >
           {FINANCE_PRESETS.map((p) => (
             <option key={p.value} value={p.value}>
-              {p.label}
+              {presetLabelIn(lang, p.value)}
             </option>
           ))}
         </select>
       </label>
 
       <label className={styles.field}>
-        <span className={styles.label}>From</span>
+        <span className={styles.label}>{t("fin_filter_from")}</span>
         <input
           type="date"
           className={styles.input}
@@ -109,7 +112,7 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
       </label>
 
       <label className={styles.field}>
-        <span className={styles.label}>To</span>
+        <span className={styles.label}>{t("fin_filter_to")}</span>
         <input
           type="date"
           className={styles.input}
@@ -121,7 +124,7 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
 
       <div className={styles.field}>
         <span className={styles.label} id="finance-type-label">
-          Type
+          {t("fin_col_type")}
         </span>
         <div className={styles.segmented} role="group" aria-labelledby="finance-type-label">
           {kinds.map((k) => {
@@ -147,20 +150,20 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
       </div>
 
       <label className={styles.field}>
-        <span className={styles.label}>Category</span>
+        <span className={styles.label}>{t("fin_col_category")}</span>
         <select
           className={styles.select}
           value={filters.category ?? ""}
           onChange={(e) => go({ category: e.target.value || null })}
         >
-          <option value="">All sources</option>
+          <option value="">{t("fin_filter_all_sources")}</option>
           {(["received", "spent"] as const)
             .filter((kind) => !filters.kind || filters.kind === kind)
             .map((kind) => (
-              <optgroup key={kind} label={kind === "received" ? "Money in" : "Money out"}>
+              <optgroup key={kind} label={kind === "received" ? t("fin_filter_money_in") : t("fin_filter_money_out")}>
                 {FINANCE_CATEGORIES.filter((c) => c.kind === kind).map((c) => (
                   <option key={c.value} value={c.value}>
-                    {c.label}
+                    {categoryLabelIn(lang, c.value)}
                   </option>
                 ))}
               </optgroup>
@@ -169,16 +172,16 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
       </label>
 
       <label className={styles.field}>
-        <span className={styles.label}>Method</span>
+        <span className={styles.label}>{t("fin_filter_method")}</span>
         <select
           className={styles.select}
           value={filters.method ?? ""}
           onChange={(e) => go({ method: e.target.value || null })}
         >
-          <option value="">All methods</option>
+          <option value="">{t("fin_filter_all_methods")}</option>
           {FINANCE_METHODS.map((m) => (
             <option key={m.value} value={m.value}>
-              {m.label}
+              {methodLabelIn(lang, m.value)}
             </option>
           ))}
         </select>
@@ -191,11 +194,11 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
           go({ q: q.trim() });
         }}
       >
-        <span className={styles.label}>Search</span>
+        <span className={styles.label}>{t("common_search")}</span>
         <input
           type="search"
           className={`${styles.input} ${styles.search}`}
-          placeholder="Name, person or note…"
+          placeholder={t("fin_filter_search_ph")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onBlur={() => {
@@ -212,14 +215,14 @@ export function FinanceFilters({ filters, today }: { filters: Filters; today: st
             startTransition(() => router.push("/admin/financials", { scroll: false }))
           }
         >
-          Reset
+          {t("fin_filter_reset")}
         </button>
       ) : null}
 
       {isPending ? (
         <span className={styles.pending} role="status">
           <LoadingIcon size="sm" />
-          Updating…
+          {t("fin_filter_updating")}
         </span>
       ) : null}
     </div>

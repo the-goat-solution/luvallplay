@@ -3,13 +3,15 @@ import { Badge, EmptyState, kit } from "@/components/admin/kit";
 import { addAttendanceByEmail, markAttended, markNotAttended } from "@/app/admin/(console)/play-days/attendance-actions";
 import { listAttendanceForDate } from "@/lib/stats-db";
 import type { RosterEntry } from "@/lib/db";
+import { adminText } from "@/lib/admin-lang";
+import type { AdminKey } from "@luvallplay/i18n/admin";
 
-const SOURCE_LABEL: Record<string, string> = {
-  board: "from the court board",
-  minigame: "from the round robin",
-  admin: "marked by an admin",
-  booking_history: "from past bookings",
-  api: "from a connected app",
+const SOURCE_KEY: Record<string, AdminKey> = {
+  board: "att_src_board",
+  minigame: "att_src_minigame",
+  admin: "att_src_admin",
+  booking_history: "att_src_booking_history",
+  api: "att_src_api",
 };
 
 /**
@@ -18,6 +20,7 @@ const SOURCE_LABEL: Record<string, string> = {
  * round robin; tick or untick anyone here for days the board wasn't used.
  */
 export async function AttendanceSection({ date, roster }: { date: string; roster: RosterEntry[] }) {
+  const { t } = await adminText();
   const records = await listAttendanceForDate(date);
   const byEmail = new Map(records.map((r) => [r.email, r]));
   const people = new Map<string, string>();
@@ -30,21 +33,20 @@ export async function AttendanceSection({ date, roster }: { date: string; roster
   return (
     <section id="attendance">
       <p className={kit.muted} style={{ fontSize: 13, marginTop: 0 }}>
-        Who played counts toward stats and the leaderboard. It&apos;s filled in automatically from the court board (anyone with a finished game) and the
-        round robin; fix it here for days they weren&apos;t used. Members who said they can&apos;t make it aren&apos;t listed.
+        {t("att_intro")}
       </p>
       {people.size === 0 ? (
-        <EmptyState>Nobody to show yet: no one signed up and nothing was recorded.</EmptyState>
+        <EmptyState>{t("att_empty")}</EmptyState>
       ) : (
         <div className={kit.tableWrap}>
           <table className={kit.table}>
-            <caption className={kit.srOnly}>Attendance on {date}</caption>
+            <caption className={kit.srOnly}>{t("att_caption", { date })}</caption>
             <thead>
               <tr>
-                <th scope="col">Player</th>
-                <th scope="col">Played?</th>
+                <th scope="col">{t("play_col_player")}</th>
+                <th scope="col">{t("att_col_played")}</th>
                 <th scope="col">
-                  <span className={kit.srOnly}>Actions</span>
+                  <span className={kit.srOnly}>{t("play_col_actions")}</span>
                 </th>
               </tr>
             </thead>
@@ -55,32 +57,32 @@ export async function AttendanceSection({ date, roster }: { date: string; roster
                 const toConfirm = Boolean(rec && !rec.verified && !rec.removed);
                 return (
                   <tr key={email}>
-                    <td data-label="Player">
+                    <td data-label={t("play_col_player")}>
                       <div>
                         {name}
                         <span className={kit.sub}>{email}</span>
                       </div>
                     </td>
-                    <td data-label="Played?">
+                    <td data-label={t("att_col_played")}>
                       {played ? (
-                        <Badge tone="good">✓ Played, {SOURCE_LABEL[rec!.source] ?? rec!.source}</Badge>
+                        <Badge tone="good">{t("att_played", { source: SOURCE_KEY[rec!.source] ? t(SOURCE_KEY[rec!.source]) : rec!.source })}</Badge>
                       ) : toConfirm ? (
-                        <Badge tone="warn">Checked in from an app: confirm?</Badge>
+                        <Badge tone="warn">{t("att_to_confirm")}</Badge>
                       ) : (
-                        <span className={kit.muted}>Not recorded</span>
+                        <span className={kit.muted}>{t("att_not_recorded")}</span>
                       )}
                     </td>
                     <td data-label="">
                       {played ? (
                         <form action={markNotAttended.bind(null, date, email)}>
-                          <SubmitButton className={kit.btnSecondary} loadingText="Saving…">
-                            Didn&apos;t play
+                          <SubmitButton className={kit.btnSecondary} loadingText={t("common_saving")}>
+                            {t("att_didnt_play")}
                           </SubmitButton>
                         </form>
                       ) : (
                         <form action={markAttended.bind(null, date, email)}>
-                          <SubmitButton className={kit.btn} loadingText="Saving…">
-                            {toConfirm ? "Confirm" : "Played"}
+                          <SubmitButton className={kit.btn} loadingText={t("common_saving")}>
+                            {toConfirm ? t("att_confirm") : t("att_played_btn")}
                           </SubmitButton>
                         </form>
                       )}
@@ -94,11 +96,11 @@ export async function AttendanceSection({ date, roster }: { date: string; roster
       )}
       <form action={addAttendanceByEmail.bind(null, date)} className={kit.toolbar} style={{ marginTop: 12 }}>
         <label className={kit.field} style={{ flex: "1 1 260px" }}>
-          Someone else who played
-          <input name="email" type="email" placeholder="Their email" required className={kit.input} />
+          {t("att_someone_else")}
+          <input name="email" type="email" placeholder={t("att_their_email")} required className={kit.input} />
         </label>
-        <SubmitButton className={kit.btnSecondary} loadingText="Adding…">
-          Add
+        <SubmitButton className={kit.btnSecondary} loadingText={t("play_adding")}>
+          {t("att_add")}
         </SubmitButton>
       </form>
     </section>

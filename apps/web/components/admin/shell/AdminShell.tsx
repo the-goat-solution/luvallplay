@@ -8,6 +8,7 @@ import { FlashToast } from "@/components/admin/FlashToast";
 import { activeHref, type BadgeKey, type NavGroup } from "@/components/admin/nav-config";
 import s from "./shell.module.css";
 import { clubShortName } from "@/lib/club-brand";
+import { AdminLangProvider } from "@/components/admin/AdminLang";
 import { at, navLabel } from "@luvallplay/i18n/admin";
 import type { Lang } from "@luvallplay/i18n";
 
@@ -127,7 +128,9 @@ export function AdminShell({
       <Suspense fallback={null}>
         <FlashToast pathname={pathname} lang={lang} />
       </Suspense>
-      <main className={s.main}>{children}</main>
+      <main className={s.main}>
+        <AdminLangProvider lang={lang}>{children}</AdminLangProvider>
+      </main>
     </div>
   );
 }

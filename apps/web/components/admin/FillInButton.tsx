@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SubmitButton } from "@/components/admin/SubmitButton";
+import { useAdminText } from "@/components/admin/AdminLang";
 
 export type FillInValue = {
   name: string;
@@ -54,6 +55,7 @@ export function FillInButton({
   saveAction: (formData: FormData) => void;
   removeAction: () => void;
 }) {
+  const { t } = useAdminText();
   const [open, setOpen] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +93,7 @@ export function FillInButton({
           cursor: "pointer",
         }}
       >
-        {existing ? "Edit stand-in" : "Add stand-in"}
+        {existing ? t("fill_edit") : t("fill_add")}
       </button>
 
       {open ? (
@@ -115,7 +117,7 @@ export function FillInButton({
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
-            aria-label={`Stand-in for ${playerName}`}
+            aria-label={t("fill_dialog_label", { name: playerName })}
             style={{
               background: "#fff",
               borderRadius: 10,
@@ -128,7 +130,7 @@ export function FillInButton({
             }}
           >
             <h3 style={{ fontSize: 16, margin: "0 0 4px" }}>
-              {existing ? `Edit the stand-in for ${playerName}` : `Add a stand-in for ${playerName}`}
+              {existing ? t("fill_title_edit", { name: playerName }) : t("fill_title_add", { name: playerName })}
             </h3>
             <p
               style={{
@@ -138,9 +140,7 @@ export function FillInButton({
                 lineHeight: 1.5,
               }}
             >
-              Standing in for <strong>{playerName}</strong>, who can&apos;t make
-              this session. Their spot is already paid, so nothing is charged
-              and the headcount doesn&apos;t change.
+              {t("fill_intro_a")}<strong>{playerName}</strong>{t("fill_intro_b")}
             </p>
 
             <form action={saveAction}>
@@ -148,7 +148,7 @@ export function FillInButton({
                 <div style={{ display: "flex", gap: 10 }}>
                   <div style={{ flex: 1 }}>
                     <label style={labelStyle} htmlFor="fill-in-first-name">
-                      First name
+                      {t("play_first_name")}
                     </label>
                     <input
                       id="fill-in-first-name"
@@ -160,7 +160,7 @@ export function FillInButton({
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={labelStyle} htmlFor="fill-in-last-name">
-                      Last name
+                      {t("play_last_name")}
                     </label>
                     <input
                       id="fill-in-last-name"
@@ -173,7 +173,7 @@ export function FillInButton({
                 </div>
                 <div>
                   <label style={labelStyle} htmlFor="fill-in-email">
-                    Email
+                    {t("play_email")}
                   </label>
                   <input
                     id="fill-in-email"
@@ -186,7 +186,7 @@ export function FillInButton({
                 </div>
                 <div>
                   <label style={labelStyle} htmlFor="fill-in-phone">
-                    Phone
+                    {t("fill_phone")}
                   </label>
                   <input
                     id="fill-in-phone"
@@ -217,10 +217,10 @@ export function FillInButton({
                     cursor: "pointer",
                   }}
                 >
-                  Cancel
+                  {t("common_cancel")}
                 </button>
                 <SubmitButton
-                  loadingText="Saving…"
+                  loadingText={t("common_saving")}
                   style={{
                     padding: "7px 14px",
                     borderRadius: 6,
@@ -231,7 +231,7 @@ export function FillInButton({
                     fontWeight: 600,
                   }}
                 >
-                  {existing ? "Save stand-in" : "Add stand-in"}
+                  {existing ? t("fill_save") : t("fill_add")}
                 </SubmitButton>
               </div>
             </form>
@@ -248,7 +248,7 @@ export function FillInButton({
                 }}
               >
                 <SubmitButton
-                  loadingText="Removing…"
+                  loadingText={t("play_removing")}
                   style={{
                     padding: "5px 10px",
                     borderRadius: 6,
@@ -258,7 +258,7 @@ export function FillInButton({
                     fontSize: 12,
                   }}
                 >
-                  Remove the stand-in: {playerName} is playing after all
+                  {t("fill_remove", { name: playerName })}
                 </SubmitButton>
               </form>
             ) : null}

@@ -4,12 +4,13 @@ import type { CSSProperties, ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { LoadingIcon } from "@/components/LoadingIcon";
 import { useDelayedLoading } from "@/hooks/useDelayedLoading";
+import { useAdminText } from "@/components/admin/AdminLang";
 
 // Submit button for a Server Action <form> — must be a descendant of the
 // form (not the form itself) so useFormStatus can read its pending state.
 export function SubmitButton({
   children,
-  loadingText = "Saving…",
+  loadingText,
   className,
   style,
   disabled = false,
@@ -25,6 +26,8 @@ export function SubmitButton({
   confirmMessage?: string;
 }) {
   const { pending } = useFormStatus();
+  const { t } = useAdminText();
+  const savingText = loadingText ?? t("common_saving");
   const showPending = useDelayedLoading(pending);
 
   return (
@@ -57,7 +60,7 @@ export function SubmitButton({
       {showPending ? (
         <>
           <LoadingIcon size="sm" />
-          {loadingText}
+          {savingText}
         </>
       ) : (
         children

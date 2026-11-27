@@ -69,7 +69,6 @@ export type KeyList = {
 const OTHER_LISTS: readonly { env: string; what: string }[] = [
   { env: "INTEGRATIONS_KEKS", what: "a club's provider tokens (the integrations vault; nothing is stored with it yet)" },
   { env: "CONTACT_INDEX_KEYS", what: "the index that finds a sealed phone number (players.phone_index)" },
-  { env: "MODERATION_KEKS", what: "reports to moderators (Social and Marketplace; not built yet)" },
 ];
 
 const nameOf = (env: string) => env.replace(/_(KEKS|KEYS)$/, "").toLowerCase().replaceAll("_", "-");

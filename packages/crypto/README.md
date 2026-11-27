@@ -20,7 +20,7 @@ One list per purpose, each in its own environment variable. A leak of one purpos
 | `JUNIORS_KEKS` | `junior_medical_notes.sealed` |
 | `CONTACT_KEKS` | `players.phone_sealed` |
 | `CONTACT_INDEX_KEYS` | `players.phone_index` (an index key, not a sealing key) |
-| `MODERATION_KEKS` | reports to moderators (Social and Marketplace; not built yet) |
+| `MODERATION_KEKS` | `content_reports.details_sealed` (what a reporter wrote), `moderation_evidence.sealed` (the content of a child-safety report) |
 
 **The format is strict:**
 
@@ -88,9 +88,11 @@ If the script can't reach the database it says so in one line and exits 2, havin
 
 `scripts/pii/backfill-phone.mjs --apply` makes the same check for `CONTACT_KEKS` and `CONTACT_INDEX_KEYS`. Its very first run has nothing sealed to check against, so it goes ahead and says that no existing row could confirm the keys: then verify one sign-in by phone once the servers have the keys, before relying on what it sealed.
 
-### A sealing key (`PUSH_KEKS`, `JUNIORS_KEKS`, `CONTACT_KEKS`)
+### A sealing key (`PUSH_KEKS`, `JUNIORS_KEKS`, `CONTACT_KEKS`, `MODERATION_KEKS`)
 
 Say the list is `k1:…` and the new key is `k2`.
+
+`MODERATION_KEKS` seals two columns: do steps 3 to 5 once for `content_reports.details_sealed` and once for `moderation_evidence.sealed`, and remove the old key only when both report nothing left on it. (The app's database role can't update `moderation_evidence`; the script connects as the database's owner, as it always does.)
 
 1. **Add the new key first in the list, keeping the old one:** `k2:…,k1:…`. Check it against the parser (above).
 2. **Deploy.** From now on new sealings use `k2`; everything sealed with `k1` still opens.

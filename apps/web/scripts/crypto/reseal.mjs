@@ -7,7 +7,9 @@
 //
 // Purposes: push_devices.sealed (PUSH_KEKS), junior_medical_notes.sealed
 // (JUNIORS_KEKS), players.phone_sealed (CONTACT_KEKS; brings the phone index
-// to the current CONTACT_INDEX_KEYS key in the same write), and contact-index
+// to the current CONTACT_INDEX_KEYS key in the same write),
+// content_reports.details_sealed and moderation_evidence.sealed (both
+// MODERATION_KEKS: run both before an old key is removed), and contact-index
 // (re-indexes phone numbers when only CONTACT_INDEX_KEYS was rotated).
 //
 // - The current key is the FIRST one in the purpose's list. The older keys

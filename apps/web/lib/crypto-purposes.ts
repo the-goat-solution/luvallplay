@@ -39,6 +39,7 @@
 //   time, with the club named for each transaction (app.tenant_id), which is
 //   the only way the app's database role sees its rows at all.
 import { createSeal, parseKeks, SealError, sealedWith, type Binding } from "@luvallplay/crypto";
+import { evidenceBinding, reportBinding } from "./moderation/seal.ts";
 import { KeyNotConfirmedError, phoneBinding, phoneSealing } from "./pii/contact.ts";
 
 export { KeyNotConfirmedError };
@@ -191,6 +192,31 @@ export const PURPOSES: readonly Purpose[] = [
       },
       canary: phoneIndexCanary,
     },
+  },
+  // Reports to moderators: lib/moderation/seal.ts. Two columns under one key
+  // list (MODERATION_KEKS); the first part of each binding keeps one from
+  // opening as the other.
+  {
+    // What the reporter wrote.
+    purpose: "content_reports.details_sealed",
+    env: "MODERATION_KEKS",
+    table: "content_reports",
+    column: "details_sealed",
+    keyColumns: ["id"],
+    key: byColumns(["id"]),
+    binding: (row) => reportBinding(int(row.id)),
+  },
+  {
+    // The copy of the content kept for a child-safety report. The app's role
+    // can't update this table; the run connects as the database's owner, as
+    // every run does.
+    purpose: "moderation_evidence.sealed",
+    env: "MODERATION_KEKS",
+    table: "moderation_evidence",
+    column: "sealed",
+    keyColumns: ["report_id"],
+    key: byColumns(["report_id"]),
+    binding: (row) => evidenceBinding(int(row.report_id)),
   },
 ];
 

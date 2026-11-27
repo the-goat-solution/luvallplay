@@ -21,6 +21,7 @@ import { createSeal, parseKeks, SealError, sealedWith } from "@luvallplay/crypto
 import { migrate } from "../scripts/db/migrate.mjs";
 import { KeyNotConfirmedError, PURPOSES, RESEAL_PURPOSES, reseal } from "../lib/crypto-purposes.ts";
 import { pushSeal } from "../lib/push/seal.ts";
+import { moderationSeal } from "../lib/moderation/seal.ts";
 import { addressesFor, setPrefs } from "../lib/push/devices.ts";
 import { addChild } from "../lib/juniors/family.ts";
 import { juniorsVault, readMedicalNotesAsGuardian, setMedicalNotes } from "../lib/juniors/care.ts";
@@ -39,8 +40,12 @@ test("every sealed column has its purpose: its own key list, its table and key, 
     ["push_devices.sealed", "PUSH_KEKS", "push_devices", "sealed"],
     ["junior_medical_notes.sealed", "JUNIORS_KEKS", "junior_medical_notes", "sealed"],
     ["players.phone_sealed", "CONTACT_KEKS", "players", "phone_sealed"],
+    ["content_reports.details_sealed", "MODERATION_KEKS", "content_reports", "details_sealed"],
+    ["moderation_evidence.sealed", "MODERATION_KEKS", "moderation_evidence", "sealed"],
   ]);
-  assert.equal(new Set(PURPOSES.map((p) => p.env)).size, PURPOSES.length, "one key list per purpose");
+  // One key list per purpose, except a report's two columns, which share MODERATION_KEKS and differ in what they are bound to.
+  const lists = PURPOSES.map((p) => p.env);
+  assert.deepEqual(lists.filter((env, i) => lists.indexOf(env) !== i), ["MODERATION_KEKS"]);
   assert.deepEqual(RESEAL_PURPOSES, [...PURPOSES.map((p) => p.purpose), "contact-index"]);
   const of = (name: string) => PURPOSES.find((p) => p.purpose === name)!;
 
@@ -56,6 +61,16 @@ test("every sealed column has its purpose: its own key list, its table and key, 
   const phone = of("players.phone_sealed");
   assert.equal(envelope.open(phone.binding({ id: 3 }), phoneSealing({ CONTACT_KEKS: keys, CONTACT_INDEX_KEYS: `i1:${key()}` }).seal(3, numberOf(3)).sealed), numberOf(3));
   assert.deepEqual(phone.key({ id: 3 }), { where: "id = $1", params: [3] });
+
+  const moderation = moderationSeal({ MODERATION_KEKS: keys });
+  const details = of("content_reports.details_sealed");
+  const evidence = of("moderation_evidence.sealed");
+  assert.equal(envelope.open(details.binding({ id: 12 }), moderation.seal(12, "what the reporter wrote")), "what the reporter wrote");
+  assert.equal(envelope.open(evidence.binding({ report_id: 12 }), moderation.sealEvidence(12, "what was reported")), "what was reported");
+  assert.deepEqual(details.key({ id: 12 }), { where: "id = $1", params: [12] });
+  assert.deepEqual(evidence.key({ report_id: 12 }), { where: "report_id = $1", params: [12] });
+  assert.throws(() => envelope.open(evidence.binding({ report_id: 12 }), moderation.seal(12, "x")), SealError, "the two don't open as each other");
+  assert.equal(details.tenant ?? evidence.tenant, undefined, "platform-wide: not handled club by club");
 
   const notes = of("junior_medical_notes.sealed");
   const note = { tenant_id: 2, junior_profile_id: 7 };
@@ -131,6 +146,7 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
     await c.query(`RESET ROLE`);
     await c.query(`DELETE FROM push_devices`);
     await c.query(`DELETE FROM push_prefs`);
+    await c.query(`TRUNCATE moderation_evidence, moderation_actions, content_reports`);
     await c.query(`DELETE FROM junior_medical_notes`);
     await c.query(`DELETE FROM guardianships`);
     await c.query(`DELETE FROM junior_profiles`);
@@ -300,6 +316,61 @@ describe("re-sealing after a key rotation", { skip: !BASE_URL && !REQUIRE_DB ? "
     for (const [tenantId, guardianId, childId, text] of NOTES) {
       assert.equal(value(await readMedicalNotesAsGuardian(c, juniorsVault(NEWEST), tenantId, guardianId, childId, NEWEST)).notes, text);
     }
+  });
+
+  test("reports: details and evidence re-seal separately under MODERATION_KEKS; each still opens for its own report, and only there", async () => {
+    const m1 = `m1:${key()}`;
+    const K1 = { MODERATION_KEKS: m1 };
+    const ROTATED = { MODERATION_KEKS: `m2:${key()},${m1}` };
+    const old = moderationSeal(K1);
+    const words = (n: number) => `What reporter ${n} wrote`;
+    const content = (n: number) => `The content of report ${n}`;
+    const ids: number[] = [];
+    for (let n = 1; n <= 5; n++) {
+      const id = Number((await c.query(`SELECT nextval('content_reports_id_seq') AS id`)).rows[0].id);
+      ids.push(id);
+      // Reports 1 to 3 are child-safety reports with evidence; report 5 has no details.
+      const child = n <= 3;
+      await c.query(
+        `INSERT INTO content_reports (id, reporter_id, target_type, target_id, club_id, reason, severity, queue, details_sealed, due_at)
+         VALUES ($1, $2, 'profile', $3, 1, $4, $5, $6, $7, now() + interval '12 hours')`,
+        [id, MIA, 100 + n, child ? "child_safety" : "spam", child ? "serious" : "normal", child ? "platform" : "club", n === 5 ? null : old.seal(id, words(n))],
+      );
+      if (child) await c.query(`INSERT INTO moderation_evidence (report_id, sealed, author_player_id) VALUES ($1, $2, $3)`, [id, old.sealEvidence(id, content(n)), PETE]);
+    }
+    const lines: string[] = [];
+    const log = (line: string) => lines.push(line);
+    const D = "content_reports.details_sealed";
+    const E = "moderation_evidence.sealed";
+    assert.deepEqual(await reseal(c, { purpose: D, apply: false, env: ROTATED, log }), { purpose: D, current: "m2", byKey: { m1: 4 }, todo: 4, done: 0, skipped: 0, problems: 0 });
+    assert.deepEqual(await reseal(c, { purpose: E, apply: false, env: ROTATED, log }), { purpose: E, current: "m2", byKey: { m1: 3 }, todo: 3, done: 0, skipped: 0, problems: 0 });
+    // The details first: the evidence is untouched by it.
+    assert.deepEqual(await reseal(c, { purpose: D, apply: true, batch: 3, firstUseOfKey: true, env: ROTATED, log }), { purpose: D, current: "m2", byKey: { m1: 4 }, todo: 4, done: 4, skipped: 0, problems: 0 });
+    assert.deepEqual(await kids("content_reports", "details_sealed"), { m2: 4 });
+    assert.deepEqual(await kids("moderation_evidence", "sealed"), { m1: 3 });
+    // Then the evidence, as its own run (no evidence row is on the new key yet, so it too is a first use).
+    assert.deepEqual(await reseal(c, { purpose: E, apply: true, batch: 2, firstUseOfKey: true, env: ROTATED, log }), { purpose: E, current: "m2", byKey: { m1: 3 }, todo: 3, done: 3, skipped: 0, problems: 0 });
+    assert.deepEqual(await kids("moderation_evidence", "sealed"), { m2: 3 });
+
+    // Through the app's own seal, with the old key gone: every text opens for its report, and for no other.
+    const now = moderationSeal({ MODERATION_KEKS: ROTATED.MODERATION_KEKS.split(",")[0] });
+    const reports = (await c.query(`SELECT id, details_sealed FROM content_reports ORDER BY id`)).rows;
+    assert.deepEqual(reports.map((r) => (r.details_sealed ? now.open(Number(r.id), r.details_sealed) : null)), [words(1), words(2), words(3), words(4), null]);
+    const kept = (await c.query(`SELECT report_id, sealed, author_player_id FROM moderation_evidence ORDER BY report_id`)).rows;
+    assert.deepEqual(kept.map((r) => [now.openEvidence(Number(r.report_id), r.sealed), r.author_player_id]), [[content(1), PETE], [content(2), PETE], [content(3), PETE]]);
+    assert.throws(() => now.open(ids[1], reports[0].details_sealed), SealError);
+    assert.throws(() => now.openEvidence(ids[1], kept[0].sealed), SealError);
+    assert.throws(() => now.openEvidence(ids[0], reports[0].details_sealed), SealError, "details are still not evidence");
+    // Nothing but the sealed columns changed.
+    assert.deepEqual((await c.query(`SELECT count(*)::int AS n FROM content_reports WHERE status = 'open' AND reporter_id = $1`, [MIA])).rows[0].n, 5);
+    const printed = lines.join("\n");
+    assert.ok(printed.length > 0);
+    for (const secret of ["reporter", "content of", ...reports.flatMap((r) => (r.details_sealed ? String(r.details_sealed).split(".").slice(2) : [])), ...kept.flatMap((r) => String(r.sealed).split(".").slice(2))]) {
+      assert.ok(!printed.includes(secret), "a secret was printed");
+    }
+    // A third run has nothing to do.
+    assert.deepEqual(await reseal(c, { purpose: D, apply: true, env: ROTATED }), { purpose: D, current: "m2", byKey: { m2: 4 }, todo: 0, done: 0, skipped: 0, problems: 0 });
+    assert.deepEqual(await reseal(c, { purpose: E, apply: true, env: ROTATED }), { purpose: E, current: "m2", byKey: { m2: 3 }, todo: 0, done: 0, skipped: 0, problems: 0 });
   });
 
   test("a row that can't be opened is counted and left exactly as it was; the others are re-sealed; a write made meanwhile wins", async () => {

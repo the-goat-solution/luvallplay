@@ -109,6 +109,8 @@ export const vi: Messages<AppKey> = {
   me_next_included: "Có trong gói thành viên",
   me_next_booked: "Đã đặt chỗ chơi lẻ",
   me_on_website: "Mở trên trang web của câu lạc bộ",
+  profile_website: "Trang web của {club}",
+  profile_website_sub: "Mở trong trình duyệt",
   me_manage: "Quản lý gói thành viên",
   me_join: "Chọn gói của bạn",
   me_retry_load: "Không tải được. Hãy thử lại.",

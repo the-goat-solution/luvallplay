@@ -114,6 +114,8 @@ export const en = {
   me_next_included: "Included in your membership",
   me_next_booked: "Casual spot booked",
   me_on_website: "Opens on your club's website",
+  profile_website: "{club}'s website",
+  profile_website_sub: "Opens in your browser",
   me_manage: "Manage membership",
   me_join: "Choose your plan",
   me_retry_load: "We couldn't load this. Pull down or try again.",

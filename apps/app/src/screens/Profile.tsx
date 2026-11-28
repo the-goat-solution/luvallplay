@@ -19,6 +19,7 @@ import { usePlace } from "./me/parts.tsx";
 import { dayLabel } from "../lib/format.ts";
 import { LoadError } from "../components/LoadError.tsx";
 import { FamilyEntry } from "./family/Entry.tsx";
+import { WebsiteEntry } from "./me/WebsiteEntry.tsx";
 
 type MeQuery = { data?: Me; isError: boolean; refetch: () => unknown };
 
@@ -129,6 +130,12 @@ export default function ProfileScreen() {
         </ClubScopeProvider>
       ))}
       <SettingsSections />
+      {/* Back to each club's own website (screens/me/WebsiteEntry.tsx); none for a club without one. */}
+      {clubs.map((club) => (
+        <ClubScopeProvider key={`website:${club.slug}`} club={club}>
+          <WebsiteEntry />
+        </ClubScopeProvider>
+      ))}
     </section>
   );
 }

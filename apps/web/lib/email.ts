@@ -1,3 +1,4 @@
+import { playerLink } from "./player-links";
 import { meteredResend } from "./usage-hooks";
 import { CLUB_TIME_ZONE } from "./constants";
 import { Resend } from "resend";
@@ -410,7 +411,8 @@ export async function sendCasualBookingConfirmationEmail(
     ? `at ${input.sessionTime}, ${location}`
     : location;
 
-  const accountUrl = `${getSiteUrl()}/login?email=${encodeURIComponent(to)}&next=/profile`;
+  // Once player emails go to the app (lib/player-links.ts): its sign-in, which makes the account.
+  const accountUrl = playerLink("/signin", `${getSiteUrl()}/login?email=${encodeURIComponent(to)}&next=/profile`);
   const bodyHtml = `
     ${heading("You're confirmed!")}
     ${paragraph(`Hi ${escapeHtml(input.firstName)}, you're booked in for play on <strong>${escapeHtml(displayDate)}</strong>, ${whenWhere}.`)}

@@ -1,3 +1,4 @@
+import { playerLink } from "./player-links";
 import { clubClock } from "./club";
 import crypto from "crypto";
 import {
@@ -22,7 +23,8 @@ export function renewalUrl(token: string): string {
 // on auto-renew. The private token is still issued, so links in reminders
 // sent before accounts existed keep working (renewalUrl above).
 export function profileRenewalUrl(email: string): string {
-  return `${getSiteUrl()}/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent("/profile")}`;
+  // Once player emails go to the app (lib/player-links.ts): its Membership screen.
+  return playerLink("/membership", `${getSiteUrl()}/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent("/profile")}`, { club: true });
 }
 
 // Emails every active one-time membership ending within the next

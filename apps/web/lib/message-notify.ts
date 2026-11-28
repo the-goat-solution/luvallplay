@@ -37,7 +37,7 @@ export async function notifyPlayerOfReply(input: {
       subject: vi ? `${clubShortName()} đã trả lời: ${input.subject}` : `${clubShortName()} replied: ${input.subject}`,
       heading: vi ? "Bạn có tin nhắn mới" : "You have a new message",
       lines: [input.body.slice(0, 1500)],
-      cta: { label: vi ? "Mở tin nhắn" : "Open the conversation", path: `/profile?thread=${input.threadId}` },
+      cta: { label: vi ? "Mở tin nhắn" : "Open the conversation", path: `/profile?thread=${input.threadId}`, appPath: `/inbox/${input.threadId}` },
     });
   } catch (err) {
     console.error("[messages] player email failed:", err);

@@ -52,7 +52,7 @@ States: **Same** = a member can do the same thing; **Partial** = there, with a d
 | Club admin button | `MeHeader.tsx` ClubAdminButton, `me/SettingsAdminCard.tsx` (plain link to `/admin`, same cookie) | `screens/settings/ClubAdmin.tsx` (single-use link, opens the website's admin) | Same | From the website's admin, "My profile" goes back to the website's `/profile` (`components/admin/shell/AdminShell.tsx:107`), not the app. |
 | Red count on the Arena tab (a score to confirm, a team-up request) | `lib/profile-badges.ts`, `ProfileShell.tsx` | none (`screens/Shell.tsx` has only the inbox bell's count) | Missing | Unread messages are covered by the bell. |
 | "Your match is on" pill on other tabs | `ProfileShell.tsx` MatchPill | `screens/Shell.tsx`, `screens/arena/versus-store.ts` | Same | |
-| Link back to the club's website | `ProfileShell.tsx` ("Back to site", "View site") | none (`webHref` in `screens/me/parts.tsx` is unused) | Missing | Minor. |
+| Link back to the club's website | `ProfileShell.tsx` ("Back to site", "View site") | none (`webHref` in `screens/me/parts.tsx` is unused) | Missing | Minor. **Built, 28 Nov (lane N).** |
 | Pull down to refresh (installed web app) | `ProfileShell.tsx` usePullToRefresh | none | Missing | Minor; the app refetches on its own. |
 
 ### Player, Arena, Leaderboard, Vision
@@ -133,9 +133,9 @@ The website session cannot simply go away with `/profile`: the public join and b
 | Gap | Proposal |
 |---|---|
 | Red count on the Arena tab (a score to confirm, a team-up request) | Add it to the app's tab (the data is in `arena.state`). Before cutover if time allows: it is the one thing members would notice daily. **Built, 28 Nov (lane N).** |
-| Shop: size guide and full-screen photos | Add both (the API already sends the size charts). |
-| Link back to the club's website | One row in My profile. |
-| Leaderboard: the chosen board isn't in the address | Put it in the address, so shared links open the same board. |
+| Shop: size guide and full-screen photos | Add both (the API already sends the size charts). **Built, 28 Nov (lane N).** |
+| Link back to the club's website | One row in My profile. **Built, 28 Nov (lane N).** |
+| Leaderboard: the chosen board isn't in the address | Put it in the address, so shared links open the same board. **Built, 28 Nov (lane N).** |
 | Arena invite codes made on the website open the website | Covered by the `/profile/arena?join=` redirect (§6). |
 | Pull to refresh | Leave: the app refreshes itself. The store apps get the native gesture. |
 | "Add to home screen" guide, and recording installs for admin | Leave: the store apps replace home-screen installs. Tell admin the "App on home screen" column stops counting. |

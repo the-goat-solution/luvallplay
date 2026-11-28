@@ -9,6 +9,7 @@ import { CardPayment } from "../../components/CardPayment.tsx";
 import { Dialog } from "../../components/Dialog.tsx";
 import { useShop, useShopActions, type Order, type Product } from "./data.ts";
 import { LoadError } from "../../components/LoadError.tsx";
+import { PhotoViewer } from "./PhotoViewer.tsx";
 
 const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
@@ -24,11 +25,16 @@ function ProductCard({ p, cash }: { p: Product; cash: boolean }) {
   const [variantId, setVariantId] = useState<number | null>(!p.hasFit && !p.hasSizes ? (p.variants[0]?.id ?? null) : null);
   const [checkout, setCheckout] = useState<{ id: number; clientSecret: string } | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // A photo full screen (its index), and the size guide for the fit chosen.
+  const [viewing, setViewing] = useState<number | null>(null);
+  const [sizeGuide, setSizeGuide] = useState(false);
   const web = config?.club.webUrl ?? "";
   const src = (u: string) => (u.startsWith("/") ? `${web}${u}` : u);
   const name = lang === "vi" ? p.nameVi || p.nameEn : p.nameEn;
   const desc = lang === "vi" ? p.descVi || p.descEn : p.descEn;
   const price = money(p.priceCents, currency);
+  const chart = fit === "women" ? p.sizeChartWomen : fit === "men" ? p.sizeChartMen : p.sizeChartMen ?? p.sizeChartWomen;
+  const photoAlt = (i: number) => `${name} — ${t("shop_photo", { n: i + 1 })}`;
   const failed = (e: unknown) => setMessage({ ok: false, text: (e as { code?: string }).code === "sold_out" ? t("shop_sold_out_now") : t("shop_failed") });
 
   const buy = (method: "card" | "cash") => {
@@ -60,7 +66,9 @@ function ProductCard({ p, cash }: { p: Product; cash: boolean }) {
       {p.images.length > 0 && (
         <div className="product-photos">
           {p.images.map((u, i) => (
-            <img key={u} src={src(u)} alt={`${name} — ${t("shop_photo", { n: i + 1 })}`} loading={i === 0 ? "eager" : "lazy"} decoding="async" />
+            <button key={u} type="button" className="product-photo" onClick={() => setViewing(i)} aria-label={t("shop_view_photo", { n: i + 1 })}>
+              <img src={src(u)} alt={photoAlt(i)} loading={i === 0 ? "eager" : "lazy"} decoding="async" />
+            </button>
           ))}
         </div>
       )}
@@ -80,7 +88,10 @@ function ProductCard({ p, cash }: { p: Product; cash: boolean }) {
       )}
       {p.hasSizes && (
         <fieldset className="stack-tight">
-          <legend className="small">{t("shop_size")}</legend>
+          <div className="legend-row">
+            <legend className="small">{t("shop_size")}</legend>
+            <button type="button" className="button button-quiet size-guide-button" aria-haspopup="dialog" onClick={() => setSizeGuide(true)}>{t("shop_size_guide")}</button>
+          </div>
           <div className="chips">
             {sizes.map((v) => (
               <button key={v.id} type="button" className="chip-button" aria-pressed={variantId === v.id} disabled={v.available <= 0} onClick={() => setVariantId(v.id)}>
@@ -101,6 +112,14 @@ function ProductCard({ p, cash }: { p: Product; cash: boolean }) {
           </button>
         )}
       </div>
+      {viewing !== null && <PhotoViewer images={p.images.map(src)} start={viewing} alt={photoAlt} onClose={() => setViewing(null)} t={t} />}
+      {sizeGuide && (
+        <Dialog label={t("shop_size_guide")} onClose={() => setSizeGuide(false)}>
+          <h2>{t("shop_size_guide")}{p.hasFit ? ` · ${t(fit === "women" ? "shop_women" : "shop_men")}` : ""}</h2>
+          {chart ? <img className="size-chart" src={src(chart)} alt={t("shop_size_guide")} /> : <p className="muted">{t("shop_size_guide_soon")}</p>}
+          <div><button type="button" className="button" onClick={() => setSizeGuide(false)}>{t("close")}</button></div>
+        </Dialog>
+      )}
       {message && <p className={`notice${message.ok ? "" : " notice-error"}`} role={message.ok ? "status" : "alert"}>{message.text}</p>}
       {checkout && (
         <Dialog label={t("shop_card_title")} onClose={abandon}>

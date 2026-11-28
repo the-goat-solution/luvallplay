@@ -50,6 +50,8 @@ let api;
 before(async () => {
   // The API allows this origin, exactly as APP_ORIGINS will in production.
   process.env.APP_ORIGINS = APP;
+  // The players' app address (cutover B2 and B4): the website hands members over to this app, and player emails link here.
+  process.env.PLAYER_APP_URL = APP;
   // Juniors is hidden platform-wide (Phase 3b ships dark). The test server offers it, as a preview would;
   // it stays off for the club until a journey switches it on (the Family journeys).
   process.env.JUNIORS_AVAILABILITY = "available";
@@ -3351,5 +3353,180 @@ describe("APP · iPhone Duo", () => {
       await context.close();
     }
     assert.deepEqual(problems, []);
+  });
+});
+
+// The cutover's fixes (phase-4-cutover.md §3): B3 the screen asked for, B2 the
+// handover from the website, and the small gaps (the Arena tab's count, the
+// Leaderboard's board in the address, the club's website, the shop's photos
+// and size guide).
+describe("APP · the cutover's fixes", () => {
+  test("CUT1 · B3: a screen opened signed out opens after the code", async () => {
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/inbox`);
+      await page.waitForURL(`${APP}/signin?next=%2Finbox`);
+      await page.getByLabel("Email").fill(PEOPLE.member.email);
+      await page.getByRole("button", { name: "Send my code" }).click();
+      await page.getByLabel(/code/i).first().fill(await outboxCode(PEOPLE.member.email));
+      await page.getByRole("button", { name: /Sign in|Verify/ }).click();
+      await page.waitForURL(`${APP}/inbox`);
+      assert.deepEqual(problems, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("CUT2 · B2: signed in on the website, the app opens signed in at the screen asked for; the token works once", async () => {
+    const webToken = await sessionToken(PEOPLE.member.email);
+    const context = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
+    await context.addCookies([{ name: "tw_player", value: webToken, url: env.base }]);
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      const hops = [];
+      page.on("framenavigated", (f) => f === page.mainFrame() && hops.push(f.url()));
+      await page.goto(`${env.base}/app-handover?to=${encodeURIComponent("/leaderboard")}`);
+      await page.waitForURL(`${APP}/leaderboard`);
+      await page.waitForSelector('[data-screen="nav_leaderboard"][data-state="ready"]');
+      const handoverHop = hops.find((u) => u.startsWith(`${APP}/handover`));
+      assert.ok(handoverHop, `through the app's /handover: ${hops.join(" → ")}`);
+      assert.equal(new URL(handoverHop).search, "", "the token is never in the query string");
+      const token = new URL(handoverHop).hash.match(/t=([^&]+)/)[1];
+      assert.equal(await page.evaluate(() => location.hash), "", "and leaves the address");
+      assert.ok(await page.evaluate(() => localStorage.getItem("lp.token")), "the app has its own session");
+
+      // The same link again, in a fresh app: refused, so the app's sign-in, keeping the screen.
+      const again = await browser.newContext({ viewport: PHONE, serviceWorkers: "block" });
+      const p2 = await again.newPage();
+      await p2.goto(`${APP}/handover#t=${token}&to=%2Fleaderboard`);
+      await p2.waitForURL(`${APP}/signin?next=%2Fleaderboard`);
+      await again.close();
+      assert.deepEqual(problems, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("CUT3 · the Arena tab's red count: a team-up request to answer", async () => {
+    const act = async (token, body) => {
+      const r = await fetch(`${api}/clubs/three-wolves/arena`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const json = await r.json();
+      if (!r.ok) throw new Error(`${body.action}: ${r.status} ${json.error}`);
+      return json;
+    };
+    const cora = await signedIn(PEOPLE.coach.email);
+    const pete = await signedIn(PEOPLE.player.email);
+    for (const t of [cora.token, pete.token]) await act(t, { action: "pair_leave" }).catch(() => {});
+    const page = await cora.context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/home`);
+      await page.waitForSelector(ME_READY);
+      const arenaTab = page.locator(".shell-nav .tab", { hasText: "Arena" });
+      assert.equal(await arenaTab.locator(".tab-badge").count(), 0, "nothing waiting yet");
+      const { code } = await act(cora.token, { action: "pair_code" });
+      await act(pete.token, { action: "pair_enter", code: code.code });
+      await page.reload();
+      await page.waitForSelector(ME_READY);
+      await arenaTab.locator(".tab-badge").waitFor({ timeout: 15000 });
+      assert.equal((await arenaTab.locator(".tab-badge").textContent()).trim(), "1");
+      assert.match(await arenaTab.textContent(), /1 waiting for you/, "named for screen readers");
+      assert.deepEqual(problems, []);
+    } finally {
+      await act(pete.token, { action: "pair_cancel" }).catch(() => {});
+      await cora.context.close();
+      await pete.context.close();
+    }
+  });
+
+  test("CUT4 · the Leaderboard's board is in the address: kept on reload, Back steps back", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const page = await context.newPage();
+    const problems = watch(page);
+    const READY = '[data-screen="nav_leaderboard"][data-state="ready"]';
+    try {
+      await page.goto(`${APP}/leaderboard`);
+      await page.waitForSelector(READY);
+      await page.getByRole("button", { name: "Quarter", exact: true }).click();
+      await page.waitForURL(/\/leaderboard\?period=quarter$/);
+      await page.getByRole("button", { name: "Play days" }).click();
+      await page.waitForURL(/period=quarter/);
+      await page.waitForURL(/source=play/);
+      await page.reload();
+      await page.waitForSelector(READY);
+      assert.equal(await page.getByRole("button", { name: "Quarter", exact: true }).getAttribute("aria-pressed"), "true");
+      await page.waitForFunction(() => document.querySelector(".chip-button[aria-pressed='true']")?.textContent === "Play days");
+      await page.goBack();
+      await page.goBack();
+      await page.waitForURL(`${APP}/leaderboard`);
+      assert.equal(await page.getByRole("button", { name: "All time" }).getAttribute("aria-pressed"), "true");
+      await page.goto(`${APP}/leaderboard?period=decade&source=secret`);
+      await page.waitForSelector(READY);
+      assert.equal(await page.getByRole("button", { name: "All time" }).getAttribute("aria-pressed"), "true", "an unknown board is the default");
+      assert.deepEqual(problems, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("CUT5 · My profile: a row back to the club's website", async () => {
+    const { context } = await signedIn(PEOPLE.member.email);
+    const base = await realConfig();
+    await serveJson(context, `${api}/clubs/three-wolves/config`, () => ({ ...base, club: { ...base.club, webUrl: "https://club.example" } }));
+    const page = await context.newPage();
+    try {
+      await page.goto(`${APP}/profile`);
+      const row = page.locator('[data-entry="website"]');
+      await row.waitFor();
+      assert.equal(await row.getAttribute("href"), "https://club.example/");
+      assert.equal(await row.getAttribute("target"), "_blank");
+      assert.match(await row.textContent(), /Three Wolves.*website/);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("CUT6 · the shop: a photo full screen (‹ › and Escape), and the size guide for the fit chosen", async () => {
+    const shop = await seedShop(db);
+    await db.query(`UPDATE shop_products SET images = $2, size_chart_men = $3 WHERE id = $1`, [shop.product, JSON.stringify(["https://img.example/tee-1.png", "https://img.example/tee-2.png"]), "https://img.example/chart-men.png"]);
+    const { context } = await signedIn(PEOPLE.player.email);
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==", "base64");
+    await context.route("https://img.example/**", (route) => route.fulfill({ status: 200, contentType: "image/png", body: png }));
+    const page = await context.newPage();
+    const problems = watch(page);
+    try {
+      await page.goto(`${APP}/me`);
+      await page.waitForSelector(ME_READY);
+      const tee = page.locator("article.product", { hasText: "E2E Tee" });
+      await tee.waitFor();
+      const opener = tee.getByRole("button", { name: "View photo 2 larger" });
+      await opener.click();
+      const viewer = page.locator("dialog.photo-viewer[open]");
+      await viewer.waitFor();
+      assert.match(await viewer.locator(".viewer-count").textContent(), /2 \/ 2/);
+      await viewer.getByRole("button", { name: "Next photo" }).click();
+      await page.waitForFunction(() => document.querySelector(".viewer-count")?.textContent?.includes("1 / 2"));
+      const box = await viewer.boundingBox();
+      assert.ok(box.width >= PHONE.width - 1 && box.height >= PHONE.height - 1, `full screen: ${JSON.stringify(box)}`);
+      await page.keyboard.press("Escape");
+      await viewer.waitFor({ state: "detached" });
+      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "View photo 2 larger", "focus back on the photo");
+
+      await tee.getByRole("button", { name: "Size guide" }).click();
+      const guide = page.getByRole("dialog", { name: "Size guide" });
+      await guide.waitFor();
+      assert.equal(await guide.locator("img.size-chart").getAttribute("src"), "https://img.example/chart-men.png");
+      await guide.getByRole("button", { name: "Close" }).click();
+      await tee.getByRole("button", { name: "Women", exact: true }).click();
+      await tee.getByRole("button", { name: "Size guide" }).click();
+      await page.getByRole("dialog", { name: "Size guide" }).getByText("Size guide coming soon").waitFor();
+      assert.deepEqual(problems, []);
+    } finally {
+      await context.close();
+      await shop.undo();
+    }
   });
 });

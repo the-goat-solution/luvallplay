@@ -3,6 +3,8 @@
 // time) from every source or one, with the tiers marked, your next tier,
 // and a card for each player with a "Challenge" button.
 import { useState, type CSSProperties } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { boardSearch, queryOf } from "../lib/board-search.ts";
 import { ITEMS, LADDER, nextRank } from "@luvallplay/core/ranks";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { useCurrentClub, useLang, useT } from "../hooks.tsx";
@@ -35,7 +37,10 @@ export default function LeaderboardScreen() {
   const t = useT(config);
   const lang = useLang();
   const { rank } = useArenaT();
-  const [q, setQ] = useState<BoardQuery>({ source: "all", period: "lifetime" });
+  // The board shown is the address's (lib/board-search.ts): a shared link opens the same one.
+  const navigate = useNavigate({ from: "/leaderboard" });
+  const q: BoardQuery = queryOf(useSearch({ from: "/shell/leaderboard" }));
+  const setQ = (next: BoardQuery) => void navigate({ search: boardSearch(next as Record<string, unknown>) });
   const [selected, setSelected] = useState<number | null>(null);
   const board = useBoard(q);
   const b = board.data;

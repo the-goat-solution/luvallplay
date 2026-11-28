@@ -3,6 +3,7 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Navigate, Outlet, redirect } from "@tanstack/react-router";
 import { store } from "./app.ts";
 import { appNext, nextSearch } from "./lib/next-path.ts";
+import { boardSearch } from "./lib/board-search.ts";
 import { Crash } from "./components/Crash.tsx";
 import { HandoverScreen } from "./screens/Handover.tsx";
 import { InviteScreen } from "./screens/Invite.tsx";
@@ -49,7 +50,8 @@ const home = createRoute({ getParentRoute: () => shell, path: "/home", component
 const me = createRoute({ getParentRoute: () => shell, path: "/me", beforeLoad: () => { throw redirect({ to: "/home", replace: true }); } });
 const profile = createRoute({ getParentRoute: () => shell, path: "/profile", component: lazyRouteComponent(() => import("./screens/Profile.tsx")) });
 const arena = createRoute({ getParentRoute: () => shell, path: "/arena", component: lazyRouteComponent(() => import("./screens/Arena.tsx")) });
-const leaderboard = createRoute({ getParentRoute: () => shell, path: "/leaderboard", component: lazyRouteComponent(() => import("./screens/Leaderboard.tsx")) });
+// The chosen board is in the address (lib/board-search.ts).
+const leaderboard = createRoute({ getParentRoute: () => shell, path: "/leaderboard", validateSearch: boardSearch, component: lazyRouteComponent(() => import("./screens/Leaderboard.tsx")) });
 const vision = createRoute({ getParentRoute: () => shell, path: "/vision", component: lazyRouteComponent(() => import("./screens/Vision.tsx")) });
 const player = createRoute({ getParentRoute: () => shell, path: "/player", component: lazyRouteComponent(() => import("./screens/Player.tsx")) });
 // The inbox isn't a tab (as on the website, where it opens from Me's bell).

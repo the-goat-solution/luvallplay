@@ -2494,6 +2494,40 @@
         }
       }
     },
+    "auth.handover": {
+      "method": "POST",
+      "path": "/auth/handover",
+      "auth": "public",
+      "body": {
+        "t": "object",
+        "fields": {
+          "token": {
+            "t": "string"
+          }
+        }
+      },
+      "response": {
+        "t": "object",
+        "fields": {
+          "expiresAt": {
+            "t": "string"
+          },
+          "needsDetails": {
+            "t": "boolean"
+          },
+          "ok": {
+            "t": "literal",
+            "value": true
+          },
+          "phoneTaken": {
+            "t": "boolean"
+          },
+          "token": {
+            "t": "string"
+          }
+        }
+      }
+    },
     "auth.logout": {
       "method": "POST",
       "path": "/auth/logout",

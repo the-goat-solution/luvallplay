@@ -505,6 +505,9 @@ function sha256(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+/** A handoff token's exact shape: 32 random bytes, base64url (the same shape as an app handover's, lib/app-handover.ts). */
+const HANDOFF_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+
 export async function createHandoff(db: Db, playerId: number): Promise<{ token: string; expiresInSeconds: number }> {
   const token = crypto.randomBytes(32).toString("base64url");
   await db.query(
@@ -516,9 +519,13 @@ export async function createHandoff(db: Db, playerId: number): Promise<{ token: 
   return { token, expiresInSeconds: HANDOFF_TTL_SECONDS };
 }
 
-/** Single use: only the request that marks it used gets the player id. */
+/**
+ * Single use: only the request that marks it used gets the player id. Only the
+ * exact token shape is taken, so a string built to match an app handover row
+ * (lib/app-handover.ts, the same table under its own hash label) can't open admin.
+ */
 export async function consumeHandoff(db: Db, token: string): Promise<number | null> {
-  if (!token || token.length > 100) return null;
+  if (!HANDOFF_TOKEN.test(token)) return null;
   const { rows } = await db.query(
     `UPDATE admin_handoffs SET used_at = NOW()
      WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()

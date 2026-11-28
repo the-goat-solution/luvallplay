@@ -23,6 +23,7 @@ export const ROUTES = {
   "arena.state": { method: "GET", path: "/clubs/{club}/arena", auth: "session" },
   "auth.emailStart": { method: "POST", path: "/auth/email/start", auth: "public" },
   "auth.emailVerify": { method: "POST", path: "/auth/email/verify", auth: "public" },
+  "auth.handover": { method: "POST", path: "/auth/handover", auth: "public" },
   "auth.logout": { method: "POST", path: "/auth/logout", auth: "session" },
   "auth.session": { method: "GET", path: "/auth/session", auth: "session" },
   "auth.smsStart": { method: "POST", path: "/auth/sms/start", auth: "public" },

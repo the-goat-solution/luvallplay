@@ -69,6 +69,9 @@ export function createApi(transport: Transport) {
       /** POST /auth/email/verify (no sign-in needed) */
       emailVerify: (body: BodyOf<"auth.emailVerify">, options?: Options) =>
         transport.call("auth.emailVerify", { body, signal: options?.signal }) as Promise<ResponseOf<"auth.emailVerify">>,
+      /** POST /auth/handover (no sign-in needed) */
+      handover: (body: BodyOf<"auth.handover">, options?: Options) =>
+        transport.call("auth.handover", { body, signal: options?.signal }) as Promise<ResponseOf<"auth.handover">>,
       /** POST /auth/logout (signed in) */
       logout: (body: BodyOf<"auth.logout">, options?: Options) =>
         transport.call("auth.logout", { body, signal: options?.signal }) as Promise<ResponseOf<"auth.logout">>,

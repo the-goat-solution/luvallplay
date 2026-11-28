@@ -13,6 +13,11 @@ export const authEndpoints = defineEndpoints("auth", {
     body: S.emailVerifyRequest, response: S.sessionCreatedResponse,
     rateLimit: { limit: 30, windowMs: 15 * MIN },
   },
+  "auth.handover": {
+    method: "POST", path: "/auth/handover", auth: "public", scope: "account",
+    body: S.handoverRequest, response: S.sessionCreatedResponse,
+    rateLimit: { limit: 20, windowMs: 15 * MIN },
+  },
   "auth.smsStart": {
     method: "POST", path: "/auth/sms/start", auth: "public", scope: "account",
     body: S.smsStartRequest, response: S.smsStartResponse,

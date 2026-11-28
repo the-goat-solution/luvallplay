@@ -4,6 +4,7 @@ import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Navigat
 import { store } from "./app.ts";
 import { appNext, nextSearch } from "./lib/next-path.ts";
 import { Crash } from "./components/Crash.tsx";
+import { HandoverScreen } from "./screens/Handover.tsx";
 import { InviteScreen } from "./screens/Invite.tsx";
 import { Shell } from "./screens/Shell.tsx";
 import { SignInScreen } from "./screens/SignIn.tsx";
@@ -30,6 +31,8 @@ const signIn = createRoute({
 });
 
 const invite = createRoute({ getParentRoute: () => root, path: "/c/$club", component: InviteScreen });
+// The cutover's handover from the club's website (lib/handover.ts): signed in or not, it decides where to go.
+const handover = createRoute({ getParentRoute: () => root, path: "/handover", component: HandoverScreen });
 
 const shell = createRoute({
   getParentRoute: () => root,
@@ -65,7 +68,7 @@ const visionTrack = createRoute({ getParentRoute: () => shell, path: "/vision/tr
 const visionLabel = createRoute({ getParentRoute: () => shell, path: "/vision/label", component: lazyRouteComponent(() => import("./screens/VisionLabel.tsx")) });
 const settings = createRoute({ getParentRoute: () => shell, path: "/settings", beforeLoad: () => { throw redirect({ to: "/profile", hash: "settings", replace: true }); } });
 
-const routeTree = root.addChildren([index, signIn, invite, shell.addChildren([home, me, profile, player, arena, leaderboard, vision, visionLabel, visionTrack, settings, welcome, membership, family, inbox, inboxNew, inboxThread])]);
+const routeTree = root.addChildren([index, signIn, invite, handover, shell.addChildren([home, me, profile, player, arena, leaderboard, vision, visionLabel, visionTrack, settings, welcome, membership, family, inbox, inboxNew, inboxThread])]);
 
 export const router = createRouter({
   routeTree,

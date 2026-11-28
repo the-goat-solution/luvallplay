@@ -56,6 +56,7 @@ export const en = {
   signin_email: "Email",
   signin_send: "Send my code",
   signin_sending: "Sending…",
+  handover_signing_in: "Signing you in…",
   signin_code_title: "Check your email",
   signin_code_lead: "We sent a 6-digit code to {email}.",
   signin_code: "6-digit code",

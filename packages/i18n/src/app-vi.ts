@@ -53,6 +53,7 @@ export const vi: Messages<AppKey> = {
   signin_email: "Email",
   signin_send: "Gửi mã cho tôi",
   signin_sending: "Đang gửi…",
+  handover_signing_in: "Đang đăng nhập cho bạn…",
   signin_code_title: "Kiểm tra email của bạn",
   signin_code_lead: "Chúng tôi đã gửi mã 6 chữ số tới {email}.",
   signin_code: "Mã 6 chữ số",

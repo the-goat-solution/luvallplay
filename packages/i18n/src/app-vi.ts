@@ -96,6 +96,7 @@ export const vi: Messages<AppKey> = {
 
   me_inbox: "Hộp thư",
   me_inbox_unread: "{n} chưa đọc",
+  nav_arena_waiting: "{n} việc đang chờ bạn",
   me_inbox_preview: "Tin nhắn",
   me_inbox_open: "Mở hộp thư",
   me_inbox_none: "Chưa có tin nhắn. Bạn có thể nhắn cho ban quản trị bất cứ lúc nào.",

@@ -101,6 +101,7 @@ export const en = {
   // name or a currency typed in: {price} is the club's money, formatted.
   me_inbox: "Inbox",
   me_inbox_unread: "{n} unread",
+  nav_arena_waiting: "{n} waiting for you",
   me_inbox_preview: "Messages",
   me_inbox_open: "Open inbox",
   me_inbox_none: "No messages yet. Write to the club admins any time.",

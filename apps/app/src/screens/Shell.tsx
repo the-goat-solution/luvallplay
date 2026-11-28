@@ -2,7 +2,8 @@
 // the window's size, the club switcher, and the screen for the current tab.
 import { lazy, Suspense, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { storage, store } from "../app.ts";
+import { apiForClub, storage, store } from "../app.ts";
+import { arenaActionCount, badgeText } from "../lib/arena-badge.ts";
 import { platformOf, storeLinks, storeToOffer } from "../lib/get-app.ts";
 import { countOpen } from "../lib/app-opens.ts";
 import { LuvallplayMark, Notice, OnLuvallplay, Splash, useLook } from "../Frame.tsx";
@@ -126,6 +127,22 @@ function MatchPill({ slug, who, t }: { slug: string | null; who: string | null; 
   );
 }
 
+/**
+ * The Arena tab's red count (lib/arena-badge.ts), from the same board the Arena
+ * screen polls (one cache entry). Away from the Arena it is read once a minute
+ * and when the app comes back to the front, not every 5 seconds.
+ */
+function useArenaCount(club: Club | null, who: string | null, on: boolean): number {
+  const board = useQuery<ArenaState>({
+    queryKey: ["arena", club?.slug ?? null, who],
+    queryFn: ({ signal }) => apiForClub(club?.apiBase).arena.state({ club: club!.slug }, { signal }),
+    enabled: on && !!club && !!who,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+  return arenaActionCount(board.data);
+}
+
 const GetTheApp = lazy(() => import("../components/GetTheApp.tsx"));
 
 /** On a phone's browser, every fifth open, once the store app is live: offer it (lib/get-app.ts). */
@@ -218,6 +235,7 @@ export function Shell() {
   // The Arena's "your match is on" pill: the club whose Arena would open.
   const arenaClub = multi ? spaceClub(list, modulesOf, prefs.club, "arena") : current;
   const arenaOn = !!arenaClub && !!(multi ? configOf(arenaClub) : currentConfig)?.modules.includes("arena");
+  const arenaCount = useArenaCount(arenaClub ?? null, who, arenaOn);
   useEffect(() => {
     if (gone) void navigate({ to: "/home", replace: true });
   }, [gone, navigate]);
@@ -258,6 +276,12 @@ export function Shell() {
                 <Link to={tab.path} className="tab" activeProps={{ "aria-current": "page" }}>
                   <Icon name={TAB_ICON[tab.id]} />
                   <span>{tabLabel(tab)}</span>
+                  {tab.id === "arena" && arenaCount > 0 && (
+                    <>
+                      <span className="badge tab-badge" aria-hidden="true">{badgeText(arenaCount)}</span>
+                      <span className="visually-hidden">{t("nav_arena_waiting", { n: arenaCount })}</span>
+                    </>
+                  )}
                 </Link>
               </li>
             ))}

@@ -343,6 +343,8 @@ fieldset.card > legend + * { clear: both; }
 }
 .tab svg { flex: none; }
 .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The Arena tab's count: by the icon's top corner, as the bell's is. */
+.tab .tab-badge { top: 0.125rem; right: auto; left: calc(50% + 0.25rem); max-width: none; overflow: visible; }
 .tab[aria-current="page"] { color: var(--heading); }
 .tab[aria-current="page"]::before {
   content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px;

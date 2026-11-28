@@ -13,6 +13,7 @@ import "@fontsource/barlow-condensed/800.css";
 import "@luvallplay/ui/tokens.css";
 import "@luvallplay/ui/system.css";
 import "./styles/app.css";
+import "./styles/fold-app.css";
 import { api, storage, store } from "./app.ts";
 import { watchInstall } from "./lib/install.ts";
 import { clearOffline, restoreCache, saveCache } from "./lib/offline.ts";
@@ -69,6 +70,8 @@ await Promise.race([loadLang(pickLang(store.get().lang, null, navigator.language
 // The store app only: links that open the app land on their screen, and the
 // Android back button closes sheets before it goes back (lib/native/shell.ts).
 if (isNative()) {
+  // A foldable iPhone's fold, from the shell (WKWebView has no viewport segments): lib/native/fold.ts.
+  void import("./lib/native/fold.ts").then((m) => m.startFold()).catch(() => {});
   void import("./lib/native/shell.ts").then((m) => {
     m.startShell({ go: (path) => router.history.push(path), back: () => router.history.back() });
     // Notifications are on for this phone and it has a new push address: the server learns it.

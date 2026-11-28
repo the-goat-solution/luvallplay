@@ -109,7 +109,7 @@ const SEMANTIC = ["primary", "on-primary", "accent", "on-accent", "surface", "su
 // nav-size and head-size: the shell's. club and on-club: components/ClubTag.tsx. The rest: per-element values set
 // inline by components/Stage.tsx and the stage screens (a confetti piece's place and colour, a meter's value, a stagger index),
 // and the fold's width on a foldable opened like a book (styles/stage.css).
-const LOCAL = ["nav-size", "head-size", "club", "on-club", "x", "delay", "turn", "drift", "c", "v", "i", "h", "fold"];
+const LOCAL = ["nav-size", "head-size", "club", "on-club", "x", "delay", "turn", "drift", "c", "v", "i", "h", "fold", "seg-0-left", "seg-0-right", "seg-0-width", "seg-1-left", "seg-1-right", "seg-1-width"];
 
 /** Each `animation:` (other than none) that isn't inside an @media (prefers-reduced-motion: no-preference) block. */
 function unguardedAnimations(css: string): string[] {

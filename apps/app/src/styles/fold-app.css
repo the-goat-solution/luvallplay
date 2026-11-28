@@ -1,0 +1,13 @@
+/* GENERATED from app.css by scripts/fold-css.mjs: do not edit; run `pnpm --filter app fold:css`. */
+/* The fold rules, for the iOS store app (no viewport segments in WKWebView): the shell sets data-fold on <html>. */
+:where(:root[data-fold="vertical"]) {
+  .shell {
+    grid-template-columns: var(--seg-0-width, 50vw) minmax(0, 1fr);
+    column-gap: calc(var(--seg-1-left, 50vw) - var(--seg-0-right, 50vw));
+    grid-template-areas: "head head" "nav main";
+  }
+  .shell-nav { grid-area: nav; position: sticky; top: 0; inset: auto; border-top: 0; height: 100%; padding: 1rem; }
+  .shell-nav ul { flex-direction: column; gap: 0.25rem; }
+  .tab { flex-direction: row; justify-content: flex-start; gap: 0.75rem; min-height: 3rem; padding: 0.5rem 0.75rem; font-size: 1rem; }
+  .shell-main { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+}

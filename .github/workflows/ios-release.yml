@@ -34,20 +34,15 @@ env:
 jobs:
   archive:
     name: Signed iOS build (IPA)
-    runs-on: macos-15
+    # iPhone Duo needs a runner image with Xcode 27.1 or later: set the repository variable IOS_RUNNER to it.
+    runs-on: ${{ vars.IOS_RUNNER || 'macos-15' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      # App Store Connect only takes apps built with the iOS 26 SDK or later
-      # (Xcode 26+); the runner's default Xcode is older, so pick the newest.
-      - name: The newest Xcode on the runner (26 or later)
-        run: |
-          X=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
-          [ -n "$X" ] || { echo "::error title=Xcode::no Xcode_*.app found on the runner"; exit 1; }
-          sudo xcode-select -s "$X/Contents/Developer"
-          xcodebuild -version
-          MAJOR=$(xcodebuild -version | head -1 | sed 's/Xcode //' | cut -d. -f1)
-          [ "$MAJOR" -ge 26 ] || { echo "::error title=Xcode::$X is older than Xcode 26; use a newer runner image"; exit 1; }
+      # The newest Xcode on the runner (26 or later, as App Store Connect needs);
+      # with the iOS 27.1 SDK the build is also made for iPhone Duo (FOLD_API).
+      - name: The newest Xcode on the runner
+        run: apps/native/scripts/select-xcode.sh
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -96,6 +91,7 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            ${FOLD_API:+'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) FOLD_API'} \
             archive
       - name: The signed app carries its entitlements
         run: |

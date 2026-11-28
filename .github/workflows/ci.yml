@@ -364,10 +364,12 @@ jobs:
   # Apple account's certificates and come in a later step (build plan §4.5).
   ios:
     name: iOS shell (simulator build)
-    runs-on: macos-15
+    runs-on: ${{ vars.IOS_RUNNER || 'macos-15' }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: The newest Xcode on the runner (builds the iPhone Duo fold plugin when it has the iOS 27.1 SDK)
+        run: apps/native/scripts/select-xcode.sh
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -384,4 +386,6 @@ jobs:
         run: |
           xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build
+            CODE_SIGNING_ALLOWED=NO \
+            ${FOLD_API:+'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) FOLD_API'} \
+            build

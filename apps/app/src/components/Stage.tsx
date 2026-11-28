@@ -10,6 +10,7 @@ import { useCurrentClub } from "../hooks.tsx";
 import { applyTheme } from "../lib/theme.ts";
 import { RankIcon } from "./RankIcon.tsx";
 import "../styles/stage.css";
+import "../styles/fold-stage.css";
 
 /** True when the person asked for less motion (read once per mount; the CSS also stops every animation). */
 export function prefersLessMotion(): boolean {

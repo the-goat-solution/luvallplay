@@ -505,7 +505,8 @@ Lane T (build plan §9.2) owns steps 11 and 12 and keeps the migration queue. Th
 | Shadow reads through row-level security started | 23 Nov 2026, 19:06 | §10 |
 | **Evidence found failing** (audit C0) | 25 Nov 2026 | `settings` differs daily (three club words only migration `0013` stores); the row-level-security heartbeat is `unavailable` while `0012`'s tables are missing; the report couldn't see it. **None of the days so far count** |
 | `0012` and `0013` run on production | 26 Nov 2026, 00:44 and 00:47 | §13.2. From the next heartbeat (03:00 UTC) the stored settings match the built-in ones and the junior tables exist |
-| **Clock restarted** | *not yet* | Needs: #159 merged and deployed (`0012` and `0013` have run), then the first heartbeat (03:00 UTC) with all three checks clean. That day is day 1 |
+| #159 live, and the old Vercel address known to routing | 26 Nov 2026, 07:49 | Production deployed `main` with `DEPLOYMENT_HOSTS` set. 26 Nov itself doesn't count: it has 10 routing differences (requests to `three-wolves-badminton.vercel.app`, from the moment the repository went public) and 2 settings differences from before `0013` ran. The last difference of any kind was at 05:34 UTC |
+| **Clock restarted: day 1 is 27 Nov 2026** | 27 Nov 2026, 03:00 | The 03:00 UTC heartbeat recorded `settings`, `routing` and `tenant-reads` (69 tables) all clean, with no `differ` or `unavailable` row since 26 Nov 05:34. Read at 03:41 UTC with `shadow-report.mjs --since 2026-11-27`: 1 clean day. **A day only counts once it has ended clean**, so the earliest the gate can be met is after the heartbeat of **3 Dec 2026** (seven days, 27 Nov to 3 Dec). Any `differ` or `unavailable` row on any of those days restarts the count |
 
 To read the gate once it has restarted: `node --import ./tests/register.mjs scripts/shadow-report.mjs --since <day 1>` (§4).
 
@@ -551,3 +552,5 @@ pnpm db:drift                                                     # must say: No
 **26 Nov, 07:15 UTC: 4 branches.** Every earlier restore point and the rehearsal branch were cleared by the owner. Now: `main`, a new `rehearsal-phase-3` (a new host, allowed in the lane's environment), `pre-0014-rate-limits-stripe-events` and `pre-0015-junior-details`. The restore points for `0012` and `0013` no longer exist.
 
 **26 Nov, 22:56 UTC: 9 branches of 10**: `main`, `rehearsal-phase-3`, and one restore point for each of `0014` to `0020`. One more data step fits; after that the owner names the restore points to delete.
+
+**26 Nov, 23:15 UTC: 4 branches of 10.** The owner deleted the restore points for `0014` and `0015` and the rehearsal branch; `0016`'s and `0017`'s were deleted on the owner's word. Left: `main` and the restore points for `0018`, `0019` and `0020`. There is no rehearsal copy: the next rehearsal makes a new one, and its new host needs allowing in the lane's environment.

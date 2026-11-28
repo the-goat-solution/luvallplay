@@ -17,6 +17,11 @@ const DEFAULT_API_HOSTS = ["https://api.luvallplay.com"];
 // payment step loads it.
 const STRIPE = { script: "https://js.stripe.com", frame: "https://js.stripe.com https://hooks.stripe.com", connect: "https://api.stripe.com" };
 
+// Cloudflare Turnstile, the bot check on sign-in (cutover B1): its script and
+// its frame (Cloudflare's published CSP requirements), only in a build with a
+// site key (VITE_TURNSTILE_SITE_KEY), so the app's reach grows only then.
+const TURNSTILE = "https://challenges.cloudflare.com";
+
 // The tracker's person and pose models, downloaded on its screen only.
 const MODELS = "https://storage.googleapis.com";
 // My photos go straight to the club's photo store (Vercel Blob): its upload
@@ -36,11 +41,12 @@ function csp(env: Record<string, string>): Plugin {
     apply: "build",
     transformIndexHtml(html) {
       const hosts = apiHosts(env).join(" ");
+      const turnstile = env.VITE_TURNSTILE_SITE_KEY ? ` ${TURNSTILE}` : "";
       const policy = [
         "default-src 'self'",
         // Stripe's card form (Payment Element), loaded only on a payment step;
         // the tracker's WebAssembly runtime (served from /mediapipe).
-        `script-src 'self' 'wasm-unsafe-eval' ${STRIPE.script}`,
+        `script-src 'self' 'wasm-unsafe-eval' ${STRIPE.script}${turnstile}`,
         "style-src 'self'",
         `img-src 'self' data: blob: https: ${hosts}`,
         // The app's own fonts, and a club's fonts from wherever its website
@@ -52,7 +58,7 @@ function csp(env: Record<string, string>): Plugin {
         // The tracker's detection models (Google's MediaPipe model storage).
         `connect-src 'self' ${hosts} ${STRIPE.connect} ${MODELS} ${PHOTO_STORE}`,
         "worker-src 'self' blob:",
-        `frame-src ${STRIPE.frame}`,
+        `frame-src ${STRIPE.frame}${turnstile}`,
         "base-uri 'self'",
         "form-action 'self'",
         "object-src 'none'",

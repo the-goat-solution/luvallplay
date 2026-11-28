@@ -2,6 +2,8 @@
 interface ImportMetaEnv {
   /** The home API host, e.g. https://api.luvallplay.com. Empty: this page's own origin. */
   readonly VITE_API_BASE?: string;
+  /** Cloudflare Turnstile's site key for sign-in (cutover B1); unset: no check shown or sent. */
+  readonly VITE_TURNSTILE_SITE_KEY?: string;
   /** The app's public address (default https://app.luvallplay.com): what links made inside the store app start with. */
   readonly VITE_PUBLIC_APP_URL?: string;
   /** More API hosts the app may talk to (other regions), space or comma separated. */

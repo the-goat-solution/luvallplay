@@ -342,6 +342,13 @@ describe("the built page's rules", () => {
     assert.match(html, /<!--csp-->/);
     assert.doesNotMatch(html, /user-scalable=no|maximum-scale/);
   });
+  test("the CSP lets in Cloudflare's bot check only in a build with its site key (script and frame, nothing else)", () => {
+    const vite = read("../vite.config.ts");
+    assert.match(vite, /const turnstile = env\.VITE_TURNSTILE_SITE_KEY \? ` \$\{TURNSTILE\}` : "";/);
+    assert.match(vite, /`script-src 'self' 'wasm-unsafe-eval' \$\{STRIPE\.script\}\$\{turnstile\}`/);
+    assert.match(vite, /`frame-src \$\{STRIPE\.frame\}\$\{turnstile\}`/);
+    assert.equal(vite.match(/\$\{turnstile\}/g)?.length, 2);
+  });
   test("vercel.json: the ignore rule, SPA fallback, no framing, long cache for hashed assets", () => {
     const v = JSON.parse(read("../vercel.json"));
     assert.equal(v.ignoreCommand, "bash ../../scripts/vercel-ignore.sh app");

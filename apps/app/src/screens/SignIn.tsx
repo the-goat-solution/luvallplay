@@ -8,6 +8,7 @@ import { appNext } from "../lib/next-path.ts";
 import { signInErrorKey as errorKey } from "../lib/signin-errors.ts";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { LuvallplayMark, Notice, OnLuvallplay, useLook } from "../Frame.tsx";
+import { Turnstile, TURNSTILE_SITE_KEY } from "../components/Turnstile.tsx";
 import { useLang, useT, type ClubConfig } from "../hooks.tsx";
 
 const RESEND_WAIT_S = 30;
@@ -31,6 +32,19 @@ export function SignInForm({ club, next }: { club?: string; next?: string }) {
   const [resendAt, setResendAt] = useState(0);
   const [wait, setWait] = useState(0);
   const [resent, setResent] = useState(false);
+  // The bot check's token (components/Turnstile.tsx): needed for each code sent while a site key is built in.
+  const [human, setHuman] = useState("");
+  const [check, setCheck] = useState(0);
+  const needsCheck = !!TURNSTILE_SITE_KEY && !human;
+  /** The token for one "send my code", then a fresh check for the next. */
+  const takeCheck = () => {
+    const token = human || null;
+    if (TURNSTILE_SITE_KEY) {
+      setHuman("");
+      setCheck((n) => n + 1);
+    }
+    return token;
+  };
   useEffect(() => {
     // By the clock, not by counting ticks: right again after the phone slept or the tab was away.
     const tick = () => setWait(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
@@ -45,7 +59,7 @@ export function SignInForm({ club, next }: { club?: string; next?: string }) {
     setError(null);
     setResent(false);
     try {
-      await api.auth.emailStart({ email, lang });
+      await api.auth.emailStart({ email, lang, turnstileToken: takeCheck() });
       setCode("");
       setResent(true);
       setResendAt(Date.now() + RESEND_WAIT_S * 1000);
@@ -61,7 +75,7 @@ export function SignInForm({ club, next }: { club?: string; next?: string }) {
     setBusy(true);
     setError(null);
     try {
-      await api.auth.emailStart({ email, lang });
+      await api.auth.emailStart({ email, lang, turnstileToken: takeCheck() });
       setResent(false);
       setResendAt(Date.now() + RESEND_WAIT_S * 1000);
       setStep("code");
@@ -98,8 +112,9 @@ export function SignInForm({ club, next }: { club?: string; next?: string }) {
           <span>{t("signin_email")}</span>
           <input type="email" name="email" autoComplete="email" inputMode="email" autoCapitalize="none" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
+        <Turnstile onToken={setHuman} lang={lang} resetKey={check} />
         {error && <Notice tone="error">{t(error)}</Notice>}
-        <button className="button button-primary" type="submit" disabled={busy || !email.trim()}>
+        <button className="button button-primary" type="submit" disabled={busy || !email.trim() || needsCheck}>
           {busy ? t("signin_sending") : t("signin_send")}
         </button>
       </form>
@@ -118,7 +133,8 @@ export function SignInForm({ club, next }: { club?: string; next?: string }) {
       <button className="button button-primary" type="submit" disabled={busy || code.length < 6}>
         {busy ? t("signin_verifying") : t("signin_verify")}
       </button>
-      <button className="button button-quiet" type="button" disabled={busy || wait > 0} onClick={() => void resend()}>
+      {wait === 0 && <Turnstile onToken={setHuman} lang={lang} resetKey={check} />}
+      <button className="button button-quiet" type="button" disabled={busy || wait > 0 || needsCheck} onClick={() => void resend()}>
         {wait > 0 ? t("signin_resend_wait", { s: wait }) : t("signin_resend")}
       </button>
       <button className="button button-quiet" type="button" onClick={() => { setStep("email"); setCode(""); setError(null); }}>

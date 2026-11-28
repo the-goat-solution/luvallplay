@@ -67,19 +67,32 @@ jobs:
           mkdir -p "$RUNNER_TEMP/keys"
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
           chmod 600 "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
-      # Archived unsigned on purpose: a signed archive asks Apple for a
-      # development profile, which needs a registered device. The export below
-      # signs for the App Store with the API key (cloud signing, Admin role).
-      - name: Archive (unsigned)
+      # Signed archive: only a signed archive keeps the push and app-links
+      # entitlements (an unsigned one drops them), and Apple's cloud signing
+      # needs a key with the Admin role and at least one registered device in
+      # the team (tested on the owner's Mac, 28 Nov 2026).
+      - name: Archive
         working-directory: apps/native/ios/App
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           xcodebuild -project App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             archive
+      - name: The signed app carries its entitlements
+        run: |
+          APP="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app"
+          ENT=$(codesign -d --entitlements :- "$APP" 2>/dev/null)
+          echo "$ENT" | grep -q "aps-environment" || { echo "::error title=Entitlements::push (aps-environment) is missing from the signed app"; exit 1; }
+          echo "$ENT" | grep -q "applinks:app.luvallplay.com" || { echo "::error title=Entitlements::app links are missing from the signed app"; exit 1; }
       - name: Export (and upload, when asked)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

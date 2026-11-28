@@ -2,6 +2,7 @@
 // is its own chunk, loaded when it is first opened.
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Navigate, Outlet, redirect } from "@tanstack/react-router";
 import { store } from "./app.ts";
+import { appNext, nextSearch } from "./lib/next-path.ts";
 import { Crash } from "./components/Crash.tsx";
 import { InviteScreen } from "./screens/Invite.tsx";
 import { Shell } from "./screens/Shell.tsx";
@@ -20,8 +21,10 @@ const index = createRoute({
 const signIn = createRoute({
   getParentRoute: () => root,
   path: "/signin",
-  beforeLoad: () => {
-    if (store.get().token) throw redirect({ to: "/home", replace: true });
+  // ?next=<path>: the screen a signed-out visitor asked for, opened after sign-in (lib/next-path.ts).
+  validateSearch: nextSearch,
+  beforeLoad: ({ search }) => {
+    if (store.get().token) throw redirect({ href: appNext(search.next), replace: true });
   },
   component: SignInScreen,
 });
@@ -31,8 +34,9 @@ const invite = createRoute({ getParentRoute: () => root, path: "/c/$club", compo
 const shell = createRoute({
   getParentRoute: () => root,
   id: "shell",
-  beforeLoad: () => {
-    if (!store.get().token) throw redirect({ to: "/signin", replace: true });
+  beforeLoad: ({ location }) => {
+    // Signed out: to sign-in, keeping the address asked for so it opens afterwards.
+    if (!store.get().token) throw redirect({ to: "/signin", search: nextSearch({ next: location.href }), replace: true });
   },
   component: Shell,
 });
@@ -53,7 +57,7 @@ const clubSearch = (search: Record<string, unknown>): { club?: string } =>
 const inbox = createRoute({ getParentRoute: () => shell, path: "/inbox", component: inboxScreen, validateSearch: clubSearch });
 const inboxNew = createRoute({ getParentRoute: () => shell, path: "/inbox/new", component: inboxScreen, validateSearch: clubSearch });
 const inboxThread = createRoute({ getParentRoute: () => shell, path: "/inbox/$id", component: inboxScreen, validateSearch: clubSearch });
-const welcome = createRoute({ getParentRoute: () => shell, path: "/welcome", component: lazyRouteComponent(() => import("./screens/Welcome.tsx")) });
+const welcome = createRoute({ getParentRoute: () => shell, path: "/welcome", validateSearch: nextSearch, component: lazyRouteComponent(() => import("./screens/Welcome.tsx")) });
 const membership = createRoute({ getParentRoute: () => shell, path: "/membership", component: lazyRouteComponent(() => import("./screens/Membership.tsx")) });
 // Family (module juniors): a guardian's children in the club shown. Reached from My profile.
 const family = createRoute({ getParentRoute: () => shell, path: "/family", component: lazyRouteComponent(() => import("./screens/Family.tsx")) });

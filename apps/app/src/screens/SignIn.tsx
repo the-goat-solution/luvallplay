@@ -1,9 +1,10 @@
 // Sign-in: email, then the 6-digit code (the same codes as the web).
 // Text-message sign-in plugs in here later (api.auth.smsStart / smsVerify).
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouter, useSearch } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, store } from "../app.ts";
+import { appNext } from "../lib/next-path.ts";
 import { signInErrorKey as errorKey } from "../lib/signin-errors.ts";
 import type { AppKey } from "@luvallplay/i18n/app";
 import { LuvallplayMark, Notice, OnLuvallplay, useLook } from "../Frame.tsx";
@@ -11,11 +12,15 @@ import { useLang, useT, type ClubConfig } from "../hooks.tsx";
 
 const RESEND_WAIT_S = 30;
 
-/** The form itself; `club` is set on a club's invite link (the club to open after sign-in). */
-export function SignInForm({ club }: { club?: string }) {
+/**
+ * The form itself; `club` is set on a club's invite link (the club to open
+ * after sign-in), `next` is the screen asked for before sign-in (Home if none).
+ */
+export function SignInForm({ club, next }: { club?: string; next?: string }) {
   const t = useT();
   const lang = useLang();
   const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -75,7 +80,9 @@ export function SignInForm({ club }: { club?: string }) {
       const session = await api.auth.emailVerify({ email, code });
       queryClient.clear();
       store.set({ token: session.token, needsDetails: session.needsDetails, ...(club ? { club } : {}) });
-      await navigate({ to: session.needsDetails ? "/welcome" : "/home" });
+      // A brand-new account gives its name first, then goes on to the screen asked for.
+      if (session.needsDetails) await navigate({ to: "/welcome", search: next ? { next } : {} });
+      else router.history.push(appNext(next));
     } catch (err) {
       setError(errorKey(err, "signin_err_code"));
       setBusy(false);
@@ -148,9 +155,10 @@ export function SignedOutPage({ club, children }: { club: ClubConfig | null; chi
 }
 
 export function SignInScreen() {
+  const { next } = useSearch({ from: "/signin" });
   return (
     <SignedOutPage club={null}>
-      <SignInForm />
+      <SignInForm next={next} />
     </SignedOutPage>
   );
 }

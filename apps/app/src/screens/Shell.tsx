@@ -128,19 +128,25 @@ function MatchPill({ slug, who, t }: { slug: string | null; who: string | null; 
 }
 
 /**
- * The Arena tab's red count (lib/arena-badge.ts), from the same board the Arena
- * screen polls (one cache entry). Away from the Arena it is read once a minute
- * and when the app comes back to the front, not every 5 seconds.
+ * The Arena tab's red count (lib/arena-badge.ts). On the Arena, from the board
+ * its screen polls (read only, never fetched here). Elsewhere, its own read
+ * once a minute and on return: a key of its own, so it isn't kept offline as
+ * the board is and never stands in for the Arena screen's own answer.
  */
-function useArenaCount(club: Club | null, who: string | null, on: boolean): number {
-  const board = useQuery<ArenaState>({
-    queryKey: ["arena", club?.slug ?? null, who],
+function useArenaCount(club: Club | null, who: string | null, on: boolean, onArena: boolean): number {
+  const slug = club?.slug ?? null;
+  const shown = useQuery<ArenaState>({ queryKey: ["arena", slug, who], queryFn: skipToken });
+  const away = useQuery<ArenaState>({
+    queryKey: ["arena-count", slug, who],
     queryFn: ({ signal }) => apiForClub(club?.apiBase).arena.state({ club: club!.slug }, { signal }),
-    enabled: on && !!club && !!who,
+    enabled: on && !onArena && !!club && !!who,
     staleTime: 60_000,
     refetchInterval: 60_000,
+    // A count that can't load is left out quietly; no retries.
+    retry: false,
   });
-  return arenaActionCount(board.data);
+  if (!on) return 0;
+  return arenaActionCount(onArena ? (shown.data ?? away.data) : (away.data ?? shown.data));
 }
 
 const GetTheApp = lazy(() => import("../components/GetTheApp.tsx"));
@@ -235,7 +241,7 @@ export function Shell() {
   // The Arena's "your match is on" pill: the club whose Arena would open.
   const arenaClub = multi ? spaceClub(list, modulesOf, prefs.club, "arena") : current;
   const arenaOn = !!arenaClub && !!(multi ? configOf(arenaClub) : currentConfig)?.modules.includes("arena");
-  const arenaCount = useArenaCount(arenaClub ?? null, who, arenaOn);
+  const arenaCount = useArenaCount(arenaClub ?? null, who, arenaOn, pathname.startsWith("/arena"));
   useEffect(() => {
     if (gone) void navigate({ to: "/home", replace: true });
   }, [gone, navigate]);

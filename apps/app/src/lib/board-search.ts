@@ -12,7 +12,10 @@ export type BoardSearch = { source?: Source; period?: Period; key?: string };
 
 const KEY = /^\d{4}(-(0[1-9]|1[0-2]|Q[1-4]))?$/;
 
-/** The route's search: only known values; a past period's key only with a period that has one. */
+/**
+ * The route's search, and what the screen reads from it (again: the router
+ * lays the raw query of the routes above over a route's validated search).
+ * The route's search: only known values; a past period's key only with a period that has one. */
 export function boardSearch(search: Record<string, unknown>): BoardSearch {
   const out: BoardSearch = {};
   if (typeof search.source === "string" && (SOURCES as readonly string[]).includes(search.source) && search.source !== "all") out.source = search.source as Source;

@@ -39,7 +39,8 @@ export default function LeaderboardScreen() {
   const { rank } = useArenaT();
   // The board shown is the address's (lib/board-search.ts): a shared link opens the same one.
   const navigate = useNavigate({ from: "/leaderboard" });
-  const q: BoardQuery = queryOf(useSearch({ from: "/shell/leaderboard" }));
+  // Cleaned again here: the router lays the raw query of the routes above over the route's own validated search.
+  const q: BoardQuery = queryOf(boardSearch(useSearch({ from: "/shell/leaderboard" }) as Record<string, unknown>));
   const setQ = (next: BoardQuery) => void navigate({ search: boardSearch(next as Record<string, unknown>) });
   const [selected, setSelected] = useState<number | null>(null);
   const board = useBoard(q);

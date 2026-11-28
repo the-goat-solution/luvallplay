@@ -275,9 +275,9 @@ describe("APP · the Luvallplay frame and the club's look (decision AM)", () => 
     assert.deepEqual(await look(page), { primary: COURT_GREEN, look: "luvallplay", mode: "light", lang: "en" });
     assert.equal(await page.evaluate(() => localStorage.getItem("lp.token")), null);
     assert.equal((await fetch(`${api}/auth/session`, { headers: { Authorization: `Bearer ${token}` } })).status, 401, "the session ended on the server too");
-    // Signed out means signed out: the app's screens send you to sign-in.
+    // Signed out means signed out: the app's screens send you to sign-in, which then opens the screen asked for (cutover B3).
     await page.goto(`${APP}/settings`);
-    await page.waitForURL(`${APP}/signin`);
+    await page.waitForURL(`${APP}/signin?next=%2Fsettings`);
     assert.deepEqual(problems, [], "no console errors (CSP, CORS) on the way");
     await context.close();
   });
@@ -3368,9 +3368,10 @@ describe("APP · the cutover's fixes", () => {
     try {
       await page.goto(`${APP}/inbox`);
       await page.waitForURL(`${APP}/signin?next=%2Finbox`);
-      await page.getByLabel("Email").fill(PEOPLE.member.email);
+      // Someone who hasn't just asked for a code in another journey (the per-email limits stay on).
+      await page.getByLabel("Email").fill(PEOPLE.admin.email);
       await page.getByRole("button", { name: "Send my code" }).click();
-      await page.getByLabel(/code/i).first().fill(await outboxCode(PEOPLE.member.email));
+      await page.getByLabel(/code/i).first().fill(await outboxCode(PEOPLE.admin.email));
       await page.getByRole("button", { name: /Sign in|Verify/ }).click();
       await page.waitForURL(`${APP}/inbox`);
       assert.deepEqual(problems, []);
@@ -3452,7 +3453,7 @@ describe("APP · the cutover's fixes", () => {
       await page.waitForSelector(READY);
       await page.getByRole("button", { name: "Quarter", exact: true }).click();
       await page.waitForURL(/\/leaderboard\?period=quarter$/);
-      await page.getByRole("button", { name: "Play days" }).click();
+      await page.locator(".chip-button", { hasText: "Play days" }).click();
       await page.waitForURL(/period=quarter/);
       await page.waitForURL(/source=play/);
       await page.reload();
@@ -3520,7 +3521,7 @@ describe("APP · the cutover's fixes", () => {
       await guide.waitFor();
       assert.equal(await guide.locator("img.size-chart").getAttribute("src"), "https://img.example/chart-men.png");
       await guide.getByRole("button", { name: "Close" }).click();
-      await tee.getByRole("button", { name: "Women", exact: true }).click();
+      await tee.getByRole("button", { name: "Women's", exact: true }).click();
       await tee.getByRole("button", { name: "Size guide" }).click();
       await page.getByRole("dialog", { name: "Size guide" }).getByText("Size guide coming soon").waitFor();
       assert.deepEqual(problems, []);

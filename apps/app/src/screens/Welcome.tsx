@@ -47,7 +47,7 @@ export default function Welcome() {
           <button type="submit" className="button button-primary" disabled={save.isPending || !firstName.trim()}>
             {save.isPending ? t("acc_saving") : t("name_step_save")}
           </button>
-          <button type="button" className="button button-quiet" onClick={() => router.history.replace(after)}>{t("cancel")}</button>
+          <a href={after} className="button button-quiet" onClick={(e) => { e.preventDefault(); router.history.replace(after); }}>{t("cancel")}</a>
         </div>
       </form>
     </div>

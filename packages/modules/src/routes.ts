@@ -22,6 +22,8 @@ export const ROUTE_OWNERS: readonly (readonly [prefix: string, owner: RouteOwner
   // ── Pages ───────────────────────────────────────────────────────────────
   ["/", "core"],
   ["/login", "account"],
+  // The cutover's session handover to the players' app (apps/web/app/app-handover): sign-in, always on.
+  ["/app-handover", "account"],
   ["/profile", "account"],
   ["/profile/arena", "arena"],
   ["/profile/leaderboard", "arena"],
